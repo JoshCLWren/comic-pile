@@ -48,8 +48,9 @@ divergence exits 3 and must be explained before any canary decision. Invalid or 
 input exits 2. The adapter never changes Factory labels, dispatches a worker, enables a
 workflow, or applies a cutover decision.
 
-The shadow invocation supplies ComicPile's observed completion backlog and configured
-limit as explicit Rotisserie projection inputs. Backpressure therefore remains portable
+The shadow invocation supplies both ComicPile's observed completion backlog and active
+Factory PR count, together with their configured limits, as explicit Rotisserie
+projection inputs. Completion and production backpressure therefore remain portable
 decision policy instead of being hidden inside the adopter translation.
 
 ## Current Factory classification
