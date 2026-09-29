@@ -23,6 +23,7 @@ head_has_authorized_approval = _review_policy.head_has_authorized_approval
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
 semantic_repair_heads = _review_policy.semantic_repair_heads
+parse_review_marker = _review_policy.parse_review_marker
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
@@ -916,7 +917,7 @@ def handle_review(
     """Interpret model review output under controller-owned repository authority."""
     if not FIXED_WORKER_RE.fullmatch(worker):
         raise RuntimeError(f"unsupported fixed-model reviewer: {worker}")
-    if verdict not in {"approve", "repair", "reject"}:
+    if verdict not in {"approve", "repair", "reject", "obsolete", "duplicate", "superseded", "delivered"}:
         raise RuntimeError(f"unsupported semantic verdict: {verdict}")
     if not HEAD_RE.fullmatch(reviewed_head):
         raise RuntimeError("reviewed head must be a full lowercase Git SHA")
@@ -1093,6 +1094,58 @@ def handle_review(
         run_gh(["pr", "close", str(pr_number), "--repo", REPO])
         return {"status": "rejected", "head": reviewed_head, "producer": producer}
 
+    # Handle terminal verdicts that result in PR closure
+    if verdict in {"obsolete", "duplicate", "superseded", "delivered"}:
+        if not has_actionable_review_findings(excerpt):
+            raise RuntimeError(f"semantic {verdict} requires durable actionable review findings")
+        
+        # Map verdicts to human-readable reasons
+        reason_messages = {
+            "obsolete": "This PR is obsolete and no longer needed",
+            "duplicate": "This PR is a duplicate of other work",
+            "superseded": "This PR has been superseded by other changes",
+            "delivered": "The changes targeted by this PR are already delivered on main"
+        }
+        
+        post_review_comment(
+            pr_number=pr_number,
+            marker=marker,
+            reviewer=worker,
+            verdict=verdict,
+            excerpt=excerpt,
+            note=(
+                f"The independent reviewer classified this factory PR as {verdict}. "
+                f"{reason_messages[verdict]}. "
+                "The linked issue remains available for a clean implementation."
+            ),
+        )
+        
+        # Close the PR with terminal state reconciliation
+        run_gh(["pr", "close", str(pr_number), "--repo", REPO])
+        
+        # Record terminal reason marker for future reconciliation
+        terminal_marker = (
+            f"<!-- comic-pile-factory-terminal-state-v1:"
+            f"pr-{pr_number}:head-{reviewed_head}:"
+            f"verdict-{verdict}:reason-{reason_messages[verdict]} -->"
+        )
+        run_gh([
+            "issue", 
+            "comment", 
+            str(linked_issue_from_branch(branch) or pr_number),
+            "--repo", 
+            REPO,
+            "--body", 
+            terminal_marker,
+        ])
+        
+        return {
+            "status": f"terminal-{verdict}", 
+            "head": reviewed_head, 
+            "producer": producer,
+            "reason": reason_messages[verdict]
+        }
+
     post_review_comment(
         pr_number=pr_number,
         marker=marker,
@@ -1235,6 +1288,74 @@ def demote_ready(pr_number: int) -> dict[str, Any]:
     return {"status": "demoted", "pr": pr_number}
 
 
+def reconcile_terminal_pr(pr_number: int) -> dict[str, Any]:
+    """Reconcile one terminal PR using authoritative semantic review results."""
+    pr = pr_json(pr_number)
+    labels = labels_of(pr)
+    
+    # Skip if PR is not open or doesn't have factory labels
+    if str(pr.get("state")) != "OPEN" or "factory" not in labels:
+        return {"pr": pr_number, "status": "skipped"}
+    
+    # Check for existing terminal verdict markers
+    comments = review_comment_bodies(pr_number)
+    terminal_verdict = None
+    terminal_head = None
+    terminal_reason = None
+    
+    for comment in comments:
+        first_line = str(comment or "").splitlines()[0] if comment else ""
+        marker = parse_review_marker(first_line)
+        if marker and marker["verdict"] in {"obsolete", "duplicate", "superseded", "delivered"}:
+            terminal_verdict = marker["verdict"]
+            terminal_head = marker["head"]
+            terminal_reason = f"Terminal {terminal_verdict} verdict"
+            break
+    
+    # No terminal verdict found, skip
+    if terminal_verdict is None:
+        return {"pr": pr_number, "status": "no-terminal-verdict"}
+    
+    # Verify the terminal verdict still applies to the current head
+    current_head = str(pr.get("headRefOid") or "")
+    if current_head != terminal_head:
+        return {"pr": pr_number, "status": "stale-terminal-verdict", "current_head": current_head, "terminal_head": terminal_head}
+    
+    # Close the PR with terminal state reconciliation
+    try:
+        run_gh(["pr", "close", str(pr_number), "--repo", REPO])
+        
+        # Remove incompatible factory state
+        replace_factory_labels(pr_number, "factory:unowned", "factory:unowned")
+        
+        # Record durable terminal reason marker
+        terminal_marker = (
+            f"<!-- comic-pile-factory-terminal-state-v1:"
+            f"pr-{pr_number}:head-{current_head}:"
+            f"verdict-{terminal_verdict}:reason-{terminal_reason} -->"
+        )
+        run_gh([
+            "issue", 
+            "comment", 
+            str(linked_issue_from_branch(pr.get("headRefName")) or pr_number),
+            "--repo", 
+            REPO,
+            "--body", 
+            terminal_marker,
+        ])
+        
+        return {
+            "pr": pr_number, 
+            "status": "terminal-closed", 
+            "verdict": terminal_verdict,
+            "reason": terminal_reason,
+            "head": current_head
+        }
+        
+    except RuntimeError as exc:
+        return {"pr": pr_number, "status": "reconciliation-failed", "error": str(exc)}
+
+
 def authorize_ready(pr_number: int) -> dict[str, Any]:
     """Validate that a ready PR still has authorization for its current head."""
     pr = pr_json(pr_number)
@@ -1310,6 +1431,7 @@ def main() -> int:
     gates.add_argument("--expected-head", required=True)
 
     subparsers.add_parser("reconcile-ci")
+    subparsers.add_parser("reconcile-terminal")
 
     args = parser.parse_args()
     if args.command == "review":
@@ -1326,6 +1448,8 @@ def main() -> int:
         result = demote_ready(args.pr)
     elif args.command == "reconcile-ci":
         result = {"results": reconcile_ci()}
+    elif args.command == "reconcile-terminal":
+        result = {"results": [reconcile_terminal_pr(args.pr)]}
     else:
         if not HEAD_RE.fullmatch(args.expected_head):
             raise RuntimeError("expected head must be a full lowercase Git SHA")

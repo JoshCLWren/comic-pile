@@ -8,7 +8,7 @@ REVIEW_MARKER_RE = re.compile(
     r"^<!-- comic-pile-factory-semantic-review-v1:"
     r"pr-(?P<pr>\d+):head-(?P<head>[0-9a-f]{40}):"
     r"reviewer-(?P<reviewer>\d+):producer-(?P<producer>\d+|unknown):"
-    r"verdict-(?P<verdict>approve|repair|reject) -->$"
+    r"verdict-(?P<verdict>approve|repair|reject|obsolete|duplicate|superseded|delivered) -->$"
 )
 BRANCH_PRODUCER_RE = re.compile(r"^factory/(?P<worker>\d+)-\d+-")
 BODY_PRODUCER_RE = re.compile(
@@ -66,7 +66,7 @@ def review_marker(
     verdict: str,
 ) -> str:
     """Build one controller-authored semantic review marker."""
-    if verdict not in {"approve", "repair", "reject"}:
+    if verdict not in {"approve", "repair", "reject", "obsolete", "duplicate", "superseded", "delivered"}:
         raise ValueError(f"unsupported verdict: {verdict}")
     producer_value = producer or "unknown"
     return (
@@ -95,6 +95,23 @@ def semantic_repair_heads(
         if not marker or int(marker["pr"]) != pr:
             continue
         if marker["verdict"] == "repair":
+            heads.add(marker["head"])
+    return heads
+
+
+def semantic_terminal_heads(
+    comments: Iterable[str],
+    *,
+    pr: int,
+) -> set[str]:
+    """Return distinct PR heads that received an authoritative terminal verdict."""
+    heads: set[str] = set()
+    for body in comments:
+        first_line = str(body or "").splitlines()[0] if body else ""
+        marker = parse_review_marker(first_line)
+        if not marker or int(marker["pr"]) != pr:
+            continue
+        if marker["verdict"] in {"obsolete", "duplicate", "superseded", "delivered"}:
             heads.add(marker["head"])
     return heads
 
