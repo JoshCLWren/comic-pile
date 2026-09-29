@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "cutover-2553"
+revision: str = "c25530000001"
 # Down revision is the previous migration
 # NOTE: revision string contains hyphen, acceptable
 # for alembic
