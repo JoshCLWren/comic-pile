@@ -7,16 +7,15 @@ import { authApi } from '../services/api'
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
+  const tokenValid = !!token
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(token ? '' : 'Invalid or missing reset token.')
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
-  const [tokenValid, setTokenValid] = useState(true)
 
   useEffect(() => {
     if (!token) {
-      setTokenValid(false)
       setError('Invalid or missing reset token.')
     }
   }, [token])
@@ -58,7 +57,12 @@ export default function ResetPasswordPage() {
     } catch (err: unknown) {
       if (axios.isAxiosError<{ detail?: string }>(err) && err.response?.data?.detail) {
         const detail = err.response.data.detail
-        if (detail.includes('expired') || detail.includes('used') || detail.includes('superseded') || detail.includes('Invalid')) {
+        if (
+          detail.includes('expired') ||
+          detail.includes('used') ||
+          detail.includes('superseded') ||
+          detail.includes('Invalid')
+        ) {
           setError('This reset link has expired or was already used. Please request a new one.')
         } else {
           setError(detail)

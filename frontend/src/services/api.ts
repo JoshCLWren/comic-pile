@@ -35,7 +35,35 @@ export type ApiClientTransport = HttpClient & Pick<AxiosInstance, 'interceptors'
 const CSRF_COOKIE_NAME = 'csrf_token'
 const CSRF_HEADER_NAME = 'X-CSRF-Token'
 const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
-const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1/auth/refresh'])
+const AUTH_ENDPOINT_PATHS = new Set([
+  '/v1/auth/login',
+  '/v1/auth/register',
+  '/v1/auth/refresh',
+  '/v1/auth/forgot-password',
+  '/v1/auth/reset-password',
+])
+
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface ResetPasswordRequest {
+  token: string
+  new_password: string
+}
+
+export interface PasswordResetResponse {
+  message: string
+}
+
+export function createAuthApi(client: ApiClient) {
+  return {
+    forgotPassword: (data: ForgotPasswordRequest) =>
+      client.post<PasswordResetResponse, ForgotPasswordRequest>('/v1/auth/forgot-password', data),
+    resetPassword: (data: ResetPasswordRequest) =>
+      client.post<PasswordResetResponse, ResetPasswordRequest>('/v1/auth/reset-password', data),
+  }
+}
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -202,7 +230,12 @@ async function ensureCsrfToken(client: ApiClient): Promise<string | null> {
 
 function isOnAuthPage(): boolean {
   const pathname = window.location.pathname
-  return pathname === '/login' || pathname === '/register'
+  return (
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password'
+  )
 }
 
 function redirectToLogin(): void {
@@ -470,22 +503,4 @@ export const preferencesApi = {
     api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
 }
 
-export interface ForgotPasswordRequest {
-  email: string
-}
-
-export interface ResetPasswordRequest {
-  token: string
-  new_password: string
-}
-
-export interface PasswordResetResponse {
-  message: string
-}
-
-export const authApi = {
-  forgotPassword: (data: ForgotPasswordRequest) =>
-    api.post<PasswordResetResponse, ForgotPasswordRequest>('/v1/auth/forgot-password', data),
-  resetPassword: (data: ResetPasswordRequest) =>
-    api.post<PasswordResetResponse, ResetPasswordRequest>('/v1/auth/reset-password', data),
-}
+export const authApi = createAuthApi(api)
