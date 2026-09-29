@@ -83,7 +83,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+              <label htmlFor="username" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Username
               </label>
               <p className="text-xs text-[var(--theme-text-muted)]">Use your username, not email.</p>
@@ -101,7 +101,7 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+              <label htmlFor="password" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Password
               </label>
               <input
@@ -127,7 +127,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+            className="w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>

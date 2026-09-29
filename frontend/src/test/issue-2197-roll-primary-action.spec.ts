@@ -5,7 +5,7 @@
  * Roll: a solid "Pick manually" button competed with "Tap Die to Roll", the
  * die face, and mode chips. This spec asserts the corrected hierarchy:
  *
- * 1. The default happy path has exactly one dominant primary CTA (`Roll now`)
+ * 1. The default happy path has exactly one dominant primary CTA (`Begin`)
  *    rendered under the die.
  * 2. The "Pick manually" control reads as secondary (no solid primary fill).
  * 3. The die registers as ready-to-roll (not dimmed/passive) on load.
@@ -43,7 +43,7 @@ test.describe('Roll primary-action hierarchy (#2197)', () => {
     // The CTA is the dominant filled primary action.
     const cta = page.getByTestId('roll-primary-action')
     await expect(cta).toBeVisible()
-    await expect(cta).toHaveText('Roll now')
+    await expect(cta).toHaveText('Begin')
 
     // "Pick manually" is demoted to a quiet secondary button (no solid amber
     // fill) while remaining present in the header.

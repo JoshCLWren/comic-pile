@@ -203,11 +203,13 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(screen.getByText(/This is the last issue in the series/)).toBeInTheDocument()
   })
 
-  it('rating actions container has sticky class for mobile', () => {
+  it('rating actions container does not use sticky/fixed positioning (layout is normal flow)', () => {
     render(ratingView())
     const actions = screen.getByTestId('rating-actions')
-    expect(actions.className).toContain('sticky')
-    expect(actions.className).toContain('bottom-0')
+    expect(actions.className).not.toContain('sticky')
+    expect(actions.className).not.toContain('bottom-0')
+    expect(actions.className).toContain('border-t')
+    expect(actions.className).toContain('surface-glass')
   })
 
   it('save button is disabled while rateIsPending', () => {
@@ -329,7 +331,7 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
     expect(grid!.className).toContain('items-start')
-    expect(grid!.className).toContain('lg:grid-cols-2')
+    expect(grid!.className).toContain('lg:grid-cols-[1fr,auto]')
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
@@ -393,6 +395,6 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
     expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
-    expect(container.querySelector('[data-testid="rating-pillars-grid"]')!.className).toContain('lg:grid-cols-2')
+    expect(container.querySelector('[data-testid="rating-pillars-grid"]')!.className).toContain('lg:grid-cols-[1fr,auto]')
   })
 })
