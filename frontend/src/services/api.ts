@@ -35,7 +35,38 @@ export type ApiClientTransport = HttpClient & Pick<AxiosInstance, 'interceptors'
 const CSRF_COOKIE_NAME = 'csrf_token'
 const CSRF_HEADER_NAME = 'X-CSRF-Token'
 const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
-const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1/auth/refresh'])
+const AUTH_ENDPOINT_PATHS = new Set([
+  '/v1/auth/login',
+  '/v1/auth/register',
+  '/v1/auth/refresh',
+  '/v1/auth/forgot-password',
+  '/v1/auth/reset-password',
+])
+// Request bodies for these paths carry single-use secrets (reset token, new
+// password). They must never reach console output or error telemetry.
+const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v1/auth/reset-password'])
+
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface ResetPasswordRequest {
+  token: string
+  new_password: string
+}
+
+export interface PasswordResetResponse {
+  message: string
+}
+
+export function createAuthApi(client: ApiClient) {
+  return {
+    forgotPassword: (data: ForgotPasswordRequest) =>
+      client.post<PasswordResetResponse, ForgotPasswordRequest>('/v1/auth/forgot-password', data),
+    resetPassword: (data: ResetPasswordRequest) =>
+      client.post<PasswordResetResponse, ResetPasswordRequest>('/v1/auth/reset-password', data),
+  }
+}
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -202,7 +233,12 @@ async function ensureCsrfToken(client: ApiClient): Promise<string | null> {
 
 function isOnAuthPage(): boolean {
   const pathname = window.location.pathname
-  return pathname === '/login' || pathname === '/register'
+  return (
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password'
+  )
 }
 
 function redirectToLogin(): void {
@@ -233,6 +269,40 @@ function isAuthenticationFailure(error: AxiosError): boolean {
   // SAFETY: axios 403 responses always carry a JSON body; narrowing to check for auth-failure detail.
   const responseData = error.response.data as { detail?: unknown } | undefined
   return responseData?.detail === 'Not authenticated'
+}
+
+/**
+ * Redacted stand-in logged for a failed request whose body carried a secret.
+ */
+export interface RedactedRequestDiagnostic {
+  name: string
+  message: string
+  url: string
+  status: number | null
+}
+
+/**
+ * Build the value that is safe to hand to `console.error` for a failed request.
+ *
+ * Axios errors carry the full request config, so logging one verbatim would
+ * print the request body. For auth paths whose body is a single-use secret the
+ * raw error is replaced with a minimal, redacted summary.
+ *
+ * @param error - The rejected axios error.
+ * @returns The error itself, or a redacted summary for sensitive auth requests.
+ */
+function errorForDiagnosticLog(error: AxiosError): AxiosError | RedactedRequestDiagnostic {
+  const requestPathname = getRequestPathname(error.config?.url ?? '')
+  if (!SENSITIVE_AUTH_BODY_PATHS.has(requestPathname)) {
+    return error
+  }
+
+  return {
+    name: error.name,
+    message: error.message,
+    url: requestPathname,
+    status: error.response?.status ?? null,
+  }
 }
 
 function createRequestInterceptor(client: ApiClient) {
@@ -352,7 +422,7 @@ function createResponseErrorInterceptor(client: ApiClient) {
 
     const status = error.response?.status
     if (status !== 503) {
-      console.error('API Error:', error)
+      console.error('API Error:', errorForDiagnosticLog(error))
     }
     return Promise.reject(error)
   }
@@ -469,3 +539,5 @@ export const preferencesApi = {
   patch: (data: UserPreferencesPatchRequest) =>
     api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
 }
+
+export const authApi = createAuthApi(api)
