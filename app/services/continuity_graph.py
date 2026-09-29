@@ -438,30 +438,83 @@ def _direct_blockers(
     return blockers
 
 
+def crossover_order_blockers(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
+    """Return crossover ordering blockers for one issue, AND-composed across crossovers.
 
+    For every active crossover that contains the issue as an ordered entry, the
+    issue is blocked while any earlier unread ordered entry remains. An issue
+    belonging to multiple ordered crossovers must satisfy every one of them, so
+    any unsatisfied earlier prerequisite produces a blocker.
+
+    Crossover ordering is no longer a Roll authority after the canonical
+    dependency cutover, so this function is measurement support for the
+    cutover release gate and continuity-chain explanations only.
+
+    Args:
+        issue_id: The owned issue to evaluate against crossover reading order.
+        snapshot: Loaded continuity graph snapshot.
+
+    Returns:
+        One ``crossover_order`` blocker per active ordered crossover with an
+        earlier unread entry, each naming the crossover and the earliest earlier
+        unread issue.
+    """
+    if snapshot.issues.get(issue_id) is None:
+        return []
+    target_label = _issue_detail(issue_id, snapshot).label
+    markers: list[ContinuityBlocker] = []
+    for group_id, position in snapshot.issue_crossover_positions.get(issue_id, ()):
+        ordered_ids = snapshot.crossover_ordered_issue_ids.get(group_id, ())
+        if position <= 1:
+            continue
+        for earlier_id in ordered_ids[: position - 1]:
+            if is_read(earlier_id, snapshot):
+                continue
+            group = snapshot.groups[group_id]
+            earlier_label = _issue_detail(earlier_id, snapshot).label
+            markers.append(
+                ContinuityBlocker(
+                    rule_id=None,
+                    source_type="crossover",
+                    source_id=group_id,
+                    source_label=group.name,
+                    satisfaction_type="all_members_read",
+                    blocker_type="crossover_order",
+                    causing_member_issue_ids=[earlier_id],
+                    unread_issue_details=[UnreadIssueDetail(issue_id=earlier_id, label=earlier_label)],
+                    note=(
+                        f"Read {earlier_label} before {target_label} in {group.name}."
+                    ),
+                    crossover_id=group_id,
+                    sequence_position=position,
+                )
+            )
+            break
+    return markers
 
 
 def issue_readiness(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
-    """Return direct blockers for one issue from ContinuityRule rows only.
+    """Return direct blockers for one issue, including crossover ordering.
 
     Args:
         issue_id: Issue identifier.
         snapshot: Loaded continuity graph snapshot.
 
     Returns:
-        Direct continuity-rule blockers. Crossover ordering is no longer a
-        runtime authority after the canonical dependency cutover.
+        Direct continuity-rule blockers plus any crossover ordering blockers that
+        prevent the issue from being read before earlier ordered entries.
     """
-    return _direct_blockers("issue", issue_id, snapshot)
+    return _direct_blockers("issue", issue_id, snapshot) + crossover_order_blockers(
+        issue_id, snapshot
+    )
 
 
 def issue_rule_readiness(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
     """Return blockers from compiled ContinuityRule rows only.
 
-    This is the primary readiness function after the canonical dependency cutover.
-    ContinuityRule evaluation is retained for backward compatibility and migration
-    scenarios, but the canonical runtime authority is Thread frontiers plus
-    canonical Dependencies only.
+    Excludes ``DependencyGroupMembership.sequence_order`` crossover ordering so
+    callers that audit canonical rule coverage cannot mistake sequence-order
+    authority for ContinuityRule coverage.
     """
     return _direct_blockers("issue", issue_id, snapshot)
 
