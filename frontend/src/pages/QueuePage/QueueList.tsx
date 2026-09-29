@@ -61,7 +61,7 @@ export function QueueList({
           🎲
         </div>
         <div className="mt-4 space-y-1">
-          <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+          <p className="text-base font-bold text-stone-300">
             Nothing to roll yet
           </p>
           <p className="text-xs text-stone-500">

@@ -166,7 +166,7 @@ export function DecisionCard({
       ) : null}
 
       <div
-        className="sticky bottom-0 -mx-3 md:static md:mx-0 space-y-2 pt-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:pt-1 md:pb-0 border-t border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 md:px-0 surface-glass"
+        className="w-full space-y-2 pt-3 pb-3 md:pt-1 md:pb-0 border-t border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-0 surface-glass"
         data-testid="rating-actions"
       >
         <button

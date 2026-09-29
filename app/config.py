@@ -536,6 +536,71 @@ class RedisSettings(BaseSettings):
         return self.cache_provider
 
 
+class EmailSettings(BaseSettings):
+    """Outbound email configuration settings (issue #2778).
+
+    Resend is the selected outbound email provider for password-reset
+    delivery. All three core values are deployment configuration, never
+    source literals. Placeholder values are treated as missing.
+    """
+
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+
+    resend_api_key: str = Field(
+        default="",
+        description="Resend API key for outbound email (RESEND_API_KEY)",
+        json_schema_extra={"env": "RESEND_API_KEY"},
+    )
+    password_reset_sender: str = Field(
+        default="",
+        description=(
+            "Verified sender identity for password-reset mail, e.g. "
+            "'Comic Pile <no-reply@example.com>' (PASSWORD_RESET_SENDER)"
+        ),
+        json_schema_extra={"env": "PASSWORD_RESET_SENDER"},
+    )
+    password_reset_origin: str = Field(
+        default="",
+        description=(
+            "Public web origin used to build password-reset links, e.g. "
+            "'https://app.example.com' (PASSWORD_RESET_ORIGIN)"
+        ),
+        json_schema_extra={"env": "PASSWORD_RESET_ORIGIN"},
+    )
+    password_reset_path: str = Field(
+        default="/reset-password",
+        description="Public reset-page path appended to the origin",
+        json_schema_extra={"env": "PASSWORD_RESET_PATH"},
+    )
+
+    @property
+    def usable_resend_api_key(self) -> str | None:
+        """Return the Resend API key, or None when missing/placeholder."""
+        return _usable_secret(self.resend_api_key or None)
+
+    @property
+    def normalized_origin(self) -> str | None:
+        """Return the reset-link origin without a trailing slash, or None."""
+        value = (self.password_reset_origin or "").strip()
+        if not value:
+            return None
+        return value.rstrip("/")
+
+    @property
+    def normalized_path(self) -> str:
+        """Return the reset-page path guaranteed to start with '/'."""
+        value = (self.password_reset_path or "").strip() or "/reset-password"
+        return value if value.startswith("/") else f"/{value}"
+
+    @property
+    def is_configured(self) -> bool:
+        """Return True when all required outbound-email settings are present."""
+        sender = (self.password_reset_sender or "").strip()
+        return bool(
+            self.usable_resend_api_key and sender and self.normalized_origin,
+        )
+
+
 class ImageDeliverySettings(BaseSettings):
     """Remote comic cover image optimization settings."""
 
@@ -622,6 +687,11 @@ class Settings(BaseSettings):
         """Get remote image delivery settings."""
         return get_image_delivery_settings()
 
+    @property
+    def email(self) -> EmailSettings:
+        """Get outbound email settings."""
+        return get_email_settings()
+
 
 @lru_cache
 def get_database_settings() -> DatabaseSettings:
@@ -672,6 +742,12 @@ def get_recommendation_settings() -> RecommendationSettings:
 
 
 @lru_cache
+def get_email_settings() -> EmailSettings:
+    """Get cached outbound email settings instance."""
+    return EmailSettings()
+
+
+@lru_cache
 def get_image_delivery_settings() -> ImageDeliverySettings:
     """Get cached remote image delivery settings instance."""
     return ImageDeliverySettings()
@@ -693,5 +769,6 @@ def clear_settings_cache() -> None:
     get_github_settings.cache_clear()
     get_redis_settings.cache_clear()
     get_recommendation_settings.cache_clear()
+    get_email_settings.cache_clear()
     get_image_delivery_settings.cache_clear()
     get_settings.cache_clear()

@@ -55,7 +55,7 @@ function QueueControlsInner({
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
             Queue
           </h1>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+          <p className="text-base font-semibold text-stone-500">
             Your upcoming comics
           </p>
         </div>

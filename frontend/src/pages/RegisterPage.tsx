@@ -95,7 +95,7 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+              <label htmlFor="username" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Username
               </label>
               <input
@@ -112,7 +112,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+              <label htmlFor="email" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Email
               </label>
               <input
@@ -129,7 +129,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+              <label htmlFor="password" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Password
               </label>
               <input
@@ -146,7 +146,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+              <label htmlFor="confirmPassword" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Confirm Password
               </label>
               <input
@@ -172,7 +172,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+            className="w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
           >
             {isLoading ? 'Creating account...' : 'Create Account'}
           </button>

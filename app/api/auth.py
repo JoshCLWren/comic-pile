@@ -4,7 +4,7 @@ import logging
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from jose.exceptions import ExpiredSignatureError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +23,7 @@ from app.auth import (
 from app.csrf import ensure_csrf_cookie, is_secure_request
 from app.database import get_db
 from app.middleware import limiter
-from app.services.password_reset_service import request_forgot_password, complete_reset
+from app.services.password_reset_service import handle_forgot_password_request, complete_reset
 from app.models.user import User
 from app.repositories.failed_login_repository import (
     clear_attempts_for_username,
@@ -415,26 +415,16 @@ async def get_current_user_info(
 async def forgot_password(
     request: Request,
     data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PasswordResetResponse:
     """Enumeration-safe forgot-password request.
 
-    Same acknowledgement whether email exists or not.
-    Rate-limited via existing application limiter.
+    Same acknowledgement whether email exists or not, and returned before any
+    outbound email attempt so provider latency cannot distinguish a known
+    address from an unknown one. Rate-limited via existing application limiter.
     """
-    handoff = await request_forgot_password(db, data.email)
-    if handoff is not None:
-        # Provider-neutral delivery handoff for #2778 — do not embed provider
-        logger.info(
-            "Password reset handoff: user=%s email=%s expires=%s",
-            handoff.user_username,
-            handoff.recipient_email,
-            handoff.expires_at,
-            extra={
-                "event": "password_reset_handoff",
-                "user": handoff.user_username,
-            },
-        )
+    await handle_forgot_password_request(db, data.email, background_tasks)
     return PasswordResetResponse(message="If an account exists, a reset link has been sent.")
 
 

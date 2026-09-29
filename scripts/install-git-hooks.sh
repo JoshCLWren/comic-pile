@@ -5,12 +5,19 @@ set -euo pipefail
 
 echo "🔧 Installing git hooks..."
 
-mkdir -p .git/hooks .git/hooks/comic-pile-originals
+if git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+    hooks_dir="$git_common_dir/hooks"
+else
+    # Preserve support for the isolated fixture used by the installer regression test.
+    hooks_dir="$(pwd)/.git/hooks"
+fi
+
+mkdir -p "$hooks_dir" "$hooks_dir/comic-pile-originals"
 
 backup_original_hook() {
     local hook_name="$1"
-    local active_hook=".git/hooks/$hook_name"
-    local backup_hook=".git/hooks/comic-pile-originals/$hook_name"
+    local active_hook="$hooks_dir/$hook_name"
+    local backup_hook="$hooks_dir/comic-pile-originals/$hook_name"
 
     if [[ -f "$active_hook" && ! -e "$backup_hook" ]]; then
         cp "$active_hook" "$backup_hook"
@@ -24,17 +31,17 @@ backup_original_hook pre-push
 backup_original_hook prepare-commit-msg
 
 # Install from versioned hooks.
-cp .githooks/pre-commit .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
+cp .githooks/pre-commit "$hooks_dir/pre-commit"
+chmod +x "$hooks_dir/pre-commit"
 
 if [[ -f .githooks/pre-push ]]; then
-    cp .githooks/pre-push .git/hooks/pre-push
-    chmod +x .git/hooks/pre-push
+    cp .githooks/pre-push "$hooks_dir/pre-push"
+    chmod +x "$hooks_dir/pre-push"
 fi
 
 if [[ -f .githooks/prepare-commit-msg ]]; then
-    cp .githooks/prepare-commit-msg .git/hooks/prepare-commit-msg
-    chmod +x .git/hooks/prepare-commit-msg
+    cp .githooks/prepare-commit-msg "$hooks_dir/prepare-commit-msg"
+    chmod +x "$hooks_dir/prepare-commit-msg"
 fi
 
 echo "✅ Git hooks installed"
@@ -45,7 +52,7 @@ echo "  - pre-push: Runs tests before each push"
 echo "  - prepare-commit-msg: Adds the producing model trailer (\$OPENCODE_MODEL)"
 echo ""
 echo "Original user hooks, when present, are preserved in:"
-echo "  .git/hooks/comic-pile-originals/"
+echo "  $hooks_dir/comic-pile-originals/"
 echo ""
 echo "Cursor Cloud remaps core.hooksPath to its dispatcher. That dispatcher"
 echo "only chains to these files when they exist and are executable under"

@@ -29,7 +29,7 @@ interface RollHeaderProps {
  * and data ownership stays in the page feature modules.
  *
  * Visual hierarchy (issue #2087 deslop + #2197 action clarity + #2304 mode-state grammar):
- *   1. roll now      - the Roll CTA under the die is the single dominant primary
+ *   1. Begin        - the Roll CTA under the die is the single dominant primary
  *                      action for the default happy path (#2197)
  *   2. die-size selection  - one segmented-control group; items have no border
  *   3. automatic / mode    - "Auto" lives inside the segmented group; the
