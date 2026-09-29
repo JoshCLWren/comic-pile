@@ -18,15 +18,18 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "cutover-2553"
+# Down revision is the previous migration
+# NOTE: revision string contains hyphen, acceptable
+# for alembic
+
 down_revision: str | Sequence[str] | None = "g9h0i1j2k3l4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Persist canonical Dependency edges and drop the legacy bridge trigger."""
-    # Insert canonical Dependency rows for rule-native item_read rules
-    # that have no existing matching Dependency row.
+    """Persist canonical Dependency edges and drop legacy bridge trigger."""
+    # Insert canonical Dependency rows for rule-native item_read rules that have no existing matching Dependency row.
     op.execute(
         sa.text(
             """
@@ -53,13 +56,12 @@ def upgrade() -> None:
                 AND d.target_issue_id = dcr.target_issue_id
             WHERE d.id IS NULL
             ORDER BY dcr.source_issue_id, dcr.target_issue_id, dcr.created_at DESC
-            ON CONFLICT (source_issue_id, target_issue_id) DO NOTHING
+            ON CONFLICT (source_issue_id, target_issue_id) DO NOTHING;
             """
         )
     )
 
-    # Insert canonical Dependency rows for converged rules: one edge per
-    # convergence target that has no existing matching Dependency row.
+    # Insert canonical Dependency rows for converged rules: one edge per convergence target that has no existing matching Dependency row.
     op.execute(
         sa.text(
             """
@@ -73,9 +75,9 @@ def upgrade() -> None:
             JOIN issues src_issue ON src_issue.id = cr.source_id
             CROSS JOIN jsonb_array_elements(
                 CASE WHEN cr.convergence_targets::text <> 'null'
-                     AND cr.convergence_targets IS NOT NULL
-                     THEN cr.convergence_targets::jsonb
-                     ELSE '[]'::jsonb
+                      AND cr.convergence_targets IS NOT NULL
+                      THEN cr.convergence_targets::jsonb
+                      ELSE '[]'::jsonb
                 END
             ) AS tgt
             JOIN issues tgt_issue ON tgt_issue.id = (tgt->>'id')::int
@@ -86,14 +88,12 @@ def upgrade() -> None:
               AND src_issue.id <> (tgt->>'id')::int
               AND d.id IS NULL
             ORDER BY src_issue.id, (tgt->>'id')::int, cr.created_at DESC
-            ON CONFLICT (source_issue_id, target_issue_id) DO NOTHING
+            ON CONFLICT (source_issue_id, target_issue_id) DO NOTHING;
             """
         )
     )
 
     # Drop the trigger that mirrored Dependency writes into ContinuityRules.
-    # After cutover, the Dependency table is canonical and the trigger
-    # is no longer needed.
     op.execute("DROP TRIGGER IF EXISTS trg_sync_legacy_dependency_to_continuity_rule ON dependencies")
 
 
