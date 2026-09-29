@@ -21,10 +21,12 @@ from factory_review_policy import head_has_authorized_approval
 from factory_work_policy import (
     BLOCKED_LABELS,
     FACTORY_REVIEW_BACKLOG_LIMIT,
+    FACTORY_PR_WIP_LIMIT,
     MANUAL_ONLY_MARKER,
     NON_EXECUTABLE_ISSUES,
     build_candidates,
     factory_review_backlog_count,
+    factory_pr_wip_count,
     labels_of,
     linked_issue_from_pr,
     owner_of,
@@ -457,6 +459,10 @@ def main() -> int:
                 str(factory_review_backlog_count(json.loads(raw)["pull_requests"])),
                 "--backlog-limit",
                 str(FACTORY_REVIEW_BACKLOG_LIMIT),
+                "--active-changes",
+                str(factory_pr_wip_count(json.loads(raw)["pull_requests"])),
+                "--wip-limit",
+                str(FACTORY_PR_WIP_LIMIT),
             ]
             return subprocess.run(command, check=False).returncode
     except (AdopterInputError, KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:

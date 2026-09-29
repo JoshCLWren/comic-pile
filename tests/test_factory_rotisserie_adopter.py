@@ -113,6 +113,14 @@ def test_retry_suppression_is_visible() -> None:
     assert ("ranking", "work:3002") not in observations
 
 
+def test_projection_pressure_uses_factory_wip_policy() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+    assert adapter.factory_pr_wip_count(view["pull_requests"]) == 0
+    assert adapter.FACTORY_PR_WIP_LIMIT == 5
+
+
 def test_manual_gate_mapping() -> None:
     adapter = load_adapter()
     view = json.loads(FIXTURE.read_text(encoding="utf-8"))
