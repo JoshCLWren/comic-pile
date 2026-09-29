@@ -52,7 +52,7 @@ class IssueCreateRange(BaseModel):
     insert_after_issue_id: int | None = Field(
         default=None,
         ge=1,
-        description="Insert new issues after this issue ID. If null, append to end.",
+        description="Insert new issues after this issue ID. If null, insert at the beginning (position 1).",
     )
 
 

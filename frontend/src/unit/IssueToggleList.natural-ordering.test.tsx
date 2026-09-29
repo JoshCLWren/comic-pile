@@ -143,7 +143,7 @@ describe('IssueToggleList with Natural Ordering', () => {
     })
   })
 
-  test('adds non-numeric issue (should append)', async () => {
+  test('adds non-numeric issue (should append at end)', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <IssueToggleList threadId={1} />
@@ -163,10 +163,10 @@ describe('IssueToggleList with Natural Ordering', () => {
     fireEvent.change(input, { target: { value: 'Annual 1' } })
     fireEvent.click(addButton)
 
-    // Verify the API was called with append (null for insert_after_issue_id)
+    // Verify the API was called with append (last issue's ID for insert_after_issue_id)
     await waitFor(() => {
       expect(issuesApi.create).toHaveBeenCalledWith(1, 'Annual 1', {
-        insert_after_issue_id: null // Should append for ambiguous cases
+        insert_after_issue_id: 3 // Should append at end for ambiguous cases
       })
     })
   })

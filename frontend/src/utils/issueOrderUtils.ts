@@ -26,7 +26,7 @@ export function parseOrdinaryNumericIssue(issueNumber: string): number | null {
  * 
  * @param existingIssues - Current list of issues (must be sorted by position)
  * @param newIssueNumbers - Array of issue numbers to add
- * @returns The issue ID to insert after, or null if should append
+ * @returns The issue ID to insert after, or null if should insert at the beginning
  */
 export function findNaturalInsertPosition(
   existingIssues: Array<{ id: number; issue_number: string }>,
@@ -36,9 +36,9 @@ export function findNaturalInsertPosition(
   const ordinaryNewIssues = newIssueNumbers.filter(isOrdinaryNumericIssue)
   const nonOrdinaryNewIssues = newIssueNumbers.filter(issue => !isOrdinaryNumericIssue)
 
-  // If no ordinary numeric issues, just append (ambiguous case)
+  // If no ordinary numeric issues (all ambiguous), append at end
   if (ordinaryNewIssues.length === 0) {
-    return null
+    return existingIssues.length > 0 ? existingIssues[existingIssues.length - 1].id : null
   }
 
   // Convert existing issues to comparable format
@@ -65,7 +65,7 @@ export function findNaturalInsertPosition(
   // Find the insertion position for the first ordinary new issue
   const firstNewIssue = sortedOrdinaryNewIssues[0]
   if (!firstNewIssue) {
-    return null
+    return existingIssues.length > 0 ? existingIssues[existingIssues.length - 1].id : null
   }
 
   // Find where the first new issue should go among existing ordinary issues
@@ -81,14 +81,14 @@ export function findNaturalInsertPosition(
     }
   }
 
-  // If all existing issues are smaller than our new issue, we insert after the last one
+  // If all existing ordinary issues are smaller than our new issue, we insert after the last ordinary one
   if (insertAfterId === null && existingOrdinaryIssues.length > 0) {
     insertAfterId = existingOrdinaryIssues[existingOrdinaryIssues.length - 1].id
   }
 
-  // If there are no existing ordinary issues, just append (insert at beginning)
+  // If there are no existing ordinary issues, append at end of all issues
   if (existingOrdinaryIssues.length === 0) {
-    return null
+    return existingIssues.length > 0 ? existingIssues[existingIssues.length - 1].id : null
   }
 
   return insertAfterId

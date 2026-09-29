@@ -113,8 +113,7 @@ async def create_issues(
     existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
     existing_issues = {row[1]: row[2] for row in existing_rows}
 
-    max_position = max((row[2] for row in existing_rows), default=0)
-    insert_position = max_position
+    insert_position = 0
 
     if insert_after_issue_id is not None:
         insert_after_issue = next(

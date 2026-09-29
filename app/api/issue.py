@@ -211,9 +211,10 @@ async def create_issues(
 ) -> IssueListResponse:
     """Create issues from a range string and place them in thread order.
 
-    By default new issues are appended after the last existing issue. When
-    ``insert_after_issue_id`` is provided, existing issues later in the thread are
-    shifted upward so the new issues are inserted immediately after that issue.
+    By default new issues are inserted at the beginning of the thread (position 1).
+    When ``insert_after_issue_id`` is provided, existing issues at or after that
+    position are shifted upward so the new issues are inserted immediately after
+    that issue.
 
     Args:
         thread_id: The thread ID to create issues for.
