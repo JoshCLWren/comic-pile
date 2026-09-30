@@ -60,6 +60,13 @@ Fix the problem instead.
 3. Run `make dev` and open the app at `http://localhost:5173`.
 4. API docs are available at `http://localhost:8000/docs`.
 
+Production migrations install dependencies with `uv sync --locked --no-dev`.
+This keeps the `migrate` and `server` default groups but excludes development
+tools. Keep `sqlalchemy[asyncio]` in the project dependencies: both the async
+application and Alembic's model imports require greenlet. The Production
+Runtime Migrations CI job tests this install separately from the dev image,
+where Playwright can otherwise mask a missing greenlet dependency.
+
 ### API Development
 
 - REST endpoints are defined in `app/api/`

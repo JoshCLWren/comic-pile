@@ -139,6 +139,27 @@ def test_default_groups_cover_all_non_vercel_runtimes() -> None:
     assert default_groups == ["dev", "migrate", "server"]
 
 
+def test_async_database_runtime_installs_greenlet_without_dev_tools() -> None:
+    """SQLAlchemy async support must not depend on Playwright's dev dependency."""
+    dependencies = _pyproject()["project"]["dependencies"]
+    assert any(dependency.startswith("sqlalchemy[asyncio]") for dependency in dependencies)
+
+    package = _lock_project_package()
+    sqlalchemy = next(item for item in package["dependencies"] if item["name"] == "sqlalchemy")
+    assert "asyncio" in sqlalchemy["extra"]
+    sqlalchemy_metadata = next(
+        item for item in package["metadata"]["requires-dist"] if item["name"] == "sqlalchemy"
+    )
+    assert "asyncio" in sqlalchemy_metadata["extras"]
+
+    locked_sqlalchemy = next(
+        item for item in _lockfile()["package"] if item["name"] == "sqlalchemy"
+    )
+    assert any(
+        item["name"] == "greenlet" for item in locked_sqlalchemy["optional-dependencies"]["asyncio"]
+    )
+
+
 def test_lockfile_project_metadata_matches_the_slim_set() -> None:
     """uv.lock must agree with the trimmed production dependency set."""
     package = _lock_project_package()

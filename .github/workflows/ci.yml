@@ -184,6 +184,48 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  production-runtime-migrations:
+    name: Production Runtime Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: true
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      # Match Deploy Production exactly; dev tools can mask missing runtime
+      # dependencies (Playwright brings greenlet into the ordinary CI image).
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Verify async runtime imports
+        run: .venv/bin/python -c "import greenlet; import app.database; import app.models"
+
+      - name: Apply all migrations from scratch with production dependencies
+        run: .venv/bin/alembic upgrade head
+
   migration-health:
     name: Migration Health
     runs-on: ubuntu-latest
@@ -319,7 +361,7 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, migration-health, test-unit]
+    needs: [build, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health, test-unit]
     if: always()
     steps:
       - name: Check job results
@@ -330,6 +372,7 @@ jobs:
           echo "Python Type Check (ty): ${{ needs.python-typecheck.result }}"
           echo "Frontend Unit Tests: ${{ needs.frontend-unit-tests.result }}"
           echo "Rendered UI Audit: ${{ needs.ui-audit.result }}"
+          echo "Production Runtime Migrations: ${{ needs.production-runtime-migrations.result }}"
           echo "Migration Health: ${{ needs.migration-health.result }}"
           echo "Backend Tests: ${{ needs.test-unit.result }}"
           if [ "${{ needs.build.result }}" != "success" ] || \
@@ -338,6 +381,7 @@ jobs:
              [ "${{ needs.python-typecheck.result }}" != "success" ] || \
              [ "${{ needs.frontend-unit-tests.result }}" != "success" ] || \
              [ "${{ needs.ui-audit.result }}" != "success" ] || \
+             [ "${{ needs.production-runtime-migrations.result }}" != "success" ] || \
              [ "${{ needs.migration-health.result }}" != "success" ] || \
              [ "${{ needs.test-unit.result }}" != "success" ]; then
             echo "::error::One or more required CI jobs failed. Please review the failures."

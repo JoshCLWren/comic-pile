@@ -3,6 +3,12 @@
 
 set -euo pipefail
 
+# Git exports repository-local settings to hooks. Tests create independent
+# repositories, so do not let those children inherit this worktree's Git state.
+while IFS= read -r git_local_variable; do
+    unset "$git_local_variable"
+done < <(git rev-parse --local-env-vars)
+
 echo "Running pre-push CI parity checks..."
 
 # Ensure we're running at repo root
