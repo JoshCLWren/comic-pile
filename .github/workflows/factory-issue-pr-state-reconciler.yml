@@ -2,7 +2,7 @@ name: Factory Issue PR State Reconciler
 
 on:
   pull_request_target:
-    types: [opened, reopened, closed]
+    types: [opened, reopened, ready_for_review, closed, unlabeled]
   workflow_dispatch:
   schedule:
     # PR events cannot repair issues whose last canonical PR was closed before
@@ -31,6 +31,13 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+
+      - name: Enroll repository PRs missing factory labels
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { reconcileMissingPrLabels } = require('./.github/scripts/factory-visibility.cjs');
+            await reconcileMissingPrLabels({ github, context });
 
       - name: Reconcile linked issue from trusted canonical PR history
         env:

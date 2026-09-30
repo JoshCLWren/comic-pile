@@ -193,6 +193,46 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
   return 'factory:unowned';
 }
 
+async function reconcileMissingPrLabels({ github, context }) {
+  const candidates = context.eventName === 'pull_request_target'
+    ? [context.payload.pull_request]
+    : await withRetry(() => github.paginate(github.rest.pulls.list, {
+      ...context.repo, state: 'open', per_page: 100,
+    }));
+  for (const pr of candidates) {
+    if (pr.state !== 'open' || pr.draft
+      || pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`
+      || /^(dependabot|renovate)(\[bot\])?$/.test(pr.user?.login || '')) continue;
+    const current = await currentLabels(github, context, pr.number);
+    const owners = OWNER_LABELS.filter(label => current.has(label));
+    const stages = STAGE_LABELS.filter(label => current.has(label));
+    if (current.has('factory') && owners.length === 1 && stages.length === 1) continue;
+
+    // Repair missing metadata without taking an existing lease or downgrading
+    // review/CI state. Never manufacture readiness from green checks alone.
+    let stage = stages.length === 1 ? stages[0] : 'factory:review';
+    if (stages.length === 0) {
+      const comments = await withRetry(() => github.paginate(github.rest.issues.listComments, {
+        ...context.repo, issue_number: pr.number, per_page: 100,
+      }));
+      for (const comment of [...comments].sort(
+        (left, right) => new Date(right.created_at) - new Date(left.created_at),
+      )) {
+        if (!TRUSTED_ASSOCIATIONS.has(comment.author_association)) continue;
+        const match = (comment.body || '').match(
+          /comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required)/,
+        );
+        if (match?.[1] !== pr.head.sha) continue;
+        stage = match[2] === 'pass' ? 'factory:ci' : 'factory:changes-requested';
+        break;
+      }
+    }
+    await reconcileLabels(github, context, pr.number, {
+      owner: owners.length === 1 ? owners[0] : 'factory:unowned', stage,
+    });
+  }
+}
+
 async function reconcile({ github, context }) {
   await ensureLabels(github, context);
 
@@ -281,6 +321,7 @@ async function reconcile({ github, context }) {
 }
 
 module.exports = reconcile;
+module.exports.reconcileMissingPrLabels = reconcileMissingPrLabels;
 module.exports._test = {
   durablePrOwner,
   ownerFor,
