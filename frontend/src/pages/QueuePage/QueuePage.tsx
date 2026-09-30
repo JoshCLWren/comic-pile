@@ -54,7 +54,6 @@ export default function QueuePage() {
   // Fetch crossover groups once for all active threads so cards never fan out
   // into their own per-card request.
   const {
-    crossoverGroupsByThreadId,
     crossoverGroupsPending,
     crossoverGroupsError,
     getCrossoverGroupsForThread,

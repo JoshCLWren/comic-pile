@@ -39,7 +39,6 @@ vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 
-
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: vi.fn() } }))
 
 vi.mock('../services/api', () => ({
