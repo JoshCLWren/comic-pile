@@ -86,3 +86,57 @@ export function resolveNaturalInsertAnchor(
 
   return anchorIssueId === null ? { kind: 'start' } : { kind: 'after', issueId: anchorIssueId };
 }
+
+/**
+ * Build the full thread issue-id order that persists a natural insertion, or
+ * `null` when the create call alone already persisted it.
+ *
+ * Create persists the run in the order the values were typed, so a run typed
+ * out of order (e.g. "5, 4") would land out of natural order. The natural
+ * anchors guarantee the run is ordinary numeric, so the block is normalized to
+ * ascending numbers on the canonical `Issue.position` path instead of
+ * inventing a second ordering source of truth. Existing issues keep whatever
+ * canonical order the reader established.
+ *
+ * No reorder is needed when an `after` creation already landed the run in
+ * natural order, and never for an ambiguous `end` append.
+ *
+ * @param existingIssues - Current thread issues in canonical order.
+ * @param anchor - The natural insert anchor for this addition.
+ * @param createdIssues - Issues the create call returned, in creation order.
+ * @returns The full ordered id list to send to the reorder endpoint, or null.
+ */
+export function naturalInsertFullOrder(
+  existingIssues: readonly OrderedIssue[],
+  anchor: NaturalInsertAnchor,
+  createdIssues: readonly OrderedIssue[],
+): number[] | null {
+  if (anchor.kind === 'end' || createdIssues.length === 0) {
+    return null;
+  }
+
+  const createdSorted = [...createdIssues].sort(
+    (a, b) => Number(a.issue_number) - Number(b.issue_number),
+  );
+  const blockIsNatural = createdSorted.every(
+    (issue, index) => issue.id === createdIssues[index].id,
+  );
+
+  if (anchor.kind === 'after' && blockIsNatural) {
+    return null;
+  }
+
+  if (anchor.kind === 'start') {
+    return [
+      ...createdSorted.map((issue) => issue.id),
+      ...existingIssues.map((issue) => issue.id),
+    ];
+  }
+
+  const anchorIndex = existingIssues.findIndex((issue) => issue.id === anchor.issueId);
+  return [
+    ...existingIssues.slice(0, anchorIndex + 1).map((issue) => issue.id),
+    ...createdSorted.map((issue) => issue.id),
+    ...existingIssues.slice(anchorIndex + 1).map((issue) => issue.id),
+  ];
+}
