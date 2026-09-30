@@ -82,6 +82,7 @@ jobs:
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: |
           set -Eeuo pipefail
           mkdir -p "$HOME/.config/opencode"
@@ -93,12 +94,14 @@ jobs:
             --arg zen "${OPENCODE_ZEN_API_KEY:-}" \
             --arg nvidia "${NVIDIA_API_KEY:-}" \
             --arg openrouter "${OPENROUTER_API_KEY:-}" \
+            --arg mistral "${MISTRAL_API_KEY:-}" \
             '{
               provider: (
                 {}
                 + (if $zen != "" then {opencode: {options: {apiKey: $zen}}} else {} end)
                 + (if $nvidia != "" then {nvidia: {options: {apiKey: $nvidia}}} else {} end)
                 + (if $openrouter != "" then {openrouter: {options: {apiKey: $openrouter}}} else {} end)
+                + (if $mistral != "" then {mistral: {options: {apiKey: $mistral}}} else {} end)
               )
             }' > "$HOME/.config/opencode/opencode.json"
           chmod 600 "$HOME/.config/opencode/opencode.json"
@@ -125,6 +128,7 @@ jobs:
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           CATALOG_FIXTURE: ${{ inputs.catalog_fixture }}
           ADD_UNUSED_FREE: ${{ github.event_name == 'workflow_dispatch' && inputs.add_unused_free == false && 'false' || 'true' }}
         run: |
@@ -189,6 +193,7 @@ jobs:
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           CATALOG_FIXTURE: ${{ inputs.catalog_fixture }}
           ADD_UNUSED_FREE: ${{ github.event_name == 'workflow_dispatch' && inputs.add_unused_free == false && 'false' || 'true' }}
         run: |

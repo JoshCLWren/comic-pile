@@ -1148,12 +1148,13 @@ def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
 
 
 def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free() -> None:
-    """Nex pins became pickles; one surplus pickle converted to Space Bunny.
+    """Nex pins became pickles; surplus pickle 48 is now native Codestral.
 
     OpenRouter Nex N2.5 Pro/Mini free pins expired 2026-09-25 and were
     replaced in place by OpenCode Big Pickle on workers 48-49. Discovery
     then converted the highest surplus pickle (49) to unused
-    ``space-bunny-free``. Worker 48 stays surplus pickle convert fodder.
+    ``space-bunny-free``. Worker 48, the last surplus pickle, is the
+    native Mistral ``codestral-latest`` pin (not mistral-small).
     Worker 50 later retired when ``inclusionai/ling-3.0-flash-vl:free``
     left the live OpenRouter/OpenCode catalogs. Remaining worker ids and
     dispatcher minutes stay; kilo-auto 46 is untouched.
@@ -1171,11 +1172,11 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["48"] == {
         "worker": "48",
-        "source": "opencode-free",
-        "model": "big-pickle",
+        "source": "mistral",
+        "model": "codestral-latest",
         "minute": "50",
         "scheduler": "dispatcher",
-        "display_name": "OpenCode Big Pickle",
+        "display_name": "Mistral Codestral",
     }
     assert by_worker["49"] == {
         "worker": "49",
@@ -1197,11 +1198,10 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
     assert 72 in lock["expected_workers"]
     assert by_worker["72"]["source"] == "vercel-ai-gateway"
     assert by_worker["72"]["model"] == "stealth/pixel-canary"
-    assert ROSTER.opencode_model_is_free(by_worker["48"]["model"])
+    assert ROSTER.mistral_model_is_pinned(by_worker["48"]["model"])
+    assert not ROSTER.mistral_model_is_pinned("mistral-small")
     assert ROSTER.opencode_model_is_free(by_worker["49"]["model"])
-    assert ROSTER.opencode_free_display_name("big-pickle") == (
-        by_worker["48"]["display_name"]
-    )
+    assert by_worker["48"]["display_name"] == "Mistral Codestral"
     assert ROSTER.opencode_free_display_name("space-bunny-free") == (
         by_worker["49"]["display_name"]
     )
@@ -1209,17 +1209,17 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
     assert "big-pickle" in catalogs["opencode"].model_ids()
     assert "space-bunny-free" in catalogs["opencode"].model_ids()
     assert ROSTER.schedule_is_balanced(rows)
-    assert sum(1 for row in rows if row["model"] == "big-pickle") == 1
+    assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 
 
 def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     tmp_path: Path,
 ) -> None:
-    """Fixture apply on the converted roster is a no-op (no grow-72 pickle).
+    """Fixture apply on the converted roster is a no-op (no new worker).
 
     Unique OpenCode frees including ``space-bunny-free`` are already pinned.
-    The remaining surplus pickle on 48 stays convert fodder instead of
-    discovery allocating a new worker.
+    Worker 48 is the protected native Mistral pin, so discovery must not
+    grow a big-pickle worker or rewrite that slot.
     """
     source_roster = ROOT / ".github" / "free-model-factories.tsv"
     source_lock = ROOT / ".github" / "factory-expected-workers.json"
@@ -1255,14 +1255,15 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert by_worker["72"]["source"] == "vercel-ai-gateway"
     assert by_worker["72"]["model"] == "stealth/pixel-canary"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["48"]["model"] == "big-pickle"
+    assert by_worker["48"]["source"] == "mistral"
+    assert by_worker["48"]["model"] == "codestral-latest"
     assert by_worker["48"]["minute"] == "50"
     assert by_worker["49"]["model"] == "space-bunny-free"
     assert by_worker["49"]["minute"] == "55"
     assert by_worker["49"]["display_name"] == ROSTER.opencode_free_display_name(
         "space-bunny-free"
     )
-    assert sum(1 for row in remaining if row["model"] == "big-pickle") == 1
+    assert sum(1 for row in remaining if row["model"] == "big-pickle") == 0
     assert ROSTER.schedule_is_balanced(remaining)
 
 
@@ -1276,8 +1277,9 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     assert {51, 52, 53}.isdisjoint(set(lock["retired_workers"]))
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["48"]["source"] == "opencode-free"
-    assert by_worker["48"]["model"] == "big-pickle"
+    assert by_worker["48"]["source"] == "mistral"
+    assert by_worker["48"]["model"] == "codestral-latest"
+    assert by_worker["48"]["model"] != "mistral-small"
     assert by_worker["51"] == {
         "worker": "51",
         "source": "openrouter-free",
@@ -1439,7 +1441,7 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_qwen38_27b() -> Non
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
     assert "qwen/qwen3.8-27b:free" in catalogs["openrouter"].model_ids()
     assert ROSTER.schedule_is_balanced(rows)
-    assert sum(1 for row in rows if row["model"] == "big-pickle") == 1
+    assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 
 
 def test_committed_tsv_upgrades_worker_41_to_opencode_mimo_v26_flash() -> None:

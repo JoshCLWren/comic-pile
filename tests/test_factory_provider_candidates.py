@@ -224,6 +224,13 @@ def test_z_ai_and_ollama_cloud_require_runtime_evidence() -> None:
     assert ollama.mode == "runtime_only"
     assert ollama.status == "indeterminate"
     assert ollama.candidates == ()
+    mistral = CANDIDATES.discover(
+        "mistral",
+        json.dumps({"data": [{"id": "codestral-latest"}, {"id": "mistral-small"}]}),
+    )
+    assert mistral.mode == "runtime_only"
+    assert mistral.status == "indeterminate"
+    assert mistral.candidates == ()
 
 
 def test_unknown_provider_is_rejected() -> None:

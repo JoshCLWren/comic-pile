@@ -80,6 +80,11 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     vercel = [row for row in rows if row['source'] == 'vercel-ai-gateway']
     assert len(vercel) == 1
     assert vercel[0]['model'] == 'stealth/pixel-canary'
+    mistral = [row for row in rows if row['source'] == 'mistral']
+    assert len(mistral) == 1
+    assert mistral[0]['worker'] == '48'
+    assert mistral[0]['model'] == 'codestral-latest'
+    assert validate.mistral_model_is_pinned(mistral[0]['model'])
 
 
 def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:
@@ -91,6 +96,16 @@ def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:
     assert validate.ollama_cloud_model_is_free('nemotron-3-nano:30b')
     assert validate.ollama_cloud_model_is_free('gpt-oss:20b')
     assert not validate.ollama_cloud_model_is_free('llama3')
+
+
+def test_mistral_pin_is_codestral_latest_not_mistral_small(validate) -> None:
+    """Native Mistral lanes accept only codestral-latest."""
+    assert validate.mistral_model_is_pinned('codestral-latest')
+    assert validate.mistral_model_is_pinned('mistral/codestral-latest')
+    assert not validate.mistral_model_is_pinned('mistral-small')
+    assert not validate.mistral_model_is_pinned('mistral/mistral-small')
+    assert not validate.mistral_model_is_pinned('mistral-small-latest')
+    assert not validate.mistral_model_is_pinned('codestral-2501')
 
 def test_opencode_zen_promo_union_alpha_is_free(validate) -> None:
     """Bare Zen union-alpha is a time-boxed $0 promo free pin."""
