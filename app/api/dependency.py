@@ -276,4 +276,31 @@ async def get_thread_connected_threads(
     return result
 
 
+# Sub-router registrations moved from app.api.__init__ so the package
+# does not eagerly import the full router surface (issue #2978).
+from app.api import issue_dependency_batch  # noqa: E402
+from app.api import dependency_group  # noqa: E402
+from app.api import dependency_group_batch  # noqa: E402
+from app.api import continuity_rule  # noqa: E402
+from app.api import continuity_plan  # noqa: E402
+from app.api import continuity_template  # noqa: E402
+from app.api import reading_order_projection  # noqa: E402
+from app.api import cbl_sources  # noqa: E402
+from app.api import custom_cbl  # noqa: E402
+from app.api import roll_recovery_switch  # noqa: E402
+from app.api import releases  # noqa: E402
+
+router.include_router(issue_dependency_batch.router)
+router.include_router(dependency_group.router)
+router.include_router(dependency_group_batch.router)
+router.include_router(continuity_rule.router)
+router.include_router(continuity_plan.router)
+router.include_router(continuity_template.router)
+router.include_router(reading_order_projection.router)
+router.include_router(cbl_sources.router)
+router.include_router(custom_cbl.router)
+router.include_router(roll_recovery_switch.router, prefix="/roll")
+router.include_router(releases.router, prefix="/releases")
+
+
 

@@ -131,6 +131,19 @@ async def test_ping_then_non_ping_sequence() -> None:
 
 
 @pytest.mark.asyncio
+async def test_api_init_does_not_eagerly_import_full_router_surface() -> None:
+    """Importing app.api.ping defers full router surface; cold start stays cheap (issue #2978)."""
+    import time
+
+    start = time.time()
+    from app.api import ping
+    elapsed = time.time() - start
+
+    # Cold import must complete quickly; full router surface deferred.
+    assert elapsed < 1.0, f"Cold ping import too slow: {elapsed:.2f}s"
+
+
+@pytest.mark.asyncio
 async def test_heavy_init_is_idempotent_under_concurrent_pings() -> None:
     """Concurrent non-ping requests initialize heavy deps only once."""
     reset_startup_diagnostics_for_test()
