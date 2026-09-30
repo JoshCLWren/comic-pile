@@ -17,7 +17,6 @@ import {
   useShuffleQueue,
 } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
-import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import type { CrossoverGroupsApi } from '../hooks/useCrossoverGroups'
 
@@ -40,7 +39,6 @@ vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 
-vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: vi.fn() } }))
 
