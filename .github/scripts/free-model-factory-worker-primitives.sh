@@ -481,7 +481,11 @@ persist_issue_pr() {
     title="$(gh issue view "$number" --json title --jq .title)"
     body="$(printf 'Closes #%s.\n\nModel: %s\nSource: %s\nWorker: %s\n\nProduced by fixed-model Factory %s (%s). Normal ComicPile exact-head factory merge gates apply.\n' \
       "$number" "$MODEL" "$SOURCE" "$WORKER_ID" "$WORKER" "$DISPLAY")"
-    gh pr create --base main --head "$branch" --title "$title" --body "$body" >/tmp/factory-pr-url
+    # PR creation must use the same trusted actor as pushes. The workflow
+    # token makes the author github-actions[bot], which can require approval
+    # for Actions and causes CodeRabbit to skip the initial review.
+    GH_TOKEN="${PR_REBASE_TOKEN:?PR_REBASE_TOKEN is required for trusted PR creation}" \
+      gh pr create --base main --head "$branch" --title "$title" --body "$body" >/tmp/factory-pr-url
     pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number')"
   fi
   echo "$pr"

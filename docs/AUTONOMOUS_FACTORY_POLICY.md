@@ -240,6 +240,10 @@ Rules:
 
 ## Repository safety
 
+- Fixed-model PR creation must use `PR_REBASE_TOKEN`, like git pushes. Keep the
+  workflow token for controller comments and labels; creating the PR with that
+  token attributes it to `github-actions[bot]`, which can leave Actions awaiting
+  approval and causes CodeRabbit to skip initial review.
 - Never push directly to `main`.
 - Never create or convert a draft PR unless Josh explicitly requests a draft.
 - Never enable auto-merge.
