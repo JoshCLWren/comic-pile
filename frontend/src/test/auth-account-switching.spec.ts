@@ -14,8 +14,8 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
     const request = route.request()
     const path = new URL(request.url()).pathname
     const respond = (body: unknown, status = 200) => route.fulfill({ status, json: body })
-    if (path.endsWith('/auth/csrf')) return respond({ csrf_token: 'test-csrf' })
-    if (path.endsWith('/auth/login')) {
+    if (path === '/api/v1/auth/csrf') return respond({ csrf_token: 'test-csrf' })
+    if (path === '/api/v1/auth/login') {
       const credentials: unknown = request.postDataJSON()
       if (!isObject(credentials) || !isString(credentials.username) || !isString(credentials.password)) {
         throw new Error('Login request must contain a username and password')
@@ -26,16 +26,16 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
       account = credentials.username
       return respond({ access_token: account + '-token', token_type: 'bearer' })
     }
-    if (path.endsWith('/auth/logout')) { account = ''; return respond({}) }
-    if (path.endsWith('/auth/refresh')) {
+    if (path === '/api/v1/auth/logout') { account = ''; return respond({}) }
+    if (path === '/api/v1/auth/refresh') {
       refreshRequests += 1
       return respond({ detail: 'Missing refresh token' }, 401)
     }
-    if (path.endsWith('/auth/me')) {
+    if (path === '/api/v1/auth/me') {
       return account ? respond({ id: account === 'first' ? 1 : 2, username: account, email: account + '@example.com' })
         : respond({ detail: 'Not authenticated' }, 401)
     }
-    if (path.endsWith('/auth/forgot-password')) return respond({ message: 'Reset requested' })
+    if (path === '/api/v1/auth/forgot-password') return respond({ message: 'Reset requested' })
     if (path.endsWith('/users/me/preferences')) return respond({ theme: 'classic', user_id: account === 'first' ? 1 : 2 })
     if (path.endsWith('/identity-inbox')) {
       inboxRequests += 1
