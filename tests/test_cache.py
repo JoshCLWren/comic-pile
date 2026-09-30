@@ -1,29 +1,20 @@
-"""Warm-cache mutation regression tests.
+"""Cache provider regression tests.
 
-These tests verify that cache invalidation actually works by:
-1. Warming the read cache via a GET request
-2. Executing a mutation
-3. Repeating the identical GET request
-4. Asserting the new value appears (before TTL expiration)
+These cover the retained cache implementation itself: circuit breaking, TTL
+handling, value type preservation, reconnect behavior, and the transactional
+guarantee that a blocked-status refresh never populates the cache.
+
+Endpoint read-after-write behavior for the de-cached read paths lives in
+``tests/test_read_path_without_cache_provider.py`` (issue #2972).
 """
 
 from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import cache
-from app.models import Dependency, Issue, Thread, User
-from comic_pile.dependencies import get_blocked_thread_ids
-
-
-async def _authenticated_user_id(async_db: AsyncSession, test_username: str) -> int:
-    """Return the user ID created by the authenticated client fixture."""
-    result = await async_db.execute(select(User.id).where(User.username == test_username))
-    return result.scalar_one()
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -43,285 +34,6 @@ async def _reinitialize_cache() -> AsyncIterator[None]:
     await cache.initialize(local_url=settings.redis_url, allow_local=True)
     assert cache.is_initialized, "Cache failed to initialize for cache regression tests"
     yield
-
-
-@pytest.mark.asyncio
-async def test_cache_thread_list_warm_then_create(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Warm thread list cache, create thread, verify list updates."""
-    await cache.clear_pattern("cache:*")
-
-    # Warm the list cache
-    response1 = await auth_client.get("/api/v1/threads/")
-    assert response1.status_code == 200
-    initial_threads = response1.json()["threads"]
-
-    # Create a new thread
-    response = await auth_client.post(
-        "/api/v1/threads/",
-        json={"title": "Cache Test Thread", "format": "Comic", "issues_remaining": 5},
-    )
-    assert response.status_code == 201
-
-    # Reread - should reflect new thread (list should be different after invalidation)
-    response2 = await auth_client.get("/api/v1/threads/")
-    assert response2.status_code == 200
-    new_threads = response2.json()["threads"]
-    assert len(new_threads) == len(initial_threads) + 1 or new_threads != initial_threads
-
-
-@pytest.mark.asyncio
-async def test_cache_thread_detail_warm_then_update(
-    auth_client: AsyncClient,
-    sample_data: dict,
-) -> None:
-    """Warm thread detail cache, update thread, verify detail updates."""
-    await cache.clear_pattern("cache:*")
-    thread = sample_data["threads"][0]
-
-    # Warm the detail cache
-    response1 = await auth_client.get(f"/api/v1/threads/{thread.id}")
-    assert response1.status_code == 200
-    assert response1.json()["title"] == thread.title
-
-    new_title = "Superman (Updated)"
-    response = await auth_client.put(
-        f"/api/v1/threads/{thread.id}",
-        json={"title": new_title, "format": "Comic", "issues_remaining": 10},
-    )
-    assert response.status_code == 200
-
-    # Reread - should reflect new title
-    response2 = await auth_client.get(f"/api/v1/threads/{thread.id}")
-    assert response2.status_code == 200
-    assert response2.json()["title"] == new_title
-
-
-@pytest.mark.asyncio
-async def test_cache_session_details_warm_then_rate(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    test_username: str,
-) -> None:
-    """Warm session details, rate a thread, verify new event appears."""
-    await cache.clear_pattern("cache:*")
-
-    from app.models import Thread as ThreadModel
-
-    user_id = await _authenticated_user_id(async_db, test_username)
-    thread = ThreadModel(
-        title="Rate Session Test",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user_id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    # Roll dice first so rate endpoint has an active thread
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-
-    # Determine which session is active after the roll
-    current_resp = await auth_client.get("/api/v1/sessions/current/")
-    assert current_resp.status_code == 200
-    active_session_id = current_resp.json()["id"]
-
-    # Warm session details cache using the active session
-    response1 = await auth_client.get(f"/api/v1/sessions/{active_session_id}/details")
-    assert response1.status_code == 200
-    initial_event_count = len(response1.json()["events"])
-
-    # Rate a thread
-    rate_response = await auth_client.post(
-        "/api/v1/rate/",
-        json={
-            "rating": 4,
-            "finish_session": False,
-        },
-    )
-    assert rate_response.status_code == 200
-
-    # Reread session details - should include new rate event
-    response2 = await auth_client.get(f"/api/v1/sessions/{active_session_id}/details")
-    assert response2.status_code == 200
-    assert len(response2.json()["events"]) > initial_event_count
-
-
-@pytest.mark.asyncio
-async def test_cache_session_snapshots_warm_then_rate(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    test_username: str,
-) -> None:
-    """Warm snapshot list, rate a thread, verify new snapshot appears."""
-    await cache.clear_pattern("cache:*")
-
-    from app.models import Thread as ThreadModel
-
-    user_id = await _authenticated_user_id(async_db, test_username)
-    thread = ThreadModel(
-        title="Snap Session Test",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user_id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    # Roll dice first so rate endpoint has an active thread
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-
-    # Determine which session is active after the roll
-    current_resp = await auth_client.get("/api/v1/sessions/current/")
-    assert current_resp.status_code == 200
-    active_session_id = current_resp.json()["id"]
-
-    # Warm snapshot cache using the active session
-    response1 = await auth_client.get(f"/api/v1/sessions/{active_session_id}/snapshots")
-    assert response1.status_code == 200
-    initial_count = len(response1.json()["snapshots"])
-
-    # Rate
-    rate_response = await auth_client.post(
-        "/api/v1/rate/",
-        json={
-            "rating": 4,
-            "finish_session": False,
-        },
-    )
-    assert rate_response.status_code == 200
-
-    # Reread - should include new snapshot
-    response2 = await auth_client.get(f"/api/v1/sessions/{active_session_id}/snapshots")
-    assert response2.status_code == 200
-    assert len(response2.json()["snapshots"]) > initial_count
-
-
-@pytest.mark.asyncio
-async def test_cache_blocking_info_warm_then_mark_read(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Warm blocking info, mark source issue read, verify target unblocked."""
-    await cache.clear_pattern("cache:*")
-
-    user = None
-    from app.models.user import User
-
-    result = await async_db.execute(
-        select(User).where(User.username == "testuser")
-    )
-    user = result.scalar_one_or_none()
-    if not user:
-        result = await async_db.execute(select(User).limit(1))
-        user = result.scalar_one()
-
-    a = Thread(
-        title="Blocking Thread A",
-        format="Comic",
-        issues_remaining=1,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        total_issues=1,
-    )
-    b = Thread(
-        title="Blocked Thread B",
-        format="Comic",
-        issues_remaining=1,
-        queue_position=2,
-        status="active",
-        user_id=user.id,
-        total_issues=1,
-    )
-    async_db.add_all([a, b])
-    await async_db.flush()
-    for t in (a, b):
-        await async_db.refresh(t)
-
-    issue_a = Issue(
-        thread_id=a.id,
-        issue_number="1",
-        position=1,
-        status="unread",
-    )
-    issue_b = Issue(
-        thread_id=b.id,
-        issue_number="1",
-        position=1,
-        status="unread",
-    )
-    async_db.add_all([issue_a, issue_b])
-    await async_db.flush()
-    for iss in (issue_a, issue_b):
-        await async_db.refresh(iss)
-
-    from sqlalchemy import update
-
-    await async_db.execute(
-        update(Thread)
-        .where(Thread.id == a.id)
-        .values(next_unread_issue_id=issue_a.id)
-    )
-    await async_db.execute(
-        update(Thread)
-        .where(Thread.id == b.id)
-        .values(next_unread_issue_id=issue_b.id)
-    )
-
-    dependency = Dependency(
-        source_issue_id=issue_a.id,
-        target_issue_id=issue_b.id,
-    )
-    async_db.add(dependency)
-    await async_db.commit()
-
-    from comic_pile.dependencies import refresh_user_blocked_status
-    await refresh_user_blocked_status(user.id, async_db)
-    await async_db.commit()
-
-    # Warm blocking info for B
-    response1 = await auth_client.post(f"/api/v1/threads/{b.id}:getBlockingInfo")
-    assert response1.status_code == 200
-    assert response1.json()["is_blocked"] is True
-    assert len(response1.json()["blocking_reasons"]) > 0
-
-    # Mark source issue read
-    mark_response = await auth_client.post(
-        f"/api/v1/issues/{issue_a.id}:markRead"
-    )
-    assert mark_response.status_code == 204
-
-    # Reread blocking info - should now show unblocked
-    response2 = await auth_client.post(f"/api/v1/threads/{b.id}:getBlockingInfo")
-    assert response2.status_code == 200
-    assert response2.json()["is_blocked"] is False
-    assert response2.json()["blocking_reasons"] == []
-
-
-@pytest.mark.asyncio
-async def test_cache_get_blocked_thread_ids_returns_set(
-    async_db: AsyncSession,
-    sample_data: dict,
-) -> None:
-    """Verify get_blocked_thread_ids returns a set (not list) on both hit and miss."""
-    user = sample_data["user"]
-
-    await cache.clear_pattern("cache:*")
-
-    result1 = await get_blocked_thread_ids(user.id, async_db)
-    assert isinstance(result1, set), f"Expected set, got {type(result1)}"
-
-    result2 = await get_blocked_thread_ids(user.id, async_db)
-    assert isinstance(result2, set), f"Expected set on cache hit, got {type(result2)}"
 
 
 @pytest.mark.asyncio
@@ -389,25 +101,6 @@ async def test_cache_set_type_preservation(
 
 
 @pytest.mark.asyncio
-async def test_cache_current_session_warm_then_set_pending(
-    auth_client: AsyncClient,
-    sample_data: dict,
-) -> None:
-    """Manual selection invalidates a previously warmed current-session response."""
-    thread = sample_data["threads"][0]
-
-    before = await auth_client.get("/api/v1/sessions/current/")
-    assert before.status_code == 200
-
-    pending = await auth_client.post(f"/api/v1/threads/{thread.id}/set-pending")
-    assert pending.status_code == 200
-
-    after = await auth_client.get("/api/v1/sessions/current/")
-    assert after.status_code == 200
-    assert after.json()["active_thread"]["id"] == thread.id
-
-
-@pytest.mark.asyncio
 async def test_cache_reinitialize_resets_open_circuit() -> None:
     """A successful reconnect closes an earlier open circuit."""
     from app.cache import CircuitState
@@ -447,28 +140,31 @@ async def test_cache_zero_ttl_does_not_persist() -> None:
 
 
 @pytest.mark.asyncio
-async def test_refresh_blocked_status_does_not_populate_cache_before_commit(
+async def test_refresh_blocked_status_uses_the_uncached_blocked_thread_read(
     async_db: AsyncSession,
     sample_data: dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Transactional blocked-status refresh bypasses the cache-backed read."""
+    """The transactional refresh must never use the non-transactional read.
+
+    ``get_blocked_thread_ids`` shares the uncached evaluator, but the refresh
+    path must stay on ``_get_blocked_thread_ids_uncached`` so it reads inside
+    the caller's transaction rather than through a second connection.
+    """
     import comic_pile.dependencies as dependencies_module
 
     user = sample_data["user"]
-    cache_key = f"cache:get_blocked_thread_ids:{user.id}:"
-    await cache.delete(cache_key)
 
-    async def fail_if_cached_read_is_used(user_id: int, db: AsyncSession) -> set[int]:
-        raise AssertionError(f"cached blocked-thread read used for user {user_id}")
+    async def fail_if_non_transactional_read_is_used(
+        user_id: int, db: AsyncSession
+    ) -> set[int]:
+        raise AssertionError(f"non-transactional blocked-thread read used for user {user_id}")
 
     monkeypatch.setattr(
         dependencies_module,
         "get_blocked_thread_ids",
-        fail_if_cached_read_is_used,
+        fail_if_non_transactional_read_is_used,
     )
 
     await dependencies_module.refresh_user_blocked_status(user.id, async_db)
-
-    assert await cache.get(cache_key) is None
     await async_db.rollback()

@@ -9,7 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache import TTL, cached
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import Issue
@@ -130,7 +129,6 @@ def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
 
 
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
-@cached(ttl=TTL.SHORT)
 async def list_issues(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -173,7 +171,6 @@ async def list_issues(
     "/threads/{thread_id}/issues:validateOrder",
     response_model=IssueOrderValidationResponse,
 )
-@cached(ttl=TTL.SHORT)
 async def validate_issue_order(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -262,7 +259,6 @@ async def create_issues(
 
 
 @router.get("/issues/{issue_id}", response_model=IssueResponse)
-@cached(ttl=TTL.SHORT)
 async def get_issue(
     issue_id: int,
     current_user: Annotated[User, Depends(get_current_user)],

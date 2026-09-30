@@ -11,7 +11,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache import TTL, cached
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.middleware import limiter
@@ -325,7 +324,6 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
 
 
 @router.get("/current/")
-@cached(ttl=TTL.SHORT)
 @limiter.limit("200/minute")
 async def get_current_session(
     request: Request,
@@ -442,7 +440,6 @@ async def get_current_session(
 
 
 @router.get("/", response_model=SessionHistoryListResponse)
-@cached(ttl=TTL.SHORT)
 async def list_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
     page_size: int = Query(
@@ -710,7 +707,6 @@ async def list_sessions(
 
 
 @router.get("/{session_id}")
-@cached(ttl=TTL.SHORT)
 async def get_session(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -777,7 +773,6 @@ async def get_session(
 
 
 @router.get("/{session_id}/details")
-@cached(ttl=TTL.SHORT)
 async def get_session_details(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -898,7 +893,6 @@ async def get_session_details(
 
 
 @router.get("/{session_id}/snapshots")
-@cached(ttl=TTL.SHORT)
 async def get_session_snapshots(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],

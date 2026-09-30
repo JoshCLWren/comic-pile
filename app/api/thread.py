@@ -1,7 +1,7 @@
 """Thread CRUD API endpoints.
 
 Thin routing layer: authentication, request/response schema validation,
-HTTP status mapping, and rate limiting/caching decorators. Business logic
+HTTP status mapping, and rate limiting. Business logic
 lives in ``app/services/thread_service.py``; query construction lives in
 ``app/repositories/``.
 """
@@ -13,7 +13,6 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache import TTL, cached
 from app.database import get_db
 from app.middleware import limiter
 from app.models.user import User
@@ -98,7 +97,6 @@ async def list_stale_threads(
 
 @router.get("/", response_model=QueueThreadListResponse)
 @limiter.limit("100/minute")
-@cached(ttl=TTL.SHORT)
 async def list_threads(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -167,7 +165,6 @@ async def list_threads(
 
 @v1_router.get("/completed/threads", response_model=QueueThreadListResponse)
 @limiter.limit("100/minute")
-@cached(ttl=TTL.SHORT)
 async def list_completed_threads(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -270,7 +267,6 @@ async def create_thread(
 
 
 @router.get("/{thread_id}", response_model=ThreadDetail)
-@cached(ttl=TTL.MEDIUM)
 async def get_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],

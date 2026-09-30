@@ -22,10 +22,11 @@ import stays lazy and deployed images never load it (issue #1752).
 Usage:
     from app.cache import cached, cache, TTL
 
-    @cached(ttl=TTL.SHORT)
     async def get_roll_pool(user_id: int, db: AsyncSession):
         # Expensive DB query
         ...
+
+    get_roll_pool = cached(ttl=TTL.SHORT)(get_roll_pool)
 
     # Configure at startup without opening a network connection. The first
     # real cache command performs the connection lazily.
@@ -204,9 +205,10 @@ def cached(
         A decorator preserving the wrapped async function's parameter and return types.
 
     Usage:
-        @cached(ttl=TTL.SHORT)
         async def get_roll_pool(user_id: int, db: AsyncSession):
             ...
+
+        get_roll_pool = cached(ttl=TTL.SHORT)(get_roll_pool)
     """
 
     def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
