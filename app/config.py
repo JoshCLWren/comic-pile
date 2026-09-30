@@ -540,8 +540,9 @@ class EmailSettings(BaseSettings):
     """Outbound email configuration settings (issue #2778).
 
     Resend is the selected outbound email provider for password-reset
-    delivery. All three core values are deployment configuration, never
-    source literals. Placeholder values are treated as missing.
+    delivery. Only the API key is required; production sender and reset-link
+    values are app-owned in the mailer. Overrides apply outside production.
+    Placeholder secrets are treated as missing.
     """
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
@@ -554,7 +555,7 @@ class EmailSettings(BaseSettings):
     password_reset_sender: str = Field(
         default="",
         description=(
-            "Verified sender identity for password-reset mail, e.g. "
+            "Non-production sender override for password-reset mail, e.g. "
             "'Comic Pile <no-reply@example.com>' (PASSWORD_RESET_SENDER)"
         ),
         json_schema_extra={"env": "PASSWORD_RESET_SENDER"},
@@ -562,14 +563,14 @@ class EmailSettings(BaseSettings):
     password_reset_origin: str = Field(
         default="",
         description=(
-            "Public web origin used to build password-reset links, e.g. "
+            "Non-production origin override for password-reset links, e.g. "
             "'https://app.example.com' (PASSWORD_RESET_ORIGIN)"
         ),
         json_schema_extra={"env": "PASSWORD_RESET_ORIGIN"},
     )
     password_reset_path: str = Field(
         default="/reset-password",
-        description="Public reset-page path appended to the origin",
+        description="Non-production reset-page path override",
         json_schema_extra={"env": "PASSWORD_RESET_PATH"},
     )
 
@@ -594,11 +595,8 @@ class EmailSettings(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        """Return True when all required outbound-email settings are present."""
-        sender = (self.password_reset_sender or "").strip()
-        return bool(
-            self.usable_resend_api_key and sender and self.normalized_origin,
-        )
+        """Return True when the only required email secret is usable."""
+        return bool(self.usable_resend_api_key)
 
 
 class ImageDeliverySettings(BaseSettings):

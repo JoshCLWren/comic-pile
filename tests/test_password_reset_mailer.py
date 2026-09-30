@@ -1,12 +1,16 @@
 """Focused acceptance tests for #2778 password-reset email delivery."""
 
 import hashlib
+import io
+import json
 import logging
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 
 import pytest
 from httpx import AsyncClient
@@ -15,6 +19,7 @@ from starlette.background import BackgroundTasks
 from app.auth import hash_password
 from app.config import clear_settings_cache, get_email_settings
 from app.repositories.user_repository import create_user, get_user_by_username
+from app.services import password_reset_mailer
 from app.services.password_reset_mailer import (
     FakePasswordResetMailer,
     PasswordResetDeliveryError,
@@ -147,7 +152,84 @@ async def test_resend_adapter_sends_configured_payload_without_logging_token(
 
 
 @pytest.mark.asyncio
+async def test_resend_wire_request_avoids_urllib_edge_rejection(
+    _clean_mailer_state: None,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Exercise real urllib headers/body against the reproduced edge rejection."""
+    captured: dict[str, object] = {}
+
+    class EdgeHandler(BaseHTTPRequestHandler):
+        """Reject urllib's default signature just like the provider's edge."""
+
+        def do_POST(self) -> None:
+            """Capture actual wire values and accept only the app user agent."""
+            captured.update(
+                path=self.path,
+                authorization=self.headers.get("Authorization"),
+                content_type=self.headers.get("Content-Type"),
+                user_agent=self.headers.get("User-Agent"),
+                payload=json.loads(self.rfile.read(int(self.headers["Content-Length"]))),
+            )
+            accepted = self.headers.get("User-Agent") == "ComicPile/1.0"
+            self.send_response(200 if accepted else 403)
+            self.end_headers()
+            self.wfile.write(b'{"id":"test-message"}' if accepted else b"error code: 1010")
+
+        def log_message(self, format: str, *args: object) -> None:
+            """Keep HTTP request data out of test logs."""
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("RESEND_API_KEY", " \r\nre_wire_test_key\n ")
+    monkeypatch.setenv("PASSWORD_RESET_SENDER", "Stale <unverified@example.com>")
+    monkeypatch.setenv("PASSWORD_RESET_ORIGIN", "https://stale.example.com")
+    monkeypatch.setenv("PASSWORD_RESET_PATH", "/stale-path")
+    clear_settings_cache()
+    assert password_reset_mailer.RESEND_API_URL == "https://api.resend.com/emails"
+    server = ThreadingHTTPServer(("127.0.0.1", 0), EdgeHandler)
+    worker = Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    monkeypatch.setattr(
+        password_reset_mailer, "RESEND_API_URL", f"http://127.0.0.1:{server.server_port}/emails",
+    )
+    try:
+        mailer = get_password_reset_mailer()
+        with caplog.at_level(logging.INFO):
+            await mailer.send_password_reset(
+                recipient_email="joshisplutar@gmail.com",
+                username="wire-user",
+                reset_token="wire-secret-token",
+                expires_at=datetime(2026, 9, 30, 23, 0, tzinfo=UTC),
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
+
+    assert captured["path"] == "/emails"
+    assert captured["authorization"] == "Bearer re_wire_test_key"
+    assert captured["content_type"] == "application/json"
+    assert captured["user_agent"] == "ComicPile/1.0"
+    assert captured["payload"] == {
+        "from": "Comic Pile <onboarding@resend.dev>",
+        "to": ["joshisplutar@gmail.com"],
+        "subject": "Reset your Comic Pile password",
+        "text": build_password_reset_text_body(
+            "wire-user",
+            "https://comic-pile.vercel.app/reset-password?token=wire-secret-token",
+            datetime(2026, 9, 30, 23, 0, tzinfo=UTC),
+        ),
+    }
+    assert "wire-secret-token" not in caplog.text
+    assert "re_wire_test_key" not in caplog.text
+    assert "?token=" not in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [400, 403])
 async def test_resend_provider_failure_raises_without_token_in_message(
+    status: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Transport and HTTP failures surface as delivery errors, token-free."""
@@ -158,10 +240,10 @@ async def test_resend_provider_failure_raises_without_token_in_message(
         """Simulate a provider HTTP rejection."""
         raise urllib.error.HTTPError(
             "https://api.resend.com/emails",
-            400,
+            status,
             "Bad Request",
             {},
-            None,
+            io.BytesIO(b"provider echoed token-that-must-not-leak and re_test_key"),
         )
 
     monkeypatch.setattr(urllib.request, "urlopen", _raise_http)
@@ -177,7 +259,9 @@ async def test_resend_provider_failure_raises_without_token_in_message(
             reset_token="token-that-must-not-leak",
             expires_at=datetime.now(UTC) + timedelta(minutes=TOKEN_EXPIRY_MINUTES),
         )
+    assert f"status {status}" in str(exc_info.value)
     assert "token-that-must-not-leak" not in str(exc_info.value)
+    assert "re_test_key" not in str(exc_info.value)
 
 
 def test_mailer_resolution_prefers_resend_when_configured_else_fake(
@@ -244,28 +328,33 @@ async def test_domain_stores_digest_only_never_plaintext(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ["/api/auth/forgot-password", "/api/v1/auth/forgot-password"])
 async def test_delivery_failure_keeps_enumeration_safety_and_token_state(
+    endpoint: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
     _clean_mailer_state: None,
     client: AsyncClient,
     async_db,
 ) -> None:
     """A mail outage returns the identical ack and preserves token state."""
 
-    class _FailingMailer:
-        """Test double simulating a provider outage."""
+    def _reject_request(request: urllib.request.Request, timeout: float) -> object:
+        """Reproduce the production edge rejection without exposing response bodies."""
+        raise urllib.error.HTTPError(
+            request.full_url,
+            403,
+            "Forbidden",
+            {},
+            io.BytesIO(b"error code: 1010; echoed-secret-token; re_failure_test_key"),
+        )
 
-        async def send_password_reset(
-            self,
-            *,
-            recipient_email: str,
-            username: str,
-            reset_token: str,
-            expires_at: datetime,
-        ) -> None:
-            """Always fail delivery without leaking account existence."""
-            raise PasswordResetDeliveryError("provider down")
-
-    override_password_reset_mailer(_FailingMailer())
+    monkeypatch.setattr(urllib.request, "urlopen", _reject_request)
+    override_password_reset_mailer(ResendPasswordResetMailer(
+        api_key="re_failure_test_key",
+        sender="Comic Pile <onboarding@resend.dev>",
+        origin="https://comic-pile.vercel.app",
+    ))
     user = await get_user_by_username(async_db, "mailfailuser")
     if user is None:
         user = await create_user(
@@ -276,16 +365,20 @@ async def test_delivery_failure_keeps_enumeration_safety_and_token_state(
         )
         await async_db.commit()
     known = await client.post(
-        "/api/auth/forgot-password",
+        endpoint,
         json={"email": "mailfail@example.com"},
     )
     unknown = await client.post(
-        "/api/auth/forgot-password",
+        endpoint,
         json={"email": "definitely-unknown@example.com"},
     )
     assert known.status_code == unknown.status_code == 200
     assert known.json() == unknown.json()
     assert "message" in known.json()
+    assert "status 403" in caplog.text
+    assert "echoed-secret-token" not in caplog.text
+    assert "re_failure_test_key" not in caplog.text
+    assert "?token=" not in caplog.text
     # Token state is not corrupted by the delivery failure.
     from sqlalchemy import select
 

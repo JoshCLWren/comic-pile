@@ -20,7 +20,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,12 +27,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from app.config import get_email_settings
+from app.config import get_app_settings, get_email_settings
 
 logger = logging.getLogger(__name__)
 
 RESEND_API_URL = "https://api.resend.com/emails"
 RESEND_REQUEST_TIMEOUT_SECONDS = 10.0
+RESEND_USER_AGENT = "ComicPile/1.0"
 
 RESET_SUBJECT = "Reset your Comic Pile password"
 PRODUCTION_RESET_SENDER = "Comic Pile <onboarding@resend.dev>"
@@ -258,6 +258,9 @@ class ResendPasswordResetMailer:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
+                # Resend's edge rejects urllib's default Python-urllib user agent
+                # with HTTP 403 / Cloudflare 1010 before API authentication.
+                "User-Agent": RESEND_USER_AGENT,
             },
         )
         try:
@@ -340,7 +343,7 @@ def override_password_reset_mailer(mailer: PasswordResetMailer | None) -> None:
 
 def _default_sender_and_origin() -> tuple[str, str]:
     """Return production defaults or harmless local placeholders."""
-    if os.environ.get("ENVIRONMENT", "development") == "production":
+    if get_app_settings().environment == "production":
         return PRODUCTION_RESET_SENDER, PRODUCTION_RESET_ORIGIN
     return NON_PRODUCTION_RESET_SENDER, NON_PRODUCTION_RESET_ORIGIN
 
@@ -349,8 +352,8 @@ def get_password_reset_mailer() -> PasswordResetMailer:
     """Resolve the active password-reset mailer.
 
     The Resend API key is the only required deployment secret. Sender and
-    origin use stable application defaults based on ENVIRONMENT, while the
-    existing settings remain optional overrides for self-hosting and tests.
+    origin and path are app-owned in production. Optional overrides apply
+    only outside production.
     """
     if _mailer_override is not None:
         return _mailer_override
@@ -361,11 +364,15 @@ def get_password_reset_mailer() -> PasswordResetMailer:
         return get_fake_mailer()
 
     default_sender, default_origin = _default_sender_and_origin()
-    sender = settings.password_reset_sender.strip() or default_sender
-    origin = settings.normalized_origin or default_origin
+    if get_app_settings().environment == "production":
+        sender, origin, path = default_sender, default_origin, "/reset-password"
+    else:
+        sender = settings.password_reset_sender.strip() or default_sender
+        origin = settings.normalized_origin or default_origin
+        path = settings.normalized_path
     return ResendPasswordResetMailer(
         api_key=api_key,
         sender=sender,
         origin=origin,
-        path=settings.normalized_path,
+        path=path,
     )

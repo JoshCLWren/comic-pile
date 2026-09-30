@@ -76,7 +76,7 @@ API key as an email-specific environment secret:
 RESEND_API_KEY=re_...
 ```
 
-When `ENVIRONMENT=production`, ComicPile supplies its maintained defaults:
+When `ENVIRONMENT=production`, ComicPile uses fixed app-owned values:
 
 ```text
 sender: Comic Pile <onboarding@resend.dev>
@@ -84,13 +84,16 @@ origin: https://comic-pile.vercel.app
 path: /reset-password
 ```
 
-Outside production, the mailer uses harmless example/local defaults. Self-hosters
-and tests may still override `PASSWORD_RESET_SENDER`, `PASSWORD_RESET_ORIGIN`,
-and `PASSWORD_RESET_PATH`, but those values are not required for the maintained
-ComicPile deployment.
+Outside production, the mailer uses harmless example/local defaults. Local deployments
+and tests may override `PASSWORD_RESET_SENDER`, `PASSWORD_RESET_ORIGIN`,
+and `PASSWORD_RESET_PATH`. Production ignores all three overrides, including stale
+Vercel values. `RESEND_API_KEY` is the only required email configuration.
 
 Notes:
 
+- The stdlib adapter sends `User-Agent: ComicPile/1.0`. Resend's edge rejects
+  urllib's default `Python-urllib` signature with HTTP 403 / Cloudflare 1010
+  before authentication. Delivery errors log status only, never provider bodies.
 - `RESEND_API_KEY` is already configured in the Vercel production
   environment. Never copy the secret value into GitHub, logs, source, or
   issue comments.

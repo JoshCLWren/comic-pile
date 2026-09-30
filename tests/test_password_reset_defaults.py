@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.config import clear_settings_cache
+from app.config import clear_settings_cache, get_email_settings
 from app.services.password_reset_mailer import (
     NON_PRODUCTION_RESET_ORIGIN,
     NON_PRODUCTION_RESET_SENDER,
@@ -43,6 +43,8 @@ def test_production_needs_only_resend_api_key(monkeypatch: pytest.MonkeyPatch) -
     assert mailer.api_key == "re_live_key"
     assert mailer.sender == PRODUCTION_RESET_SENDER
     assert mailer.origin == PRODUCTION_RESET_ORIGIN
+    assert mailer.path == "/reset-password"
+    assert get_email_settings().is_configured
 
 
 def test_non_production_uses_harmless_placeholders(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,18 +60,28 @@ def test_non_production_uses_harmless_placeholders(monkeypatch: pytest.MonkeyPat
     assert mailer.origin == NON_PRODUCTION_RESET_ORIGIN
 
 
-def test_explicit_sender_and_origin_still_override_defaults(
+@pytest.mark.parametrize("environment", ["production", "development"])
+def test_overrides_apply_only_outside_production(
+    environment: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Self-hosters and tests may still replace the built-in defaults."""
-    monkeypatch.setenv("ENVIRONMENT", "production")
-    monkeypatch.setenv("RESEND_API_KEY", "re_live_key")
+    """Stale deployment overrides cannot change production sender or reset links."""
+    monkeypatch.setenv("ENVIRONMENT", environment)
+    monkeypatch.setenv("RESEND_API_KEY", " \r\nre_live_key\n ")
     monkeypatch.setenv("PASSWORD_RESET_SENDER", "Custom <mail@example.com>")
     monkeypatch.setenv("PASSWORD_RESET_ORIGIN", "https://custom.example.com")
+    monkeypatch.setenv("PASSWORD_RESET_PATH", "stale-reset")
     clear_settings_cache()
 
     mailer = get_password_reset_mailer()
 
     assert isinstance(mailer, ResendPasswordResetMailer)
-    assert mailer.sender == "Custom <mail@example.com>"
-    assert mailer.origin == "https://custom.example.com"
+    assert mailer.api_key == "re_live_key"
+    if environment == "production":
+        assert mailer.sender == PRODUCTION_RESET_SENDER
+        assert mailer.origin == PRODUCTION_RESET_ORIGIN
+        assert mailer.path == "/reset-password"
+    else:
+        assert mailer.sender == "Custom <mail@example.com>"
+        assert mailer.origin == "https://custom.example.com"
+        assert mailer.path == "/stale-reset"
