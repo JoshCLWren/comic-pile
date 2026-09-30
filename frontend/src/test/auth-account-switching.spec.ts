@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { isObject, isString } from '../utils/runtimeChecks'
 
 // Exercise the built browser app with deterministic API responses. No real
 // credentials or production writes are needed for this session-boundary regression.
@@ -15,7 +16,10 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
     const respond = (body: unknown, status = 200) => route.fulfill({ status, json: body })
     if (path.endsWith('/auth/csrf')) return respond({ csrf_token: 'test-csrf' })
     if (path.endsWith('/auth/login')) {
-      const credentials = request.postDataJSON() as { username: string; password: string }
+      const credentials: unknown = request.postDataJSON()
+      if (!isObject(credentials) || !isString(credentials.username) || !isString(credentials.password)) {
+        throw new Error('Login request must contain a username and password')
+      }
       if (credentials.password !== 'correct-password') {
         return respond({ detail: 'Incorrect username or password' }, 401)
       }

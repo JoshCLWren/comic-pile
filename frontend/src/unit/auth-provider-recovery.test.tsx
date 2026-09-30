@@ -182,6 +182,79 @@ describe('AuthProvider transient recovery', () => {
     expect(client.getQueryData(['private'])).toBe('first-user-data')
   })
 
+  it('rejects a previously rejected refresh without another cookie probe', async () => {
+    mocks.get.mockResolvedValue({ username: 'first', email: 'first@example.com' })
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    mocks.isSessionRefreshRejected.mockReturnValue(true)
+    await act(async () => {
+      await expect(auth!.recoverSession()).rejects.toMatchObject({ response: { status: 401 } })
+    })
+    expect(auth?.isAuthenticated).toBe(false)
+    expect(mocks.refreshSession).not.toHaveBeenCalled()
+  })
+
+  it.each(['success', 'failure'])('ignores a late %s from revalidation after account switching', async outcome => {
+    mocks.get.mockResolvedValue({ username: 'first', email: 'first@example.com' })
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    let finish!: (user: { username: string; email: string }) => void
+    let fail!: (error: Error) => void
+    mocks.get.mockImplementationOnce(() => new Promise((resolve, reject) => { finish = resolve; fail = reject }))
+    let pending!: Promise<void>
+    act(() => { pending = auth!.revalidateSession() })
+    mocks.get.mockResolvedValue({ username: 'second', email: 'second@example.com' })
+    await act(async () => auth!.login('second-token'))
+    await act(async () => {
+      if (outcome === 'success') finish({ username: 'first', email: 'first@example.com' })
+      else fail(axiosError(401))
+      await pending
+    })
+    expect(auth?.user?.username).toBe('second')
+    expect(auth?.isAuthenticated).toBe(true)
+    expect(mocks.refreshSession).not.toHaveBeenCalled()
+  })
+
+  it.each(['success', 'failure'])('ignores a late %s from login after logout', async outcome => {
+    mocks.get.mockResolvedValue({ username: 'first', email: 'first@example.com' })
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    let finish!: (user: { username: string; email: string }) => void
+    let fail!: (error: Error) => void
+    mocks.get.mockImplementationOnce(() => new Promise((resolve, reject) => { finish = resolve; fail = reject }))
+    let pending!: Promise<void>
+    act(() => { pending = auth!.login('second-token') })
+    act(() => auth!.logout())
+    await act(async () => {
+      if (outcome === 'success') finish({ username: 'second', email: 'second@example.com' })
+      else fail(axiosError(503))
+      await pending
+    })
+    expect(auth?.user).toBeNull()
+    expect(auth?.authState.status).toBe('unauthenticated')
+  })
+
+  it.each(['success', 'failure'])('ignores a late refresh %s after logout', async outcome => {
+    mocks.get.mockResolvedValue({ username: 'first', email: 'first@example.com' })
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    let finish!: (token: string) => void
+    let fail!: (error: Error) => void
+    mocks.refreshSession.mockImplementationOnce(() => new Promise((resolve, reject) => { finish = resolve; fail = reject }))
+    let pending!: Promise<void>
+    act(() => { pending = auth!.recoverSession() })
+    act(() => auth!.logout())
+    const requestsAtLogout = mocks.get.mock.calls.length
+    await act(async () => {
+      if (outcome === 'success') finish('old-account-token')
+      else fail(axiosError(401))
+      await pending
+    })
+    expect(auth?.isAuthenticated).toBe(false)
+    expect(auth?.user).toBeNull()
+    expect(mocks.get).toHaveBeenCalledTimes(requestsAtLogout)
+  })
+
   it('keeps bootstrap in recovery after a transient network failure and authenticates on retry', async () => {
     vi.useFakeTimers()
     // First call fails with network error, second succeeds

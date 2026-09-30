@@ -111,7 +111,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        recoveryPromise.current = (async () => {
          try {
            if (isSessionRefreshRejected()) {
-             markDefinitivelyUnauthenticated()
              throw Object.assign(new Error('Session refresh unavailable'), {
                isAxiosError: true,
                response: { status: 401 },
