@@ -20,7 +20,6 @@ import api, {
 import { isDefinitiveAuthenticationFailure, createAuthError, type AuthState, calculateRetryDelay } from './services/authState'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
-import { usePingHeartbeat } from './hooks/usePingHeartbeat'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { PreferencesSync } from './hooks/usePreferences'
 import { useAuthDegradedState, ServiceUnavailableWrapper } from './hooks/useAuthDegradedState'
@@ -665,7 +664,10 @@ function AuthResumeBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
-  usePingHeartbeat()
+  // The 4-minute /api/ping keepalive was removed (issue #2980): on a cold
+  // Fluid instance each request pays the full Python import graph, so the
+  // interval caused cold boots after idle and burned Active CPU without
+  // improving warm-instance budget. No in-app UI depended on ping status.
   return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><AuthProvider><NavCollapseProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></NavCollapseProvider></AuthProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 
