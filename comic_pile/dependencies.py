@@ -2,14 +2,9 @@
 
 from collections import defaultdict, deque
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_app_settings
-from app.continuity_blocking import (
-    get_continuity_blocked_thread_ids,
-    get_continuity_rule_blocked_thread_ids,
-)
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -24,25 +19,26 @@ def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
 
 
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
-    """Read unified blocked thread IDs directly from the current transaction."""
+    """Read blocked thread IDs from the canonical Dependency set only.
+
+    Canonical Dependency rows are those without historical CBL materialization:
+    ``note IS NULL OR note NOT LIKE 'cbl-order:%'``. ContinuityRule and
+    DependencyGroup ordering are removed from Roll authority per #2553.
+    """
     _invalidate_continuity_snapshot(user_id, db)
-    if not get_app_settings().legacy_dependency_blocking_enabled:
-        # After cutover, compiled ContinuityRule rows are the only Roll authority.
-        # sequence_order must not contribute to eligibility.
-        return await get_continuity_rule_blocked_thread_ids(user_id, db)
-    continuity_blocked_ids = await get_continuity_blocked_thread_ids(user_id, db)
-    legacy_blocked_ids = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
-    return legacy_blocked_ids | continuity_blocked_ids
+    return await _get_legacy_blocked_thread_ids_uncached(user_id, db, canonical=True)
 
 
-async def _get_legacy_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
+async def _get_legacy_blocked_thread_ids_uncached(
+    user_id: int, db: AsyncSession, canonical: bool = False
+) -> set[int]:
     """Read dependency-based blocked thread IDs directly from the current transaction."""
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
     target_thread = Thread.__table__.alias("target_thread")
     source = Thread.__table__.alias("source_thread")
 
-    issue_result = await db.execute(
+    query = (
         select(target_thread.c.id)
         .join(
             next_unread_issue,
@@ -55,8 +51,15 @@ async def _get_legacy_blocked_thread_ids_uncached(user_id: int, db: AsyncSession
         .where(source.c.user_id == user_id)
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .distinct()
     )
+    if canonical:
+        query = query.where(
+            or_(
+                Dependency.note.is_(None),
+                Dependency.note.notlike("cbl-order:%"),
+            )
+        )
+    issue_result = await db.execute(query.distinct())
     return {row[0] for row in issue_result.all()}
 
 
@@ -119,6 +122,7 @@ async def _legacy_blocking_explanations(
     thread_id: int,
     user_id: int,
     db: AsyncSession,
+    canonical: bool = False,
 ) -> list[BlockingDependency]:
     """Return unread raw-Dependency blockers for one thread."""
     source_issue = Issue.__table__.alias("source_issue")
@@ -126,7 +130,7 @@ async def _legacy_blocking_explanations(
     source_thread = Thread.__table__.alias("source_thread")
     target_thread = Thread.__table__.alias("target_thread")
 
-    issue_result = await db.execute(
+    query = (
         select(
             source_thread.c.id,
             source_thread.c.title,
@@ -146,8 +150,15 @@ async def _legacy_blocking_explanations(
         .where(source_thread.c.user_id == user_id)
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .distinct()
     )
+    if canonical:
+        query = query.where(
+            or_(
+                Dependency.note.is_(None),
+                Dependency.note.notlike("cbl-order:%"),
+            )
+        )
+    issue_result = await db.execute(query.distinct())
     return [
         BlockingDependency(
             thread_id=thread_id_val,
@@ -162,6 +173,7 @@ async def _legacy_blocking_explanations_batch(
     thread_ids: list[int],
     user_id: int,
     db: AsyncSession,
+    canonical: bool = False,
 ) -> dict[int, list[BlockingDependency]]:
     """Return unread raw-Dependency blockers for many threads."""
     source_issue = Issue.__table__.alias("source_issue")
@@ -169,7 +181,7 @@ async def _legacy_blocking_explanations_batch(
     source_thread = Thread.__table__.alias("source_thread")
     target_thread = Thread.__table__.alias("target_thread")
 
-    result = await db.execute(
+    result_query = (
         select(
             target_thread.c.id,
             source_thread.c.id,
@@ -190,6 +202,14 @@ async def _legacy_blocking_explanations_batch(
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
     )
+    if canonical:
+        result_query = result_query.where(
+            or_(
+                Dependency.note.is_(None),
+                Dependency.note.notlike("cbl-order:%"),
+            )
+        )
+    result = await db.execute(result_query)
 
     reasons_map: dict[int, list[BlockingDependency]] = {}
     for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
@@ -221,11 +241,7 @@ async def _continuity_blocking_explanations(
     if thread is None or thread.next_unread_issue_id is None:
         return []
 
-    readiness = (
-        issue_rule_readiness
-        if not get_app_settings().legacy_dependency_blocking_enabled
-        else issue_readiness
-    )
+    readiness = issue_readiness
     reasons: list[BlockingDependency] = []
     seen: set[tuple[int, str]] = set()
     for blocker in readiness(thread.next_unread_issue_id, snapshot):
@@ -264,11 +280,7 @@ async def _continuity_blocking_explanations_batch(
 
     _invalidate_continuity_snapshot(user_id, db)
     snapshot = await load_snapshot(db, user_id)
-    readiness = (
-        issue_rule_readiness
-        if not get_app_settings().legacy_dependency_blocking_enabled
-        else issue_readiness
-    )
+    readiness = issue_readiness
     reasons_map: dict[int, list[BlockingDependency]] = {}
     for thread_id in thread_ids:
         thread = snapshot.threads.get(thread_id)
@@ -301,18 +313,8 @@ async def _continuity_blocking_explanations_batch(
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
-    """Human-readable reasons a thread is blocked.
-
-    Continuity-rule blockers are always included so reader-facing copy stays
-    accurate after the raw-Dependency Roll switch is disabled. Legacy
-    Dependency rows are included only while
-    ``LEGACY_DEPENDENCY_BLOCKING_ENABLED`` remains true.
-    """
-    continuity = await _continuity_blocking_explanations(thread_id, user_id, db)
-    if not get_app_settings().legacy_dependency_blocking_enabled:
-        return continuity
-    legacy = await _legacy_blocking_explanations(thread_id, user_id, db)
-    return _merge_blocking_explanations(continuity, legacy)
+    """Human-readable reasons a thread is blocked (canonical Dependency only)."""
+    return await _legacy_blocking_explanations(thread_id, user_id, db, canonical=True)
 
 
 async def get_blocking_explanations_batch(
@@ -323,19 +325,7 @@ async def get_blocking_explanations_batch(
     """Human-readable blocking reasons for multiple threads in one query."""
     if not thread_ids:
         return {}
-
-    continuity_map = await _continuity_blocking_explanations_batch(thread_ids, user_id, db)
-    if not get_app_settings().legacy_dependency_blocking_enabled:
-        return {thread_id: continuity_map.get(thread_id, []) for thread_id in thread_ids}
-
-    legacy_map = await _legacy_blocking_explanations_batch(thread_ids, user_id, db)
-    return {
-        thread_id: _merge_blocking_explanations(
-            continuity_map.get(thread_id, []),
-            legacy_map.get(thread_id, []),
-        )
-        for thread_id in thread_ids
-    }
+    return await _legacy_blocking_explanations_batch(thread_ids, user_id, db, canonical=True)
 
 
 async def validate_position_dependency_consistency(
