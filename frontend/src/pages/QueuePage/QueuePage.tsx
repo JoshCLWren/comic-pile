@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -8,11 +7,9 @@ import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hoo
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
 import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
-import { useCrossoverGroups } from '../../hooks/useCrossoverGroups'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
-import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { ThreadListItem } from '../../types'
 import QueueThreadCard from './QueueThreadCard'
 import CompletedThreadsSection from './CompletedThreadsSection'
@@ -23,21 +20,7 @@ import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
-
-/**
- * Stable empty membership so a queue card always receives a defined
- * `crossoverGroups` value (even while the page-level batch query is still
- * pending or has failed) and never falls back to its own per-card fetch.
- */
-const EMPTY_CROSSOVER_GROUPS: DependencyGroupSummary[] = []
-
-/**
- * Route entry for the Queue page. The component composes the focused
- * retained feature modules (`QueueControls`, `QueueList`, `QueueModals`,
- * `CompletedThreadsSection`) plus the page-level navigation/error boundary
- * concerns. Data ownership stays in the page so a second cache layer is
- * never introduced.
- */
+import { useQueueCrossoverGroups } from './useQueueCrossoverGroups'
 export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
@@ -70,13 +53,12 @@ export default function QueuePage() {
 
   // Fetch crossover groups once for all active threads so cards never fan out
   // into their own per-card request.
-  const activeThreadIds = activeThreads.map((thread) => thread.id)
   const {
-    groupsByThreadId: crossoverGroupsByThreadId,
-    isPending: crossoverGroupsPending,
-    error: crossoverGroupsQueryError,
-  } = useCrossoverGroups(activeThreadIds)
-  const crossoverGroupsError = Boolean(crossoverGroupsQueryError)
+    crossoverGroupsByThreadId,
+    crossoverGroupsPending,
+    crossoverGroupsError,
+    getCrossoverGroupsForThread,
+  } = useQueueCrossoverGroups(activeThreads)
 
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
@@ -180,7 +162,7 @@ export default function QueuePage() {
           index={index}
           isBlocked={isBlocked}
           blockingDependencies={blockingDependencies}
-          crossoverGroups={crossoverGroupsByThreadId[thread.id] ?? EMPTY_CROSSOVER_GROUPS}
+          crossoverGroups={getCrossoverGroupsForThread(thread)}
           crossoverGroupsLoading={crossoverGroupsPending}
           crossoverGroupsError={crossoverGroupsError}
           isDragOver={isDragOver}
@@ -209,9 +191,9 @@ export default function QueuePage() {
       actions,
       activeThreads,
       blockingByThreadId,
-      crossoverGroupsByThreadId,
       crossoverGroupsPending,
       crossoverGroupsError,
+      getCrossoverGroupsForThread,
       modals,
       navigate,
       session,
