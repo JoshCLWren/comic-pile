@@ -81,7 +81,7 @@ export function ComicPillar({
   return (
     <div className="w-full space-y-4">
       {/* Cover rail beside issue identity/details composition */}
-      <div className="grid grid-cols-1 lg:grid-cols-[auto,1fr] gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4 items-start">
         {/* Cover rail */}
         <div className="flex-shrink-0 w-full lg:w-auto">
           <ComicIdentity issueId={issueId} />
