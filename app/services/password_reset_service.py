@@ -105,9 +105,10 @@ async def deliver_password_reset_email(handoff: PasswordResetDeliveryHandoff) ->
             reset_token=handoff.reset_token,
             expires_at=handoff.expires_at,
         )
-    except PasswordResetDeliveryError:
+    except PasswordResetDeliveryError as exc:
         logger.warning(
-            "Password reset email delivery failed.",
+            "Password reset email delivery failed: %s",
+            exc,
             extra={"event": "password_reset_delivery_failed"},
         )
     except Exception:
