@@ -99,15 +99,15 @@ export function createDependencyGroupsApi(client: HttpClient) {
     listForThreads: async (
       threadIds: number[],
     ): Promise<Record<number, DependencyGroupSummary[]>> => {
-      const entries = await Promise.all(
-        threadIds.map(async (threadId) => [
-          threadId,
-          await client.get<DependencyGroupSummary[]>(
-            `/v1/reading-order-groups/threads/${threadId}/groups`,
-          ),
-        ] as const),
+      if (threadIds.length === 0) {
+        return {}
+      }
+      // One batched request for the whole set (backend caps batches at 200),
+      // never one request per thread.
+      return client.post<Record<number, DependencyGroupSummary[]>>(
+        '/v1/threads/groups:batch',
+        { thread_ids: threadIds },
       )
-      return Object.fromEntries(entries)
     },
 
     addMember: async (

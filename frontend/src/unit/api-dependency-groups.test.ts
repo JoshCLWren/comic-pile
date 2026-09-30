@@ -67,28 +67,29 @@ describe('dependencyGroupsApi', () => {
     )
   })
 
-  it('loads multiple thread groups through routes that exist on the backend', async () => {
-    client.get
-      .mockResolvedValueOnce([{ id: 7, name: 'Annihilation' }])
-      .mockResolvedValueOnce([])
+  it('loads multiple thread groups with one batch request, never per thread', async () => {
+    client.post.mockResolvedValueOnce({
+      42: [{ id: 7, name: 'Annihilation' }],
+      43: [],
+    })
 
     await expect(dependencyGroupsApi.listForThreads([42, 43])).resolves.toEqual({
       42: [{ id: 7, name: 'Annihilation' }],
       43: [],
     })
 
-    expect(client.get).toHaveBeenNthCalledWith(
-      1,
-      '/v1/reading-order-groups/threads/42/groups',
-    )
-    expect(client.get).toHaveBeenNthCalledWith(
-      2,
-      '/v1/reading-order-groups/threads/43/groups',
-    )
-    expect(client.post).not.toHaveBeenCalledWith(
-      '/v1/reading-order-groups/threads/groups:batch',
-      expect.anything(),
-    )
+    expect(client.post).toHaveBeenCalledTimes(1)
+    expect(client.post).toHaveBeenCalledWith('/v1/threads/groups:batch', {
+      thread_ids: [42, 43],
+    })
+    expect(client.get).not.toHaveBeenCalled()
+  })
+
+  it('skips the batch request entirely when no thread ids are supplied', async () => {
+    await expect(dependencyGroupsApi.listForThreads([])).resolves.toEqual({})
+
+    expect(client.post).not.toHaveBeenCalled()
+    expect(client.get).not.toHaveBeenCalled()
   })
 
   it('adds inclusive issue-position ranges', async () => {
