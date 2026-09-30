@@ -7,27 +7,27 @@ const MAX_ISSUES = 10000;
 const MAX_LITERAL_LENGTH = 100;
 
 /**
- * Parse issue range string and return count.
- * Simple client-side version for preview.
+ * Parse issue range string into its deduplicated issue identifiers, in input order.
+ * Simple client-side version for preview and ordering.
  *
  * NOTE: The backend has a parallel parser at app/utils/issue_parser.py
  * that must be kept in sync with this logic.
  *
  * Supports formats:
- * - "1-25" -> count = 25
- * - "0-18" -> count = 19 (issues 0..18)
- * - "1, 3, 5-7" -> count = 5 (issues 1, 3, 5, 6, 7)
- * - "0, Annual 1, 5-7" -> count = 5 (issues 0, Annual 1, 5, 6, 7)
- * - "½" -> count = 1
+ * - "1-25" -> ["1", "2", ..., "25"]
+ * - "0-18" -> ["0", "1", ..., "18"]
+ * - "1, 3, 5-7" -> ["1", "3", "5", "6", "7"]
+ * - "0, Annual 1, 5-7" -> ["0", "Annual 1", "5", "6", "7"]
+ * - "½" -> ["½"]
  *
  * Tokens with a dash are attempted as integer ranges (both endpoints >= 0).
  * If that fails, the whole token is kept as a literal identifier.
  *
  * @param input - Issue range string (e.g., "0-25" or "0, Annual 1, 5-7")
- * @returns Total number of issues in the range
+ * @returns Deduplicated issue identifiers in input order
  * @throws Error if input is invalid
  */
-export function parseIssueRange(input: string): number {
+export function parseIssueRangeTokens(input: string): string[] {
   if (!input || !input.trim()) {
     throw new Error('Issue range cannot be empty');
   }
@@ -104,5 +104,16 @@ export function parseIssueRange(input: string): number {
     throw new Error(`Cannot create more than ${MAX_ISSUES} issues at once`);
   }
 
-  return uniqueResult.length;
+  return uniqueResult;
+}
+
+/**
+ * Parse issue range string and return count.
+ *
+ * @param input - Issue range string (e.g., "0-25" or "0, Annual 1, 5-7")
+ * @returns Total number of issues in the range
+ * @throws Error if input is invalid
+ */
+export function parseIssueRange(input: string): number {
+  return parseIssueRangeTokens(input).length;
 }

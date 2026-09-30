@@ -1,113 +1,88 @@
-/**
- * Utility functions for determining natural issue insertion order
- */
+import { parseIssueRangeTokens } from './issueParser';
 
 /**
- * Check if an issue number is "ordinary numeric" - can be sorted numerically
- * This excludes irregular identifiers like "Annual 1", "½", "-1", etc.
+ * Where a newly added run of issues belongs in a thread's canonical issue order.
+ *
+ * - `start`: no existing ordinary issue sorts before the addition, so the new
+ *   issues go to position 1.
+ * - `after`: the new issues go immediately after the reported issue.
+ * - `end`: ordering is ambiguous for this addition, so the existing canonical
+ *   order is preserved and the new issues are appended.
  */
-export function isOrdinaryNumericIssue(issueNumber: string): boolean {
-  // Must be exactly numeric (no letters, symbols, spaces)
-  return /^\d+$/.test(issueNumber)
+export type NaturalInsertAnchor =
+  | { kind: 'start' }
+  | { kind: 'after'; issueId: number }
+  | { kind: 'end' };
+
+/** Minimal issue shape needed to decide natural ordering. */
+export interface OrderedIssue {
+  id: number;
+  issue_number: string;
 }
 
 /**
- * Parse issue number as integer if it's ordinary numeric, otherwise return null
+ * Report whether an issue identifier is an ordinary positive number.
+ *
+ * Irregular provider numbering is deliberately excluded so natural ordering is
+ * never faked for it: `0` (the ubiquitous free prequel), decimals/fractions such
+ * as `1.5` or `½`, negative values, and named specials such as `Annual 1`.
  */
-export function parseOrdinaryNumericIssue(issueNumber: string): number | null {
-  if (!isOrdinaryNumericIssue(issueNumber)) {
-    return null
-  }
-  return parseInt(issueNumber, 10)
+export function isOrdinaryNumericIssueNumber(issueNumber: string): boolean {
+  return /^[1-9]\d*$/.test(issueNumber);
 }
 
 /**
- * Find the best position to insert new issues into an existing list
- * 
- * @param existingIssues - Current list of issues (must be sorted by position)
- * @param newIssueNumbers - Array of issue numbers to add
- * @returns The issue ID to insert after, or null if should insert at the beginning
+ * Decide where a requested issue range belongs in an existing thread order.
+ *
+ * The decision is deterministic and independent of the order the values were
+ * typed: it only depends on the set of identifiers that are actually new. When
+ * the addition mixes ordinary and irregular identifiers, or contains no ordinary
+ * identifier at all, ordering is ambiguous and the existing order is preserved.
+ *
+ * @param existingIssues - Current thread issues in canonical order.
+ * @param issueRange - Range string such as "2", "19-24" or "1, 3, 5-7".
+ * @returns The anchor the new issues should be inserted relative to.
+ * @throws Error if the range string is invalid.
  */
-export function findNaturalInsertPosition(
-  existingIssues: Array<{ id: number; issue_number: string }>,
-  newIssueNumbers: string[]
-): number | null {
-  // Separate ordinary numeric and non-ordinary new issues
-  const ordinaryNewIssues = newIssueNumbers.filter(isOrdinaryNumericIssue)
+export function resolveNaturalInsertAnchor(
+  existingIssues: readonly OrderedIssue[],
+  issueRange: string,
+): NaturalInsertAnchor {
+  const requestedNumbers = parseIssueRangeTokens(issueRange);
+  const existingNumbers = new Set(existingIssues.map((issue) => issue.issue_number));
+  const addedNumbers = requestedNumbers.filter(
+    (issueNumber) => !existingNumbers.has(issueNumber),
+  );
 
-  // If no ordinary numeric issues (all ambiguous), append at end
-  if (ordinaryNewIssues.length === 0) {
-    return existingIssues.length > 0 ? existingIssues[existingIssues.length - 1].id : null
+  // Nothing to order against: the create contract already lands these first.
+  if (existingIssues.length === 0 || addedNumbers.length === 0) {
+    return { kind: 'end' };
   }
 
-  // Convert existing issues to comparable format
-  const existingOrdinaryIssues = existingIssues.flatMap((issue) => {
-    const numericValue = parseOrdinaryNumericIssue(issue.issue_number)
-    return numericValue === null
-      ? []
-      : [{ id: issue.id, issue_number: issue.issue_number, numericValue }]
-  })
+  const addedOrdinaryNumbers = addedNumbers.filter(isOrdinaryNumericIssueNumber);
 
-  // Sort ordinary new issues numerically
-  const sortedOrdinaryNewIssues = ordinaryNewIssues
-    .map(issue => ({
-      issue,
-      numericValue: parseOrdinaryNumericIssue(issue)!
-    }))
-    .sort((a, b) => a.numericValue - b.numericValue)
-
-  // Find the insertion position for the first ordinary new issue
-  const firstNewIssue = sortedOrdinaryNewIssues[0]
-  if (!firstNewIssue) {
-    return existingIssues.length > 0 ? existingIssues[existingIssues.length - 1].id : null
+  // Any irregular identifier in the run makes the whole placement ambiguous.
+  if (addedOrdinaryNumbers.length !== addedNumbers.length) {
+    return { kind: 'end' };
   }
 
-  // Find where the first new issue should go among existing ordinary issues
-  let insertAfterId: number | null = null
+  let smallestAdded = Number.POSITIVE_INFINITY;
+  for (const issueNumber of addedOrdinaryNumbers) {
+    smallestAdded = Math.min(smallestAdded, Number(issueNumber));
+  }
 
-  // Sort by numeric value so the scan finds the correct insertion point
-  const sortedExistingOrdinaryIssues = [...existingOrdinaryIssues].sort(
-    (a, b) => a.numericValue - b.numericValue
-  )
-
-  for (const existingIssue of sortedExistingOrdinaryIssues) {
-    if (existingIssue.numericValue < firstNewIssue.numericValue) {
-      // This existing issue comes before our new issue, so we could insert after it
-      insertAfterId = existingIssue.id
-    } else {
-      // This existing issue comes after or at our new issue, so we stop
-      break
+  // Anchor after the last existing ordinary issue that sorts before the
+  // addition. Walking the canonical order (rather than sorting by number) keeps
+  // any intentionally non-numeric prefix of the thread where the reader put it.
+  let anchorIssueId: number | null = null;
+  for (const issue of existingIssues) {
+    if (!isOrdinaryNumericIssueNumber(issue.issue_number)) {
+      continue;
+    }
+    if (Number(issue.issue_number) < smallestAdded) {
+      anchorIssueId = issue.id;
     }
   }
 
-  // If there are no existing ordinary issues, append at end of all issues
-  if (existingOrdinaryIssues.length === 0) {
-    return existingIssues.length > 0 ? existingIssues[existingIssues.length - 1].id : null
-  }
-
-  return insertAfterId
+  return anchorIssueId === null ? { kind: 'start' } : { kind: 'after', issueId: anchorIssueId };
 }
-
-/**
- * Example usage scenarios:
- * 
- * 1. Adding #2 to #33,#34,#35:
- *    - existingIssues: [{id: 1, issue_number: "33"}, {id: 2, issue_number: "34"}, {id: 3, issue_number: "35"}]
- *    - newIssueNumbers: ["2"]
- *    - Returns: null (since 2 < 33, insert at beginning)
- * 
- * 2. Adding #2 to #1,#3:
- *    - existingIssues: [{id: 1, issue_number: "1"}, {id: 2, issue_number: "3"}]
- *    - newIssueNumbers: ["2"]
- *    - Returns: 1 (insert after issue #1)
- * 
- * 3. Adding #4,#5 to #1,#2,#10:
- *    - existingIssues: [{id: 1, issue_number: "1"}, {id: 2, issue_number: "2"}, {id: 3, issue_number: "10"}]
- *    - newIssueNumbers: ["4", "5"]
- *    - Returns: 2 (insert after issue #2)
- * 
- * 4. Adding "Annual 1" to #1,#2,#3:
- *    - existingIssues: [{id: 1, issue_number: "1"}, {id: 2, issue_number: "2"}, {id: 3, issue_number: "3"}]
- *    - newIssueNumbers: ["Annual 1"]
- *    - Returns: 3 (ambiguous case, append at end)
- */

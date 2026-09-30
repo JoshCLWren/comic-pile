@@ -113,7 +113,8 @@ async def create_issues(
     existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
     existing_issues = {row[1]: row[2] for row in existing_rows}
 
-    insert_position = 0
+    max_position = max((row[2] for row in existing_rows), default=0)
+    insert_position = max_position
 
     if insert_after_issue_id is not None:
         insert_after_issue = next(
@@ -142,13 +143,6 @@ async def create_issues(
         await issue_repository.shift_positions_after(
             db, thread_id, after_position=insert_position, delta=new_issues_count
         )
-    else:
-        # Insert at beginning: shift all existing positions upward
-        await issue_repository.defer_position_unique_constraint(db)
-        await issue_repository.shift_positions_after(
-            db, thread_id, after_position=0, delta=new_issues_count
-        )
-        insert_position = 0  # new issues start at position 1
 
     new_issues = []
     next_new_position = insert_position + 1

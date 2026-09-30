@@ -18,7 +18,7 @@ import {
   applyIssueMutations,
   getPendingIssueIds,
 } from './issueUtils'
-import { findNaturalInsertPosition } from '../../utils/issueOrderUtils'
+import { resolveNaturalInsertAnchor } from '../../utils/issueOrderUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
 
 /** The issue-API surface IssueToggleList consumes, injectable for tests. */
@@ -314,23 +314,33 @@ export function IssueToggleList({
   }
 
   async function handleAddIssues() {
-    if (!addRange.trim()) {
+    const requestedRange = addRange.trim()
+    if (!requestedRange) {
       return
     }
     setIsAdding(true)
     setAddError(null)
     try {
-      // Parse the issue range to determine what we're adding
-      const issueNumbers = addRange.trim().split(',').map(num => num.trim()).filter(Boolean)
-      
-      // Find the natural insertion position
-      const insertAfterIssueId = findNaturalInsertPosition(issues, issueNumbers)
-      
-      // Create issues with the determined insertion position
-      await issuesService.create(threadId, addRange.trim(), {
-        insert_after_issue_id: insertAfterIssueId
-      })
-      
+      const existingIssues = baseIssuesRef.current
+      const anchor = resolveNaturalInsertAnchor(existingIssues, requestedRange)
+      // The existing create contract appends when no anchor is supplied, so an
+      // `after` anchor is the only placement the create call can express.
+      const created = anchor.kind === 'after'
+        ? await issuesService.create(threadId, requestedRange, {
+            insert_after_issue_id: anchor.issueId,
+          })
+        : await issuesService.create(threadId, requestedRange)
+
+      // Nothing sorts before the addition, so the created issues were appended at
+      // the end. Reorder them onto the canonical `Issue.position` path instead of
+      // inventing a second ordering source of truth.
+      if (anchor.kind === 'start' && created.issues.length > 0) {
+        await issuesService.reorder(threadId, [
+          ...created.issues.map((issue) => issue.id),
+          ...existingIssues.map((issue) => issue.id),
+        ])
+      }
+
       setAddRange('')
       await loadIssues()
     } catch (err: unknown) {
@@ -499,13 +509,13 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                   </Tooltip>
                 </>
               )}
-               <div className="hidden md:flex border-l border-white/10">
+               <div className="flex border-l border-white/10">
                  <button
                    type="button"
                    onClick={() => handleMoveIssue(issue, 'up')}
                    disabled={isBusy || !canMoveUp}
                    className={[
-                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
+                     'min-h-[36px] md:min-h-[44px] min-w-[36px] md:min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
                      'hover:text-amber-300 disabled:opacity-40',
                    ].join(' ')}
                    aria-label={`Move issue #${issue.issue_number} up`}
@@ -520,7 +530,7 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                    onClick={() => handleMoveIssue(issue, 'down')}
                    disabled={isBusy || !canMoveDown}
                    className={[
-                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
+                     'min-h-[36px] md:min-h-[44px] min-w-[36px] md:min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
                      'hover:text-amber-300 disabled:opacity-40',
                    ].join(' ')}
                    aria-label={`Move issue #${issue.issue_number} down`}

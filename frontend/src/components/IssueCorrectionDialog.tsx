@@ -125,13 +125,7 @@ export default function IssueCorrectionDialog({
       let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
       if (!targetIssue) {
         const insertAfterIssueId =
-          insertPosition === 'start'
-            ? null
-            : insertPosition !== 'end'
-            ? Number(insertPosition)
-            : allIssues.length > 0
-            ? allIssues[allIssues.length - 1].id
-            : null
+          insertPosition !== 'start' && insertPosition !== 'end' ? Number(insertPosition) : null
         const createdIssues = await issuesService.create(threadId, targetNumber, {
           insert_after_issue_id: insertAfterIssueId,
         })
@@ -139,6 +133,10 @@ export default function IssueCorrectionDialog({
 
         if (!targetIssue) {
           throw new Error('Created issue was not returned by the API')
+        }
+
+        if (insertPosition === 'start') {
+          await issuesService.move(targetIssue.id, null)
         }
       }
 

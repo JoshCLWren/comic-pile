@@ -1,126 +1,111 @@
-/**
- * Tests for issue order utility functions
- */
+import { describe, expect, it } from 'vitest'
+import {
+  isOrdinaryNumericIssueNumber,
+  resolveNaturalInsertAnchor,
+} from '../utils/issueOrderUtils'
 
-import { findNaturalInsertPosition, isOrdinaryNumericIssue, parseOrdinaryNumericIssue } from '../utils/issueOrderUtils'
+const issue = (id: number, issueNumber: string) => ({ id, issue_number: issueNumber })
 
-describe('issueOrderUtils', () => {
-  describe('isOrdinaryNumericIssue', () => {
-    test('returns true for ordinary numeric issues', () => {
-      expect(isOrdinaryNumericIssue('1')).toBe(true)
-      expect(isOrdinaryNumericIssue('25')).toBe(true)
-      expect(isOrdinaryNumericIssue('0')).toBe(true)
-      expect(isOrdinaryNumericIssue('100')).toBe(true)
-    })
-
-    test('returns false for non-ordinary issues', () => {
-      expect(isOrdinaryNumericIssue('Annual 1')).toBe(false)
-      expect(isOrdinaryNumericIssue('½')).toBe(false)
-      expect(isOrdinaryNumericIssue('-1')).toBe(false)
-      expect(isOrdinaryNumericIssue('1a')).toBe(false)
-      expect(isOrdinaryNumericIssue('1.5')).toBe(false)
-      expect(isOrdinaryNumericIssue('Issue 1')).toBe(false)
-    })
+describe('isOrdinaryNumericIssueNumber', () => {
+  it('accepts ordinary positive issue numbers', () => {
+    expect(isOrdinaryNumericIssueNumber('1')).toBe(true)
+    expect(isOrdinaryNumericIssueNumber('33')).toBe(true)
+    expect(isOrdinaryNumericIssueNumber('250')).toBe(true)
   })
 
-  describe('parseOrdinaryNumericIssue', () => {
-    test('returns number for ordinary numeric issues', () => {
-      expect(parseOrdinaryNumericIssue('1')).toBe(1)
-      expect(parseOrdinaryNumericIssue('25')).toBe(25)
-      expect(parseOrdinaryNumericIssue('0')).toBe(0)
-      expect(parseOrdinaryNumericIssue('100')).toBe(100)
-    })
+  it('rejects irregular provider numbering', () => {
+    expect(isOrdinaryNumericIssueNumber('0')).toBe(false)
+    expect(isOrdinaryNumericIssueNumber('-1')).toBe(false)
+    expect(isOrdinaryNumericIssueNumber('1.5')).toBe(false)
+    expect(isOrdinaryNumericIssueNumber('½')).toBe(false)
+    expect(isOrdinaryNumericIssueNumber('Annual 1')).toBe(false)
+    expect(isOrdinaryNumericIssueNumber('1MU')).toBe(false)
+    expect(isOrdinaryNumericIssueNumber('')).toBe(false)
+  })
+})
 
-    test('returns null for non-ordinary issues', () => {
-      expect(parseOrdinaryNumericIssue('Annual 1')).toBe(null)
-      expect(parseOrdinaryNumericIssue('½')).toBe(null)
-      expect(parseOrdinaryNumericIssue('-1')).toBe(null)
-      expect(parseOrdinaryNumericIssue('1a')).toBe(null)
-    })
+describe('resolveNaturalInsertAnchor', () => {
+  it('inserts the reported #2 before #33, #34, #35', () => {
+    const existing = [issue(1, '33'), issue(2, '34'), issue(3, '35')]
+
+    expect(resolveNaturalInsertAnchor(existing, '2')).toEqual({ kind: 'start' })
   })
 
-  describe('findNaturalInsertPosition', () => {
-    test('adds #2 to empty list (should append)', () => {
-      const existingIssues: Array<{ id: number; issue_number: string }> = []
-      const newIssueNumbers = ['2']
-      const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(null) // Should append when no existing issues
-    })
+  it('inserts between surrounding issue numbers', () => {
+    const existing = [issue(1, '1'), issue(2, '3')]
 
-    test('adds #2 to #33,#34,#35 (should insert at beginning)', () => {
-      const existingIssues = [
-        { id: 1, issue_number: '33' },
-        { id: 2, issue_number: '34' },
-        { id: 3, issue_number: '35' }
-      ]
-      const newIssueNumbers = ['2']
-      const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(null) // Should insert at beginning (null means append to beginning)
-    })
+    expect(resolveNaturalInsertAnchor(existing, '2')).toEqual({ kind: 'after', issueId: 1 })
+  })
 
-    test('adds #2 to #1,#3 (should insert after #1)', () => {
-      const existingIssues = [
-        { id: 1, issue_number: '1' },
-        { id: 2, issue_number: '3' }
-      ]
-      const newIssueNumbers = ['2']
-      const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(1) // Should insert after issue with id 1
-    })
+  it('anchors a gap-filling range after the last lower issue', () => {
+    const existing = [issue(1, '1'), issue(2, '2'), issue(3, '10')]
 
-    test('adds #4,#5 to #1,#2,#10 (should insert after #2)', () => {
-      const existingIssues = [
-        { id: 1, issue_number: '1' },
-        { id: 2, issue_number: '2' },
-        { id: 3, issue_number: '10' }
-      ]
-      const newIssueNumbers = ['4', '5']
-      const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(2) // Should insert after issue with id 2
-    })
+    expect(resolveNaturalInsertAnchor(existing, '4-5')).toEqual({ kind: 'after', issueId: 2 })
+  })
 
-    test('adds "Annual 1" to numeric issues (should append - ambiguous case)', () => {
-      const existingIssues = [
-        { id: 1, issue_number: '1' },
-        { id: 2, issue_number: '2' },
-        { id: 3, issue_number: '3' }
-      ]
-      const newIssueNumbers = ['Annual 1']
-      const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(3) // Ambiguous cases append at end
-    })
+  it('produces the same anchor regardless of the typed order', () => {
+    const existing = [issue(1, '1'), issue(2, '3')]
 
-    test('adds multiple issues with mixed types (should handle numeric naturally)', () => {
-      const existingIssues = [
-        { id: 1, issue_number: '1' },
-        { id: 2, issue_number: '3' },
-        { id: 3, issue_number: '5' }
-      ]
-      const newIssueNumbers = ['2', 'Annual 1', '4']
-      const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(1) // Should insert after issue #1 (for the numeric '2')
-    })
+    expect(resolveNaturalInsertAnchor(existing, '5,2,4')).toEqual(
+      resolveNaturalInsertAnchor(existing, '2,4,5'),
+    )
+  })
 
-    test('adds issues with existing non-numeric issues (should still work)', () => {
-      const existingIssues = [
-        { id: 1, issue_number: '1' },
-        { id: 2, issue_number: 'Annual 1' },
-        { id: 3, issue_number: '3' }
-      ]
-      const newIssueNumbers = ['2']
-      const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(1) // Should insert after issue #1 (ignoring non-numeric)
-    })
+  it('ignores issue numbers that already exist in the thread', () => {
+    const existing = [issue(1, '1'), issue(2, '2'), issue(3, '3')]
 
-    test('adds issues that should go at the end', () => {
-      const existingIssues = [
-        { id: 1, issue_number: '1' },
-        { id: 2, issue_number: '2' },
-        { id: 3, issue_number: '3' }
-      ]
-      const newIssueNumbers = ['4', '5']
-      const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(3) // Should insert after last issue (id 3)
-    })
+    // "2" already exists, so only "5" is new and it belongs after issue #3.
+    expect(resolveNaturalInsertAnchor(existing, '2-5')).toEqual({ kind: 'after', issueId: 3 })
+  })
+
+  it('appends when every requested issue already exists', () => {
+    const existing = [issue(1, '1'), issue(2, '2')]
+
+    expect(resolveNaturalInsertAnchor(existing, '1-2')).toEqual({ kind: 'end' })
+  })
+
+  it('preserves the canonical order for irregular identifiers', () => {
+    const existing = [issue(1, '1'), issue(2, '2'), issue(3, '3')]
+
+    expect(resolveNaturalInsertAnchor(existing, 'Annual 1')).toEqual({ kind: 'end' })
+    expect(resolveNaturalInsertAnchor(existing, '0')).toEqual({ kind: 'end' })
+    expect(resolveNaturalInsertAnchor(existing, '½')).toEqual({ kind: 'end' })
+  })
+
+  it('treats a mixed ordinary and irregular run as ambiguous', () => {
+    const existing = [issue(1, '1'), issue(2, '2')]
+
+    expect(resolveNaturalInsertAnchor(existing, '0, 5')).toEqual({ kind: 'end' })
+    expect(resolveNaturalInsertAnchor(existing, 'Annual 1, 9')).toEqual({ kind: 'end' })
+  })
+
+  it('keeps an intentionally non-numeric prefix where the reader put it', () => {
+    const existing = [issue(1, '10'), issue(2, '1'), issue(3, '2')]
+
+    // #3 is added: the last existing ordinary issue below it is #2, not #1.
+    expect(resolveNaturalInsertAnchor(existing, '3')).toEqual({ kind: 'after', issueId: 3 })
+  })
+
+  it('does not let irregular existing issues capture the anchor', () => {
+    const existing = [issue(1, 'Annual 1'), issue(2, '1')]
+
+    expect(resolveNaturalInsertAnchor(existing, '2')).toEqual({ kind: 'after', issueId: 2 })
+  })
+
+  it('anchors at the start when no ordinary issue sorts first', () => {
+    const existing = [issue(1, 'Annual 1'), issue(2, 'Annual 2')]
+
+    expect(resolveNaturalInsertAnchor(existing, '5')).toEqual({ kind: 'start' })
+  })
+
+  it('appends into an empty thread', () => {
+    expect(resolveNaturalInsertAnchor([], '1-3')).toEqual({ kind: 'end' })
+  })
+
+  it('rejects an invalid range before any request is made', () => {
+    const existing = [issue(1, '1')]
+
+    expect(() => resolveNaturalInsertAnchor(existing, '5-2')).toThrow('cannot exceed')
+    expect(() => resolveNaturalInsertAnchor(existing, '  ')).toThrow('cannot be empty')
   })
 })
