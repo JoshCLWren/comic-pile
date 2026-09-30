@@ -133,21 +133,33 @@ beforeEach(() => {
     nextPageToken: null,
     loadMore: vi.fn(),
     activeCount: 3,
-  } as never)
+  } // SAFETY: test double matches useQueueThreads return shape
+  )
   vi.mocked(useSession).mockReturnValue({
     data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
     refetch: vi.fn(),
-  } as never)
-  vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  vi.mocked(useUnsnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  } // SAFETY: test double matches useSession return shape
+  )
+  vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useCreateThread return shape
+  )
+  vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useUpdateThread return shape
+  )
+  vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useDeleteThread return shape
+  )
+  vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useReactivateThread return shape
+  )
+  vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useMoveToFront return shape
+  )
+  vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useMoveToBack return shape
+  )
+  vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useMoveToPosition return shape
+  )
+  vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useShuffleQueue return shape
+  )
+  vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useSnooze return shape
+  )
+  vi.mocked(useUnsnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useUnsnooze return shape
+  )
 
   listForThreads.mockImplementation(async (threadIds) => {
     const groups: Record<number, DependencyGroupSummary[]> = {}
@@ -182,9 +194,9 @@ describe('QueuePage crossover group batching', () => {
   })
 
   it('never starts per-card crossover requests while the page-level batch is pending', async () => {
-    const deferred: {
-      resolve?: (value: Record<number, DependencyGroupSummary[]>) => void
-    } = {}
+    const deferred = {
+      resolve: undefined as ((value: Record<number, DependencyGroupSummary[]>) => void) | undefined,
+    }
     listForThreads.mockImplementation(
       () =>
         new Promise((resolve) => {
