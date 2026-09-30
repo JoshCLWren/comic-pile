@@ -158,6 +158,28 @@ describe('useSkipInboxItem', () => {
 })
 
 describe('useIdentityInboxStatus', () => {
+  it('does not fetch while signed out and resumes across login/logout/login', async () => {
+    const wrapper = createWrapper()
+    let authenticated = false
+    const { result, rerender } = renderHook(() => useIdentityInboxStatus(authenticated), { wrapper })
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(mockedInboxApi.list).not.toHaveBeenCalled()
+
+    authenticated = true
+    rerender()
+    await waitFor(() => expect(result.current.data).toBe(1))
+    expect(mockedInboxApi.list).toHaveBeenCalledTimes(1)
+
+    authenticated = false
+    rerender()
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(mockedInboxApi.list).toHaveBeenCalledTimes(1)
+
+    authenticated = true
+    rerender()
+    expect(result.current.data).toBe(1)
+  })
+
   it('returns total from a limit=1 query', async () => {
     const wrapper = createWrapper()
     const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })

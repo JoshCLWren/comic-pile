@@ -22,6 +22,14 @@ import { isObject } from '../utils/runtimeChecks'
  *   real-time nature of the reconciliation system.
  */
 
+/** Remove session-owned data and cancel queries before another account can read it.
+ * QueryClient.clear destroys active queries (including pending retryers) and
+ * removes mutation records without refetching authenticated endpoints.
+ */
+export function clearSessionCache(client: QueryClient): void {
+  client.clear()
+}
+
 export type ThreadCacheRollback = () => void
 
 export function optimisticallyUpdateThreadCache(
