@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,6 +36,10 @@ RESEND_API_URL = "https://api.resend.com/emails"
 RESEND_REQUEST_TIMEOUT_SECONDS = 10.0
 
 RESET_SUBJECT = "Reset your Comic Pile password"
+PRODUCTION_RESET_SENDER = "Comic Pile <onboarding@resend.dev>"
+PRODUCTION_RESET_ORIGIN = "https://comic-pile.vercel.app"
+NON_PRODUCTION_RESET_SENDER = "Comic Pile <no-reply@example.com>"
+NON_PRODUCTION_RESET_ORIGIN = "http://localhost:3000"
 
 
 def build_password_reset_url(origin: str, path: str, raw_token: str) -> str:
@@ -161,7 +166,7 @@ class FakePasswordResetMailer:
             expiry_minutes: Human-readable expiry window in minutes.
         """
         settings = get_email_settings()
-        origin = settings.normalized_origin or "http://localhost:3000"
+        origin = settings.normalized_origin or NON_PRODUCTION_RESET_ORIGIN
         reset_url = build_password_reset_url(
             origin,
             settings.normalized_path,
@@ -333,23 +338,34 @@ def override_password_reset_mailer(mailer: PasswordResetMailer | None) -> None:
     _mailer_override = mailer
 
 
-def get_password_reset_mailer() -> PasswordResetMailer:
-    """Resolve the active password-reset mailer from configuration.
+def _default_sender_and_origin() -> tuple[str, str]:
+    """Return production defaults or harmless local placeholders."""
+    if os.environ.get("ENVIRONMENT", "development") == "production":
+        return PRODUCTION_RESET_SENDER, PRODUCTION_RESET_ORIGIN
+    return NON_PRODUCTION_RESET_SENDER, NON_PRODUCTION_RESET_ORIGIN
 
-    Returns:
-        The test override when set, the Resend adapter when
-        ``EmailSettings.is_configured`` holds, otherwise the shared
-        deterministic fake mailer.
+
+def get_password_reset_mailer() -> PasswordResetMailer:
+    """Resolve the active password-reset mailer.
+
+    The Resend API key is the only required deployment secret. Sender and
+    origin use stable application defaults based on ENVIRONMENT, while the
+    existing settings remain optional overrides for self-hosting and tests.
     """
     if _mailer_override is not None:
         return _mailer_override
+
     settings = get_email_settings()
-    if settings.is_configured:
-        origin = settings.normalized_origin or ""
-        return ResendPasswordResetMailer(
-            api_key=settings.usable_resend_api_key or "",
-            sender=settings.password_reset_sender.strip(),
-            origin=origin,
-            path=settings.normalized_path,
-        )
-    return get_fake_mailer()
+    api_key = settings.usable_resend_api_key
+    if not api_key:
+        return get_fake_mailer()
+
+    default_sender, default_origin = _default_sender_and_origin()
+    sender = settings.password_reset_sender.strip() or default_sender
+    origin = settings.normalized_origin or default_origin
+    return ResendPasswordResetMailer(
+        api_key=api_key,
+        sender=sender,
+        origin=origin,
+        path=settings.normalized_path,
+    )
