@@ -511,7 +511,7 @@ async def create_thread_with_retry(
             await db.commit()
             await db.refresh(new_thread)
 
-                    return await thread_to_response(new_thread, db)
+            return await thread_to_response(new_thread, db)
         except OperationalError as e:
             if "deadlock" in str(e).lower():
                 await db.rollback()
