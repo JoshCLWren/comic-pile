@@ -7,7 +7,7 @@ const authApi = vi.hoisted(() => ({
   resetPassword: vi.fn(),
 }))
 const apiClient = vi.hoisted(() => ({ post: vi.fn() }))
-const auth = vi.hoisted(() => ({ login: vi.fn() }))
+const auth = vi.hoisted(() => ({ login: vi.fn(), logout: vi.fn() }))
 
 vi.mock('../services/api', () => ({
   authApi,
@@ -151,6 +151,7 @@ describe('LoginPage password recovery entry point', () => {
 describe('ResetPasswordPage', () => {
   beforeEach(() => {
     authApi.resetPassword.mockReset()
+    auth.logout.mockReset()
   })
 
   it('renders a safe invalid-link state when the token is missing', () => {
@@ -168,8 +169,9 @@ describe('ResetPasswordPage', () => {
     fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'newpassword' } })
     fireEvent.click(screen.getByRole('button', { name: 'Reset Password' }))
 
-    expect(authApi.resetPassword).toHaveBeenCalledWith({ token: 'abc123', new_password: 'newpassword' })
     expect(await screen.findByText('Password Reset Successfully')).toBeInTheDocument()
+    expect(authApi.resetPassword).toHaveBeenCalledWith({ token: 'abc123', new_password: 'newpassword' })
+    expect(auth.logout).toHaveBeenCalledOnce()
     expect(screen.getByText(/All existing sessions have been revoked/)).toBeInTheDocument()
   })
 
@@ -246,6 +248,7 @@ describe('ResetPasswordPage', () => {
 describe('post-reset re-login', () => {
   beforeEach(() => {
     authApi.resetPassword.mockReset()
+    auth.logout.mockReset()
     auth.login.mockReset()
     apiClient.post.mockReset()
   })

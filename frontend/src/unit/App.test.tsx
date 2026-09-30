@@ -51,6 +51,9 @@ vi.mock('../pages/LoginPage', () => ({
 vi.mock('../pages/RegisterPage', () => ({
   default: () => <div data-testid="register-page">Create Account</div>,
 }))
+vi.mock('../pages/ResetPasswordPage', () => ({ default: () => <div data-testid="reset-password-page">Reset Password</div> }))
+vi.mock('../pages/ForgotPasswordPage', () => ({ default: () => <div data-testid="forgot-password-page">Forgot Password</div> }))
+
 vi.mock('../pages/RollPage', () => ({ default: () => <div data-testid="roll-page">Roll</div> }))
 vi.mock('../pages/RatePage', () => ({ default: () => <div data-testid="rate-page">Rate</div> }))
 vi.mock('../pages/QueuePage', () => ({ default: () => <div data-testid="queue-page">Queue</div> }))
@@ -496,4 +499,24 @@ describe('anonymous no-token probe suppression', () => {
     })
     expect(mockSetAccessToken).toHaveBeenCalledWith('ssr-token')
   })
+})
+
+
+test.each([true, false])('recovery routes remain reachable with authenticated=%s', async (authenticated) => {
+  if (authenticated) {
+    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  } else {
+    mockApiGet.mockRejectedValue(unauthenticatedError())
+  }
+  for (const [path, testId] of [
+    ['/reset-password?token=route-test-token', 'reset-password-page'],
+    ['/forgot-password', 'forgot-password-page'],
+  ]) {
+    const view = renderWithAuth(path)
+    await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument())
+    await waitFor(() => expect(authContextValue?.authState.isLoading).toBe(false))
+    expect(screen.getByTestId(testId)).toBeInTheDocument()
+    expect(screen.queryByTestId('roll-page')).not.toBeInTheDocument()
+    view.unmount()
+  }
 })

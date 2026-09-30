@@ -16,7 +16,6 @@ from app.repositories.password_reset_token_repository import (
     get_token_by_digest,
     mark_used,
 )
-from app.repositories.session_repository import delete_all_sessions_for_user
 from app.repositories.user_repository import get_user_by_email, get_user_by_id
 from app.services.password_reset_mailer import (
     FakePasswordResetMailer,
@@ -191,9 +190,8 @@ async def complete_reset(
     user.password_changed_at = now
     # Consume token
     await mark_used(db, token_id)
-    # Revoke all server-side sessions for user
-    await delete_all_sessions_for_user(db, user_id)
-    # Refresh-token revocation: for any existing revoked_token JTIs the user has,
-    # they remain revoked; new JWTs will include password_changed_at which is now current.
+    # Login and refresh tokens are revoked by password_changed_at. The sessions
+    # table contains reading history, not authentication sessions; never delete it
+    # during password recovery.
     await db.commit()
     return True

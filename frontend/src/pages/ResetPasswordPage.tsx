@@ -1,8 +1,10 @@
 import type { FormEvent } from 'react'
 import axios from 'axios'
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { useAuth } from '../App'
 import { Link, useSearchParams } from 'react-router-dom'
-import { authApi } from '../services/api'
+import { authApi, type ResetPasswordRequest } from '../services/api'
 import { isNonEmptyString, isString } from '../utils/runtimeChecks'
 
 const INVALID_LINK_MESSAGE =
@@ -34,8 +36,19 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const { logout } = useAuth()
+  const reset = useMutation({
+    mutationFn: (data: ResetPasswordRequest) => authApi.resetPassword(data),
+    onSuccess: () => {
+      logout()
+      setIsSuccess(true)
+    },
+    onError: (err: unknown) => {
+      setError(readInvalidLinkError(err) ?? 'Reset failed. Please try again.')
+    },
+  })
+  const isLoading = reset.isPending
 
   const validateForm = () => {
     if (!password) {
@@ -53,7 +66,7 @@ export default function ResetPasswordPage() {
     return true
   }
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
 
@@ -65,16 +78,7 @@ export default function ResetPasswordPage() {
       return
     }
 
-    setIsLoading(true)
-
-    try {
-      await authApi.resetPassword({ token, new_password: password })
-      setIsSuccess(true)
-    } catch (err: unknown) {
-      setError(readInvalidLinkError(err) ?? 'Reset failed. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
+    reset.mutate({ token, new_password: password })
   }
 
   if (!token) {

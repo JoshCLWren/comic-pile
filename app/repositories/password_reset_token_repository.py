@@ -26,9 +26,12 @@ async def create_token(
 
 
 async def get_token_by_digest(db: AsyncSession, digest: str) -> PasswordResetToken | None:
-    """Look up a password reset token by its digest."""
+    """Lock a reset token until the transaction commits to enforce single use."""
     result = await db.execute(
-        select(PasswordResetToken).where(PasswordResetToken.token_digest == digest).limit(1)
+        select(PasswordResetToken)
+        .where(PasswordResetToken.token_digest == digest)
+        .limit(1)
+        .with_for_update()
     )
     return result.scalar_one_or_none()
 
