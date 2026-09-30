@@ -6,7 +6,6 @@ used by the continuity rule, plan, and template routers.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.schemas.continuity_plan import ContinuityPlanResponse
@@ -20,7 +19,6 @@ async def _refresh_blocked_state(
     """Persist the unified Queue/Roll blocked projection after graph mutations."""
     await refresh_user_blocked_status(user_id, db)
     await db.commit()
-    await invalidate_user_view(user_id)
 
 
 def _to_response(rule: ContinuityRule) -> ContinuityRuleResponse:

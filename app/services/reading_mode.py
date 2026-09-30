@@ -11,7 +11,6 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import Session as SessionModel
 from app.models.user import User
@@ -93,7 +92,6 @@ class ReadingModeService:
 
         await self.db.commit()
         await self.db.refresh(session)
-        await invalidate_user_view(user.id)
 
         return {
             "bandwidth": session.reading_bandwidth,
@@ -109,7 +107,6 @@ class ReadingModeService:
 
         await self.db.commit()
         await self.db.refresh(session)
-        await invalidate_user_view(user.id)
 
         return {
             "bandwidth": session.reading_bandwidth,
@@ -125,7 +122,6 @@ class ReadingModeService:
 
         await self.db.commit()
         await self.db.refresh(session)
-        await invalidate_user_view(user.id)
 
         return {
             "bandwidth": session.reading_bandwidth,

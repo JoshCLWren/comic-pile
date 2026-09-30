@@ -10,7 +10,6 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.models.cbl_reference import CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
 from app.schemas.shared_types import SourceBackedDecision
@@ -149,7 +148,6 @@ async def adopt_cbl_into_existing_reading_plan(
         await db.rollback()
         raise
 
-    await invalidate_user_view(user_id)
     await db.refresh(plan)
     return AdoptionCommitResult(
         plan=plan,

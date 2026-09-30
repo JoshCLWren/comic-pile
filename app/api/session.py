@@ -11,7 +11,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, User
@@ -957,8 +956,6 @@ async def restore_session_start(
         RuntimeError: If failed after max retries.
     """
     session = await session_service.restore_session_start(session_id, current_user.id)
-
-    await invalidate_user_view(current_user.id)
 
     from sqlalchemy import func
 

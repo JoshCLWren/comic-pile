@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.external_identities import ExternalIdentityMappingError
 from app.models.user import User
@@ -264,7 +263,6 @@ async def api_import_issue(
             ) from exc
         raise
     await db.commit()
-    await invalidate_user_view(current_user.id)
     return result
 
 

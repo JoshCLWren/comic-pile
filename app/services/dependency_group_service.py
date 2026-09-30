@@ -1,9 +1,9 @@
 """Dependency-group orchestration for the reading-order-groups API.
 
-Services own business rules, transaction boundaries (commit/rollback),
-blocked-state refresh, and cache invalidation. Query construction and
-persistence live in ``app/repositories/dependency_group_repository.py``;
-HTTP status mapping lives in routers.
+Services own business rules, transaction boundaries (commit/rollback), and
+blocked-state refresh. Query construction and persistence live in
+``app/repositories/dependency_group_repository.py``; HTTP status mapping
+lives in routers.
 """
 
 from collections.abc import Sequence
@@ -11,7 +11,6 @@ from collections.abc import Sequence
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.models import DependencyGroup, DependencyGroupMembership
 from app.repositories import dependency_group_repository as groups_repo
 from app.schemas.dependency_group import (
@@ -241,14 +240,13 @@ class DependencyGroupService:
         )
 
     async def _refresh_crossover_blocked_state(self, user_id: int) -> None:
-        """Persist blocked-state changes and invalidate dependent user-scoped reads.
+        """Persist blocked-state changes after crossover mutations.
 
         Args:
             user_id: The authenticated user whose blocked state changed.
         """
         await refresh_user_blocked_status(user_id, self._db)
         await self._db.commit()
-        await invalidate_user_view(user_id)
 
     async def list_groups(self, user_id: int) -> list[DependencyGroupResponse]:
         """List the current user's groups and memberships.

@@ -53,7 +53,6 @@ from comic_pile.recommendation_version import (
 )
 from comic_pile.session import get_current_die_for_session, get_or_create
 
-from app.cache_invalidation import invalidate_session_caches
 from app.config import get_recommendation_settings
 from app.schemas import RollResponse
 
@@ -458,7 +457,6 @@ class RollService:
         from app.repositories.roll_repository import clear_session_pending
         await clear_session_pending(self._db, current_session.id, now)
         await self._db.commit()
-        await invalidate_session_caches(current_user_id)
 
     async def execute_roll(
         self,
@@ -540,7 +538,6 @@ class RollService:
         await update_session_pending_thread(self._db, current_session.id, selected_thread.id, now)
 
         await self._db.commit()
-        await invalidate_session_caches(user_id)
 
         selected_index: int = artifacts["selected_index"]
         unread_count: int = artifacts["unread_count"]
@@ -616,7 +613,6 @@ class RollService:
         await update_session_pending_thread(self._db, current_session.id, selected_thread.id, now)
 
         await self._db.commit()
-        await invalidate_session_caches(user_id)
 
         selected_index: int = artifacts["selected_index"]
         unread_count: int = artifacts["unread_count"]
