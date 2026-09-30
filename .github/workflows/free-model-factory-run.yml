@@ -51,8 +51,8 @@ jobs:
     timeout-minutes: 30
     env:
       # Workflow token handles GitHub API, labels, comments, and backlog-zero
-      # workflow dispatch. A dedicated PAT is used only for git fetch/push so
-      # pull_request workflows are attributed to a trusted actor.
+      # workflow dispatch. Git fetch/push and PR creation use the dedicated
+      # PAT so pull_request workflows and initial review use a trusted actor.
       GH_TOKEN: ${{ github.token }}
       PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}

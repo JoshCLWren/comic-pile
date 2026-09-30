@@ -230,6 +230,12 @@ Apply these states exactly. Reconcile each target with one full label-set replac
 
 Rules:
 
+- The issue/PR state reconciler enrolls open, non-draft repository PRs missing
+  factory metadata on open/reopen/unlabel events and every 15 minutes. Forks,
+  Dependabot, and Renovate are excluded. It preserves unrelated labels and an
+  existing owner/stage, defaults missing ownership to `factory:unowned`, and uses
+  exact-head trusted review markers when recovering a missing stage; otherwise
+  it requests `factory:review`. Green CI alone never establishes readiness.
 - `factory:building`, `factory:review`, `factory:changes-requested`, `factory:ci`, `factory:ready`, and `factory:blocked` are mutually exclusive workflow states.
 - `factory:unowned`, `factory:local`, and every `factory:<number>` owner label are mutually exclusive next-action owners.
 - Never leave a factory-produced or factory-managed open PR without `factory`, one truthful workflow-state label, and one truthful owner label.
@@ -240,6 +246,10 @@ Rules:
 
 ## Repository safety
 
+- Fixed-model PR creation must use `PR_REBASE_TOKEN`, like git pushes. Keep the
+  workflow token for controller comments and labels; creating the PR with that
+  token attributes it to `github-actions[bot]`, which can leave Actions awaiting
+  approval and causes CodeRabbit to skip initial review.
 - Never push directly to `main`.
 - Never create or convert a draft PR unless Josh explicitly requests a draft.
 - Never enable auto-merge.

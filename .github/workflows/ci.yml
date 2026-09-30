@@ -22,6 +22,18 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/${{ github.event.repository.name }}
 
 jobs:
+  factory-pr-auth:
+    name: Factory PR authentication
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: node --test .github/scripts/factory-pr-auth.test.cjs .github/scripts/factory-visibility*.test.cjs
+
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
