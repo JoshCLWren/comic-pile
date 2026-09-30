@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock, patch
 
 from app.cache_accounting import cache_accounting
 from app.startup_diagnostics import (
     is_heavy_initialized,
     reset_startup_diagnostics_for_test,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _find_startup_handler(app):
@@ -135,9 +140,7 @@ async def test_api_init_does_not_eagerly_import_full_router_surface() -> None:
     """Importing app.api.ping defers full router surface; cold start stays cheap (issue #2978)."""
     import subprocess
     import sys
-    from pathlib import Path
 
-    repo_root = Path(__file__).resolve().parents[1]
     code = (
         "import sys\n"
         "from app.api import ping\n"
@@ -150,11 +153,58 @@ async def test_api_init_does_not_eagerly_import_full_router_surface() -> None:
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        cwd=repo_root,
+        cwd=REPO_ROOT,
         timeout=120,
     )
     assert result.returncode == 0, (
-        f"app.api package eagerly loaded the full router surface: {result.stdout.strip()}"
+        "app.api package eagerly loaded the full router surface: "
+        f"stdout={result.stdout.strip()!r} stderr={result.stderr.strip()!r}"
+    )
+
+
+def test_app_main_defers_app_construction_to_lazy_attribute() -> None:
+    """Guard against eager app construction in app.main (issue #2978)."""
+    tree = ast.parse((REPO_ROOT / "app" / "main.py").read_text(encoding="utf-8"))
+
+    eager_constructions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign | ast.AnnAssign)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == "create_app"
+    ]
+    assert eager_constructions == [], (
+        "app.main must not call create_app() at module scope; the shared instance is "
+        "built lazily by the module __getattr__ so api/index.py does not pay twice"
+    )
+    assert any(
+        isinstance(node, ast.FunctionDef) and node.name == "__getattr__" for node in tree.body
+    ), "app.main must expose a module-level __getattr__ that builds the shared app lazily"
+
+
+def test_vercel_entry_path_constructs_exactly_one_app() -> None:
+    """Verify the Vercel entry path builds exactly one application (issue #2978)."""
+    tree = ast.parse((REPO_ROOT / "api" / "index.py").read_text(encoding="utf-8"))
+
+    create_app_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "create_app"
+    ]
+    assert len(create_app_calls) == 1
+
+    imported_from_app_main = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "app.main"
+        for alias in node.names
+    }
+    assert imported_from_app_main == {"create_app"}, (
+        "api/index.py must build its own instance instead of importing the shared app, "
+        "which would construct a second application on every cold start"
     )
 
 
