@@ -8,6 +8,7 @@ import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hoo
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
 import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
+import { useCrossoverGroups } from '../../hooks/useCrossoverGroups'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
@@ -58,6 +59,10 @@ export default function QueuePage() {
   const blockingByThreadId = useQueueBlockingInfo(
     activeThreads.map((thread) => thread.id),
   )
+
+  // Fetch crossover groups once for all active threads to avoid N+1 queries
+  const activeThreadIds = activeThreads.map((thread) => thread.id)
+  const crossoverGroupsState = useCrossoverGroups(activeThreadIds)
 
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
@@ -161,6 +166,9 @@ export default function QueuePage() {
           index={index}
           isBlocked={isBlocked}
           blockingDependencies={blockingDependencies}
+          crossoverGroups={crossoverGroupsState.groupsByThreadId[thread.id]}
+          crossoverGroupsLoading={crossoverGroupsState.isPending}
+          crossoverGroupsError={Boolean(crossoverGroupsState.error)}
           isDragOver={isDragOver}
           snoozeIcon={snoozeIcon}
           snoozeLabel={snoozeLabel}
@@ -183,7 +191,7 @@ export default function QueuePage() {
         />
       )
     },
-    [actions, activeThreads, blockingByThreadId, modals, navigate, session],
+    [actions, activeThreads, blockingByThreadId, crossoverGroupsState, modals, navigate, session],
   )
 
   const handleLoadMore = useCallback(() => {
