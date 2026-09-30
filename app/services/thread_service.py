@@ -1,9 +1,8 @@
 """Thread business logic and orchestration.
 
-Services own business rules, transaction boundaries (commit/rollback/retry),
-and cache invalidation. Query construction lives in
-``app/repositories/thread_repository.py`` and sibling repositories; HTTP
-status mapping lives in routers.
+Services own business rules and transaction boundaries (commit/rollback/retry).
+Query construction lives in ``app/repositories/thread_repository.py`` and
+sibling repositories; HTTP status mapping lives in routers.
 """
 
 import asyncio
@@ -16,7 +15,6 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.models import Event, Issue, Thread
 from app.models.thread import normalize_format_value
 from app.repositories import (
@@ -513,8 +511,7 @@ async def create_thread_with_retry(
             await db.commit()
             await db.refresh(new_thread)
 
-            await invalidate_user_view(user_id)
-            return await thread_to_response(new_thread, db)
+                    return await thread_to_response(new_thread, db)
         except OperationalError as e:
             if "deadlock" in str(e).lower():
                 await db.rollback()
@@ -590,7 +587,6 @@ async def update_thread(
     await db.commit()
     await db.refresh(thread)
 
-    await invalidate_user_view(user_id)
     return await thread_to_response(thread, db)
 
 
@@ -708,7 +704,6 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         await db.rollback()
         logger.exception("Unexpected error deleting thread %s", thread_id)
         raise InvalidRequestError(f"Cannot delete thread: {exc}") from exc
-    await invalidate_user_view(user_id)
 
 
 async def reactivate_completed_thread(
@@ -781,7 +776,6 @@ async def reactivate_completed_thread(
     await db.commit()
     await db.refresh(thread)
 
-    await invalidate_user_view(user_id)
     return await thread_to_response(thread, db)
 
 
@@ -869,7 +863,6 @@ async def set_pending_thread(
         snoozed_count = len(snoozed_ids)
 
     await db.commit()
-    await invalidate_user_view(user_id)
 
     return RollResponse(
         thread_id=thread_id_int,
@@ -918,7 +911,6 @@ async def backdate_thread_for_testing(
     thread.last_activity_at = datetime.now(UTC) - timedelta(days=days_ago)
     await db.commit()
     await db.refresh(thread)
-    await invalidate_user_view(user_id)
 
     return await thread_to_response(thread, db)
 
@@ -964,7 +956,6 @@ async def migrate_thread_to_issues(
     response = await thread_to_response(thread, db)
 
     await db.commit()
-    await invalidate_user_view(user_id)
 
     return response
 
@@ -1063,7 +1054,6 @@ async def migrate_thread_to_issues_simple(
     response = await thread_to_response(thread, db)
 
     await db.commit()
-    await invalidate_user_view(user_id)
 
     return response
 
@@ -1150,7 +1140,6 @@ async def set_current_issue(
     current_session.pending_thread_updated_at = now
 
     await db.commit()
-    await invalidate_user_view(user_id)
 
     return SetCurrentIssueResponse(
         thread_id=thread_id,

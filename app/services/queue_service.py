@@ -1,16 +1,15 @@
 """Queue move/shuffle orchestration.
 
-Services own business rules, transaction boundaries, reorder-event writes,
-and cache invalidation. Persistence (position maps, event rows, and the
-queue mutation SQL) lives in ``app/repositories/queue_repository.py`` and
-``comic_pile.queue``. HTTP status mapping lives in routers.
+Services own business rules, transaction boundaries, and reorder-event
+writes. Persistence (position maps, event rows, and the queue mutation SQL)
+lives in ``app/repositories/queue_repository.py`` and ``comic_pile.queue``.
+HTTP status mapping lives in routers.
 """
 
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.repositories import queue_repository, thread_repository
 from app.services.errors import InvalidRequestError, NotFoundError
 from app.services.thread_service import thread_to_response
@@ -25,21 +24,12 @@ from comic_pile.queue import (
 logger = logging.getLogger(__name__)
 
 
-async def invalidate_queue_caches(user_id: int) -> None:
-    """Invalidate every cached view affected by queue reordering.
-
-    Args:
-        user_id: Owner of the reordered queue.
-    """
-    await invalidate_user_view(user_id)
-
-
 class QueueService:
     """Queue list/mutation orchestration for the queue API.
 
     Owns the move-to-position, move-to-front, move-to-back, and shuffle flows
-    previously embedded in ``app.api.queue``, including ownership checks,
-    reorder-event persistence, and cache invalidation.
+    previously embedded in ``app.api.queue``, including ownership checks and
+    reorder-event persistence.
     """
 
     def __init__(self, db: AsyncSession) -> None:
@@ -161,7 +151,6 @@ class QueueService:
             await queue_repository.add_reorder_event(self._db, thread_id)
             await self._db.commit()
             await self._db.refresh(thread)
-            await invalidate_queue_caches(user_id)
 
         return await thread_to_response(thread, self._db)
 
@@ -173,8 +162,4 @@ class QueueService:
         """
         logger.info("Shuffling queue for user %d", user_id)
 
-        before_positions = await queue_repository.active_queue_positions(self._db, user_id)
         await _shuffle_queue(user_id, self._db)
-        after_positions = await queue_repository.active_queue_positions(self._db, user_id)
-        if after_positions != before_positions:
-            await invalidate_queue_caches(user_id)

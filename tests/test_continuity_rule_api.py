@@ -1,14 +1,12 @@
 """API coverage for generalized continuity-rule CRUD."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import continuity_rule as continuity_rule_api
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.dependency_group import DependencyGroup
 from app.models.issue import Issue
@@ -229,17 +227,6 @@ async def test_other_users_rules_are_hidden_and_unreferenceable(
         json=_payload("issue", owned_issue.id, "crossover", foreign_group.id),
     )
     assert foreign_reference.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_continuity_mutations_invalidate_related_caches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Continuity mutations advance exactly one bounded user cache generation."""
-    invalidate = AsyncMock()
-    monkeypatch.setattr(continuity_rule_api, "invalidate_user_view", invalidate)
-
-    await continuity_rule_api._invalidate_continuity_caches(42)
-
-    invalidate.assert_awaited_once_with(42)
 
 
 @pytest.mark.asyncio

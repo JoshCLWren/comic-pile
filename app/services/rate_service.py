@@ -1,8 +1,8 @@
 """Rate service orchestrating the thread-rating pipeline.
 
-Services own business logic, transaction boundaries (commit/rollback),
-and cache invalidation. Query construction lives in repositories
-(app.repositories). HTTP status mapping lives in routers.
+Services own business logic and transaction boundaries (commit/rollback).
+Query construction lives in repositories (app.repositories). HTTP status
+mapping lives in routers.
 """
 
 from datetime import UTC, datetime
@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.config import get_rating_settings
 from app.models import Event, Issue, Snapshot, Thread
 from app.models.thread import normalize_format_value
@@ -583,8 +582,6 @@ async def rate_thread(
         pre_session_state=pre_session_state,
     )
     await db.commit()
-
-    await invalidate_user_view(user_id)
 
     # Create base ThreadResponse data
     thread_response_data = {

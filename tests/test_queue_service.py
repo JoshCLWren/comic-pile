@@ -1,9 +1,9 @@
 """Focused unit coverage for queue service orchestration.
 
-The queue router now delegates every mutation to ``QueueService``. These
-tests pin the orchestration decisions (ownership lookup, change detection,
-reorder-event write, cache invalidation) without a database by mocking the
-repository and mutation boundaries.
+The queue router delegates every mutation to ``QueueService``. These tests
+pin the orchestration decisions (ownership lookup, change detection, and
+reorder-event write) without a database by mocking the repository and
+mutation boundaries.
 """
 
 from types import SimpleNamespace
@@ -43,7 +43,7 @@ async def _patch_service_boundaries(
     thread: SimpleNamespace | None,
     before: dict[int, int] | None = None,
     after: dict[int, int] | None = None,
-) -> tuple[AsyncMock, AsyncMock, AsyncMock, AsyncMock]:
+) -> tuple[AsyncMock, AsyncMock, AsyncMock]:
     """Patch every repository and mutation boundary the service relies on.
 
     Args:
@@ -53,8 +53,7 @@ async def _patch_service_boundaries(
         after: Position map captured after the mutation.
 
     Returns:
-        Tuple of (mutation mock, add_reorder_event mock, thread_to_response
-        mock, invalidator mock).
+        Tuple of (mutation mock, add_reorder_event mock, thread_to_response mock).
     """
     find_owned = AsyncMock(return_value=thread)
     monkeypatch.setattr(queue_service.thread_repository, "find_owned", find_owned)
@@ -74,18 +73,15 @@ async def _patch_service_boundaries(
     to_response = AsyncMock(return_value={"id": thread.id if thread else None})
     monkeypatch.setattr(queue_service, "thread_to_response", to_response)
 
-    invalidator = AsyncMock(return_value=True)
-    monkeypatch.setattr(queue_service, "invalidate_user_view", invalidator)
-
-    return mutation, add_reorder_event, to_response, invalidator
+    return mutation, add_reorder_event, to_response
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_records_reorder_event_and_invalidates(
+async def test_move_to_position_records_reorder_event_on_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A real position change writes a reorder event and bumps caches."""
-    _mutation, add_reorder_event, _to_response, invalidator = await _patch_service_boundaries(
+    """A real position change writes a reorder event and commits."""
+    _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
         monkeypatch,
         thread=_make_thread(),
         before={10: 1, 7: 2, 11: 3},
@@ -98,7 +94,6 @@ async def test_move_to_position_records_reorder_event_and_invalidates(
 
     _mutation.assert_awaited_once_with(7, 1, 1, db)
     add_reorder_event.assert_awaited_once_with(db, 7)
-    invalidator.assert_awaited_once_with(1)
     db.commit.assert_awaited_once()
 
 
@@ -107,7 +102,7 @@ async def test_move_to_position_noop_skips_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Moving a thread to its current position never mutates the queue."""
-    _mutation, add_reorder_event, _to_response, invalidator = await _patch_service_boundaries(
+    _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
         monkeypatch,
         thread=_make_thread(queue_position=1),
     )
@@ -117,7 +112,6 @@ async def test_move_to_position_noop_skips_mutation(
 
     _mutation.assert_not_awaited()
     add_reorder_event.assert_not_awaited()
-    invalidator.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -125,7 +119,7 @@ async def test_move_to_position_missing_thread_raises_not_found(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A foreign or absent thread maps to the 404 domain error."""
-    _mutation, _add_reorder_event, _to_response, invalidator = await _patch_service_boundaries(
+    _mutation, _add_reorder_event, _to_response = await _patch_service_boundaries(
         monkeypatch,
         thread=None,
     )
@@ -135,7 +129,6 @@ async def test_move_to_position_missing_thread_raises_not_found(
         await service.move_to_position(1, 999, 3)
 
     _mutation.assert_not_awaited()
-    invalidator.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -143,7 +136,7 @@ async def test_move_to_position_invalid_target_raises_invalid_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An out-of-range target position surfaces as a 400-mapped error."""
-    _mutation, _add_reorder_event, _to_response, invalidator = await _patch_service_boundaries(
+    _mutation, _add_reorder_event, _to_response = await _patch_service_boundaries(
         monkeypatch,
         thread=_make_thread(),
         before={10: 1, 7: 2, 11: 3},
@@ -158,8 +151,6 @@ async def test_move_to_position_invalid_target_raises_invalid_request(
     service = queue_service.QueueService(_fake_db())
     with pytest.raises(InvalidRequestError, match="Position 9 is out of range"):
         await service.move_to_position(1, 7, 9)
-
-    invalidator.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -182,8 +173,6 @@ async def test_move_to_front_delegates_to_front_mutation(
     monkeypatch.setattr(
         queue_service, "thread_to_response", AsyncMock(return_value={"id": 7})
     )
-    invalidator = AsyncMock(return_value=True)
-    monkeypatch.setattr(queue_service, "invalidate_user_view", invalidator)
 
     db = _fake_db()
     service = queue_service.QueueService(db)
@@ -191,7 +180,6 @@ async def test_move_to_front_delegates_to_front_mutation(
 
     front_mutation.assert_awaited_once_with(7, 1, db)
     add_reorder_event.assert_awaited_once_with(db, 7)
-    invalidator.assert_awaited_once_with(1)
 
 
 @pytest.mark.asyncio
@@ -214,8 +202,6 @@ async def test_move_to_back_uses_back_mutation(
     monkeypatch.setattr(
         queue_service, "thread_to_response", AsyncMock(return_value={"id": 7})
     )
-    invalidator = AsyncMock(return_value=True)
-    monkeypatch.setattr(queue_service, "invalidate_user_view", invalidator)
 
     db = _fake_db()
     service = queue_service.QueueService(db)
@@ -223,32 +209,17 @@ async def test_move_to_back_uses_back_mutation(
 
     back_mutation.assert_awaited_once_with(7, 1, db)
     add_reorder_event.assert_awaited_once_with(db, 7)
-    invalidator.assert_awaited_once_with(1)
 
 
 @pytest.mark.asyncio
-async def test_shuffle_invalidates_only_when_order_changes(
+async def test_shuffle_delegates_to_shuffle_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Shuffle bumps caches only when the random reorder actually moved rows."""
-    monkeypatch.setattr(
-        queue_service.queue_repository,
-        "active_queue_positions",
-        AsyncMock(side_effect=[{10: 1, 7: 2}, {7: 1, 10: 2}]),
-    )
+    """Shuffle delegates straight to the queue shuffle mutation."""
     shuffle = AsyncMock()
     monkeypatch.setattr(queue_service, "_shuffle_queue", shuffle)
-    invalidator = AsyncMock(return_value=True)
-    monkeypatch.setattr(queue_service, "invalidate_user_view", invalidator)
 
     service = queue_service.QueueService(_fake_db())
     await service.shuffle(1)
-    invalidator.assert_awaited_once_with(1)
 
-    monkeypatch.setattr(
-        queue_service.queue_repository,
-        "active_queue_positions",
-        AsyncMock(return_value={10: 1, 7: 2}),
-    )
-    await service.shuffle(1)
-    assert invalidator.await_count == 1
+    shuffle.assert_awaited_once_with(1, service._db)

@@ -7,7 +7,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache_invalidation import invalidate_user_view
 from app.continuity_rules import (
     _would_create_cycle,
     ensure_owned_continuity_rule_references,
@@ -29,11 +28,6 @@ from app.schemas.continuity_rule import (
 from app.services.continuity import _refresh_blocked_state, _to_response
 
 router = APIRouter(tags=["continuity"])
-
-
-async def _invalidate_continuity_caches(user_id: int) -> None:
-    """Invalidate all user-scoped cached views after a continuity mutation."""
-    await invalidate_user_view(user_id)
 
 
 async def _get_owned_rule(db: AsyncSession, user_id: int, rule_id: int) -> ContinuityRule:

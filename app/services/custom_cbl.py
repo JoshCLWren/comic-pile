@@ -12,7 +12,6 @@ from fastapi import HTTPException
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.issue import Issue
@@ -620,7 +619,6 @@ async def apply_custom_cbl_for_user(
         )
         if result.plan.ordering_mode == "strict_sequential":
             await refresh_user_blocked_status(user_id, db)
-        await invalidate_user_view(user_id)
         await db.commit()
     except Exception:
         await db.rollback()
