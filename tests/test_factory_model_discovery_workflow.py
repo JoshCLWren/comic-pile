@@ -43,6 +43,7 @@ def test_discovery_uses_opencode_cli_not_omniroute_or_integrate_api() -> None:
     assert "auto/best-free" not in workflow
     assert "OPENCODE_ZEN_API_KEY" in workflow
     assert "NVIDIA_API_KEY" in workflow
+    assert "MISTRAL_API_KEY" in workflow
     assert "catalog_fixture" in workflow
 
 

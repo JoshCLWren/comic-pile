@@ -49,6 +49,7 @@ opencode_model_is_free: Callable[[str], bool] = _ROSTER.opencode_model_is_free
 openrouter_model_is_free: Callable[[str], bool] = _ROSTER.openrouter_model_is_free
 z_ai_model_is_free: Callable[[str], bool] = _ROSTER.z_ai_model_is_free
 ollama_cloud_model_is_free: Callable[[str], bool] = _ROSTER.ollama_cloud_model_is_free
+mistral_model_is_pinned: Callable[[str], bool] = _ROSTER.mistral_model_is_pinned
 load_roster_rows = _ROSTER.load_roster_rows
 
 
@@ -81,6 +82,11 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
             assert model == 'stealth/pixel-canary', (
                 f'worker {worker} vercel-ai-gateway pin must be the current '
                 f'zero-price Pixel Canary promo, got {model!r}'
+            )
+        elif source == 'mistral':
+            assert mistral_model_is_pinned(model), (
+                f'worker {worker} mistral pin must be codestral-latest, '
+                f'not mistral-small or any other id, got {model!r}'
             )
 
 
@@ -171,16 +177,18 @@ def main() -> None:
     assert 'OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' in runner
     assert 'Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}' in runner
     assert 'OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}' in runner
+    assert 'MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}' in runner
     assert 'AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}' in runner
     assert 'nvidia)' in runner
     assert 'opencode-free|openrouter-free)' in runner
     assert 'kilo-auto)' in runner
-    assert 'z-ai|ollama-cloud)' in runner
+    assert 'z-ai|ollama-cloud|mistral)' in runner
     assert 'vercel-ai-gateway)' in runner
-    assert 'nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway)' in runner
+    assert 'nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral)' in runner
     assert 'Configure OpenAI-compatible factory provider' in runner
     assert 'https://api.z.ai/api/paas/v4' in runner
     assert 'https://ollama.com/v1' in runner
+    assert 'https://api.mistral.ai/v1' in runner
     assert 'https://ai-gateway.vercel.sh/v1' in runner
     assert 'Require Pixel Canary to remain zero-price' in runner
     assert 'Prove Pixel Canary can use OpenCode tools' in runner
@@ -214,6 +222,7 @@ def main() -> None:
         'opencode-model-catalog.sh',
         'OPENCODE_ZEN_API_KEY',
         'NVIDIA_API_KEY',
+        'MISTRAL_API_KEY',
         'factory/model-retirement',
         'integrate.api.nvidia.com',
         '--retirement-comments',

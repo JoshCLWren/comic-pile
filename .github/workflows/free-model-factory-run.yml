@@ -16,6 +16,8 @@ on:
         required: false
       OLLAMA_API_KEY:
         required: false
+      MISTRAL_API_KEY:
+        required: false
       AI_GATEWAY_API_KEY:
         required: false
       OMNIROUTE_API_KEY:
@@ -57,6 +59,7 @@ jobs:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
       OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+      MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
       OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
       OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}
@@ -122,7 +125,7 @@ jobs:
               configured=true
               reason='configured-anonymous-free'
               ;;
-            z-ai|ollama-cloud)
+            z-ai|ollama-cloud|mistral)
               if [[ "$model" == "${source}/"* ]]; then
                 runtime_model="$model"
               else
@@ -131,8 +134,10 @@ jobs:
               branch_suffix="$source"
               if [[ "$source" == "z-ai" ]]; then
                 if [[ -n "${Z_AI_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-Z_AI_API_KEY'; fi
-              else
+              elif [[ "$source" == "ollama-cloud" ]]; then
                 if [[ -n "${OLLAMA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OLLAMA_API_KEY'; fi
+              else
+                if [[ -n "${MISTRAL_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-MISTRAL_API_KEY'; fi
               fi
               ;;
             vercel-ai-gateway)
@@ -263,7 +268,7 @@ jobs:
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
 
           case "$SOURCE" in
-            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway)
+            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
               {
@@ -515,7 +520,8 @@ jobs:
           (
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'z-ai' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'ollama-cloud' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'mistral'
           )
         shell: bash
         env:
@@ -541,6 +547,12 @@ jobs:
               base_url='https://ai-gateway.vercel.sh/v1'
               provider_id='vercel-ai-gateway'
               provider_name='Vercel AI Gateway free capacity'
+              ;;
+            mistral)
+              key="${MISTRAL_API_KEY:-}"
+              base_url='https://api.mistral.ai/v1'
+              provider_id='mistral'
+              provider_name='Mistral Codestral'
               ;;
             *)
               echo "Unsupported OpenAI-compatible factory source: ${SOURCE}" >&2

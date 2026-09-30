@@ -9,3 +9,5 @@ def test_model_present_in_free_model_factories() -> None:
     content = file_path.read_text()
     assert 'ollama-cloud' in content
     assert 'nemotron-3-nano:30b' in content
+    assert 'codestral-latest' in content
+    assert 'mistral-small' not in content

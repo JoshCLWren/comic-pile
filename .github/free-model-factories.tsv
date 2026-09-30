@@ -8,7 +8,7 @@
 42	opencode-free	nemotron-3-ultra-free	20	dispatcher	OpenCode Nemotron 3 Ultra Free
 45	opencode-free	nemotron-3.5-lightning-free	35	dispatcher	OpenCode Nemotron 3.5 Lightning Free
 46	kilo-auto	kilo-auto/free	40	dispatcher	Kilo Auto Free · Forge
-48	opencode-free	big-pickle	50	dispatcher	OpenCode Big Pickle
+48	mistral	codestral-latest	50	dispatcher	Mistral Codestral
 49	opencode-free	space-bunny-free	55	dispatcher	OpenCode Space Bunny Free
 51	openrouter-free	nvidia/nemotron-3-ultra-550b-a55b:free	5	dispatcher	OpenRouter Nemotron 3 Ultra Free
 52	openrouter-free	thinkingmachines/inkling:free	10	dispatcher	OpenRouter Inkling Free

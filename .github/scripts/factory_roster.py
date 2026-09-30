@@ -39,9 +39,12 @@ OPENCODE_DISPLAY_TOKEN_OVERRIDES = {"mimo": "MiMo"}
 OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
 _VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
-PROTECTED_SOURCES = frozenset({"kilo-auto", "z-ai", "ollama-cloud", "vercel-ai-gateway"})
+PROTECTED_SOURCES = frozenset({"kilo-auto", "z-ai", "ollama-cloud", "vercel-ai-gateway", "mistral"})
 Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash"})
 OLLAMA_CLOUD_FREE_MODELS = frozenset({"nemotron-3-nano:30b", "gpt-oss:20b"})
+# Approved native Mistral lane pin. Not a catalog :free id; mistral-small
+# and every other Mistral id stay rejected.
+MISTRAL_PINNED_MODELS = frozenset({"codestral-latest"})
 # Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
 OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha"})
 LOCK_SCHEMA_VERSION = 1
@@ -156,6 +159,19 @@ def ollama_cloud_model_is_free(model: str) -> bool:
         True for ``nemotron-3-nano:30b`` or the documented alt ``gpt-oss:20b``.
     """
     return _bare_source_model(model, "ollama-cloud") in OLLAMA_CLOUD_FREE_MODELS
+
+
+def mistral_model_is_pinned(model: str) -> bool:
+    """Return whether a Mistral lane pin is the approved Codestral id.
+
+    Args:
+        model: Bare or ``mistral/``-prefixed Mistral model id.
+
+    Returns:
+        True only for ``codestral-latest``. ``mistral-small`` and every
+        other Mistral id are rejected.
+    """
+    return _bare_source_model(model, "mistral") in MISTRAL_PINNED_MODELS
 
 
 def is_big_pickle(model: str) -> bool:
