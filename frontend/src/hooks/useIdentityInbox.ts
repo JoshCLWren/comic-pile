@@ -14,12 +14,13 @@ export function useIdentityInbox(offset: number) {
   })
 }
 
-export function useIdentityInboxStatus() {
+export function useIdentityInboxStatus(enabled = true) {
   return useQuery({
     queryKey: queryKeys.identityInbox.list({ offset: 0, limit: 1 }),
     queryFn: () => identityInboxApi.list(0, 1),
     select: (data) => data.total,
     staleTime: 10_000,
+    enabled,
   })
 }
 

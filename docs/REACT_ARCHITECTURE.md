@@ -366,3 +366,18 @@ configuration, governed by the semantic roles in the visual grammar.
 - [REACT_INTERACTION_POLICY.md](REACT_INTERACTION_POLICY.md) — interaction/gesture rules
 - [API.md](API.md) — REST API contracts and examples
 - [Architecture overview](ARCHITECTURE.md) — repository-level architecture
+
+## Authentication boundaries and cached data
+
+`AuthProvider` clears the provider's QueryClient through `clearSessionCache` in
+`frontend/src/query/cacheEffects.ts` on logout, cross-tab logout, definitive
+session rejection, and explicit login. Clearing destroys pending queries and
+removes mutation records so a new account cannot reuse the previous account's
+query data. Transient revalidation failures preserve the current account's cache.
+Auth validation uses a session generation to prevent responses and bootstrap
+retries from restoring an account after logout or superseding a newer login.
+
+Navigation enables its identity-inbox status query only while authenticated.
+Logout broadcasts on the same BroadcastChannel instance that receives messages,
+so other tabs are notified without the originating tab receiving a delayed copy
+of its own logout after another login.

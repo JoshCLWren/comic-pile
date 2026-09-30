@@ -208,7 +208,7 @@ test('redirects the retired analytics route to Roll', async () => {
   expect(screen.queryByText('Analytics')).not.toBeInTheDocument()
 })
 
-test('broadcasts logout events and closes the auth channel', async () => {
+test('broadcasts logout on the existing channel and closes it on unmount', async () => {
   const postMessage = vi.fn()
   const close = vi.fn()
   let channel: TestBroadcastChannel | undefined
@@ -220,7 +220,7 @@ test('broadcasts logout events and closes the auth channel', async () => {
   }
   vi.stubGlobal('BroadcastChannel', TestBroadcastChannel)
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-  renderWithAuth('/')
+  const { unmount } = renderWithAuth('/')
   await waitFor(() => expect(authContextValue?.isAuthenticated).toBe(true))
   // SAFETY: the handler reads only data.type, which is the field the test sets
   act(() => channel?.onmessage?.({ data: { type: 'other' } } as MessageEvent))
@@ -230,7 +230,9 @@ test('broadcasts logout events and closes the auth channel', async () => {
   expect(authContextValue?.isAuthenticated).toBe(false)
   act(() => authContextValue?.logout())
   expect(postMessage).toHaveBeenCalledWith({ type: 'logout' })
-  expect(close).toHaveBeenCalled()
+  expect(close).not.toHaveBeenCalled()
+  unmount()
+  expect(close).toHaveBeenCalledOnce()
   vi.unstubAllGlobals()
 })
 

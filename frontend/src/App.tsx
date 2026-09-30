@@ -1,8 +1,9 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
+import { clearSessionCache } from './query/cacheEffects'
 import { lazyRoute } from './routes/routeModules'
 import { useRoutePrefetch } from './hooks/useRoutePrefetch'
 import Navigation from './components/Navigation'
@@ -68,6 +69,9 @@ const IdentityInboxPage = lazyRoute('identityInbox')
 const LandingPage = lazyRoute('landing')
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const client = useQueryClient()
+  const sessionGeneration = useRef(0)
+  const authChannelRef = useRef<BroadcastChannel | null>(null)
   const [authState, setAuthState] = useState<AuthState>({
     status: 'checking',
     isLoading: true,
@@ -79,7 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const recoveryPromise = useRef<Promise<void> | null>(null)
 
   const markDefinitivelyUnauthenticated = useCallback(() => {
+    sessionGeneration.current += 1
     clearAccessToken()
+    clearSessionCache(client)
     setAuthState(prev => ({
       ...prev,
       status: 'unauthenticated',
@@ -89,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       retryCount: 0,
       lastRetryAt: null,
     }))
-  }, [])
+  }, [client])
 
   const clearAuthError = useCallback(() => {
     setAuthState(prev => ({
@@ -101,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const recoverSession = useCallback(
     (timeout?: number): Promise<void> => {
      if (!recoveryPromise.current) {
+       const generation = sessionGeneration.current
        recoveryPromise.current = (async () => {
          try {
            if (isSessionRefreshRejected()) {
@@ -111,10 +118,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              })
            }
            await refreshSession({ skipAuthRedirect: true })
+           if (generation !== sessionGeneration.current) return
            const response = await api.get<AuthUser>('/v1/auth/me', {
              timeout,
              skipAuthRedirect: true,
            })
+           if (generation !== sessionGeneration.current) return
            setAuthState(prev => ({
              ...prev,
              status: 'authenticated',
@@ -125,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              lastRetryAt: null,
            }))
          } catch (error) {
+           if (generation !== sessionGeneration.current) return
            const authError = createAuthError(error)
            if (isDefinitiveAuthenticationFailure(error)) {
              markDefinitivelyUnauthenticated()
@@ -168,11 +178,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    }, [recoverSession])
 
   const revalidateSession = useCallback(async (timeout?: number) => {
+    const generation = sessionGeneration.current
     try {
       const response = await api.get<AuthUser>('/v1/auth/me', {
         timeout,
         skipAuthRedirect: true,
       })
+      if (generation !== sessionGeneration.current) return
       setAuthState(prev => ({
         ...prev,
         status: 'authenticated',
@@ -183,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastRetryAt: null,
       }))
     } catch (error) {
+      if (generation !== sessionGeneration.current) return
       const authError = createAuthError(error)
       if (isDefinitiveAuthenticationFailure(error)) {
         // The persistent session can usually be renewed silently with the
@@ -211,10 +224,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true
+    const bootstrapGeneration = sessionGeneration.current
     let retryTimer: number | undefined
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
+    authChannelRef.current = authChannel
     
     const validateSession = async () => {
+      const generation = bootstrapGeneration
+      if (generation !== sessionGeneration.current) return
       const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
       if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
         setAuthState(prev => ({
@@ -240,7 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
           skipAuthRedirect: true,
         })
-        if (isMounted) {
+        if (isMounted && generation === sessionGeneration.current) {
           setAuthState(prev => ({
             ...prev,
             status: 'authenticated',
@@ -252,7 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }))
         }
       } catch (error) {
-        if (!isMounted) return
+        if (!isMounted || generation !== sessionGeneration.current) return
         
         const authError = createAuthError(error)
         
@@ -315,13 +332,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.clearTimeout(retryTimer)
       }
       authChannel?.close()
+      authChannelRef.current = null
     }
   }, [markDefinitivelyUnauthenticated, recoverSession])
 
   const login = async (accessToken: string) => {
+    const generation = ++sessionGeneration.current
+    setAuthState(prev => ({ ...prev, status: 'checking', isLoading: true, user: null }))
+    clearSessionCache(client)
     setAccessToken(accessToken)
     try {
       const response = await api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
+      if (generation !== sessionGeneration.current) return
       setAuthState(prev => ({
         ...prev,
         status: 'authenticated',
@@ -332,6 +354,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastRetryAt: null,
       }))
     } catch (error) {
+      if (generation !== sessionGeneration.current) return
       const authError = createAuthError(error)
       // Preserve the freshly issued session only when the hydration failure is
       // positively identified as a transient outage (503 / network). A
@@ -339,6 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // legacy invalid-credentials behavior: clear the token and log out.
       if (isDefinitiveAuthenticationFailure(error) || authError === null) {
         clearAccessToken()
+        clearSessionCache(client)
         setAuthState(prev => ({
           ...prev,
           status: 'unauthenticated',
@@ -363,11 +387,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     markDefinitivelyUnauthenticated()
-    if (typeof BroadcastChannel !== 'undefined') {
-      const authChannel = new BroadcastChannel('comic-pile-auth')
-      authChannel.postMessage({ type: 'logout' })
-      authChannel.close()
-    }
+    // Posting on the receiving instance excludes this tab from its own logout.
+    authChannelRef.current?.postMessage({ type: 'logout' })
   }
 
   // Legacy context value for backward compatibility

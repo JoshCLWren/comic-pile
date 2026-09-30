@@ -54,13 +54,12 @@ function PreferencesSyncConsumer() {
   return <PreferencesSync isAuthenticated={authState.status === 'authenticated'} />
 }
 
-function renderProvider() {
-  const queryClient = new QueryClient({
+function renderProvider(queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
-  })
+  })) {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -103,6 +102,84 @@ describe('AuthProvider transient recovery', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('clears cached user data and mutations on logout and a new login', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    mocks.get.mockResolvedValue({ username: 'first', email: 'first@example.com' })
+    renderProvider(client)
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    const key = ['queue', 'first-user']
+    client.setQueryData(key, { title: 'First user private queue' })
+    client.getMutationCache().build(client, { mutationKey: ['private-write'] })
+
+    act(() => auth!.logout())
+    expect(client.getQueryData(key)).toBeUndefined()
+    expect(client.getMutationCache().getAll()).toHaveLength(0)
+    expect(auth?.isAuthenticated).toBe(false)
+
+    client.setQueryData(key, { title: 'Stale data' })
+    mocks.get.mockResolvedValue({ username: 'second', email: 'second@example.com' })
+    await act(async () => auth!.login('second-token'))
+    expect(auth?.user?.username).toBe('second')
+    expect(client.getQueryData(key)).toBeUndefined()
+  })
+
+  it('does not let a pending session validation sign a logged-out user back in', async () => {
+    let resolveUser!: (user: { username: string; email: string }) => void
+    mocks.get.mockImplementationOnce(() => new Promise(resolve => { resolveUser = resolve }))
+    renderProvider()
+    act(() => auth!.logout())
+    await act(async () => resolveUser({ username: 'first', email: 'first@example.com' }))
+    expect(auth?.isAuthenticated).toBe(false)
+    expect(auth?.user).toBeNull()
+  })
+
+  it('clears private cache on a logout received from another tab', async () => {
+    let channel!: { onmessage: ((event: MessageEvent) => void) | null }
+    class TestChannel {
+      onmessage: ((event: MessageEvent) => void) | null = null
+      constructor() { channel = this }
+      close() {}
+      postMessage() {}
+    }
+    vi.stubGlobal('BroadcastChannel', TestChannel)
+    const client = new QueryClient()
+    mocks.get.mockResolvedValue({ username: 'first', email: 'first@example.com' })
+    renderProvider(client)
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    client.setQueryData(['private'], 'first-user-data')
+    act(() => channel.onmessage?.(new MessageEvent('message', { data: { type: 'logout' } })))
+    expect(auth?.isAuthenticated).toBe(false)
+    expect(client.getQueryData(['private'])).toBeUndefined()
+    expect(client.getQueryCache().getAll().every(query => query.state.data === undefined)).toBe(true)
+  })
+
+  it('clears private cache when refresh definitively rejects the session', async () => {
+    const client = new QueryClient()
+    mocks.get.mockResolvedValue({ username: 'first', email: 'first@example.com' })
+    renderProvider(client)
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    client.setQueryData(['private'], 'first-user-data')
+    mocks.get.mockRejectedValueOnce(axiosError(401))
+    mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
+    await act(async () => { await auth!.revalidateSession().catch(() => undefined) })
+    expect(auth?.isAuthenticated).toBe(false)
+    expect(client.getQueryData(['private'])).toBeUndefined()
+    expect(client.getQueryCache().getAll().every(query => query.state.data === undefined)).toBe(true)
+  })
+
+  it('retains private cache during a transient revalidation outage', async () => {
+    const client = new QueryClient()
+    mocks.get.mockResolvedValue({ username: 'first', email: 'first@example.com' })
+    renderProvider(client)
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    client.setQueryData(['private'], 'first-user-data')
+    mocks.get.mockRejectedValueOnce(axiosError(503))
+    await act(async () => { await auth!.revalidateSession().catch(() => undefined) })
+    expect(auth?.authState.status).toBe('service_unavailable')
+    expect(client.getQueryData(['private'])).toBe('first-user-data')
   })
 
   it('keeps bootstrap in recovery after a transient network failure and authenticates on retry', async () => {
