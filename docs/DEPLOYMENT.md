@@ -69,43 +69,48 @@ After deployment, `GET /api/v1/health/dependencies` can be used to verify the ap
 ### Password-reset outbound email (Resend, issue #2778)
 
 Password-reset links are delivered through Resend behind a provider-neutral
-mailer boundary. Production delivery requires three settings (see
-[`.env.example`](../.env.example)):
+mailer boundary. The maintained production deployment requires only the Resend
+API key as an email-specific environment secret:
 
 ```dotenv
 RESEND_API_KEY=re_...
-PASSWORD_RESET_SENDER=Comic Pile <no-reply@example.com>
-PASSWORD_RESET_ORIGIN=https://your-comic-pile.example
-# Optional: PASSWORD_RESET_PATH=/reset-password
 ```
+
+When `ENVIRONMENT=production`, ComicPile supplies its maintained defaults:
+
+```text
+sender: Comic Pile <onboarding@resend.dev>
+origin: https://comic-pile.vercel.app
+path: /reset-password
+```
+
+Outside production, the mailer uses harmless example/local defaults. Self-hosters
+and tests may still override `PASSWORD_RESET_SENDER`, `PASSWORD_RESET_ORIGIN`,
+and `PASSWORD_RESET_PATH`, but those values are not required for the maintained
+ComicPile deployment.
 
 Notes:
 
 - `RESEND_API_KEY` is already configured in the Vercel production
   environment. Never copy the secret value into GitHub, logs, source, or
   issue comments.
-- `PASSWORD_RESET_SENDER` must use a domain verified in the Resend
-  dashboard. Verification is an owner-controlled DNS action: add the
-  SPF/DKIM TXT records Resend shows for the sending domain. Until the
-  domain is verified, Resend rejects the message; the app logs a
-  `password_reset_delivery_failed` event and still returns the
-  enumeration-safe acknowledgement, so requesters cannot distinguish the
-  outage from ordinary behavior.
+- The `onboarding@resend.dev` sender uses Resend's hosted test domain. If
+  ComicPile later needs to send password-reset messages broadly to arbitrary
+  users, move the maintained sender to a domain controlled and verified by
+  ComicPile rather than adding more required deployment knobs.
 - Delivery runs as a request background task after the acknowledgement is
   returned, so provider latency (including the 10-second adapter timeout
   during an outage) never changes how quickly a known address is
   acknowledged compared with an unknown one.
-- `PASSWORD_RESET_ORIGIN` must be the public origin users open in a
-  browser; the reset token is appended as an encoded `?token=` query
-  parameter on `PASSWORD_RESET_PATH` at the delivery boundary only.
-- When any setting is missing (local development, tests), the app uses a
-  deterministic fake mailer and records messages in-memory instead of
-  sending, logging a `password_reset_email_unconfigured` warning so a
-  misconfigured production environment is visible operationally.
-  Automated coverage in `tests/test_password_reset_mailer.py`
-  asserts link construction, expiry copy, digest-only storage, enumeration
-  safety under provider failure, deferred delivery, and that the raw token
-  is never logged.
+- The reset token is appended as an encoded `?token=` query parameter on the
+  reset path at the delivery boundary only.
+- When `RESEND_API_KEY` is missing or unusable, the app uses a deterministic
+  fake mailer and records messages in-memory instead of sending, logging a
+  `password_reset_email_unconfigured` warning.
+  Automated coverage in `tests/test_password_reset_mailer.py` and
+  `tests/test_password_reset_defaults.py` asserts link construction, expiry
+  copy, digest-only storage, environment defaults, enumeration safety under
+  provider failure, deferred delivery, and that the raw token is never logged.
 
 ### How ComicPile uses Neon
 
