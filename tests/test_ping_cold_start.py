@@ -133,14 +133,29 @@ async def test_ping_then_non_ping_sequence() -> None:
 @pytest.mark.asyncio
 async def test_api_init_does_not_eagerly_import_full_router_surface() -> None:
     """Importing app.api.ping defers full router surface; cold start stays cheap (issue #2978)."""
-    import time
+    import subprocess
+    import sys
+    from pathlib import Path
 
-    start = time.time()
-    from app.api import ping
-    elapsed = time.time() - start
-
-    # Cold import must complete quickly; full router surface deferred.
-    assert elapsed < 1.0, f"Cold ping import too slow: {elapsed:.2f}s"
+    repo_root = Path(__file__).resolve().parents[1]
+    code = (
+        "import sys\n"
+        "from app.api import ping\n"
+        "eager = [m for m in sys.modules if m.startswith('app.api.') and m != 'app.api.ping']\n"
+        "if eager:\n"
+        "    print(eager)\n"
+        "    sys.exit(1)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
+        timeout=120,
+    )
+    assert result.returncode == 0, (
+        f"app.api package eagerly loaded the full router surface: {result.stdout.strip()}"
+    )
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,19 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api import (
+    cbl_sources,
+    continuity_plan,
+    continuity_rule,
+    continuity_template,
+    custom_cbl,
+    dependency_group,
+    dependency_group_batch,
+    issue_dependency_batch,
+    reading_order_projection,
+    releases,
+    roll_recovery_switch,
+)
 from app.auth import get_current_user
 from app.cache import TTL, cached
 from app.database import get_db
@@ -278,18 +291,6 @@ async def get_thread_connected_threads(
 
 # Sub-router registrations moved from app.api.__init__ so the package
 # does not eagerly import the full router surface (issue #2978).
-from app.api import issue_dependency_batch  # noqa: E402
-from app.api import dependency_group  # noqa: E402
-from app.api import dependency_group_batch  # noqa: E402
-from app.api import continuity_rule  # noqa: E402
-from app.api import continuity_plan  # noqa: E402
-from app.api import continuity_template  # noqa: E402
-from app.api import reading_order_projection  # noqa: E402
-from app.api import cbl_sources  # noqa: E402
-from app.api import custom_cbl  # noqa: E402
-from app.api import roll_recovery_switch  # noqa: E402
-from app.api import releases  # noqa: E402
-
 router.include_router(issue_dependency_batch.router)
 router.include_router(dependency_group.router)
 router.include_router(dependency_group_batch.router)

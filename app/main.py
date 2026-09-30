@@ -760,4 +760,30 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     return app
 
 
-app = create_app()
+app: FastAPI
+
+
+def __getattr__(name: str) -> FastAPI:
+    """Lazily construct the shared application instance on first access.
+
+    Module-import-time construction forced every importer of ``app.main``
+    (including the Vercel entry point in ``api/index.py``) to pay for a full
+    ``create_app()`` before building the function-specific instance,
+    doubling cold-start cost (issue #2978). PEP 562 lazy attribute access
+    keeps ``from app.main import app`` and ``uvicorn app.main:app`` working
+    while letting importers construct exactly the instance they need.
+
+    Args:
+        name: Attribute name being accessed.
+
+    Returns:
+        The shared application instance, constructed on first access.
+
+    Raises:
+        AttributeError: If the attribute is not ``app``.
+    """
+    if name == "app":
+        global app
+        app = create_app()
+        return app
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
