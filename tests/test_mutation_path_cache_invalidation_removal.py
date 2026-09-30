@@ -161,3 +161,4 @@ def test_decoupled_mutation_paths_reference_no_cache_invalidation(relative: str)
             assert node.name not in REMOVED_INVALIDATION_HELPERS, (
                 f"{relative} still defines {node.name}()"
             )
+
