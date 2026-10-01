@@ -160,14 +160,13 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
     expect(grid!.className).toContain('items-start')
-    // #2992: no single track recipe is blessed. The grid must declare a
-    // two-track lg layout (density is asserted on rendered geometry in
-    // issue-2992-roll-density-guard.spec.ts), and the #2952 comma failure
-    // mode must never return.
-    expect(grid!.className).toMatch(/lg:grid-cols-\[[^\]]+\]/)
+    // #2990 bounds both the desktop shell and decision track; #2992
+    // verifies the rendered content gap across wide viewports.
+    expect(grid!.className).toContain('lg:max-w-6xl')
+    expect(grid!.className).toContain('lg:mx-auto')
+    expect(grid!.className).toContain('lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]')
     expect(hasNoGridColsArbitraryComma(grid!.className)).toBe(true)
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
-    expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
 
     // After #2711, only Comic and the decision region remain (2 cells)
     expect(cells.length).toBe(2)

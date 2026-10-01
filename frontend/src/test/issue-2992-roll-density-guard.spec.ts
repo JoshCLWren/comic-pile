@@ -18,10 +18,8 @@
  * 3. The progress line keeps meaningful width when present (#2991).
  * 4. The regions still tile without overlap (preserve the #2952 win).
  *
- * Status note: assertion (1) is expected to FAIL on the current
- * `lg:grid-cols-[1fr_auto]` recipe until #2990 packs the pillars grid, and
- * assertion (2) fails on the vertical-title collapse from #2991. That is
- * the point of this guard: it must be falsifiable, not merely green.
+ * Wide viewports also exercise #2990: expanding the shell must not expand
+ * the empty track between the comic content and decision card.
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
@@ -54,8 +52,11 @@ const COVER_DATA_URI = (() => {
 })()
 
 const VIEWPORTS = [
+  { label: '1024', width: 1024, height: 800 },
   { label: '1280', width: 1280, height: 800 },
   { label: '1440', width: 1440, height: 900 },
+  { label: '1920', width: 1920, height: 900 },
+  { label: '2560', width: 2560, height: 900 },
 ]
 
 interface DOMRectSnapshot {

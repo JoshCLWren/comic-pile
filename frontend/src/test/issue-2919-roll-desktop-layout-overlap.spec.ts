@@ -231,7 +231,7 @@ test.describe('Issue #2919 Roll result layout overlap and clipping', () => {
     })
   }
 
-  test('the rating view adds no nested scroll container above the sticky action cluster', async ({
+  test('the rating view adds no nested scroll container around the action cluster', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -273,12 +273,11 @@ test.describe('Issue #2919 Roll result layout overlap and clipping', () => {
       }
     })
 
-    // The action cluster is sticky below the md band; this test is what keeps
-    // that behaviour real.
-    expect(result.position).toBe('sticky')
+    // DecisionCard actions remain in normal flow (#2711); the shell owns scrolling.
+    expect(result.position).toBe('static')
     expect(
       result.scrollContainers,
-      'only #root may scroll around the rating action cluster; a nested overflow wrapper breaks stickiness without any page-level overflow',
+      'only #root may scroll around the rating action cluster; a nested overflow wrapper can clip actions without any page-level overflow',
     ).toEqual([])
   })
 })

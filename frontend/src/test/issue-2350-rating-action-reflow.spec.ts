@@ -1,13 +1,7 @@
 /**
- * Issue #2350: the rating action cluster uses available content width on
- * tablet and wraps secondaries out of one cramped row when space is tight.
- *
- * Acceptance criterion #6 requires a rendered regression at 800×1094 and
- * 390×844 that asserts layout geometry (cluster width vs viewport / actual row
- * stacking), not class strings. This spec measures rendered boxes: at tablet
- * width the cluster must span the pillars grid instead of leaving a canyon,
- * and at iPhone width the secondaries must have wrapped into a stacked layout
- * with comfortable tap widths instead of staying one 7–8px-packed row.
+ * Narrow rating action coverage (#2350, refreshed for DecisionCard in #3001).
+ * Measure the current action container and touch targets at tablet and phone
+ * widths so desktop clustering changes cannot break narrow containment.
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
@@ -31,6 +25,8 @@ interface ReflowGeometry {
   grid: Box
   actionsCell: Box
   secondary: Box
+  comic: Box
+  decision: Box
   secondaryButtons: Array<{
     left: number
     right: number
@@ -111,8 +107,10 @@ async function readReflowGeometry(page: Page): Promise<ReflowGeometry> {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       scrollWidth: document.documentElement.scrollWidth,
       grid: rect(document.querySelector('[data-testid="rating-pillars-grid"]')),
-      actionsCell: rect(document.querySelector('[data-testid="rating-actions-grid-cell"]')),
+      actionsCell: rect(document.querySelector('[data-testid="rating-actions"]')),
       secondary: rect(secondary),
+      comic: rect(document.querySelector('[data-testid="rating-region-comic"]')),
+      decision: rect(document.querySelector('[data-testid="rating-region-decision"]')),
       secondaryButtons: buttons.map((button) => {
         const r = button.getBoundingClientRect()
         return {
@@ -174,7 +172,7 @@ test.describe('rating action cluster reflow (issue #2350)', () => {
     assertNoHorizontalOverflow(g)
   })
 
-  test('phone 390×844: secondaries wrap out of the packed single row and stay tappable', async ({
+  test('phone 390×844: decision stacks below comic and actions stay contained and tappable', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -193,14 +191,15 @@ test.describe('rating action cluster reflow (issue #2350)', () => {
     expect(g.secondary).not.toBeNull()
 
     expect(g.secondaryButtons).toHaveLength(3)
-    // When insufficient width remains for three comfortable lanes the
-    // secondaries must stack/wrap instead of staying one 7–8px-packed row
-    // (acceptance criteria #2/#3/#6).
-    const rows = distinctRows(g.secondaryButtons)
-    expect(rows).toBeGreaterThanOrEqual(2)
+    expect(g.comic).not.toBeNull()
+    expect(g.decision).not.toBeNull()
+    expect(g.decision!.top).toBeGreaterThanOrEqual(g.comic!.bottom)
+    expect(g.actionsCell!.width / g.grid!.width).toBeGreaterThan(0.85)
     for (const button of g.secondaryButtons) {
       expect(button.width).toBeGreaterThanOrEqual(96)
       expect(button.height).toBeGreaterThanOrEqual(44)
+      expect(button.left).toBeGreaterThanOrEqual(g.actionsCell!.left)
+      expect(button.right).toBeLessThanOrEqual(g.actionsCell!.right + 1)
     }
 
     assertNoHorizontalOverflow(g)
