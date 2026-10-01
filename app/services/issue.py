@@ -6,6 +6,7 @@ lifecycle status are kept in sync with the issue set.
 """
 
 import logging
+import re
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
@@ -20,6 +21,56 @@ from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
 
 logger = logging.getLogger(__name__)
+
+
+def _is_simple_positive_integer(issue_number: str) -> bool:
+    """Check if an issue number is a simple positive integer (1, 2, 3, ...).
+
+    Returns False for: "0", "-1", "½", "1.5", "Annual 1", "Special", etc.
+    """
+    return bool(re.fullmatch(r"[1-9]\d*", issue_number))
+
+
+def _compute_auto_insert_position(
+    existing_rows: list[tuple[int, str, int]],
+    new_issue_numbers: list[str],
+) -> int:
+    """Compute the natural insertion position for a block of new numeric issues.
+
+    Args:
+        existing_rows: List of (issue_id, issue_number, position) for existing issues.
+        new_issue_numbers: List of new issue numbers (all simple positive integers).
+
+    Returns:
+        The position where the new issues should be inserted (0 = before all existing).
+    """
+    # Filter existing issues to only unambiguous numeric ones
+    numeric_existing = [
+        (int(row[1]), row[2]) for row in existing_rows if _is_simple_positive_integer(row[1])
+    ]
+
+    if not numeric_existing:
+        # No existing numeric issues, insert at the beginning
+        return 0
+
+    # Sort existing numeric issues by their numeric value
+    numeric_existing.sort(key=lambda x: x[0])
+
+    # Sort new issue numbers by their numeric value
+    new_numeric_values = sorted(int(n) for n in new_issue_numbers)
+    first_new_value = new_numeric_values[0]
+
+    # Find the first existing issue with a numeric value greater than the first new issue
+    for _value, position in numeric_existing:
+        if _value > first_new_value:
+            # Insert before this existing issue
+            return position - 1
+
+    # All new issues are greater than all existing numeric issues, append after the last numeric
+    # But we need to insert after the last numeric issue's position
+    # Find the max position among numeric issues
+    max_numeric_position = max(pos for _val, pos in numeric_existing)
+    return max_numeric_position
 
 
 async def list_issues(
@@ -113,6 +164,14 @@ async def create_issues(
     existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
     existing_issues = {row[1]: row[2] for row in existing_rows}
 
+    new_issue_numbers = [n for n in issue_numbers if n not in existing_issues]
+
+    if not new_issue_numbers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="All issues in range already exist",
+        )
+
     max_position = max((row[2] for row in existing_rows), default=0)
     insert_position = max_position
 
@@ -127,18 +186,15 @@ async def create_issues(
                 detail=f"Issue {insert_after_issue_id} not found",
             )
         insert_position = insert_after_issue[2]
-
-    new_issue_numbers = [n for n in issue_numbers if n not in existing_issues]
-
-    if not new_issue_numbers:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="All issues in range already exist",
-        )
+    else:
+        # Auto-place unambiguous numeric issues in natural order
+        if all(_is_simple_positive_integer(n) for n in new_issue_numbers):
+            insert_position = _compute_auto_insert_position(existing_rows, new_issue_numbers)
 
     new_issues_count = len(new_issue_numbers)
 
-    if insert_after_issue_id is not None:
+    # Shift existing issues if we're inserting in the middle (not appending at the end)
+    if insert_position < max_position:
         await issue_repository.defer_position_unique_constraint(db)
         await issue_repository.shift_positions_after(
             db, thread_id, after_position=insert_position, delta=new_issues_count

@@ -488,38 +488,39 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                   </Tooltip>
                 </>
               )}
-               <div className="hidden md:flex border-l border-white/10">
-                 <button
-                   type="button"
-                   onClick={() => handleMoveIssue(issue, 'up')}
-                   disabled={isBusy || !canMoveUp}
-                   className={[
-                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
-                     'hover:text-amber-300 disabled:opacity-40',
-                   ].join(' ')}
-                   aria-label={`Move issue #${issue.issue_number} up`}
-                   data-testid={`issue-move-up-${issue.id}`}
-                   data-move-control={`up-${issue.id}`}
-                   title={`Move issue #${issue.issue_number} up`}
-                 >
-                   ↑
-                 </button>
-                 <button
-                   type="button"
-                   onClick={() => handleMoveIssue(issue, 'down')}
-                   disabled={isBusy || !canMoveDown}
-                   className={[
-                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
-                     'hover:text-amber-300 disabled:opacity-40',
-                   ].join(' ')}
-                   aria-label={`Move issue #${issue.issue_number} down`}
-                   data-testid={`issue-move-down-${issue.id}`}
-                   data-move-control={`down-${issue.id}`}
-                   title={`Move issue #${issue.issue_number} down`}
-                 >
-                   ↓
-                 </button>
-               </div>
+<>
+                  <div className="flex border-l border-white/10" role="group" aria-label={`Move issue #${issue.issue_number}`}>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveIssue(issue, 'up')}
+                      disabled={isBusy || !canMoveUp}
+                      className={[
+                        'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
+                        'hover:text-amber-300 disabled:opacity-40 active:bg-white/5',
+                      ].join(' ')}
+                      aria-label={`Move issue #${issue.issue_number} up`}
+                      data-testid={`issue-move-up-${issue.id}`}
+                      data-move-control={`up-${issue.id}`}
+                      title={`Move issue #${issue.issue_number} up`}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveIssue(issue, 'down')}
+                      disabled={isBusy || !canMoveDown}
+                      className={[
+                        'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
+                        'hover:text-amber-300 disabled:opacity-40 active:bg-white/5',
+                      ].join(' ')}
+                      aria-label={`Move issue #${issue.issue_number} down`}
+                      data-testid={`issue-move-down-${issue.id}`}
+                      data-move-control={`down-${issue.id}`}
+                      title={`Move issue #${issue.issue_number} down`}
+                    >
+                      ↓
+                    </button>
+                  </div>
                <button
                  type="button"
                  onClick={() => {
