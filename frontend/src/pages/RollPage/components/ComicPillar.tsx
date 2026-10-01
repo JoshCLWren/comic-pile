@@ -80,8 +80,9 @@ export function ComicPillar({
 
   return (
     <div className="w-full space-y-4">
-      {/* Cover rail beside issue identity/details composition */}
-      <div className="grid grid-cols-1 lg:grid-cols-[auto_minmax(12rem,1fr)] gap-4 items-start">
+      {/* Cover rail beside issue identity/details composition. The cover track grows only when
+          the outer Roll shell has room for it, so the header can never spill into DecisionCard. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(9rem,11rem)_minmax(0,1fr)] xl:grid-cols-[minmax(10rem,17rem)_minmax(0,1fr)] gap-4 items-start">
         {/* Cover rail */}
         <div className="flex-shrink-0 w-full lg:w-auto">
           <ComicIdentity issueId={issueId} />
@@ -125,13 +126,13 @@ export function ComicPillar({
 
           {/* Compact identity/correction controls */}
           {(issueNumber != null || (needsIdentity && issueId) || (identityState?.has_confirmed_identity && issueId)) && (
-            <div className="flex flex-wrap items-center gap-2" data-testid="comic-header-controls">
+            <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid="comic-header-controls">
               {issueNumber != null && (
                 <button
                   type="button"
                   onClick={() => setIsCorrectionDialogOpen(true)}
                   disabled={!activeRatingThread?.id}
-                  className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
+                  className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
                   style={{
                     border: '1px solid rgba(255,255,255,0.1)',
                     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -146,14 +147,14 @@ export function ComicPillar({
                 <button
                   type="button"
                   onClick={() => { setSearchMode('confirm'); setIsSearchDialogOpen(true) }}
-                  className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-900 bg-amber-500 hover:bg-amber-400 transition shrink-0"
+                  className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-900 bg-amber-500 hover:bg-amber-400 transition"
                 >
                   Find ComicVine match
                 </button>
               )}
 
               {identityState?.has_confirmed_identity && issueId && (
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1 rounded-full px-2 py-1 bg-green-500/10 border border-green-500/30">
                     <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
                     <span className="text-[9px] font-bold text-green-400">Linked</span>
@@ -161,7 +162,7 @@ export function ComicPillar({
                   <button
                     type="button"
                     onClick={() => { setSearchMode('replace'); setIsSearchDialogOpen(true) }}
-                    className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-400 hover:text-amber-400 transition shrink-0"
+                    className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-400 hover:text-amber-400 transition"
                     style={{
                       border: '1px solid rgba(255,255,255,0.1)',
                       backgroundColor: 'rgba(255,255,255,0.05)',
