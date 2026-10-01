@@ -131,25 +131,29 @@ const ROTWORLD: DependencyGroupSummary[] = [{ id: 11, name: 'Rotworld' }]
 const originalListForThreads = dependencyGroupsApi.listForThreads
 const listForThreads = vi.fn<CrossoverGroupsApi['listForThreads']>()
 
-const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
-const mockedUseCreateThread = vi.mocked(useCreateThread) as any
-const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
-const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
-const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
-const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
-const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
-const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
-const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
-const mockedUseSession = vi.mocked(useSession) as any
-const mockedUseSnooze = vi.mocked(useSnooze) as any
-const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
+/**
+ * Point a module-mocked hook at the return value this test needs.
+ *
+ * Every `vi.mock` factory above replaces the real hook module with a bare
+ * `vi.fn()` double, so the double no longer carries the production signature
+ * and each test supplies only the fields `QueuePage` actually reads. The
+ * helper keeps that intent in one documented place instead of casting twelve
+ * mocks independently.
+ */
+function mockHookResult<T>(hook: unknown, value: T): void {
+  // SAFETY: the `vi.mock` factories replace each hook module with a bare
+  // `vi.fn()`, so `mockReturnValue` accepts any value and this cast only
+  // re-types that test double rather than asserting a runtime fact.
+  const hookDouble = hook as { mockReturnValue: (next: T) => void }
+  hookDouble.mockReturnValue(value)
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('alert', vi.fn())
   dependencyGroupsApi.listForThreads = listForThreads
 
-  mockedUseQueueThreads.mockReturnValue({
+  mockHookResult(useQueueThreads, {
     data: ACTIVE_THREADS,
     isPending: false,
     isError: false,
@@ -158,22 +162,22 @@ beforeEach(() => {
     loadMore: vi.fn(),
     activeCount: 3,
   })
-  mockedUseSession.mockReturnValue({
+  mockHookResult(useSession, {
     data: { snoozed_threads: [] },
     isPending: false,
     isError: false,
     error: null,
     refetch: vi.fn(),
   })
-  mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
-  mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
-  mockedUseDeleteThread.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
-  mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
-  mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
-  mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
-  mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
-  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
-  mockedUseSnooze.mockReturnValue({
+  mockHookResult(useCreateThread, { mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useUpdateThread, { mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useDeleteThread, { mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useReactivateThread, { mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useMoveToFront, { mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useMoveToBack, { mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useMoveToPosition, { mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useShuffleQueue, { mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useSnooze, {
     mutate: vi.fn(),
     retryRefresh: vi.fn(),
     isPending: false,
@@ -181,7 +185,7 @@ beforeEach(() => {
     refreshError: null,
     hasRefreshError: false,
   })
-  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockHookResult(useUnsnooze, { mutate: vi.fn(), isPending: false, isError: false })
 
   listForThreads.mockImplementation(async (threadIds) => {
     const groups: Record<number, DependencyGroupSummary[]> = {}

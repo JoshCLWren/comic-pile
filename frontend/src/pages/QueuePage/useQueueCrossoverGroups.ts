@@ -11,12 +11,23 @@ import type { DependencyGroupSummary } from '../../services/api-dependency-group
 const EMPTY_CROSSOVER_GROUPS: DependencyGroupSummary[] = []
 
 interface UseQueueCrossoverGroupsResult {
-  crossoverGroupsByThreadId: Record<number, DependencyGroupSummary[]>
   crossoverGroupsPending: boolean
   crossoverGroupsError: boolean
   getCrossoverGroupsForThread: (thread: ThreadListItem) => DependencyGroupSummary[]
 }
 
+/**
+ * Load crossover memberships for the whole visible queue with one batched
+ * request instead of letting each `QueueThreadCard` request its own.
+ *
+ * Cards always receive a defined `crossoverGroups` value, so the card-level
+ * `useCrossoverGroups([thread.id])` fallback stays disabled on the queue path
+ * while the page-level batch is pending or has failed (issue #2979).
+ *
+ * @param activeThreads - Active queue threads rendered by `QueuePage`.
+ * @returns The batch loading/error state plus a per-thread group lookup that
+ *   returns a stable empty array for threads the response omitted.
+ */
 export function useQueueCrossoverGroups(
   activeThreads: ThreadListItem[],
 ): UseQueueCrossoverGroupsResult {
@@ -39,7 +50,6 @@ export function useQueueCrossoverGroups(
   )
 
   return {
-    crossoverGroupsByThreadId,
     crossoverGroupsPending,
     crossoverGroupsError,
     getCrossoverGroupsForThread,

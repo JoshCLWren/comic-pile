@@ -21,6 +21,14 @@ import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
 import { useQueueCrossoverGroups } from './useQueueCrossoverGroups'
+
+/**
+ * Route entry for the Queue page. The component composes the focused
+ * retained feature modules (`QueueControls`, `QueueList`, `QueueModals`,
+ * `CompletedThreadsSection`) plus the page-level navigation/error boundary
+ * concerns. Data ownership stays in the page so a second cache layer is
+ * never introduced.
+ */
 export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
@@ -51,8 +59,6 @@ export default function QueuePage() {
     activeThreads.map((thread) => thread.id),
   )
 
-  // Fetch crossover groups once for all active threads so cards never fan out
-  // into their own per-card request.
   const {
     crossoverGroupsPending,
     crossoverGroupsError,
