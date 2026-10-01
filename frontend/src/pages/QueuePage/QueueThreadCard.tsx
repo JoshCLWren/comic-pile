@@ -3,7 +3,6 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import { CrossoverTags } from '../../components/CrossoverTags'
-import { useCrossoverGroups } from '../../hooks/useCrossoverGroups'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
@@ -13,9 +12,17 @@ interface QueueThreadCardProps {
   index: number
   isBlocked: boolean
   blockingDependencies: BlockingDependency[]
-  crossoverGroups?: DependencyGroupSummary[]
-  crossoverGroupsLoading?: boolean
-  crossoverGroupsError?: boolean
+  /**
+   * Crossover memberships resolved by the owning list view.
+   *
+   * The card is deliberately presentational: it never fetches. QueuePage owns
+   * one batched crossover request for the whole visible thread set and hands the
+   * per-thread slice down, because a self-fetching card turns every rendered
+   * row into its own request (issue #2979).
+   */
+  crossoverGroups: DependencyGroupSummary[]
+  crossoverGroupsLoading: boolean
+  crossoverGroupsError: boolean
   isDragOver: boolean
   snoozeIcon: string
   snoozeLabel: string
@@ -71,12 +78,6 @@ export default function QueueThreadCard({
   const blockerLabels = blockingDependencies.map((dependency) => dependency.label)
   const firstBlocker = blockingDependencies[0] ?? null
   const extraBlockerCount = Math.max(blockingDependencies.length - 1, 0)
-  const fallbackCrossoverGroups = useCrossoverGroups(
-    crossoverGroups === undefined ? [thread.id] : [],
-  )
-  const resolvedCrossoverGroups = crossoverGroups ?? fallbackCrossoverGroups.groupsByThreadId[thread.id] ?? []
-  const resolvedCrossoverGroupsLoading = crossoverGroupsLoading ?? fallbackCrossoverGroups.isPending
-  const resolvedCrossoverGroupsError = crossoverGroupsError ?? Boolean(fallbackCrossoverGroups.error)
 
   const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
     const interactive = target instanceof Element
@@ -168,12 +169,12 @@ export default function QueueThreadCard({
           </div>
           {thread.notes && <p className="mt-1.5 text-xs text-[var(--theme-text-muted)] [overflow-wrap:anywhere] break-words">{thread.notes}</p>}
           <div className="mt-1.5">
-            {resolvedCrossoverGroupsLoading ? (
+            {crossoverGroupsLoading ? (
               <p className="text-xs text-[var(--theme-text-dim)]">Loading crossovers…</p>
-            ) : resolvedCrossoverGroupsError ? (
+            ) : crossoverGroupsError ? (
               <p className="text-xs text-red-300/80">Crossovers unavailable</p>
             ) : (
-              <CrossoverTags groups={resolvedCrossoverGroups} label={`Crossovers for ${thread.title}`} />
+              <CrossoverTags groups={crossoverGroups} label={`Crossovers for ${thread.title}`} />
             )}
           </div>
           {isBlocked && (

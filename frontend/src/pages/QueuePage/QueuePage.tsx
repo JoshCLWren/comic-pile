@@ -19,6 +19,7 @@ import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
+import { useQueueCrossovers } from './useQueueCrossovers'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
 
@@ -58,6 +59,7 @@ export default function QueuePage() {
   const blockingByThreadId = useQueueBlockingInfo(
     activeThreads.map((thread) => thread.id),
   )
+  const crossovers = useQueueCrossovers(activeThreads)
 
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
@@ -161,6 +163,9 @@ export default function QueuePage() {
           index={index}
           isBlocked={isBlocked}
           blockingDependencies={blockingDependencies}
+          crossoverGroups={crossovers.groupsForThread(thread.id)}
+          crossoverGroupsLoading={crossovers.isPending}
+          crossoverGroupsError={crossovers.hasError}
           isDragOver={isDragOver}
           snoozeIcon={snoozeIcon}
           snoozeLabel={snoozeLabel}
@@ -183,7 +188,15 @@ export default function QueuePage() {
         />
       )
     },
-    [actions, activeThreads, blockingByThreadId, modals, navigate, session],
+    [
+      actions,
+      activeThreads,
+      blockingByThreadId,
+      crossovers,
+      modals,
+      navigate,
+      session,
+    ],
   )
 
   const handleLoadMore = useCallback(() => {
