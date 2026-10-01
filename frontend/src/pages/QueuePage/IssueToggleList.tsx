@@ -532,14 +532,14 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                    'hover:text-red-300 disabled:opacity-50',
                  ].join(' ')}
                  aria-label={`Delete issue #${issue.issue_number}`}
-                 data-testid={`issue-delete-${issue.id}`}
-                 title={`Delete issue #${issue.issue_number}`}
-               >
-                 x
-               </button>
-            </>
-              );
-            }}
+data-testid={`issue-delete-${issue.id}`}
+                  title={`Delete issue #${issue.issue_number}`}
+                >
+                  x
+                </button>
+            </div>
+          )
+        })}
       </div>
       <div className="flex gap-2">
         <input
