@@ -96,6 +96,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isBlocked: false,
     // SAFETY: this fixture declares no blocking dependencies
     blockingDependencies: [] as BlockingDependency[],
+    // SAFETY: empty literal satisfies the DependencyGroupSummary subset this card renders.
     crossoverGroups: [] as { id: number; name: string }[],
     crossoverGroupsLoading: false,
     crossoverGroupsError: false,

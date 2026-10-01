@@ -21,6 +21,7 @@ function createWrapper() {
 }
 
 function thread(id: number): ThreadListItem {
+  // SAFETY: hook under test reads only id/title/status; remaining ThreadListItem fields are unused here.
   return {
     id,
     title: `Series ${id}`,
