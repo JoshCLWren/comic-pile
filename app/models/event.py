@@ -14,7 +14,7 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.issue import Issue
     from app.models.recommendation_context import RecommendationContext
-    from app.models.session import Session
+    from app.models.reading_session import ReadingSession
     from app.models.snapshot import Snapshot
     from app.models.thread import Thread
 
@@ -76,7 +76,7 @@ class Event(Base):
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)
     die_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
     session_id: Mapped[int | None] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True
+        ForeignKey("reading_sessions.id", ondelete="CASCADE"), nullable=True
     )
     # Foreign key to threads table for events that act on a thread
     # Used by: "rate" events (thread that was read) and "rolled_but_skipped" events
@@ -133,8 +133,8 @@ class Event(Base):
         Index("ix_event_source_roll_event_id", "source_roll_event_id"),
     )
 
-    session: Mapped[Session | None] = relationship(
-        "Session", back_populates="events", lazy="raise"
+    session: Mapped[ReadingSession | None] = relationship(
+        "ReadingSession", back_populates="events", lazy="raise"
     )
     thread: Mapped[Thread | None] = relationship("Thread", back_populates="events", lazy="raise")
     issue: Mapped[Issue | None] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")

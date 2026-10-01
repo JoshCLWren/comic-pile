@@ -12,7 +12,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.event import Event
-    from app.models.session import Session
+    from app.models.reading_session import ReadingSession
 
 
 class Snapshot(Base):
@@ -22,7 +22,7 @@ class Snapshot(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     session_id: Mapped[int] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("reading_sessions.id", ondelete="CASCADE"), nullable=False
     )
     event_id: Mapped[int | None] = mapped_column(
         ForeignKey("events.id", ondelete="CASCADE"), nullable=True
@@ -40,5 +40,5 @@ class Snapshot(Base):
         Index("ix_snapshot_created_at", "created_at"),
     )
 
-    session: Mapped[Session] = relationship("Session", back_populates="snapshots", lazy="raise")
+    session: Mapped[ReadingSession] = relationship("ReadingSession", back_populates="snapshots", lazy="raise")
     event: Mapped[Event | None] = relationship("Event", back_populates="snapshots", lazy="raise")
