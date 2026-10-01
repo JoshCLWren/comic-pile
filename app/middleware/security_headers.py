@@ -51,7 +51,7 @@ def _add_session_read_diagnostics(
     """
     diagnostics = get_request_diagnostics()
     application_ms = max(
-        total_ms - diagnostics.database_time_ms - diagnostics.cache_time_ms,
+        total_ms - diagnostics.database_time_ms,
         0.0,
     )
 
@@ -60,8 +60,6 @@ def _add_session_read_diagnostics(
     response.headers["X-Session-Read-App-Ms"] = f"{application_ms:.2f}"
     response.headers["X-Session-Read-DB-Ms"] = f"{diagnostics.database_time_ms:.2f}"
     response.headers["X-Session-Read-DB-Queries"] = str(diagnostics.database_queries)
-    response.headers["X-Session-Read-Cache-Ms"] = f"{diagnostics.cache_time_ms:.2f}"
-    response.headers["X-Session-Read-Cache-Calls"] = str(diagnostics.cache_calls)
 
     logger.warning(
         "Session read diagnostics: %s completed in %.2f ms",
@@ -77,9 +75,6 @@ def _add_session_read_diagnostics(
             "application_time_ms": round(application_ms, 2),
             "database_time_ms": round(diagnostics.database_time_ms, 2),
             "database_queries": diagnostics.database_queries,
-            "cache_time_ms": round(diagnostics.cache_time_ms, 2),
-            "cache_calls": diagnostics.cache_calls,
-            "cache_status": diagnostics.cache_status,
         },
     )
 

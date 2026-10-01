@@ -9,8 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache import TTL, cached
-from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import Issue
 from app.models.user import User
@@ -86,11 +84,6 @@ async def get_issue_reader_context(
     return await get_reader_context(db, current_user.id, issue_id)
 
 
-async def _invalidate_issue_caches(user_id: int) -> None:
-    """Invalidate issue-derived views with one bounded user generation bump."""
-    await invalidate_user_view(user_id)
-
-
 def issue_to_response(issue: Issue) -> IssueResponse:
     """Convert Issue model to IssueResponse.
 
@@ -130,7 +123,6 @@ def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
 
 
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
-@cached(ttl=TTL.SHORT)
 async def list_issues(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -173,7 +165,6 @@ async def list_issues(
     "/threads/{thread_id}/issues:validateOrder",
     response_model=IssueOrderValidationResponse,
 )
-@cached(ttl=TTL.SHORT)
 async def validate_issue_order(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -251,7 +242,6 @@ async def create_issues(
     issue_responses = [issue_to_response(issue) for issue in new_issues]
 
     await db.commit()
-    await _invalidate_issue_caches(current_user.id)
 
     return IssueListResponse(
         issues=issue_responses,
@@ -262,7 +252,6 @@ async def create_issues(
 
 
 @router.get("/issues/{issue_id}", response_model=IssueResponse)
-@cached(ttl=TTL.SHORT)
 async def get_issue(
     issue_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -312,7 +301,6 @@ async def move_issue(
     )
 
     await db.commit()
-    await _invalidate_issue_caches(current_user.id)
 
 
 @router.post("/threads/{thread_id}/issues:reorder", status_code=status.HTTP_204_NO_CONTENT)
@@ -341,7 +329,6 @@ async def reorder_issues(
     )
 
     await db.commit()
-    await _invalidate_issue_caches(current_user.id)
 
 
 @router.delete("/issues/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -366,7 +353,6 @@ async def delete_issue(
     await issue_service.delete_issue(db, issue_id, current_user.id)
 
     await db.commit()
-    await _invalidate_issue_caches(current_user.id)
 
 
 @router.post("/issues/{issue_id}:markRead", status_code=status.HTTP_204_NO_CONTENT)
@@ -387,7 +373,6 @@ async def mark_issue_read(
     """
     await issue_service.mark_issue_read(db, issue_id, current_user.id)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id)
 
 
 @router.post("/issues/{issue_id}:markUnread", status_code=status.HTTP_204_NO_CONTENT)
@@ -410,7 +395,6 @@ async def mark_issue_unread(
     """
     await issue_service.mark_issue_unread(db, issue_id, current_user.id)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id)
 
 
 @router.post("/issues:bulkMarkRead", status_code=status.HTTP_204_NO_CONTENT)
@@ -431,7 +415,6 @@ async def bulk_mark_issue_read(
     """
     await issue_service.bulk_mark_issue_read(db, request.issue_ids, current_user.id)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id)
 
 
 @router.post("/issues:bulkMarkUnread", status_code=status.HTTP_204_NO_CONTENT)
@@ -452,5 +435,4 @@ async def bulk_mark_issue_unread(
     """
     await issue_service.bulk_mark_issue_unread(db, request.issue_ids, current_user.id)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id)
 

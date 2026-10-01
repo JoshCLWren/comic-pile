@@ -1,8 +1,8 @@
 """Snooze business logic and orchestration.
 
-Services own business rules, transaction boundaries (commit/rollback),
-and cache invalidation. Query construction lives in
-``app.repositories``. HTTP status mapping lives in routers.
+Services own business rules and transaction boundaries (commit/rollback).
+Query construction lives in ``app.repositories``. HTTP status mapping lives
+in routers.
 """
 
 import logging
@@ -12,7 +12,6 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.models import Event, Thread
 from app.models.thread import normalize_format_value
 from app.repositories.rate_repository import fetch_source_roll_event
@@ -356,7 +355,6 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
     await db.commit()
 
     await db.refresh(current_session)
-    await invalidate_user_view(user_id)
 
     return await build_session_response(
         current_session,
@@ -420,7 +418,6 @@ async def unsnooze_thread(db: AsyncSession, user_id: int, thread_id: int) -> Ses
     await db.commit()
 
     await db.refresh(current_session)
-    await invalidate_user_view(user_id)
 
     return await build_session_response(
         current_session,

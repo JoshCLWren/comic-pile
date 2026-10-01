@@ -1,9 +1,8 @@
 """Dependency business logic and orchestration.
 
-Services own business rules, transaction boundaries (commit/rollback/retry),
-and cache invalidation. Query construction lives in
-``app/repositories/dependency_repository.py`` and sibling repositories; HTTP
-status mapping lives in routers.
+Services own business rules and transaction boundaries (commit/rollback/retry).
+Query construction lives in ``app/repositories/dependency_repository.py`` and
+sibling repositories; HTTP status mapping lives in routers.
 """
 
 
@@ -11,7 +10,6 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.models import Dependency, Issue, Thread
 from app.repositories import dependency_repository, issue_repository
 from app.schemas.dependency import (
@@ -365,8 +363,6 @@ async def create_dependency(
             return None, "Dependency already exists"
         raise
 
-    await invalidate_dependency_caches(user_id)
-
     dependency = await dependency_repository.get_dependency_by_ids(
         db, source_issue_id, target_issue_id
     )
@@ -408,7 +404,6 @@ async def update_dependency_note(
     await dependency_repository.update_dependency_note(db, dependency_id, note)
     await db.commit()
     dependency = await dependency_repository.get_dependency(db, dependency_id)
-    await invalidate_dependency_caches(user_id)
     enriched = await enrich_dependencies([dependency], db)
     return enriched[0]
 
@@ -426,7 +421,6 @@ async def delete_dependency(dependency_id: int, user_id: int, db: AsyncSession) 
     await dependency_repository.delete_dependency(db, dependency_id)
     await refresh_user_blocked_status(user_id, db)
     await db.commit()
-    await invalidate_dependency_caches(user_id)
     return True
 
 
@@ -555,11 +549,6 @@ async def get_thread_connected_threads(
         ))
 
     return ThreadConnectedResponse(thread_id=thread_id, connected_threads=connected)
-
-
-async def invalidate_dependency_caches(user_id: int) -> None:
-    """Invalidate dependency-derived views with one bounded user generation bump."""
-    await invalidate_user_view(user_id)
 
 
 async def get_thread_issue_dependencies_batch(

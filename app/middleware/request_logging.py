@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 
-from app.cache import cache
 from app.performance_diagnostics import (
     begin_request_diagnostics,
     end_request_diagnostics,

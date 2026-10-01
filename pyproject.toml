@@ -35,7 +35,6 @@ dependencies = [
     "pydantic-settings>=2.12.0",
     "filelock>=3.25.2",
     "PyGithub>=2.0.0",
-    "upstash-redis>=1.7.0",
 ]
 
 # Local development and test tooling. Installed by default for `uv sync` /

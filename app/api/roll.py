@@ -15,7 +15,6 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache_invalidation import invalidate_session_caches
 from app.config import get_recommendation_settings
 from app.database import get_db
 from app.middleware import limiter
@@ -375,7 +374,6 @@ async def roll_dice(
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await invalidate_session_caches(current_user.id)
 
     return _build_roll_response(
         artifacts=artifacts,
@@ -486,7 +484,6 @@ async def skip_roll(
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await invalidate_session_caches(current_user.id)
 
     return _build_roll_response(
         artifacts=artifacts,
@@ -608,7 +605,6 @@ async def unskip_thread(
         ]
 
     await db.commit()
-    await invalidate_session_caches(user_id)
 
     return SessionResponse(
         id=session_id,
@@ -850,7 +846,6 @@ async def override_roll(
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await invalidate_session_caches(current_user.id)
 
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
@@ -904,7 +899,6 @@ async def set_manual_die(
 
     current_session.manual_die = die
     await db.commit()
-    await invalidate_session_caches(current_user.id)
     return f"d{die}"
 
 
@@ -926,7 +920,6 @@ async def clear_manual_die(
 
     current_session.manual_die = None
     await db.commit()
-    await invalidate_session_caches(current_user.id)
 
     await db.refresh(current_session)
     current_die = await get_current_die_for_session(current_session, db)
@@ -1021,7 +1014,6 @@ async def update_session_mode(
             )
         )
     await db.commit()
-    await invalidate_session_caches(current_user.id)
 
     return SessionModeResponse(
         active_bandwidth=active_bandwidth,

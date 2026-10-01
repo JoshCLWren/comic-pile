@@ -12,7 +12,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from app.cache import cache
 from app.repositories import health_repository
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -278,14 +277,12 @@ async def get_cache_quota_health() -> CacheQuotaHealthResult:
     """Report the observed monthly cache command budget snapshot.
 
     Purely in-process: reads the privacy-safe command counter from
-    :func:`app.cache_quota.observe_cache_quota` without opening any connection or
     firing the alert sink. Monitoring polls this to see the near-limit /
     over-budget band and to confirm alerting and smoke-test throttling state.
 
     Returns:
         Aggregate budget snapshot with alert and throttle state.
     """
-    from app.cache_quota import observe_cache_quota
 
     state = observe_cache_quota()
     return CacheQuotaHealthResult(

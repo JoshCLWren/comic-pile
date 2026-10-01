@@ -32,10 +32,8 @@ const STAGE_LABELS = [
 const ADVANCED_PR_STAGES = new Set(['factory:review', 'factory:ci', 'factory:ready']);
 const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
-function trusted(login, association) {
-  return TRUSTED_ASSOCIATIONS.has(association)
-    || login === 'coderabbitai[bot]'
-    || login === 'coderabbitai';
+function trusted(association) {
+  return TRUSTED_ASSOCIATIONS.has(association);
 }
 
 function workerFrom(body) {
@@ -184,7 +182,7 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
   }));
   comments.sort((left, right) => new Date(right.created_at) - new Date(left.created_at));
   for (const comment of comments) {
-    if (!trusted(comment.user?.login, comment.author_association)) continue;
+    if (!trusted(comment.author_association)) continue;
     const body = comment.body || '';
     if (/comic-pile-factory-claim-released-v\d+:/.test(body)) return 'factory:unowned';
     const worker = workerFrom(body);
@@ -240,7 +238,7 @@ async function reconcile({ github, context }) {
     const comment = context.payload.comment;
     const body = comment?.body || '';
     if (!body.includes('comic-pile-factory-')) return;
-    if (!trusted(comment?.user?.login, comment?.author_association)) return;
+    if (!trusted(comment?.author_association)) return;
 
     const number = context.payload.issue.number;
     const current = await currentLabels(github, context, number);
@@ -304,15 +302,11 @@ async function reconcile({ github, context }) {
     }
 
     const review = context.payload.review;
-    if (!trusted(review.user?.login, review.author_association)) return;
+    if (!trusted(review.author_association)) return;
     const state = (review.state || '').toUpperCase();
-    const body = review.body || '';
     let stage = 'factory:review';
     if (state === 'CHANGES_REQUESTED') stage = 'factory:changes-requested';
     else if (state === 'APPROVED') stage = 'factory:ci';
-    else if (/Actionable comments posted:\s*[1-9]\d*/i.test(body)) {
-      stage = 'factory:changes-requested';
-    }
     await reconcileLabels(github, context, pullRequest.number, {
       owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
       stage,

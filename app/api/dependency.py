@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.cache import TTL, cached
 from app.database import get_db
 from app.models.user import User
 from app.schemas.dependency import (
@@ -39,7 +38,6 @@ async def get_all_blocked_thread_ids(
 
 
 @router.get("/threads/{thread_id}/dependencies", response_model=ThreadDependenciesResponse)
-@cached(ttl=TTL.MEDIUM)
 async def list_thread_dependencies(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -56,7 +54,6 @@ async def list_thread_dependencies(
 
 
 @router.get("/issues/{issue_id}/dependencies", response_model=IssueDependenciesResponse)
-@cached(ttl=TTL.MEDIUM)
 async def list_issue_dependencies(
     issue_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -73,7 +70,6 @@ async def list_issue_dependencies(
 
 
 @router.post("/threads/{thread_id}:getBlockingInfo", response_model=BlockingExplanation)
-@cached(ttl=TTL.SHORT)
 async def get_thread_blocking_info(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -90,7 +86,6 @@ async def get_thread_blocking_info(
 
 
 @router.post("/threads:getBlockingInfo", response_model=BatchBlockingExplanationResponse)
-@cached(ttl=TTL.SHORT)
 async def get_threads_blocking_info(
     request: BatchBlockingExplanationRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -158,7 +153,6 @@ async def create_dependency(
 
 
 @router.get("/dependencies/{dependency_id}", response_model=DependencyResponse)
-@cached(ttl=TTL.MEDIUM)
 async def get_dependency(
     dependency_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -213,7 +207,6 @@ async def delete_dependency(
     "/threads/{thread_id}/dependency-order-check",
     response_model=ThreadDependencyOrderCheckResponse,
 )
-@cached(ttl=TTL.MEDIUM)
 async def check_thread_dependency_order(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -256,7 +249,6 @@ async def check_thread_dependency_order(
     "/threads/{thread_id}/connected",
     response_model=ThreadConnectedResponse,
 )
-@cached(ttl=TTL.MEDIUM)
 async def get_thread_connected_threads(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
