@@ -13,7 +13,6 @@ from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-CacheProvider = Literal["postgres", "redis", "off"]
 _PLACEHOLDER_SECRET_VALUES = frozenset(
     {
         "",
@@ -401,141 +400,6 @@ class GitHubSettings(BaseSettings):
         return self.github_token
 
 
-class RedisSettings(BaseSettings):
-    """Cache provider configuration settings."""
-
-    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
-
-    cache_provider: CacheProvider = Field(
-        default="postgres",
-        description="Cache backend: postgres (default), redis, or off to disable caching",
-        json_schema_extra={"env": "CACHE_PROVIDER"},
-    )
-    cache_enabled: bool = Field(
-        default=False,
-        description="Explicitly enable Redis caching; disabled by default in deployed environments",
-        json_schema_extra={"env": "CACHE_ENABLED"},
-    )
-    upstash_redis_rest_url: str | None = Field(
-        default=None,
-        description="Upstash Redis REST URL (cloud)",
-        json_schema_extra={"env": "UPSTASH_REDIS_REST_URL"},
-    )
-    upstash_redis_rest_token: str | None = Field(
-        default=None,
-        description="Upstash Redis REST token",
-        json_schema_extra={"env": "UPSTASH_REDIS_REST_TOKEN"},
-    )
-    kv_rest_api_url: str | None = Field(
-        default=None,
-        description="Vercel KV REST URL alias for Upstash (KV_REST_API_URL)",
-        json_schema_extra={"env": "KV_REST_API_URL"},
-    )
-    kv_rest_api_token: str | None = Field(
-        default=None,
-        description="Vercel KV REST read-write token alias (KV_REST_API_TOKEN)",
-        json_schema_extra={"env": "KV_REST_API_TOKEN"},
-    )
-    redis_url: str | None = Field(
-        default=None,
-        description="Local Redis URL (e.g., redis://localhost:6379/0)",
-        json_schema_extra={"env": "REDIS_URL"},
-    )
-    cache_local_redis_dev: bool = Field(
-        default=False,
-        description=(
-            "Dev-only escape hatch that permits the local Redis client path. "
-            "Production must use Upstash; a bare REDIS_URL is ignored unless "
-            "this flag is explicitly set, so a stray local URL can never enable "
-            "caching in a deployed environment."
-        ),
-        json_schema_extra={"env": "CACHE_LOCAL_REDIS_DEV"},
-    )
-    cache_ttl_short: int = Field(
-        default=120,
-        description="Short TTL for high-frequency queries",
-        json_schema_extra={"env": "CACHE_TTL_SHORT"},
-    )
-    cache_ttl_medium: int = Field(
-        default=360,
-        description="Medium TTL for moderate-frequency queries",
-        json_schema_extra={"env": "CACHE_TTL_MEDIUM"},
-    )
-    cache_ttl_long: int = Field(
-        default=900,
-        description="Long TTL for low-frequency queries",
-        json_schema_extra={"env": "CACHE_TTL_LONG"},
-    )
-    cache_quota_throttle_enabled: bool = Field(
-        default=False,
-        description=(
-            "Arm the smoke-test write-drop throttle once the observed monthly cache "
-            "command budget is reached. Off by default; enable only during a deliberate "
-            "cache re-enable evaluation so normal operation never silently drops writes."
-        ),
-        json_schema_extra={"env": "CACHE_QUOTA_THROTTLE_ENABLED"},
-    )
-
-    @property
-    def resolved_upstash_rest_url(self) -> str | None:
-        """Return the Upstash REST URL, accepting the Vercel KV alias.
-
-        Returns:
-            Native ``UPSTASH_REDIS_REST_URL``, else ``KV_REST_API_URL``, else
-            ``None``. Placeholder values are treated as missing.
-        """
-        return _usable_secret(self.upstash_redis_rest_url) or _usable_secret(
-            self.kv_rest_api_url
-        )
-
-    @property
-    def resolved_upstash_rest_token(self) -> str | None:
-        """Return the Upstash REST token, accepting the Vercel KV write token.
-
-        Returns:
-            Native ``UPSTASH_REDIS_REST_TOKEN``, else ``KV_REST_API_TOKEN``,
-            else ``None``. Does not fall back to the GET-only KV token.
-        """
-        return _usable_secret(self.upstash_redis_rest_token) or _usable_secret(
-            self.kv_rest_api_token
-        )
-
-    @property
-    def is_configured(self) -> bool:
-        """Return whether caching is active for the resolved provider.
-
-        Delegates to :attr:`effective_provider` so ``cache_provider=postgres``
-        (the default) is considered configured even though it requires no
-        Redis credentials, while ``cache_provider=redis`` still requires
-        ``cache_enabled`` and Redis credentials, and ``off`` is never configured.
-        """
-        return self.effective_provider != "off"
-
-    @property
-    def effective_provider(self) -> Literal["postgres", "redis", "off"]:
-        """Return the resolved provider after applying credential gating.
-
-        When ``cache_provider=redis`` but credentials are absent, ``effective_provider``
-        returns ``off`` instead of ``redis`` so that callers never attempt to use a
-        backend that has not actually been configured.
-        """
-        if self.cache_provider == "off":
-            return "off"
-        if self.cache_provider == "redis":
-            if not self.cache_enabled:
-                return "off"
-            upstash_ok = bool(
-                self.resolved_upstash_rest_url and self.resolved_upstash_rest_token
-            )
-            # The local Redis client is a dev-only path. A bare REDIS_URL must not
-            # enable caching in production; it requires CACHE_LOCAL_REDIS_DEV.
-            local_ok = bool(self.redis_url) and self.cache_local_redis_dev
-            if upstash_ok or local_ok:
-                return "redis"
-            return "off"
-        return self.cache_provider
-
-
 class EmailSettings(BaseSettings):
     """Outbound email configuration settings (issue #2778).
 
@@ -730,12 +594,6 @@ def get_github_settings() -> GitHubSettings:
 
 
 @lru_cache
-def get_redis_settings() -> RedisSettings:
-    """Get cached Redis settings instance."""
-    return RedisSettings()
-
-
-@lru_cache
 def get_recommendation_settings() -> RecommendationSettings:
     """Get cached recommendation settings instance."""
     return RecommendationSettings()
@@ -767,7 +625,6 @@ def clear_settings_cache() -> None:
     get_session_settings.cache_clear()
     get_rating_settings.cache_clear()
     get_github_settings.cache_clear()
-    get_redis_settings.cache_clear()
     get_recommendation_settings.cache_clear()
     get_email_settings.cache_clear()
     get_image_delivery_settings.cache_clear()

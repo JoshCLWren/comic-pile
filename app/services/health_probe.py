@@ -12,7 +12,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from app.cache import cache
 from app.repositories import health_repository
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,22 +77,7 @@ class DependencyHealthResult:
 
     status: Literal["healthy", "degraded", "unhealthy"]
     database: DependencyProbeResult
-    cache: DependencyProbeResult
     total_duration_ms: float
-
-
-@dataclass(slots=True)
-class CacheQuotaHealthResult:
-    """Visible cache-quota snapshot for budget alerting."""
-
-    status: Literal["ok", "near-limit", "over-budget"]
-    observed_commands: int
-    budget: int
-    remaining: int
-    usage_ratio: float
-    alerted: bool
-    throttling: bool
-    degraded: bool = False
 
 
 @dataclass(slots=True)
@@ -153,21 +137,17 @@ def _is_heartbeat_within_limits(request_count: int) -> bool:
 
 def _overall_status(
     database: DependencyProbeResult,
-    cache_probe: DependencyProbeResult,
 ) -> Literal["healthy", "degraded", "unhealthy"]:
     """Derive the aggregate status from independent probe results.
 
     Args:
         database: Database probe result.
-        cache_probe: Cache probe result.
 
     Returns:
         Healthy, degraded, or unhealthy aggregate status.
     """
     if database.status != "healthy":
         return "unhealthy"
-    if cache_probe.status != "healthy":
-        return "degraded"
     return "healthy"
 
 
@@ -223,23 +203,8 @@ async def database_probe(db: AsyncSession) -> None:
         raise ProbeUnavailableError("Database ping failed", cause=e) from e
 
 
-async def cache_probe() -> None:
-    """Ping the initialized cache client without reading or mutating user data.
-
-    Raises:
-        ProbeNotConfiguredError: If the cache has not been initialized.
-        ProbeUnavailableError: If the cache is unavailable.
-    """
-    if not cache.is_initialized:
-        raise ProbeNotConfiguredError("Cache is not initialized")
-    try:
-        await cache.ping()
-    except Exception as e:
-        raise ProbeUnavailableError("Cache ping failed", cause=e) from e
-
-
 async def get_dependency_health(db: AsyncSession) -> DependencyHealthResult:
-    """Probe database and cache independently with strict time bounds.
+    """Probe database with strict time bounds.
 
     Args:
         db: Async database session.
@@ -248,60 +213,27 @@ async def get_dependency_health(db: AsyncSession) -> DependencyHealthResult:
         Structured per-dependency status and timings.
     """
     started = time.perf_counter()
-    database_probe_result, cache_probe_result = await asyncio.gather(
-        _timed_probe(lambda: database_probe(db)),
-        _timed_probe(cache_probe),
-    )
-    overall = _overall_status(database_probe_result, cache_probe_result)
+    database_probe_result = await _timed_probe(lambda: database_probe(db))
+    overall = _overall_status(database_probe_result)
     total_duration_ms = round((time.perf_counter() - started) * 1000, 2)
 
     logger.info(
-        "operational_health status=%s database_status=%s database_ms=%.2f "
-        "cache_status=%s cache_ms=%.2f total_ms=%.2f",
+        "operational_health status=%s database_status=%s database_ms=%.2f total_ms=%.2f",
         overall,
         database_probe_result.status,
         database_probe_result.duration_ms,
-        cache_probe_result.status,
-        cache_probe_result.duration_ms,
         total_duration_ms,
     )
 
     return DependencyHealthResult(
         status=overall,
         database=database_probe_result,
-        cache=cache_probe_result,
         total_duration_ms=total_duration_ms,
     )
 
 
-async def get_cache_quota_health() -> CacheQuotaHealthResult:
-    """Report the observed monthly cache command budget snapshot.
-
-    Purely in-process: reads the privacy-safe command counter from
-    :func:`app.cache_quota.observe_cache_quota` without opening any connection or
-    firing the alert sink. Monitoring polls this to see the near-limit /
-    over-budget band and to confirm alerting and smoke-test throttling state.
-
-    Returns:
-        Aggregate budget snapshot with alert and throttle state.
-    """
-    from app.cache_quota import observe_cache_quota
-
-    state = observe_cache_quota()
-    return CacheQuotaHealthResult(
-        status=state.status,
-        observed_commands=state.used,
-        budget=state.budget,
-        remaining=state.remaining,
-        usage_ratio=round(state.usage_ratio, 6),
-        alerted=state.alerted,
-        throttling=state.throttling,
-        degraded=state.degraded,
-    )
-
-
 async def get_warmup_health(db: AsyncSession) -> DependencyHealthResult:
-    """Exercise the real read-only database and cache dependency path.
+    """Exercise the real read-only database dependency path.
 
     Args:
         db: Async database session.

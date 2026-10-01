@@ -2,7 +2,7 @@
 
 Provides helpers for safely reading and redacting request bodies before they
 are written to logs. The HTTP middleware also emits request IDs, Server-Timing
-metrics, cache outcomes, database query counts, slow-request logs, startup
+metrics, database query counts, slow-request logs, startup
 phase timing, and cold/warm request classification.
 """
 
@@ -15,12 +15,10 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 
-from app.cache import cache
 from app.performance_diagnostics import (
     begin_request_diagnostics,
     end_request_diagnostics,
     get_request_diagnostics,
-    install_cache_instrumentation,
 )
 from app.startup_diagnostics import (
     mark_startup_complete,
@@ -186,10 +184,6 @@ def _server_timing_header(total_ms: float) -> str:
         metrics.append(
             f'db;dur={diagnostics.database_time_ms:.2f};desc="{diagnostics.database_queries} queries"'
         )
-    if diagnostics.cache_calls:
-        metrics.append(
-            f'cache;dur={diagnostics.cache_time_ms:.2f};desc="{diagnostics.cache_status}"'
-        )
     return ", ".join(metrics)
 
 
@@ -205,7 +199,6 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
         app: FastAPI application instance to wire the middleware onto.
         environment: Current application environment.
     """
-    install_cache_instrumentation(cache)
 
     @app.on_event("startup")
     async def record_startup_completion() -> None:
@@ -259,7 +252,6 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             log_path = _sanitize_log_path(request.url.path)
 
             response.headers["X-Request-ID"] = request_id
-            response.headers["X-App-Cache"] = diagnostics.cache_status
             response.headers["X-App-DB-Queries"] = str(diagnostics.database_queries)
             response.headers["X-App-Cold-Request"] = "1" if startup.cold else "0"
             response.headers["X-Heavy-Init"] = "1" if startup.heavy_initialized else "0"
@@ -275,9 +267,6 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "process_time_ms": round(process_time_ms, 2),
                 "database_queries": diagnostics.database_queries,
                 "database_time_ms": round(diagnostics.database_time_ms, 2),
-                "cache_status": diagnostics.cache_status,
-                "cache_calls": diagnostics.cache_calls,
-                "cache_time_ms": round(diagnostics.cache_time_ms, 2),
                 "cold_request": startup.cold,
                 "process_request_number": startup.invocation,
                 "process_age_ms": round(startup.process_age_ms, 2),
