@@ -71,6 +71,22 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
+function activeThread(id: number, position: number) {
+  return {
+    id,
+    title: `Series ${id}`,
+    format: 'Comic',
+    status: 'active' as const,
+    queue_position: position,
+    issues_remaining: 3,
+    total_issues: null,
+    is_blocked: false,
+    blocking_reasons: [],
+    created_at: '2026-01-01T00:00:00Z',
+    last_activity_at: '2026-01-01T00:00:00Z',
+  }
+}
+
 const ACTIVE_THREADS = [
   {
     id: 1,
@@ -148,13 +164,18 @@ function mockHookResult<T>(hook: unknown, value: T): void {
   hookDouble.mockReturnValue(value)
 }
 
+let queueThreadsData = ACTIVE_THREADS
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('alert', vi.fn())
   dependencyGroupsApi.listForThreads = listForThreads
+  queueThreadsData = ACTIVE_THREADS
 
   mockHookResult(useQueueThreads, {
-    data: ACTIVE_THREADS,
+    get data() {
+      return queueThreadsData
+    },
     isPending: false,
     isError: false,
     refetch: vi.fn(),
@@ -254,5 +275,51 @@ describe('QueuePage crossover group batching', () => {
 
     expect(await screen.findAllByText('Crossovers unavailable')).toHaveLength(3)
     expect(listForThreads).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps already-rendered crossover badges while a newly appended queue page batches', async () => {
+    const { rerender } = renderPage()
+    await screen.findByRole('link', { name: 'Rotworld' })
+
+    // The appended page starts a second, still-pending batch. Already-rendered
+    // cards must keep their badges instead of falling back to the loading state.
+    let resolveSecondBatch: ((value: Record<number, DependencyGroupSummary[]>) => void) | null =
+      null
+    listForThreads.mockImplementation(
+      (threadIds: number[]) =>
+        new Promise((resolve) => {
+          if (threadIds.length === 3) {
+            resolveSecondBatch = resolve
+            return
+          }
+          const groups: Record<number, DependencyGroupSummary[]> = {}
+          for (const threadId of threadIds) {
+            groups[threadId] = threadId === 1 ? ROTWORLD : []
+          }
+          resolve(groups)
+        }),
+    )
+
+    queueThreadsData = [...ACTIVE_THREADS, activeThread(5, 4)]
+
+    await act(async () => {
+      rerender(
+        <BrowserRouter>
+          <ToastProvider>
+            <QueuePage />
+          </ToastProvider>
+        </BrowserRouter>,
+      )
+    })
+
+    expect(screen.queryAllByText('Loading crossovers…')).toHaveLength(0)
+    expect(screen.getAllByRole('link', { name: 'Rotworld' })).toHaveLength(1)
+    expect(listForThreads).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      resolveSecondBatch?.({ 1: ROTWORLD, 2: [], 3: [], 5: [] })
+    })
+
+    expect(screen.getAllByRole('link', { name: 'Rotworld' })).toHaveLength(1)
   })
 })

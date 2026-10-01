@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useCrossoverGroups } from '../../hooks/useCrossoverGroups'
 import type { ThreadListItem } from '../../types'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
@@ -9,6 +9,13 @@ import type { DependencyGroupSummary } from '../../services/api-dependency-group
  * pending or has failed) and never falls back to its own per-card fetch.
  */
 const EMPTY_CROSSOVER_GROUPS: DependencyGroupSummary[] = []
+
+/**
+ * Stable "nothing resolved yet" map. Used as the initial last-resolved
+ * snapshot so the identity check below can tell "no response has arrived" apart
+ * from a resolved response that legitimately contains no memberships.
+ */
+const NO_GROUPS_BY_THREAD_ID: Record<number, DependencyGroupSummary[]> = {}
 
 interface UseQueueCrossoverGroupsResult {
   crossoverGroupsPending: boolean
@@ -23,6 +30,12 @@ interface UseQueueCrossoverGroupsResult {
  * Cards always receive a defined `crossoverGroups` value, so the card-level
  * `useCrossoverGroups([thread.id])` fallback stays disabled on the queue path
  * while the page-level batch is pending or has failed (issue #2979).
+ *
+ * `useCrossoverGroups` keys its cache by the whole requested thread-id set, so
+ * appending a queue page starts a brand-new pending query. The last resolved
+ * snapshot is retained across that transition so already-rendered cards keep
+ * their crossover badges instead of flashing the loading state again, matching
+ * the per-card behavior this batching replaced.
  *
  * @param activeThreads - Active queue threads rendered by `QueuePage`.
  * @returns The batch loading/error state plus a per-thread group lookup that
@@ -41,17 +54,31 @@ export function useQueueCrossoverGroups(
     isPending: crossoverGroupsPending,
     error: crossoverGroupsQueryError,
   } = useCrossoverGroups(activeThreadIds)
-  const crossoverGroupsError = Boolean(crossoverGroupsQueryError)
+
+  const hasResolvedBatch = Object.keys(crossoverGroupsByThreadId).length > 0
+  const lastResolvedGroupsRef = useRef<Record<number, DependencyGroupSummary[]>>(
+    NO_GROUPS_BY_THREAD_ID,
+  )
+
+  useEffect(() => {
+    if (hasResolvedBatch) {
+      lastResolvedGroupsRef.current = crossoverGroupsByThreadId
+    }
+  }, [crossoverGroupsByThreadId, hasResolvedBatch])
+
+  const resolvedGroupsByThreadId = hasResolvedBatch
+    ? crossoverGroupsByThreadId
+    : lastResolvedGroupsRef.current
+  const hasAnyResolvedData = resolvedGroupsByThreadId !== NO_GROUPS_BY_THREAD_ID
 
   const getCrossoverGroupsForThread = useCallback(
-    (thread: ThreadListItem) =>
-      crossoverGroupsByThreadId[thread.id] ?? EMPTY_CROSSOVER_GROUPS,
-    [crossoverGroupsByThreadId],
+    (thread: ThreadListItem) => resolvedGroupsByThreadId[thread.id] ?? EMPTY_CROSSOVER_GROUPS,
+    [resolvedGroupsByThreadId],
   )
 
   return {
-    crossoverGroupsPending,
-    crossoverGroupsError,
+    crossoverGroupsPending: crossoverGroupsPending && !hasAnyResolvedData,
+    crossoverGroupsError: Boolean(crossoverGroupsQueryError) && !hasAnyResolvedData,
     getCrossoverGroupsForThread,
   }
 }
