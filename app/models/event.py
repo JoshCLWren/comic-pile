@@ -76,7 +76,7 @@ class Event(Base):
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)
     die_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
     session_id: Mapped[int | None] = mapped_column(
-        ForeignKey("reading_sessions.id", ondelete="CASCADE"), nullable=True
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True
     )
     # Foreign key to threads table for events that act on a thread
     # Used by: "rate" events (thread that was read) and "rolled_but_skipped" events

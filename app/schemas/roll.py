@@ -5,7 +5,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_blocking import ContinuityBlocker
-from app.schemas.session import ActiveThreadInfo, BandwidthSource, IntentSource, SessionBandwidthState, SessionMode
+from app.schemas.reading_session import ActiveThreadInfo, BandwidthSource, IntentSource, ReadingSessionBandwidthState, ReadingSessionMode
 from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
@@ -175,10 +175,10 @@ class RollBootstrapResponse(BaseModel):
     manual_die: int | None
     pending_thread_id: int | None
     last_rolled_result: int | None
-    session_mode: SessionMode
+    session_mode: ReadingSessionMode
     active_thread: ActiveThreadInfo | None
     roll_recovery: RollRecoveryInfo | None = None
-    bandwidth: SessionBandwidthState
+    bandwidth: ReadingSessionBandwidthState
     roll_pool: list[RollBootstrapThread]
     snoozed_threads: list[RollBootstrapThread]
     snoozed_count: int

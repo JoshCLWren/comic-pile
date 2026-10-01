@@ -5,8 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Snapshot, Thread
-from app.models.session import Session as SessionModel
+from app.models import Event, Issue, ReadingSession as SessionModel, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
 

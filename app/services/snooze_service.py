@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Thread
 from app.models.thread import normalize_format_value
 from app.repositories.rate_repository import fetch_source_roll_event
-from app.repositories.session_repository import (
+from app.repositories.reading_session_repository import (
     count_snapshots,
-    fetch_active_session,
-    recent_session_events,
+    fetch_active_reading_session as fetch_active_session,
+    recent_reading_session_events as recent_session_events,
     recent_snooze_events,
 )
 from app.repositories.snooze_repository import (

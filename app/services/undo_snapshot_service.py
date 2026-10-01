@@ -6,8 +6,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Issue, Snapshot, Thread
-from app.models.session import Session as SessionModel
+from app.models import Issue, ReadingSession as SessionModel, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
 from app.schemas import ActiveThreadInfo

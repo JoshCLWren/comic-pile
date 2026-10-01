@@ -29,7 +29,7 @@ from app.schemas import (
     ThreadUpdate,
 )
 from app.schemas.migration import MigrateToIssuesSimpleRequest
-from app.repositories.session_repository import fetch_active_session
+from app.repositories.reading_session_repository import fetch_active_reading_session as fetch_active_session
 from app.services import thread_service
 from app.services.errors import (
     ConflictError,

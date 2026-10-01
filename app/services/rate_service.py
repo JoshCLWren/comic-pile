@@ -22,9 +22,9 @@ from app.repositories.issue_repository import (
     issues_ordered,
 )
 from app.repositories.rate_repository import fetch_source_roll_event
-from app.repositories.session_repository import (
-    fetch_active_session,
-    get_session,
+from app.repositories.reading_session_repository import (
+    fetch_active_reading_session as fetch_active_session,
+    get_reading_session as get_session,
     latest_action_event,
 )
 from app.repositories.thread_repository import find_owned, threads_for_user

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_serializer
 
-from app.schemas.session import _to_utc_iso
+from app.schemas.reading_session import _to_utc_iso
 
 
 class SnapshotResponse(BaseModel):

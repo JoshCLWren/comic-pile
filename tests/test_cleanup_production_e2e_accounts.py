@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 import scripts.cleanup_production_e2e_accounts as cleanup_module
-from app.models.session import Session
+from app.models.reading_session import ReadingSession as Session
 from app.models.thread import Thread
 from app.models.user import User
 from scripts.cleanup_production_e2e_accounts import (

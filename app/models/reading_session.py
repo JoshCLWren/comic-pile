@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 class ReadingSession(Base):
     """Reading session model."""
 
-    __tablename__ = "reading_sessions"
+    __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     started_at: Mapped[datetime] = mapped_column(
@@ -85,42 +85,42 @@ class ReadingSession(Base):
     session_mode_correction_guidance: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
-        Index("ix_reading_session_started_at", "started_at"),
-        Index("ix_reading_session_ended_at", "ended_at"),
-        Index("ix_reading_session_user_ended_started", "user_id", "ended_at", "started_at"),
+        Index("ix_session_started_at", "started_at"),
+        Index("ix_session_ended_at", "ended_at"),
+        Index("ix_session_user_ended_started", "user_id", "ended_at", "started_at"),
         CheckConstraint(
             f"predicted_bandwidth IS NULL OR predicted_bandwidth IN {BANDWIDTH_VALUES}",
-            name="ck_reading_sessions_predicted_bandwidth_valid",
+            name="ck_sessions_predicted_bandwidth_valid",
         ),
         CheckConstraint(
             f"active_bandwidth IS NULL OR active_bandwidth IN {BANDWIDTH_VALUES}",
-            name="ck_reading_sessions_active_bandwidth_valid",
+            name="ck_sessions_active_bandwidth_valid",
         ),
         CheckConstraint(
             f"bandwidth_source IS NULL OR bandwidth_source IN {BANDWIDTH_SOURCE_VALUES}",
-            name="ck_reading_sessions_bandwidth_source_valid",
+            name="ck_sessions_bandwidth_source_valid",
         ),
         CheckConstraint(
             "bandwidth_confidence IS NULL "
             "OR (bandwidth_confidence >= 0 AND bandwidth_confidence <= 1)",
-            name="ck_reading_sessions_bandwidth_confidence_range",
+            name="ck_sessions_bandwidth_confidence_range",
         ),
         CheckConstraint(
             f"active_intent IS NULL OR active_intent IN {INTENT_VALUES}",
-            name="ck_reading_sessions_active_intent_valid",
+            name="ck_sessions_active_intent_valid",
         ),
         CheckConstraint(
             f"predicted_intent IS NULL OR predicted_intent IN {INTENT_VALUES}",
-            name="ck_reading_sessions_predicted_intent_valid",
+            name="ck_sessions_predicted_intent_valid",
         ),
         CheckConstraint(
             f"intent_source IS NULL OR intent_source IN {INTENT_SOURCE_VALUES}",
-            name="ck_reading_sessions_intent_source_valid",
+            name="ck_sessions_intent_source_valid",
         ),
         CheckConstraint(
             "intent_confidence IS NULL "
             "OR (intent_confidence >= 0 AND intent_confidence <= 1)",
-            name="ck_reading_sessions_intent_confidence_range",
+            name="ck_sessions_intent_confidence_range",
         ),
     )
 

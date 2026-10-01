@@ -22,7 +22,7 @@ class Snapshot(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     session_id: Mapped[int] = mapped_column(
-        ForeignKey("reading_sessions.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
     )
     event_id: Mapped[int | None] = mapped_column(
         ForeignKey("events.id", ondelete="CASCADE"), nullable=True
