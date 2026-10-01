@@ -8,10 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Snapshot, Thread, User
-from app.models import Session as SessionModel
-from app.services.session_response import build_ladder_path
+from app.models import ReadingSession as SessionModel
+from app.services.reading_session_response import build_ladder_path
 from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
-from comic_pile.session import get_current_die
+from comic_pile.reading_session import get_current_die
 
 
 def _thread_state(thread: Thread, *, issues_remaining: int) -> dict:

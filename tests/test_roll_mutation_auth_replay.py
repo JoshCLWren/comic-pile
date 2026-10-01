@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from tests.conftest import get_or_create_user_async
 
 

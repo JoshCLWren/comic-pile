@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Issue, Session as SessionModel, Thread
+from app.models import Issue, ReadingSession as SessionModel, Thread
 from app.models.external_identity import (
     ExternalIdentity,
     IssueExternalIdentityMapping,

@@ -3,7 +3,7 @@
 import pytest
 
 from httpx import AsyncClient
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, ReadingSession as SessionModel, Thread
 from sqlalchemy.ext.asyncio import AsyncSession
 
 

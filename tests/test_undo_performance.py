@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from httpx import AsyncClient
 
 from app.models import Event, Snapshot, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
 
 

@@ -84,8 +84,16 @@ INTENT_SOURCE_VALUES: tuple[str, ...] = tuple(src.value for src in IntentSource)
 # Extended to support large thread pools (50+ threads)
 DICE_LADDER = [4, 6, 8, 10, 12, 20, 30, 50, 100]
 
-# Session configuration
+# Reading session configuration
 DEFAULT_SESSION_GAP_HOURS = 6
+
+# Persisted ``Snapshot.description`` marker for the checkpoint captured when a
+# reading session starts. This is durable data queried by
+# ``reading_session_repository.first_start_snapshot`` and asserted by undo and
+# snapshot regression tests, so it must never be renamed along with the
+# reading-session vocabulary. Keep it as a shared constant so the writer and the
+# reader cannot drift.
+READING_SESSION_START_SNAPSHOT_DESCRIPTION = "Session start"
 
 # Supported visual theme identifiers persisted per user (issue #1398).
 THEME_CLASSIC = "classic"

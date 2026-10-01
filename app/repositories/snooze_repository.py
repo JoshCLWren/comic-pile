@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, ReadingSession as SessionModel, Thread
 
 SnoozeBackoffRow = tuple[int, datetime | None, str | None, datetime | None, int]
 

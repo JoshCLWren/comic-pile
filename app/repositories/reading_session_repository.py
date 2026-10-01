@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import READING_SESSION_START_SNAPSHOT_DESCRIPTION
 from app.models import Event, ReadingSession as ReadingSessionModel, Snapshot, Thread
 from app.models.thread import normalize_format_value
 
@@ -27,14 +28,7 @@ async def get_reading_session(db: AsyncSession, session_id: int) -> ReadingSessi
     return await db.get(ReadingSessionModel, session_id)
 
 
-async def delete_all_reading_sessions_for_user(db: AsyncSession, user_id: int) -> None:
-    """Delete all reading sessions for a user.
 
-    Args:
-        db: Database session.
-        user_id: Owner whose reading sessions should be removed.
-    """
-    await db.execute(delete(ReadingSessionModel).where(ReadingSessionModel.user_id == user_id))
 
 
 async def find_owned_reading_session(
@@ -327,7 +321,9 @@ async def first_start_snapshot(db: AsyncSession, session_id: int) -> Snapshot | 
     result = await db.execute(
         select(Snapshot)
         .where(Snapshot.session_id == session_id)
-        .where(Snapshot.description == "Reading session start")
+        .where(
+            Snapshot.description == READING_SESSION_START_SNAPSHOT_DESCRIPTION
+        )
         .order_by(Snapshot.created_at)
     )
     return result.scalars().first()
@@ -382,7 +378,6 @@ async def restore_reading_session_start(
     """
     from app.repositories.thread_repository import threads_by_ids, delete_threads_by_ids
     from app.models import Issue
-    from sqlalchemy import delete
 
     # Get current threads for the user
     current_threads_result = await db.execute(

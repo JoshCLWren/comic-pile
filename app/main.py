@@ -184,7 +184,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import reading_orders
     from app.api import recommendation_diagnostics
     from app.api import roll
-    from app.api import session
+    from app.api import reading_session
     from app.api import snooze
     from app.api import taste
     from app.api import taste_signal
@@ -223,12 +223,20 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(
         recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
     )
-    app.include_router(session.router, prefix="/api/sessions", tags=["session"])
+    app.include_router(
+        reading_session.router, prefix="/api/sessions", tags=["session"]
+    )
     # Versioned-only new client resources (e.g. the #2744 correction-sheet
     # examples) have no bare /api/* twin. The v1 router is registered before the
     # legacy twin so its literal paths resolve ahead of /{session_id}.
-    app.include_router(session.v1_router, prefix="/api/v1/sessions", tags=["session"])
-    app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
+    app.include_router(
+        reading_session.v1_router,
+        prefix="/api/v1/sessions",
+        tags=["session"],
+    )
+    app.include_router(
+        reading_session.router, prefix="/api/v1/sessions", tags=["session"]
+    )
     app.include_router(reading_mode.router, tags=["reading-mode"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])

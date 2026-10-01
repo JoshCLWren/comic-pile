@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Event, Issue, Snapshot, Thread, User
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,

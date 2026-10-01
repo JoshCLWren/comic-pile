@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from app.models import Session
-from comic_pile.session import get_or_create
+from app.models import ReadingSession
+from comic_pile.reading_session import get_or_create
 from tests.conftest import get_or_create_user_async
 
 
@@ -37,8 +37,8 @@ async def test_concurrent_get_or_create_reuses_one_authoritative_session(
 
     count_result = await async_db_committed.execute(
         select(func.count())
-        .select_from(Session)
-        .where(Session.user_id == user_id)
-        .where(Session.ended_at.is_(None))
+        .select_from(ReadingSession)
+        .where(ReadingSession.user_id == user_id)
+        .where(ReadingSession.ended_at.is_(None))
     )
     assert count_result.scalar_one() == 1

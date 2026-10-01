@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.constants import INTENT_SOURCE_VALUES, INTENT_VALUES, Intent, IntentSource
-from app.models import Event, Session as SessionModel, Snapshot, Thread
-from app.schemas.session import SessionListItem, build_session_intent_state
-from comic_pile.session import get_or_create
+from app.models import Event, ReadingSession as SessionModel, Snapshot, Thread
+from app.schemas.reading_session import SessionListItem, build_session_intent_state
+from comic_pile.reading_session import get_or_create
 
 
 def test_intent_constants_include_all_first_class_values() -> None:
@@ -304,7 +304,7 @@ async def test_end_session_clears_ephemeral_intent(
     async_db: AsyncSession, sample_data: dict
 ) -> None:
     """AC4: Ending a session terminates its ephemeral reading-intent lifetime."""
-    from comic_pile.session import end_session
+    from comic_pile.reading_session import end_session
 
     session = sample_data["sessions"][0]
     session.active_intent = "explore"

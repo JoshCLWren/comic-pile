@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 
 RECENT_SESSIONS_LIMIT = 5
 TOP_THREADS_LIMIT = 5

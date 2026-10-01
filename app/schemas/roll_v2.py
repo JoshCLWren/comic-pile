@@ -13,7 +13,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.roll import RollRecoveryInfo
-from app.schemas.reading_session import ActiveThreadInfo, ReadingSessionBandwidthState, ReadingSessionMode
+from app.schemas.reading_session import ActiveThreadInfo, SessionBandwidthState, SessionMode
 from app.schemas.thread import ThreadResponse
 
 
@@ -142,10 +142,10 @@ class RollV2BootstrapResponse(BaseModel):
     manual_die: int | None
     pending_thread_id: int | None
     last_rolled_result: int | None
-    session_mode: ReadingSessionMode
+    session_mode: SessionMode
     active_thread: ActiveThreadInfo | None
     roll_recovery: RollRecoveryInfo | None = None
-    bandwidth: ReadingSessionBandwidthState
+    bandwidth: SessionBandwidthState
     rollable: list[RollableItem]  # Replaces roll_pool
     last_read: RollLastRead | None  # New nullable session-scoped field
     snoozed_threads: list[RollableThread] = Field(default_factory=list)

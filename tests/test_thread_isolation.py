@@ -264,7 +264,7 @@ async def test_set_pending_thread_success(
     client: AsyncClient, async_db: AsyncSession, user_a: User, user_a_thread: Thread
 ) -> None:
     """Test POST /api/threads/{id}/set-pending sets pending thread in session."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     _ = user_a
     login_a = await client.post(

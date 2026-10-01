@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.models import Event, Snapshot, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 

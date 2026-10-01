@@ -5,7 +5,7 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_blocking import ContinuityBlocker
-from app.schemas.reading_session import ActiveThreadInfo, BandwidthSource, IntentSource, ReadingSessionBandwidthState, ReadingSessionMode
+from app.schemas.reading_session import ActiveThreadInfo, BandwidthSource, IntentSource, SessionBandwidthState, SessionMode
 from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
@@ -74,7 +74,7 @@ class OverrideRequest(BaseModel):
     thread_id: int
 
 
-class ReadingSessionModeUpdateRequest(BaseModel):
+class SessionModeUpdateRequest(BaseModel):
     """Canonical request to update active session bandwidth and/or intent.
 
     Only the supplied dimensions are changed; the other dimension is left
@@ -94,7 +94,7 @@ class ReadingSessionModeUpdateRequest(BaseModel):
     )
 
 
-class ReadingSessionModeResponse(BaseModel):
+class SessionModeResponse(BaseModel):
     """Canonical session mode returned from manual change and bootstrap endpoints."""
 
     active_bandwidth: str | None
@@ -175,10 +175,10 @@ class RollBootstrapResponse(BaseModel):
     manual_die: int | None
     pending_thread_id: int | None
     last_rolled_result: int | None
-    session_mode: ReadingSessionMode
+    session_mode: SessionMode
     active_thread: ActiveThreadInfo | None
     roll_recovery: RollRecoveryInfo | None = None
-    bandwidth: ReadingSessionBandwidthState
+    bandwidth: SessionBandwidthState
     roll_pool: list[RollBootstrapThread]
     snoozed_threads: list[RollBootstrapThread]
     snoozed_count: int

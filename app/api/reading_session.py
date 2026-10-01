@@ -13,31 +13,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, User
+from app.models import Event, Issue, ReadingSession as SessionModel, Snapshot, Thread, User
 from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
     CorrectionSheetExamplesResponse,
     EventDetail,
-    ReadingSessionDetailsResponse,
-    ReadingSessionHistoryListResponse,
-    ReadingSessionListItem,
-    ReadingSessionResponse,
+    SessionDetailsResponse,
+    SessionHistoryListResponse,
+    SessionListItem,
+    SessionResponse,
     SnapshotResponse,
     SnapshotsListResponse,
 )
 from app.schemas.reading_session import (
     SnoozedThreadInfo,
-    build_reading_session_bandwidth_state,
-    build_reading_session_intent_state,
+    build_session_bandwidth_state,
+    build_session_intent_state,
 )
-from app.services.ownership import get_owned_session_or_404
-from app.services.session_response import build_ladder_path
-from app.services.session_service import get_session_service, SessionService
-from app.services.session_history_projection import project_session_history_events
+from app.services.ownership import get_owned_reading_session_or_404
+from app.services.reading_session_response import build_ladder_path
+from app.services.reading_session_service import get_session_service, SessionService
+from app.services.reading_session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
 from app.services.correction_examples import generate_correction_examples
-from comic_pile.session import get_current_die, get_or_create, is_active
+from comic_pile.reading_session import get_current_die, get_or_create, is_active
 
 router = APIRouter(tags=["sessions"])
 #: Versioned-only surface for new session client resources. ``app.main`` mounts
@@ -70,13 +70,13 @@ def _event_word(event_type: str) -> str:
     return EVENT_TYPE_DESCRIPTIONS.get(event_type, event_type.replace("_", " ").capitalize())
 
 
-def _to_session_list_item(sr: ReadingSessionResponse) -> ReadingSessionListItem:
-    """Convert a full ReadingReadingSessionResponse to a narrow ReadingReadingSessionListItem.
+def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
+    """Convert a full ReadingSessionResponse to a narrow ReadingSessionListItem.
 
     Deliberately drops snoozed_thread_ids, snoozed_threads, and pending_thread_id
     to reduce payload size for session history list views.
     """
-    return ReadingSessionListItem(
+    return SessionListItem(
         id=sr.id,
         started_at=sr.started_at,
         ended_at=sr.ended_at,
@@ -328,7 +328,7 @@ async def get_current_session(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReadingSessionResponse:
+) -> SessionResponse:
     """Get current active session with deadlock retry handling.
 
     Args:
@@ -337,7 +337,7 @@ async def get_current_session(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ReadingSessionResponse with current session details.
+        SessionResponse with current session details.
 
     Raises:
         RuntimeError: If failed after max retries.
@@ -388,7 +388,7 @@ async def get_current_session(
                     for thread in snoozed_result.scalars().all()
                 ]
 
-            return ReadingSessionResponse(
+            return SessionResponse(
                 id=active_session_id,
                 started_at=active_session.started_at,
                 ended_at=active_session.ended_at,
@@ -409,14 +409,14 @@ async def get_current_session(
                 reading_intent=active_session.reading_intent,
                 reading_mode_source=active_session.reading_mode_source,
                 reading_mode_suggested=active_session.reading_mode_suggested,
-                bandwidth=build_reading_session_bandwidth_state(
+                bandwidth=build_session_bandwidth_state(
                     predicted_bandwidth=active_session.predicted_bandwidth,
                     active_bandwidth=active_session.active_bandwidth,
                     confidence=active_session.bandwidth_confidence,
                     source=active_session.bandwidth_source,
                     mode_version=active_session.bandwidth_version,
                 ),
-                intent=build_reading_session_intent_state(
+                intent=build_session_intent_state(
                     predicted_intent=active_session.predicted_intent,
                     active_intent=active_session.active_intent,
                     confidence=active_session.intent_confidence,
@@ -438,7 +438,7 @@ async def get_current_session(
     raise RuntimeError(f"Failed to get current session after {max_retries} retries")
 
 
-@router.get("/", response_model=ReadingSessionHistoryListResponse)
+@router.get("/", response_model=SessionHistoryListResponse)
 async def list_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
     page_size: int = Query(
@@ -451,7 +451,7 @@ async def list_sessions(
         default=None, description="Token for pagination continuation (started_at,session_id)"
     ),
     db: AsyncSession = Depends(get_db),
-) -> ReadingSessionHistoryListResponse:
+) -> SessionHistoryListResponse:
     """List sessions with cursor-based pagination.
 
     Args:
@@ -461,7 +461,7 @@ async def list_sessions(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ReadingSessionHistoryListResponse with paginated sessions and next_page_token if more exist.
+        SessionHistoryListResponse with paginated sessions and next_page_token if more exist.
     """
     from sqlalchemy import or_
 
@@ -495,7 +495,7 @@ async def list_sessions(
     sessions_to_return = sessions[:page_size]
 
     if not sessions_to_return:
-        return ReadingSessionHistoryListResponse(sessions=[], next_page_token=None)
+        return SessionHistoryListResponse(sessions=[], next_page_token=None)
 
     session_ids = [s.id for s in sessions_to_return]
 
@@ -671,12 +671,12 @@ async def list_sessions(
         for sid in session_ids:
             active_threads_dict[sid] = None
 
-    responses: list[ReadingSessionListItem] = []
+    responses: list[SessionListItem] = []
     for session in sessions_to_return:
         active_thread = active_threads_dict.get(session.id)
         snapshot_count_num = snapshot_counts.get(session.id, 0)
 
-        sr = ReadingSessionResponse(
+        sr = SessionResponse(
             id=session.id,
             started_at=session.started_at,
             ended_at=session.ended_at,
@@ -702,7 +702,7 @@ async def list_sessions(
         last = sessions_to_return[-1]
         next_page_token = f"{last.started_at.isoformat()},{last.id}"
 
-    return ReadingSessionHistoryListResponse(sessions=responses, next_page_token=next_page_token)
+    return SessionHistoryListResponse(sessions=responses, next_page_token=next_page_token)
 
 
 @router.get("/{session_id}")
@@ -710,7 +710,7 @@ async def get_session(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReadingSessionResponse:
+) -> SessionResponse:
     """Get single session by ID.
 
     Args:
@@ -719,12 +719,12 @@ async def get_session(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ReadingSessionResponse with session details.
+        SessionResponse with session details.
 
     Raises:
         HTTPException: If session not found.
     """
-    session = await get_owned_session_or_404(db, current_user.id, session_id)
+    session = await get_owned_reading_session_or_404(db, current_user.id, session_id)
 
     _, active_thread = await get_session_with_thread_safe(session_id, db)
 
@@ -735,7 +735,7 @@ async def get_session(
     )
     snapshot_count = snapshot_count_result.scalar() or 0
 
-    return ReadingSessionResponse(
+    return SessionResponse(
         id=session.id,
         started_at=session.started_at,
         ended_at=session.ended_at,
@@ -754,14 +754,14 @@ async def get_session(
         reading_intent=session.reading_intent,
         reading_mode_source=session.reading_mode_source,
         reading_mode_suggested=session.reading_mode_suggested,
-        bandwidth=build_reading_session_bandwidth_state(
+        bandwidth=build_session_bandwidth_state(
             predicted_bandwidth=session.predicted_bandwidth,
             active_bandwidth=session.active_bandwidth,
             confidence=session.bandwidth_confidence,
             source=session.bandwidth_source,
             mode_version=session.bandwidth_version,
         ),
-        intent=build_reading_session_intent_state(
+        intent=build_session_intent_state(
             predicted_intent=session.predicted_intent,
             active_intent=session.active_intent,
             confidence=session.intent_confidence,
@@ -776,7 +776,7 @@ async def get_session_details(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReadingSessionDetailsResponse:
+) -> SessionDetailsResponse:
     """Get session details with all events for expanded view.
 
     Args:
@@ -785,12 +785,12 @@ async def get_session_details(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ReadingSessionDetailsResponse with events and narrative summary.
+        SessionDetailsResponse with events and narrative summary.
 
     Raises:
         HTTPException: If session not found.
     """
-    session_obj = await get_owned_session_or_404(db, current_user.id, session_id)
+    session_obj = await get_owned_reading_session_or_404(db, current_user.id, session_id)
 
     events_result = await db.execute(
         select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
@@ -878,7 +878,7 @@ async def get_session_details(
 
         formatted_events.append(event_data)
 
-    return ReadingSessionDetailsResponse(
+    return SessionDetailsResponse(
         session_id=session_obj.id,
         started_at=session_obj.started_at,
         ended_at=session_obj.ended_at,
@@ -910,7 +910,7 @@ async def get_session_snapshots(
     Raises:
         HTTPException: If session not found.
     """
-    await get_owned_session_or_404(db, current_user.id, session_id)
+    await get_owned_reading_session_or_404(db, current_user.id, session_id)
 
     snapshots_result = await db.execute(
         select(Snapshot)
@@ -939,7 +939,7 @@ async def restore_session_start(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     session_service: SessionService = Depends(get_session_service),
-) -> ReadingSessionResponse:
+) -> SessionResponse:
     """Restore session to its initial state at session start.
 
     Args:
@@ -949,7 +949,7 @@ async def restore_session_start(
         session_service: Session service for business logic.
 
     Returns:
-        ReadingSessionResponse with restored session details.
+        SessionResponse with restored session details.
 
     Raises:
         HTTPException: If session or snapshot not found.
@@ -966,7 +966,7 @@ async def restore_session_start(
     )
     snapshot_count = snapshot_count_result.scalar() or 0
 
-    return ReadingSessionResponse(
+    return SessionResponse(
         id=session.id,
         started_at=session.started_at,
         ended_at=session.ended_at,
@@ -985,14 +985,14 @@ async def restore_session_start(
         reading_intent=session.reading_intent,
         reading_mode_source=session.reading_mode_source,
         reading_mode_suggested=session.reading_mode_suggested,
-        bandwidth=build_reading_session_bandwidth_state(
+        bandwidth=build_session_bandwidth_state(
             predicted_bandwidth=session.predicted_bandwidth,
             active_bandwidth=session.active_bandwidth,
             confidence=session.bandwidth_confidence,
             source=session.bandwidth_source,
             mode_version=session.bandwidth_version,
         ),
-        intent=build_reading_session_intent_state(
+        intent=build_session_intent_state(
             predicted_intent=session.predicted_intent,
             active_intent=session.active_intent,
             confidence=session.intent_confidence,

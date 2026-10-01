@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from app.models import Event
-from app.services.session_history_projection import project_session_history_events
+from app.services.reading_session_history_projection import project_session_history_events
 
 
 def _event(

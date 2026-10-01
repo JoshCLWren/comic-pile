@@ -145,7 +145,7 @@ async def test_roll_pending_message_does_not_leak_other_user_thread_title(
     import os
     from datetime import UTC, datetime
 
-    from app.models import Session as SessionModel, Thread
+    from app.models import ReadingSession as SessionModel, Thread
     from tests.conftest import get_or_create_user_async
 
     session_response = await auth_client.get("/api/v1/sessions/current/")
@@ -212,7 +212,7 @@ async def test_clear_manual_die(
 ) -> None:
     """POST /roll/clear-manual-die clears manual_die and returns to auto mode."""
     _ = sample_data
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     result = await async_db.execute(select(SessionModel).where(SessionModel.ended_at.is_(None)))
     session = result.scalars().first()
@@ -252,7 +252,7 @@ async def test_clear_manual_die_returns_correct_current_die_regression(
     the correct current die from the dice ladder, not a stale cached value.
     """
     _ = sample_data
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     result = await async_db.execute(select(SessionModel).where(SessionModel.ended_at.is_(None)))
     session = result.scalars().first()
@@ -421,7 +421,7 @@ async def test_roll_bootstrap_excludes_snoozed_threads_from_stale(
     """Bootstrap stale count excludes threads that are currently snoozed."""
     from datetime import UTC, datetime, timedelta
 
-    from app.models import Session as SessionModel, Thread
+    from app.models import ReadingSession as SessionModel, Thread
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -479,7 +479,7 @@ async def test_roll_die_boundary_caps_result(
     """
     from datetime import UTC, datetime
 
-    from app.models import Session as SessionModel, Thread
+    from app.models import ReadingSession as SessionModel, Thread
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -530,7 +530,7 @@ async def test_roll_d20_includes_all_available_threads(
     """
     from datetime import UTC, datetime
 
-    from app.models import Session as SessionModel, Thread
+    from app.models import ReadingSession as SessionModel, Thread
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -581,7 +581,7 @@ async def test_roll_snoozed_thread_excluded_from_pool(
     """
     from datetime import UTC, datetime
 
-    from app.models import Session as SessionModel, Thread
+    from app.models import ReadingSession as SessionModel, Thread
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)

@@ -7,12 +7,12 @@ from sqlalchemy.exc import OperationalError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dependency, Event, Issue, Session as SessionModel, Thread, User
+from app.models import Dependency, Event, Issue, ReadingSession as SessionModel, Thread, User
 from comic_pile.dependencies import (
     detect_circular_dependency,
 )
 from comic_pile.queue import get_roll_pool
-from comic_pile.session import get_or_create, get_current_die, get_current_die_for_session
+from comic_pile.reading_session import get_or_create, get_current_die, get_current_die_for_session
 
 
 @pytest.mark.asyncio

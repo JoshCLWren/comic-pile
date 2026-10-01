@@ -10,7 +10,7 @@ from fastapi import File, UploadFile
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Thread, User
+from app.models import Event, ReadingSession as SessionModel, Thread, User
 from app.models.thread import normalize_format_value
 from app.services.summary_service import build_narrative_summary
 

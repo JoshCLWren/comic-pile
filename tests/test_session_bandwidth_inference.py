@@ -12,9 +12,9 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Thread, User
+from app.models import Event, ReadingSession as SessionModel, Thread, User
 from comic_pile.bandwidth import apply_bandwidth_state
-from comic_pile.session import get_or_create, resolve_current_session
+from comic_pile.reading_session import get_or_create, resolve_current_session
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.models import Event, Thread
 from comic_pile.queue import get_bounded_roll_pool_rows
 from httpx import AsyncClient
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -586,7 +586,7 @@ async def test_rate_targets_pending_thread_not_last_roll(
 async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Rating creates rate event with die_after value."""
     from tests.conftest import get_or_create_user_async
-    from comic_pile.session import get_current_die
+    from comic_pile.reading_session import get_current_die
 
     user = await get_or_create_user_async(async_db)
 
@@ -647,7 +647,7 @@ async def test_rate_low_rating_updates_manual_die(
 ) -> None:
     """Low rating steps die up and records die_after in rate event."""
     from tests.conftest import get_or_create_user_async
-    from comic_pile.session import get_current_die
+    from comic_pile.reading_session import get_current_die
 
     user = await get_or_create_user_async(async_db)
 

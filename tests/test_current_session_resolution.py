@@ -6,9 +6,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from app.models import Thread, User
-from comic_pile.session import is_active
+from comic_pile.reading_session import is_active
 
 
 @pytest.mark.asyncio

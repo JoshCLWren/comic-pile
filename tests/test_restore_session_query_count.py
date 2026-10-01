@@ -13,8 +13,8 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Issue, Thread, User
-from app.models import Session as SessionModel
-from comic_pile.session import create_session_start_snapshot
+from app.models import ReadingSession as SessionModel
+from comic_pile.reading_session import create_session_start_snapshot
 
 
 async def _seed_migrated_session(

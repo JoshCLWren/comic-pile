@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Session, Thread, User
+from app.models import Event, Issue, ReadingSession, Thread, User
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.external_identity import (
     ExternalIdentity,
@@ -157,9 +157,9 @@ async def _rate(
     await db.flush()
 
 
-async def _active_session(db: AsyncSession, user: User) -> Session:
+async def _active_session(db: AsyncSession, user: User) -> ReadingSession:
     """Create an active reading session for last-read tests."""
-    session = Session(user_id=user.id, start_die=6)
+    session = ReadingSession(user_id=user.id, start_die=6)
     db.add(session)
     await db.flush()
     return session
@@ -669,12 +669,12 @@ async def test_routes_are_capped_group_references(
 async def test_last_read_comes_from_latest_session_rate_event(
     async_db: AsyncSession, default_user: User
 ) -> None:
-    """Session last-read reflects the newest rate event, not the next issue."""
+    """Reading session last-read reflects the newest rate event, not the next issue."""
     thread, issues = await _make_thread(
         async_db, default_user, title="Reading", issue_count=3, queue_position=1, read_through=1
     )
     session = await _active_session(async_db, default_user)
-    other_session = Session(user_id=default_user.id, start_die=6)
+    other_session = ReadingSession(user_id=default_user.id, start_die=6)
     async_db.add(other_session)
     await async_db.flush()
     await _rate(async_db, issues[0], rating=3.0, timestamp=D1, session_id=session.id)
@@ -799,7 +799,7 @@ async def test_v2_preserves_fail_open_recovery(
     bootstrap = await auth_client.get("/api/v2/roll/bootstrap")
     assert bootstrap.status_code == 200
     session_id = bootstrap.json()["session_id"]
-    session = await async_db.get(Session, session_id)
+    session = await async_db.get(ReadingSession, session_id)
     assert session is not None
     session.pending_thread_id = thread.id
     await async_db.flush()

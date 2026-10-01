@@ -22,7 +22,7 @@ from app.models import (
     Issue,
     ReadingOrder,
     ReadingOrderItem,
-    Session,
+    ReadingSession as Session,
     Snapshot,
     Thread,
     User,

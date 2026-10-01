@@ -6,10 +6,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import clear_settings_cache
-from app.models import Event, Session, Snapshot, Thread, User
-from app.models import Session as SessionModel
-from app.services.session_response import get_active_thread
-from comic_pile.session import (
+from app.models import Event, ReadingSession, Snapshot, Thread, User
+from app.models import ReadingSession as SessionModel
+from app.services.reading_session_response import get_active_thread
+from comic_pile.reading_session import (
     end_session,
     get_current_die,
     get_or_create,
@@ -18,12 +18,12 @@ from comic_pile.session import (
 )
 
 async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Session env parsing validates and rejects invalid values.
+    """Reading session env parsing validates and rejects invalid values.
 
     Args:
         monkeypatch: Pytest's monkeypatch fixture for modifying env vars.
     """
-    import comic_pile.session as session_mod
+    import comic_pile.reading_session as session_mod
     from pydantic import ValidationError
 
     from app.config import SessionSettings
@@ -74,7 +74,7 @@ async def test_get_or_create_ignores_advisory_lock_failure(
     assert session.user_id == 1
 
 async def test_is_active_true(async_db: AsyncSession, default_user: User) -> None:
-    """Session created < 6 hours ago is active."""
+    """Reading session created < 6 hours ago is active."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
@@ -87,7 +87,7 @@ async def test_is_active_true(async_db: AsyncSession, default_user: User) -> Non
     assert result is True
 
 async def test_is_active_false_old(async_db: AsyncSession, default_user: User) -> None:
-    """Session created > 6 hours ago is inactive."""
+    """Reading session created > 6 hours ago is inactive."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=7),
         start_die=6,
@@ -100,7 +100,7 @@ async def test_is_active_false_old(async_db: AsyncSession, default_user: User) -
     assert result is False
 
 async def test_is_active_false_ended(async_db: AsyncSession, default_user: User) -> None:
-    """Session that has ended is inactive."""
+    """Reading session that has ended is inactive."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
         ended_at=datetime.now(UTC),
@@ -198,7 +198,7 @@ async def test_end_session_nonexistent(async_db: AsyncSession, default_user: Use
     assert True
 
 async def test_is_active_exactly_6_hours(async_db: AsyncSession, default_user: User) -> None:
-    """Session created exactly 6 hours ago is considered active."""
+    """Reading session created exactly 6 hours ago is considered active."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=5, minutes=59),
         start_die=6,
@@ -273,7 +273,7 @@ async def test_get_or_create_creates_user_id_1(async_db: AsyncSession) -> None:
     from sqlalchemy import delete
 
     await async_db.execute(delete(Snapshot))
-    await async_db.execute(delete(Session))
+    await async_db.execute(delete(ReadingSession))
     from sqlalchemy import delete
 
     await async_db.execute(delete(Thread))
@@ -450,7 +450,7 @@ async def test_get_or_create_returns_existing_within_time_window(
     This tests the early return path at line 148 where active_session is found
     before attempting to create a new session.
     """
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     existing_session = SessionModel(
         start_die=8,
@@ -504,7 +504,7 @@ async def test_get_or_create_deadlock_retries_with_backoff(
     async_db: AsyncSession, sample_data: dict, default_user: User
 ) -> None:
     """Test that get_or_create returns existing session found after lock."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     for session in sample_data["sessions"]:
         session.ended_at = datetime.now(UTC) - timedelta(hours=7)
@@ -531,7 +531,7 @@ async def test_get_or_create_returns_existing_after_lock(
     This tests the code path at line 141 where active_session is found
     after the lock is acquired.
     """
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     for session in sample_data["sessions"]:
         session.ended_at = datetime.now(UTC) - timedelta(hours=7)
@@ -557,7 +557,7 @@ async def test_get_current_die_returns_manual_die(
 
     This tests line 194 where session.manual_die is returned.
     """
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     session = SessionModel(
         start_die=6,

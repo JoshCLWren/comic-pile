@@ -191,9 +191,10 @@ async def complete_reset(
     user.password_changed_at = now
     # Consume token
     await mark_used(db, token_id)
-    # Revoke all server-side reading sessions for user
     await delete_all_reading_sessions_for_user(db, user_id)
-    # Refresh-token revocation: for any existing revoked_token JTIs the user has,
-    # they remain revoked; new JWTs will include password_changed_at which is now current.
+    # Reading history is deliberately preserved across a password reset. Password
+    # changes revoke prior credentials through `password_changed_at` (checked by
+    # `get_current_user`) and `revoked_token`, so authentication state never has to
+    # touch the reading-session tables. See docs/PASSWORD_RESET_INCIDENT_AUDIT_2026-09-30.md.
     await db.commit()
     return True

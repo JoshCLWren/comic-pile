@@ -20,7 +20,7 @@ from app.models.thread import normalize_format_value
 from app.repositories import (
     continuity_repository,
     issue_repository,
-    session_repository,
+    reading_session_repository,
     thread_repository,
 )
 from app.schemas import (
@@ -46,7 +46,7 @@ from app.services.queue_pagination import (
     normalize_queue_search,
 )
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
-from comic_pile.session import get_current_die, get_or_create
+from comic_pile.reading_session import get_current_die, get_or_create
 from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
 
 logger = logging.getLogger(__name__)
@@ -609,7 +609,7 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
 
-    await session_repository.detach_pending_thread_references(db, thread_id)
+    await reading_session_repository.detach_pending_thread_references(db, thread_id)
 
     # Collect issue ids that will disappear with the thread for plan cleanup.
     deleted_issue_ids = await issue_repository.issue_ids_for_thread(db, thread_id)

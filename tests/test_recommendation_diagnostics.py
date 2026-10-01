@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, ReadingSession as SessionModel, Thread
 
 
 async def _ensure_thread(db: AsyncSession, *, user_id: int, thread_id: int) -> None:

@@ -103,7 +103,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 
 LEGACY_ALGORITHM_VERSION = "legacy"
 UNKNOWN_BUCKET = "unknown"

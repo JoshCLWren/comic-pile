@@ -50,7 +50,7 @@ class SnoozedThreadInfo(BaseModel):
     title: str
 
 
-class ReadingSessionBandwidthState(BaseModel):
+class SessionBandwidthState(BaseModel):
     """Canonical ephemeral bandwidth state for the active reading session.
 
     Every field is always present but nullable so legacy sessions that predate
@@ -66,14 +66,14 @@ class ReadingSessionBandwidthState(BaseModel):
     mode_version: str | None
 
 
-def build_reading_session_bandwidth_state(
+def build_session_bandwidth_state(
     *,
     predicted_bandwidth: str | None,
     active_bandwidth: str | None,
     confidence: float | None,
     source: str | None,
     mode_version: str | None,
-) -> ReadingSessionBandwidthState:
+) -> SessionBandwidthState:
     """Build a canonical bandwidth state from raw stored values, safely.
 
     Unknown enum strings, out-of-range confidences, or other legacy garbage are
@@ -88,9 +88,9 @@ def build_reading_session_bandwidth_state(
         mode_version: Stored mode/algorithm version tag or None.
 
     Returns:
-        A ReadingSessionBandwidthState with invalid values normalized to None.
+        A SessionBandwidthState with invalid values normalized to None.
     """
-    return ReadingSessionBandwidthState(
+    return SessionBandwidthState(
         predicted_bandwidth=(
             predicted_bandwidth if predicted_bandwidth in _BANDWIDTH_LEVELS else None
         ),
@@ -103,10 +103,10 @@ def build_reading_session_bandwidth_state(
     )
 
 
-class ReadingSessionIntentState(BaseModel):
+class SessionIntentState(BaseModel):
     """Canonical ephemeral reading-intent state for the active reading session.
 
-    Symmetric to :class:`ReadingSessionBandwidthState`. Every field is always present
+    Symmetric to :class:`SessionBandwidthState`. Every field is always present
     but nullable so legacy sessions that predate intent tracking serialize to a
     stable, safe shape instead of a missing or partially shaped object. A fully
     null object means the session defaults to the balanced intent.
@@ -119,14 +119,14 @@ class ReadingSessionIntentState(BaseModel):
     mode_version: str | None
 
 
-def build_reading_session_intent_state(
+def build_session_intent_state(
     *,
     predicted_intent: str | None,
     active_intent: str | None,
     confidence: float | None,
     source: str | None,
     mode_version: str | None,
-) -> ReadingSessionIntentState:
+) -> SessionIntentState:
     """Build a canonical intent state from raw stored values, safely.
 
     Unknown enum strings, out-of-range confidences, or other legacy garbage are
@@ -142,9 +142,9 @@ def build_reading_session_intent_state(
         mode_version: Stored mode/algorithm version tag or None.
 
     Returns:
-        A ReadingSessionIntentState with invalid values normalized to None.
+        A SessionIntentState with invalid values normalized to None.
     """
-    return ReadingSessionIntentState(
+    return SessionIntentState(
         predicted_intent=predicted_intent if predicted_intent in _INTENT_LEVELS else None,
         active_intent=active_intent if active_intent in _INTENT_LEVELS else None,
         confidence=confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None,
@@ -225,7 +225,7 @@ class ActiveThreadInfo(BaseModel):
     )
 
 
-class ReadingSessionResponse(BaseModel):
+class SessionResponse(BaseModel):
     """Schema for reading session response."""
 
     id: int
@@ -250,14 +250,14 @@ class ReadingSessionResponse(BaseModel):
     reading_intent: str | None = None
     reading_mode_source: str | None = None
     reading_mode_suggested: bool = False
-    bandwidth: ReadingSessionBandwidthState | None = Field(
+    bandwidth: SessionBandwidthState | None = Field(
         default=None,
         description=(
             "Canonical ephemeral bandwidth state for the session. Null on endpoints "
             "that do not load bandwidth state."
         ),
     )
-    intent: ReadingSessionIntentState | None = Field(
+    intent: SessionIntentState | None = Field(
         default=None,
         description=(
             "Canonical ephemeral reading-intent state for the session. Null on "
@@ -324,7 +324,7 @@ class EventDetail(BaseModel):
         return _to_utc_iso(value)
 
 
-class ReadingSessionDetailsResponse(BaseModel):
+class SessionDetailsResponse(BaseModel):
     """Schema for reading session details with all events."""
 
     session_id: int
@@ -354,17 +354,17 @@ class ReadingSessionDetailsResponse(BaseModel):
         return _to_utc_iso(value)
 
 
-class ReadingSessionListResponse(BaseModel):
+class SessionListResponse(BaseModel):
     """Schema for paginated reading session list response."""
 
-    sessions: list[ReadingSessionResponse]
+    sessions: list[SessionResponse]
     next_page_token: str | None = None
 
 
-class ReadingSessionListItem(BaseModel):
+class SessionListItem(BaseModel):
     """Schema for a single reading session in the history list view.
 
-    A deliberate subset of ReadingSessionResponse. The list view does not need
+    A deliberate subset of SessionResponse. The list view does not need
     snoozed_thread_ids, snoozed_threads, pending_thread_id, or timezone,
     which reduces payload size for session history lists.
     """
@@ -403,14 +403,14 @@ class ReadingSessionListItem(BaseModel):
         return _to_utc_iso(value)
 
 
-class ReadingSessionHistoryListResponse(BaseModel):
+class SessionHistoryListResponse(BaseModel):
     """Schema for paginated reading session history list response."""
 
-    sessions: list[ReadingSessionListItem]
+    sessions: list[SessionListItem]
     next_page_token: str | None = None
 
 
-class ReadingSessionMode(BaseModel):
+class SessionMode(BaseModel):
     """Canonical reading session mode state for Roll bootstrap and frontend rendering.
 
     Describes the active and predicted reading bandwidth and intent, together

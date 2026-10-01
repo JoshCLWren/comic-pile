@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Event,
     RecommendationContext,
-    Session as SessionModel,
+    ReadingSession as SessionModel,
     Thread,
 )
 from tests.conftest import get_or_create_user_async

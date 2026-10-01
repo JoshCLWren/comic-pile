@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.auth import hash_password
 from app.config import get_database_settings
 from app.database import AsyncSessionLocal
-from app.models import Session as SessionModel, Thread, User
+from app.models import ReadingSession as SessionModel, Thread, User
 
 
 SEED_USERNAME = "testuser"

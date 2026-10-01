@@ -7,14 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.models import Event, Snapshot, Thread, User
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 
 async def test_get_current_session_active(
     client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test getting current active session."""
     from app.auth import create_access_token
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
@@ -60,7 +60,7 @@ async def test_get_current_session_no_active(
 ) -> None:
     """Test getting current session creates a new session when none is active."""
     from app.auth import create_access_token
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     session = SessionModel(
         start_die=6,
@@ -84,7 +84,7 @@ async def test_list_sessions(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test listing all sessions with pagination."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     for i in range(5):
         session = SessionModel(
@@ -105,7 +105,7 @@ async def test_list_sessions_pagination(
 ) -> None:
     """Test session pagination works correctly."""
     import time
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     for i in range(5):
         session = SessionModel(
@@ -140,7 +140,7 @@ async def test_get_session_by_id(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test getting a specific session by ID."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
@@ -163,7 +163,7 @@ async def test_get_session_includes_ladder_path(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test session response includes dice ladder path."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
@@ -210,7 +210,7 @@ async def test_get_session_includes_snapshot_info(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test session response includes snapshot count and restore point info."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)

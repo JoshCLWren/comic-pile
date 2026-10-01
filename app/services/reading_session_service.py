@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import OperationalError
 
 from app.database import get_db
-from app.models import Session as SessionModel
-from app.repositories import session_repository
-from app.services.ownership import get_owned_session_or_404
+from app.models import ReadingSession as SessionModel
+from app.repositories import reading_session_repository
+from app.services.ownership import get_owned_reading_session_or_404
 from app.services.thread_issue_stats import load_unread_counts
 from comic_pile.dependencies import refresh_user_blocked_status
 
@@ -50,9 +50,9 @@ class SessionService:
 
         while retries < max_retries:
             try:
-                session = await get_owned_session_or_404(self.db, user_id, session_id)
+                session = await get_owned_reading_session_or_404(self.db, user_id, session_id)
 
-                snapshot = await session_repository.first_start_snapshot(self.db, session_id)
+                snapshot = await reading_session_repository.first_start_snapshot(self.db, session_id)
                 if not snapshot:
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
@@ -60,7 +60,7 @@ class SessionService:
                     )
 
                 # Use repository to perform the data restoration
-                session, affected_threads = await session_repository.restore_session_start(
+                session, affected_threads = await reading_session_repository.restore_reading_session_start(
                     self.db, session, snapshot, user_id
                 )
 

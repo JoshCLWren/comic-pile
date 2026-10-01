@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.continuity_chains import resolve_continuity_chains
-from app.models import Event, Issue, Session, Thread
+from app.models import Event, Issue, ReadingSession, Thread
 from app.roll_recovery import build_roll_recovery
 from app.schemas.roll import RollRecoveryInfo
-from comic_pile.session import get_current_die_for_session, get_or_create
+from comic_pile.reading_session import get_current_die_for_session, get_or_create
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,9 +68,9 @@ async def switch_pending_roll_to_prerequisite(
     """
     current_session = await get_or_create(db, user_id=user_id)
     session_result = await db.execute(
-        select(Session)
-        .where(Session.id == current_session.id)
-        .where(Session.user_id == user_id)
+        select(ReadingSession)
+        .where(ReadingSession.id == current_session.id)
+        .where(ReadingSession.user_id == user_id)
         .with_for_update()
     )
     locked_session = session_result.scalar_one()

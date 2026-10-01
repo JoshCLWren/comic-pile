@@ -26,7 +26,7 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, ExternalIdentity, Thread, ThreadExternalSeriesMapping
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from app.models.user import User
 from app.repositories.rate_repository import fetch_user_recent_rated_threads
 from app.services.correction_examples import generate_correction_examples

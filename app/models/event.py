@@ -133,7 +133,7 @@ class Event(Base):
         Index("ix_event_source_roll_event_id", "source_roll_event_id"),
     )
 
-    session: Mapped[ReadingSession | None] = relationship(
+    reading_session: Mapped[ReadingSession | None] = relationship(
         "ReadingSession", back_populates="events", lazy="raise"
     )
     thread: Mapped[Thread | None] = relationship("Thread", back_populates="events", lazy="raise")

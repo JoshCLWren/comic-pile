@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.constants import Bandwidth, BandwidthSource
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from app.models import Snapshot, Thread
-from app.schemas.session import SessionListItem
+from app.schemas.reading_session import SessionListItem
 from comic_pile.bandwidth import (
     BANDWIDTH_CHOICES,
     BANDWIDTH_SOURCE_CHOICES,
@@ -23,7 +23,7 @@ from comic_pile.bandwidth import (
     restore_ephemeral_bandwidth,
     validate_bandwidth_state,
 )
-from comic_pile.session import end_session, get_or_create, resolve_current_session
+from comic_pile.reading_session import end_session, get_or_create, resolve_current_session
 
 
 @pytest.mark.asyncio

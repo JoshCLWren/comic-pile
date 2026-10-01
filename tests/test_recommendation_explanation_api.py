@@ -17,7 +17,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.models import Event, Session as SessionModel, Thread, User
+from app.models import Event, ReadingSession as SessionModel, Thread, User
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 
 

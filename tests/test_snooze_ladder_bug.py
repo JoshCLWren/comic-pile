@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Thread
-from app.models import Session as SessionModel, User
+from app.models import ReadingSession as SessionModel, User
 from httpx import AsyncClient
 from comic_pile.dice_ladder import step_down, step_up
 

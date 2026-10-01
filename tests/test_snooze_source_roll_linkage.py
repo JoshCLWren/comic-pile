@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 
 
 async def _create_session_with_thread(

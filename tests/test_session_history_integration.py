@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Snapshot, Thread, User
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 
 
 @pytest.mark.asyncio
@@ -121,7 +121,7 @@ async def test_session_restore_preserves_events(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that session restore preserves session events."""
-    from comic_pile.session import create_session_start_snapshot
+    from comic_pile.reading_session import create_session_start_snapshot
 
     thread = Thread(
         title="Test Comic",
@@ -495,7 +495,7 @@ async def test_session_response_includes_restore_point_info(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that session response includes restore point information."""
-    from comic_pile.session import create_session_start_snapshot
+    from comic_pile.reading_session import create_session_start_snapshot
 
     session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)

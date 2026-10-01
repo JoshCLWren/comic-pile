@@ -3,8 +3,8 @@
 from datetime import UTC, datetime
 
 import pytest
-from app.models import Session as SessionModel, Snapshot
-from comic_pile.session import get_or_create
+from app.models import ReadingSession as SessionModel, Snapshot
+from comic_pile.reading_session import get_or_create
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 

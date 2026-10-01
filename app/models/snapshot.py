@@ -40,5 +40,7 @@ class Snapshot(Base):
         Index("ix_snapshot_created_at", "created_at"),
     )
 
-    session: Mapped[ReadingSession] = relationship("ReadingSession", back_populates="snapshots", lazy="raise")
+    reading_session: Mapped[ReadingSession] = relationship(
+        "ReadingSession", back_populates="snapshots", lazy="raise"
+    )
     event: Mapped[Event | None] = relationship("Event", back_populates="snapshots", lazy="raise")

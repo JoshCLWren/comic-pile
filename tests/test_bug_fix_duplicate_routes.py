@@ -10,7 +10,7 @@ def test_no_duplicate_route_handlers() -> None:
 
     Bug: Task 127 - Prevent DB lock or app freeze from history interactions
     """
-    from app.api.session import router
+    from app.api.reading_session import router
     from collections import defaultdict
 
     paths = defaultdict(list)

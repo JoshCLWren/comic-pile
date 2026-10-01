@@ -3,7 +3,7 @@
 import pytest
 
 from app.schemas.roll import SessionModeResponse
-from app.schemas.session import SessionMode
+from app.schemas.reading_session import SessionMode
 
 
 @pytest.mark.parametrize("source", ["snooze", "quiz"])

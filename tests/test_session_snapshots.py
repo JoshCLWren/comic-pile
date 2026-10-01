@@ -7,8 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Snapshot, Thread, User
-from app.models import Session as SessionModel
-from comic_pile.session import create_session_start_snapshot, get_or_create
+from app.models import ReadingSession as SessionModel
+from comic_pile.reading_session import create_session_start_snapshot, get_or_create
 
 async def test_session_start_snapshot_created(async_db: AsyncSession, default_user: User) -> None:
     """A snapshot is created when a new session starts."""
@@ -140,7 +140,7 @@ async def test_restore_session_start(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Restore session to start state via API."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     thread1 = Thread(
         title="Thread 1",
@@ -199,7 +199,7 @@ async def test_restore_session_start_no_snapshot(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test restoring session when no session start snapshot exists."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     session = SessionModel(start_die=6, user_id=default_user.id)
     async_db.add(session)
@@ -214,7 +214,7 @@ async def test_restore_session_start_with_deleted_threads(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that restore handles threads that were deleted after snapshot."""
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     thread1 = Thread(
         title="Thread 1",
@@ -272,7 +272,7 @@ async def test_restore_session_start_clears_pending_thread_id(
     threads no longer exist, sessions with pending_thread_id referencing those
     threads have their pending_thread_id cleared to prevent ForeignViolation errors.
     """
-    from app.models import Session as SessionModel
+    from app.models import ReadingSession as SessionModel
 
     thread1 = Thread(
         title="Thread 1",
@@ -383,7 +383,7 @@ async def test_undo_to_snapshot_clears_pending_thread_id(
     Regression test for BUG-131: Verifies that snapshot restoration works correctly.
     """
     from app.api.undo import undo_to_snapshot
-    from app.models import Session as SessionModel, Snapshot
+    from app.models import ReadingSession as SessionModel, Snapshot
 
     thread1 = Thread(
         title="Thread 1",

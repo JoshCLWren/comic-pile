@@ -11,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.main import app
-from app.models import Event, Session as SessionModel, Snapshot, Thread, User
+from app.models import Event, ReadingSession as SessionModel, Snapshot, Thread, User
 
 
 @pytest_asyncio.fixture(scope="function")

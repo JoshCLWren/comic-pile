@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Snapshot, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession as SessionModel
 from app.models.user import User
 from app.services.rate_service import snapshot_thread_states
 

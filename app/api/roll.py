@@ -18,7 +18,15 @@ from app.auth import get_current_user
 from app.config import get_recommendation_settings
 from app.database import get_db
 from app.middleware import limiter
-from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Snapshot, Thread
+from app.models import (
+    DependencyGroup,
+    DependencyGroupMembership,
+    Event,
+    Issue,
+    ReadingSession,
+    Snapshot,
+    Thread,
+)
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
@@ -31,7 +39,7 @@ from app.services.reading_effort import (
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.services.roll_service import RollService
-from app.services.session_response import (
+from app.services.reading_session_response import (
     build_ladder_path,
     build_session_response,
     get_session_with_thread_safe,
@@ -45,10 +53,10 @@ from app.schemas import (
     RollBootstrapThread,
     RollRequest,
     RollResponse,
-    ReadingSessionMode,
-    ReadingSessionModeResponse,
-    ReadingSessionModeUpdateRequest,
-    ReadingSessionResponse,
+    SessionMode,
+    SessionModeResponse,
+    SessionModeUpdateRequest,
+    SessionResponse,
 )
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
@@ -58,7 +66,7 @@ from app.services.roll_v2_projection import get_v2_rollable_projection
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
-from app.schemas.reading_session import build_reading_session_bandwidth_state, build_reading_session_intent_state, SnoozedThreadInfo
+from app.schemas.reading_session import build_session_bandwidth_state, build_session_intent_state, SnoozedThreadInfo
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
     DEFAULT_INTENT,
@@ -68,7 +76,7 @@ from comic_pile.recommendation_version import (
     RECOMMENDATION_ALGORITHM_VERSION,
     recommendation_algorithm_version,
 )
-from comic_pile.session import get_current_die_for_session, get_or_create
+from comic_pile.reading_session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
 v2_router = APIRouter(tags=["roll"])
@@ -128,7 +136,7 @@ async def _select_pending_thread(
     *,
     db: AsyncSession,
     user_id: int,
-    current_session: Session,
+    current_session: ReadingSession,
     current_die: int,
     excluded_ids: list[int],
     selection_bandwidth: str,
@@ -246,7 +254,7 @@ def _build_rolling_recommendation_context(
         selected_index: Selected candidate index/result
         selection_method: Selection method (random, momentum, bandwidth, override,
             skip, or forced legacy)
-        session_timezone: Session timezone if available
+        session_timezone: Reading session timezone if available
         selected_thread_last_rating: Last rating of selected thread at decision time
         selected_thread_last_activity_at: Last activity timestamp of selected thread
         effort_estimate: Optional effort estimate if available
@@ -492,14 +500,14 @@ async def skip_roll(
     )
 
 
-@router.post("/skip/{thread_id}/unskip", response_model=ReadingSessionResponse)
+@router.post("/skip/{thread_id}/unskip", response_model=SessionResponse)
 @limiter.limit("30/minute")
 async def unskip_thread(
     thread_id: int,
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReadingSessionResponse:
+) -> SessionResponse:
     """Remove a thread from the skipped list for the current session.
 
     Args:
@@ -509,17 +517,17 @@ async def unskip_thread(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ReadingSessionResponse containing the updated session.
+        SessionResponse containing the updated session.
 
     Raises:
         HTTPException: If no active session exists.
     """
     _ = request
     result = await db.execute(
-        select(Session)
-        .where(Session.user_id == current_user.id)
-        .where(Session.ended_at.is_(None))
-        .order_by(Session.started_at.desc())
+        select(ReadingSession)
+        .where(ReadingSession.user_id == current_user.id)
+        .where(ReadingSession.ended_at.is_(None))
+        .order_by(ReadingSession.started_at.desc())
     )
     current_session = result.scalars().first()
 
@@ -606,7 +614,7 @@ async def unskip_thread(
 
     await db.commit()
 
-    return ReadingSessionResponse(
+    return SessionResponse(
         id=session_id,
         started_at=session_started_at,
         ended_at=session_ended_at,
@@ -629,14 +637,14 @@ async def unskip_thread(
         reading_intent=session_reading_intent,
         reading_mode_source=session_reading_mode_source,
         reading_mode_suggested=session_reading_mode_suggested,
-        bandwidth=build_reading_session_bandwidth_state(
+        bandwidth=build_session_bandwidth_state(
             predicted_bandwidth=session_predicted_bandwidth,
             active_bandwidth=session_active_bandwidth,
             confidence=session_bandwidth_confidence,
             source=session_bandwidth_source,
             mode_version=session_bandwidth_version,
         ),
-        intent=build_reading_session_intent_state(
+        intent=build_session_intent_state(
             predicted_intent=session_predicted_intent,
             active_intent=session_active_intent,
             confidence=session_intent_confidence,
@@ -926,14 +934,14 @@ async def clear_manual_die(
     return f"d{current_die}"
 
 
-@router.patch("/session-mode", response_model=ReadingReadingSessionModeResponse)
+@router.patch("/session-mode", response_model=SessionModeResponse)
 @limiter.limit("60/minute")
 async def update_session_mode(
     request: Request,
-    mode_update: ReadingReadingSessionModeUpdateRequest,
+    mode_update: SessionModeUpdateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReadingReadingSessionModeResponse:
+) -> SessionModeResponse:
     """Update the active session's bandwidth and/or intent.
 
     Only the supplied dimensions are changed. Omitting both is a no-op and
@@ -948,7 +956,7 @@ async def update_session_mode(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ReadingReadingSessionModeResponse with the updated canonical mode state.
+        SessionModeResponse with the updated canonical mode state.
     """
     current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
 
@@ -1015,7 +1023,7 @@ async def update_session_mode(
         )
     await db.commit()
 
-    return ReadingSessionModeResponse(
+    return SessionModeResponse(
         active_bandwidth=active_bandwidth,
         predicted_bandwidth=predicted_bandwidth,
         bandwidth_confidence=bandwidth_confidence,
@@ -1068,7 +1076,7 @@ async def roll_bootstrap(
 
     current_session_id = current_session.id
 
-    bandwidth_state = build_reading_session_bandwidth_state(
+    bandwidth_state = build_session_bandwidth_state(
         predicted_bandwidth=current_session.predicted_bandwidth,
         active_bandwidth=current_session.active_bandwidth,
         confidence=current_session.bandwidth_confidence,
@@ -1081,7 +1089,7 @@ async def roll_bootstrap(
     die_size = await get_current_die_for_session(current_session, db)
     manual_die = current_session.manual_die
     pending_thread_id = current_session.pending_thread_id
-    session_mode = ReadingSessionMode(
+    session_mode = SessionMode(
         active_bandwidth=current_session.active_bandwidth,
         predicted_bandwidth=current_session.predicted_bandwidth,
         bandwidth_confidence=current_session.bandwidth_confidence,
@@ -1335,7 +1343,7 @@ async def roll_v2_bootstrap(
 
     current_session_id = current_session.id
 
-    bandwidth_state = build_reading_session_bandwidth_state(
+    bandwidth_state = build_session_bandwidth_state(
         predicted_bandwidth=current_session.predicted_bandwidth,
         active_bandwidth=current_session.active_bandwidth,
         confidence=current_session.bandwidth_confidence,
@@ -1348,7 +1356,7 @@ async def roll_v2_bootstrap(
     die_size = await get_current_die_for_session(current_session, db)
     manual_die = current_session.manual_die
     pending_thread_id = current_session.pending_thread_id
-    session_mode = ReadingSessionMode(
+    session_mode = SessionMode(
         active_bandwidth=current_session.active_bandwidth,
         predicted_bandwidth=current_session.predicted_bandwidth,
         bandwidth_confidence=current_session.bandwidth_confidence,
@@ -1376,7 +1384,7 @@ async def roll_v2_bootstrap(
 
     # Bounded v2 projection (issue #2717): rollable[] and session last-read
     # come from three bulk read-model round trips with no per-row queries.
-    # Session/recovery/partition semantics above stay identical to #2716.
+    # Reading session/recovery/partition semantics above stay identical to #2716.
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
     derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
@@ -1553,8 +1561,8 @@ async def get_roll_recommendation_explanation(
         HTTPException 422: When the event type is not ``"roll"``.
     """
     result = await db.execute(
-        select(Event, Session.user_id)
-        .join(Session, Event.session_id == Session.id)
+        select(Event, ReadingSession.user_id)
+        .join(ReadingSession, Event.session_id == ReadingSession.id)
         .where(Event.id == event_id)
     )
     row = result.one_or_none()

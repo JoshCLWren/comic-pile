@@ -7,7 +7,7 @@ from app.main import app
 from app.schemas.dependency import BlockingExplanation, ThreadDependenciesResponse
 from app.schemas.issue import IssueListResponse, IssueResponse
 from app.schemas.roll import RollResponse
-from app.schemas.session import SessionListItem, SessionResponse
+from app.schemas.reading_session import SessionListItem, SessionResponse
 from app.schemas.thread import QueueThreadListItem, ThreadDetail, ThreadResponse
 
 

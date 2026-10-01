@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.api import roll as roll_api
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
 from app.schemas import RollBootstrapResponse, RollBootstrapThread, SessionMode
-from app.schemas.session import SessionBandwidthState, build_session_bandwidth_state
+from app.schemas.reading_session import SessionBandwidthState, build_session_bandwidth_state
 from tests.conftest import get_or_create_user_async
 
 
