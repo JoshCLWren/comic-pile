@@ -74,7 +74,7 @@ class OverrideRequest(BaseModel):
     thread_id: int
 
 
-class SessionModeUpdateRequest(BaseModel):
+class ReadingSessionModeUpdateRequest(BaseModel):
     """Canonical request to update active session bandwidth and/or intent.
 
     Only the supplied dimensions are changed; the other dimension is left
@@ -94,7 +94,7 @@ class SessionModeUpdateRequest(BaseModel):
     )
 
 
-class SessionModeResponse(BaseModel):
+class ReadingSessionModeResponse(BaseModel):
     """Canonical session mode returned from manual change and bootstrap endpoints."""
 
     active_bandwidth: str | None

@@ -26,8 +26,8 @@ from app.repositories.snooze_repository import (
     fetch_user_session_started_ats,
 )
 from app.repositories.thread_repository import threads_by_ids
-from app.schemas import ActiveThreadInfo, SessionResponse
-from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo
+from app.schemas import ActiveThreadInfo, ReadingSessionResponse
+from app.schemas.reading_session import SnoozeCorrectionInfo, SnoozedThreadInfo
 from app.services.session_response import (
     build_ladder_path,
     build_session_response,
@@ -157,7 +157,7 @@ async def _snoozed_thread_info(db: AsyncSession, thread_ids: list[int]) -> list[
     ]
 
 
-async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
+async def snooze_thread(db: AsyncSession, user_id: int) -> ReadingSessionResponse:
     """Snooze the pending thread and step the die up.
 
     This function:
@@ -178,7 +178,7 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
         user_id: The authenticated user making the request.
 
     Returns:
-        SessionResponse containing the updated session with snoozed_thread_ids,
+        ReadingSessionResponse containing the updated session with snoozed_thread_ids,
         cleared pending_thread_id, current die state, bandwidth state, and
         structured correction guidance.
 
@@ -370,7 +370,7 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
     )
 
 
-async def unsnooze_thread(db: AsyncSession, user_id: int, thread_id: int) -> SessionResponse:
+async def unsnooze_thread(db: AsyncSession, user_id: int, thread_id: int) -> ReadingSessionResponse:
     """Remove a thread from the current session's snoozed list.
 
     Args:
@@ -379,7 +379,7 @@ async def unsnooze_thread(db: AsyncSession, user_id: int, thread_id: int) -> Ses
         thread_id: The thread to unsnooze.
 
     Returns:
-        SessionResponse containing the updated session.
+        ReadingSessionResponse containing the updated session.
 
     Raises:
         HTTPException: If no active session exists.

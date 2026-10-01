@@ -10,12 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread
 from app.models.thread import normalize_format_value
-from app.schemas import ActiveThreadInfo, SessionResponse
-from app.schemas.session import (
+from app.schemas import ActiveThreadInfo, ReadingSessionResponse
+from app.schemas.reading_session import (
     SnoozeCorrectionInfo,
     SnoozedThreadInfo,
-    build_session_bandwidth_state,
-    build_session_intent_state,
+    build_reading_session_bandwidth_state,
+    build_reading_session_intent_state,
 )
 from comic_pile.session import get_current_die
 
@@ -316,8 +316,8 @@ async def build_session_response(
     skipped_threads: list[SnoozedThreadInfo] | None = None,
     skipped_thread_ids: list[int] | None = None,
     correction: SnoozeCorrectionInfo | None = None,
-) -> SessionResponse:
-    """Build a SessionResponse from a session model.
+) -> ReadingSessionResponse:
+    """Build a ReadingSessionResponse from a session model.
 
     When pre-loaded values are provided, avoids redundant database queries.
     Callers that already computed die, active thread, or ladder path should
@@ -338,7 +338,7 @@ async def build_session_response(
         correction: Structured correction result from the most recent Snooze.
 
     Returns:
-        A SessionResponse with all required fields populated.
+        A ReadingSessionResponse with all required fields populated.
     """
     if active_thread_id is not None and active_thread_info is None:
         thread = await db.get(Thread, active_thread_id)
@@ -394,7 +394,7 @@ async def build_session_response(
     if ladder_path is None:
         ladder_path = await build_ladder_path(session.id, db, session=session)
 
-    return SessionResponse(
+    return ReadingSessionResponse(
         id=session.id,
         started_at=session.started_at,
         ended_at=session.ended_at,
@@ -417,14 +417,14 @@ async def build_session_response(
         reading_intent=session.reading_intent,
         reading_mode_source=session.reading_mode_source,
         reading_mode_suggested=session.reading_mode_suggested,
-        bandwidth=build_session_bandwidth_state(
+        bandwidth=build_reading_session_bandwidth_state(
             predicted_bandwidth=session.predicted_bandwidth,
             active_bandwidth=session.active_bandwidth,
             confidence=session.bandwidth_confidence,
             source=session.bandwidth_source,
             mode_version=session.bandwidth_version,
         ),
-        intent=build_session_intent_state(
+        intent=build_reading_session_intent_state(
             predicted_intent=session.predicted_intent,
             active_intent=session.active_intent,
             confidence=session.intent_confidence,

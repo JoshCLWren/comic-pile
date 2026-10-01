@@ -13,7 +13,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models.user import User
-from app.schemas import SessionResponse
+from app.schemas import ReadingReadingSessionResponse
 from app.services.snooze_service import (
     snooze_thread as snooze_thread_service,
     unsnooze_thread as unsnooze_thread_service,
@@ -22,13 +22,13 @@ from app.services.snooze_service import (
 router = APIRouter()
 
 
-@router.post("/", response_model=SessionResponse)
+@router.post("/", response_model=ReadingSessionResponse)
 @limiter.limit("30/minute")
 async def snooze_thread(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> SessionResponse:
+) -> ReadingSessionResponse:
     """Snooze the pending thread and step the die up.
 
     This endpoint:
@@ -50,7 +50,7 @@ async def snooze_thread(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        SessionResponse containing the updated session with snoozed_thread_ids,
+        ReadingSessionResponse containing the updated session with snoozed_thread_ids,
         cleared pending_thread_id, current die state, bandwidth state, and
         structured correction guidance.
 
@@ -61,14 +61,14 @@ async def snooze_thread(
     return await snooze_thread_service(db=db, user_id=current_user.id)
 
 
-@router.post("/{thread_id}/unsnooze", response_model=SessionResponse)
+@router.post("/{thread_id}/unsnooze", response_model=ReadingSessionResponse)
 @limiter.limit("30/minute")
 async def unsnooze_thread(
     thread_id: int,
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> SessionResponse:
+) -> ReadingSessionResponse:
     """Remove thread from snoozed list."""
     _ = request
     return await unsnooze_thread_service(db=db, user_id=current_user.id, thread_id=thread_id)

@@ -57,8 +57,8 @@ from app.schemas.roll import (
     RollResponse,
     SetCurrentIssueRequest,
     SetCurrentIssueResponse,
-    SessionModeResponse,
-    SessionModeUpdateRequest,
+    ReadingSessionModeResponse,
+    ReadingSessionModeUpdateRequest,
 )
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
@@ -152,8 +152,8 @@ __all__ = [
     "SetCurrentIssueResponse",
     "RecommendationExplanationResponse",
     "ExplainableFactorResponse",
-    "SessionModeResponse",
-    "SessionModeUpdateRequest",
+    "ReadingSessionModeResponse",
+    "ReadingSessionModeUpdateRequest",
     # Recommendation Context
     "RecommendationContextCreate",
     "RecommendationContextResponse",

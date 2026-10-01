@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas import SessionResponse, SnapshotResponse, SnapshotsListResponse
-from app.schemas.session import build_session_intent_state
+from app.schemas import ReadingSessionResponse, SnapshotResponse, SnapshotsListResponse
+from app.schemas.reading_session import build_reading_session_intent_state
 from app.services.undo_snapshot_service import UndoSnapshotService
 
 router = APIRouter(tags=["undo"])
@@ -24,7 +24,7 @@ async def undo_to_snapshot(
     snapshot_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> SessionResponse:
+) -> ReadingSessionResponse:
     """Undo session state to a snapshot.
 
     Args:
@@ -70,7 +70,7 @@ async def undo_to_snapshot(
             await db.commit()
 
             # Build response from pre-computed values (safe: extracted before commit)
-            return SessionResponse(
+            return ReadingSessionResponse(
                 id=session_id,
                 started_at=started_at,
                 ended_at=ended_at,
@@ -85,7 +85,7 @@ async def undo_to_snapshot(
                 snapshot_count=response_values["snapshot_count"],
                 pending_thread_id=pending_thread_id,
                 timezone=timezone,
-                intent=build_session_intent_state(
+                intent=build_reading_session_intent_state(
                     predicted_intent=predicted_intent,
                     active_intent=active_intent,
                     confidence=intent_confidence,
