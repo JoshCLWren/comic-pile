@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -283,11 +282,10 @@ async def test_cutover_fails_when_sequence_order_contributes_to_eligibility(
 
 
 @pytest.mark.asyncio
-async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
+async def test_canonical_dependency_evaluator_ignores_continuity_rule_debris(
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Turning off raw blocking ignores debris while canonical prerequisites remain."""
+    """Canonical Dependency evaluator ignores deleted ContinuityRule mirrors."""
     user_id, threads, _issues, reader_order, _standalone = await _two_dependency_families(
         async_db
     )
@@ -302,11 +300,13 @@ async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
     )
     await async_db.commit()
 
-    monkeypatch.setattr(
-        dependencies,
-        "get_app_settings",
-        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
-    )
+    blocked = await dependencies._get_blocked_thread_ids_uncached(user_id, async_db)
+    assert threads[1].id in blocked  # Reader target still blocked by canonical Dependency
+    assert threads[3].id in blocked  # Prerequisite target still blocked by canonical Dependency
+
+    await async_db.execute(delete(Dependency).where(Dependency.id == reader_order.id))
+    await async_db.commit()
+
     blocked = await dependencies._get_blocked_thread_ids_uncached(user_id, async_db)
     assert threads[1].id not in blocked
     assert threads[3].id in blocked

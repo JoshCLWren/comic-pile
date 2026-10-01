@@ -242,10 +242,34 @@ async def test_explanations_and_evaluator_agree(async_db: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_explanations_use_format_blocking_reason(async_db: AsyncSession) -> None:
     """format_blocking_reason wraps build_blocking_explanation for legacy consumers."""
-    dep = await get_blocking_explanations.__wrapped__ if hasattr(
-        get_blocking_explanations, "__wrapped__"
-    ) else None
-    _ = dep
+    user = await get_or_create_user_async(async_db)
+    source_thread, source_issue = await _make_thread_with_issue(
+        async_db,
+        user_id=user.id,
+        title="Format source",
+        queue_position=1,
+    )
+    target_thread, target_issue = await _make_thread_with_issue(
+        async_db,
+        user_id=user.id,
+        title="Format target",
+        queue_position=2,
+    )
+
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue.id,
+            target_issue_id=target_issue.id,
+        )
+    )
+    await async_db.commit()
+
+    explanations = await get_blocking_explanations(
+        target_thread.id, user.id, async_db
+    )
+    assert len(explanations) == 1
+    blocker = explanations[0]
+    assert format_blocking_reason(blocker) == blocker.label
 
 
 def test_build_blocking_explanation_matches_canonical_authority() -> None:
@@ -261,5 +285,6 @@ class BlockingDependencyPlaceholder:
     """Minimal stub mirroring BlockingDependency for pure-function tests."""
 
     def __init__(self, issue_number: str, thread_title: str) -> None:
+        """Mirror the issue_number and thread_title attributes consumed by format_blocking_reason."""
         self.issue_number = str(issue_number)
         self.thread_title = thread_title
