@@ -57,7 +57,7 @@ async def dependency_health(
     _: Annotated[None, Depends(_authorize_operational_probe)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> health_probe.DependencyHealthResult | JSONResponse:
-    """Probe database and cache independently with strict time bounds.
+    """Probe database with strict time bounds.
 
     Args:
         _: Operational-probe authorization result.
@@ -82,30 +82,6 @@ async def dependency_health(
 
 
 @router.get(
-    "/health/cache-quota",
-    response_model=health_probe.CacheQuotaHealthResult,
-    include_in_schema=False,
-)
-async def cache_quota_health(
-    _: Annotated[None, Depends(_authorize_operational_probe)],
-) -> health_probe.CacheQuotaHealthResult:
-    """Report the observed monthly cache command budget snapshot.
-
-    Purely in-process: reads the privacy-safe command counter from
-    :func:`app.cache_quota.observe_cache_quota` without opening any connection or
-    firing the alert sink. Monitoring polls this to see the near-limit /
-    over-budget band and to confirm alerting and smoke-test throttling state.
-
-    Args:
-        _: Operational-probe authorization result.
-
-    Returns:
-        Aggregate budget snapshot with alert and throttle state.
-    """
-    return await health_probe.get_cache_quota_health()
-
-
-@router.get(
     "/health/warmup",
     response_model=health_probe.DependencyHealthResult,
     include_in_schema=False,
@@ -114,7 +90,7 @@ async def warmup(
     _: Annotated[None, Depends(_authorize_operational_probe)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> health_probe.DependencyHealthResult | JSONResponse:
-    """Exercise the real read-only database and cache dependency path.
+    """Exercise the real read-only database dependency path.
 
     Args:
         _: Operational-probe authorization result.
@@ -142,8 +118,8 @@ async def warmup(
 async def legacy_health() -> dict[str, str]:
     """Preserve the public legacy health URL as dependency-free liveness.
 
-    Database and cache checks live only on the explicit bounded operational
-    endpoints so an uptime probe cannot wake Neon or wait on Redis.
+    Database checks live only on the explicit bounded operational
+    endpoints so an uptime probe cannot wake Neon.
 
     Returns:
         Stable liveness response.

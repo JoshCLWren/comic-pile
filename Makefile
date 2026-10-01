@@ -75,9 +75,6 @@ start-task:  ## Validate and start a GitHub issue (Usage: make start-task ISSUE=
 	@if [ -z "$(ISSUE)" ]; then echo "Usage: make start-task ISSUE=644"; exit 1; fi
 	@$(PYTHON) scripts/next_task.py start $(ISSUE)
 
-cache-usage:  ## Print one-command Upstash cache usage vs budget (issue #1716)
-	@$(PYTHON) -m scripts.cache_usage_report
-
 db-up:  ## Start local PostgreSQL without changing its data
 	@docker compose up -d db
 
@@ -505,6 +502,3 @@ clone-prod-export:  ## Backup production user data (ex: make clone-prod-export A
 
 clone-prod-import:  ## Restore backup into local dev database
 	@python -m scripts.clone_prod_to_local import $(ARGS)
-
-cache-upstash-report:  ## Print Upstash cache usage vs budget via REST API (issue #1748)
-	@$(PYTHON) -m scripts.cache_upstash_report

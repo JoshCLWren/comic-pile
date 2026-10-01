@@ -262,7 +262,6 @@ dependencies = [
     { name = "python-multipart" },
     { name = "slowapi" },
     { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "upstash-redis" },
 ]
 
 [package.dev-dependencies]
@@ -283,7 +282,6 @@ dev = [
     { name = "pytest-xdist" },
     { name = "python-jose", extra = ["cryptography"] },
     { name = "pyyaml" },
-    { name = "redis" },
     { name = "ruff" },
     { name = "ty" },
     { name = "uvicorn" },
@@ -312,7 +310,6 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.6" },
     { name = "slowapi", specifier = ">=0.1.9" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.53" },
-    { name = "upstash-redis", specifier = ">=1.7.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -333,7 +330,6 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.0.0" },
     { name = "python-jose", extras = ["cryptography"] },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "redis", specifier = ">=5.0.0" },
     { name = "ruff", specifier = ">=0.1.0" },
     { name = "ty", specifier = ">=0.0.12" },
     { name = "uvicorn", specifier = ">=0.30.0" },
@@ -1215,15 +1211,6 @@ wheels = [
 ]
 
 [[package]]
-name = "redis"
-version = "8.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a8/99/604f0b666d4c616d891cf77ebb9db6bb21601344c051aebf1b72b9ff915f/redis-8.1.0.tar.gz", hash = "sha256:6e1a19beef9225c83efd689c7e6b7da2d5215b1f42cd13b7fc3714d0a09c7b25", size = 5254356, upload-time = "2026-07-30T08:51:00.269Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/9d/c5731f6e3608663d4d3656fd8d3aecee8b509c3082818f5a13eae925baea/redis-8.1.0-py3-none-any.whl", hash = "sha256:a4fe1aac3d3b3cc791d4b3d5931c5a956045dc951ee74d1c913ee3ac4d2ee9fb", size = 560618, upload-time = "2026-07-30T08:50:58.497Z" },
-]
-
-[[package]]
 name = "referencing"
 version = "0.37.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1506,18 +1493,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/19/f5/cd531b2d15a671a40c0f66cf06bc3570a12cd56eef98960068ebbad1bf5a/tzdata-2026.1.tar.gz", hash = "sha256:67658a1903c75917309e753fdc349ac0efd8c27db7a0cb406a25be4840f87f98", size = 197639, upload-time = "2026-04-03T11:25:22.002Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/70/d460bd685a170790ec89317e9bd33047988e4bce507b831f5db771e142de/tzdata-2026.1-py2.py3-none-any.whl", hash = "sha256:4b1d2be7ac37ceafd7327b961aa3a54e467efbdb563a23655fbfe0d39cfc42a9", size = 348952, upload-time = "2026-04-03T11:25:20.313Z" },
-]
-
-[[package]]
-name = "upstash-redis"
-version = "1.8.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/63/98fffe42262376f4b39d371d9b583b33b13c08f662bda05c627827d2c290/upstash_redis-1.8.0.tar.gz", hash = "sha256:5fcd172802f517473b711de2fd1d2d2587c13c816cd2c570ad66fceb4f77e695", size = 47555, upload-time = "2026-08-26T09:50:41.96Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/04/a350e6b9b910c6006826dd63deb45be30fed85b826351588df27671bd92b/upstash_redis-1.8.0-py3-none-any.whl", hash = "sha256:e08f18d9a955b2b224ab8d1611a9782bc21054a83afb3b88df36809ff87096fa", size = 49959, upload-time = "2026-08-26T09:50:40.809Z" },
 ]
 
 [[package]]
