@@ -34,6 +34,12 @@ class TestIsSimplePositiveInteger:
         ],
     )
     def test_is_simple_positive_integer(self, issue_number: str, expected: bool) -> None:
+        """Test _is_simple_positive_integer with various inputs.
+
+        Args:
+            issue_number: The string to test.
+            expected: The expected result (True for simple positive integer, False otherwise).
+        """
         assert _is_simple_positive_integer(issue_number) == expected
 
 

@@ -537,9 +537,9 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                >
                  x
                </button>
-            </div>
-          )
-        })}
+            </>
+              );
+            }}
       </div>
       <div className="flex gap-2">
         <input

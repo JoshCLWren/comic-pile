@@ -56,21 +56,27 @@ def _compute_auto_insert_position(
     # Sort existing numeric issues by their numeric value
     numeric_existing.sort(key=lambda x: x[0])
 
-    # Sort new issue numbers by their numeric value
-    new_numeric_values = sorted(int(n) for n in new_issue_numbers)
-    first_new_value = new_numeric_values[0]
+    # Find the smallest new issue number
+    new_min = min(int(n) for n in new_issue_numbers)
 
-    # Find the first existing issue with a numeric value greater than the first new issue
-    for _value, position in numeric_existing:
-        if _value > first_new_value:
-            # Insert before this existing issue
-            return position - 1
+    # Collect positions of existing numeric issues with value < new_min
+    less_than_positions = [pos for value, pos in numeric_existing if value < new_min]
 
-    # All new issues are greater than all existing numeric issues, append after the last numeric
-    # But we need to insert after the last numeric issue's position
-    # Find the max position among numeric issues
-    max_numeric_position = max(pos for _val, pos in numeric_existing)
-    return max_numeric_position
+    if less_than_positions:
+        # Insert after the last existing numeric issue less than new_min
+        return max(less_than_positions)
+    else:
+        # No numeric issue is less than new_min
+        greater_than_positions = [pos for value, pos in numeric_existing if value > new_min]
+        if greater_than_positions:
+            # Insert before the first existing numeric issue greater than new_min
+            # Since numeric_existing is sorted by value, we can find the first such issue
+            _, pos = next((value, pos) for value, pos in numeric_existing if value > new_min)
+            return pos - 1
+        else:
+            # All existing numeric issues are equal to new_min
+            # Insert after the last existing numeric issue
+            return max(pos for _, pos in numeric_existing)
 
 
 async def list_issues(
