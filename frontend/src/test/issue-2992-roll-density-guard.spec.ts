@@ -18,10 +18,8 @@
  * 3. The progress line keeps meaningful width when present (#2991).
  * 4. The regions still tile without overlap (preserve the #2952 win).
  *
- * Status note: assertion (1) is expected to FAIL on the current
- * `lg:grid-cols-[1fr_auto]` recipe until #2990 packs the pillars grid, and
- * assertion (2) fails on the vertical-title collapse from #2991. That is
- * the point of this guard: it must be falsifiable, not merely green.
+ * Wide viewports also exercise #2990: expanding the shell must not expand
+ * the empty track between the comic content and decision card.
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
@@ -54,8 +52,11 @@ const COVER_DATA_URI = (() => {
 })()
 
 const VIEWPORTS = [
+  { label: '1024', width: 1024, height: 800 },
   { label: '1280', width: 1280, height: 800 },
   { label: '1440', width: 1440, height: 900 },
+  { label: '1920', width: 1920, height: 900 },
+  { label: '2560', width: 2560, height: 900 },
 ]
 
 interface DOMRectSnapshot {
@@ -75,6 +76,7 @@ interface DensityGeometry {
   cover: DOMRectSnapshot | null
   title: (DOMRectSnapshot & { writingMode: string }) | null
   progress: DOMRectSnapshot | null
+  titleText: DOMRectSnapshot | null
 }
 
 /**
@@ -166,6 +168,9 @@ async function readDensityGeometry(page: Page): Promise<DensityGeometry> {
     const root = document.getElementById('root')
     const titleElement = document.querySelector('[data-testid="comic-header-title"]')
     const titleBox = snapshot(titleElement)
+    const titleRange = document.createRange()
+    if (titleElement) titleRange.selectNodeContents(titleElement)
+    const titleTextRect = titleElement ? titleRange.getBoundingClientRect() : null
     return {
       root: {
         scrollWidth: root?.scrollWidth ?? 0,
@@ -183,6 +188,11 @@ async function readDensityGeometry(page: Page): Promise<DensityGeometry> {
               : '',
           }
         : null,
+      titleText: titleTextRect ? {
+        left: titleTextRect.left, right: titleTextRect.right,
+        top: titleTextRect.top, bottom: titleTextRect.bottom,
+        width: titleTextRect.width, height: titleTextRect.height,
+      } : null,
       progress: snapshot(document.querySelector('[data-testid="comic-progress-line"]')),
     }
   })
@@ -209,6 +219,7 @@ test.describe('Issue #2992 Roll density and title guard', () => {
       expect(geometry.decision, 'the action/details region must be present').not.toBeNull()
       expect(geometry.cover, 'the cover must be present').not.toBeNull()
       expect(geometry.title, 'the series title must be present').not.toBeNull()
+      expect(geometry.titleText, 'visible title text must be present').not.toBeNull()
 
       // Preserve the #2952 win: regions tile side by side without overlap.
       expect(
@@ -219,7 +230,7 @@ test.describe('Issue #2992 Roll density and title guard', () => {
       // #2990: measure content, not region boxes. The region boxes abut even
       // when a huge empty `1fr` track separates the cover/title from the
       // decision card.
-      const contentRight = Math.max(geometry.cover!.right, geometry.title!.right)
+      const contentRight = Math.max(geometry.cover!.right, geometry.titleText!.right)
       const deadSpace = geometry.decision!.left - contentRight
       expect(
         deadSpace,

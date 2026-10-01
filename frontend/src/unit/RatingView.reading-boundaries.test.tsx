@@ -139,7 +139,7 @@ describe('RatingView Reading Boundaries retired control (#2711 supersedes #2519)
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
-    expect(grid!.className).toContain('lg:grid-cols-[1fr_auto]')
+    expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
   })
 

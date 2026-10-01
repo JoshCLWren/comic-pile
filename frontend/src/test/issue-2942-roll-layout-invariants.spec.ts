@@ -202,7 +202,7 @@ test.describe('Roll Layout Invariants - Issue #2942', () => {
     )
   })
 
-  test('next vertical section begins at or below the bottom of the preceding layout region', async ({
+  test('rating shell contains the full height of both content regions', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -212,25 +212,14 @@ test.describe('Roll Layout Invariants - Issue #2942', () => {
     const g = await readRatingGeometry(page)
     expect(g.ratingViewTop, 'the rating view must be present').not.toBeNull()
 
-    // The next content below the rating view top must start at or below its bottom.
-    // Find the ThreadPool or any content element that follows the rating view.
-    const belowRect = await page
-      .locator('[data-testid="thread-pool"], #explosion-layer')
-      .first()
-      .boundingBox()
-
-    expect(
-      belowRect,
-      'there must be content below the rating view top',
-    ).toBeTruthy()
-
-    const ratingViewBottom = g.ratingViewTop!.bottom
-    const belowTop = belowRect!.y
-
-    expect(
-      belowTop,
-      'the next section must begin at or below the bottom of the rating view',
-    ).toBeGreaterThanOrEqual(ratingViewBottom - GEOMETRY_TOLERANCE_PX)
+    expect(g.comic).not.toBeNull()
+    expect(g.decision).not.toBeNull()
+    // The explosion layer is an overlay, not a following content section.
+    // Both normal-flow regions must contribute their height to the shell.
+    for (const region of [g.comic!, g.decision!]) {
+      expect(region.top).toBeGreaterThanOrEqual(g.ratingViewTop!.top - GEOMETRY_TOLERANCE_PX)
+      expect(region.bottom).toBeLessThanOrEqual(g.ratingViewTop!.bottom + GEOMETRY_TOLERANCE_PX)
+    }
   })
 
   test('no horizontal page overflow across the viewport matrix', async ({
@@ -238,9 +227,9 @@ test.describe('Roll Layout Invariants - Issue #2942', () => {
   }) => {
     const page = authenticatedPage
 
+    await enterRatingView(page)
     for (const viewport of VIEWPORT_MATRIX) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await enterRatingView(page)
 
       const g = await readRatingGeometry(page)
 
@@ -330,26 +319,15 @@ test.describe('Roll Layout Invariants - Issue #2942', () => {
     expect(g.decision, 'the decision region must be present').not.toBeNull()
     expect(grid, 'the grid container must be present').toBeTruthy()
 
-    const comicWidth = g.comic!.width
-    const decisionWidth = g.decision!.width
-    const totalWidth = grid!.width
+    // #2990 caps the cluster and decision track instead of prescribing ratios
+    // that vary with shell/navigation width.
+    expect(grid!.width).toBeLessThanOrEqual(896 + GEOMETRY_TOLERANCE_PX)
+    expect(g.decision!.width).toBeLessThanOrEqual(384 + GEOMETRY_TOLERANCE_PX)
+    expect(g.decision!.width).toBeGreaterThanOrEqual(288 - GEOMETRY_TOLERANCE_PX)
+    expect(g.decision!.left - g.comic!.right).toBeCloseTo(24, 0)
+    expect(g.comic!.width).toBeGreaterThan(0)
+    expect(g.comic!.width).toBeLessThanOrEqual(384 + GEOMETRY_TOLERANCE_PX)
 
-    const comicRatio = comicWidth / totalWidth
-    const decisionRatio = decisionWidth / totalWidth
-
-    // Comic should take the majority of the width (1fr column); Decision is auto-sized.
-    expect(comicRatio, 'Comic region should take majority of width on desktop').toBeGreaterThan(0.5)
-    expect(comicRatio, 'Comic region should not consume nearly all width').toBeLessThan(0.9)
-    expect(decisionRatio, 'Decision region should be a fraction of total width').toBeGreaterThan(0.1)
-    expect(decisionRatio, 'Decision region should not dominate').toBeLessThan(0.5)
-
-    // Combined widths should match the grid container (within tolerance for gaps).
-    const combinedWidth = comicWidth + decisionWidth
-    const widthDifference = Math.abs(combinedWidth - totalWidth)
-    expect(
-      widthDifference,
-      'Comic + Decision widths should fit within the grid container',
-    ).toBeLessThanOrEqual(20)
   })
 
   test('no horizontal overflow or overlap after resizing across desktop → tablet → phone → desktop', async ({
