@@ -3,7 +3,7 @@
 import pytest
 
 from httpx import AsyncClient
-from app.models import Event, ReadingSession as SessionModel, Thread
+from app.models import Event, ReadingSession as ReadingSessionModel, Thread
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -18,7 +18,7 @@ async def test_both_buttons_available_when_thread_complete(
     user = await get_or_create_user_async(async_db)
 
     # Create session
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -85,7 +85,7 @@ async def test_can_still_rate_after_thread_complete(
     user = await get_or_create_user_async(async_db)
 
     # Create session
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

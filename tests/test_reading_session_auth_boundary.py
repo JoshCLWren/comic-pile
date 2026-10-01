@@ -242,3 +242,29 @@ def test_ambiguous_legacy_session_module_paths_are_gone() -> None:
         "app/repositories/session_repository.py",
     ):
         assert not (REPO_ROOT / rel).exists(), f"{rel} should have been renamed"
+
+
+def test_application_code_never_aliases_the_reading_session_model_to_a_bare_session() -> None:
+    """No module may re-introduce a bare ``Session``/``SessionModel`` alias for reading history.
+
+    ``app.models`` no longer exports ``Session``, so an alias such as
+    ``from app.models import ReadingSession as SessionModel`` is the only remaining way to smuggle
+    the ambiguous name back into application code. Requiring the qualified alias keeps the
+    reading/auth distinction visible at every call site.
+    """
+    violations: list[str] = []
+    for path in sorted((REPO_ROOT / "app").rglob("*.py")):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            for alias in node.names:
+                asname = alias.asname or ""
+                if "Session" in asname and "ReadingSession" not in asname:
+                    violations.append(
+                        f"{path.relative_to(REPO_ROOT)}:{node.lineno} "
+                        f"aliases {alias.name!r} as ambiguous {asname!r}"
+                    )
+    assert violations == [], (
+        "reading-session imports must keep their qualified alias:\n" + "\n".join(violations)
+    )

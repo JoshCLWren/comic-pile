@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Issue, ReadingSession as SessionModel, Snapshot, Thread
+from app.models import Issue, ReadingSession as ReadingSessionModel, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
 from app.schemas import ActiveThreadInfo
@@ -63,7 +63,7 @@ class UndoSnapshotService:
 
     async def apply_snapshot(
         self, session_id: int, snapshot_id: int, session_user_id: int
-    ) -> tuple[SessionModel, dict[str, Any], dict[str, Any]]:
+    ) -> tuple[ReadingSessionModel, dict[str, Any], dict[str, Any]]:
         """Apply a snapshot to restore session state.
 
         Args:
@@ -136,7 +136,7 @@ class UndoSnapshotService:
         return session, response_values, {"is_delta": is_delta, "snapshot_id": snapshot_id}
 
     async def _apply_full_snapshot(
-        self, session: SessionModel, snapshot: Snapshot, session_id: int
+        self, session: ReadingSessionModel, snapshot: Snapshot, session_id: int
     ) -> None:
         """Apply a legacy or session-start full-library snapshot."""
         snapshot_thread_ids = {int(thread_id) for thread_id in snapshot.thread_states}
@@ -187,7 +187,7 @@ class UndoSnapshotService:
             session.start_die = snapshot.session_state.get("start_die", session.start_die)
             session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
 
-    async def _apply_delta_snapshot(self, session: SessionModel, snapshot: Snapshot) -> None:
+    async def _apply_delta_snapshot(self, session: ReadingSessionModel, snapshot: Snapshot) -> None:
         """Apply only state changed by one version-two rating snapshot."""
         thread_states = snapshot.thread_states or {}
         restore_thread_ids = [
@@ -345,7 +345,7 @@ class UndoSnapshotService:
         )
 
     async def _precompute_response_values(
-        self, session: SessionModel, session_id: int, is_delta: bool
+        self, session: ReadingSessionModel, session_id: int, is_delta: bool
     ) -> dict[str, Any]:
         """Pre-compute response values to avoid post-commit MissingGreenlet errors."""
         # Combined query: fetch all die-changing events and latest roll event

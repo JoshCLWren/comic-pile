@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, ReadingSession as SessionModel, Snapshot, Thread, User
+from app.models import Event, Issue, ReadingSession as ReadingSessionModel, Snapshot, Thread, User
 from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
@@ -117,7 +117,7 @@ async def _fetch_thread_issue_metadata(
 
 async def get_session_with_thread_safe(
     session_id: int, db: AsyncSession
-) -> tuple[SessionModel | None, ActiveThreadInfo | None]:
+) -> tuple[ReadingSessionModel | None, ActiveThreadInfo | None]:
     """Get session and active thread with consistent lock ordering to prevent deadlocks.
 
     Args:
@@ -127,7 +127,7 @@ async def get_session_with_thread_safe(
     Returns:
         Tuple of (session or None, active_thread or None).
     """
-    session = await db.get(SessionModel, session_id)
+    session = await db.get(ReadingSessionModel, session_id)
     if not session:
         return None, None
 
@@ -351,10 +351,10 @@ async def get_current_session(
     while retries < max_retries:
         try:
             active_session_result = await db.execute(
-                select(SessionModel)
-                .where(SessionModel.user_id == current_user.id)
-                .where(SessionModel.ended_at.is_(None))
-                .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                select(ReadingSessionModel)
+                .where(ReadingSessionModel.user_id == current_user.id)
+                .where(ReadingSessionModel.ended_at.is_(None))
+                .order_by(ReadingSessionModel.started_at.desc(), ReadingSessionModel.id.desc())
                 .limit(1)
             )
             active_session = active_session_result.scalars().first()
@@ -465,8 +465,8 @@ async def list_sessions(
     """
     from sqlalchemy import or_
 
-    query = select(SessionModel).where(SessionModel.user_id == current_user.id)
-    query = query.order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+    query = select(ReadingSessionModel).where(ReadingSessionModel.user_id == current_user.id)
+    query = query.order_by(ReadingSessionModel.started_at.desc(), ReadingSessionModel.id.desc())
 
     if page_token:
         try:
@@ -477,8 +477,8 @@ async def list_sessions(
             cursor_id = int(parts[1])
             query = query.where(
                 or_(
-                    SessionModel.started_at < cursor_started_at,
-                    (SessionModel.started_at == cursor_started_at) & (SessionModel.id > cursor_id),
+                    ReadingSessionModel.started_at < cursor_started_at,
+                    (ReadingSessionModel.started_at == cursor_started_at) & (ReadingSessionModel.id > cursor_id),
                 )
             )
         except ValueError:

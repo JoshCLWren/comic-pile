@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from app.models import Thread, User
 from comic_pile.reading_session import is_active
 
@@ -34,14 +34,14 @@ async def test_current_session_prefers_older_pending_session_over_newer_blank_du
     await async_db.commit()
     await async_db.refresh(thread)
 
-    pending_session = SessionModel(
+    pending_session = ReadingSessionModel(
         started_at=now - timedelta(hours=2),
         start_die=10,
         user_id=user.id,
         pending_thread_id=thread.id,
         pending_thread_updated_at=now - timedelta(minutes=5),
     )
-    newer_blank_session = SessionModel(
+    newer_blank_session = ReadingSessionModel(
         started_at=now - timedelta(hours=1),
         start_die=6,
         user_id=user.id,
@@ -71,7 +71,7 @@ async def test_is_active_rejects_timestamp_shared_by_multiple_users(
     await async_db.flush()
 
     sessions = [
-        SessionModel(started_at=started_at, start_die=6, user_id=user.id)
+        ReadingSessionModel(started_at=started_at, start_die=6, user_id=user.id)
         for user in users
     ]
     async_db.add_all(sessions)

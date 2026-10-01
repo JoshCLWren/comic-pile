@@ -13,7 +13,7 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Thread, User
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 
 
 async def _commit_all(async_db: AsyncSession) -> None:
@@ -22,7 +22,7 @@ async def _commit_all(async_db: AsyncSession) -> None:
 
 
 def _roll_event(
-    session: SessionModel,
+    session: ReadingSessionModel,
     thread: Thread,
     *,
     timestamp: int,
@@ -42,7 +42,7 @@ def _roll_event(
 
 
 def _die_event(
-    session: SessionModel,
+    session: ReadingSessionModel,
     thread: Thread,
     *,
     timestamp: int,
@@ -71,7 +71,7 @@ async def test_history_ladder_is_chronological_and_current_die_uses_latest(
         user_id=default_user.id,
     )
     async_db.add(thread)
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.flush()
     async_db.add_all(
@@ -105,7 +105,7 @@ async def test_history_manual_die_overrides_event_derived_die(
         user_id=default_user.id,
     )
     async_db.add(thread)
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         manual_die=20,
         user_id=default_user.id,
@@ -130,7 +130,7 @@ async def test_history_no_die_events_falls_back_to_start_die(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Sessions without die events fall back to the start die for ladder and die."""
-    session = SessionModel(start_die=10, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=10, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await _commit_all(async_db)
 
@@ -162,7 +162,7 @@ async def test_history_latest_roll_wins_when_multiple_rolls_exist(
         user_id=default_user.id,
     )
     async_db.add_all([thread_a, thread_b])
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.flush()
     async_db.add_all(
@@ -195,7 +195,7 @@ async def test_history_deleted_thread_yields_null_active_thread(
         user_id=default_user.id,
     )
     async_db.add(thread)
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.flush()
     await _commit_all(async_db)
@@ -230,7 +230,7 @@ async def test_history_event_reads_do_not_grow_per_session(
             user_id=default_user.id,
         )
         async_db.add(thread)
-        session = SessionModel(
+        session = ReadingSessionModel(
             start_die=6,
             user_id=default_user.id,
             started_at=datetime(2026, 8, 2, 12, 0, i, tzinfo=UTC),
@@ -284,7 +284,7 @@ async def test_history_rate_metadata_surfaces_with_single_events_read(
         user_id=default_user.id,
     )
     async_db.add(thread)
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.flush()
     async_db.add(_roll_event(session, thread, timestamp=1))
@@ -339,7 +339,7 @@ async def test_history_pagination_preserves_ordering_and_tokens(
 ) -> None:
     """Cursor pages keep reverse-chronological ordering and stable tokens."""
     for i in range(5):
-        session = SessionModel(
+        session = ReadingSessionModel(
             start_die=6,
             user_id=default_user.id,
             started_at=datetime(2026, 8, 2, 12, 0, 50 - i, tzinfo=UTC),
@@ -398,7 +398,7 @@ async def test_history_duplicate_timestamps_break_ties_by_event_id(
         user_id=default_user.id,
     )
     async_db.add(thread)
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.flush()
 
@@ -446,8 +446,8 @@ async def test_history_active_thread_metadata_loads_in_bulk(
     )
     async_db.add_all([migrated, unmigrated])
     await async_db.flush()
-    session_a = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
-    session_b = SessionModel(start_die=8, user_id=default_user.id, started_at=datetime.now(UTC))
+    session_a = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session_b = ReadingSessionModel(start_die=8, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add_all([session_a, session_b])
     await async_db.flush()
 
@@ -524,7 +524,7 @@ async def test_history_missing_next_issue_yields_null_issue_metadata(
         reading_progress="in_progress",
     )
     async_db.add(migrated)
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.flush()
 
@@ -581,7 +581,7 @@ async def test_history_issue_reads_stay_bounded_across_page_sizes(
             reading_progress="in_progress",
         )
         async_db.add(migrated)
-        session = SessionModel(
+        session = ReadingSessionModel(
             start_die=6,
             user_id=default_user.id,
             started_at=datetime(2026, 8, 2, 12, 1, i, tzinfo=UTC),
@@ -649,7 +649,7 @@ async def test_history_migrated_zero_unread_returns_zero_not_stored_counter(
         reading_progress="in_progress",
     )
     async_db.add(migrated)
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.flush()
 
@@ -681,9 +681,9 @@ async def test_current_session_selects_newest_active_candidate(
     """Current-session selection uses the newest open candidate and stays active."""
     now = datetime.now(UTC)
     open_sessions = [
-        SessionModel(start_die=6, user_id=default_user.id, started_at=now),
-        SessionModel(start_die=8, user_id=default_user.id, started_at=now),
-        SessionModel(
+        ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=now),
+        ReadingSessionModel(start_die=8, user_id=default_user.id, started_at=now),
+        ReadingSessionModel(
             start_die=10,
             user_id=default_user.id,
             started_at=now - timedelta(hours=2),
@@ -710,7 +710,7 @@ async def test_current_session_candidate_read_is_bounded(
     now = datetime.now(UTC)
     for i in range(10):
         async_db.add(
-            SessionModel(
+            ReadingSessionModel(
                 start_die=6,
                 user_id=default_user.id,
                 started_at=now - timedelta(minutes=i),

@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread, User
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ async def _create_session_with_pending(
     predicted_bandwidth: str = "balanced",
     thread_count: int = 3,
     pending_index: int = 0,
-) -> tuple[int, SessionModel, list[Thread]]:
+) -> tuple[int, ReadingSessionModel, list[Thread]]:
     """Create a session with a pending thread and pre-set bandwidth state.
 
     Returns (user_id, session, threads).
@@ -60,7 +60,7 @@ async def _create_session_with_pending(
     db.add_all(threads)
     await db.flush()
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=user.id,
         pending_thread_id=threads[pending_index].id,

@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Issue, ReadingSession as SessionModel, Thread
+from app.models import Issue, ReadingSession as ReadingSessionModel, Thread
 from app.models.external_identity import (
     ExternalIdentity,
     IssueExternalIdentityMapping,
@@ -233,9 +233,9 @@ async def expire_current_session(
     _require_test_environment()
 
     session_result = await db.execute(
-        select(SessionModel)
-        .where(SessionModel.user_id == user_id)
-        .where(SessionModel.ended_at.is_(None))
+        select(ReadingSessionModel)
+        .where(ReadingSessionModel.user_id == user_id)
+        .where(ReadingSessionModel.ended_at.is_(None))
     )
     session = session_result.scalar_one_or_none()
 

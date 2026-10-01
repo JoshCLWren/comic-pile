@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from httpx import AsyncClient
 
 from app.models import Event, Snapshot, Thread
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
 
 
@@ -31,7 +31,7 @@ async def test_undo_endpoint_query_count(
     user = await get_or_create_user_async(async_db)
 
     # Create a session with a pending thread.
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSessionModel(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 

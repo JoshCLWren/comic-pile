@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from app.models import Thread
 
 
@@ -36,7 +36,7 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
     await async_db.refresh(thread1)
 
     # Roll and snooze thread1
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSessionModel(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

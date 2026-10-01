@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Event, Issue, Snapshot, Thread, User
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
@@ -45,7 +45,7 @@ async def test_delta_undo_preserves_issue_associations_and_die(
     Returns:
         None.
     """
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -153,7 +153,7 @@ async def test_delta_undo_reverses_implicit_issue_migration(
     Returns:
         None.
     """
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -243,7 +243,7 @@ async def test_delta_snapshot_uses_queue_helper_change_set(
     Returns:
         None.
     """
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -322,7 +322,7 @@ async def test_delta_undo_restores_finished_session_state(
     Returns:
         None.
     """
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -386,7 +386,7 @@ async def test_delta_undo_restores_deterministic_blocked_transition(
     Returns:
         None.
     """
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -492,7 +492,7 @@ async def test_delta_snapshot_requires_rated_thread_id(
     """
     from app.services.rate_service import snapshot_thread_states
 
-    session = SessionModel(start_die=6, user_id=default_user.id)
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 
 
 @pytest.mark.asyncio
@@ -24,7 +24,7 @@ async def test_roll_populates_issue_id_and_number(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=8, user_id=user.id)
+    session = ReadingSessionModel(start_die=8, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -88,7 +88,7 @@ async def test_roll_override_populates_issue_id_and_number(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=8, user_id=user.id)
+    session = ReadingSessionModel(start_die=8, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -212,7 +212,7 @@ async def test_rate_links_to_source_roll_event(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -270,7 +270,7 @@ async def test_snooze_links_to_source_roll_event(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSessionModel(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -326,7 +326,7 @@ async def test_rate_links_to_correct_roll_in_multi_roll_session(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -416,7 +416,7 @@ async def test_unsnooze_does_not_set_source_roll_event_id(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSessionModel(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -471,7 +471,7 @@ async def test_existing_events_with_null_source_roll_load_normally(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

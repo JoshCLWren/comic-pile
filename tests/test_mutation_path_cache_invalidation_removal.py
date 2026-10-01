@@ -51,7 +51,7 @@ DECOUPLED_MUTATION_PATHS = (
     "app/api/roll_recovery_switch.py",
     "app/api/undo.py",
     "app/api/issue.py",
-    "app/api/session.py",
+    "app/api/reading_session.py",
     "app/api/continuity_rule.py",
     "app/api/comicvine_resolution.py",
     "app/services/roll_service.py",

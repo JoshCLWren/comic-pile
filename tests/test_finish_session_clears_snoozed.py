@@ -4,7 +4,7 @@ import pytest
 
 from app.models import Event, Thread
 from httpx import AsyncClient
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -17,7 +17,7 @@ async def test_finish_session_clears_snoozed_threads(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSessionModel(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Event,
     RecommendationContext,
-    ReadingSession as SessionModel,
+    ReadingSession as ReadingSessionModel,
     Thread,
 )
 from tests.conftest import get_or_create_user_async
@@ -34,7 +34,7 @@ async def test_update_session_mode_bandwidth_only(
     async_db.add(thread)
     await async_db.commit()
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         user_id=user.id,
         start_die=6,
         started_at=datetime.now(UTC),
@@ -61,7 +61,7 @@ async def test_update_session_mode_bandwidth_only(
     assert data["predicted_intent"] == "explore"
     assert data["intent_source"] is None
 
-    db_session = await async_db.get(SessionModel, session_id)
+    db_session = await async_db.get(ReadingSessionModel, session_id)
     assert db_session is not None
     assert db_session.active_bandwidth == "light"
     assert db_session.bandwidth_source == "manual"
@@ -86,7 +86,7 @@ async def test_update_session_mode_intent_only(
     async_db.add(thread)
     await async_db.commit()
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         user_id=user.id,
         start_die=6,
         started_at=datetime.now(UTC),
@@ -134,7 +134,7 @@ async def test_update_session_mode_both_dimensions(
     async_db.add(thread)
     await async_db.commit()
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         user_id=user.id,
         start_die=6,
         started_at=datetime.now(UTC),

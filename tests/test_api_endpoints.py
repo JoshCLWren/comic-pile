@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ReadingSession as SessionModel, Thread
+from app.models import ReadingSession as ReadingSessionModel, Thread
 
 
 @pytest.mark.asyncio
@@ -366,7 +366,7 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
     _ = sample_data
     from datetime import UTC, datetime
 
-    from app.models import Event, ReadingSession as SessionModel, Snapshot, Thread, User
+    from app.models import Event, ReadingSession as ReadingSessionModel, Snapshot, Thread, User
 
     now = datetime.now(UTC)
     result = await async_db.execute(select(User).where(User.id == 1))
@@ -386,7 +386,7 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
     await async_db.refresh(thread)
     thread_id = thread.id  # Extract before next commit
 
-    session = SessionModel(start_die=6, user_id=user_id, started_at=now)
+    session = ReadingSessionModel(start_die=6, user_id=user_id, started_at=now)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -437,11 +437,11 @@ async def test_get_session_current(
     """Test GET /session/current/ returns active session."""
     from datetime import UTC, datetime
 
-    from app.models import ReadingSession as SessionModel, User
+    from app.models import ReadingSession as ReadingSessionModel, User
 
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
-    session = SessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -461,9 +461,9 @@ async def test_get_session_current_creates_session(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """Test GET /api/v1/sessions/current/ creates new session when none exists."""
-    from app.models import ReadingSession as SessionModel
+    from app.models import ReadingSession as ReadingSessionModel
 
-    initial_count_result = await async_db.execute(select(func.count()).select_from(SessionModel))
+    initial_count_result = await async_db.execute(select(func.count()).select_from(ReadingSessionModel))
     initial_count = initial_count_result.scalar()
 
     response = await auth_client.get("/api/v1/sessions/current/")
@@ -473,7 +473,7 @@ async def test_get_session_current_creates_session(
     assert "id" in session_data
     assert "start_die" in session_data
 
-    final_count_result = await async_db.execute(select(func.count()).select_from(SessionModel))
+    final_count_result = await async_db.execute(select(func.count()).select_from(ReadingSessionModel))
     final_count = final_count_result.scalar()
     assert final_count == (initial_count or 0) + 1
 
@@ -486,7 +486,7 @@ async def test_get_session_current_uses_selected_thread_id(
     from datetime import UTC, datetime
 
     from app.models import Event, Thread, User
-    from app.models import ReadingSession as SessionModel
+    from app.models import ReadingSession as ReadingSessionModel
 
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one_or_none()
@@ -509,7 +509,7 @@ async def test_get_session_current_uses_selected_thread_id(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    session = SessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -543,7 +543,7 @@ async def test_get_session_current_prefers_pending_thread_over_last_roll(
     from datetime import UTC, datetime
 
     from app.models import Event, Thread, User
-    from app.models import ReadingSession as SessionModel
+    from app.models import ReadingSession as ReadingSessionModel
 
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one_or_none()
@@ -576,7 +576,7 @@ async def test_get_session_current_prefers_pending_thread_over_last_roll(
     await async_db.refresh(first_thread)
     await async_db.refresh(pending_thread)
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=user.id,
         pending_thread_id=pending_thread.id,
@@ -617,7 +617,7 @@ async def test_get_session_current_returns_no_active_thread_when_pending_is_stal
     from datetime import UTC, datetime
 
     from app.models import Event, Thread, User
-    from app.models import ReadingSession as SessionModel
+    from app.models import ReadingSession as ReadingSessionModel
 
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one_or_none()
@@ -658,7 +658,7 @@ async def test_get_session_current_returns_no_active_thread_when_pending_is_stal
     await async_db.commit()
     await async_db.refresh(other_user_thread)
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=user.id,
         pending_thread_id=other_user_thread.id,
@@ -944,7 +944,7 @@ async def test_delete_thread_clears_pending_thread_id(
     """Test that deleting a thread clears pending_thread_id from sessions."""
     from datetime import UTC, datetime
 
-    from app.models import ReadingSession as SessionModel, Thread, User
+    from app.models import ReadingSession as ReadingSessionModel, Thread, User
 
     result = await async_db.execute(select(User).where(User.username == test_username))
     user = result.scalar_one()
@@ -961,7 +961,7 @@ async def test_delete_thread_clears_pending_thread_id(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6, user_id=user.id, pending_thread_id=thread.id, started_at=datetime.now(UTC)
     )
     async_db.add(session)
@@ -993,7 +993,7 @@ async def test_delete_thread_with_pending_thread_id_does_not_crash(
     """
     from datetime import UTC, datetime
 
-    from app.models import ReadingSession as SessionModel, Thread, User
+    from app.models import ReadingSession as ReadingSessionModel, Thread, User
 
     result = await async_db.execute(select(User).where(User.username == test_username))
     user = result.scalar_one()
@@ -1009,7 +1009,7 @@ async def test_delete_thread_with_pending_thread_id_does_not_crash(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=user.id,
         pending_thread_id=thread.id,
@@ -1060,7 +1060,7 @@ async def test_set_pending_thread_updates_timestamp_and_clears_cache(
     thread_issues_remaining = thread.issues_remaining
     thread_queue_position = thread.queue_position
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=user.id,
         started_at=datetime.now(UTC),

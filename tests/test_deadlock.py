@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from app.models import ReadingSession as SessionModel, Snapshot
+from app.models import ReadingSession as ReadingSessionModel, Snapshot
 from comic_pile.reading_session import get_or_create
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,7 @@ async def test_get_or_create_sequential(async_db: AsyncSession) -> None:
     multiple times in sequence.
     """
     await async_db.execute(delete(Snapshot))
-    await async_db.execute(delete(SessionModel))
+    await async_db.execute(delete(ReadingSessionModel))
     await async_db.commit()
 
     results = []
@@ -44,7 +44,7 @@ async def test_get_or_create_after_end_session(async_db: AsyncSession) -> None:
     Regression test for BUG-158: Verifies proper session management.
     """
     await async_db.execute(delete(Snapshot))
-    await async_db.execute(delete(SessionModel))
+    await async_db.execute(delete(ReadingSessionModel))
     await async_db.commit()
 
     session1 = await get_or_create(async_db, user_id=1)

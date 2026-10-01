@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Snapshot, Thread, User
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from app.services.reading_session_response import build_ladder_path
 from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
 from comic_pile.reading_session import get_current_die
@@ -51,7 +51,7 @@ async def test_delta_undo_is_lifo_and_consumes_snapshots(
 ) -> None:
     """Reject stale delta targets and allow repeated undo only in reverse order."""
     now = datetime.now(UTC)
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=now,
@@ -192,7 +192,7 @@ async def test_session_apis_include_all_die_changing_events(
     default_user: User,
 ) -> None:
     """Keep detail, summary, and direct die calculations aligned after undo."""
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),

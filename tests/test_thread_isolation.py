@@ -264,7 +264,7 @@ async def test_set_pending_thread_success(
     client: AsyncClient, async_db: AsyncSession, user_a: User, user_a_thread: Thread
 ) -> None:
     """Test POST /api/threads/{id}/set-pending sets pending thread in session."""
-    from app.models import ReadingSession as SessionModel
+    from app.models import ReadingSession as ReadingSessionModel
 
     _ = user_a
     login_a = await client.post(
@@ -284,7 +284,7 @@ async def test_set_pending_thread_success(
     assert data["format"] == user_a_thread.format
     assert data["die_size"] >= 4
 
-    result = await async_db.execute(select(SessionModel).where(SessionModel.user_id == user_a.id))
+    result = await async_db.execute(select(ReadingSessionModel).where(ReadingSessionModel.user_id == user_a.id))
     session = result.scalar_one_or_none()
     assert session is not None
     assert session.pending_thread_id == user_a_thread.id

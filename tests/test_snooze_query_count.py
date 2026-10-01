@@ -12,7 +12,7 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Thread, User
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from app.services.reading_session_response import build_session_response
 
 
@@ -37,7 +37,7 @@ async def test_build_session_response_snoozed_thread_reads_are_constant(
     ]
     async_db.add_all(threads)
     await async_db.flush()
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         snoozed_thread_ids=[t.id for t in threads],

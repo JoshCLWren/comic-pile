@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Snapshot, Thread, User
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 
 
 @pytest.mark.asyncio
@@ -26,7 +26,7 @@ async def test_session_lifecycle_creates_history_events(
     async_db.add(thread)
     await async_db.commit()
 
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -63,7 +63,7 @@ async def test_undo_operation_creates_history_event(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that undo operation creates a history event."""
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -133,7 +133,7 @@ async def test_session_restore_preserves_events(
     async_db.add(thread)
     await async_db.commit()
 
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -183,7 +183,7 @@ async def test_multiple_undos_in_sequence(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that multiple undo operations work correctly in sequence."""
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -245,7 +245,7 @@ async def test_get_session_details_endpoint(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test getting session details with all events."""
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -298,7 +298,7 @@ async def test_get_session_details_describes_events_in_reader_language(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Session timeline events expose reader-language descriptions (issue #1694)."""
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -351,7 +351,7 @@ async def test_session_details_narrative_summary_includes_issue_numbers(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """History narrative entries always pair thread titles with issue numbers."""
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -402,7 +402,7 @@ async def test_get_session_snapshots_endpoint(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test getting session snapshots list."""
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -441,7 +441,7 @@ async def test_rating_creates_snapshot_automatically(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that rating operation automatically creates a snapshot."""
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -497,7 +497,7 @@ async def test_session_response_includes_restore_point_info(
     """Test that session response includes restore point information."""
     from comic_pile.reading_session import create_session_start_snapshot
 
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -529,7 +529,7 @@ async def test_multiple_sessions_listed_in_reverse_order(
 ) -> None:
     """Test that sessions are listed in reverse chronological order."""
     for i in range(5):
-        session = SessionModel(
+        session = ReadingSessionModel(
             start_die=6 + i, user_id=default_user.id, started_at=datetime.now(UTC)
         )
         async_db.add(session)
@@ -548,7 +548,7 @@ async def test_undo_to_snapshot_with_session_state(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test undo operation properly restores session state."""
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=10, manual_die=8, user_id=default_user.id, started_at=datetime.now(UTC)
     )
     async_db.add(session)
@@ -602,7 +602,7 @@ async def test_current_session_response_includes_ladder_path(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test current session response includes dice ladder path."""
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    session = ReadingSessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -665,7 +665,7 @@ async def test_history_list_surfaces_pending_thread_title_without_roll(
     async_db.add(thread)
     await async_db.commit()
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -710,7 +710,7 @@ async def test_history_list_pending_thread_omitted_from_active_thread_when_roll_
     async_db.add_all([rolled_thread, pending_thread])
     await async_db.commit()
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),

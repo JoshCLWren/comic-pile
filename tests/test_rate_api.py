@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.models import Event, Thread
 from comic_pile.queue import get_bounded_roll_pool_rows
 from httpx import AsyncClient
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -17,7 +17,7 @@ async def test_rate_success(auth_client: AsyncClient, async_db: AsyncSession) ->
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -65,7 +65,7 @@ async def test_rate_low_rating(auth_client: AsyncClient, async_db: AsyncSession)
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -113,7 +113,7 @@ async def test_low_rating_moves_thread_beyond_expanded_roll_pool(
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSessionModel(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 
@@ -192,7 +192,7 @@ async def test_low_rating_safe_position_accounts_for_skipped_threads_issue_2802(
 
     target = threads[0]
     skipped = threads[1]
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=6,
         user_id=user.id,
         skipped_thread_ids=[skipped.id],
@@ -244,7 +244,7 @@ async def test_rate_high_rating(auth_client: AsyncClient, async_db: AsyncSession
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -291,7 +291,7 @@ async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSe
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -346,7 +346,7 @@ async def test_rate_finish_session_no_missing_greenlet_after_queue_commit(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -401,7 +401,7 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -451,7 +451,7 @@ async def test_rate_ignores_client_issues_read_and_reads_one(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -514,7 +514,7 @@ async def test_rate_no_active_thread(auth_client: AsyncClient, async_db: AsyncSe
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -554,7 +554,7 @@ async def test_rate_targets_pending_thread_not_last_roll(
     await async_db.refresh(first_thread)
     await async_db.refresh(pending_thread)
 
-    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=pending_thread.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id, pending_thread_id=pending_thread.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -590,7 +590,7 @@ async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: Async
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, manual_die=20, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, manual_die=20, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -651,7 +651,7 @@ async def test_rate_low_rating_updates_manual_die(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, manual_die=6, user_id=user.id)
+    session = ReadingSessionModel(start_die=6, manual_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -711,7 +711,7 @@ async def test_rate_finish_session_flag_controls_session_end(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -824,7 +824,7 @@ async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
     threads = sample_data["threads"]
 
     # Create a session
-    session = SessionModel(
+    session = ReadingSessionModel(
         user_id=1,
         start_die=20,
         manual_die=None,
@@ -868,7 +868,7 @@ async def test_rate_final_issue_completes_thread_but_keeps_session_active(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -924,7 +924,7 @@ async def test_rate_save_and_continue_clears_pending_thread(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -993,7 +993,7 @@ async def test_rate_requires_new_roll_before_second_rating(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -1056,7 +1056,7 @@ async def test_finish_session_ends_session_regardless_of_thread_completion(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -1108,7 +1108,7 @@ async def test_rate_thread_with_zero_issues_remaining_returns_error(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

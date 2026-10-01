@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.models import Event, Snapshot, Thread
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -24,7 +24,7 @@ async def test_rate_creates_snapshot_without_greenlet_error(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

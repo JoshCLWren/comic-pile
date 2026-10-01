@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, ReadingSession as SessionModel, Snapshot, Thread
+from app.models import Event, Issue, ReadingSession as ReadingSessionModel, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
 
@@ -83,7 +83,7 @@ class UndoSnapshotRepository:
 
     async def get_user_session(
         self, session_id: int, user_id: int, *, for_update: bool = False
-    ) -> SessionModel | None:
+    ) -> ReadingSessionModel | None:
         """Get a session owned by a user.
 
         Args:
@@ -95,9 +95,9 @@ class UndoSnapshotRepository:
             Session or None if not found or not owned by user.
         """
         query = (
-            select(SessionModel)
-            .where(SessionModel.id == session_id)
-            .where(SessionModel.user_id == user_id)
+            select(ReadingSessionModel)
+            .where(ReadingSessionModel.id == session_id)
+            .where(ReadingSessionModel.user_id == user_id)
         )
         if for_update:
             query = query.with_for_update()
@@ -247,9 +247,9 @@ class UndoSnapshotRepository:
         """
         if thread_ids_to_clear:
             await self.db.execute(
-                update(SessionModel)
-                .where(SessionModel.id == session_id)
-                .where(SessionModel.pending_thread_id.in_(thread_ids_to_clear))
+                update(ReadingSessionModel)
+                .where(ReadingSessionModel.id == session_id)
+                .where(ReadingSessionModel.pending_thread_id.in_(thread_ids_to_clear))
                 .values(pending_thread_id=None)
             )
 

@@ -103,7 +103,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 
 LEGACY_ALGORITHM_VERSION = "legacy"
 UNKNOWN_BUCKET = "unknown"
@@ -1063,10 +1063,10 @@ async def load_decision_history(
 
     session_rows = (
         await db.scalars(
-            select(SessionModel).where(
-                SessionModel.user_id == user_id,
-                SessionModel.started_at >= start,
-                SessionModel.started_at < end,
+            select(ReadingSessionModel).where(
+                ReadingSessionModel.user_id == user_id,
+                ReadingSessionModel.started_at >= start,
+                ReadingSessionModel.started_at < end,
             )
         )
     ).all()
@@ -1074,9 +1074,9 @@ async def load_decision_history(
     events = (
         await db.scalars(
             select(Event)
-            .join(SessionModel, Event.session_id == SessionModel.id)
+            .join(ReadingSessionModel, Event.session_id == ReadingSessionModel.id)
             .where(
-                SessionModel.user_id == user_id,
+                ReadingSessionModel.user_id == user_id,
                 Event.timestamp >= start,
                 Event.timestamp < end,
             )

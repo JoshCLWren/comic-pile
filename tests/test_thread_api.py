@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.models import Issue, ReadingSession as SessionModel, Thread, User
+from app.models import Issue, ReadingSession as ReadingSessionModel, Thread, User
 from tests.conftest import get_or_create_user_async
 
 
@@ -540,7 +540,7 @@ async def test_stale_endpoint_excludes_snoozed_threads(
     async_db.add_all([stale_thread, snoozed_stale_thread])
     await async_db.flush()
 
-    session = SessionModel(
+    session = ReadingSessionModel(
         user_id=user.id,
         started_at=now,
         snoozed_thread_ids=[snoozed_stale_thread.id],

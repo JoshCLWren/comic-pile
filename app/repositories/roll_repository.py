@@ -460,8 +460,8 @@ async def fetch_current_die_for_session(
         The current die size.
     """
     from comic_pile.reading_session import get_current_die_for_session as _get_die
-    from app.models import ReadingSession as SessionModel
-    session = await db.get(SessionModel, session_id)
+    from app.models import ReadingSession as ReadingSessionModel
+    session = await db.get(ReadingSessionModel, session_id)
     if session is None:
         return 1
     return await _get_die(session, db)

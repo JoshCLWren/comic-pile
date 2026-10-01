@@ -27,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread, User
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from app.services.bandwidth_inference import (
     HistoricalObservation,
     infer_bandwidth,
@@ -120,9 +120,9 @@ async def _create_session(
     active_intent: str | None = None,
     intent_source: str | None = None,
     start_die: int = 6,
-) -> SessionModel:
+) -> ReadingSessionModel:
     """Create an active session for the given user."""
-    session = SessionModel(
+    session = ReadingSessionModel(
         start_die=start_die,
         user_id=user_id,
         active_bandwidth=active_bandwidth,
@@ -215,7 +215,7 @@ async def _setup_user_with_history(
 ) -> list[Thread]:
     """Create a user with historical reading behavior for bandwidth inference."""
     threads: list[Thread] = []
-    history_session = SessionModel(user_id=user_id)
+    history_session = ReadingSessionModel(user_id=user_id)
     db.add(history_session)
     await db.flush()
     base_time = datetime.now(UTC) - timedelta(days=1)

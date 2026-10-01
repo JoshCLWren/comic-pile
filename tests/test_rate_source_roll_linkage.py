@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 
 
 async def _latest_rate_event(async_db: AsyncSession, session_id: int) -> Event:
@@ -42,13 +42,13 @@ async def _create_thread(async_db: AsyncSession, user_id: int, title: str) -> Th
 
 async def _roll_via_api(
     auth_client: AsyncClient, async_db: AsyncSession
-) -> tuple[SessionModel, Event]:
+) -> tuple[ReadingSessionModel, Event]:
     """Roll through the API and return the authoritative session and roll event."""
     roll_response = await auth_client.post("/api/roll/")
     assert roll_response.status_code == 200
 
     session_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.ended_at.is_(None))
+        select(ReadingSessionModel).where(ReadingSessionModel.ended_at.is_(None))
     )
     session = session_result.scalars().first()
     assert session is not None
@@ -104,7 +104,7 @@ async def test_multiple_rolls_and_rates_each_link_to_their_own_roll(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -171,7 +171,7 @@ async def test_rate_does_not_link_to_earlier_roll_for_another_thread(
     rolled_thread = await _create_thread(async_db, user.id, "Rolled Thread")
     pending_thread = await _create_thread(async_db, user.id, "Pending Thread")
 
-    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=pending_thread.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id, pending_thread_id=pending_thread.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -207,7 +207,7 @@ async def test_rate_links_to_latest_matching_roll_not_older_duplicate(
 
     thread = await _create_thread(async_db, user.id, "Re-rolled Thread")
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -266,7 +266,7 @@ async def test_override_roll_links_as_originating_selection(
     assert response.status_code == 200
 
     session_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.ended_at.is_(None))
+        select(ReadingSessionModel).where(ReadingSessionModel.ended_at.is_(None))
     )
     session = session_result.scalars().one()
 
@@ -299,7 +299,7 @@ async def test_stale_session_without_matching_roll_keeps_null_linkage(
 
     thread = await _create_thread(async_db, user.id, "Orphan Pending Thread")
 
-    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=thread.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id, pending_thread_id=thread.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -322,7 +322,7 @@ async def test_fallback_latest_action_roll_links_without_pending_state(
 
     thread = await _create_thread(async_db, user.id, "Legacy Flow Thread")
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSessionModel(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -356,7 +356,7 @@ async def test_rate_in_second_session_never_links_to_other_session_roll(
 
     thread = await _create_thread(async_db, user.id, "Cross Session Thread")
 
-    old_session = SessionModel(
+    old_session = ReadingSessionModel(
         start_die=10, user_id=user.id, ended_at=None, pending_thread_id=None
     )
     async_db.add(old_session)
@@ -375,7 +375,7 @@ async def test_rate_in_second_session_never_links_to_other_session_roll(
     old_session.ended_at = datetime.now(UTC)
     await async_db.commit()
 
-    current_session = SessionModel(
+    current_session = ReadingSessionModel(
         start_die=10, user_id=user.id, pending_thread_id=thread.id
     )
     async_db.add(current_session)

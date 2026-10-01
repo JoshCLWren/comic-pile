@@ -10,7 +10,7 @@ from fastapi import File, UploadFile
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ReadingSession as SessionModel, Thread, User
+from app.models import Event, ReadingSession as ReadingSessionModel, Thread, User
 from app.models.thread import normalize_format_value
 from app.services.summary_service import build_narrative_summary
 
@@ -148,7 +148,7 @@ async def export_json(db: AsyncSession) -> io.BytesIO:
     users = users_result.scalars().all()
     threads_result = await db.execute(select(Thread).where(Thread.is_test.is_(False)))
     threads = threads_result.scalars().all()
-    sessions_result = await db.execute(select(SessionModel))
+    sessions_result = await db.execute(select(ReadingSessionModel))
     sessions = sessions_result.scalars().all()
     events_result = await db.execute(select(Event))
     events = events_result.scalars().all()
@@ -249,12 +249,12 @@ async def delete_test_data(db: AsyncSession) -> dict[str, int]:
             await db.delete(event)
 
     await db.execute(
-        update(SessionModel)
-        .where(SessionModel.pending_thread_id.in_(thread_ids))
+        update(ReadingSessionModel)
+        .where(ReadingSessionModel.pending_thread_id.in_(thread_ids))
         .values(pending_thread_id=None)
     )
 
-    sessions_result = await db.execute(select(SessionModel).where(SessionModel.user_id == 1))
+    sessions_result = await db.execute(select(ReadingSessionModel).where(ReadingSessionModel.user_id == 1))
     sessions = sessions_result.scalars().all()
     for session in sessions:
         session_events_result = await db.execute(
@@ -306,7 +306,7 @@ async def export_summary(db: AsyncSession) -> tuple[io.BytesIO, str]:
         BytesIO with markdown data.
     """
     all_sessions_result = await db.execute(
-        select(SessionModel).order_by(SessionModel.started_at.desc())
+        select(ReadingSessionModel).order_by(ReadingSessionModel.started_at.desc())
     )
     all_sessions = all_sessions_result.scalars().all()
 

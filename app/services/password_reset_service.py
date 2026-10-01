@@ -16,7 +16,7 @@ from app.repositories.password_reset_token_repository import (
     get_token_by_digest,
     mark_used,
 )
-from app.repositories.reading_session_repository import delete_all_reading_sessions_for_user
+
 from app.repositories.user_repository import get_user_by_email, get_user_by_id
 from app.services.password_reset_mailer import (
     FakePasswordResetMailer,
@@ -154,7 +154,7 @@ async def complete_reset(
     token_string: str,
     new_password: str,
 ) -> bool:
-    """Validate token, atomically update password, consume token, revoke sessions.
+    """Validate token, atomically update password, consume token, revoke credentials.
 
     Returns True on success. Raises HTTPException on failure with safe messages.
     """
@@ -191,10 +191,10 @@ async def complete_reset(
     user.password_changed_at = now
     # Consume token
     await mark_used(db, token_id)
-    await delete_all_reading_sessions_for_user(db, user_id)
     # Reading history is deliberately preserved across a password reset. Password
     # changes revoke prior credentials through `password_changed_at` (checked by
     # `get_current_user`) and `revoked_token`, so authentication state never has to
-    # touch the reading-session tables. See docs/PASSWORD_RESET_INCIDENT_AUDIT_2026-09-30.md.
+    # touch the reading-session tables. See docs/READING_SESSION_DOMAIN_VOCABULARY.md
+    # and #2996 for the incident this preserves.
     await db.commit()
     return True

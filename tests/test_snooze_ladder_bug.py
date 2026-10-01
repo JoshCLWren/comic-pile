@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Thread
-from app.models import ReadingSession as SessionModel, User
+from app.models import ReadingSession as ReadingSessionModel, User
 from httpx import AsyncClient
 from comic_pile.dice_ladder import step_down, step_up
 
@@ -103,7 +103,7 @@ async def test_multiple_snooze_then_rate(auth_client: AsyncClient, async_db: Asy
 
         if i == 0:
             result = await async_db.execute(
-                select(SessionModel).where(SessionModel.user_id == default_user.id)
+                select(ReadingSessionModel).where(ReadingSessionModel.user_id == default_user.id)
             )
             session = result.scalars().first()
             assert session is not None

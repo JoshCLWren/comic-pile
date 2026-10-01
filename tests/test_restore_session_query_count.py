@@ -13,7 +13,7 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Issue, Thread, User
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from comic_pile.reading_session import create_session_start_snapshot
 
 
@@ -21,9 +21,9 @@ async def _seed_migrated_session(
     async_db: AsyncSession,
     user_id: int,
     thread_count: int,
-) -> SessionModel:
+) -> ReadingSessionModel:
     """Create a session with ``thread_count`` migrated threads and a start snapshot."""
-    session = SessionModel(start_die=6, user_id=user_id)
+    session = ReadingSessionModel(start_die=6, user_id=user_id)
     async_db.add(session)
     await async_db.flush()
     for i in range(thread_count):

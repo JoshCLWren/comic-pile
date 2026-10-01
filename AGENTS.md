@@ -243,6 +243,31 @@ New backend code must follow this layering without exceptions. Legacy modules ar
 
 Remember the MissingGreenlet rule above when services/repositories commit: extract model attributes BEFORE `await db.commit()`.
 
+### Domain Nouns That Collide With Infrastructure Vocabulary
+
+A domain noun that also means something in infrastructure must be **qualified in code** at its
+boundary: model, repository, service, and helper names. Never rely on reviewer vigilance to
+disambiguate a destructive call.
+
+The canonical example is **session**. ComicPile's durable reading-history record is
+`ReadingSession` (`app/models/reading_session.py`, `app/repositories/reading_session_repository.py`).
+It is *not* authentication state. The password-reset incident fixed in #2996 deleted a user's
+entire reading history because an auth path called a helper that read like "revoke logins".
+
+Rules:
+
+- Name reading-domain symbols `ReadingSession*` / `reading_session_*`. Storage, HTTP path, and
+  OpenAPI component names keep their legacy `sessions` spelling for compatibility.
+- Auth code must not import anything from `app/repositories/reading_session_repository.py` unless
+  the interaction is explicitly justified in the PR that introduces it.
+- Never add a bulk-delete helper to a repository. Individual row mutations belong to the service
+  that owns the business rule.
+- `tests/test_reading_session_auth_boundary.py` statically enforces the boundary. Extend it when a
+  new ambiguous domain noun appears.
+
+See [`docs/READING_SESSION_DOMAIN_VOCABULARY.md`](docs/READING_SESSION_DOMAIN_VOCABULARY.md) for the
+full vocabulary and the intentionally retained ambiguous-looking uses.
+
 ### Pydantic Schemas
 All API input/output uses Pydantic models in `app/schemas/`:
 ```python

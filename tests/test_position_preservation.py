@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.rate_service import snapshot_thread_states
 from app.api.undo import undo_to_snapshot
 from app.models import Event, Issue, Snapshot, Thread
-from app.models import ReadingSession as SessionModel
+from app.models import ReadingSession as ReadingSessionModel
 from app.models.user import User
 
 
@@ -18,9 +18,9 @@ async def _create_session_event(
     user: User,
     thread: Thread,
     event_type: str = "rate",
-) -> tuple[SessionModel, Event]:
+) -> tuple[ReadingSessionModel, Event]:
     """Create a session/event pair for snapshot and undo tests."""
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSessionModel(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 
