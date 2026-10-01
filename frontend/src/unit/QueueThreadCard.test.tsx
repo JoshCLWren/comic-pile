@@ -5,10 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { BlockingDependency, Thread } from '../types'
 
-const { useCrossoverGroups } = vi.hoisted(() => ({
-  useCrossoverGroups: vi.fn(() => ({ groupsByThreadId: {}, isPending: false, error: null })),
-}))
-
 vi.mock('../components/Tooltip', () => ({
   default: ({ children, content }: { children: React.ReactNode; content?: string }) => (
     <div data-testid="mock-tooltip" data-content={content}>{children}</div>
@@ -70,10 +66,6 @@ vi.mock('../components/PositionMenu', () => ({
   ),
 }))
 
-vi.mock('../hooks/useCrossoverGroups', () => ({
-  useCrossoverGroups,
-}))
-
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: 1,
@@ -104,6 +96,10 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     isBlocked: false,
     // SAFETY: this fixture declares no blocking dependencies
     blockingDependencies: [] as BlockingDependency[],
+    // SAFETY: empty literal satisfies the DependencyGroupSummary subset this card renders.
+    crossoverGroups: [] as { id: number; name: string }[],
+    crossoverGroupsLoading: false,
+    crossoverGroupsError: false,
     isDragOver: false,
     snoozeIcon: '',
     snoozeLabel: '',
@@ -466,13 +462,15 @@ describe('QueueThreadCard', () => {
 
     expect(screen.getByRole('link', { name: 'Rotworld' })).toHaveAttribute('href', '/crossovers?group=11')
     expect(screen.getByRole('link', { name: 'Night of the Owls' })).toHaveAttribute('href', '/crossovers?group=12')
-    expect(useCrossoverGroups).toHaveBeenCalledWith([])
   })
 
-  it('uses the per-thread fallback only when no batch result was supplied', () => {
-    renderCard(createMockThread({ id: 27 }))
+  it('renders exactly the memberships the parent resolved for this card', () => {
+    renderCard(createMockThread({ id: 27 }), {
+      crossoverGroups: [{ id: 31, name: 'Blackest Night' }],
+    })
 
-    expect(useCrossoverGroups).toHaveBeenCalledWith([27])
+    expect(screen.getByRole('link', { name: 'Blackest Night' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Rotworld' })).not.toBeInTheDocument()
   })
 
   it('shows a crossover loading state without inventing empty membership', () => {

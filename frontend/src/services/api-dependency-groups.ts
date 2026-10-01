@@ -96,18 +96,25 @@ export function createDependencyGroupsApi(client: HttpClient) {
       )
     },
 
+    /**
+     * Load crossover memberships for several threads in one request.
+     *
+     * Uses the backend batch route `POST /v1/threads/groups:batch`, which the
+     * server resolves with a single ownership check plus a single membership
+     * query. Fan-out over the per-thread GET route is deliberately avoided:
+     * every extra request is a billable function invocation and re-derives the
+     * same membership rows once per thread.
+     *
+     * @param threadIds - Owned thread identifiers to resolve, at most 200.
+     * @returns A mapping from thread id to zero or more crossover summaries.
+     */
     listForThreads: async (
       threadIds: number[],
     ): Promise<Record<number, DependencyGroupSummary[]>> => {
-      const entries = await Promise.all(
-        threadIds.map(async (threadId) => [
-          threadId,
-          await client.get<DependencyGroupSummary[]>(
-            `/v1/reading-order-groups/threads/${threadId}/groups`,
-          ),
-        ] as const),
+      return client.post<Record<number, DependencyGroupSummary[]>>(
+        '/v1/threads/groups:batch',
+        { thread_ids: threadIds },
       )
-      return Object.fromEntries(entries)
     },
 
     addMember: async (
