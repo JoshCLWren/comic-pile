@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
+import { ToastProvider } from '../contexts/ToastProvider'
 import QueuePage from '../pages/QueuePage'
 import { dependencyGroupsApi, type DependencyGroupSummary } from '../services/api-dependency-groups'
 import {
@@ -10,8 +11,8 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import {
-  useMoveToBack,
   useMoveToFront,
+  useMoveToBack,
   useMoveToPosition,
   useQueueThreads,
   useShuffleQueue,
@@ -81,6 +82,8 @@ const ACTIVE_THREADS = [
     total_issues: null,
     is_blocked: false,
     blocking_reasons: [],
+    created_at: '2026-01-01T00:00:00Z',
+    last_activity_at: '2026-01-01T00:00:00Z',
   },
   {
     id: 2,
@@ -92,6 +95,8 @@ const ACTIVE_THREADS = [
     total_issues: null,
     is_blocked: false,
     blocking_reasons: [],
+    created_at: '2026-01-01T00:00:00Z',
+    last_activity_at: '2026-01-01T00:00:00Z',
   },
   {
     id: 3,
@@ -103,6 +108,8 @@ const ACTIVE_THREADS = [
     total_issues: null,
     is_blocked: false,
     blocking_reasons: [],
+    created_at: '2026-01-01T00:00:00Z',
+    last_activity_at: '2026-01-01T00:00:00Z',
   },
   {
     id: 4,
@@ -112,6 +119,10 @@ const ACTIVE_THREADS = [
     queue_position: 0,
     issues_remaining: 0,
     total_issues: 12,
+    is_blocked: false,
+    blocking_reasons: [],
+    created_at: '2026-01-01T00:00:00Z',
+    last_activity_at: '2026-01-01T00:00:00Z',
   },
 ]
 
@@ -120,12 +131,25 @@ const ROTWORLD: DependencyGroupSummary[] = [{ id: 11, name: 'Rotworld' }]
 const originalListForThreads = dependencyGroupsApi.listForThreads
 const listForThreads = vi.fn<CrossoverGroupsApi['listForThreads']>()
 
+const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+const mockedUseCreateThread = vi.mocked(useCreateThread) as any
+const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
+const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
+const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
+const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
+const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
+const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
+const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseSnooze = vi.mocked(useSnooze) as any
+const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('alert', vi.fn())
   dependencyGroupsApi.listForThreads = listForThreads
 
-  vi.mocked(useQueueThreads).mockReturnValue({
+  mockedUseQueueThreads.mockReturnValue({
     data: ACTIVE_THREADS,
     isPending: false,
     isError: false,
@@ -133,33 +157,31 @@ beforeEach(() => {
     nextPageToken: null,
     loadMore: vi.fn(),
     activeCount: 3,
-  } // SAFETY: test double matches useQueueThreads return shape
-  )
-  vi.mocked(useSession).mockReturnValue({
-    data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
+  })
+  mockedUseSession.mockReturnValue({
+    data: { snoozed_threads: [] },
+    isPending: false,
+    isError: false,
+    error: null,
     refetch: vi.fn(),
-  } // SAFETY: test double matches useSession return shape
-  )
-  vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useCreateThread return shape
-  )
-  vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useUpdateThread return shape
-  )
-  vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useDeleteThread return shape
-  )
-  vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useReactivateThread return shape
-  )
-  vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useMoveToFront return shape
-  )
-  vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useMoveToBack return shape
-  )
-  vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useMoveToPosition return shape
-  )
-  vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useShuffleQueue return shape
-  )
-  vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useSnooze return shape
-  )
-  vi.mocked(useUnsnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } // SAFETY: test double matches useUnsnooze return shape
-  )
+  })
+  mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockedUseDeleteThread.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
+  mockedUseSnooze.mockReturnValue({
+    mutate: vi.fn(),
+    retryRefresh: vi.fn(),
+    isPending: false,
+    isError: false,
+    refreshError: null,
+    hasRefreshError: false,
+  })
+  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false })
 
   listForThreads.mockImplementation(async (threadIds) => {
     const groups: Record<number, DependencyGroupSummary[]> = {}
@@ -177,7 +199,9 @@ afterEach(() => {
 function renderPage() {
   return render(
     <BrowserRouter>
-      <QueuePage />
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
     </BrowserRouter>,
   )
 }
