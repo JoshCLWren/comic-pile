@@ -46,9 +46,9 @@ from app.schemas import (
     RollRequest,
     RollResponse,
     ReadingSessionMode,
-    ReadingReadingSessionModeResponse,
-    ReadingReadingSessionModeUpdateRequest,
-    ReadingReadingSessionResponse,
+    ReadingSessionModeResponse,
+    ReadingSessionModeUpdateRequest,
+    ReadingSessionResponse,
 )
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
@@ -1015,7 +1015,7 @@ async def update_session_mode(
         )
     await db.commit()
 
-    return ReadingReadingSessionModeResponse(
+    return ReadingSessionModeResponse(
         active_bandwidth=active_bandwidth,
         predicted_bandwidth=predicted_bandwidth,
         bandwidth_confidence=bandwidth_confidence,

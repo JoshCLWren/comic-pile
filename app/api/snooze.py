@@ -13,7 +13,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models.user import User
-from app.schemas import ReadingReadingSessionResponse
+from app.schemas import ReadingSessionResponse
 from app.services.snooze_service import (
     snooze_thread as snooze_thread_service,
     unsnooze_thread as unsnooze_thread_service,

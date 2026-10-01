@@ -19,10 +19,10 @@ from app.schemas import (
     ActiveThreadInfo,
     CorrectionSheetExamplesResponse,
     EventDetail,
-    ReadingReadingSessionDetailsResponse,
-    ReadingReadingSessionHistoryListResponse,
-    ReadingReadingSessionListItem,
-    ReadingReadingSessionResponse,
+    ReadingSessionDetailsResponse,
+    ReadingSessionHistoryListResponse,
+    ReadingSessionListItem,
+    ReadingSessionResponse,
     SnapshotResponse,
     SnapshotsListResponse,
 )
@@ -70,13 +70,13 @@ def _event_word(event_type: str) -> str:
     return EVENT_TYPE_DESCRIPTIONS.get(event_type, event_type.replace("_", " ").capitalize())
 
 
-def _to_session_list_item(sr: ReadingReadingSessionResponse) -> ReadingReadingSessionListItem:
+def _to_session_list_item(sr: ReadingSessionResponse) -> ReadingSessionListItem:
     """Convert a full ReadingReadingSessionResponse to a narrow ReadingReadingSessionListItem.
 
     Deliberately drops snoozed_thread_ids, snoozed_threads, and pending_thread_id
     to reduce payload size for session history list views.
     """
-    return ReadingReadingSessionListItem(
+    return ReadingSessionListItem(
         id=sr.id,
         started_at=sr.started_at,
         ended_at=sr.ended_at,
@@ -328,7 +328,7 @@ async def get_current_session(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReadingReadingSessionResponse:
+) -> ReadingSessionResponse:
     """Get current active session with deadlock retry handling.
 
     Args:
@@ -451,7 +451,7 @@ async def list_sessions(
         default=None, description="Token for pagination continuation (started_at,session_id)"
     ),
     db: AsyncSession = Depends(get_db),
-) -> ReadingReadingSessionHistoryListResponse:
+) -> ReadingSessionHistoryListResponse:
     """List sessions with cursor-based pagination.
 
     Args:
@@ -710,7 +710,7 @@ async def get_session(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReadingReadingSessionResponse:
+) -> ReadingSessionResponse:
     """Get single session by ID.
 
     Args:
@@ -776,7 +776,7 @@ async def get_session_details(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReadingReadingSessionDetailsResponse:
+) -> ReadingSessionDetailsResponse:
     """Get session details with all events for expanded view.
 
     Args:
@@ -939,7 +939,7 @@ async def restore_session_start(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     session_service: SessionService = Depends(get_session_service),
-) -> ReadingReadingSessionResponse:
+) -> ReadingSessionResponse:
     """Restore session to its initial state at session start.
 
     Args:
