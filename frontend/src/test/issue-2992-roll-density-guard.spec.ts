@@ -76,6 +76,7 @@ interface DensityGeometry {
   cover: DOMRectSnapshot | null
   title: (DOMRectSnapshot & { writingMode: string }) | null
   progress: DOMRectSnapshot | null
+  titleText: DOMRectSnapshot | null
 }
 
 /**
@@ -167,6 +168,9 @@ async function readDensityGeometry(page: Page): Promise<DensityGeometry> {
     const root = document.getElementById('root')
     const titleElement = document.querySelector('[data-testid="comic-header-title"]')
     const titleBox = snapshot(titleElement)
+    const titleRange = document.createRange()
+    if (titleElement) titleRange.selectNodeContents(titleElement)
+    const titleTextRect = titleElement ? titleRange.getBoundingClientRect() : null
     return {
       root: {
         scrollWidth: root?.scrollWidth ?? 0,
@@ -184,6 +188,11 @@ async function readDensityGeometry(page: Page): Promise<DensityGeometry> {
               : '',
           }
         : null,
+      titleText: titleTextRect ? {
+        left: titleTextRect.left, right: titleTextRect.right,
+        top: titleTextRect.top, bottom: titleTextRect.bottom,
+        width: titleTextRect.width, height: titleTextRect.height,
+      } : null,
       progress: snapshot(document.querySelector('[data-testid="comic-progress-line"]')),
     }
   })
@@ -210,6 +219,7 @@ test.describe('Issue #2992 Roll density and title guard', () => {
       expect(geometry.decision, 'the action/details region must be present').not.toBeNull()
       expect(geometry.cover, 'the cover must be present').not.toBeNull()
       expect(geometry.title, 'the series title must be present').not.toBeNull()
+      expect(geometry.titleText, 'visible title text must be present').not.toBeNull()
 
       // Preserve the #2952 win: regions tile side by side without overlap.
       expect(
@@ -220,7 +230,7 @@ test.describe('Issue #2992 Roll density and title guard', () => {
       // #2990: measure content, not region boxes. The region boxes abut even
       // when a huge empty `1fr` track separates the cover/title from the
       // decision card.
-      const contentRight = Math.max(geometry.cover!.right, geometry.title!.right)
+      const contentRight = Math.max(geometry.cover!.right, geometry.titleText!.right)
       const deadSpace = geometry.decision!.left - contentRight
       expect(
         deadSpace,

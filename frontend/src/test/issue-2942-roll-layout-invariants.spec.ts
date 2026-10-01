@@ -321,11 +321,12 @@ test.describe('Roll Layout Invariants - Issue #2942', () => {
 
     // #2990 caps the cluster and decision track instead of prescribing ratios
     // that vary with shell/navigation width.
-    expect(grid!.width).toBeLessThanOrEqual(1152 + GEOMETRY_TOLERANCE_PX)
+    expect(grid!.width).toBeLessThanOrEqual(896 + GEOMETRY_TOLERANCE_PX)
     expect(g.decision!.width).toBeLessThanOrEqual(384 + GEOMETRY_TOLERANCE_PX)
     expect(g.decision!.width).toBeGreaterThanOrEqual(288 - GEOMETRY_TOLERANCE_PX)
     expect(g.decision!.left - g.comic!.right).toBeCloseTo(24, 0)
     expect(g.comic!.width).toBeGreaterThan(0)
+    expect(g.comic!.width).toBeLessThanOrEqual(384 + GEOMETRY_TOLERANCE_PX)
 
   })
 
