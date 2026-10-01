@@ -102,7 +102,7 @@ export function ComicPillar({
                 {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
               </h2>
               {(issueNumber != null || displayDate) && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
+                <div data-testid="comic-progress-line" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
                   {issueNumber != null && totalIssues != null && (
                     <>
                       <span>Issue {issueNumber} of {totalIssues}</span>

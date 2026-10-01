@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import { hasNoGridColsArbitraryComma } from '../../eslint-rules/grid-cols-comma-guard'
 import { ToastProvider } from '../contexts/ToastProvider'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { RatingThread } from '../pages/RollPage/types'
@@ -159,7 +160,12 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
     expect(grid!.className).toContain('items-start')
-    expect(grid!.className).toContain('lg:grid-cols-[1fr_auto]')
+    // #2992: no single track recipe is blessed. The grid must declare a
+    // two-track lg layout (density is asserted on rendered geometry in
+    // issue-2992-roll-density-guard.spec.ts), and the #2952 comma failure
+    // mode must never return.
+    expect(grid!.className).toMatch(/lg:grid-cols-\[[^\]]+\]/)
+    expect(hasNoGridColsArbitraryComma(grid!.className)).toBe(true)
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
 

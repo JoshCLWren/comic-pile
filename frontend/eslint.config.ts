@@ -4,6 +4,10 @@ import tsEslintPlugin from '@typescript-eslint/eslint-plugin'
 import tsEslintParser from '@typescript-eslint/parser'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import {
+  findGridColsArbitraryComma,
+  gridColsArbitraryCommaMessage,
+} from './eslint-rules/grid-cols-comma-guard.ts'
 
 /**
  * Custom rule to prevent direct React Query cache mutations outside cacheEffects.ts
@@ -57,6 +61,58 @@ create(context) {
   },
 }
 
+/**
+ * Custom rule banning Tailwind arbitrary `grid-cols-[...]` track lists that
+ * use commas (the #2952 failure mode: `grid-cols-[1fr,auto]` emits invalid
+ * CSS and the grid silently collapses). Underscore-separated tracks and
+ * commas inside CSS functions such as `minmax(0,1fr)` remain allowed.
+ * Detection lives in `./eslint-rules/grid-cols-comma-guard` so the vitest
+ * suite can cover the same predicate. CI bar owned by #2992.
+ */
+const noGridColsArbitraryCommasPlugin = {
+  rules: {
+    'no-grid-cols-arbitrary-commas': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description:
+            'Ban Tailwind arbitrary grid-cols tracks with commas; use underscores instead',
+          recommended: 'error',
+        },
+        schema: [],
+        messages: {
+          gridColsComma: '{{message}}',
+        },
+      },
+      create(context) {
+        // String() normalizes any literal value to scannable text: string
+        // literals pass through unchanged, while numbers/booleans/null can
+        // never spell a grid-cols token. This keeps the visitor free of
+        // runtime typeof narrowing (see anti-slop/no-runtime-typeof).
+        const reportIfOffending = (text, node) => {
+          const offending = findGridColsArbitraryComma(String(text))
+          if (offending !== null) {
+            context.report({
+              node,
+              messageId: 'gridColsComma',
+              data: { message: gridColsArbitraryCommaMessage(offending) },
+            })
+          }
+        }
+
+        return {
+          Literal(node) {
+            reportIfOffending(node.value, node)
+          },
+          TemplateElement(node) {
+            reportIfOffending(node.value.cooked, node)
+          },
+        }
+      },
+    },
+  },
+}
+
 export default [
   {
     ignores: ['dist', 'coverage'],
@@ -65,9 +121,11 @@ export default [
     files: ['**/*.{js,jsx,ts,tsx}'],
     plugins: {
       'no-direct-cache-mutations': noDirectCacheMutationsPlugin,
+      'no-grid-cols-arbitrary-commas': noGridColsArbitraryCommasPlugin,
     },
     rules: {
       'no-direct-cache-mutations/no-direct-cache-mutations': 'error',
+      'no-grid-cols-arbitrary-commas/no-grid-cols-arbitrary-commas': 'error',
     },
   },
   {
