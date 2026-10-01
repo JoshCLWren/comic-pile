@@ -194,6 +194,7 @@ describe('QueuePage crossover group batching', () => {
   })
 
   it('never starts per-card crossover requests while the page-level batch is pending', async () => {
+    // SAFETY: deferred resolver starts unset and is assigned once the batch promise executor runs.
     const deferred = {
       resolve: undefined as ((value: Record<number, DependencyGroupSummary[]>) => void) | undefined,
     }
