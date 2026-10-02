@@ -15,18 +15,18 @@ The process snapshot records:
 - total measured startup duration;
 - Vercel deployment or commit identifier when available.
 
-Request diagnostics add total route duration, database query count and time, cache outcome and time, HTTP status, and request ID. Production sanitization removes request bodies, query strings, user/session identifiers, cookies, and authorization headers.
+Request diagnostics add total route duration, database query count and time, HTTP status, and request ID. Production sanitization removes request bodies, query strings, user/session identifiers, cookies, and authorization headers.
 
 ## Reading a slow request
 
 1. Filter deployment logs to `event=application_startup` for the process startup record.
 2. Find the first request with `cold_request=true` and correlate it by deployment ID plus `process_started_at_ns`.
 3. Compare `startup_duration_ms` with the external time-to-first-byte captured by the timing script.
-4. Compare `process_time_ms`, database time, and cache time inside that first request.
+4. Compare `process_time_ms` and database time inside that first request.
 5. Review the `httpstat` phase breakdown for DNS, TCP, TLS, and other externally visible transport time before attributing latency to application startup. Only the remainder not explained by those phases, measured startup, or measured request work can be treated as pre-application/platform time.
 6. Repeat the same path immediately and verify the response marker before treating it as warm (`X-App-Cold-Request: 0`).
 
-A cold request is suspicious when measured application startup exceeds 1,000 ms or total request duration exceeds the configured slow-request threshold. A warm request is suspicious when database or cache duration dominates the request, or when unexplained application time remains after subtracting dependency time.
+A cold request is suspicious when measured application startup exceeds 1,000 ms or total request duration exceeds the configured slow-request threshold. A warm request is suspicious when database duration dominates the request, or when unexplained application time remains after subtracting dependency time.
 
 ## Reproduced baseline from 2026-08-06
 
