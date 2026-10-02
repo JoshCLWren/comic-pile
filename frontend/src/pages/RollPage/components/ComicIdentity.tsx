@@ -304,80 +304,43 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                   summary != null &&
                   coverage != null &&
                   (coverage.upcoming_complete || summary.upcoming_count > 0)
-                return (
-                  <p
-                    key={`${creator.name}-${index}`}
-                    data-testid="creator-row"
-                    className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-stone-300 min-w-0 break-words"
-                  >
-                    <span className="font-bold break-words min-w-0">{creator.name}</span>
-                    {creator.roles.length > 0 && (
-                      <span className="text-stone-500 break-words min-w-0">· {creator.roles.join(', ')}</span>
-                    )}
-                    {hasRatedStats ? (
-                      summary.average_rating != null ? (
-                        <>
-                          <span className="text-stone-500" aria-hidden="true">
-                            ·
-                          </span>
-                          <span
-                            className="inline-flex items-center gap-0.5"
-                            aria-label={`Average rating ${formatRating(summary.average_rating)} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}${coverage && !coverage.ratings_complete ? ', partial coverage' : ''}`}
+                        return (
+                          <div
+                            key={`${creator.name}-${index}`}
+                            data-testid="creator-row"
+                            className="flex flex-col gap-0.5 py-1 border-b border-white/5 last:border-none"
                           >
-                            <span aria-hidden="true" className="text-amber-400/90">
-                              ★
-                            </span>
-                            <span>{formatRating(summary.average_rating)}</span>
-                          </span>
-                          <span className="text-stone-500" aria-hidden="true">
-                            ·
-                          </span>
-                          <span
-                            aria-label={
-                              coverage && !coverage.ratings_complete
-                                ? `${summary.ratings_count} rated, partial coverage — lower bound`
-                                : `${summary.ratings_count} rated`
-                            }
-                          >
-                            {summary.ratings_count}
-                            {coverage && !coverage.ratings_complete && summary.ratings_count > 0 ? '+' : ''} rated
-                          </span>
-                          {coverage && !coverage.ratings_complete && summary.ratings_count > 0 && (
-                            <span className="sr-only"> partial coverage</span>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-stone-500" aria-hidden="true">
-                            ·
-                          </span>
-                          <span>0 rated</span>
-                        </>
-                      )
-                    ) : null}
-                    {upcomingVisible ? (
-                      coverage!.upcoming_complete ? (
-                        <>
-                          <span className="text-stone-500" aria-hidden="true">
-                            ·
-                          </span>
-                          <span>{summary!.upcoming_count} unread</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-stone-500" aria-hidden="true">
-                            ·
-                          </span>
-                          <span
-                            aria-label={`At least ${summary!.upcoming_count} unread, partial coverage`}
-                          >
-                            {summary!.upcoming_count}+ unread
-                          </span>
-                        </>
-                      )
-                    ) : null}
-                  </p>
-                )
+                            <div className="flex items-baseline gap-x-1.5 min-w-0">
+                              <span className="font-bold text-stone-200 break-words min-w-0">{creator.name}</span>
+                              {creator.roles.length > 0 && (
+                                <span className="text-stone-500 text-[11px] break-words min-w-0">
+                                  {creator.roles.join(', ')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-stone-400 min-w-0">
+                              {hasRatedStats && summary.average_rating != null ? (
+                                <span
+                                  className="inline-flex items-center gap-0.5"
+                                  aria-label={`Average rating ${formatRating(summary.average_rating)} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}${coverage && !coverage.ratings_complete ? ', partial coverage' : ''}`}
+                                >
+                                  <span aria-hidden="true" className="text-amber-400/80">
+                                    ★
+                                  </span>
+                                  <span>{formatRating(summary.average_rating)} ({summary.ratings_count}${coverage && !coverage.ratings_complete && summary.ratings_count > 0 ? '+' : ''})</span>
+                                </span>
+                              ) : hasRatedStats ? null : null}
+                              {upcomingVisible ? (
+                                <span
+                                  className="inline-flex items-center gap-0.5"
+                                  aria-label={coverage!.upcoming_complete ? `${summary!.upcoming_count} unread` : `At least ${summary!.upcoming_count} unread, partial coverage`}
+                                >
+                                  {summary!.upcoming_count}{coverage && !coverage.upcoming_complete && summary!.upcoming_count > 0 ? '+' : ''} unread
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        )
               })}
             </div>
             {hasMoreCreators && (
