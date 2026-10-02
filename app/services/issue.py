@@ -6,6 +6,7 @@ lifecycle status are kept in sync with the issue set.
 """
 
 import logging
+import re
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
@@ -20,6 +21,82 @@ from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
 
 logger = logging.getLogger(__name__)
+
+_NATURAL_NUMBER_RE = re.compile(r"[1-9]\d*")
+
+
+def _is_natural_issue_number(issue_number: str) -> bool:
+    """Report whether an issue number is an ordinary positive integer.
+
+    ``"1"`` and ``"33"`` qualify; ``"0"``, ``"-1"``, ``"1.5"``, ``"\u00bd"``,
+    ``"Annual 1"``, and named specials do not. Only unambiguous ordinary
+    numbers participate in natural placement.
+
+    Args:
+        issue_number: Stored issue identifier.
+
+    Returns:
+        True when the identifier is a plain positive integer.
+    """
+    return _NATURAL_NUMBER_RE.fullmatch(issue_number) is not None
+
+
+def _natural_insert_position(
+    existing_rows: list[tuple[int, str, int]],
+    new_issue_numbers: list[str],
+) -> int | None:
+    """Compute the natural insertion point for a batch of new issues.
+
+    New issues are placed relative to the thread's natural-number spine: the
+    subsequence of existing issues whose numbers are ordinary positive
+    integers, in canonical position order. The spine must be strictly
+    ascending; when it is not, the reader has intentionally ordered the
+    thread and natural placement is refused.
+
+    Args:
+        existing_rows: ``(id, issue_number, position)`` rows in position order.
+        new_issue_numbers: Issue numbers that do not yet exist in the thread.
+
+    Returns:
+        The position of the last existing issue that should remain before the
+        new block, or None when natural placement is ambiguous and the caller
+        should preserve the existing canonical order (append).
+    """
+    if not all(_is_natural_issue_number(n) for n in new_issue_numbers):
+        return None
+
+    spine: list[tuple[int, int]] = []
+    for _issue_id, number, position in existing_rows:
+        if _is_natural_issue_number(number):
+            spine.append((int(number), position))
+
+    if not spine:
+        return None
+
+    spine_values = [value for value, _position in spine]
+    pairs = zip(spine_values, spine_values[1:], strict=False)
+    if any(earlier >= later for earlier, later in pairs):
+        return None
+
+    new_values = sorted(int(n) for n in new_issue_numbers)
+    lowest_new = new_values[0]
+    highest_new = new_values[-1]
+
+    gap = 0
+    for value, _position in spine:
+        if value < lowest_new:
+            gap += 1
+        else:
+            break
+
+    # The new block must fit entirely inside a single gap of the spine; a
+    # batch that spans existing issues has no unambiguous natural order.
+    if gap < len(spine) and highest_new >= spine[gap][0]:
+        return None
+
+    if gap == 0:
+        return spine[0][1] - 1
+    return spine[gap - 1][1]
 
 
 async def list_issues(
@@ -81,6 +158,7 @@ async def create_issues(
     current_user_id: int,
     issue_range: str,
     insert_after_issue_id: int | None,
+    placement: str = "append",
 ) -> tuple[list[Issue], int]:
     """Create issues from a range and integrate them into the thread order.
 
@@ -90,6 +168,9 @@ async def create_issues(
         current_user_id: User owning the thread.
         issue_range: Range string to parse.
         insert_after_issue_id: Optional anchor for insertion.
+        placement: How to place new issues when no anchor is given. "natural"
+            inserts unambiguous ordinary numeric issues at their natural
+            position in the thread order; "append" (default) appends them.
 
     Returns:
         A tuple of (newly_created_issues, total_issue_count).
@@ -113,6 +194,14 @@ async def create_issues(
     existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
     existing_issues = {row[1]: row[2] for row in existing_rows}
 
+    new_issue_numbers = [n for n in issue_numbers if n not in existing_issues]
+
+    if not new_issue_numbers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="All issues in range already exist",
+        )
+
     max_position = max((row[2] for row in existing_rows), default=0)
     insert_position = max_position
 
@@ -127,18 +216,15 @@ async def create_issues(
                 detail=f"Issue {insert_after_issue_id} not found",
             )
         insert_position = insert_after_issue[2]
-
-    new_issue_numbers = [n for n in issue_numbers if n not in existing_issues]
-
-    if not new_issue_numbers:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="All issues in range already exist",
-        )
+    elif placement == "natural":
+        natural_position = _natural_insert_position(existing_rows, new_issue_numbers)
+        if natural_position is not None:
+            insert_position = natural_position
+            new_issue_numbers = sorted(new_issue_numbers, key=int)
 
     new_issues_count = len(new_issue_numbers)
 
-    if insert_after_issue_id is not None:
+    if insert_position < max_position:
         await issue_repository.defer_position_unique_constraint(db)
         await issue_repository.shift_positions_after(
             db, thread_id, after_position=insert_position, delta=new_issues_count

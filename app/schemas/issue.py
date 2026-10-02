@@ -1,6 +1,7 @@
 """Issue-related Pydantic schemas for request/response validation."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -53,6 +54,14 @@ class IssueCreateRange(BaseModel):
         default=None,
         ge=1,
         description="Insert new issues after this issue ID. If null, append to end.",
+    )
+    placement: Literal["natural", "append"] = Field(
+        default="append",
+        description=(
+            "Placement when no explicit anchor is given. 'natural' inserts "
+            "unambiguous ordinary numeric issues at their natural position in the "
+            "thread order; 'append' keeps the legacy append-to-end behavior."
+        ),
     )
 
 

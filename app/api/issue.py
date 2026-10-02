@@ -205,6 +205,11 @@ async def create_issues(
     By default new issues are appended after the last existing issue. When
     ``insert_after_issue_id`` is provided, existing issues later in the thread are
     shifted upward so the new issues are inserted immediately after that issue.
+    When ``placement`` is ``"natural"`` and no anchor is given, unambiguous
+    ordinary numeric issues are inserted at their natural position in the
+    thread's canonical order; ambiguous batches (irregular numbering, batches
+    that span existing issues, intentionally non-numeric ordering) fall back
+    to append so the reader can reorder them explicitly.
 
     Args:
         thread_id: The thread ID to create issues for.
@@ -221,7 +226,12 @@ async def create_issues(
     """
     try:
         new_issues, total_issue_count = await issue_service.create_issues(
-            db, thread_id, current_user.id, request.issue_range, request.insert_after_issue_id
+            db,
+            thread_id,
+            current_user.id,
+            request.issue_range,
+            request.insert_after_issue_id,
+            request.placement,
         )
     except IntegrityError as e:
         await db.rollback()

@@ -25,6 +25,7 @@ export interface SetCurrentIssueResponse {
 interface CreateIssuesPayload {
   issue_range: string
   insert_after_issue_id?: number | null
+  placement?: 'natural' | 'append'
 }
 
 /** Query parameters accepted by the thread issue list endpoint. */
@@ -61,12 +62,19 @@ export function createIssuesApi(client: HttpClient) {
      * @param threadId - The thread ID to create issues for
      * @param issueRange - Issue range string to parse and create
      * @param options - Optional insert positioning options
+     * @param options.insert_after_issue_id - Insert after this issue ID
+     * @param options.placement - 'natural' inserts unambiguous numeric issues
+     *   at their natural position when no anchor is given; 'append' keeps the
+     *   legacy append-to-end behavior
      * @returns List of created issues
      */
     create: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null }
+      options?: {
+        insert_after_issue_id?: number | null
+        placement?: 'natural' | 'append'
+      }
     ): Promise<IssueListResponse> => {
       const payload: CreateIssuesPayload = {
         issue_range: issueRange,
@@ -74,6 +82,10 @@ export function createIssuesApi(client: HttpClient) {
 
       if (options && 'insert_after_issue_id' in options) {
         payload.insert_after_issue_id = options.insert_after_issue_id ?? null
+      }
+
+      if (options && 'placement' in options) {
+        payload.placement = options.placement
       }
 
       return client.post(`/v1/threads/${threadId}/issues`, payload)

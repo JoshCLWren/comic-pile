@@ -183,8 +183,16 @@ export function useCreateIssues(threadId: number) {
     mutationFn: async ({
       issueRange,
       insertAfterIssueId,
-    }: { issueRange: string; insertAfterIssueId?: number | null }) => {
-      return issuesApi.create(threadId, issueRange, { insert_after_issue_id: insertAfterIssueId })
+      placement,
+    }: {
+      issueRange: string
+      insertAfterIssueId?: number | null
+      placement?: 'natural' | 'append'
+    }) => {
+      return issuesApi.create(threadId, issueRange, {
+        insert_after_issue_id: insertAfterIssueId,
+        placement,
+      })
     },
     onSuccess: async () => {
       await invalidateAfterIssueEdit(queryClient, threadId)

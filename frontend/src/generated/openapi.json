@@ -146,6 +146,78 @@
         "title": "ActiveThreadInfo",
         "type": "object"
       },
+      "AnalyticsMetricsResponse": {
+        "description": "Reading metrics and analytics for the current user.\n\n``completion_rate`` and ``average_session_hours`` keep the legacy\n``int | float`` shape because the aggregation returns either an exact\ninteger fallback (0) or a rounded float.",
+        "properties": {
+          "active_threads": {
+            "title": "Active Threads",
+            "type": "integer"
+          },
+          "average_session_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Average Session Hours"
+          },
+          "completed_threads": {
+            "title": "Completed Threads",
+            "type": "integer"
+          },
+          "completion_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Completion Rate"
+          },
+          "event_stats": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Event Stats",
+            "type": "object"
+          },
+          "recent_sessions": {
+            "items": {
+              "$ref": "#/components/schemas/RecentSession"
+            },
+            "title": "Recent Sessions",
+            "type": "array"
+          },
+          "top_rated_threads": {
+            "items": {
+              "$ref": "#/components/schemas/TopRatedThread"
+            },
+            "title": "Top Rated Threads",
+            "type": "array"
+          },
+          "total_threads": {
+            "title": "Total Threads",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_threads",
+          "active_threads",
+          "completed_threads",
+          "completion_rate",
+          "average_session_hours",
+          "recent_sessions",
+          "event_stats",
+          "top_rated_threads"
+        ],
+        "title": "AnalyticsMetricsResponse",
+        "type": "object"
+      },
       "Bandwidth": {
         "description": "Reading-bandwidth vocabulary from the personalized-Roll roadmap.",
         "enum": [
@@ -849,6 +921,256 @@
         "title": "CBLPlacement",
         "type": "object"
       },
+      "CBLReconciliationEntryResponse": {
+        "description": "Typed reconciliation and read-state data for one CBL source position.",
+        "properties": {
+          "canonical_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Issue Id"
+          },
+          "cbl_entry_id": {
+            "title": "Cbl Entry Id",
+            "type": "integer"
+          },
+          "cbl_position": {
+            "title": "Cbl Position",
+            "type": "integer"
+          },
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Issue Id"
+          },
+          "comicvine_series_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Series Id"
+          },
+          "external_issue_identity_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Issue Identity Id"
+          },
+          "external_series_identity_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Series Identity Id"
+          },
+          "is_duplicate_identity": {
+            "title": "Is Duplicate Identity",
+            "type": "boolean"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "read_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read Status"
+          },
+          "resolution_status": {
+            "title": "Resolution Status",
+            "type": "string"
+          },
+          "resolved_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Issue Id"
+          },
+          "series_external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series External Id"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          },
+          "series_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Provider"
+          }
+        },
+        "required": [
+          "cbl_position",
+          "series_name",
+          "issue_number",
+          "comicvine_issue_id",
+          "comicvine_series_id",
+          "series_provider",
+          "series_external_id",
+          "external_issue_identity_id",
+          "external_series_identity_id",
+          "cbl_entry_id",
+          "resolved_issue_id",
+          "canonical_issue_id",
+          "resolution_status",
+          "is_duplicate_identity",
+          "read_status",
+          "read_at"
+        ],
+        "title": "CBLReconciliationEntryResponse",
+        "type": "object"
+      },
+      "CBLReconciliationResponse": {
+        "description": "Reconciled CBL source list with paginated entries.",
+        "properties": {
+          "ambiguous_count": {
+            "title": "Ambiguous Count",
+            "type": "integer"
+          },
+          "duplicate_identity_groups": {
+            "title": "Duplicate Identity Groups",
+            "type": "integer"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CBLReconciliationEntryResponse"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "first_unread_entry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CBLReconciliationEntryResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "first_unread_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Unread Position"
+          },
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_prev": {
+            "title": "Has Prev",
+            "type": "boolean"
+          },
+          "list_id": {
+            "title": "List Id",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "resolved_count": {
+            "title": "Resolved Count",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total_positions": {
+            "title": "Total Positions",
+            "type": "integer"
+          },
+          "unresolved_count": {
+            "title": "Unresolved Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "list_id",
+          "total_positions",
+          "resolved_count",
+          "unresolved_count",
+          "duplicate_identity_groups",
+          "ambiguous_count",
+          "entries",
+          "first_unread_position",
+          "first_unread_entry",
+          "page",
+          "size",
+          "has_next",
+          "has_prev"
+        ],
+        "title": "CBLReconciliationResponse",
+        "type": "object"
+      },
       "CBLSourceFingerprintResponse": {
         "description": "Immutable source evidence needed to review and later accept a plan.",
         "properties": {
@@ -1446,6 +1768,59 @@
         "title": "ComicVineIssueIntelligence",
         "type": "object"
       },
+      "ComicVineMappingHealth": {
+        "description": "Compact ComicVine mapping health projection for a queue thread.\n\nDerived from stored canonical issue mappings only. No live provider calls.\nCounts are scoped to the issues represented by the Queue thread.",
+        "properties": {
+          "confirmed_issue_count": {
+            "description": "Issues with confirmed ComicVine mappings",
+            "minimum": 0.0,
+            "title": "Confirmed Issue Count",
+            "type": "integer"
+          },
+          "needs_mapping_count": {
+            "description": "Issues with no confirmed mapping (unresolved/candidate)",
+            "minimum": 0.0,
+            "title": "Needs Mapping Count",
+            "type": "integer"
+          },
+          "needs_review_count": {
+            "description": "Issues with conflicting/ambiguous mappings",
+            "minimum": 0.0,
+            "title": "Needs Review Count",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComicVineMappingStatus"
+          },
+          "tracked_issue_count": {
+            "description": "Total issues in this thread's scope",
+            "minimum": 0.0,
+            "title": "Tracked Issue Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "tracked_issue_count",
+          "confirmed_issue_count",
+          "needs_mapping_count",
+          "needs_review_count"
+        ],
+        "title": "ComicVineMappingHealth",
+        "type": "object"
+      },
+      "ComicVineMappingStatus": {
+        "description": "ComicVine mapping health status for a thread.\n\n- ``not_applicable``: Thread does not use issue tracking (legacy counter-based).\n- ``fully_mapped``: All in-scope issues have confirmed ComicVine mappings.\n- ``partial``: Some issues confirmed, some unresolved/unmapped.\n- ``unresolved``: Issues exist but none have confirmed mappings.\n- ``needs_review``: Conflicting/ambiguous mappings requiring human review.",
+        "enum": [
+          "not_applicable",
+          "fully_mapped",
+          "partial",
+          "unresolved",
+          "needs_review"
+        ],
+        "title": "ComicVineMappingStatus",
+        "type": "string"
+      },
       "ComicVineRelatedIssue": {
         "description": "One external issue related through explicit story-arc membership.",
         "properties": {
@@ -1520,6 +1895,171 @@
           "comicvine_issue_id"
         ],
         "title": "ComicVineRelatedIssue",
+        "type": "object"
+      },
+      "ComicVineResolveResponse": {
+        "description": "Result of resolving a correction input that may be a pasted URL.\n\n``kind`` distinguishes an exact issue resolution, an exact volume\nresolution, or an ordinary title-search input. ``validation_error`` carries\na clear inline message when the input is an unsupported/malformed URL or\nprovider resolution failed, while leaving normal title search available.",
+        "properties": {
+          "input": {
+            "title": "Input",
+            "type": "string"
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComicVineResolvedIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ComicVineIssueCandidate"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "issue",
+              "volume",
+              "search"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "validation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Error"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComicVineSeriesResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "input",
+          "kind"
+        ],
+        "title": "ComicVineResolveResponse",
+        "type": "object"
+      },
+      "ComicVineResolvedIssue": {
+        "description": "A ComicVine issue resolved directly from a pasted URL.\n\nCarries the owning series/volume metadata so the confirmation card can\nrender without a separate volume search.",
+        "properties": {
+          "comicvine_issue_id": {
+            "title": "Comicvine Issue Id",
+            "type": "integer"
+          },
+          "cover_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Date"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "series_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Name"
+          },
+          "site_detail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Detail Url"
+          },
+          "store_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Date"
+          },
+          "volume_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Id"
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "title": "ComicVineResolvedIssue",
         "type": "object"
       },
       "ComicVineSeriesIssuesResponse": {
@@ -1624,8 +2164,34 @@
         "type": "object"
       },
       "ComicVineSeriesSearchResponse": {
-        "description": "Paginated series search results.",
+        "description": "Paginated series search results using ComicVine offset semantics.",
         "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 10,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          },
+          "offset": {
+            "default": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
           "query": {
             "title": "Query",
             "type": "string"
@@ -1717,6 +2283,48 @@
           "comicvine_issue_id"
         ],
         "title": "ConfirmIdentityRequest",
+        "type": "object"
+      },
+      "ConflictResponse": {
+        "description": "One issue with conflicting confirmed ComicVine identities.",
+        "properties": {
+          "comicvine_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Comicvine Ids",
+            "type": "array"
+          },
+          "distinct_identities": {
+            "title": "Distinct Identities",
+            "type": "integer"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "comicvine_ids",
+          "distinct_identities"
+        ],
+        "title": "ConflictResponse",
         "type": "object"
       },
       "ConnectedThreadInfo": {
@@ -2672,6 +3280,73 @@
         "title": "ConvergenceTarget",
         "type": "object"
       },
+      "CorrectionSheetExamplesResponse": {
+        "description": "Personalized examples for the correction sheet steering choices.\n\nEach field corresponds to a correction choice and contains a compact\nexample drawn from the user's own rated/read history, or ``null`` when\nno honest example exists for that option.",
+        "properties": {
+          "even_easier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Example for 'Give me something lighter' (lower-commitment read)",
+            "title": "Even Easier"
+          },
+          "keep_level_different": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Example for 'Keep about the same effort' (same commitment, different comic)",
+            "title": "Keep Level Different"
+          },
+          "pure_random": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Always null. 'Surprise me' disables similarity and effort steering, so no preference-derived example is shown.",
+            "title": "Pure Random"
+          },
+          "something_different": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Example for 'Give me a change of pace' (different from recent/high-rated reads)",
+            "title": "Something Different"
+          },
+          "something_familiar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Example for 'Stay close to what I've liked' (similar to highly rated comics)",
+            "title": "Something Familiar"
+          }
+        },
+        "title": "CorrectionSheetExamplesResponse",
+        "type": "object"
+      },
       "CoverageInfo": {
         "additionalProperties": false,
         "description": "Honest labeling of data completeness for the requested range.",
@@ -2848,6 +3523,98 @@
           "sort_key"
         ],
         "title": "CreatorIssueRow",
+        "type": "object"
+      },
+      "CreatorListItem": {
+        "description": "One row in the bounded creator discovery collection.\n\nThe row mirrors the headline rating semantics from ``#2028``/``#2037``:\nonly effective ``rate`` events with a headline-eligible role feed\n``ratings_count``/``average_rating`` and one issue counts at most once\neven when a creator has several roles on that issue.",
+        "properties": {
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average of the user's latest effective ratings across issues attributed to this creator with a headline-eligible role. ``null`` when no headline-eligible ratings (explicit null handling for deterministic ordering).",
+            "title": "Average Rating"
+          },
+          "canonical_creator_key": {
+            "description": "Stable normalized creator key (e.g. ``creator:12345``).",
+            "title": "Canonical Creator Key",
+            "type": "string"
+          },
+          "display_name": {
+            "description": "Human-readable creator name from confirmed issue metadata.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "normalized_roles": {
+            "description": "Distinct roles seen for this creator across the user's issues.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Normalized Roles",
+            "type": "array"
+          },
+          "ratings_count": {
+            "default": 0,
+            "description": "Number of distinct rated issues contributing to the headline average.",
+            "minimum": 0.0,
+            "title": "Ratings Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name"
+        ],
+        "title": "CreatorListItem",
+        "type": "object"
+      },
+      "CreatorListResponse": {
+        "description": "Response body for the bounded personal creator list endpoint.",
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorSummaryCoverage",
+            "description": "Coverage state distinguishing complete from lower-bound statistics."
+          },
+          "items": {
+            "description": "Bounded, deterministically ordered page of creators with at least one rated issue for the authenticated user.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size requested.",
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Page offset requested.",
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of creators matching the filter before pagination.",
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset",
+          "coverage"
+        ],
+        "title": "CreatorListResponse",
         "type": "object"
       },
       "CreatorRoleStat": {
@@ -3034,6 +3801,85 @@
           "display_name"
         ],
         "title": "CreatorSummaryItem",
+        "type": "object"
+      },
+      "CrossRepoDeliveryRequest": {
+        "description": "Schema for requesting a cross-repository delivery operation.",
+        "properties": {
+          "base_branch": {
+            "default": "main",
+            "title": "Base Branch",
+            "type": "string"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "branch_name": {
+            "minLength": 1,
+            "title": "Branch Name",
+            "type": "string"
+          },
+          "commit_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Message"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/DeliveryFilePayload"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "target_repository": {
+            "minLength": 1,
+            "title": "Target Repository",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "worker_id": {
+            "minLength": 1,
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_repository",
+          "branch_name",
+          "worker_id",
+          "title"
+        ],
+        "title": "CrossRepoDeliveryRequest",
         "type": "object"
       },
       "CrossoverTemplateAdoptRequest": {
@@ -3667,6 +4513,258 @@
           "name"
         ],
         "title": "CustomCBLWrite",
+        "type": "object"
+      },
+      "DeliveryFilePayload": {
+        "description": "A single file to write on the target repository delivery branch.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "title": "DeliveryFilePayload",
+        "type": "object"
+      },
+      "DeliveryRecordResponse": {
+        "description": "Schema for returning a delivery record.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "metadata_json": {
+            "additionalProperties": true,
+            "title": "Metadata Json",
+            "type": "object"
+          },
+          "source_repository": {
+            "title": "Source Repository",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_branch": {
+            "title": "Target Branch",
+            "type": "string"
+          },
+          "target_merge_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Merge Sha"
+          },
+          "target_pr_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pr Number"
+          },
+          "target_repository": {
+            "title": "Target Repository",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "worker_id": {
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_repository",
+          "target_repository",
+          "target_branch",
+          "target_pr_number",
+          "target_merge_sha",
+          "issue_number",
+          "status",
+          "worker_id",
+          "error_message",
+          "metadata_json",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DeliveryRecordResponse",
+        "type": "object"
+      },
+      "DeliveryRecordUpdate": {
+        "description": "Schema for updating a delivery record.",
+        "properties": {
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "branch_created",
+                  "pr_opened",
+                  "merged",
+                  "failed",
+                  "released"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "target_merge_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Merge Sha"
+          },
+          "target_pr_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pr Number"
+          }
+        },
+        "title": "DeliveryRecordUpdate",
+        "type": "object"
+      },
+      "DeliveryResult": {
+        "description": "Schema for the result of a delivery operation.",
+        "properties": {
+          "credential_source": {
+            "title": "Credential Source",
+            "type": "string"
+          },
+          "delivery_key": {
+            "minLength": 1,
+            "title": "Delivery Key",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          },
+          "target_branch": {
+            "title": "Target Branch",
+            "type": "string"
+          },
+          "target_merge_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Merge Sha"
+          },
+          "target_pr_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pr Number"
+          },
+          "target_repository": {
+            "title": "Target Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "target_repository",
+          "target_branch",
+          "credential_source",
+          "delivery_key"
+        ],
+        "title": "DeliveryResult",
         "type": "object"
       },
       "DependencyCreate": {
@@ -4511,8 +5609,7 @@
           },
           "issue_details": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/IssueDetailResponse"
             },
             "title": "Issue Details",
             "type": "array"
@@ -4996,6 +6093,21 @@
         "title": "ExternalIdentityUpsert",
         "type": "object"
       },
+      "ForgotPasswordRequest": {
+        "description": "Enumeration-safe forgot-password request using recovery email.",
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "ForgotPasswordRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5460,8 +6572,7 @@
           },
           "conflicting_provider_ids": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ConflictResponse"
             },
             "title": "Conflicting Provider Ids",
             "type": "array"
@@ -5483,6 +6594,18 @@
         ],
         "title": "IdentityReportResponse",
         "type": "object"
+      },
+      "IdentityState": {
+        "description": "Derived identity states for rollable items.",
+        "enum": [
+          "confirmed",
+          "candidate",
+          "unresolved",
+          "ambiguous",
+          "conflicting"
+        ],
+        "title": "IdentityState",
+        "type": "string"
       },
       "ImportIssueRequest": {
         "description": "Request to import a ComicVine issue as a new identity-preserving thread.\n\nThe optional reading-order placement is neighbor-anchored: the anchors are\nthe thread IDs of the arc members immediately surrounding the imported\nissue in story-arc order. Anchors absent from the target order fall back\nper ``resolve_anchored_position`` rules.",
@@ -5845,6 +6968,46 @@
         "title": "IssueAttachResponse",
         "type": "object"
       },
+      "IssueBulkMarkReadRequest": {
+        "description": "Schema for bulk marking issues as read.",
+        "properties": {
+          "issue_ids": {
+            "description": "Broadcast list of issue IDs to mark read.",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Issue Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_ids"
+        ],
+        "title": "IssueBulkMarkReadRequest",
+        "type": "object"
+      },
+      "IssueBulkMarkUnreadRequest": {
+        "description": "Schema for bulk marking issues as unread.",
+        "properties": {
+          "issue_ids": {
+            "description": "Broadcast list of issue IDs to mark unread.",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Issue Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_ids"
+        ],
+        "title": "IssueBulkMarkUnreadRequest",
+        "type": "object"
+      },
       "IssueCreateRange": {
         "description": "Schema for creating issues from range format.",
         "properties": {
@@ -5865,6 +7028,16 @@
             "description": "Issue range like '1-25' or '1, 3, 5-7'",
             "minLength": 1,
             "title": "Issue Range",
+            "type": "string"
+          },
+          "placement": {
+            "default": "append",
+            "description": "Placement when no explicit anchor is given. 'natural' inserts unambiguous ordinary numeric issues at their natural position in the thread order; 'append' keeps the legacy append-to-end behavior.",
+            "enum": [
+              "natural",
+              "append"
+            ],
+            "title": "Placement",
             "type": "string"
           }
         },
@@ -5936,6 +7109,81 @@
           "source_thread_title"
         ],
         "title": "IssueDependencyEdge",
+        "type": "object"
+      },
+      "IssueDetailResponse": {
+        "description": "Read and ownership context for one issue in a duplicate identity group.",
+        "properties": {
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "thread_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Title"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "read_at"
+        ],
+        "title": "IssueDetailResponse",
         "type": "object"
       },
       "IssueExternalIdentityMappingResponse": {
@@ -6082,6 +7330,17 @@
             },
             "title": "Candidate Mappings",
             "type": "array"
+          },
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Issue Id"
           },
           "confirmed_mappings": {
             "items": {
@@ -6428,6 +7687,104 @@
         "title": "OverrideRequest",
         "type": "object"
       },
+      "PaginatedConflictsResponse": {
+        "description": "Paginated list of conflict responses.",
+        "properties": {
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_prev": {
+            "title": "Has Prev",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size",
+          "has_next",
+          "has_prev"
+        ],
+        "title": "PaginatedConflictsResponse",
+        "type": "object"
+      },
+      "PaginatedDuplicateAnomaliesResponse": {
+        "description": "Paginated list of duplicate anomaly responses.",
+        "properties": {
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_prev": {
+            "title": "Has Prev",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateAnomalyResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size",
+          "has_next",
+          "has_prev"
+        ],
+        "title": "PaginatedDuplicateAnomaliesResponse",
+        "type": "object"
+      },
+      "PasswordResetResponse": {
+        "description": "Safe acknowledgement regardless of account existence.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "PasswordResetResponse",
+        "type": "object"
+      },
       "PerformanceMetricComparison": {
         "description": "Schema for cold vs warm comparison response.",
         "properties": {
@@ -6569,6 +7926,15 @@
         "title": "PositionRequest",
         "type": "object"
       },
+      "ProgressScope": {
+        "description": "Progress scope for reader context.",
+        "enum": [
+          "canonical_series_run",
+          "thread"
+        ],
+        "title": "ProgressScope",
+        "type": "string"
+      },
       "PublicReleaseResponse": {
         "description": "One release ledger record returned by public-facing endpoints.",
         "properties": {
@@ -6643,6 +8009,16 @@
             },
             "title": "Blocking Reasons",
             "type": "array"
+          },
+          "comicvine_mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "format": "date-time",
@@ -6742,7 +8118,7 @@
         "properties": {
           "active_count": {
             "default": 0,
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Active Count",
             "type": "integer"
           },
@@ -6804,6 +8180,160 @@
           "rating"
         ],
         "title": "RateRequest",
+        "type": "object"
+      },
+      "RateResponse": {
+        "description": "Rate response extending ThreadResponse with roll reconciliation.\n\nSubclasses ThreadResponse so every current top-level field is preserved\nexactly, and adds ``roll_reconciliation.last_read`` for the v2 contract.\nDeclared as the FastAPI ``response_model`` so the extra field is not\nfiltered out.",
+        "properties": {
+          "blocking_reasons": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking Reasons",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_blocked": {
+            "default": false,
+            "title": "Is Blocked",
+            "type": "boolean"
+          },
+          "is_test": {
+            "title": "Is Test",
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "title": "Issues Remaining",
+            "type": "integer"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "last_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rating"
+          },
+          "next_unread_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Unread Issue Id"
+          },
+          "next_unread_issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Unread Issue Number"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "queue_position": {
+            "title": "Queue Position",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Progress"
+          },
+          "roll_reconciliation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RollReconciliation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_issues": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Issues"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "last_rating",
+          "last_activity_at",
+          "notes",
+          "is_test",
+          "created_at"
+        ],
+        "title": "RateResponse",
         "type": "object"
       },
       "ReactivateRequest": {
@@ -7851,6 +9381,360 @@
         "title": "ReadingOrderSummary",
         "type": "object"
       },
+      "ReadingPlanDependencyLink": {
+        "description": "One plan provenance reference to a canonical Dependency edge.",
+        "properties": {
+          "dependency_id": {
+            "title": "Dependency Id",
+            "type": "integer"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
+          "source_issue_id": {
+            "title": "Source Issue Id",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "title": "Target Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "title": "ReadingPlanDependencyLink",
+        "type": "object"
+      },
+      "ReadingPlanDependencyLinkRequest": {
+        "description": "Request to reference one canonical Dependency edge from a plan.",
+        "properties": {
+          "explanation": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          }
+        },
+        "title": "ReadingPlanDependencyLinkRequest",
+        "type": "object"
+      },
+      "ReadingPlanMemberIssue": {
+        "description": "One normalized Issue occurrence inside a Reading Plan.",
+        "properties": {
+          "display_position": {
+            "title": "Display Position",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "default": false,
+            "title": "Is Checkpoint",
+            "type": "boolean"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "lane_id": {
+            "title": "Lane Id",
+            "type": "string"
+          },
+          "occurrence_id": {
+            "title": "Occurrence Id",
+            "type": "string"
+          },
+          "reader_optional": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reader Optional"
+          },
+          "reader_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reader Role"
+          },
+          "source_metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Metadata"
+          }
+        },
+        "required": [
+          "occurrence_id",
+          "issue_id",
+          "lane_id",
+          "display_position"
+        ],
+        "title": "ReadingPlanMemberIssue",
+        "type": "object"
+      },
+      "ReadingPlanMembershipResponse": {
+        "description": "Normalized membership, provenance, and progress for one Reading Plan.",
+        "properties": {
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+            },
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanMemberIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "placements": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourcePlacementView"
+            },
+            "title": "Placements",
+            "type": "array"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ReadingPlanProgress"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourceSnapshot"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_id",
+          "issues",
+          "dependencies",
+          "sources",
+          "placements",
+          "progress"
+        ],
+        "title": "ReadingPlanMembershipResponse",
+        "type": "object"
+      },
+      "ReadingPlanProgress": {
+        "description": "Plan progress derived from global Issue read state.",
+        "properties": {
+          "read_issues": {
+            "title": "Read Issues",
+            "type": "integer"
+          },
+          "total_issues": {
+            "title": "Total Issues",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_issues",
+          "read_issues"
+        ],
+        "title": "ReadingPlanProgress",
+        "type": "object"
+      },
+      "ReadingPlanSourcePlacementView": {
+        "description": "One preserved source-position observation for a plan occurrence.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "occurrence_id": {
+            "title": "Occurrence Id",
+            "type": "string"
+          },
+          "plan_source_id": {
+            "title": "Plan Source Id",
+            "type": "integer"
+          },
+          "source_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Position"
+          }
+        },
+        "required": [
+          "id",
+          "occurrence_id",
+          "plan_source_id"
+        ],
+        "title": "ReadingPlanSourcePlacementView",
+        "type": "object"
+      },
+      "ReadingPlanSourceSnapshot": {
+        "description": "One preserved import snapshot referenced by a Reading Plan.",
+        "properties": {
+          "adopted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adopted At"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "raw_source_path": {
+            "title": "Raw Source Path",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository"
+          },
+          "revision_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Sha"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          }
+        },
+        "required": [
+          "id",
+          "raw_source_path",
+          "recorded_at"
+        ],
+        "title": "ReadingPlanSourceSnapshot",
+        "type": "object"
+      },
+      "RecentSession": {
+        "description": "Summary of one recent reading session.",
+        "properties": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "start_die": {
+            "title": "Start Die",
+            "type": "integer"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "ended_at",
+          "start_die"
+        ],
+        "title": "RecentSession",
+        "type": "object"
+      },
       "RecommendationDiagnosticsResponse": {
         "additionalProperties": false,
         "description": "Bounded, read-only recommendation-quality summary for one user.",
@@ -8376,6 +10260,26 @@
         "title": "ReplaceIdentityRequest",
         "type": "object"
       },
+      "ResetPasswordRequest": {
+        "description": "Request schema for password reset completion.",
+        "properties": {
+          "new_password": {
+            "minLength": 1,
+            "title": "New Password",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "title": "ResetPasswordRequest",
+        "type": "object"
+      },
       "RollBootstrapResponse": {
         "description": "Bounded bootstrap payload for the Roll initial render.\n\nReturns only the retained data required for the first interactive screen.\nDoes not include the full queue, collection data, or secondary detail panels.",
         "properties": {
@@ -8606,6 +10510,69 @@
         "title": "RollBootstrapThread",
         "type": "object"
       },
+      "RollLastRead": {
+        "description": "Session-scoped last read information.",
+        "properties": {
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "thread_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Title"
+          }
+        },
+        "title": "RollLastRead",
+        "type": "object"
+      },
       "RollPrerequisiteSwitchRequest": {
         "additionalProperties": false,
         "description": "One recovery recommendation selected from the current Roll guidance.",
@@ -8664,6 +10631,19 @@
           "changed"
         ],
         "title": "RollPrerequisiteSwitchResponse",
+        "type": "object"
+      },
+      "RollReconciliation": {
+        "description": "Roll reconciliation information for rate response.",
+        "properties": {
+          "last_read": {
+            "$ref": "#/components/schemas/RollLastRead"
+          }
+        },
+        "required": [
+          "last_read"
+        ],
+        "title": "RollReconciliation",
         "type": "object"
       },
       "RollRecoveryChainNode": {
@@ -8985,6 +10965,428 @@
         "title": "RollResponse",
         "type": "object"
       },
+      "RollV2BootstrapResponse": {
+        "description": "V2 bootstrap response superset with rollable and last_read fields.\n\nReplaces the v1 roll_pool with rollable[] and adds nullable last_read.\nMaintains all v1 session/recovery/partition fields with unchanged semantics.",
+        "properties": {
+          "active_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveThreadInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bandwidth": {
+            "$ref": "#/components/schemas/SessionBandwidthState"
+          },
+          "blocked_count": {
+            "title": "Blocked Count",
+            "type": "integer"
+          },
+          "blocked_threads": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RollableThread"
+            },
+            "title": "Blocked Threads",
+            "type": "array"
+          },
+          "current_die": {
+            "title": "Current Die",
+            "type": "integer"
+          },
+          "last_read": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RollLastRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_rolled_result": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rolled Result"
+          },
+          "manual_die": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Die"
+          },
+          "pending_thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Thread Id"
+          },
+          "roll_recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RollRecoveryInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rollable": {
+            "items": {
+              "$ref": "#/components/schemas/RollableItem"
+            },
+            "title": "Rollable",
+            "type": "array"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "session_mode": {
+            "$ref": "#/components/schemas/SessionMode"
+          },
+          "skipped_thread_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Skipped Thread Ids",
+            "type": "array"
+          },
+          "skipped_threads": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RollableThread"
+            },
+            "title": "Skipped Threads",
+            "type": "array"
+          },
+          "snoozed_count": {
+            "title": "Snoozed Count",
+            "type": "integer"
+          },
+          "snoozed_threads": {
+            "items": {
+              "$ref": "#/components/schemas/RollableThread"
+            },
+            "title": "Snoozed Threads",
+            "type": "array"
+          },
+          "stale_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RollableThread"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stale_thread_count": {
+            "title": "Stale Thread Count",
+            "type": "integer"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "user_id",
+          "current_die",
+          "manual_die",
+          "pending_thread_id",
+          "last_rolled_result",
+          "session_mode",
+          "active_thread",
+          "bandwidth",
+          "rollable",
+          "last_read",
+          "snoozed_count",
+          "blocked_count",
+          "stale_thread_count",
+          "stale_thread"
+        ],
+        "title": "RollV2BootstrapResponse",
+        "type": "object"
+      },
+      "RollableIdentity": {
+        "description": "Identity information for rollable items.",
+        "properties": {
+          "canonical_series_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Series Id"
+          },
+          "series_mapping_state": {
+            "$ref": "#/components/schemas/IdentityState"
+          },
+          "source": {
+            "enum": [
+              "comicvine",
+              "unavailable"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/IdentityState"
+          }
+        },
+        "required": [
+          "source",
+          "state",
+          "series_mapping_state"
+        ],
+        "title": "RollableIdentity",
+        "type": "object"
+      },
+      "RollableIssue": {
+        "description": "Issue information for rollable items.",
+        "properties": {
+          "canonical_series_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Series Title"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number"
+        ],
+        "title": "RollableIssue",
+        "type": "object"
+      },
+      "RollableItem": {
+        "description": "A single rollable candidate thread with issue and context.",
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/RollableIdentity"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/RollableIssue"
+          },
+          "overflow_routes_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Overflow Routes Count",
+            "type": "integer"
+          },
+          "reader": {
+            "$ref": "#/components/schemas/RollableReader"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RollableRoute"
+            },
+            "maxItems": 3,
+            "title": "Routes",
+            "type": "array"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/RollableThread"
+          }
+        },
+        "required": [
+          "thread",
+          "issue",
+          "identity",
+          "reader"
+        ],
+        "title": "RollableItem",
+        "type": "object"
+      },
+      "RollableReader": {
+        "description": "Reader context for rollable items.",
+        "properties": {
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Rating"
+          },
+          "issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Count"
+          },
+          "latest_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Rating"
+          },
+          "progress_scope": {
+            "$ref": "#/components/schemas/ProgressScope"
+          },
+          "rating_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Count"
+          },
+          "read_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read Count"
+          }
+        },
+        "required": [
+          "progress_scope"
+        ],
+        "title": "RollableReader",
+        "type": "object"
+      },
+      "RollableRoute": {
+        "description": "Route information for rollable items.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RouteKind",
+            "default": "group"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RollableRoute",
+        "type": "object"
+      },
+      "RollableThread": {
+        "description": "Thread information for rollable items.",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "format"
+        ],
+        "title": "RollableThread",
+        "type": "object"
+      },
+      "RouteKind": {
+        "description": "Route kind for rollable items.",
+        "enum": [
+          "group"
+        ],
+        "title": "RouteKind",
+        "type": "string"
+      },
       "RouteTrafficCounter": {
         "description": "One aggregated (method, route template, status class) tally.",
         "properties": {
@@ -9038,6 +11440,393 @@
           "decision"
         ],
         "title": "SeriesDecision",
+        "type": "object"
+      },
+      "SeriesMappingPreviewCounts": {
+        "description": "Schema for classification counts in preview responses.",
+        "properties": {
+          "already_confirmed": {
+            "description": "Number of already confirmed mappings",
+            "minimum": 0.0,
+            "title": "Already Confirmed",
+            "type": "integer"
+          },
+          "excluded_special": {
+            "description": "Number of excluded special/annual issues",
+            "minimum": 0.0,
+            "title": "Excluded Special",
+            "type": "integer"
+          },
+          "needs_review_ambiguous": {
+            "description": "Number of issues needing review due to ambiguity",
+            "minimum": 0.0,
+            "title": "Needs Review Ambiguous",
+            "type": "integer"
+          },
+          "needs_review_conflict": {
+            "description": "Number of issues needing review due to conflicts",
+            "minimum": 0.0,
+            "title": "Needs Review Conflict",
+            "type": "integer"
+          },
+          "safe_exact_match": {
+            "description": "Number of safe exact matches",
+            "minimum": 0.0,
+            "title": "Safe Exact Match",
+            "type": "integer"
+          },
+          "unresolved": {
+            "description": "Number of unresolved issues",
+            "minimum": 0.0,
+            "title": "Unresolved",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "already_confirmed",
+          "safe_exact_match",
+          "needs_review_ambiguous",
+          "needs_review_conflict",
+          "unresolved",
+          "excluded_special"
+        ],
+        "title": "SeriesMappingPreviewCounts",
+        "type": "object"
+      },
+      "SeriesMappingPreviewProviderSeries": {
+        "description": "Schema for provider series information in preview responses.",
+        "properties": {
+          "count_of_issues": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Total number of issues in the series",
+            "title": "Count Of Issues"
+          },
+          "id": {
+            "description": "Provider series ID",
+            "title": "Id",
+            "type": "string"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Image information",
+            "title": "Image"
+          },
+          "name": {
+            "description": "Series name",
+            "title": "Name",
+            "type": "string"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publisher name",
+            "title": "Publisher"
+          },
+          "site_detail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL to the series on the provider site",
+            "title": "Site Detail Url"
+          },
+          "start_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Start year",
+            "title": "Start Year"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SeriesMappingPreviewProviderSeries",
+        "type": "object"
+      },
+      "SeriesMappingPreviewRequest": {
+        "description": "Schema for series mapping preview requests.",
+        "properties": {
+          "origin_issue_id": {
+            "description": "The anchor issue ID for the mapping preview",
+            "minimum": 1.0,
+            "title": "Origin Issue Id",
+            "type": "integer"
+          },
+          "provider": {
+            "description": "External provider name (e.g., comicvine)",
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_series_external_id": {
+            "description": "Provider-specific series identifier",
+            "minLength": 1,
+            "title": "Provider Series External Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "origin_issue_id",
+          "provider",
+          "provider_series_external_id"
+        ],
+        "title": "SeriesMappingPreviewRequest",
+        "type": "object"
+      },
+      "SeriesMappingPreviewResponse": {
+        "description": "Schema for series mapping preview responses.",
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/SeriesMappingPreviewCounts",
+            "description": "Classification counts"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Token expiration timestamp (Unix epoch)",
+            "title": "Expires At"
+          },
+          "issued_at": {
+            "description": "Token issuance timestamp (Unix epoch)",
+            "title": "Issued At",
+            "type": "number"
+          },
+          "preview_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Preview token when scope is available",
+            "title": "Preview Token"
+          },
+          "provider_series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeriesMappingPreviewProviderSeries"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider series information"
+          },
+          "rows": {
+            "description": "Individual issue mappings",
+            "items": {
+              "$ref": "#/components/schemas/SeriesMappingPreviewRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/SeriesMappingPreviewScope",
+            "description": "Scope information"
+          }
+        },
+        "required": [
+          "scope",
+          "counts",
+          "issued_at"
+        ],
+        "title": "SeriesMappingPreviewResponse",
+        "type": "object"
+      },
+      "SeriesMappingPreviewRow": {
+        "description": "Schema for individual rows in preview responses.",
+        "properties": {
+          "classification": {
+            "description": "Classification: already_confirmed, safe_exact_match, needs_review_ambiguous, needs_review_conflict, unresolved, excluded_special",
+            "title": "Classification",
+            "type": "string"
+          },
+          "current_mapping_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current mapping status if any",
+            "title": "Current Mapping Status"
+          },
+          "default_selected": {
+            "description": "Whether this is a default selected row (only for safe_exact_match)",
+            "title": "Default Selected",
+            "type": "boolean"
+          },
+          "issue_id": {
+            "description": "Internal issue ID",
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Issue number",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "proposed_mapping": {
+            "description": "Whether this issue would be mapped in the proposed scope",
+            "title": "Proposed Mapping",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Explanation for the classification",
+            "title": "Reason"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Thread ID if the issue belongs to a thread",
+            "title": "Thread Id"
+          },
+          "thread_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Thread title if applicable",
+            "title": "Thread Title"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issue title",
+            "title": "Title"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "classification",
+          "proposed_mapping",
+          "default_selected"
+        ],
+        "title": "SeriesMappingPreviewRow",
+        "type": "object"
+      },
+      "SeriesMappingPreviewScope": {
+        "description": "Schema for the scope information in preview responses.",
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Basis for scope determination",
+            "title": "Basis"
+          },
+          "origin_issue_id": {
+            "description": "Origin issue ID",
+            "title": "Origin Issue Id",
+            "type": "integer"
+          },
+          "scope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque scope key when available",
+            "title": "Scope Key"
+          },
+          "series_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Series label when available",
+            "title": "Series Label"
+          },
+          "status": {
+            "description": "Scope status: 'available' or 'unavailable'",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "origin_issue_id"
+        ],
+        "title": "SeriesMappingPreviewScope",
         "type": "object"
       },
       "SessionBandwidthState": {
@@ -10180,6 +12969,17 @@
             ],
             "title": "Description"
           },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -11272,6 +14072,35 @@
         "title": "TokenResponse",
         "type": "object"
       },
+      "TopRatedThread": {
+        "description": "Summary of one highly rated thread.",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "number"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "rating",
+          "format"
+        ],
+        "title": "TopRatedThread",
+        "type": "object"
+      },
       "TrafficMetricsSnapshot": {
         "description": "Process-local traffic counters for one serverless instance.\n\nCounters are monotonic within a process lifetime, so a collector can\nreconstruct fleet-wide totals by keeping the maximum count per key across\npolls of the same ``instance_id``.",
         "properties": {
@@ -11515,7 +14344,7 @@
     },
     "/api/ping": {
       "get": {
-        "description": "Return a minimal alive response.\n\nThis endpoint has zero database, ORM, or heavy dependency\ninitialization overhead. It exists solely to keep the Vercel\nPython serverless function warm and avoid cold starts.\n\nReturns:\n    Simple status dict with no external dependencies.",
+        "description": "Return a minimal alive response.\n\nThis endpoint has zero database, ORM, or heavy dependency\ninitialization overhead. Lifespan startup is intentionally lightweight\nand heavy initialization (database connectivity, durable cache\naccounting, cache provider) is deferred until the first non-ping\nrequest. A cold ``GET /api/ping`` therefore never opens a\nPostgreSQL connection or reserves a cache block.\n\nReturns:\n    Simple status dict with no external dependencies.",
         "operationId": "ping_api_ping_get",
         "responses": {
           "200": {
@@ -11688,53 +14517,14 @@
     },
     "/api/v1/analytics/metrics": {
       "get": {
-        "description": "Get reading metrics and analytics for the current user.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: The database session for querying data.\n\nReturns:\n    Dictionary containing various reading metrics and statistics including\n    total_threads, active_threads, completed_threads, completion_rate,\n    average_session_hours, recent_sessions, event_stats, and top_rated_threads.",
+        "description": "Get reading metrics and analytics for the current user.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: The database session for querying data.\n\nReturns:\n    Typed analytics payload covering thread counts, completion rate,\n    average session length, recent sessions, event distribution, and\n    top-rated threads.",
         "operationId": "get_metrics_api_v1_analytics_metrics_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "additionalProperties": {
-                          "type": "integer"
-                        },
-                        "type": "object"
-                      },
-                      {
-                        "items": {
-                          "additionalProperties": {
-                            "anyOf": [
-                              {
-                                "type": "integer"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "type": "object"
-                        },
-                        "type": "array"
-                      }
-                    ]
-                  },
-                  "title": "Response Get Metrics Api V1 Analytics Metrics Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AnalyticsMetricsResponse"
                 }
               }
             },
@@ -11774,6 +14564,49 @@
           }
         },
         "summary": "Get Csrf Token",
+        "tags": [
+          "auth",
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "description": "Enumeration-safe forgot-password request.\n\nSame acknowledgement whether email exists or not, and returned before any\noutbound email attempt so provider latency cannot distinguish a known\naddress from an unknown one. Rate-limited via existing application limiter.",
+        "operationId": "forgot_password_api_v1_auth_forgot_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forgot Password",
         "tags": [
           "auth",
           "auth"
@@ -11969,6 +14802,49 @@
         ]
       }
     },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "description": "Complete password reset with atomic token consumption and session revocation.",
+        "operationId": "reset_password_api_v1_auth_reset_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Password",
+        "tags": [
+          "auth",
+          "auth"
+        ]
+      }
+    },
     "/api/v1/bug-reports/": {
       "post": {
         "description": "Create a bug report or feature request issue on GitHub.\n\nArgs:\n    body: Report type, title, description, and optional diagnostics.\n    current_user: The authenticated user.\n\nReturns:\n    Created GitHub issue URL.\n\nRaises:\n    HTTPException: If validation fails or GitHub integration is unavailable.",
@@ -12019,7 +14895,7 @@
     },
     "/api/v1/catalog/issues": {
       "get": {
-        "description": "Search for canonical issues in the shared catalog.\n\nArgs:\n    search: Optional search term to match against issue external_id.\n    provider: Filter by provider name (default: comicvine).\n    series_external_id: Filter by series external_id to scope the search.\n    db: Database session.\n\nReturns:\n    List of matching external identities for issues.",
+        "description": "Search for canonical issues in the shared catalog.\n\nArgs:\n    search: Optional search term to match against issue external_id.\n    provider: Filter by provider name (default: comicvine).\n    series_external_id: Filter by series external_id to scope the search.\n    limit: Maximum number of results to return (hard capped at 100).\n    db: Database session.\n\nReturns:\n    List of matching external identities for issues.",
         "operationId": "search_catalog_issues_api_v1_catalog_issues_get",
         "parameters": [
           {
@@ -12076,6 +14952,20 @@
               ],
               "description": "Filter by series external_id (e.g., 4050-justice-league)",
               "title": "Series External Id"
+            }
+          },
+          {
+            "description": "Maximum number of results to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of results to return",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
@@ -12155,7 +15045,7 @@
     },
     "/api/v1/catalog/mappings/issues": {
       "get": {
-        "description": "List issue-external identity mappings (inspection endpoint).\n\nRead-only inspection may be public where safe.\n\nArgs:\n    issue_id: Optional filter by issue ID.\n    status: Optional filter by mapping status.\n    db: Database session.\n\nReturns:\n    List of issue-external identity mappings.",
+        "description": "List issue-external identity mappings (inspection endpoint).\n\nRead-only inspection may be public where safe.\n\nArgs:\n    issue_id: Optional filter by issue ID.\n    status: Optional filter by mapping status.\n    limit: Maximum number of results to return.\n    db: Database session.\n\nReturns:\n    List of issue-external identity mappings.",
         "operationId": "list_issue_mappings_api_v1_catalog_mappings_issues_get",
         "parameters": [
           {
@@ -12192,6 +15082,20 @@
               ],
               "description": "Filter by mapping status",
               "title": "Status"
+            }
+          },
+          {
+            "description": "Maximum number of results to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Maximum number of results to return",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
@@ -12230,7 +15134,7 @@
     },
     "/api/v1/catalog/mappings/series": {
       "get": {
-        "description": "List thread-series mappings (inspection endpoint).\n\nRead-only inspection may be public where safe.\n\nArgs:\n    thread_id: Optional filter by thread ID.\n    status: Optional filter by mapping status.\n    db: Database session.\n\nReturns:\n    List of thread-series mappings.",
+        "description": "List thread-series mappings (inspection endpoint).\n\nRead-only inspection may be public where safe.\n\nArgs:\n    thread_id: Optional filter by thread ID.\n    status: Optional filter by mapping status.\n    limit: Maximum number of results to return.\n    db: Database session.\n\nReturns:\n    List of thread-series mappings.",
         "operationId": "list_series_mappings_api_v1_catalog_mappings_series_get",
         "parameters": [
           {
@@ -12267,6 +15171,20 @@
               ],
               "description": "Filter by mapping status",
               "title": "Status"
+            }
+          },
+          {
+            "description": "Maximum number of results to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Maximum number of results to return",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
@@ -12305,7 +15223,7 @@
     },
     "/api/v1/catalog/series": {
       "get": {
-        "description": "Search for canonical series in the shared catalog.\n\nArgs:\n    search: Optional search term to match against series external_id.\n    provider: Filter by provider name (default: comicvine).\n    db: Database session.\n\nReturns:\n    List of matching external identities for series.",
+        "description": "Search for canonical series in the shared catalog.\n\nArgs:\n    search: Optional search term to match against series external_id.\n    provider: Filter by provider name (default: comicvine).\n    limit: Maximum number of results to return (hard capped at 100).\n    db: Database session.\n\nReturns:\n    List of matching external identities for series.",
         "operationId": "search_catalog_series_api_v1_catalog_series_get",
         "parameters": [
           {
@@ -12344,6 +15262,20 @@
               "default": "comicvine",
               "description": "Filter by provider",
               "title": "Provider"
+            }
+          },
+          {
+            "description": "Maximum number of results to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of results to return",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
@@ -12420,6 +15352,54 @@
           }
         ],
         "summary": "Upsert Catalog Series",
+        "tags": [
+          "catalog",
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/series-mappings/preview": {
+      "post": {
+        "description": "Preview a series mapping with safe scoping and classification.\n\nThis endpoint provides a read-only preview of what issues would be mapped\nto a selected ComicVine series, with safe scoping rules and classification\nof each issue mapping status.\n\nArgs:\n    request: Preview request with origin issue, provider, and series ID.\n    current_user: Authenticated user for authorization.\n    db: Database session.\n    \nReturns:\n    Preview response with scope information, counts, and classified rows.",
+        "operationId": "preview_series_mapping_api_v1_catalog_series_mappings_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesMappingPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMappingPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Series Mapping",
         "tags": [
           "catalog",
           "catalog"
@@ -12925,9 +15905,62 @@
         ]
       }
     },
+    "/api/v1/comicvine/resolve": {
+      "get": {
+        "description": "Resolve a correction input that may be a pasted ComicVine URL.\n\nA recognized ``4000-<id>`` issue URL resolves directly to the exact issue;\na recognized ``4050-<id>`` volume URL resolves to the volume and its\nissues. Unsupported or malformed URLs return a clear validation message\nwithout mutating any identity. Ordinary text returns ``kind='search'`` and\ncontinues through the normal title-search path.\n\nArgs:\n    input: Search text or pasted ComicVine URL.\n    current_user: Authenticated user.",
+        "operationId": "api_resolve_comicvine_input_api_v1_comicvine_resolve_get",
+        "parameters": [
+          {
+            "description": "Search text or a pasted ComicVine issue/volume URL",
+            "in": "query",
+            "name": "input",
+            "required": true,
+            "schema": {
+              "description": "Search text or a pasted ComicVine issue/volume URL",
+              "maxLength": 1000,
+              "minLength": 1,
+              "title": "Input",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComicVineResolveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Resolve Comicvine Input",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
     "/api/v1/comicvine/search/series": {
       "get": {
-        "description": "Search ComicVine for series/volumes by title.\n\nArgs:\n    q: Search query string.\n    limit: Maximum results to return.\n    current_user: Authenticated user.",
+        "description": "Search ComicVine for series/volumes by title.\n\nPagination uses ComicVine offset semantics: the response reports\n``offset``, ``limit``, ``has_more``, and ``next_offset`` so a client can\nload more results without dead-ending at the first page.\n\nArgs:\n    q: Search query string.\n    limit: Maximum results to return.\n    offset: Zero-based result offset for paging.\n    current_user: Authenticated user.",
         "operationId": "api_search_comicvine_series_api_v1_comicvine_search_series_get",
         "parameters": [
           {
@@ -12954,6 +15987,19 @@
               "maximum": 50,
               "minimum": 1,
               "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Zero-based result offset",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Zero-based result offset",
+              "minimum": 0,
+              "title": "Offset",
               "type": "integer"
             }
           }
@@ -13331,6 +16377,175 @@
         ]
       }
     },
+    "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+      "delete": {
+        "description": "Remove one plan's reference to a Dependency edge.\n\nOnly this plan's link is removed; the canonical edge and every other\nplan's references are untouched.",
+        "operationId": "unlink_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dependency_id",
+            "required": true,
+            "schema": {
+              "title": "Dependency Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unlink Plan Dependency Edge",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity-plans"
+        ]
+      },
+      "post": {
+        "description": "Reference one canonical Dependency edge from one owned plan.\n\nLinking records provenance only; it never creates, modifies, or deletes\nthe canonical edge and never changes Roll eligibility.",
+        "operationId": "link_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dependency_id",
+            "required": true,
+            "schema": {
+              "title": "Dependency Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingPlanDependencyLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Link Plan Dependency Edge",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/membership": {
+      "get": {
+        "description": "Return the normalized membership view for one owned plan.\n\nMembership, Dependency provenance, source snapshots, placements, and\nprogress derived from global Issue read state are read through the\nnormalized relational representation.",
+        "operationId": "get_continuity_plan_membership_api_v1_continuity_plans__plan_id__membership_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Continuity Plan Membership",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "continuity-plans"
+        ]
+      }
+    },
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
       "post": {
         "description": "Apply a projection atomically after a successful preview.\n\nThe confirm endpoint re-computes the projection and rejects the request\nif any conflict is detected. A failed or cancelled projection leaves\nboth the plan and the reading order unchanged because all mutations are\nperformed in a single transaction that rolls back on any error.",
@@ -13677,6 +16892,109 @@
           "dependencies",
           "dependencies",
           "continuity"
+        ]
+      }
+    },
+    "/api/v1/creators": {
+      "get": {
+        "description": "Return bounded personal creator discovery list for the authenticated user.\n\nThe default collection is creators with at least one rated issue for the\ncurrent user (headline-eligible rating). Rows include canonical key, display\nname, personal ratings count, personal average rating, and compact normalized\nroles. Ordering is deterministic with a stable canonical-key tie-breaker so\npagination is correct across pages. Name search is bounded and user-scoped.\n``average_rating`` sorting handles ``null`` explicitly (nulls last) so the\ncontract remains deterministic if filtering expands to include unrated\ncreators later.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    search: Optional bounded case-insensitive name substring.\n    sort: Deterministic browse ordering.\n    limit: Bounded page size.\n    offset: Page offset.\n    db: Async database session.\n\nReturns:\n    Bounded creator list with deterministic ordering and coverage state.",
+        "operationId": "list_creators_endpoint_api_v1_creators_get",
+        "parameters": [
+          {
+            "description": "Bounded case-insensitive name substring",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Bounded case-insensitive name substring",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Browse ordering: name (alphabetical), ratings_count (most-rated), average_rating (personal average desc, nulls last)",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Browse ordering: name (alphabetical), ratings_count (most-rated), average_rating (personal average desc, nulls last)",
+              "enum": [
+                "name",
+                "ratings_count",
+                "average_rating"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size (bounded, max 50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Page size (bounded, max 50)",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page offset",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Page offset",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Creators Endpoint",
+        "tags": [
+          "creators",
+          "creators"
         ]
       }
     },
@@ -14356,6 +17674,252 @@
         "summary": "Log Message",
         "tags": [
           "debug"
+        ]
+      }
+    },
+    "/api/v1/delivery": {
+      "get": {
+        "description": "List all delivery records.\n\nArgs:\n    db: Async database session\n    current_user: Authenticated user\n    \nReturns:\n    List of delivery records",
+        "operationId": "list_delivery_records_api_v1_delivery_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeliveryRecordResponse"
+                  },
+                  "title": "Response List Delivery Records Api V1 Delivery Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Delivery Records",
+        "tags": [
+          "delivery"
+        ]
+      },
+      "post": {
+        "description": "Create a cross-repository delivery request.\n\nThis endpoint allows the factory to deliver extracted code to target\nrepositories. The delivery service handles:\n- Target repository validation\n- Credential management (GITHUB_TOKEN vs LATTICERY_TOKEN)\n- Branch creation on target repository\n- PR creation on target repository\n- Delivery ledger tracking\n\nArgs:\n    request: The cross-repository delivery request containing:\n        - target_repository: Target repository (JoshCLWren/comic-pile or JoshCLWren/Latticery)\n        - branch_name: Name of branch to create\n        - base_branch: Base branch for the PR\n        - title: PR title\n        - body: PR body (optional)\n        - issue_number: Linked issue number (optional)\n        - worker_id: Factory worker ID\n    db: Async database session\n    current_user: Authenticated user\n    \nReturns:\n    DeliveryResult with operation outcome and tracking information\n    \nRaises:\n    HTTPException: For invalid target repositories or delivery failures",
+        "operationId": "create_delivery_request_api_v1_delivery_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossRepoDeliveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Delivery Request",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/v1/delivery/target/{owner}/{repo}/branch/{branch_name}": {
+      "get": {
+        "description": "Get delivery record by target repository and branch name.\n\nThe target repository is split into ``owner``/``repo`` path segments and the\nbranch name uses the ``:path`` converter so names containing a slash (every\nallowlisted target and factory branch) are addressable.\n\nArgs:\n    owner: Target repository owner (e.g. ``JoshCLWren``).\n    repo: Target repository name (e.g. ``Latticery``).\n    branch_name: Target branch name (may contain slashes).\n    db: Async database session\n    current_user: Authenticated user\n\nReturns:\n    Delivery record details\n\nRaises:\n    HTTPException: If delivery record not found",
+        "operationId": "get_delivery_by_target_branch_api_v1_delivery_target__owner___repo__branch__branch_name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "title": "Owner",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "repo",
+            "required": true,
+            "schema": {
+              "title": "Repo",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "branch_name",
+            "required": true,
+            "schema": {
+              "title": "Branch Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryRecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Delivery By Target Branch",
+        "tags": [
+          "delivery"
+        ]
+      }
+    },
+    "/api/v1/delivery/{delivery_id}": {
+      "get": {
+        "description": "Get a specific delivery record by ID.\n\nArgs:\n    delivery_id: Delivery record ID\n    db: Async database session\n    current_user: Authenticated user\n    \nReturns:\n    Delivery record details\n    \nRaises:\n    HTTPException: If delivery record not found",
+        "operationId": "get_delivery_record_api_v1_delivery__delivery_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "delivery_id",
+            "required": true,
+            "schema": {
+              "title": "Delivery Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryRecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Delivery Record",
+        "tags": [
+          "delivery"
+        ]
+      },
+      "patch": {
+        "description": "Update a delivery record.\n\nArgs:\n    delivery_id: Delivery record ID\n    update_data: Fields to update\n    db: Async database session\n    current_user: Authenticated user\n    \nReturns:\n    Updated delivery record\n    \nRaises:\n    HTTPException: If delivery record not found",
+        "operationId": "update_delivery_record_api_v1_delivery__delivery_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "delivery_id",
+            "required": true,
+            "schema": {
+              "title": "Delivery Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryRecordUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryRecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Delivery Record",
+        "tags": [
+          "delivery"
         ]
       }
     },
@@ -15074,22 +18638,57 @@
     },
     "/api/v1/issue-identity/anomalies": {
       "get": {
-        "description": "List duplicate physical-issue anomalies for the authenticated user.\n\nArgs:\n    current_user: Authenticated owner.\n    db: Async database session.\n\nReturns:\n    One entry per duplicated ComicVine identity.",
+        "description": "List duplicate physical-issue anomalies for the authenticated user.\n\nArgs:\n    current_user: Authenticated owner.\n    db: Async database session.\n    page: Page number (starting from 1).\n    size: Number of items per page (maximum 100).\n\nReturns:\n    Paginated list of duplicated ComicVine identities.",
         "operationId": "api_list_anomalies_api_v1_issue_identity_anomalies_get",
+        "parameters": [
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size (max 100)",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Page size (max 100)",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/DuplicateAnomalyResponse"
-                  },
-                  "title": "Response Api List Anomalies Api V1 Issue Identity Anomalies Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/PaginatedDuplicateAnomaliesResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -15337,7 +18936,7 @@
     },
     "/api/v1/issue-identity/cbl/{list_id}/reconciliation": {
       "get": {
-        "description": "Reconcile one CBL source list to canonical physical-issue identities.\n\nFor every source position the response reports the ComicVine issue ID,\nresolved canonical Issue, read state, and whether the entry is affected\nby a duplicate identity. This is the same report the repair workflow uses\nto verify that CBL adoption uses canonical identity.\n\nArgs:\n    list_id: CBLSourceList identifier.\n    current_user: Authenticated owner whose issues are eligible.\n    db: Async database session.",
+        "description": "Reconcile one CBL source list to canonical physical-issue identities.\n\nFor every source position the response reports the ComicVine issue ID,\nresolved canonical Issue, read state, and whether the entry is affected\nby a duplicate identity. This is the same report the repair workflow uses\nto verify that CBL adoption uses canonical identity.\n\nArgs:\n    list_id: CBLSourceList identifier.\n    current_user: Authenticated owner whose issues are eligible.\n    db: Async database session.\n    page: Page number (starting from 1).\n    size: Number of items per page (maximum 200).",
         "operationId": "api_cbl_reconciliation_api_v1_issue_identity_cbl__list_id__reconciliation_get",
         "parameters": [
           {
@@ -15348,6 +18947,33 @@
               "title": "List Id",
               "type": "integer"
             }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size (max 200)",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Page size (max 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -15355,9 +18981,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Api Cbl Reconciliation Api V1 Issue Identity Cbl  List Id  Reconciliation Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CBLReconciliationResponse"
                 }
               }
             },
@@ -15388,23 +19012,57 @@
     },
     "/api/v1/issue-identity/conflicts": {
       "get": {
-        "description": "List ambiguous conflicting provider identities for the user.\n\nArgs:\n    current_user: Authenticated owner.\n    db: Async database session.\n\nReturns:\n    One entry per Issue with multiple confirmed ComicVine IDs.",
+        "description": "List ambiguous conflicting provider identities for the user.\n\nArgs:\n    current_user: Authenticated owner.\n    db: Async database session.\n    page: Page number (starting from 1).\n    size: Number of items per page (maximum 100).\n\nReturns:\n    Paginated list of Issues with multiple confirmed ComicVine IDs.",
         "operationId": "api_list_conflicts_api_v1_issue_identity_conflicts_get",
+        "parameters": [
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size (max 100)",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Page size (max 100)",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "title": "Response Api List Conflicts Api V1 Issue Identity Conflicts Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/PaginatedConflictsResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -15923,6 +19581,88 @@
         ]
       }
     },
+    "/api/v1/issues:bulkMarkRead": {
+      "post": {
+        "description": "Bulk mark issues as read.\n\nArgs:\n    request: Bounded list of issue IDs.\n    current_user: Authenticated user.\n    db: Database session.\n\nRaises:\n    HTTPException: If any issue is invalid or already read.",
+        "operationId": "bulk_mark_issue_read_api_v1_issues_bulkMarkRead_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkMarkReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Mark Issue Read",
+        "tags": [
+          "issues",
+          "issues"
+        ]
+      }
+    },
+    "/api/v1/issues:bulkMarkUnread": {
+      "post": {
+        "description": "Bulk mark issues as unread.\n\nArgs:\n    request: Bounded list of issue IDs.\n    current_user: Authenticated user.\n    db: Database session.\n\nRaises:\n    HTTPException: If any issue is invalid or already unread.",
+        "operationId": "bulk_mark_issue_unread_api_v1_issues_bulkMarkUnread_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkMarkUnreadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Mark Issue Unread",
+        "tags": [
+          "issues",
+          "issues"
+        ]
+      }
+    },
     "/api/v1/metrics": {
       "get": {
         "description": "Return simple performance metrics.",
@@ -16401,8 +20141,8 @@
     },
     "/api/v1/rate/": {
       "post": {
-        "description": "Rate current reading and update its thread.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    rate_data: Rating request data.\n    current_user: Authenticated user making the request.\n    db: SQLAlchemy session.\n\nReturns:\n    Updated thread response.\n\nRaises:\n    HTTPException: If no active session, rating, or thread is valid.",
-        "operationId": "rate_thread_api_v1_rate__post",
+        "description": "Delegate rating orchestration to the rate service.",
+        "operationId": "post_rate_api_v1_rate__post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -16418,7 +20158,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
+                  "$ref": "#/components/schemas/RateResponse"
                 }
               }
             },
@@ -16440,7 +20180,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Rate Thread",
+        "summary": "Post Rate",
         "tags": [
           "rate"
         ]
@@ -17732,7 +21472,7 @@
     },
     "/api/v1/roll/bootstrap": {
       "get": {
-        "description": "Return bounded bootstrap data for the Roll initial render.\n\nReplaces the need for separate session, full-thread-library, and stale-thread requests\nby returning only the retained data required for the first interactive screen.\n\nArgs:\n    current_user: The authenticated user.\n    db: Async database session.\n    timezone: Optional browser-resolved IANA timezone identifier captured once\n        per active reading session. Invalid or unusable values leave the field\n        unset and never break the bootstrap response.\n\nReturns:\n    RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.",
+        "description": "Return bounded bootstrap data for the Roll initial render.\n\nReplaces the need for separate session, full-thread-library, and stale-thread requests\nby returning only the retained data required for the first interactive screen.\n\nArgs:\n    current_user: The authenticated user.\n    db: Async database session.\n    timezone: Optional browser-resolved IANA timezone identifier captured once\n        per active reading session. Invalid or unusable values leave the field\n        unset and never break the roll.\n\nReturns:\n    RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.",
         "operationId": "roll_bootstrap_api_v1_roll_bootstrap_get",
         "parameters": [
           {
@@ -18229,6 +21969,34 @@
         ]
       }
     },
+    "/api/v1/sessions/correction-examples": {
+      "get": {
+        "description": "Get personalized examples for the correction sheet steering choices.\n\nReturns compact examples drawn from the user's own rated/read history for\neach correction sheet option. Examples are explanatory only and do not\nconstrain the canonical recommendation behavior. Returns null for options\nwhere no honest example exists.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    CorrectionSheetExamplesResponse with examples for each choice.",
+        "operationId": "get_correction_sheet_examples_api_v1_sessions_correction_examples_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectionSheetExamplesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Correction Sheet Examples",
+        "tags": [
+          "session",
+          "sessions"
+        ]
+      }
+    },
     "/api/v1/sessions/current/": {
       "get": {
         "description": "Get current active session with deadlock retry handling.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse with current session details.\n\nRaises:\n    RuntimeError: If failed after max retries.",
@@ -18357,7 +22125,7 @@
     },
     "/api/v1/sessions/{session_id}/restore-session-start": {
       "post": {
-        "description": "Restore session to its initial state at session start.\n\nArgs:\n    session_id: The session ID to restore.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse with restored session details.\n\nRaises:\n    HTTPException: If session or snapshot not found.\n    RuntimeError: If failed after max retries.",
+        "description": "Restore session to its initial state at session start.\n\nArgs:\n    session_id: The session ID to restore.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n    session_service: Session service for business logic.\n\nReturns:\n    SessionResponse with restored session details.\n\nRaises:\n    HTTPException: If session or snapshot not found.\n    RuntimeError: If failed after max retries.",
         "operationId": "restore_session_start_api_v1_sessions__session_id__restore_session_start_post",
         "parameters": [
           {
@@ -18813,7 +22581,7 @@
     "/api/v1/threads/completed": {
       "get": {
         "description": "Render completed threads as options for the reactivation modal.",
-        "operationId": "list_completed_threads_api_v1_threads_completed_get",
+        "operationId": "list_completed_threads_html_api_v1_threads_completed_get",
         "responses": {
           "200": {
             "content": {
@@ -18824,6 +22592,107 @@
               }
             },
             "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Completed Threads Html",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/completed/threads": {
+      "get": {
+        "description": "List completed threads with deterministic cursor-based pagination.\n\nEvery retained sort has a deterministic cursor contract with stable\ntie-breakers so that search results remain correct across multiple pages.\nChanging ``search`` or ``sort`` invalidates any prior cursor.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order – ``position``, ``title``, or ``created``.\n    page_size: Threads per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Paginated completed threads plus ``next_page_token`` when more pages exist.\n\nRaises:\n    HTTPException: If the sort value is unsupported or the page token is stale/malformed.",
+        "operationId": "list_completed_threads_api_v1_threads_completed_threads_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Sort order: position, title, or created",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "created",
+              "description": "Sort order: position, title, or created",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of threads to return per page (default 50, max 200)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Number of threads to return per page (default 50, max 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor token for pagination continuation",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination continuation",
+              "title": "Page Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueThreadListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -18943,7 +22812,7 @@
     },
     "/api/v1/threads/stale": {
       "get": {
-        "description": "List the authenticated user's threads not read in ``days`` (default 30).",
+        "description": "List the authenticated user's threads not read in ``days`` (default 30).\n\nThe result is bounded at the database to ``page_size`` items (default 200, max 200).",
         "operationId": "list_stale_threads_api_v1_threads_stale_get",
         "parameters": [
           {
@@ -18953,6 +22822,18 @@
             "schema": {
               "default": 30,
               "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
               "type": "integer"
             }
           }
@@ -19432,7 +23313,7 @@
         ]
       },
       "post": {
-        "description": "Create issues from a range string and place them in thread order.\n\nBy default new issues are appended after the last existing issue. When\n``insert_after_issue_id`` is provided, existing issues later in the thread are\nshifted upward so the new issues are inserted immediately after that issue.\n\nArgs:\n    thread_id: The thread ID to create issues for.\n    request: Request with issue range string.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    IssueListResponse with newly created issues only (not all issues).\n\nRaises:\n    HTTPException: If thread not found, all issues already exist,\n                  position collision detected, or issue range is invalid.",
+        "description": "Create issues from a range string and place them in thread order.\n\nBy default new issues are appended after the last existing issue. When\n``insert_after_issue_id`` is provided, existing issues later in the thread are\nshifted upward so the new issues are inserted immediately after that issue.\nWhen ``placement`` is ``\"natural\"`` and no anchor is given, unambiguous\nordinary numeric issues are inserted at their natural position in the\nthread's canonical order; ambiguous batches (irregular numbering, batches\nthat span existing issues, intentionally non-numeric ordering) fall back\nto append so the reader can reorder them explicitly.\n\nArgs:\n    thread_id: The thread ID to create issues for.\n    request: Request with issue range string.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    IssueListResponse with newly created issues only (not all issues).\n\nRaises:\n    HTTPException: If thread not found, all issues already exist,\n                  position collision detected, or issue range is invalid.",
         "operationId": "create_issues_api_v1_threads__thread_id__issues_post",
         "parameters": [
           {
@@ -20190,7 +24071,7 @@
     },
     "/api/v1/undo/{session_id}/snapshots": {
       "get": {
-        "description": "List all snapshots for a session.\n\nArgs:\n    session_id: Session whose snapshots should be listed.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Snapshot metadata in reverse chronological order.\n\nRaises:\n    HTTPException: If the session is not owned by the current user.",
+        "description": "List all snapshots for a session.\n\nArgs:\n    session_id: Session whose snapshots should be listed.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Typed snapshot list in reverse chronological order.\n\nRaises:\n    HTTPException: If the session is not owned by the current user.",
         "operationId": "list_session_snapshots_api_v1_undo__session_id__snapshots_get",
         "parameters": [
           {
@@ -20208,12 +24089,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "title": "Response List Session Snapshots Api V1 Undo  Session Id  Snapshots Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/SnapshotsListResponse"
                 }
               }
             },
@@ -20244,7 +24120,7 @@
     },
     "/api/v1/undo/{session_id}/undo/{snapshot_id}": {
       "post": {
-        "description": "Undo session state to a snapshot with deadlock retry handling.\n\nArgs:\n    session_id: Session to restore.\n    snapshot_id: Snapshot to restore.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Restored session response.\n\nRaises:\n    RuntimeError: If all deadlock retries fail.",
+        "description": "Undo session state to a snapshot.\n\nArgs:\n    session_id: Session to restore.\n    snapshot_id: Snapshot to restore.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Restored session response.\n\nRaises:\n    HTTPException: If the session or snapshot is not found.\n    RuntimeError: If all deadlock retries fail.",
         "operationId": "undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post",
         "parameters": [
           {
