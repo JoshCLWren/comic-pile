@@ -31,7 +31,6 @@ async def test_liveness_does_not_probe_dependencies(
     async def fail_if_called() -> None:
         raise AssertionError("dependency probe must not run")
 
-    monkeypatch.setattr(health_probe, "cache_probe", fail_if_called)
     response = await client.get("/api/v1/health/live")
 
     assert response.status_code == 200
@@ -56,7 +55,6 @@ async def test_dependency_health_reports_independent_timings(
     async def healthy_cache() -> None:
         return None
 
-    monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
     response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 200
@@ -87,7 +85,6 @@ async def test_dependency_health_reports_partial_failure(
     async def unavailable_cache() -> None:
         raise ProbeUnavailableError("cache offline")
 
-    monkeypatch.setattr(health_probe, "cache_probe", unavailable_cache)
     response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 207
@@ -120,7 +117,6 @@ async def test_dependency_health_reports_database_unavailable(
         return None
 
     monkeypatch.setattr(health_probe, "database_probe", unavailable_database)
-    monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
     response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 503
@@ -199,7 +195,6 @@ async def test_legacy_health_is_dependency_free(
         raise AssertionError("legacy liveness must not probe dependencies")
 
     monkeypatch.setattr(health_probe, "database_probe", fail_if_called)
-    monkeypatch.setattr(health_probe, "cache_probe", fail_if_called)
 
     response = await client.get("/api/health")
 
@@ -227,7 +222,6 @@ async def test_warmup_uses_read_only_dependency_boundary(
         nonlocal calls
         calls += 1
 
-    monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
     response = await client.get("/api/v1/health/warmup")
 
     assert response.status_code == 200

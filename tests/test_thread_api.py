@@ -589,7 +589,6 @@ async def test_list_threads_issues_remaining_correct(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """issues_remaining reflects live unread count for migrated threads."""
-
     user = await get_or_create_user_async(async_db)
 
     threads_data: list[tuple[str, int, int, int]] = [
@@ -644,7 +643,6 @@ async def test_list_threads_mixed_migrated_unmigrated(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """Unmigrated threads report legacy column; migrated threads report true count."""
-
     user = await get_or_create_user_async(async_db)
 
     unmigrated = Thread(
