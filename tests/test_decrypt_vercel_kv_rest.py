@@ -5,6 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+from scripts.decrypt_vercel_kv_rest import (
+    KV_READ_ONLY_TOKEN_KEY,
+    KV_TOKEN_KEY,
+    KV_URL_KEY,
+    choose_kv_credentials,
+    collect_usable_values,
+    coverage_payload,
+    decrypt_production_kv_rest,
+    env_targets_production,
+    is_usable_secret,
+    select_production_env_ids,
+    write_kv_dotenv,
+)
+
 def load_dotenv_values(path: str) -> dict[str, str]:
     """Load KEY=VALUE pairs from a Vercel env-pull file without printing values.
     
@@ -30,21 +44,6 @@ def load_dotenv_values(path: str) -> dict[str, str]:
                 continue
             values[key] = value
     return values
-
-
-from scripts.decrypt_vercel_kv_rest import (
-    KV_READ_ONLY_TOKEN_KEY,
-    KV_TOKEN_KEY,
-    KV_URL_KEY,
-    choose_kv_credentials,
-    collect_usable_values,
-    coverage_payload,
-    decrypt_production_kv_rest,
-    env_targets_production,
-    is_usable_secret,
-    select_production_env_ids,
-    write_kv_dotenv,
-)
 
 
 def test_is_usable_secret_rejects_placeholders() -> None:
