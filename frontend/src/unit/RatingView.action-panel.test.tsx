@@ -294,10 +294,10 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(value.className).toContain('text-[var(--theme-comic-accent)]')
   })
 
-  it('perfect rating uses comic accent color', () => {
+  it('perfect rating uses personal accent color', () => {
     render(ratingView({ rating: 5.0 }))
     const value = screen.getByText('5.0')
-    expect(value.className).toContain('text-[var(--theme-comic-accent)]')
+    expect(value.className).toContain('text-[var(--theme-personal-accent)]')
   })
 
   it('rating value is the dominant text size', () => {

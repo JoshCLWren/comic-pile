@@ -74,9 +74,8 @@ export function getDieDirection(currentDie: number, predictedDie: number): strin
 export function getRatingColorClass(rating: number): string {
   if (rating < 2.0) return 'text-[var(--theme-danger)]'
   if (rating < 3.0) return 'text-[var(--theme-warning)]'
-  if (rating < 4.0) return 'text-[var(--theme-comic-accent)]'
-  if (rating < 5.0) return 'text-[var(--theme-personal-accent)]'
-  return 'text-[var(--theme-comic-accent)]'
+  if (rating < RATING_THRESHOLD) return 'text-[var(--theme-comic-accent)]'
+  return 'text-[var(--theme-personal-accent)]'
 }
 
 export function getProgressPercentage(

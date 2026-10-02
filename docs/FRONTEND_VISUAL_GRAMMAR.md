@@ -29,6 +29,7 @@ The three existing themes are `classic`, `ink-gold`, and `command-center`. New f
 | Primary action hover | `--theme-primary-action-hover` | Interactive state for the main action |
 | Danger | `--theme-danger` | Destructive or cancel semantics |
 | Danger hover | `--theme-danger-hover` | Interactive destructive state |
+| Warning | `--theme-warning` | Caution and graded-scale middle semantics |
 | Focus ring | `--theme-focus-ring` | Keyboard/focus visibility |
 
 The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases. The `--glass-*` variables are deprecated and new work should prefer the `--theme-*` semantic vocabulary. New surface styling should use semantic classes like `.surface-panel`, `.surface-glass`, and `.surface-modal` instead of effect-based approaches.
