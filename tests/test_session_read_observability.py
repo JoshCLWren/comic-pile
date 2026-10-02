@@ -10,7 +10,6 @@ from app.middleware.security_headers import SecurityHeadersMiddleware, _session_
 from app.performance_diagnostics import (
     begin_request_diagnostics,
     end_request_diagnostics,
-    record_cache_operation,
     record_database_query,
 )
 
@@ -56,7 +55,6 @@ async def test_current_session_response_exposes_phase_and_query_diagnostics(
     async def call_next(_request: Request) -> JSONResponse:
         record_database_query(12.5)
         record_database_query(7.5)
-        record_cache_operation("hit", 2.0)
         return JSONResponse({"id": 1})
 
     try:
@@ -68,8 +66,6 @@ async def test_current_session_response_exposes_phase_and_query_diagnostics(
     assert response.headers["X-Session-Read-Operation"] == "current-session"
     assert response.headers["X-Session-Read-DB-Ms"] == "20.00"
     assert response.headers["X-Session-Read-DB-Queries"] == "2"
-    assert response.headers["X-Session-Read-Cache-Ms"] == "2.00"
-    assert response.headers["X-Session-Read-Cache-Calls"] == "1"
     assert float(response.headers["X-Session-Read-Total-Ms"]) >= 0
     assert float(response.headers["X-Session-Read-App-Ms"]) >= 0
     assert "Session read diagnostics: current-session" in caplog.text

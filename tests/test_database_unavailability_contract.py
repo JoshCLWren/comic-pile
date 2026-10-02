@@ -426,9 +426,6 @@ async def test_dependency_health_endpoint_still_works(
 
     test_app = create_app(serve_frontend=False)
 
-    async def healthy_cache() -> None:
-        return None
-
     async def unavailable_database(_: AsyncSession) -> None:
         raise health_probe.ProbeUnavailableError("database offline")
 
@@ -445,7 +442,6 @@ async def test_dependency_health_endpoint_still_works(
     fake_session.execute = AsyncMock()
     fake_session.connection = AsyncMock()
     monkeypatch.setattr(health_probe, "database_probe", unavailable_database)
-    monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
     monkeypatch.setattr("app.database.AsyncSessionLocal", lambda: _FakeSessionContext(fake_session))
     # The token gate only applies once a token is configured.
     monkeypatch.setenv("HEALTH_CHECK_TOKEN", "test-token")

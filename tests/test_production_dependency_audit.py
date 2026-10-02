@@ -128,7 +128,6 @@ def test_request_path_dependencies_are_retained() -> None:
         "filelock",
         "pygithub",
         "slowapi",
-        "upstash-redis",
     }:
         assert required in project_names
 

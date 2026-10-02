@@ -20,8 +20,7 @@ from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.cache import cache
-from app.config import get_app_settings, get_database_settings, get_redis_settings
+from app.config import get_app_settings, get_database_settings
 from app.csrf import (
     CSRF_COOKIE_NAME,
     CSRF_HEADER_NAME,
@@ -297,7 +296,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     """
     app_settings = get_app_settings()
     _configure_logging(app_settings.environment)
-    startup_state: dict[str, str] = {}
 
     _heavy_lock: asyncio.Lock = asyncio.Lock()
     _heavy_state: dict[str, bool] = {"initialized": False, "in_progress": False}
@@ -551,44 +549,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
             return _serve_spa_index_response()
 
-    async def _init_provided_cache(
-        provider_name: str,
-        startup_state: dict[str, str],
-        config: dict[str, str],
-    ) -> None:
-        """Initialize the configured cache provider with demotion support.
-
-        The process-wide ``cache`` router is reconfigured in place so that every
-        importer keeps using the same singleton. On persistent failure the
-        provider is demoted to fail-open for the process lifetime; optional
-        caching never becomes a request dependency.
-
-        Args:
-            provider_name: ``"postgres"`` or ``"redis"``.
-            startup_state: Shared dict between startup and shutdown events.
-            config: Provider-specific keyword arguments for ``cache.configure``.
-        """
-        try:
-            await cache.configure(provider_name, **config)
-            startup_state["cache_provider_type"] = provider_name
-            logger.info(
-                "Cache provider '%s' initialized successfully", provider_name
-            )
-        except Exception as exc:
-            logger.error(
-                "Cache provider '%s' startup failed: %s - "
-                "Demoting to fail-open for process lifetime",
-                provider_name,
-                exc,
-            )
-            await cache.demote()
-            startup_state["cache_provider_type"] = "demoted-off"
-
     async def _ensure_heavy_init() -> None:
-        """Lazily initialize database, cache accounting, and cache provider once.
+        """Lazily initialize database once.
 
         The lightweight ``/api/ping`` wake-up deliberately skips this path so a
-        cold ping does not open a PostgreSQL connection or reserve cache blocks.
+        cold ping does not open a PostgreSQL connection.
         Every other operational route triggers heavy init on first use, guarded
         by an async lock so concurrent cold requests only run the sequence once.
         """
@@ -603,80 +568,16 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             try:
                 await init_database(app_settings.environment)
 
-                from app.cache_accounting import cache_accounting
-                from app.database import async_engine
-
-                try:
-                    await cache_accounting.initialize(async_engine)
-                except Exception:
-                    logger.warning(
-                        "Durable cache accounting init failed; quota telemetry degraded"
-                    )
-
-                redis_settings = get_redis_settings()
-                from app.cache_quota import set_quota_throttle_enabled
-
-                set_quota_throttle_enabled(redis_settings.cache_quota_throttle_enabled)
-                provider = redis_settings.effective_provider
-
-                if provider == "off":
-                    logger.info("CACHE_PROVIDER=off - caching disabled")
-                elif provider == "postgres":
-                    await _init_provided_cache(
-                        "postgres",
-                        startup_state,
-                        {"database_url": get_database_settings().async_url},
-                    )
-                elif provider == "redis":
-                    if (
-                        redis_settings.resolved_upstash_rest_url
-                        and redis_settings.resolved_upstash_rest_token
-                    ):
-                        await _init_provided_cache(
-                            "redis",
-                            startup_state,
-                            {
-                                "url": redis_settings.resolved_upstash_rest_url,
-                                "token": redis_settings.resolved_upstash_rest_token,
-                                "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
-                            },
-                        )
-                    elif redis_settings.redis_url:
-                        if not redis_settings.cache_local_redis_dev:
-                            logger.warning(
-                                "Local Redis URL present but CACHE_LOCAL_REDIS_DEV is not set; "
-                                "refusing the local Redis client path. Use Upstash credentials "
-                                "or enable the dev flag to use local Redis."
-                            )
-                        else:
-                            await _init_provided_cache(
-                                "redis",
-                                startup_state,
-                                {
-                                    "local_url": redis_settings.redis_url,
-                                    "allow_local": True,
-                                    "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
-                                },
-                            )
-                    else:
-                        logger.warning(
-                            "Redis credentials absent for CACHE_PROVIDER=redis; caching disabled"
-                        )
-
                 from app.startup_diagnostics import mark_heavy_init_complete
 
                 heavy_ms = mark_heavy_init_complete()
                 logger.warning(
-                    "Heavy application initialization completed in %.2f ms provider=%s",
+                    "Heavy application initialization completed in %.2f ms",
                     heavy_ms,
-                    startup_state.get("cache_provider_type", "unconfigured"),
                     extra={
                         "event": "heavy_application_startup",
                         "heavy_initialized": True,
                         "heavy_init_duration_ms": round(heavy_ms, 2),
-                        "cache_provider_type": startup_state.get(
-                            "cache_provider_type", "unconfigured"
-                        ),
                     },
                 )
                 _heavy_state["initialized"] = True
@@ -692,7 +593,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.on_event("startup")
     async def startup_event():
-        """Lightweight startup; heavy DB/cache init is deferred to first non-ping request."""
+        """Lightweight startup; heavy DB init is deferred to first non-ping request."""
         await compute_startup_duration()
         from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
 
@@ -738,16 +639,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.on_event("shutdown")
     async def shutdown_event():
-        """Close cache connection and accounting on application shutdown."""
-        from app.cache_accounting import cache_accounting
-
-        logger.info(
-            "Shutting down cache (provider=%s)",
-            startup_state.get("cache_provider_type", "unconfigured"),
-        )
-        await cache_accounting.close()
-        await cache.close()
-
+        """Shutdown application services."""
         # Shut down Neon egress monitor if it was started.
         if os.getenv("NEON_TOKEN") and os.getenv("NEON_PROJECT_ID"):
             try:

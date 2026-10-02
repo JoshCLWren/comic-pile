@@ -156,7 +156,6 @@ async def test_batch_blocking_info_no_n_plus_one(
     db_engine,
 ) -> None:
     """Batch endpoint uses one query, not N per-thread queries."""
-    from app.cache import invalidate_cache
     from sqlalchemy import event
     from tests.conftest import get_or_create_user_async
 
@@ -198,8 +197,6 @@ async def test_batch_blocking_info_no_n_plus_one(
         )
         async_db.add(dep)
     await async_db.commit()
-
-    await invalidate_cache("cache:*")
 
     captured: list[str] = []
 

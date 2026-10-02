@@ -103,8 +103,8 @@ def _duration_ms(start: float | None, end: float | None) -> float | None:
 def mark_heavy_init_complete() -> float:
     """Record heavy initialization completion once.
 
-    Heavy init covers database connectivity, durable cache accounting, and
-    cache provider setup that the lightweight ping wake-up intentionally skips.
+    Heavy init covers database connectivity that the lightweight ping wake-up
+    intentionally skips.
 
     Returns:
         Total heavy-init age in milliseconds since process start.

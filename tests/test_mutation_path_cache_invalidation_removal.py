@@ -2,14 +2,14 @@
 
 Backend writes commit their domain change and must not perform a second
 cache-generation/invalidation operation afterwards. The cache provider
-implementation itself is intentionally retained (a later cleanup slice
-deletes it), so this module pins exactly two properties:
+implementation itself was deleted by issue #2974, so this module pins the
+properties that keep mutation paths free of cache coupling:
 
 1. No module under ``app/`` or ``comic_pile/`` imports the mutation-facing
    invalidation helpers from ``app.cache_invalidation`` or calls the removed
    local invalidator wrappers.
-2. The retained cache provider implementation modules still exist, proving
-   the guard targets mutation coupling rather than the provider itself.
+2. The cache implementation modules named by the original allowlist are gone,
+   which is what makes the guards above non-vacuous.
 """
 
 from __future__ import annotations
@@ -22,14 +22,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCANNED_ROOTS = ("app", "comic_pile")
 
-#: Modules that *are* the cache implementation rather than a mutation path.
-#: The scope fence for this issue keeps them intact, so their own use of the
-#: generation primitives is legitimate and must not be flagged.
-CACHE_INFRASTRUCTURE_MODULES = frozenset(
-    {
-        "app/cache.py",
-        "app/cache_generation.py",
-    }
+#: Modules that used to *be* the cache implementation. Issue #2974 deleted
+#: them, so they must stay absent. No production module may import from them.
+DELETED_CACHE_INFRASTRUCTURE_MODULES = (
+    "app/cache.py",
+    "app/cache_generation.py",
 )
 
 #: Mutation-facing invalidation helpers removed from production call sites.
@@ -91,8 +88,6 @@ def test_no_production_module_imports_removed_invalidation_helpers() -> None:
     offenders: list[str] = []
     for path in _python_files():
         relative = _relative(path)
-        if relative in CACHE_INFRASTRUCTURE_MODULES:
-            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.ImportFrom):
@@ -114,8 +109,6 @@ def test_no_production_module_calls_removed_invalidation_helpers() -> None:
     offenders: list[str] = []
     for path in _python_files():
         relative = _relative(path)
-        if relative in CACHE_INFRASTRUCTURE_MODULES:
-            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
@@ -129,10 +122,10 @@ def test_no_production_module_calls_removed_invalidation_helpers() -> None:
     assert offenders == []
 
 
-def test_cache_infrastructure_allowlist_still_exists() -> None:
-    """The allowlist must name real files, or the guards above are vacuous."""
-    for relative in sorted(CACHE_INFRASTRUCTURE_MODULES):
-        assert (REPO_ROOT / relative).is_file(), f"allowlisted module missing: {relative}"
+@pytest.mark.parametrize("relative", DELETED_CACHE_INFRASTRUCTURE_MODULES)
+def test_cache_implementation_modules_stay_deleted(relative: str) -> None:
+    """The cache implementation stays deleted, or the guards above are vacuous."""
+    assert not (REPO_ROOT / relative).exists(), f"cache module was reintroduced: {relative}"
 
 
 @pytest.mark.parametrize("relative", DECOUPLED_MUTATION_PATHS)
@@ -161,4 +154,3 @@ def test_decoupled_mutation_paths_reference_no_cache_invalidation(relative: str)
             assert node.name not in REMOVED_INVALIDATION_HELPERS, (
                 f"{relative} still defines {node.name}()"
             )
-

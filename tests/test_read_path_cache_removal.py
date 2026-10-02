@@ -1,15 +1,17 @@
 """Structural guard for issue #2972: no application-cache reads on read paths.
 
 Backend read endpoints must execute their database/service logic directly. The
-cache implementation itself is intentionally retained (a later cleanup slice
-deletes it), so this module pins exactly two properties:
+cache implementation itself was deleted by issue #2974, so this module pins the
+properties that keep it deleted:
 
 1. No module under ``app/`` or ``comic_pile/`` applies the ``cached``
    decorator.
-2. No module outside the cache-infrastructure allowlist imports ``cached`` or
-   ``TTL`` from ``app.cache``.
+2. No module under ``app/`` or ``comic_pile/`` imports ``cached`` or ``TTL``
+   from ``app.cache``.
+3. The cache implementation modules named by the original allowlist are gone,
+   which is what makes the guards above non-vacuous.
 
-A third check keeps the removal honest: none of the de-cached read paths may
+A fourth check keeps the removal honest: none of the de-cached read paths may
 gain process-local memoization (``lru_cache``/``functools.cache``) as a
 replacement layer.
 """
@@ -24,14 +26,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCANNED_ROOTS = ("app", "comic_pile")
 
-#: Modules that *are* the cache implementation rather than a read path. The
-#: scope fence for this issue keeps them intact, so their own use of ``cached``
-#: and ``TTL`` is legitimate and must not be flagged.
-CACHE_INFRASTRUCTURE_MODULES = frozenset(
-    {
-        "app/cache.py",
-        "app/cache_generation.py",
-    }
+#: Modules that used to *be* the cache implementation. Issue #2974 deleted
+#: them, so they must stay absent. Anything importing ``app.cache`` is now an
+#: import of a nonexistent module, so there is no allowlist to skip.
+DELETED_CACHE_INFRASTRUCTURE_MODULES = (
+    "app/cache.py",
+    "app/cache_generation.py",
 )
 
 #: Read paths that previously carried a ``@cached(...)`` decorator.
@@ -80,28 +80,27 @@ def test_no_production_module_applies_the_cached_decorator() -> None:
     assert offenders == []
 
 
-def test_only_cache_infrastructure_imports_cached_or_ttl() -> None:
-    """``cached``/``TTL`` stay confined to the retained cache implementation."""
+def test_no_production_module_imports_from_app_cache() -> None:
+    """``app.cache`` no longer exists, so no module may import from it."""
     offenders: list[str] = []
     for path in _python_files():
         relative = _relative(path)
-        if relative in CACHE_INFRASTRUCTURE_MODULES:
-            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom) or node.module != "app.cache":
-                continue
-            for alias in node.names:
-                if alias.name in {"cached", "TTL"}:
-                    offenders.append(f"{relative} -> from app.cache import {alias.name}")
+            if isinstance(node, ast.ImportFrom) and node.module == "app.cache":
+                offenders.append(f"{relative} -> from app.cache import ...")
+            elif isinstance(node, ast.Import) and any(
+                alias.name == "app.cache" for alias in node.names
+            ):
+                offenders.append(f"{relative} -> import app.cache")
 
     assert offenders == []
 
 
-def test_cache_infrastructure_allowlist_still_exists() -> None:
-    """The allowlist must name real files, or the guard above is vacuous."""
-    for relative in sorted(CACHE_INFRASTRUCTURE_MODULES):
-        assert (REPO_ROOT / relative).is_file(), f"allowlisted module missing: {relative}"
+@pytest.mark.parametrize("relative", DELETED_CACHE_INFRASTRUCTURE_MODULES)
+def test_cache_implementation_modules_stay_deleted(relative: str) -> None:
+    """The cache implementation stays deleted, or the guards above are vacuous."""
+    assert not (REPO_ROOT / relative).exists(), f"cache module was reintroduced: {relative}"
 
 
 @pytest.mark.parametrize("relative", DECACHED_READ_PATHS)
