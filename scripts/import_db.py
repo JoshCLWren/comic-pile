@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy import delete
 
 from app.database import AsyncSessionLocal
-from app.models import Event, Session, Thread, User
+from app.models import Event, ReadingSession, Thread, User
 
 
 async def import_database():
@@ -21,7 +21,7 @@ async def import_database():
             print("=== Wiping database ===")
 
             await db.execute(delete(Event))
-            await db.execute(delete(Session))
+            await db.execute(delete(ReadingSession))
             await db.execute(delete(Thread))
             await db.execute(delete(User))
             await db.commit()
@@ -61,7 +61,7 @@ async def import_database():
 
             sessions_data = data.get("sessions", [])
             for s in sessions_data:
-                session = Session(
+                session = ReadingSession(
                     id=s["id"],
                     started_at=datetime.fromisoformat(s["started_at"]),
                     ended_at=datetime.fromisoformat(s["ended_at"]) if s.get("ended_at") else None,

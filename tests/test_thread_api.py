@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.models import Issue, Session as SessionModel, Thread, User
+from app.models import Issue, ReadingSession, Thread, User
 from tests.conftest import get_or_create_user_async
 
 
@@ -540,7 +540,7 @@ async def test_stale_endpoint_excludes_snoozed_threads(
     async_db.add_all([stale_thread, snoozed_stale_thread])
     await async_db.flush()
 
-    session = SessionModel(
+    session = ReadingSession(
         user_id=user.id,
         started_at=now,
         snoozed_thread_ids=[snoozed_stale_thread.id],
@@ -1015,7 +1015,7 @@ async def test_set_current_issue_updates_session_pending_issue(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
     """Test that session.pending_issue_id is updated."""
-    from comic_pile.session import resolve_current_session
+    from comic_pile.reading_session import resolve_current_session
 
     thread_id = sample_data["threads"][1].id  # Batman thread
 

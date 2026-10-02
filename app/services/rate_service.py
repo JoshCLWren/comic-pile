@@ -22,9 +22,9 @@ from app.repositories.issue_repository import (
     issues_ordered,
 )
 from app.repositories.rate_repository import fetch_source_roll_event
-from app.repositories.session_repository import (
-    fetch_active_session,
-    get_session,
+from app.repositories.reading_session_repository import (
+    fetch_active_reading_session,
+    get_reading_session,
     latest_action_event,
 )
 from app.repositories.thread_repository import find_owned, threads_for_user
@@ -41,7 +41,7 @@ from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
-from comic_pile.session import get_current_die_for_session
+from comic_pile.reading_session import get_current_die_for_session
 
 
 async def _find_source_roll_event(
@@ -225,7 +225,7 @@ async def snapshot_thread_states(
     threads = await threads_for_user(db, user_id)
     thread_states = await _capture_threads_pre_states(db, threads)
 
-    session = await get_session(db, session_id)
+    session = await get_reading_session(db, session_id)
     session_state = None
     if session:
         session_state = {
@@ -275,7 +275,7 @@ async def rate_thread(
         HTTPException: If no active session, rating, or thread is valid.
     """
     user_id = current_user.id
-    current_session = await fetch_active_session(db, user_id)
+    current_session = await fetch_active_reading_session(db, user_id)
     if not current_session:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

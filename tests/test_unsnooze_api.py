@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 
 @pytest.mark.asyncio
@@ -24,7 +24,7 @@ async def test_unsnooze_success(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -98,7 +98,7 @@ async def test_unsnooze_non_snoozed_thread_is_idempotent(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -152,7 +152,7 @@ async def test_unsnooze_multiple_snoozed_threads(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

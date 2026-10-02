@@ -1,6 +1,6 @@
 """Query-count regression tests for restore-session-start.
 
-Issue #1257: ``restore_session_start`` previously recomputed per-thread
+Issue #1257: ``restore_reading_session_start`` previously recomputed per-thread
 unread counts with one COUNT query per migrated thread (plus a dead
 per-thread positions read that always followed a DELETE). These tests prove
 the endpoint now issues a single grouped COUNT and no per-thread issue reads
@@ -13,17 +13,17 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Issue, Thread, User
-from app.models import Session as SessionModel
-from comic_pile.session import create_session_start_snapshot
+from app.models import ReadingSession
+from comic_pile.reading_session import create_session_start_snapshot
 
 
 async def _seed_migrated_session(
     async_db: AsyncSession,
     user_id: int,
     thread_count: int,
-) -> SessionModel:
+) -> ReadingSession:
     """Create a session with ``thread_count`` migrated threads and a start snapshot."""
-    session = SessionModel(start_die=6, user_id=user_id)
+    session = ReadingSession(start_die=6, user_id=user_id)
     async_db.add(session)
     await async_db.flush()
     for i in range(thread_count):

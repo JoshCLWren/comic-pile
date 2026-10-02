@@ -3,7 +3,7 @@
 import pytest
 
 from httpx import AsyncClient
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, ReadingSession, Thread
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -16,7 +16,7 @@ async def test_rate_session_api_returns_thread_info(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -64,7 +64,7 @@ async def test_rate_session_api_returns_die_info(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -111,7 +111,7 @@ async def test_rate_session_api_returns_has_restore_point(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -156,7 +156,7 @@ async def test_rate_api_invalid_rating(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -189,7 +189,7 @@ async def test_rate_api_low_rating_moves_to_back(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -245,7 +245,7 @@ async def test_rate_api_high_rating_moves_to_front(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -301,7 +301,7 @@ async def test_rate_api_updates_last_activity_at(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -351,7 +351,7 @@ async def test_rate_api_creates_snapshot(auth_client: AsyncClient, async_db: Asy
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -396,7 +396,7 @@ async def test_rate_api_with_min_rating(auth_client: AsyncClient, async_db: Asyn
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -436,7 +436,7 @@ async def test_rate_api_with_max_rating(auth_client: AsyncClient, async_db: Asyn
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -500,7 +500,7 @@ async def test_rate_api_save_and_continue_clears_pending_thread(
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
 
-    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=thread1.id)
+    session = ReadingSession(start_die=10, user_id=user.id, pending_thread_id=thread1.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -560,7 +560,7 @@ async def test_rate_api_completed_thread_still_clears_pending_thread(
     await async_db.refresh(thread)
     await async_db.refresh(thread2)
 
-    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=thread.id)
+    session = ReadingSession(start_die=10, user_id=user.id, pending_thread_id=thread.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -620,7 +620,7 @@ async def test_rate_api_with_multiple_threads_keeps_pending_cleared(
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
 
-    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=thread1.id)
+    session = ReadingSession(start_die=10, user_id=user.id, pending_thread_id=thread1.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -657,7 +657,7 @@ async def test_rate_api_updates_issues_remaining(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -727,7 +727,7 @@ async def test_rate_api_no_pending_thread_when_finish_session(
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
 
-    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=thread1.id)
+    session = ReadingSession(start_die=10, user_id=user.id, pending_thread_id=thread1.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -789,7 +789,7 @@ async def test_rate_api_save_and_continue_does_not_set_pending_thread(
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

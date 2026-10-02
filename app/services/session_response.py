@@ -8,7 +8,7 @@ living as private functions in session.py, snooze.py, and roll.py.
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import (
@@ -17,14 +17,14 @@ from app.schemas.session import (
     build_session_bandwidth_state,
     build_session_intent_state,
 )
-from comic_pile.session import get_current_die
+from comic_pile.reading_session import get_current_die
 
 
 async def build_ladder_path(
     session_id: int,
     db: AsyncSession,
     *,
-    session: SessionModel | None = None,
+    session: ReadingSession | None = None,
     die_events: list[Event] | None = None,
 ) -> str:
     """Build narrative summary of dice ladder from session events.
@@ -39,7 +39,7 @@ async def build_ladder_path(
         String representation of dice ladder path (e.g., "d4 → d6 → d8").
     """
     if session is None:
-        session = await db.get(SessionModel, session_id)
+        session = await db.get(ReadingSession, session_id)
         if not session:
             return ""
 
@@ -89,7 +89,7 @@ async def _fetch_thread_issue_metadata(
 
 async def get_session_with_thread_safe(
     session_id: int, db: AsyncSession
-) -> tuple[SessionModel | None, ActiveThreadInfo | None]:
+) -> tuple[ReadingSession | None, ActiveThreadInfo | None]:
     """Get session and active thread with consistent lock ordering to prevent deadlocks.
 
     Args:
@@ -99,7 +99,7 @@ async def get_session_with_thread_safe(
     Returns:
         Tuple of (session or None, active_thread or None).
     """
-    session = await db.get(SessionModel, session_id)
+    session = await db.get(ReadingSession, session_id)
     if not session:
         return None, None
 
@@ -303,7 +303,7 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
 
 
 async def build_session_response(
-    session: SessionModel,
+    session: ReadingSession,
     db: AsyncSession,
     *,
     current_die: int | None = None,

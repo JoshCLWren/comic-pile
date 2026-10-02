@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 RECENT_SESSIONS_LIMIT = 5
 TOP_THREADS_LIMIT = 5
@@ -54,11 +54,11 @@ async def average_session_hours(db: AsyncSession, user_id: int) -> int | float:
     result = await db.scalar(
         select(
             func.avg(
-                func.extract("epoch", SessionModel.ended_at - SessionModel.started_at) / 3600
+                func.extract("epoch", ReadingSession.ended_at - ReadingSession.started_at) / 3600
             )
         ).where(
-            SessionModel.user_id == user_id,
-            SessionModel.ended_at.isnot(None),
+            ReadingSession.user_id == user_id,
+            ReadingSession.ended_at.isnot(None),
         )
     )
     return round(result, 1) if result is not None else 0
@@ -70,7 +70,7 @@ async def recent_sessions(
     *,
     since: datetime,
     limit: int = RECENT_SESSIONS_LIMIT,
-) -> list[SessionModel]:
+) -> list[ReadingSession]:
     """Return a user's most recent sessions started on or after ``since``.
 
     Args:
@@ -83,12 +83,12 @@ async def recent_sessions(
         Sessions ordered newest first, at most ``limit`` rows.
     """
     result = await db.scalars(
-        select(SessionModel)
+        select(ReadingSession)
         .where(
-            SessionModel.user_id == user_id,
-            SessionModel.started_at >= since,
+            ReadingSession.user_id == user_id,
+            ReadingSession.started_at >= since,
         )
-        .order_by(SessionModel.started_at.desc())
+        .order_by(ReadingSession.started_at.desc())
         .limit(limit)
     )
     return list(result.all())
@@ -106,8 +106,8 @@ async def event_type_counts(db: AsyncSession, user_id: int) -> dict[str, int]:
     """
     result = await db.execute(
         select(Event.type, func.count(Event.id))
-        .join(SessionModel, Event.session_id == SessionModel.id)
-        .where(SessionModel.user_id == user_id)
+        .join(ReadingSession, Event.session_id == ReadingSession.id)
+        .where(ReadingSession.user_id == user_id)
         .group_by(Event.type)
     )
     rows = result.all()

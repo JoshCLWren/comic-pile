@@ -13,7 +13,7 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.password_reset_token import PasswordResetToken
     from app.models.revoked_token import RevokedToken
-    from app.models.session import Session
+    from app.models.reading_session import ReadingSession
     from app.models.thread import Thread
     from app.models.user_preferences import UserPreferences
 
@@ -36,8 +36,8 @@ class User(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
-    sessions: Mapped[list[Session]] = relationship(
-        "Session", back_populates="user", cascade="all, delete-orphan", lazy="raise"
+    reading_sessions: Mapped[list[ReadingSession]] = relationship(
+        "ReadingSession", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
     threads: Mapped[list[Thread]] = relationship(
         "Thread", back_populates="user", cascade="all, delete-orphan", lazy="raise"

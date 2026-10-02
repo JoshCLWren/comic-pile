@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.constants import Bandwidth, BandwidthSource
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 from app.models import Snapshot, Thread
 from app.schemas.session import SessionListItem
 from comic_pile.bandwidth import (
@@ -23,7 +23,7 @@ from comic_pile.bandwidth import (
     restore_ephemeral_bandwidth,
     validate_bandwidth_state,
 )
-from comic_pile.session import end_session, get_or_create, resolve_current_session
+from comic_pile.reading_session import end_session, get_or_create, resolve_current_session
 
 
 @pytest.mark.asyncio
@@ -31,7 +31,7 @@ async def test_predicted_and_active_bandwidth_stored_independently(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC1: Active sessions store predicted and active bandwidth independently."""
-    session = SessionModel(start_die=6, user_id=default_user.id)
+    session = ReadingSession(start_die=6, user_id=default_user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -62,7 +62,7 @@ async def test_predicted_and_active_bandwidth_stored_independently(
     assert session.active_bandwidth == "light"
     assert session.bandwidth_source == "manual"
 
-    persisted = await async_db.get(SessionModel, session.id)
+    persisted = await async_db.get(ReadingSession, session.id)
     assert persisted is not None
     assert persisted.predicted_bandwidth == "balanced"
     assert persisted.active_bandwidth == "light"
@@ -73,13 +73,13 @@ async def test_existing_sessions_without_bandwidth_remain_valid(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC2: Legacy sessions created before bandwidth columns remain valid."""
-    legacy = SessionModel(start_die=6, user_id=default_user.id)
+    legacy = ReadingSession(start_die=6, user_id=default_user.id)
     async_db.add(legacy)
     await async_db.commit()
     await async_db.refresh(legacy)
 
     fetched = (
-        (await async_db.execute(select(SessionModel).where(SessionModel.id == legacy.id)))
+        (await async_db.execute(select(ReadingSession).where(ReadingSession.id == legacy.id)))
         .scalars()
         .one()
     )
@@ -96,7 +96,7 @@ async def test_new_sessions_start_without_inherited_bandwidth(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC2: Fresh sessions never inherit a stale session's bandwidth values."""
-    stale = SessionModel(
+    stale = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC) - timedelta(hours=8),
@@ -151,7 +151,7 @@ async def test_apply_rejects_invalid_state_without_database_write(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC3: apply_bandwidth_state raises before mutating or flushing the row."""
-    session = SessionModel(start_die=6, user_id=default_user.id)
+    session = ReadingSession(start_die=6, user_id=default_user.id)
     async_db.add(session)
     await async_db.commit()
 
@@ -179,7 +179,7 @@ async def test_database_check_constraints_reject_invalid_rows(
     # trigger synchronous lazy loading (MissingGreenlet) in async context.
     user_id = default_user.id
 
-    bad_bandwidth = SessionModel(
+    bad_bandwidth = ReadingSession(
         start_die=6, user_id=user_id, active_bandwidth="overwhelmed"
     )
     async_db.add(bad_bandwidth)
@@ -187,7 +187,7 @@ async def test_database_check_constraints_reject_invalid_rows(
         await async_db.flush()
     await async_db.rollback()
 
-    bad_confidence = SessionModel(
+    bad_confidence = ReadingSession(
         start_die=6,
         user_id=user_id,
         predicted_bandwidth="light",
@@ -199,7 +199,7 @@ async def test_database_check_constraints_reject_invalid_rows(
         await async_db.flush()
     await async_db.rollback()
 
-    valid_boundary = SessionModel(
+    valid_boundary = ReadingSession(
         start_die=6,
         user_id=user_id,
         predicted_bandwidth="deep",
@@ -285,7 +285,7 @@ async def test_get_or_create_initializes_inferred_bandwidth_exactly_once(
     assert resolved.bandwidth_updated_at == initialized_updated_at
     assert resolved.bandwidth_confidence == 0.1
 
-    persisted = await async_db.get(SessionModel, created.id)
+    persisted = await async_db.get(ReadingSession, created.id)
     assert persisted is not None
     assert persisted.predicted_bandwidth == "balanced"
     assert persisted.bandwidth_source == "inferred"
@@ -296,7 +296,7 @@ async def test_get_or_create_preserves_manual_override(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC: Explicit overrides survive subsequent bootstrap requests untouched."""
-    override = SessionModel(
+    override = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -324,7 +324,7 @@ async def test_get_or_create_initializes_legacy_unended_session(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC: Uninitialized legacy sessions get mode state on first bootstrap."""
-    legacy = SessionModel(
+    legacy = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -367,7 +367,7 @@ async def test_bandwidth_initialization_fails_closed_to_balanced(
 @pytest.mark.asyncio
 async def test_clear_ephemeral_bandwidth_resets_all_fields(default_user) -> None:
     """clear_ephemeral_bandwidth wipes every bandwidth field in memory."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         predicted_bandwidth="deep",
@@ -482,7 +482,7 @@ async def test_current_session_endpoint_exposes_bandwidth_state(
     result = await async_db.execute(select(UserModel).where(UserModel.id == default_user.id))
     user = result.scalar_one()
 
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=user.id,
         started_at=datetime.now(UTC),
@@ -517,7 +517,7 @@ async def test_get_session_by_id_exposes_null_bandwidth_for_legacy_row(
     auth_client: AsyncClient, async_db: AsyncSession, default_user
 ) -> None:
     """Legacy sessions serialize with null bandwidth fields, staying API-valid."""
-    session = SessionModel(start_die=6, user_id=default_user.id)
+    session = ReadingSession(start_die=6, user_id=default_user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -601,7 +601,7 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     latest = await repository.get_latest_delta_snapshot(session.id)
     assert latest is not None and latest.id == snapshot.id
 
-    refreshed = await async_db.get(SessionModel, session.id)
+    refreshed = await async_db.get(ReadingSession, session.id)
     assert refreshed is not None
     await service._apply_delta_snapshot(refreshed, latest)
 
@@ -619,7 +619,7 @@ async def test_apply_stamps_mode_version_and_timestamp(
     async_db: AsyncSession, default_user
 ) -> None:
     """Applying state stamps the current mode version and update timestamp."""
-    session = SessionModel(start_die=6, user_id=default_user.id)
+    session = ReadingSession(start_die=6, user_id=default_user.id)
     async_db.add(session)
     await async_db.commit()
 

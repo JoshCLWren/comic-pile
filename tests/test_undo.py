@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Snapshot, Thread, User
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -25,7 +25,7 @@ async def test_list_snapshots_empty(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test listing snapshots for a session with no snapshots."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -40,7 +40,7 @@ async def test_list_snapshots_with_data(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test listing snapshots for a session with snapshots."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -102,7 +102,7 @@ async def test_undo_to_snapshot(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test undoing to a specific snapshot."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -173,7 +173,7 @@ async def test_undo_to_snapshot_invalid_snapshot(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test undoing with invalid snapshot ID."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -188,7 +188,7 @@ async def test_undo_to_snapshot_restores_thread_states(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test that undo correctly restores all thread states."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -268,7 +268,7 @@ async def test_snapshot_created_on_rating(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test that a snapshot is automatically created when rating."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -315,7 +315,7 @@ async def test_multiple_snapshots_listed_in_order(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test that multiple snapshots are listed in reverse chronological order."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -370,7 +370,7 @@ async def test_undo_to_earliest_snapshot(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test undoing to earliest snapshot in a session."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -436,7 +436,7 @@ async def test_undo_restores_session_state(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test that undo correctly restores session state (start_die, manual_die)."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6, manual_die=4, user_id=sample_user.id, started_at=datetime.now(UTC)
     )
     async_db.add(session)
@@ -488,7 +488,7 @@ async def test_undo_to_session_start_snapshot(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test undoing to session start snapshot restores initial state."""
-    session = SessionModel(start_die=20, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=20, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -540,7 +540,7 @@ async def test_undo_handles_missing_session_state(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Test that undo works when snapshot has no session_state (backward compatibility)."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6, manual_die=4, user_id=sample_user.id, started_at=datetime.now(UTC)
     )
     async_db.add(session)
@@ -597,7 +597,7 @@ async def test_delta_snapshot_contains_only_rated_thread(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Delta snapshot stores only the rated thread, not every thread."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -647,7 +647,7 @@ async def test_delta_undo_restores_issues_remaining(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Undoing a delta snapshot restores issues_remaining to pre-rating value."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -690,7 +690,7 @@ async def test_delta_undo_restores_queue_positions(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Undoing a delta snapshot restores queue positions of shifted threads."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -746,7 +746,7 @@ async def test_delta_undo_restores_session_ended_at(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Undoing a delta snapshot with finish_session restores session ended_at to None."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -792,7 +792,7 @@ async def test_backward_compat_full_snapshot_undo(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """An old-style full snapshot (no _version marker) still undoes correctly."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -839,7 +839,7 @@ async def test_delta_undo_with_blocked_changes(
     auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
 ) -> None:
     """Undoing a completion delta restores is_blocked flags."""
-    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
+    session = ReadingSession(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

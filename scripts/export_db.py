@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
-from app.models import Event, Session, Thread, User
+from app.models import Event, ReadingSession, Thread, User
 
 
 def datetime_converter(obj):
@@ -53,7 +53,7 @@ async def export_database():
                 for t in threads
             ]
 
-            result = await db.execute(select(Session))
+            result = await db.execute(select(ReadingSession))
             sessions = result.scalars().all()
             data["sessions"] = [
                 {

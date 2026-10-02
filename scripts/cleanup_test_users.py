@@ -10,7 +10,7 @@ import os
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
-from app.models import Event, Session, Snapshot, Thread
+from app.models import Event, ReadingSession, Snapshot, Thread
 from app.models.user import User
 
 ASYNC_DB_URL = os.getenv(
@@ -67,7 +67,7 @@ async def cleanup_test_users():
 
             # Delete snapshots associated with this user's sessions
             sessions_result = await session.execute(
-                select(Session).where(Session.user_id == user_id)
+                select(ReadingSession).where(ReadingSession.user_id == user_id)
             )
             sessions = sessions_result.scalars().all()
             session_ids = [s.id for s in sessions]

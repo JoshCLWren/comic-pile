@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 
 def _assert_issue_metadata(
@@ -30,7 +30,7 @@ async def test_session_with_legacy_thread_returns_nulls(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -88,7 +88,7 @@ async def test_session_with_migrated_thread_returns_metadata(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -163,7 +163,7 @@ async def test_current_session_refetch_preserves_issue_metadata(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -248,7 +248,7 @@ async def test_current_session_legacy_thread_has_null_issue_metadata(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -300,7 +300,7 @@ async def test_current_session_completed_thread_has_null_next_issue(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -439,7 +439,7 @@ async def test_rate_with_issue_number_triggers_migration(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -503,7 +503,7 @@ async def test_completed_thread_session_metadata(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -574,7 +574,7 @@ async def test_session_list_with_migrated_thread(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -647,7 +647,7 @@ async def test_pending_thread_includes_metadata(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -708,7 +708,7 @@ async def test_migration_during_rating_marks_issues_correctly(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -827,7 +827,7 @@ async def test_completed_migrated_thread_has_no_next_issue(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -886,7 +886,7 @@ async def test_legacy_thread_returns_nulls_for_issue_fields(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -950,7 +950,7 @@ async def test_migration_with_issue_number_1_starts_fresh(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -1013,7 +1013,7 @@ async def test_migration_with_zero_issues_remaining(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -1065,7 +1065,7 @@ async def test_migration_already_migrated_thread_skips_migration(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=10, user_id=user.id)
+    session = ReadingSession(start_die=10, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

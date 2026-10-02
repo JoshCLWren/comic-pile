@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 
 @pytest.mark.asyncio
@@ -24,7 +24,7 @@ async def test_snooze_success(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -105,7 +105,7 @@ async def test_snooze_no_pending_thread(
     user = await get_or_create_user_async(async_db)
 
     # Create session without pending_thread_id
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
 
@@ -141,7 +141,7 @@ async def test_snooze_excludes_from_roll(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -211,7 +211,7 @@ async def test_snooze_duplicate_thread(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -301,7 +301,7 @@ async def test_snooze_all_threads(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -361,7 +361,7 @@ async def test_snooze_steps_die_up_from_max(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=20, manual_die=20, user_id=user.id)
+    session = ReadingSession(start_die=20, manual_die=20, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -414,7 +414,7 @@ async def test_snooze_multiple_different_threads(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

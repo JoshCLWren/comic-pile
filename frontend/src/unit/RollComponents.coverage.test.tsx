@@ -172,7 +172,9 @@ describe('RatingView', () => {
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /fix issue number/i }))
+    // #3008: the correction action lives in the overflow menu.
+    await user.click(screen.getByRole('button', { name: 'Comic corrections' }))
+    await user.click(screen.getByRole('menuitem', { name: /fix issue number/i }))
     await user.click(screen.getByRole('button', { name: /close correction/i }))
     const rating = screen.getByRole('slider')
     fireEvent.change(rating, { target: { value: '3' } })
@@ -191,7 +193,9 @@ describe('RatingView', () => {
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
-    await userEvent.setup().click(screen.getByRole('button', { name: /fix issue number/i }))
+    // #3008: the correction action lives in the overflow menu.
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Comic corrections' }))
+    await userEvent.setup().click(screen.getByRole('menuitem', { name: /fix issue number/i }))
     await userEvent.setup().click(screen.getByRole('button', { name: 'Correct successfully' }))
     expect(callbacks.onRefreshThread).toHaveBeenCalled()
     fireEvent.change(screen.getByRole('slider'), { target: { value: '2' } })

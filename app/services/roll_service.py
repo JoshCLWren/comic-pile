@@ -14,7 +14,7 @@ from typing import TypedDict
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session, Thread
+from app.models import Event, ReadingSession, Thread
 from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.repositories.roll_repository import (
@@ -51,7 +51,7 @@ from comic_pile.recommendation_version import (
     RECOMMENDATION_ALGORITHM_VERSION,
     recommendation_algorithm_version,
 )
-from comic_pile.session import get_current_die_for_session, get_or_create
+from comic_pile.reading_session import get_current_die_for_session, get_or_create
 
 from app.config import get_recommendation_settings
 from app.schemas import RollResponse
@@ -101,7 +101,7 @@ class RollService:
         self,
         *,
         user_id: int,
-        current_session: Session,
+        current_session: ReadingSession,
         current_die: int,
         excluded_ids: list[int],
         selection_bandwidth: str,

@@ -12,7 +12,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 from app.models.user import User
 from app.services.reading_quiz import (
     ReadingModeSource,
@@ -28,9 +28,9 @@ class ReadingModeService:
         """Store the async database session used for all persistence calls."""
         self.db = db
 
-    async def _get_active_session(self, user: User) -> SessionModel:
+    async def _get_active_session(self, user: User) -> ReadingSession:
         """Return the active session for the current user, creating one if needed."""
-        from comic_pile.session import get_or_create
+        from comic_pile.reading_session import get_or_create
 
         return await get_or_create(self.db, user_id=user.id, existing_user=user)
 

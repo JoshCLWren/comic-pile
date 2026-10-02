@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Snapshot, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 from app.models.user import User
 from app.services.rate_service import snapshot_thread_states
 
@@ -93,7 +93,7 @@ async def test_full_snapshot_issue_loads_are_constant(
         async_db, default_user, thread_count
     )
 
-    session = SessionModel(start_die=6, user_id=default_user.id)
+    session = ReadingSession(start_die=6, user_id=default_user.id)
     async_db.add(session)
     await async_db.flush()
     event = Event(type="rate", session_id=session.id, rating=4.0)

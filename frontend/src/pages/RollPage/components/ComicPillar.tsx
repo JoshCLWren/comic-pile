@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
+import OverflowMenu, { type OverflowMenuItem } from '../../../components/OverflowMenu'
 import { comicVineApi } from '../../../services/api'
 import type { ComicVineIssueCandidate } from '../../../services/api-comicvine'
 import type { IssueIdentityResponse } from '../../../services/api-comicvine'
@@ -77,6 +78,64 @@ export function ComicPillar({
   }, [fetchIdentity, onRefreshThread, issueId])
 
   const needsIdentity = identityState && !identityState.has_confirmed_identity
+  const isLinked = Boolean(identityState?.has_confirmed_identity)
+
+  // Issue #3008: correction tools are occasional recovery actions, so they must
+  // not compete with the title, cover, rating, and Mark read & save hierarchy
+  // that follows the read/rate flow. They collapse into one quiet overflow
+  // trigger, and the mapping status stays readable next to it so the current
+  // state is discoverable without opening an edit flow.
+  const correctionItems = useMemo<OverflowMenuItem[]>(() => {
+    const entries: OverflowMenuItem[] = []
+
+    if (issueNumber != null) {
+      entries.push({
+        key: 'fix-issue-number',
+        label: 'Fix issue #',
+        ariaLabel: 'Fix issue number',
+        description: `Set the current issue number for ${threadTitle}`,
+        disabled: !activeRatingThread?.id,
+        onSelect: () => setIsCorrectionDialogOpen(true),
+      })
+    }
+
+    if (needsIdentity && issueId) {
+      entries.push({
+        key: 'find-comicvine-match',
+        label: 'Find match',
+        ariaLabel: 'Find ComicVine match',
+        description: 'Match this issue to a ComicVine series',
+        onSelect: () => {
+          setSearchMode('confirm')
+          setIsSearchDialogOpen(true)
+        },
+      })
+    }
+
+    if (isLinked && issueId) {
+      entries.push({
+        key: 'wrong-series',
+        label: 'Wrong series?',
+        ariaLabel: 'Wrong series?',
+        description: 'Map this issue to a different series',
+        onSelect: () => {
+          setSearchMode('replace')
+          setIsSearchDialogOpen(true)
+        },
+      })
+    }
+
+    return entries
+  }, [
+    activeRatingThread?.id,
+    isLinked,
+    issueId,
+    issueNumber,
+    needsIdentity,
+    threadTitle,
+  ])
+
+  const identityStatusLabel = isLinked ? 'Linked' : 'Not linked'
 
   return (
     <div className="w-full space-y-4">
@@ -124,53 +183,41 @@ export function ComicPillar({
             </div>
           </div>
 
-          {/* Compact identity/correction controls */}
-          {(issueNumber != null || (needsIdentity && issueId) || (identityState?.has_confirmed_identity && issueId)) && (
-            <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid="comic-header-controls">
-              {issueNumber != null && (
-                <button
-                  type="button"
-                  onClick={() => setIsCorrectionDialogOpen(true)}
-                  disabled={!activeRatingThread?.id}
-                  className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                  }}
-                  aria-label="Fix issue number"
+          {/* Quiet correction affordance: mapping status stays readable and the
+              occasional correction actions collapse into one overflow menu
+              (issue #3008) instead of competing with the read/rate hierarchy. */}
+          {(identityState != null || correctionItems.length > 0) && (
+            <div
+              className="flex min-w-0 flex-wrap items-center gap-2"
+              data-testid="comic-header-controls"
+            >
+              {identityState != null && (
+                <span
+                  data-testid="comic-mapping-status"
+                  data-mapping-status={isLinked ? 'linked' : 'unlinked'}
+                  className={`inline-flex min-h-6 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                    isLinked
+                      ? 'border-[var(--theme-comic-accent)]/30 text-[var(--theme-comic-accent)]'
+                      : 'border-[var(--theme-border)] text-[var(--theme-text-dim)]'
+                  }`}
                 >
-                  Fix issue #
-                </button>
+                  <span
+                    aria-hidden="true"
+                    data-testid="comic-mapping-status-dot"
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isLinked ? 'bg-[var(--theme-comic-accent)]' : 'bg-[var(--theme-text-dim)]'
+                    }`}
+                  />
+                  {identityStatusLabel}
+                </span>
               )}
 
-              {needsIdentity && issueId && (
-                <button
-                  type="button"
-                  onClick={() => { setSearchMode('confirm'); setIsSearchDialogOpen(true) }}
-                  className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-900 bg-amber-500 hover:bg-amber-400 transition"
-                >
-                  Find ComicVine match
-                </button>
-              )}
-
-              {identityState?.has_confirmed_identity && issueId && (
-                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1 rounded-full px-2 py-1 bg-green-500/10 border border-green-500/30">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-                    <span className="text-[9px] font-bold text-green-400">Linked</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setSearchMode('replace'); setIsSearchDialogOpen(true) }}
-                    className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-400 hover:text-amber-400 transition"
-                    style={{
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      backgroundColor: 'rgba(255,255,255,0.05)',
-                    }}
-                  >
-                    Wrong series?
-                  </button>
-                </div>
+              {correctionItems.length > 0 && (
+                <OverflowMenu
+                  label="Comic corrections"
+                  items={correctionItems}
+                  triggerTestId="comic-corrections-menu"
+                />
               )}
             </div>
           )}

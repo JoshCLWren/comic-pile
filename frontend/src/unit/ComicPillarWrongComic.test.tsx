@@ -78,6 +78,13 @@ const confirmedThread = {
   last_rolled_result: null,
 }
 
+/** #3008: correction actions now live in the quiet overflow menu (#3008). */
+async function openCorrectionAction(name: string): Promise<HTMLElement> {
+  const trigger = await screen.findByRole('button', { name: 'Comic corrections' })
+  fireEvent.click(trigger)
+  return screen.findByRole('menuitem', { name })
+}
+
 describe('ComicPillar Wrong comic? flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -96,8 +103,7 @@ describe('ComicPillar Wrong comic? flow', () => {
   it('routes a correction opened via Wrong comic? to the replace endpoint', async () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
-    const wrongComicButton = await screen.findByRole('button', { name: 'Wrong series?' })
-    fireEvent.click(wrongComicButton)
+    fireEvent.click(await openCorrectionAction('Wrong series?'))
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
@@ -123,8 +129,7 @@ describe('ComicPillar Wrong comic? flow', () => {
 
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
-    const findMatchButton = await screen.findByRole('button', { name: 'Find ComicVine match' })
-    fireEvent.click(findMatchButton)
+    fireEvent.click(await openCorrectionAction('Find ComicVine match'))
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
@@ -171,7 +176,7 @@ describe('ComicPillar confirmed mapping display', () => {
 
     expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
+    fireEvent.click(await openCorrectionAction('Wrong series?'))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
