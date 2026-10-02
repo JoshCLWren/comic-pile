@@ -4,6 +4,7 @@ import {
   useId,
   useRef,
   useState,
+  // SAFETY: React's KeyboardEvent is a DOM event, not a React synthetic event
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import OverlayPortal from './OverlayPortal'
