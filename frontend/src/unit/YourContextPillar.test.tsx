@@ -297,6 +297,6 @@ describe('YourContextPillar reader-context integration', () => {
       />,
     )
     expect(screen.getByText('d6 → d4')).toBeInTheDocument()
-    expect(screen.getByText('More focused next roll')).toBeInTheDocument()
+    expect(screen.queryByText('More focused next roll')).not.toBeInTheDocument()
   })
 })

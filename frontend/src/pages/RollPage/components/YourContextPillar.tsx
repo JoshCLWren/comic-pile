@@ -1,6 +1,6 @@
 import GlossaryLink from '../../../components/GlossaryLink'
 import type { ReaderContextResponse } from '../../../services/api-reader-context'
-import { RATING_THRESHOLD, getDieDirection } from '../utils'
+import { RATING_THRESHOLD } from '../utils'
 import type { RatingThread } from '../types'
 import { SeriesPanel } from './SeriesPanel'
 import { CrossoverAnalytics } from './CrossoverAnalytics'
@@ -34,7 +34,6 @@ export function YourContextPillar({
   readerContext,
   isLoading,
 }: YourContextPillarProps) {
-  const dieDirection = getDieDirection(currentDie, predictedDie)
   const isLastIssue = activeRatingThread?.issues_remaining === 1
   const hasMeaningfulContext = isLoading || readerContext !== null || isLastIssue
 
@@ -69,7 +68,6 @@ export function YourContextPillar({
             <p className="text-sm font-black text-stone-200">
             <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
           </p>
-            <p className="text-[10px] font-bold text-stone-500">{dieDirection}</p>
           </div>
         </div>
         <input
