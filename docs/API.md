@@ -920,7 +920,7 @@ curl -O http://localhost:8000/admin/export/csv/
 - **Single User**: The API is designed for single-user applications (user_id is always 1)
 - **Session Timeout**: Sessions are considered inactive after 6 hours of inactivity
 - **Dice Ladder**: The dice ladder follows the pattern: d4 → d6 → d8 → d10 → d12 → d20
-- **Caching**: Thread and session data is cached for performance (30s and 10s TTL respectively)
+
 - **CORS**: All origins are allowed for local network access during development
 
 ### Dependency Blocking Behavior

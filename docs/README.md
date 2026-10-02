@@ -12,7 +12,7 @@ Do not create a new Markdown file just because a topic needs notes. Extend the e
 
 ComicPile deploys production from `main` on Vercel. The frontend is a static Vite build and backend API routes use FastAPI. PostgreSQL is hosted by Neon. Pull requests are validated locally and in GitHub Actions; Vercel Preview environments are intentionally unsupported. Fly.io and Railway are historical deployment experiments, not current deployment targets.
 
-Remote Redis caching is governed by the active cache implementation. Documentation about caching must describe the current code rather than older provider experiments.
+
 
 What’s New is backed by the release API and Neon release ledger. A dedicated post-merge release writer publishes and reconciles user-facing release notes. `docs/changelog.md` and `docs/changelog.d/` are frozen historical migration sources retained only for provenance; they are not runtime inputs or pull-request requirements.
 

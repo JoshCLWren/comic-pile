@@ -1,6 +1,6 @@
 """SQLAlchemy database models."""
 
-from app.models.cache import CacheEntry, CacheGeneration, CacheUsage
+
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
@@ -36,9 +36,6 @@ from app.models.user import User
 from app.models.user_preferences import UserPreferences
 
 __all__ = [
-    "CacheEntry",
-    "CacheGeneration",
-    "CacheUsage",
     "CBLSource",
     "CBLSourceEntry",
     "CBLSourceList",

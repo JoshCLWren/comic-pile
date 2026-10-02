@@ -5,7 +5,33 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.benchmark_cache_latency import load_dotenv_values
+def load_dotenv_values(path: str) -> dict[str, str]:
+    """Load KEY=VALUE pairs from a Vercel env-pull file without printing values.
+    
+    Args:
+        path: Path to a .env-style file.
+    
+    Returns:
+        A mapping of variable names to unquoted values.
+    """
+    values: dict[str, str] = {}
+    with open(path, encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            if not key or not key.replace("_", "").isalnum():
+                continue
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                value = value[1:-1]
+            if not value or value == "[SENSITIVE]":
+                continue
+            values[key] = value
+    return values
+
+
 from scripts.decrypt_vercel_kv_rest import (
     KV_READ_ONLY_TOKEN_KEY,
     KV_TOKEN_KEY,
