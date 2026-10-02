@@ -172,4 +172,53 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.getByText('Next unread issue')).toBeVisible()
     expect(screen.queryByText('Issue')).not.toBeInTheDocument()
   })
+
+  it('truncates the route cue as a block and skips empty route labels (#3011)', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{
+            id: 7,
+            title: 'Amazing Adventures',
+            format: 'ongoing',
+            issue_number: '12',
+            route_labels: ['Secret War', '', 'Civil War'],
+          }]}
+        />
+      </MemoryRouter>,
+    )
+
+    const routeCue = screen.getByText(/Connected to:/)
+    expect(routeCue.textContent).toBe('Connected to: Secret War · Civil War')
+    // `truncate` only takes effect on the block itself, so the cue must not be
+    // wrapped in an inline span that silently drops the ellipsis.
+    expect(routeCue.tagName).toBe('P')
+    expect(routeCue).toHaveClass('truncate')
+    expect(routeCue.querySelector('span')).toBeNull()
+
+    const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
+    expect(row).toHaveAccessibleName(/connected to Secret War, Civil War/i)
+  })
+
+  it('omits the route cue entirely when every route label is empty', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{
+            id: 7,
+            title: 'Amazing Adventures',
+            format: 'ongoing',
+            issue_number: '12',
+            route_labels: [''],
+          }]}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryByText(/Connected to:/)).toBeNull()
+    const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
+    expect(row).not.toHaveAccessibleName(/connected to/i)
+  })
 })

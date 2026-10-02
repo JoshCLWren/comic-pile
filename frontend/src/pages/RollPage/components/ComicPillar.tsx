@@ -20,6 +20,10 @@ interface ComicPillarProps {
   onRefreshThread: () => void
 }
 
+// A non-breaking space before the separator glues it to the item it follows, so
+// a wrap can never strand a bare separator at the start of the next line.
+const METADATA_SEPARATOR = '\u00a0· '
+
 export function ComicPillar({
   activeRatingThread,
   onRefreshThread,
@@ -36,18 +40,16 @@ export function ComicPillar({
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const progress = getProgressPercentage(activeRatingThread)
   const { metadata } = useComicVineIssueIntelligence(issueId)
-  const displayDate = useMemo(() => {
-    const raw = metadata?.store_date ?? metadata?.cover_date ?? null
-    if (!raw) return null
-    const [y, m, d] = raw.split('-').map(Number)
-    if (!y || !m || !d) return raw
-    // Use more concise format to reduce redundancy
-    return new Intl.DateTimeFormat(undefined, {
-      month: 'short',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(new Date(Date.UTC(y, m - 1, d)))
-  }, [metadata?.store_date, metadata?.cover_date])
+  const storyTitle = metadata?.name ?? null
+  // The publication date is rendered once, beside the cover in ComicIdentity.
+  // Repeating it here only produced two dates for the same issue.
+  const progressItems = [
+    ...(issueNumber != null && totalIssues != null
+      ? [`Issue ${issueNumber} of ${totalIssues}`]
+      : []),
+    `${progress}% complete`,
+    `${issuesRemaining} left`,
+  ]
 
   const fetchIdentity = useCallback(async () => {
     if (!issueId) {
@@ -159,22 +161,24 @@ export function ComicPillar({
             <div className="flex flex-col gap-2">
               <h2 data-testid="comic-header-title" className="text-xl font-black text-stone-100 leading-tight break-words">
                 {threadTitle}
-                {issueNumber != null ? <span className="text-[var(--theme-comic-accent)] ml-1"> #{issueNumber}</span> : null}
+                {issueNumber != null ? <span className="ml-1 text-[var(--theme-comic-accent)]"> #{issueNumber}</span> : null}
               </h2>
-              {(issueNumber != null || displayDate) && (
-                <div data-testid="comic-progress-line" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    {issueNumber != null && totalIssues != null && (
-                      <span>Issue {issueNumber} of {totalIssues}</span>
-                    )}
-                    <span>{progress}% complete</span>
-                    <span>{issuesRemaining} left</span>
-                    {displayDate && (
-                      <span>{displayDate}</span>
-                    )}
-                  </div>
-                </div>
-              )}
+              {storyTitle ? (
+                <p data-testid="comic-story-title" className="text-sm font-semibold leading-snug text-stone-300 break-words">
+                  {storyTitle}
+                </p>
+              ) : null}
+              <p
+                data-testid="comic-progress-line"
+                className="text-[11px] font-bold text-stone-500"
+              >
+                {progressItems.map((item, index) => (
+                  <span key={item} className="whitespace-nowrap">
+                    {index > 0 ? <span aria-hidden="true">{METADATA_SEPARATOR}</span> : null}
+                    {item}
+                  </span>
+                ))}
+              </p>
             </div>
           </div>
 

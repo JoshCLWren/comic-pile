@@ -236,12 +236,6 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       </div>
 
       <div className="space-y-3">
-        {metadata.name && (
-          <h3 className="text-base font-black text-stone-200 leading-tight break-words">
-            {metadata.name}
-          </h3>
-        )}
-
         {date && (
           <p className="text-[11px] text-stone-500">{date}</p>
         )}

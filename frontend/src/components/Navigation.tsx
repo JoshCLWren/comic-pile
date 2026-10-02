@@ -407,27 +407,25 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                 role="group"
                 aria-label="Appearance"
               >
-                <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
-                <div className="flex gap-1">
-                  {APPEARANCE_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      data-theme={option.id}
-                      onClick={() => setTheme(option.id)}
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
+                {APPEARANCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    data-theme={option.id}
+                    onClick={() => setTheme(option.id)}
                     aria-pressed={activeTheme === option.id}
                     aria-label={option.label}
                     title={option.label}
-                    className={`h-6 rounded-md px-1.5 text-[8px] font-bold transition-colors ${
-                        activeTheme === option.id
-                          ? 'bg-white/10 text-[var(--theme-text-primary)]'
-                          : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-                      }`}
-                    >
-                      {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
-                    </button>
-                  ))}
-                </div>
+                    className={`h-7 w-7 rounded-md text-[10px] font-bold transition-colors ${
+                      activeTheme === option.id
+                        ? 'bg-white/10 text-[var(--theme-text-primary)]'
+                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                    }`}
+                  >
+                    {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
+                  </button>
+                ))}
               </div>
               {authState.status === 'authenticated' && (
                 <div className="mt-2 w-full">
