@@ -1,6 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import Modal from '../../../components/Modal'
-import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { RATING_THRESHOLD, getDieDirection } from '../utils'
 import type { RatingThread } from '../types'
@@ -117,11 +116,11 @@ export function DecisionCard({
 
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
-          <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the series to the front of the queue and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
-            <p id="rating-value" className={`text-5xl font-black ${rating >= RATING_THRESHOLD ? 'text-[var(--theme-personal-accent)]' : 'text-[var(--theme-danger)]'}`}>
-              {rating.toFixed(1)}
-            </p>
-          </Tooltip>
+          <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the series to the front of the queue and step the die down.`}>
+              <p id="rating-value" className={`text-5xl font-black ${rating >= RATING_THRESHOLD ? 'text-[var(--theme-personal-accent)]' : 'text-[var(--theme-danger)]'}`}>
+                {rating.toFixed(1)}
+              </p>
+            </Tooltip>
           <p className="text-[11px] font-bold text-stone-400">
             <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
           </p>

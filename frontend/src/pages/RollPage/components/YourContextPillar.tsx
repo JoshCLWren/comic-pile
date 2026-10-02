@@ -1,4 +1,3 @@
-import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
 import type { ReaderContextResponse } from '../../../services/api-reader-context'
 import { RATING_THRESHOLD, getDieDirection } from '../utils'
@@ -59,11 +58,9 @@ export function YourContextPillar({
       <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
         <div className="flex items-end justify-between gap-3">
           <div>
-            <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the series to the front of the queue and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
-              <h3 id="rating-heading" className="cursor-help text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+            <h3 id="rating-heading" className="cursor-help text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
                 Your rating
               </h3>
-            </Tooltip>
             <p id="rating-value" className={`mt-1 text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-amber-500' : 'text-red-600'}`}>
               {rating.toFixed(1)}
             </p>
