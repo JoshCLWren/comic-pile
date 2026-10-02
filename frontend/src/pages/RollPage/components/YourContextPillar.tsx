@@ -58,16 +58,16 @@ export function YourContextPillar({
         <div className="flex items-end justify-between gap-3">
           <div>
             <h3 id="rating-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
-                Your rating
-              </h3>
+              Your rating
+            </h3>
             <p id="rating-value" className={`mt-1 text-4xl font-black ${getRatingColorClass(rating)}`}>
               {rating.toFixed(1)}
             </p>
           </div>
           <div className="text-right">
             <p className="text-sm font-black text-stone-200">
-            <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
-          </p>
+              <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+            </p>
           </div>
         </div>
         <input
