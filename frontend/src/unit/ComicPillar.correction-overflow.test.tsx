@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
+import type { Thread } from '../types'
 
 const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy } =
   vi.hoisted(() => ({
@@ -50,7 +51,7 @@ vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
 
 import { ComicPillar } from '../pages/RollPage/components/ComicPillar'
 
-const linkedThread = {
+const linkedThread: Thread = {
   id: 7,
   title: 'Stormwatch Vol. 1',
   format: 'single',
@@ -58,14 +59,18 @@ const linkedThread = {
   queue_position: 1,
   total_issues: 12,
   reading_progress: '58.33',
-  issue_id: 43,
-  issue_number: '43',
-  next_issue_id: 43,
-  next_issue_number: '43',
-  last_rolled_result: null,
+  next_unread_issue_number: '43',
+  status: 'active',
+  is_blocked: false,
+  blocking_reasons: [],
+  last_rating: null,
+  last_activity_at: null,
+  notes: null,
+  is_test: false,
+  created_at: '2024-01-01T00:00:00Z',
 }
 
-const unlinkedThread = { ...linkedThread, id: null }
+const unlinkedThread: Thread = { ...linkedThread, id: 0 }
 
 const mockSeries = {
   comicvine_volume_id: 42,
@@ -89,10 +94,11 @@ const mockIssue = {
 
 function renderPillar(
   // SAFETY: the stubbed thread supplies only the fields the pillar reads
-  thread: Record<string, unknown> = linkedThread,
+  thread: Thread = linkedThread,
 ) {
   return render(
     <ComicPillar
+      // SAFETY: test stub supplies only the fields ComicPillar reads from activeRatingThread
       activeRatingThread={thread as never}
       onRefreshThread={vi.fn()}
     />,

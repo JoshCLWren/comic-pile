@@ -22,7 +22,7 @@ function stubTriggerRect(
     x: rect.left,
     y: rect.top,
     toJSON() {},
-  } as DOMRect)
+  } as DOMRect) // SAFETY: mock shape matches DOMRect interface
 }
 
 async function openMenu(): Promise<HTMLElement> {

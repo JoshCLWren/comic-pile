@@ -195,6 +195,7 @@ export default function OverflowMenu({
 
     const itemsList = itemRefs.current.filter((item): item is HTMLButtonElement => item != null)
     if (itemsList.length === 0) return
+    // SAFETY: menu items are buttons, so activeElement must be a button when in menu
     const currentIndex = itemsList.indexOf(document.activeElement as HTMLButtonElement)
 
     if (event.key === 'ArrowDown') {
