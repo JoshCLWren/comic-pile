@@ -426,9 +426,6 @@ async def test_dependency_health_endpoint_still_works(
 
     test_app = create_app(serve_frontend=False)
 
-    async def healthy_cache() -> None:
-        return None
-
     async def unavailable_database(_: AsyncSession) -> None:
         raise health_probe.ProbeUnavailableError("database offline")
 

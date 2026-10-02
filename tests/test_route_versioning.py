@@ -200,7 +200,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/auth/reset-password",
             "/api/bug-reports/",
             "/api/health",
-            "/api/health/cache-quota",
             "/api/health/dependencies",
             "/api/health/live",
             "/api/health/warmup",

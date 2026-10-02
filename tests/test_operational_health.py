@@ -28,8 +28,10 @@ async def test_liveness_does_not_probe_dependencies(
         None.
     """
 
-    async def fail_if_called() -> None:
+    async def fail_if_called(*_: object) -> None:
         raise AssertionError("dependency probe must not run")
+
+    monkeypatch.setattr(health_probe, "database_probe", fail_if_called)
 
     response = await client.get("/api/v1/health/live")
 
@@ -40,59 +42,47 @@ async def test_liveness_does_not_probe_dependencies(
 @pytest.mark.asyncio
 async def test_dependency_health_reports_independent_timings(
     client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify healthy dependency responses include independent timings.
+    """Verify the healthy dependency response reports database and total timings.
 
     Args:
         client: Async HTTP client for the test application.
-        monkeypatch: Pytest fixture for replacing the cache probe.
 
     Returns:
         None.
     """
-
-    async def healthy_cache() -> None:
-        return None
-
     response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "healthy"
     assert payload["database"]["status"] == "healthy"
-    assert payload["cache"]["status"] == "healthy"
     assert payload["database"]["duration_ms"] >= 0
-    assert payload["cache"]["duration_ms"] >= 0
     assert payload["total_duration_ms"] >= 0
 
 
 @pytest.mark.asyncio
-async def test_dependency_health_reports_partial_failure(
+async def test_dependency_health_reports_no_cache_dependency(
     client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify cache failure degrades an otherwise healthy response.
+    """Verify the bounded probe never reports or degrades on an application cache.
+
+    The application cache subsystem was deleted in issue #2974, so the bounded
+    dependency probe reports the database only. No second dependency exists that
+    could degrade an otherwise healthy response.
 
     Args:
         client: Async HTTP client for the test application.
-        monkeypatch: Pytest fixture for replacing the cache probe.
 
     Returns:
         None.
     """
-
-    async def unavailable_cache() -> None:
-        raise ProbeUnavailableError("cache offline")
-
     response = await client.get("/api/v1/health/dependencies")
 
-    assert response.status_code == 207
+    assert response.status_code == 200
     payload = response.json()
-    assert payload["status"] == "degraded"
-    assert payload["database"]["status"] == "healthy"
-    assert payload["cache"]["status"] == "unavailable"
-    assert "offline" not in response.text
+    assert payload["status"] == "healthy"
+    assert "cache" not in payload
 
 
 @pytest.mark.asyncio
@@ -113,9 +103,6 @@ async def test_dependency_health_reports_database_unavailable(
     async def unavailable_database(_: AsyncSession) -> None:
         raise ProbeUnavailableError("database offline")
 
-    async def healthy_cache() -> None:
-        return None
-
     monkeypatch.setattr(health_probe, "database_probe", unavailable_database)
     response = await client.get("/api/v1/health/dependencies")
 
@@ -123,7 +110,6 @@ async def test_dependency_health_reports_database_unavailable(
     payload = response.json()
     assert payload["status"] == "unhealthy"
     assert payload["database"]["status"] == "unavailable"
-    assert payload["cache"]["status"] == "healthy"
     assert "database offline" not in response.text
 
 
@@ -173,7 +159,7 @@ async def test_operational_token_hides_detailed_endpoints(
     )
 
     assert hidden.status_code == 404
-    assert allowed.status_code in (200, 207, 503)
+    assert allowed.status_code in (200, 503)
 
 
 @pytest.mark.asyncio
@@ -181,7 +167,7 @@ async def test_legacy_health_is_dependency_free(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify the public legacy route never opens database or cache connections.
+    """Verify legacy liveness never opens database connections.
 
     Args:
         client: Async HTTP client for the test application.
@@ -207,20 +193,24 @@ async def test_warmup_uses_read_only_dependency_boundary(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify warm-up exercises the bounded database and cache path.
+    """Verify warm-up exercises the bounded read-only database path exactly once.
 
     Args:
         client: Async HTTP client for the test application.
-        monkeypatch: Pytest fixture for replacing the cache probe.
+        monkeypatch: Pytest fixture for replacing the database probe.
 
     Returns:
         None.
     """
     calls = 0
+    original_probe = health_probe.database_probe
 
-    async def healthy_cache() -> None:
+    async def counting_probe(db: AsyncSession) -> None:
         nonlocal calls
         calls += 1
+        await original_probe(db)
+
+    monkeypatch.setattr(health_probe, "database_probe", counting_probe)
 
     response = await client.get("/api/v1/health/warmup")
 

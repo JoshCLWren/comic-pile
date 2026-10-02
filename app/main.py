@@ -593,7 +593,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.on_event("startup")
     async def startup_event():
-        """Lightweight startup; heavy DB/cache init is deferred to first non-ping request."""
+        """Lightweight startup; heavy DB init is deferred to first non-ping request."""
         await compute_startup_duration()
         from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
 
