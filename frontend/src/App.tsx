@@ -20,7 +20,6 @@ import api, {
 import { isDefinitiveAuthenticationFailure, createAuthError, type AuthState, calculateRetryDelay } from './services/authState'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
-
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { PreferencesSync } from './hooks/usePreferences'
 import { useAuthDegradedState, ServiceUnavailableWrapper } from './hooks/useAuthDegradedState'
