@@ -169,21 +169,32 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import bug_report
     from app.api import catalog
     from app.api import cbl_plan_adoption
+    from app.api import cbl_sources
     from app.api import comicvine_resolution
+    from app.api import continuity_plan
+    from app.api import continuity_rule
+    from app.api import continuity_template
     from app.api import creators
+    from app.api import custom_cbl
     from app.api import dependency
+    from app.api import dependency_group
+    from app.api import dependency_group_batch
     from app.api import delivery
     from app.api import health
     from app.api import identity_inbox
     from app.api import issue
+    from app.api import issue_dependency_batch
     from app.api import issue_identity
     from app.api import preferences
     from app.api import queue
     from app.api import rate
     from app.api import reading_mode
+    from app.api import reading_order_projection
     from app.api import reading_orders
     from app.api import recommendation_diagnostics
+    from app.api import releases
     from app.api import roll
+    from app.api import roll_recovery_switch
     from app.api import session
     from app.api import snooze
     from app.api import taste
@@ -243,6 +254,20 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(identity_inbox.router, tags=["identity-inbox"])
     app.include_router(issue_identity.router, tags=["issue-identity"])
     app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
+    
+    # Additional router registrations that were moved from app/api/__init__.py
+    # These are registered here to maintain the lazy loading strategy
+    dependency.router.include_router(issue_dependency_batch.router)
+    dependency.router.include_router(dependency_group.router)
+    dependency.router.include_router(dependency_group_batch.router)
+    dependency.router.include_router(continuity_rule.router)
+    dependency.router.include_router(continuity_plan.router)
+    dependency.router.include_router(continuity_template.router)
+    dependency.router.include_router(reading_order_projection.router)
+    dependency.router.include_router(cbl_sources.router)
+    dependency.router.include_router(custom_cbl.router)
+    dependency.router.include_router(roll_recovery_switch.router, prefix="/roll")
+    dependency.router.include_router(releases.router, prefix="/releases")
 
 
 def _register_debug_routers(app: FastAPI, environment: str) -> None:
