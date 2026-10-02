@@ -74,11 +74,14 @@ async def test_reset_atomic_and_revokes_auth_sessions(auth_client: AsyncClient, 
 
 @pytest.mark.asyncio
 async def test_reset_preserves_reading_sessions(auth_client: AsyncClient, async_db) -> None:
-    """Password reset preserves all populated reading history (issue #2998)."""
-    from app.repositories.user_repository import get_user_by_username, create_user
+    """A completed password reset preserves every populated reading-history row (#2998)."""
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy import func, select
+
     from app.auth import hash_password
-    from app.models import ReadingSession, Thread, Issue
-    from datetime import UTC, datetime
+    from app.models import Event, Issue, ReadingSession, Snapshot, Thread
+    from app.repositories.user_repository import create_user, get_user_by_username
+    from app.services.password_reset_service import request_forgot_password
 
     user = await get_user_by_username(async_db, "resetreader")
     if user is None:
@@ -86,90 +89,154 @@ async def test_reset_preserves_reading_sessions(auth_client: AsyncClient, async_
             async_db,
             username="resetreader",
             email="rr@e.com",
-            password_hash=hash_password("old"),
+            password_hash=hash_password("old-password"),
         )
         await async_db.commit()
         await async_db.refresh(user)
 
-    # Create reading sessions with threads and issues to simulate real reading history
-    thread1 = Thread(
-        title="Comic Series A",
-        format="comic",
-        issues_remaining=10,
-        user_id=user.id,
-    )
-    thread2 = Thread(
-        title="Comic Series B",
-        format="trade",
-        issues_remaining=5,
-        user_id=user.id,
-    )
-    async_db.add_all([thread1, thread2])
-    await async_db.flush()
-
-    issue1 = Issue(thread_id=thread1.id, issue_number=1, status="read", read_at=datetime.now(UTC), position=1)
-    issue2 = Issue(thread_id=thread1.id, issue_number=2, status="read", read_at=datetime.now(UTC), position=2)
-    issue3 = Issue(thread_id=thread2.id, issue_number=1, status="read", read_at=datetime.now(UTC), position=1)
-    async_db.add_all([issue1, issue2, issue3])
-    await async_db.flush()
-
-    # Create multiple reading sessions with different states
-    session1 = ReadingSession(
+    now = datetime.now(UTC)
+    active_session = ReadingSession(
         user_id=user.id,
         start_die=6,
-        started_at=datetime.now(UTC),
-        ended_at=None,  # active session
-        pending_thread_id=thread1.id,
-        snoozed_thread_ids=[thread2.id],
+        started_at=now,
+        ended_at=None,
     )
-    session2 = ReadingSession(
+    ended_session = ReadingSession(
         user_id=user.id,
         start_die=8,
-        started_at=datetime.now(UTC),
-        ended_at=datetime.now(UTC),  # ended session
-        pending_thread_id=None,
+        started_at=now - timedelta(days=1),
+        ended_at=now - timedelta(hours=1),
     )
-    async_db.add_all([session1, session2])
+    async_db.add_all([active_session, ended_session])
+    await async_db.flush()
+
+    pending_thread = Thread(
+        title="Comic Series A",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        user_id=user.id,
+    )
+    snoozed_thread = Thread(
+        title="Comic Series B",
+        format="Trade",
+        issues_remaining=0,
+        queue_position=2,
+        user_id=user.id,
+    )
+    async_db.add_all([pending_thread, snoozed_thread])
+    await async_db.flush()
+
+    read_issue = Issue(
+        thread_id=pending_thread.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=now,
+    )
+    unread_issue = Issue(
+        thread_id=snoozed_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    async_db.add_all([read_issue, unread_issue])
+    await async_db.flush()
+
+    active_session.pending_thread_id = pending_thread.id
+    active_session.pending_issue_id = read_issue.id
+    active_session.snoozed_thread_ids = [snoozed_thread.id]
+    async_db.add_all(
+        [
+            Event(
+                type="roll",
+                session_id=active_session.id,
+                timestamp=now,
+                die=6,
+                result=4,
+                selected_thread_id=pending_thread.id,
+                selection_method="random",
+            ),
+            Snapshot(
+                session_id=active_session.id,
+                thread_states={"1": {"title": "Comic Series A", "queue_position": 1}},
+                description="Session start",
+                created_at=now,
+            ),
+        ]
+    )
     await async_db.commit()
-    await async_db.refresh(session1)
-    await async_db.refresh(session2)
 
-    session1_id = session1.id
-    session2_id = session2.id
-    thread1_id = thread1.id
-    thread2_id = thread2.id
+    active_session_id = active_session.id
+    ended_session_id = ended_session.id
+    pending_thread_id = pending_thread.id
+    snoozed_thread_id = snoozed_thread.id
+    read_issue_id = read_issue.id
+    unread_issue_id = unread_issue.id
+    session_ids = {active_session_id, ended_session_id}
+    thread_ids = {pending_thread_id, snoozed_thread_id}
+    issue_ids = {read_issue_id, unread_issue_id}
 
-    # Perform password reset
-    await auth_client.post("/api/auth/forgot-password", json={"email": "rr@e.com"})
-    from app.services.password_reset_service import request_forgot_password, complete_reset
     handoff = await request_forgot_password(async_db, "rr@e.com")
     assert handoff is not None
-    await complete_reset(async_db, handoff.reset_token, "newpw")
 
-    # Verify reading sessions still exist and are unchanged
+    response = await auth_client.post(
+        "/api/auth/reset-password",
+        json={"token": handoff.reset_token, "new_password": "new-password"},
+    )
+    assert response.status_code == 200, response.text
+    assert "success" in response.json()["message"].lower()
+
     await async_db.refresh(user)
-    from sqlalchemy import select
-    sessions = (await async_db.execute(
-        select(ReadingSession).where(ReadingSession.user_id == user.id)
-    )).scalars().all()
-    assert len(sessions) == 2
-    session_ids = {s.id for s in sessions}
-    assert session1_id in session_ids
-    assert session2_id in session_ids
+    assert user.password_hash != hash_password("old-password")
+    assert user.password_changed_at is not None
 
-    # Verify threads and issues still exist
-    threads = (await async_db.execute(
-        select(Thread).where(Thread.user_id == user.id)
-    )).scalars().all()
-    assert len(threads) == 2
-    thread_ids = {t.id for t in threads}
-    assert thread1_id in thread_ids
-    assert thread2_id in thread_ids
+    sessions = (
+        (
+            await async_db.execute(
+                select(ReadingSession).where(ReadingSession.user_id == user.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {session.id for session in sessions} == session_ids
+    preserved_active = next(s for s in sessions if s.id == active_session_id)
+    assert preserved_active.start_die == 6
+    assert preserved_active.pending_thread_id == pending_thread_id
+    assert preserved_active.pending_issue_id == read_issue_id
+    assert preserved_active.snoozed_thread_ids == [snoozed_thread_id]
+    preserved_ended = next(s for s in sessions if s.id == ended_session_id)
+    assert preserved_ended.ended_at is not None
 
-    issues = (await async_db.execute(
-        select(Issue).where(Issue.thread_id.in_(thread_ids))
-    )).scalars().all()
-    assert len(issues) == 3
+    threads = (
+        (
+            await async_db.execute(select(Thread).where(Thread.user_id == user.id))
+        )
+        .scalars()
+        .all()
+    )
+    assert {thread.id for thread in threads} == thread_ids
+
+    issues = (
+        (
+            await async_db.execute(select(Issue).where(Issue.thread_id.in_(thread_ids)))
+        )
+        .scalars()
+        .all()
+    )
+    assert {issue.id for issue in issues} == issue_ids
+
+    event_count = await async_db.scalar(
+        select(func.count()).select_from(Event).where(Event.session_id.in_(session_ids))
+    )
+    assert event_count == 1
+    snapshot_count = await async_db.scalar(
+        select(func.count())
+        .select_from(Snapshot)
+        .where(Snapshot.session_id == active_session_id)
+    )
+    assert snapshot_count == 1
 
 
 @pytest.mark.asyncio

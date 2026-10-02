@@ -243,6 +243,21 @@ New backend code must follow this layering without exceptions. Legacy modules ar
 
 Remember the MissingGreenlet rule above when services/repositories commit: extract model attributes BEFORE `await db.commit()`.
 
+### Domain Nouns With Multiple Meanings (House Standard)
+
+A domain noun that also names something else must be qualified at every boundary. Never expose a
+domain concept to application code under a bare, ambiguous name when a second meaning exists in the
+same codebase.
+
+- The durable reading-history model is `ReadingSession` (`app/models/reading_session.py`), reached through `app/repositories/reading_session_repository.py` and `app/services/reading_session_service.py`. It is never `Session`, `sessions`, or `SessionModel`.
+- Auth state has its own precise names: access token, refresh token, `password_changed_at` (credential epoch), `revoked_tokens`, and `password_reset_tokens`. There is no auth-session persistence model, and none may be added just to make naming symmetrical.
+- Auth modules (`app/auth.py`, `app/api/auth.py`, `app/services/password_reset_service.py`, `app/services/password_reset_mailer.py`, and the auth-state repositories) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential.
+- Storage/API edges may keep familiar wire names (`sessions` table, `/api/session/`, `SessionListItem`) because clients and migrations depend on them. Ambiguity is resolved in code, not on the wire.
+- The static guard `tests/test_reading_session_naming_guard.py` enforces the boundary; `tests/test_password_reset.py::test_reset_preserves_reading_sessions` proves a reset preserves populated reading history.
+
+See [`docs/READING_SESSION_NAMING.md`](docs/READING_SESSION_NAMING.md) for the full convention, the
+retained-ambiguity inventory, and the rationale from the #2996 password-reset incident.
+
 ### Pydantic Schemas
 All API input/output uses Pydantic models in `app/schemas/`:
 ```python
