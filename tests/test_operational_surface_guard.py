@@ -26,9 +26,9 @@ from app.main import create_app
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 #: Bare paths that operational consumers depend on and that must never move
-#: behind a version prefix. Ping warms serverless cold starts (issue #1389)
-#: and is fetched directly by ``frontend/src/hooks/usePingHeartbeat.ts``;
-#: ``/api/health`` is the dependency-free uptime liveness URL.
+#: behind a version prefix. Ping was used for serverless cold-start warming 
+#: (issue #1389) but is now removed from frontend; ``/api/health`` is the 
+#: dependency-free uptime liveness URL.
 _BARE_OPERATIONAL_ROUTES: frozenset[str] = frozenset(
     {
         "GET /api/ping",
