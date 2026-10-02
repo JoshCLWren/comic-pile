@@ -1,6 +1,6 @@
 import GlossaryLink from '../../../components/GlossaryLink'
 import type { ReaderContextResponse } from '../../../services/api-reader-context'
-import { RATING_THRESHOLD } from '../utils'
+import { RATING_THRESHOLD, getRatingColorClass } from '../utils'
 import type { RatingThread } from '../types'
 import { SeriesPanel } from './SeriesPanel'
 import { CrossoverAnalytics } from './CrossoverAnalytics'
@@ -57,10 +57,10 @@ export function YourContextPillar({
       <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
         <div className="flex items-end justify-between gap-3">
           <div>
-            <h3 id="rating-heading" className="cursor-help text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+            <h3 id="rating-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
                 Your rating
               </h3>
-            <p id="rating-value" className={`mt-1 text-4xl font-black ${rating >= 4.0 ? 'text-[var(--theme-personal-accent)]' : rating >= 3.0 ? 'text-[var(--theme-comic-accent)]' : rating >= 2.0 ? 'text-[var(--theme-warning)]' : 'text-[var(--theme-danger)]'}`}>
+            <p id="rating-value" className={`mt-1 text-4xl font-black ${getRatingColorClass(rating)}`}>
               {rating.toFixed(1)}
             </p>
           </div>
