@@ -126,6 +126,7 @@ def test_request_path_dependencies_are_retained() -> None:
         "bcrypt",
         "email-validator",
         "filelock",
+        "httpx",
         "pygithub",
         "slowapi",
     }:
