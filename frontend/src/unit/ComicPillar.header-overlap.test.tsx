@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
@@ -133,15 +133,26 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     // Long title region must remain readable width (>= 10rem) not a sliver
     expect(t.width).toBeGreaterThanOrEqual(160)
 
-    // Controls must remain usable by touch (min-h-9) and keyboard
+    // Controls must remain usable by touch (min-h-11 menu rows) and keyboard
     // After #2288 Copy title lives beside rating controls, not in the Comic pillar
     expect(screen.queryByRole('button', { name: /Copy Absolute Batman/i })).not.toBeInTheDocument()
     expect(screen.queryByText('Copy title')).not.toBeInTheDocument()
-    const fixButton = screen.getByRole('button', { name: 'Fix issue number' })
-    expect(fixButton).toBeInTheDocument()
-    expect(fixButton.getAttribute('aria-label')).toBeTruthy()
-    // Touch target via class min-h-9
-    expect(fixButton.className).toContain('min-h-9')
+
+    // #3008: correction actions are grouped behind one quiet overflow trigger
+    // rather than rendered as prominent buttons under the title.
+    const controls = screen.getByTestId('comic-header-controls')
+    expect(within(controls).queryByRole('menuitem')).not.toBeInTheDocument()
+    const correctionsTrigger = within(controls).getByRole('button', { name: 'Comic corrections' })
+    expect(correctionsTrigger).toHaveAttribute('aria-haspopup', 'menu')
+    expect(correctionsTrigger).toHaveAttribute('aria-expanded', 'false')
+    // Touch target for the icon-only trigger
+    expect(correctionsTrigger.className).toContain('min-h-11')
+
+    fireEvent.click(correctionsTrigger)
+    const fixItem = await screen.findByRole('menuitem', { name: 'Fix issue number' })
+    expect(fixItem.getAttribute('aria-label')).toBeTruthy()
+    // Touch target via class min-h-11
+    expect(fixItem.className).toContain('min-h-11')
 
     unmount()
     narrowContainer.remove()
@@ -223,12 +234,18 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
 
     // Verify old Copy title placement is removed and single control still reflows safely
     expect(screen.queryByRole('button', { name: /Copy/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Fix issue number' })).toBeInTheDocument()
     const titleRegion = screen.getByTestId('comic-header-title')
     const controlsRegion = screen.getByTestId('comic-header-controls')
     expect(titleRegion.className).toContain('text-xl')
     expect(titleRegion.className).toContain('font-black')
     expect(controlsRegion.className).toContain('flex-wrap')
+
+    // #3008: the correction action itself lives in the overflow menu, so the
+    // region under the title stays quiet without losing the capability.
+    fireEvent.click(
+      within(controlsRegion).getByRole('button', { name: 'Comic corrections' }),
+    )
+    expect(await screen.findByRole('menuitem', { name: 'Fix issue number' })).toBeInTheDocument()
 
     unmount()
     narrowContainer.remove()

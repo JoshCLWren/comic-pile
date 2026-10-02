@@ -115,7 +115,10 @@ async function enterRatingView(page: Page): Promise<void> {
   await expect(page.getByTestId('comic-cover')).toBeVisible()
   await expect(page.getByTestId('comic-header-title')).toBeVisible()
   await expect(page.getByTestId('comic-header-controls')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Wrong series?' })).toBeVisible()
+  // #3008: correction actions are collapsed behind one quiet overflow trigger
+  // and the mapping status stays readable beside it.
+  await expect(page.getByTestId('comic-mapping-status')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Comic corrections' })).toBeVisible()
   await page.evaluate(async () => {
     if (document.fonts) await document.fonts.ready
   })
