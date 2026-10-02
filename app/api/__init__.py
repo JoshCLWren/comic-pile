@@ -1,6 +1,18 @@
-"""API route handlers."""
+"""API route handlers.
 
-__all__ = [
+This package intentionally imports nothing. Cold serverless starts serve
+``/api/ping`` without paying for the whole API import graph, so every router
+submodule is imported by the registration function that needs it (see
+``app.main.register_all_routers`` and ``app.api.dependency.mount_subrouters``).
+
+Import a router submodule explicitly (``from app.api import thread``) instead of
+relying on package-attribute access, which this package no longer provides.
+"""
+
+#: Router submodules this package composes during application registration.
+#: Listed for discoverability only: the names are not bound as attributes of
+#: this package, so ``from app.api import *`` does not resolve them.
+ROUTER_SUBMODULES = (
     "analytics",
     "cbl_sources",
     "continuity_plan",
@@ -17,4 +29,4 @@ __all__ = [
     "releases",
     "roll_recovery_switch",
     "taste_signal",
-]
+)
