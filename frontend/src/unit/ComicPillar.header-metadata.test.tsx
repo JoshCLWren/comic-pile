@@ -10,6 +10,7 @@
  */
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import type { RatingThread } from '../pages/RollPage/types'
 
 const { getIssueIntelligenceSpy, getIssueIdentitySpy } = vi.hoisted(() => ({
@@ -61,7 +62,9 @@ const linkedThread: RatingThread = {
   last_rolled_result: null,
 }
 
-function intelligenceMetadata(overrides: Record<string, unknown> = {}) {
+function intelligenceMetadata(
+  overrides: Partial<ComicVineIssueIntelligence> = {},
+): ComicVineIssueIntelligence {
   return {
     comicvine_issue_id: '36956',
     comicvine_url: null,
