@@ -15,6 +15,8 @@
  *
  * Regression anchors:
  * - #2296: left-clipped, cover-occluded Fix Issue modal at 800x1094.
+ * - #3008: the Fix Issue Number action is reached through the overflow menu, so
+ *   this spec doubles as reachability coverage for the collapsed affordance.
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
@@ -114,7 +116,10 @@ async function openRatingView(page: Page, threadId: number): Promise<void> {
 }
 
 async function openFixIssueModal(page: Page) {
-  await page.getByRole('button', { name: 'Fix issue number' }).click()
+  // #3008: the Fix Issue Number action moved into the quiet overflow menu, so
+  // the dialog must still be reachable through the collapsed affordance.
+  await page.getByRole('button', { name: 'Comic corrections' }).click()
+  await page.getByRole('menuitem', { name: 'Fix issue number' }).click()
   const dialog = page.getByTestId('issue-correction-dialog')
   await expect(dialog).toBeVisible({ timeout: 15000 })
   await expect(page.locator('#issue-number')).toBeVisible({ timeout: 15000 })

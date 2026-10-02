@@ -42,6 +42,13 @@ vi.mock('../components/IssueCorrectionDialog', () => ({
 
 import { ComicPillar } from '../pages/RollPage/components/ComicPillar'
 
+/** #3008: correction actions now live in the quiet overflow menu. */
+async function openCorrectionAction(name: string): Promise<HTMLElement> {
+  const trigger = await screen.findByRole('button', { name: 'Comic corrections' })
+  fireEvent.click(trigger)
+  return screen.findByRole('menuitem', { name })
+}
+
 const mockSeries = {
   comicvine_volume_id: 42,
   name: 'Stormwatch',
@@ -165,7 +172,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     expect(cachedBefore?.image_url).toBe('https://images.example/old-cover.jpg')
 
     // trigger replace flow via Wrong series?
-    fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
+    fireEvent.click(await openCorrectionAction('Wrong series?'))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
@@ -215,7 +222,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
     await screen.findByAltText('')
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
+    fireEvent.click(await openCorrectionAction('Wrong series?'))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
@@ -257,7 +264,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     await screen.findByAltText('')
 
     // trigger correction
-    fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
+    fireEvent.click(await openCorrectionAction('Wrong series?'))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
