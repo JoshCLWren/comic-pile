@@ -15,6 +15,8 @@ function stubTriggerRect(
   trigger: HTMLElement,
   rect: { left: number; right: number; top: number; bottom: number },
 ) {
+  // SAFETY: the literal below is built from the caller's rect plus the derived
+  // width/height/x/y and a no-op toJSON, which is the full DOMRect surface.
   vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
     ...rect,
     width: rect.right - rect.left,
@@ -22,7 +24,7 @@ function stubTriggerRect(
     x: rect.left,
     y: rect.top,
     toJSON() {},
-  } as DOMRect) // SAFETY: mock return value matches DOMRect interface
+  } as DOMRect)
 }
 
 async function openMenu(): Promise<HTMLElement> {
