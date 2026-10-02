@@ -60,7 +60,7 @@ export function YourContextPillar({
             <h3 id="rating-heading" className="cursor-help text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
                 Your rating
               </h3>
-            <p id="rating-value" className={`mt-1 text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-amber-500' : 'text-red-600'}`}>
+            <p id="rating-value" className={`mt-1 text-4xl font-black ${rating >= 4.0 ? 'text-[var(--theme-personal-accent)]' : rating >= 3.0 ? 'text-[var(--theme-comic-accent)]' : rating >= 2.0 ? 'text-[var(--theme-warning)]' : 'text-[var(--theme-danger)]'}`}>
               {rating.toFixed(1)}
             </p>
           </div>

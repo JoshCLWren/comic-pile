@@ -115,9 +115,9 @@ export function DecisionCard({
 
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
-          <p id="rating-value" className={`text-5xl font-black ${rating >= RATING_THRESHOLD ? 'text-[var(--theme-personal-accent)]' : 'text-[var(--theme-danger)]'}`}>
-            {rating.toFixed(1)}
-          </p>
+  <p id="rating-value" className={`text-5xl font-black ${rating >= 4.0 ? 'text-[var(--theme-personal-accent)]' : rating >= 3.0 ? 'text-[var(--theme-comic-accent)]' : rating >= 2.0 ? 'text-[var(--theme-warning)]' : 'text-[var(--theme-danger)]'}`}>
+    {rating.toFixed(1)}
+  </p>
           <p className="text-[11px] font-bold text-stone-400">
             <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
           </p>
