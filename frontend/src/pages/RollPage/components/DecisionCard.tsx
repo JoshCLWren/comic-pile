@@ -1,8 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import Modal from '../../../components/Modal'
-import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
-import { RATING_THRESHOLD, getDieDirection, getRatingColorClass } from '../utils'
+import { RATING_THRESHOLD, getRatingColorClass } from '../utils'
 import type { RatingThread } from '../types'
 
 interface DecisionCardProps {
@@ -42,7 +41,6 @@ export function DecisionCard({
   const isLastIssue = issuesRemaining === 1
   const threadTitle = activeRatingThread?.title ?? null
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
-  const dieDirection = getDieDirection(currentDie, predictedDie)
   const ratingFillPct = Math.min(
     100,
     Math.max(0, ((rating - 0.5) / (5.0 - 0.5)) * 100),
@@ -117,16 +115,13 @@ export function DecisionCard({
 
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
-          <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the series to the front of the queue and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
-            <p id="rating-value" className={`text-5xl font-black ${getRatingColorClass(rating)}`}>
-              {rating.toFixed(1)}
-            </p>
-          </Tooltip>
+          <p id="rating-value" className={`text-5xl font-black ${getRatingColorClass(rating)}`}>
+            {rating.toFixed(1)}
+          </p>
           <p className="text-[11px] font-bold text-stone-400">
             <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
           </p>
         </div>
-        <p className="text-[10px] font-bold text-stone-500 shrink-0">{dieDirection}</p>
       </div>
 
       <input

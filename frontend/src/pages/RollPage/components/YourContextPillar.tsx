@@ -1,7 +1,6 @@
-import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
 import type { ReaderContextResponse } from '../../../services/api-reader-context'
-import { RATING_THRESHOLD, getDieDirection } from '../utils'
+import { RATING_THRESHOLD, getRatingColorClass } from '../utils'
 import type { RatingThread } from '../types'
 import { SeriesPanel } from './SeriesPanel'
 import { CrossoverAnalytics } from './CrossoverAnalytics'
@@ -35,7 +34,6 @@ export function YourContextPillar({
   readerContext,
   isLoading,
 }: YourContextPillarProps) {
-  const dieDirection = getDieDirection(currentDie, predictedDie)
   const isLastIssue = activeRatingThread?.issues_remaining === 1
   const hasMeaningfulContext = isLoading || readerContext !== null || isLastIssue
 
@@ -59,20 +57,17 @@ export function YourContextPillar({
       <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
         <div className="flex items-end justify-between gap-3">
           <div>
-            <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the series to the front of the queue and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
-              <h3 id="rating-heading" className="cursor-help text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
-                Your rating
-              </h3>
-            </Tooltip>
-            <p id="rating-value" className={`mt-1 text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-amber-500' : 'text-red-600'}`}>
+            <h3 id="rating-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+              Your rating
+            </h3>
+            <p id="rating-value" className={`mt-1 text-4xl font-black ${getRatingColorClass(rating)}`}>
               {rating.toFixed(1)}
             </p>
           </div>
           <div className="text-right">
             <p className="text-sm font-black text-stone-200">
-            <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
-          </p>
-            <p className="text-[10px] font-bold text-stone-500">{dieDirection}</p>
+              <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+            </p>
           </div>
         </div>
         <input

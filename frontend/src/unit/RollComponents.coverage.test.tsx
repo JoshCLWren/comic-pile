@@ -216,7 +216,7 @@ describe('RatingView', () => {
     const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
     render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, total_issues: 0, issue_number: null, next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, rating: 5, predictedDie: 6, rolledResult: 2, onUpdateRating: callbacks.onUpdateRating, onSubmitRating: callbacks.onSubmitRating, onSnooze: callbacks.onSnooze, onCancel: callbacks.onCancel, onRefreshThread: callbacks.onRefreshThread })} /></MemoryRouter>)
     expect(screen.getByText('Saga')).toBeInTheDocument()
-    expect(screen.getByText('Die stays the same')).toBeInTheDocument()
+    expect(screen.queryByText('Die stays the same')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Mark read & save' }))

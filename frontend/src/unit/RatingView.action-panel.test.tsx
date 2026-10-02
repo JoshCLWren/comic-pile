@@ -153,25 +153,25 @@ describe('RatingView action panel (issue #1406)', () => {
   it('shows dN → dM die consequence', () => {
     render(ratingView({ currentDie: 6, predictedDie: 4 }))
     expect(screen.getByText('d6 → d4')).toBeInTheDocument()
-    expect(screen.getByText('More focused next roll')).toBeInTheDocument()
+    expect(screen.queryByText('More focused next roll')).not.toBeInTheDocument()
   })
 
   it('shows step-up consequence for rating below threshold', () => {
     render(ratingView({ currentDie: 6, predictedDie: 8, rating: 3.0 }))
     expect(screen.getByText('d6 → d8')).toBeInTheDocument()
-    expect(screen.getByText('More variety next roll')).toBeInTheDocument()
+    expect(screen.queryByText('More variety next roll')).not.toBeInTheDocument()
   })
 
   it('shows step-down consequence for rating at or above threshold', () => {
     render(ratingView({ currentDie: 6, predictedDie: 4, rating: RATING_THRESHOLD }))
     expect(screen.getByText('d6 → d4')).toBeInTheDocument()
-    expect(screen.getByText('More focused next roll')).toBeInTheDocument()
+    expect(screen.queryByText('More focused next roll')).not.toBeInTheDocument()
   })
 
   it('shows boundary die same when rating is neutral', () => {
     render(ratingView({ currentDie: 6, predictedDie: 6, rating: 3.0 }))
     expect(screen.getByText('d6 → d6')).toBeInTheDocument()
-    expect(screen.getByText('Die stays the same')).toBeInTheDocument()
+    expect(screen.queryByText('Die stays the same')).not.toBeInTheDocument()
   })
 
   it('primary action shows Mark read & save for multi-issue thread', () => {
