@@ -73,13 +73,23 @@ def _route_keys(app_routes: Sequence[object]) -> set[str]:
         Set of ``"<METHOD> <path>"`` strings for all routable entries.
     """
     keys: set[str] = set()
-    for route in app_routes:
-        path = getattr(route, "path", None)
-        methods = getattr(route, "methods", None)
-        if not path or not methods:
-            continue
-        for method in methods:
-            keys.add(f"{method} {path}")
+    
+    def _collect_routes(routes, prefix=""):
+        for route in routes:
+            path = getattr(route, "path", None)
+            methods = getattr(route, "methods", None)
+            # Handle included routers (FastAPI stores them as _IncludedRouter objects)
+            if hasattr(route, 'original_router') and hasattr(route.original_router, 'routes'):
+                # Get the prefix from the include context and recurse
+                include_prefix = getattr(getattr(route, 'include_context', None), 'prefix', "") or ""
+                new_prefix = prefix + include_prefix
+                _collect_routes(route.original_router.routes, new_prefix)
+            elif path and methods:
+                full_path = prefix + path
+                for method in methods:
+                    keys.add(f"{method} {full_path}")
+    
+    _collect_routes(app_routes)
     return keys
 
 
