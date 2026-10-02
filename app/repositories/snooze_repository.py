@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, ReadingSession, Thread
 
 SnoozeBackoffRow = tuple[int, datetime | None, str | None, datetime | None, int]
 
@@ -57,9 +57,9 @@ async def fetch_user_session_started_ats(db: AsyncSession, user_id: int) -> list
         All ``started_at`` values for the user's sessions, oldest first.
     """
     result = await db.execute(
-        select(SessionModel.started_at)
-        .where(SessionModel.user_id == user_id)
-        .order_by(SessionModel.started_at)
+        select(ReadingSession.started_at)
+        .where(ReadingSession.user_id == user_id)
+        .order_by(ReadingSession.started_at)
     )
     return list(result.scalars().all())
 

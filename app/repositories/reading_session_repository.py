@@ -1,65 +1,60 @@
-"""Session, event, and snapshot query construction and persistence.
+"""ReadingSession, Event, and Snapshot query construction and persistence.
 
-All SQLAlchemy access for the ``Session``/``Event``/``Snapshot`` model family
-lives here. Functions return ORM models or plain values; callers (services)
-own transaction boundaries.
+All SQLAlchemy access for the ``ReadingSession``/``Event``/``Snapshot`` model
+family lives here. Every helper is reading-history scoped: nothing in this
+module revokes credentials or touches authentication state. Functions return
+ORM models or plain values; callers (services) own transaction boundaries.
+
+Naming note: the module and its mutating helpers carry a ``reading_session``
+qualifier so an auth change cannot mistake them for login-session revocation.
+See ``docs/READING_SESSION_NAMING.md``.
 """
 
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Snapshot, Thread
+from app.models import Event, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
 
 
-async def get_session(db: AsyncSession, session_id: int) -> SessionModel | None:
+async def get_reading_session(db: AsyncSession, reading_session_id: int) -> ReadingSession | None:
     """Return a session by primary key.
 
     Args:
         db: Database session.
-        session_id: Primary key of the reading session.
+        reading_session_id: Primary key of the reading session.
 
     Returns:
         The session, or None when it does not exist.
     """
-    return await db.get(SessionModel, session_id)
+    return await db.get(ReadingSession, reading_session_id)
 
 
-async def delete_all_sessions_for_user(db: AsyncSession, user_id: int) -> None:
-    """Delete all sessions for a user.
-
-    Args:
-        db: Database session.
-        user_id: Owner whose sessions should be removed.
-    """
-    await db.execute(delete(SessionModel).where(SessionModel.user_id == user_id))
-
-
-async def find_owned(
-    db: AsyncSession, user_id: int, session_id: int
-) -> SessionModel | None:
+async def find_owned_reading_session(
+    db: AsyncSession, user_id: int, reading_session_id: int
+) -> ReadingSession | None:
     """Find a session by ID scoped to its owner.
 
     Args:
         db: Database session.
         user_id: Owner that must own the session.
-        session_id: Primary key of the session.
+        reading_session_id: Primary key of the session.
 
     Returns:
         The owned session, or None when absent or foreign.
     """
     result = await db.execute(
-        select(SessionModel).where(
-            SessionModel.id == session_id,
-            SessionModel.user_id == user_id,
+        select(ReadingSession).where(
+            ReadingSession.id == reading_session_id,
+            ReadingSession.user_id == user_id,
         )
     )
     return result.scalar_one_or_none()
 
 
-async def fetch_active_session(db: AsyncSession, user_id: int) -> SessionModel | None:
+async def fetch_active_reading_session(db: AsyncSession, user_id: int) -> ReadingSession | None:
     """Return a user's most recently started session that has not ended.
 
     Args:
@@ -70,22 +65,22 @@ async def fetch_active_session(db: AsyncSession, user_id: int) -> SessionModel |
         The latest un-ended session, or None when none exists.
     """
     result = await db.execute(
-        select(SessionModel)
-        .where(SessionModel.user_id == user_id)
-        .where(SessionModel.ended_at.is_(None))
-        .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+        select(ReadingSession)
+        .where(ReadingSession.user_id == user_id)
+        .where(ReadingSession.ended_at.is_(None))
+        .order_by(ReadingSession.started_at.desc(), ReadingSession.id.desc())
         .limit(1)
     )
     return result.scalars().first()
 
 
-async def fetch_history_page(
+async def fetch_reading_history_page(
     db: AsyncSession,
     user_id: int,
     *,
     cursor: tuple[datetime, int] | None,
     limit: int,
-) -> list[SessionModel]:
+) -> list[ReadingSession]:
     """Fetch one page of a user's session history, newest first.
 
     Args:
@@ -98,14 +93,14 @@ async def fetch_history_page(
     Returns:
         Sessions in canonical page order, at most ``limit`` rows.
     """
-    query = select(SessionModel).where(SessionModel.user_id == user_id)
-    query = query.order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+    query = select(ReadingSession).where(ReadingSession.user_id == user_id)
+    query = query.order_by(ReadingSession.started_at.desc(), ReadingSession.id.desc())
 
     if cursor is not None:
         cursor_started_at, cursor_id = cursor
         query = query.where(
-            (SessionModel.started_at < cursor_started_at)
-            | ((SessionModel.started_at == cursor_started_at) & (SessionModel.id > cursor_id))
+            (ReadingSession.started_at < cursor_started_at)
+            | ((ReadingSession.started_at == cursor_started_at) & (ReadingSession.id > cursor_id))
         )
 
     query = query.limit(limit)
@@ -114,13 +109,13 @@ async def fetch_history_page(
 
 
 async def latest_action_event(
-    db: AsyncSession, session_id: int, event_types: tuple[str, ...]
+    db: AsyncSession, reading_session_id: int, event_types: tuple[str, ...]
 ) -> Event | None:
     """Return the most recent event of the given types for a session.
 
     Args:
         db: Database session.
-        session_id: Session whose events are searched.
+        reading_session_id: Session whose events are searched.
         event_types: Event types to consider.
 
     Returns:
@@ -129,26 +124,26 @@ async def latest_action_event(
     """
     result = await db.execute(
         select(Event)
-        .where(Event.session_id == session_id)
+        .where(Event.session_id == reading_session_id)
         .where(Event.type.in_(event_types))
         .order_by(Event.timestamp.desc(), Event.id.desc())
     )
     return result.scalars().first()
 
 
-async def latest_roll_event(db: AsyncSession, session_id: int) -> Event | None:
+async def latest_roll_event(db: AsyncSession, reading_session_id: int) -> Event | None:
     """Return the most recent roll event that selected a thread.
 
     Args:
         db: Database session.
-        session_id: Session whose events are searched.
+        reading_session_id: Session whose events are searched.
 
     Returns:
         The newest roll event with a selected thread, or None.
     """
     result = await db.execute(
         select(Event)
-        .where(Event.session_id == session_id)
+        .where(Event.session_id == reading_session_id)
         .where(Event.type == "roll")
         .where(Event.selected_thread_id.is_not(None))
         .order_by(Event.timestamp.desc())
@@ -156,35 +151,35 @@ async def latest_roll_event(db: AsyncSession, session_id: int) -> Event | None:
     return result.scalars().first()
 
 
-async def events_chronological(db: AsyncSession, session_id: int) -> list[Event]:
+async def events_chronological(db: AsyncSession, reading_session_id: int) -> list[Event]:
     """Return every event of a session in chronological order.
 
     Args:
         db: Database session.
-        session_id: Session whose events are fetched.
+        reading_session_id: Session whose events are fetched.
 
     Returns:
         Events ordered by timestamp.
     """
     result = await db.execute(
-        select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
+        select(Event).where(Event.session_id == reading_session_id).order_by(Event.timestamp)
     )
     return list(result.scalars().all())
 
 
-async def recent_session_events(db: AsyncSession, session_id: int) -> list[Event]:
+async def recent_reading_session_events(db: AsyncSession, reading_session_id: int) -> list[Event]:
     """Return the most recent rate/snooze/undo/roll events for a session.
 
     Args:
         db: Database session.
-        session_id: Session whose events are fetched.
+        reading_session_id: Session whose events are fetched.
 
     Returns:
         Matching events ordered newest first by ``(timestamp desc, id desc)``.
     """
     result = await db.execute(
         select(Event)
-        .where(Event.session_id == session_id)
+        .where(Event.session_id == reading_session_id)
         .where(Event.type.in_(("rate", "snooze", "undo", "roll")))
         .order_by(Event.timestamp.desc(), Event.id.desc())
     )
@@ -192,13 +187,13 @@ async def recent_session_events(db: AsyncSession, session_id: int) -> list[Event
 
 
 async def recent_snooze_events(
-    db: AsyncSession, session_id: int, *, limit: int = 10
+    db: AsyncSession, reading_session_id: int, *, limit: int = 10
 ) -> list[Event]:
     """Return the most recent snooze events for a session.
 
     Args:
         db: Database session.
-        session_id: Session whose snooze events are fetched.
+        reading_session_id: Session whose snooze events are fetched.
         limit: Maximum number of events to return.
 
     Returns:
@@ -206,7 +201,7 @@ async def recent_snooze_events(
     """
     result = await db.execute(
         select(Event)
-        .where(Event.session_id == session_id)
+        .where(Event.session_id == reading_session_id)
         .where(Event.type == "snooze")
         .order_by(Event.timestamp.desc(), Event.id.desc())
         .limit(limit)
@@ -214,19 +209,19 @@ async def recent_snooze_events(
     return list(result.scalars().all())
 
 
-async def die_change_events(db: AsyncSession, session_id: int) -> list[Event]:
+async def die_change_events(db: AsyncSession, reading_session_id: int) -> list[Event]:
     """Return rate/snooze/undo events that changed the die for a session.
 
     Args:
         db: Database session.
-        session_id: Session whose events are fetched.
+        reading_session_id: Session whose events are fetched.
 
     Returns:
         Die-changing events in chronological order with a known ``die_after``.
     """
     result = await db.execute(
         select(Event)
-        .where(Event.session_id == session_id)
+        .where(Event.session_id == reading_session_id)
         .where(Event.type.in_(("rate", "snooze", "undo")))
         .where(Event.die_after.is_not(None))
         .order_by(Event.timestamp, Event.id)
@@ -234,14 +229,14 @@ async def die_change_events(db: AsyncSession, session_id: int) -> list[Event]:
     return list(result.scalars().all())
 
 
-async def history_events_for_sessions(
-    db: AsyncSession, session_ids: list[int]
+async def history_events_for_reading_sessions(
+    db: AsyncSession, reading_session_ids: list[int]
 ) -> list[Event]:
     """Return roll and die-change events for many sessions in projection order.
 
     Args:
         db: Database session.
-        session_ids: Session IDs to load events for.
+        reading_session_ids: Session IDs to load events for.
 
     Returns:
         Events ordered by ``(session_id, timestamp, id)`` suitable for the
@@ -249,7 +244,7 @@ async def history_events_for_sessions(
     """
     result = await db.execute(
         select(Event)
-        .where(Event.session_id.in_(session_ids))
+        .where(Event.session_id.in_(reading_session_ids))
         .where(
             (Event.type == "roll") & (Event.selected_thread_id.is_not(None))
             | (Event.type.in_(("rate", "snooze", "undo"))) & (Event.die_after.is_not(None))
@@ -259,48 +254,48 @@ async def history_events_for_sessions(
     return list(result.scalars().all())
 
 
-async def count_snapshots(db: AsyncSession, session_id: int) -> int:
+async def count_snapshots(db: AsyncSession, reading_session_id: int) -> int:
     """Count snapshots recorded for a session.
 
     Args:
         db: Database session.
-        session_id: Session whose snapshots are counted.
+        reading_session_id: Session whose snapshots are counted.
 
     Returns:
         Number of snapshots (0 when none exist).
     """
     result = await db.execute(
-        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session_id)
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == reading_session_id)
     )
     return result.scalar() or 0
 
 
-async def snapshot_counts_by_session(
-    db: AsyncSession, session_ids: list[int]
+async def snapshot_counts_by_reading_session(
+    db: AsyncSession, reading_session_ids: list[int]
 ) -> dict[int, int]:
     """Count snapshots for many sessions in one grouped query.
 
     Args:
         db: Database session.
-        session_ids: Session IDs to count snapshots for.
+        reading_session_ids: Session IDs to count snapshots for.
 
     Returns:
         Mapping of session ID to snapshot count; absent IDs have zero.
     """
     result = await db.execute(
         select(Snapshot.session_id, func.count())
-        .where(Snapshot.session_id.in_(session_ids))
+        .where(Snapshot.session_id.in_(reading_session_ids))
         .group_by(Snapshot.session_id)
     )
     return {row[0]: row[1] for row in result.all()}
 
 
-async def snapshots_desc(db: AsyncSession, session_id: int) -> list[Snapshot]:
+async def snapshots_desc(db: AsyncSession, reading_session_id: int) -> list[Snapshot]:
     """List a session's snapshots, newest first.
 
     Args:
         db: Database session.
-        session_id: Session whose snapshots are fetched.
+        reading_session_id: Session whose snapshots are fetched.
 
     Returns:
         Snapshots ordered by creation date descending (ID descending as
@@ -308,32 +303,34 @@ async def snapshots_desc(db: AsyncSession, session_id: int) -> list[Snapshot]:
     """
     result = await db.execute(
         select(Snapshot)
-        .where(Snapshot.session_id == session_id)
+        .where(Snapshot.session_id == reading_session_id)
         .order_by(Snapshot.created_at.desc(), Snapshot.id.desc())
     )
     return list(result.scalars().all())
 
 
-async def first_start_snapshot(db: AsyncSession, session_id: int) -> Snapshot | None:
+async def first_start_snapshot(db: AsyncSession, reading_session_id: int) -> Snapshot | None:
     """Return the earliest "Session start" snapshot of a session.
 
     Args:
         db: Database session.
-        session_id: Session whose snapshots are searched.
+        reading_session_id: Session whose snapshots are searched.
 
     Returns:
         The first session-start snapshot by creation time, or None.
     """
     result = await db.execute(
         select(Snapshot)
-        .where(Snapshot.session_id == session_id)
+        .where(Snapshot.session_id == reading_session_id)
         .where(Snapshot.description == "Session start")
         .order_by(Snapshot.created_at)
     )
     return result.scalars().first()
 
 
-async def detach_pending_thread_references(db: AsyncSession, thread_id: int) -> None:
+async def detach_pending_thread_references_from_reading_sessions(
+    db: AsyncSession, thread_id: int
+) -> None:
     """Clear pending-thread pointers on sessions referencing a thread.
 
     Args:
@@ -341,8 +338,8 @@ async def detach_pending_thread_references(db: AsyncSession, thread_id: int) -> 
         thread_id: Thread whose pending references should be detached.
     """
     await db.execute(
-        update(SessionModel)
-        .where(SessionModel.pending_thread_id == thread_id)
+        update(ReadingSession)
+        .where(ReadingSession.pending_thread_id == thread_id)
         .values(pending_thread_id=None)
     )
 
@@ -363,12 +360,12 @@ async def null_event_thread_references(db: AsyncSession, thread_ids: set[int]) -
     )
 
 
-async def restore_session_start(
+async def restore_reading_session_start(
     db: AsyncSession,
-    session: SessionModel,
+    session: ReadingSession,
     snapshot: Snapshot,
     user_id: int,
-) -> tuple[SessionModel, list[Thread]]:
+) -> tuple[ReadingSession, list[Thread]]:
     """Restore session to its initial state at session start.
 
     Args:

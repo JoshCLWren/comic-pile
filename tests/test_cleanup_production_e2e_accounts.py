@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 import scripts.cleanup_production_e2e_accounts as cleanup_module
-from app.models.session import Session
+from app.models.reading_session import ReadingSession
 from app.models.thread import Thread
 from app.models.user import User
 from scripts.cleanup_production_e2e_accounts import (
@@ -59,7 +59,7 @@ async def test_exact_cleanup_deletes_only_matching_empty_account(
         ordinary = User(username="reader", email="reader@example.com")
         session.add_all([managed, ordinary])
         await session.flush()
-        session.add(Session(user_id=managed.id, start_die=6))
+        session.add(ReadingSession(user_id=managed.id, start_die=6))
         await session.commit()
 
     result = await cleanup_e2e_accounts(account_username="e2e_123_1")
@@ -70,7 +70,7 @@ async def test_exact_cleanup_deletes_only_matching_empty_account(
     async with session_factory() as session:
         usernames = set((await session.scalars(select(User.username))).all())
         managed_sessions = list(
-            (await session.scalars(select(Session).where(Session.user_id == managed.id))).all()
+            (await session.scalars(select(ReadingSession).where(ReadingSession.user_id == managed.id))).all()
         )
     assert usernames == {"reader"}
     assert managed_sessions == []

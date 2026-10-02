@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, User
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
 from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
@@ -33,11 +33,11 @@ from app.schemas.session import (
 )
 from app.services.ownership import get_owned_session_or_404
 from app.services.session_response import build_ladder_path
-from app.services.session_service import get_session_service, SessionService
+from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
 from app.services.correction_examples import generate_correction_examples
-from comic_pile.session import get_current_die, get_or_create, is_active
+from comic_pile.reading_session import get_current_die, get_or_create, is_active
 
 router = APIRouter(tags=["sessions"])
 #: Versioned-only surface for new session client resources. ``app.main`` mounts
@@ -117,7 +117,7 @@ async def _fetch_thread_issue_metadata(
 
 async def get_session_with_thread_safe(
     session_id: int, db: AsyncSession
-) -> tuple[SessionModel | None, ActiveThreadInfo | None]:
+) -> tuple[ReadingSession | None, ActiveThreadInfo | None]:
     """Get session and active thread with consistent lock ordering to prevent deadlocks.
 
     Args:
@@ -127,7 +127,7 @@ async def get_session_with_thread_safe(
     Returns:
         Tuple of (session or None, active_thread or None).
     """
-    session = await db.get(SessionModel, session_id)
+    session = await db.get(ReadingSession, session_id)
     if not session:
         return None, None
 
@@ -351,10 +351,10 @@ async def get_current_session(
     while retries < max_retries:
         try:
             active_session_result = await db.execute(
-                select(SessionModel)
-                .where(SessionModel.user_id == current_user.id)
-                .where(SessionModel.ended_at.is_(None))
-                .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                select(ReadingSession)
+                .where(ReadingSession.user_id == current_user.id)
+                .where(ReadingSession.ended_at.is_(None))
+                .order_by(ReadingSession.started_at.desc(), ReadingSession.id.desc())
                 .limit(1)
             )
             active_session = active_session_result.scalars().first()
@@ -465,8 +465,8 @@ async def list_sessions(
     """
     from sqlalchemy import or_
 
-    query = select(SessionModel).where(SessionModel.user_id == current_user.id)
-    query = query.order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+    query = select(ReadingSession).where(ReadingSession.user_id == current_user.id)
+    query = query.order_by(ReadingSession.started_at.desc(), ReadingSession.id.desc())
 
     if page_token:
         try:
@@ -477,8 +477,8 @@ async def list_sessions(
             cursor_id = int(parts[1])
             query = query.where(
                 or_(
-                    SessionModel.started_at < cursor_started_at,
-                    (SessionModel.started_at == cursor_started_at) & (SessionModel.id > cursor_id),
+                    ReadingSession.started_at < cursor_started_at,
+                    (ReadingSession.started_at == cursor_started_at) & (ReadingSession.id > cursor_id),
                 )
             )
         except ValueError:
@@ -934,11 +934,11 @@ async def get_session_snapshots(
 
 
 @router.post("/{session_id}/restore-session-start")
-async def restore_session_start(
+async def restore_reading_session_start(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-    session_service: SessionService = Depends(get_session_service),
+    session_service: ReadingSessionService = Depends(get_reading_session_service),
 ) -> SessionResponse:
     """Restore session to its initial state at session start.
 
@@ -955,7 +955,7 @@ async def restore_session_start(
         HTTPException: If session or snapshot not found.
         RuntimeError: If failed after max retries.
     """
-    session = await session_service.restore_session_start(session_id, current_user.id)
+    session = await session_service.restore_reading_session_start(session_id, current_user.id)
 
     from sqlalchemy import func
 

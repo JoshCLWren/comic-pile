@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.constants import INTENT_SOURCE_VALUES, INTENT_VALUES, Intent, IntentSource
-from app.models import Event, Session as SessionModel, Snapshot, Thread
+from app.models import Event, ReadingSession, Snapshot, Thread
 from app.schemas.session import SessionListItem, build_session_intent_state
-from comic_pile.session import get_or_create
+from comic_pile.reading_session import get_or_create
 
 
 def test_intent_constants_include_all_first_class_values() -> None:
@@ -40,7 +40,7 @@ async def test_intent_stored_independently_from_bandwidth(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC1: A session stores active intent without disturbing bandwidth columns."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -54,7 +54,7 @@ async def test_intent_stored_independently_from_bandwidth(
     await async_db.commit()
     await async_db.refresh(session)
 
-    persisted = await async_db.get(SessionModel, session.id)
+    persisted = await async_db.get(ReadingSession, session.id)
     assert persisted is not None
     assert persisted.active_intent == "momentum"
     assert persisted.predicted_intent == "momentum"
@@ -71,7 +71,7 @@ async def test_random_is_a_first_class_intent_value(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC2: random persists as a stored intent value and reads back cleanly."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -99,13 +99,13 @@ async def test_existing_sessions_default_safely_to_null_semantics(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC3: Legacy sessions serialize to an all-null balanced-default shape."""
-    legacy = SessionModel(start_die=6, user_id=default_user.id)
+    legacy = ReadingSession(start_die=6, user_id=default_user.id)
     async_db.add(legacy)
     await async_db.commit()
     await async_db.refresh(legacy)
 
     fetched = (
-        (await async_db.execute(select(SessionModel).where(SessionModel.id == legacy.id)))
+        (await async_db.execute(select(ReadingSession).where(ReadingSession.id == legacy.id)))
         .scalars()
         .one()
     )
@@ -172,13 +172,13 @@ async def test_database_check_constraints_reject_invalid_intent_rows(
     """AC: Persisted CHECK constraints reject invalid intent enum and confidence."""
     user_id = default_user.id
 
-    bad_intent = SessionModel(start_die=6, user_id=user_id, active_intent="daydream")
+    bad_intent = ReadingSession(start_die=6, user_id=user_id, active_intent="daydream")
     async_db.add(bad_intent)
     with pytest.raises(IntegrityError):
         await async_db.flush()
     await async_db.rollback()
 
-    bad_source = SessionModel(
+    bad_source = ReadingSession(
         start_die=6,
         user_id=user_id,
         predicted_intent="balanced",
@@ -189,7 +189,7 @@ async def test_database_check_constraints_reject_invalid_intent_rows(
         await async_db.flush()
     await async_db.rollback()
 
-    bad_confidence = SessionModel(
+    bad_confidence = ReadingSession(
         start_die=6,
         user_id=user_id,
         active_intent="random",
@@ -201,7 +201,7 @@ async def test_database_check_constraints_reject_invalid_intent_rows(
         await async_db.flush()
     await async_db.rollback()
 
-    valid_boundary = SessionModel(
+    valid_boundary = ReadingSession(
         start_die=6,
         user_id=user_id,
         predicted_intent="explore",
@@ -225,7 +225,7 @@ async def test_current_session_endpoint_exposes_intent_state(
     result = await async_db.execute(select(UserModel).where(UserModel.id == default_user.id))
     user = result.scalar_one()
 
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=user.id,
         started_at=datetime.now(UTC),
@@ -258,7 +258,7 @@ async def test_get_session_by_id_exposes_null_intent_for_legacy_row(
     auth_client: AsyncClient, async_db: AsyncSession, default_user
 ) -> None:
     """Legacy sessions serialize with null intent fields, staying API-valid."""
-    session = SessionModel(start_die=6, user_id=default_user.id)
+    session = ReadingSession(start_die=6, user_id=default_user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -277,7 +277,7 @@ async def test_new_session_defaults_intent_to_null_not_thread_affinity(
     async_db: AsyncSession, default_user
 ) -> None:
     """AC4: Fresh sessions do not inherit a prior session's intent values."""
-    stale = SessionModel(
+    stale = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC) - timedelta(hours=8),
@@ -304,7 +304,7 @@ async def test_end_session_clears_ephemeral_intent(
     async_db: AsyncSession, sample_data: dict
 ) -> None:
     """AC4: Ending a session terminates its ephemeral reading-intent lifetime."""
-    from comic_pile.session import end_session
+    from comic_pile.reading_session import end_session
 
     session = sample_data["sessions"][0]
     session.active_intent = "explore"
@@ -331,7 +331,7 @@ async def test_snooze_endpoint_exposes_intent_state(
     auth_client: AsyncClient, async_db: AsyncSession, default_user
 ) -> None:
     """Snooze response exposes stored active/predicted intent independently."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         active_intent="familiar",
@@ -385,7 +385,7 @@ async def test_undo_endpoint_exposes_intent_state(
     auth_client: AsyncClient, async_db: AsyncSession, default_user
 ) -> None:
     """Undo response exposes stored active/predicted intent independently."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         active_intent="explore",

@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,7 @@ async def test_snooze_returns_correction_guidance(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -96,7 +96,7 @@ async def test_snooze_returns_bandwidth_state(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -161,7 +161,7 @@ async def test_snooze_does_not_demote_queue_position(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -212,7 +212,7 @@ async def test_snooze_correction_has_reason_code(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -263,7 +263,7 @@ async def test_multiple_snoozes_track_consecutive(
 
     user = await get_or_create_user_async(async_db)
 
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

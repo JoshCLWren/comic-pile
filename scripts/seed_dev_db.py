@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.auth import hash_password
 from app.config import get_database_settings
 from app.database import AsyncSessionLocal
-from app.models import Session as SessionModel, Thread, User
+from app.models import ReadingSession, Thread, User
 
 
 SEED_USERNAME = "testuser"
@@ -47,7 +47,7 @@ async def seed_database() -> None:
                 await db.delete(thread)
 
             sessions_result = await db.execute(
-                select(SessionModel).where(SessionModel.user_id == user.id)
+                select(ReadingSession).where(ReadingSession.user_id == user.id)
             )
             for session in sessions_result.scalars().all():
                 await db.delete(session)
@@ -127,7 +127,7 @@ async def seed_database() -> None:
         await db.refresh(user)
 
         # Create active session
-        session = SessionModel(
+        session = ReadingSession(
             start_die=6,
             user_id=user.id,
             started_at=datetime.now(UTC),

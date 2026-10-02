@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from httpx import AsyncClient
-from app.models import Event, Session as SessionModel, Thread, User
+from app.models import Event, ReadingSession, Thread, User
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -82,7 +82,7 @@ async def test_bulk_delete_test_data(client: AsyncClient, async_db: AsyncSession
     await async_db.refresh(test_thread2)
     await async_db.refresh(real_thread)
 
-    session = SessionModel(
+    session = ReadingSession(
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         start_die=6,
@@ -247,13 +247,13 @@ async def test_export_summary_excludes_test_only_sessions(
     await async_db.refresh(test_thread)
     await async_db.refresh(real_thread)
 
-    test_session = SessionModel(
+    test_session = ReadingSession(
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         start_die=6,
         user_id=user.id,
     )
-    real_session = SessionModel(
+    real_session = ReadingSession(
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         start_die=6,
@@ -327,7 +327,7 @@ async def test_delete_test_data_clears_pending_thread_id(
     await async_db.commit()
     await async_db.refresh(test_thread)
 
-    session = SessionModel(
+    session = ReadingSession(
         started_at=datetime.now(UTC),
         ended_at=None,
         start_die=6,
@@ -349,7 +349,7 @@ async def test_delete_test_data_clears_pending_thread_id(
     db_thread = await async_db.get(Thread, test_thread.id)
     assert db_thread is None
 
-    db_session = await async_db.get(SessionModel, session.id)
+    db_session = await async_db.get(ReadingSession, session.id)
     if db_session:
         assert db_session.pending_thread_id is None
 
@@ -396,19 +396,19 @@ async def test_delete_test_data_with_selected_thread_id(
     await async_db.refresh(test_thread)
     await async_db.refresh(real_thread)
 
-    test_session = SessionModel(
+    test_session = ReadingSession(
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         start_die=6,
         user_id=user.id,
     )
-    mixed_session = SessionModel(
+    mixed_session = ReadingSession(
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         start_die=6,
         user_id=user.id,
     )
-    real_session = SessionModel(
+    real_session = ReadingSession(
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         start_die=6,
@@ -480,11 +480,11 @@ async def test_delete_test_data_with_selected_thread_id(
     assert len(remaining_threads) == 1
     assert remaining_threads[0].title == "Real Comic"
 
-    test_session_deleted = await async_db.get(SessionModel, test_session.id)
+    test_session_deleted = await async_db.get(ReadingSession, test_session.id)
     assert test_session_deleted is None, "Test-only session should be deleted"
 
-    mixed_session_kept = await async_db.get(SessionModel, mixed_session.id)
+    mixed_session_kept = await async_db.get(ReadingSession, mixed_session.id)
     assert mixed_session_kept is not None, "Mixed session should NOT be deleted"
 
-    real_session_kept = await async_db.get(SessionModel, real_session.id)
+    real_session_kept = await async_db.get(ReadingSession, real_session.id)
     assert real_session_kept is not None, "Real session should NOT be deleted"

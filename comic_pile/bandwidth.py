@@ -1,7 +1,7 @@
 """Ephemeral reading-bandwidth state for active sessions.
 
 Bandwidth state is session-scoped and ephemeral (issue #1706): it lives only on
-the :class:`~app.models.session.Session` row, never on Thread or durable
+the :class:`~app.models.reading_session.ReadingSession` row, never on Thread or durable
 affinity data. This module is the single validation and mutation entry point so
 later phases (inference, Snooze corrections, manual mode API, quiz) cannot
 persist invalid values.
@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import Bandwidth, BandwidthSource
-from app.models import Event, Session
+from app.models import Event, ReadingSession
 from app.services.bandwidth_inference import (
     BandwidthPrediction,
     HistoricalObservation,
@@ -101,14 +101,14 @@ def validate_bandwidth_state(
 
 async def apply_bandwidth_state(
     db: AsyncSession,
-    session: Session,
+    session: ReadingSession,
     *,
     predicted_bandwidth: str | None,
     active_bandwidth: str | None,
     bandwidth_source: str | None = None,
     bandwidth_confidence: float | None = None,
     bandwidth_version: str | None = CURRENT_BANDWIDTH_MODE_VERSION,
-) -> Session:
+) -> ReadingSession:
     """Validate and persist ephemeral bandwidth state onto a session.
 
     Both bandwidth slots are independent: callers may set predicted only,
@@ -148,7 +148,7 @@ async def apply_bandwidth_state(
     return session
 
 
-def clear_ephemeral_bandwidth(session: Session) -> None:
+def clear_ephemeral_bandwidth(session: ReadingSession) -> None:
     """Clear all ephemeral bandwidth state from a session in memory.
 
     Ending a session terminates its ephemeral bandwidth lifetime, and newly
@@ -166,7 +166,7 @@ def clear_ephemeral_bandwidth(session: Session) -> None:
     session.bandwidth_updated_at = None
 
 
-def capture_ephemeral_bandwidth(session: Session) -> dict[str, object]:
+def capture_ephemeral_bandwidth(session: ReadingSession) -> dict[str, object]:
     """Capture a snapshot-compatible copy of a session's bandwidth state.
 
     Mirrors the pre-state dictionaries stored in snapshot ``session_state`` so
@@ -191,7 +191,7 @@ def capture_ephemeral_bandwidth(session: Session) -> dict[str, object]:
     }
 
 
-def restore_ephemeral_bandwidth(session: Session, state: dict[str, object]) -> None:
+def restore_ephemeral_bandwidth(session: ReadingSession, state: dict[str, object]) -> None:
     """Restore bandwidth state previously captured by capture_ephemeral_bandwidth.
 
     Only applies keys present in ``state`` so older snapshots that predate
@@ -338,7 +338,7 @@ async def _historical_observations(
         session_hour = None
         if rate_event.session_id is not None:
             session_result = await db.execute(
-                select(Session.started_at).where(Session.id == rate_event.session_id)
+                select(ReadingSession.started_at).where(ReadingSession.id == rate_event.session_id)
             )
             session_started_at = session_result.scalar_one_or_none()
             if session_started_at is not None:
@@ -357,7 +357,7 @@ async def _historical_observations(
     return observations
 
 
-async def initialize_session_bandwidth(db: AsyncSession, session: Session) -> Session:
+async def initialize_session_bandwidth(db: AsyncSession, session: ReadingSession) -> ReadingSession:
     """Initialize inferred bandwidth state once per session lifetime.
 
     Applies the Phase 2 inference (issue #1708) when a new/current reading

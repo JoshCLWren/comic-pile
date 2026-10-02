@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Session, Thread
+from app.models import Event, Issue, ReadingSession, Thread
 from app.models.continuity_rule import ContinuityRule
 from app.schemas.roll_recovery_switch import RollPrerequisiteSwitchRequest
 from tests.conftest import get_or_create_user_async
@@ -127,7 +127,7 @@ async def test_switches_blocked_roll_to_direct_readable_prerequisite(
     assert payload["target_issue_id"] == prerequisite.id
     assert payload["changed"] is True
 
-    session_result = await async_db.execute(select(Session).where(Session.user_id == user.id))
+    session_result = await async_db.execute(select(ReadingSession).where(ReadingSession.user_id == user.id))
     session = session_result.scalars().first()
     assert session is not None
     await async_db.refresh(session)
@@ -221,7 +221,7 @@ async def test_duplicate_switch_is_idempotent(
     assert second.status_code == 200
     assert second.json()["changed"] is False
 
-    session_result = await async_db.execute(select(Session.id).where(Session.user_id == user.id))
+    session_result = await async_db.execute(select(ReadingSession.id).where(ReadingSession.user_id == user.id))
     session_id = session_result.scalars().first()
     event_count_result = await async_db.execute(
         select(func.count())

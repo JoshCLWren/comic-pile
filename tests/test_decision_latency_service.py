@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread, User
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 from app.services.decision_latency import (
     derive_decision_latencies,
     derive_legacy_order_fallback_latencies,
@@ -186,7 +186,7 @@ async def test_database_loader_and_derivation_read_linked_history(
     async_db.add_all([thread_a, thread_b])
     await async_db.commit()
 
-    reading_session = SessionModel(
+    reading_session = ReadingSession(
         start_die=20, user_id=default_user.id, started_at=datetime.now(UTC)
     )
     async_db.add(reading_session)

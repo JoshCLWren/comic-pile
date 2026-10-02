@@ -1,4 +1,9 @@
-"""Session model for database."""
+"""ReadingSession model: one durable reading-history row for a user.
+
+Named ``ReadingSession`` (table ``sessions``) so it can never be mistaken for an
+authentication/login session. Auth state lives in ``password_changed_at``,
+``revoked_tokens``, and ``password_reset_tokens`` — never here.
+"""
 
 from __future__ import annotations
 
@@ -34,8 +39,13 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-class Session(Base):
-    """Session model."""
+class ReadingSession(Base):
+    """Durable reading-history row (started/ended reading session).
+
+    ``__tablename__`` deliberately stays ``sessions``: renaming the stored table
+    would require a migration plus API/client coordination and is out of scope
+    for the domain rename. See ``docs/READING_SESSION_NAMING.md``.
+    """
 
     __tablename__ = "sessions"
 
@@ -124,7 +134,7 @@ class Session(Base):
         ),
     )
 
-    user: Mapped[User] = relationship("User", back_populates="sessions", lazy="raise")
+    user: Mapped[User] = relationship("User", back_populates="reading_sessions", lazy="raise")
     pending_thread: Mapped[Thread | None] = relationship(
         "Thread", foreign_keys=[pending_thread_id], lazy="raise"
     )

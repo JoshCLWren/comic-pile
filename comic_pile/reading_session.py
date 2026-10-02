@@ -9,7 +9,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_session_settings
-from app.models import Event, Issue, Session, Snapshot, Thread, User
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
 from app.performance_diagnostics import get_request_diagnostics
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
 from comic_pile.bandwidth import clear_ephemeral_bandwidth, initialize_session_bandwidth
@@ -36,13 +36,13 @@ def _current_session_filter(user_id: int, cutoff_time: datetime):
     keeps the session current while the reader is away from the app reading the selected comic.
     """
     return (
-        (Session.user_id == user_id)
-        & Session.ended_at.is_(None)
+        (ReadingSession.user_id == user_id)
+        & ReadingSession.ended_at.is_(None)
         & or_(
-            Session.started_at >= cutoff_time,
+            ReadingSession.started_at >= cutoff_time,
             and_(
-                Session.pending_thread_id.is_not(None),
-                Session.pending_thread_updated_at >= cutoff_time,
+                ReadingSession.pending_thread_id.is_not(None),
+                ReadingSession.pending_thread_updated_at >= cutoff_time,
             ),
         )
     )
@@ -53,7 +53,7 @@ def _as_utc(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
-def _last_activity_at(session: Session, last_event_at: datetime | None) -> datetime:
+def _last_activity_at(session: ReadingSession, last_event_at: datetime | None) -> datetime:
     """Return the latest durable reading activity for a session."""
     candidates = [_as_utc(session.started_at)]
     if (
@@ -69,19 +69,19 @@ def _last_activity_at(session: Session, last_event_at: datetime | None) -> datet
 async def _resolve_current_session_with_candidate_count(
     db: AsyncSession,
     user_id: int,
-) -> tuple[Session | None, int]:
+) -> tuple[ReadingSession | None, int]:
     """Resolve current session and report how many unended rows were considered."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     result = await db.execute(
-        select(Session, func.max(Event.timestamp).label("last_event_at"))
-        .outerjoin(Event, Event.session_id == Session.id)
-        .where(Session.user_id == user_id)
-        .where(Session.ended_at.is_(None))
-        .group_by(Session.id)
+        select(ReadingSession, func.max(Event.timestamp).label("last_event_at"))
+        .outerjoin(Event, Event.session_id == ReadingSession.id)
+        .where(ReadingSession.user_id == user_id)
+        .where(ReadingSession.ended_at.is_(None))
+        .group_by(ReadingSession.id)
     )
     rows = result.all()
 
-    candidates: list[tuple[bool, datetime, datetime, int, Session]] = []
+    candidates: list[tuple[bool, datetime, datetime, int, ReadingSession]] = []
     for session, last_event_at in rows:
         activity_at = _last_activity_at(session, last_event_at)
         if activity_at < cutoff_time:
@@ -104,7 +104,7 @@ async def _resolve_current_session_with_candidate_count(
     return max(candidates, key=lambda candidate: candidate[:4])[4], len(rows)
 
 
-async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | None:
+async def resolve_current_session(db: AsyncSession, user_id: int) -> ReadingSession | None:
     """Resolve the authoritative unended session from durable recent activity.
 
     Args:
@@ -118,7 +118,7 @@ async def resolve_current_session(db: AsyncSession, user_id: int) -> Session | N
     return session
 
 
-async def _ensure_initialized_bandwidth(db: AsyncSession, session: Session) -> Session:
+async def _ensure_initialized_bandwidth(db: AsyncSession, session: ReadingSession) -> ReadingSession:
     """Apply one-time inferred bandwidth initialization to a reusable session.
 
     Sessions already recording bandwidth state pass through untouched so
@@ -144,7 +144,7 @@ async def _ensure_initialized_bandwidth(db: AsyncSession, session: Session) -> S
 def _log_session_resolution(
     *,
     user_id: int,
-    session: Session,
+    session: ReadingSession,
     resolution: str,
     candidate_unended_sessions: int,
     creation_reason: str | None = None,
@@ -187,9 +187,9 @@ async def is_active(
         return False
 
     session_result = await db.execute(
-        select(Session)
-        .where(Session.started_at == started_at)
-        .where(Session.ended_at.is_(None))
+        select(ReadingSession)
+        .where(ReadingSession.started_at == started_at)
+        .where(ReadingSession.ended_at.is_(None))
         .limit(2)
     )
     sessions = session_result.scalars().all()
@@ -209,7 +209,7 @@ async def should_start_new(db: AsyncSession, user_id: int) -> bool:
     return await resolve_current_session(db, user_id) is None
 
 
-async def create_session_start_snapshot(db: AsyncSession, session: Session) -> None:
+async def create_session_start_snapshot(db: AsyncSession, session: ReadingSession) -> None:
     """Create a consistent full-library checkpoint at session start."""
     result = await db.execute(
         select(Thread)
@@ -305,7 +305,7 @@ async def get_or_create(
     *,
     existing_user: User | None = None,
     timezone: str | None = None,
-) -> Session:
+) -> ReadingSession:
     """Get the authoritative active session or create one race-safely.
 
     Args:
@@ -377,7 +377,7 @@ async def get_or_create(
                     )
                     return active_session
 
-                new_session = Session(start_die=start_die, user_id=user_id, timezone=timezone)
+                new_session = ReadingSession(start_die=start_die, user_id=user_id, timezone=timezone)
                 db.add(new_session)
                 # Phase 2 (issue #1708): initialize inferred bandwidth exactly
                 # once, atomically with the session-start snapshot commit.
@@ -414,7 +414,7 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
         session_id: ID of the session to end.
         db: Async database session used for persistence.
     """
-    session_result = await db.execute(select(Session).where(Session.id == session_id))
+    session_result = await db.execute(select(ReadingSession).where(ReadingSession.id == session_id))
     session = session_result.scalar_one_or_none()
     if session:
         session.ended_at = datetime.now(UTC)
@@ -426,7 +426,7 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
 async def get_current_die(session_id: int, db: AsyncSession) -> int:
     """Get the die from manual selection or the latest die-changing event."""
     start_die = _start_die()
-    session_result = await db.execute(select(Session).where(Session.id == session_id))
+    session_result = await db.execute(select(ReadingSession).where(ReadingSession.id == session_id))
     session = session_result.scalar_one_or_none()
 
     if session and session.manual_die:
@@ -446,7 +446,7 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     return session.start_die if session else start_die
 
 
-async def get_current_die_for_session(session: Session, db: AsyncSession) -> int:
+async def get_current_die_for_session(session: ReadingSession, db: AsyncSession) -> int:
     """Get the current die using an already-loaded session object.
 
     Callers that hold the authoritative session in the transaction avoid the

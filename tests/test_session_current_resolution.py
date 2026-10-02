@@ -5,8 +5,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session, Thread, User
-from comic_pile.session import get_or_create, resolve_current_session, should_start_new
+from app.models import Event, ReadingSession, Thread, User
+from comic_pile.reading_session import get_or_create, resolve_current_session, should_start_new
 
 
 @pytest.mark.asyncio
@@ -26,7 +26,7 @@ async def test_pending_activity_keeps_long_running_session_current(
     async_db.add(thread)
     await async_db.flush()
 
-    session = Session(
+    session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=7),
         pending_thread_id=thread.id,
         pending_thread_updated_at=datetime.now(UTC) - timedelta(minutes=5),
@@ -60,14 +60,14 @@ async def test_pending_session_beats_newer_blank_duplicate(
     async_db.add(thread)
     await async_db.flush()
 
-    reading_session = Session(
+    reading_session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=7),
         pending_thread_id=thread.id,
         pending_thread_updated_at=datetime.now(UTC) - timedelta(minutes=10),
         start_die=20,
         user_id=default_user.id,
     )
-    blank_session = Session(
+    blank_session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(minutes=1),
         start_die=6,
         user_id=default_user.id,
@@ -100,12 +100,12 @@ async def test_recent_reading_activity_beats_older_blank_unended_session(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """Recent durable activity wins when competing sessions have no pending context."""
-    reading_session = Session(
+    reading_session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=5),
         start_die=20,
         user_id=default_user.id,
     )
-    blank_session = Session(
+    blank_session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
         user_id=default_user.id,
@@ -135,7 +135,7 @@ async def test_stale_unended_history_does_not_prevent_new_session(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """Unended historical rows outside the activity gap remain history, not current."""
-    stale_session = Session(
+    stale_session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=9),
         start_die=10,
         user_id=default_user.id,

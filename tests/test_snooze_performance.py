@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from httpx import AsyncClient
 
-from app.models import Session, Thread
+from app.models import ReadingSession, Thread
 
 
 @pytest.mark.asyncio
@@ -27,7 +27,7 @@ async def test_snooze_endpoint_query_count(
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
-    session = Session(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)

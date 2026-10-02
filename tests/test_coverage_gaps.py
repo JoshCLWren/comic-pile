@@ -7,12 +7,12 @@ from sqlalchemy.exc import OperationalError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dependency, Event, Issue, Session as SessionModel, Thread, User
+from app.models import Dependency, Event, Issue, ReadingSession, Thread, User
 from comic_pile.dependencies import (
     detect_circular_dependency,
 )
 from comic_pile.queue import get_roll_pool
-from comic_pile.session import get_or_create, get_current_die, get_current_die_for_session
+from comic_pile.reading_session import get_or_create, get_current_die, get_current_die_for_session
 
 
 @pytest.mark.asyncio
@@ -130,10 +130,10 @@ async def test_get_or_create_returns_existing_after_lock(
     """Test get_or_create returns session found after acquiring lock (session.py:149)."""
     from sqlalchemy import delete
 
-    await async_db.execute(delete(SessionModel))
+    await async_db.execute(delete(ReadingSession))
     await async_db.commit()
 
-    existing_session = SessionModel(
+    existing_session = ReadingSession(
         start_die=10,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -155,7 +155,7 @@ async def test_get_or_create_deadlock_retry_succeeds(
     """Test get_or_create retries on deadlock and succeeds (session.py:160-167)."""
     from sqlalchemy import delete
 
-    await async_db.execute(delete(SessionModel))
+    await async_db.execute(delete(ReadingSession))
     await async_db.commit()
 
     call_count = 0
@@ -183,7 +183,7 @@ async def test_get_or_create_deadlock_max_retries_exceeded(
     """Test get_or_create raises RuntimeError after max retries (session.py:171)."""
     from sqlalchemy import delete
 
-    await async_db.execute(delete(SessionModel))
+    await async_db.execute(delete(ReadingSession))
     await async_db.commit()
 
     async def mock_commit_always_deadlock(*args, **kwargs):
@@ -199,7 +199,7 @@ async def test_get_current_die_with_die_after_event(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """Test get_current_die returns die_after from last event (session.py:202-203)."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -240,7 +240,7 @@ async def test_get_current_die_with_die_after_none(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """Test get_current_die handles die_after=None in event (session.py:203)."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -290,7 +290,7 @@ async def test_get_current_die_for_session_manual_die_takes_precedence(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """get_current_die_for_session returns manual_die from session without re-reading it."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         manual_die=20,
         user_id=default_user.id,
@@ -309,7 +309,7 @@ async def test_get_current_die_for_session_latest_die_event_wins(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """get_current_die_for_session uses die_after from the most recent rate/snooze/undo event."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -355,7 +355,7 @@ async def test_get_current_die_for_session_falls_back_to_start_die(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """get_current_die_for_session returns session.start_die when no manual die or die-changing event."""
-    session = SessionModel(
+    session = ReadingSession(
         start_die=10,
         user_id=default_user.id,
         started_at=datetime.now(UTC),

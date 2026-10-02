@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Issue, Session as SessionModel, Thread
+from app.models import Issue, ReadingSession, Thread
 
 
 async def get_owned_thread_or_404(
@@ -44,12 +44,12 @@ async def get_owned_issue_or_404(db: AsyncSession, user_id: int, issue_id: int) 
     return issue
 
 
-async def get_owned_session_or_404(db: AsyncSession, user_id: int, session_id: int) -> SessionModel:
+async def get_owned_session_or_404(db: AsyncSession, user_id: int, session_id: int) -> ReadingSession:
     """Fetch a session by ID only if it belongs to the user."""
     result = await db.execute(
-        select(SessionModel).where(
-            SessionModel.id == session_id,
-            SessionModel.user_id == user_id,
+        select(ReadingSession).where(
+            ReadingSession.id == session_id,
+            ReadingSession.user_id == user_id,
         )
     )
     session = result.scalar_one_or_none()
