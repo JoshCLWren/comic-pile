@@ -20,7 +20,6 @@ import api, {
 import { isDefinitiveAuthenticationFailure, createAuthError, type AuthState, calculateRetryDelay } from './services/authState'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
-import { usePingHeartbeat } from './hooks/usePingHeartbeat'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { PreferencesSync } from './hooks/usePreferences'
 import { useAuthDegradedState, ServiceUnavailableWrapper } from './hooks/useAuthDegradedState'
@@ -665,7 +664,6 @@ function AuthResumeBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
-  usePingHeartbeat()
   return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><AuthProvider><NavCollapseProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></NavCollapseProvider></AuthProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 

@@ -26,9 +26,9 @@ from app.main import create_app
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 #: Bare paths that operational consumers depend on and that must never move
-#: behind a version prefix. Ping warms serverless cold starts (issue #1389)
-#: and is fetched directly by ``frontend/src/hooks/usePingHeartbeat.ts``;
-#: ``/api/health`` is the dependency-free uptime liveness URL.
+#: behind a version prefix. Ping was used for serverless cold-start warming
+#: (issue #1389) but is now removed from frontend; ``/api/health`` is the
+#: dependency-free uptime liveness URL.
 _BARE_OPERATIONAL_ROUTES: frozenset[str] = frozenset(
     {
         "GET /api/ping",
@@ -73,13 +73,23 @@ def _route_keys(app_routes: Sequence[object]) -> set[str]:
         Set of ``"<METHOD> <path>"`` strings for all routable entries.
     """
     keys: set[str] = set()
-    for route in app_routes:
-        path = getattr(route, "path", None)
-        methods = getattr(route, "methods", None)
-        if not path or not methods:
-            continue
-        for method in methods:
-            keys.add(f"{method} {path}")
+    
+    def _collect_routes(routes, prefix=""):
+        for route in routes:
+            path = getattr(route, "path", None)
+            methods = getattr(route, "methods", None)
+            # Handle included routers (FastAPI stores them as _IncludedRouter objects)
+            if hasattr(route, 'original_router') and hasattr(route.original_router, 'routes'):
+                # Get the prefix from the include context and recurse
+                include_prefix = getattr(getattr(route, 'include_context', None), 'prefix', "") or ""
+                new_prefix = prefix + include_prefix
+                _collect_routes(route.original_router.routes, new_prefix)
+            elif path and methods:
+                full_path = prefix + path
+                for method in methods:
+                    keys.add(f"{method} {full_path}")
+    
+    _collect_routes(app_routes)
     return keys
 
 
