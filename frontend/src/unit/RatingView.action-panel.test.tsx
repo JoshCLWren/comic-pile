@@ -277,9 +277,27 @@ describe('RatingView action panel (issue #1406)', () => {
   })
 
   it('low rating uses danger color', () => {
-    render(ratingView({ rating: 2.0 }))
-    const value = screen.getByText('2.0')
+    render(ratingView({ rating: 1.5 }))
+    const value = screen.getByText('1.5')
     expect(value.className).toContain('text-[var(--theme-danger)]')
+  })
+
+  it('below-average rating uses warning color', () => {
+    render(ratingView({ rating: 2.5 }))
+    const value = screen.getByText('2.5')
+    expect(value.className).toContain('text-[var(--theme-warning)]')
+  })
+
+  it('middling rating uses comic accent color', () => {
+    render(ratingView({ rating: 3.5 }))
+    const value = screen.getByText('3.5')
+    expect(value.className).toContain('text-[var(--theme-comic-accent)]')
+  })
+
+  it('perfect rating uses comic accent color', () => {
+    render(ratingView({ rating: 5.0 }))
+    const value = screen.getByText('5.0')
+    expect(value.className).toContain('text-[var(--theme-comic-accent)]')
   })
 
   it('rating value is the dominant text size', () => {

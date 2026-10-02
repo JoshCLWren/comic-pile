@@ -71,6 +71,14 @@ export function getDieDirection(currentDie: number, predictedDie: number): strin
   return 'Die stays the same'
 }
 
+export function getRatingColorClass(rating: number): string {
+  if (rating < 2.0) return 'text-[var(--theme-danger)]'
+  if (rating < 3.0) return 'text-[var(--theme-warning)]'
+  if (rating < 4.0) return 'text-[var(--theme-comic-accent)]'
+  if (rating < 5.0) return 'text-[var(--theme-personal-accent)]'
+  return 'text-[var(--theme-comic-accent)]'
+}
+
 export function getProgressPercentage(
   thread: { total_issues?: number | null; issues_remaining?: number | null } | null,
 ): number {
