@@ -307,7 +307,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
         aria-label="Desktop navigation"
         data-nav-collapsed={collapsed}
       >
-        <div className={`flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto ${collapsed ? 'px-2 py-3' : 'px-3 py-4'}`}>
+        <div className={`flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto ${collapsed ? 'px-3 py-3' : 'px-4 py-4'}`}>
           <div className={`mb-1 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
             {!collapsed && (
               <span className="px-1 text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>
@@ -340,7 +340,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           <div className="my-2 border-t border-[var(--glass-border)]" aria-hidden="true" />
           {visibleSecondaryNavItems.map((item) => renderNavItem(item, isActive(item.path), true))}
         </div>
-        <div className={`border-t border-[var(--glass-border)] ${collapsed ? 'px-2 py-3' : 'px-3 py-3'}`}>
+        <div className={`border-t border-[var(--glass-border)] ${collapsed ? 'px-3 py-3' : 'px-4 py-3'}`}>
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               {authState.isLoading ? (
@@ -403,7 +403,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                 <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{authState.user?.username}</span>
               ) : null}
               <div
-                className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
+                className="mt-2 flex items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
                 role="group"
                 aria-label="Appearance"
               >
@@ -415,13 +415,15 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                     data-theme={option.id}
                     onClick={() => setTheme(option.id)}
                     aria-pressed={activeTheme === option.id}
-                    className={`rounded-md px-2 py-1 text-xs font-bold transition-colors ${
+                    aria-label={option.label}
+                    title={option.label}
+                    className={`h-7 w-7 rounded-md text-[10px] font-bold transition-colors ${
                       activeTheme === option.id
                         ? 'bg-white/10 text-[var(--theme-text-primary)]'
                         : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
                     }`}
                   >
-                    {option.label}
+                    {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
                   </button>
                 ))}
               </div>
