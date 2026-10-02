@@ -40,7 +40,7 @@ export function RatingView({ data }: RatingViewProps) {
           <ComicPillar activeRatingThread={activeRatingThread} onRefreshThread={onRefreshThread} />
         </div>
 
-        <div className="min-w-0 space-y-4 w-full lg:w-auto" data-testid="rating-region-decision">
+        <div className="min-w-0 space-y-4 w-full lg:w-auto lg:sticky lg:top-4" data-testid="rating-region-decision">
           <DecisionCard
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}
