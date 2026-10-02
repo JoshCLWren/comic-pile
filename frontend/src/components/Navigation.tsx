@@ -415,9 +415,10 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                       type="button"
                       data-theme={option.id}
                       onClick={() => setTheme(option.id)}
-                      aria-pressed={activeTheme === option.id}
-                      title={option.label}
-                      className={`h-6 rounded-md px-1.5 text-[8px] font-bold transition-colors ${
+                    aria-pressed={activeTheme === option.id}
+                    aria-label={option.label}
+                    title={option.label}
+                    className={`h-6 rounded-md px-1.5 text-[8px] font-bold transition-colors ${
                         activeTheme === option.id
                           ? 'bg-white/10 text-[var(--theme-text-primary)]'
                           : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
