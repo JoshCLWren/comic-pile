@@ -124,26 +124,26 @@ export function RollHeader({
                 </button>
               )
             })}
-            <span
-              aria-hidden="true"
-              className="mx-0.5 h-5 w-px bg-[var(--theme-border)]"
-            />
-            <button
-              type="button"
-              onClick={onClearManualDie}
-              disabled={clearManualDiePending}
-              aria-pressed={manualDie === null}
-              title={
-                manualDie
-                  ? `Exit manual mode (currently d${manualDie})`
-                  : 'Automatic die mode is active'
-              }
-              className={`min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${manualDie === null
-                ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
-                : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
-            >
-              Auto
-            </button>
+<span
+            aria-hidden="true"
+            className="mx-0.5 h-5 w-px bg-[var(--theme-border)]"
+          />
+          <button
+            type="button"
+            onClick={onClearManualDie}
+            disabled={clearManualDiePending}
+            aria-pressed={manualDie === null}
+            title={
+              manualDie
+                ? `Exit manual mode (currently d${manualDie})`
+                : 'Automatic die mode is active'
+            }
+            className={`min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${manualDie === null
+              ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
+              : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'}`}
+          >
+            Auto
+          </button>
           </div>
           <div className="md:hidden">
             <button
@@ -154,7 +154,7 @@ export function RollHeader({
               className="min-h-11 rounded-xl border border-transparent bg-[var(--theme-primary-action)] px-3 py-1 text-stone-900 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             >
               <span className="block text-[11px] font-black">d{currentDie}</span>
-              <span className="block text-[8px] font-bold uppercase tracking-wide">
+              <span className="block text-[8px] font-medium">
                 {manualDie ? 'Manual' : 'Auto'}
               </span>
             </button>
@@ -174,12 +174,12 @@ export function RollHeader({
             <div className="text-right">
               <Tooltip content="The die picks randomly from the series that are ready to read. Sizes run d4→d6→d8→d10→d12→d20→d30→d50→d100 — a larger die means more series in the roll.">
                 <GlossaryLink id="die-ladder">
-                  <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-black uppercase tracking-wider text-stone-500">
+                  <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-medium text-[var(--theme-text-muted)]">
                     Die
                   </span>
                 </GlossaryLink>
               </Tooltip>
-              <span id="header-die-label" className="block text-[10px] font-black text-[var(--theme-comic-accent)]">
+              <span id="header-die-label" className="block text-[10px] font-medium text-[var(--theme-comic-accent)]">
                 d{currentDie}
               </span>
             </div>
@@ -192,7 +192,7 @@ export function RollHeader({
             onClick={onOpenOverride}
             data-roll-primary-action="pick-manually"
             aria-haspopup="dialog"
-            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] transition-colors hover:border-[var(--theme-comic-accent)]/40 hover:text-[var(--theme-comic-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] md:px-4 md:py-2"
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-[10px] font-medium text-[var(--theme-text-muted)] transition hover:border-[var(--theme-comic-accent)]/40 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] md:px-4 md:py-2"
           >
             Pick manually
           </button>

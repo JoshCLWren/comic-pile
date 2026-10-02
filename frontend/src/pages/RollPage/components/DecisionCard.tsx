@@ -78,7 +78,7 @@ export function DecisionCard({
       data-testid="decision-card"
     >
       <div className="flex items-center justify-between gap-2 border-b border-[var(--theme-border)] pb-2">
-        <h3 id="decision-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+        <h3 id="decision-heading" className="text-sm font-semibold text-[var(--theme-text-muted)]">
           Your rating
         </h3>
         {threadTitle && issueNumber != null && (
@@ -86,7 +86,7 @@ export function DecisionCard({
             type="button"
             onClick={handleCopyComicReference}
             disabled={!threadTitle}
-            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black uppercase tracking-wider transition focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40 shrink-0 ${copyStatus === 'copied' ? 'border-[var(--theme-continuity-accent)]/40 bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]' : copyStatus === 'failed' ? 'border-[var(--theme-danger)]/30 bg-[var(--theme-danger)]/10 text-[var(--theme-danger)]' : 'border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'}`}
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-medium transition focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40 shrink-0 ${copyStatus === 'copied' ? 'border-[var(--theme-continuity-accent)]/40 bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]' : copyStatus === 'failed' ? 'border-[var(--theme-danger)]/30 bg-[var(--theme-danger)]/10 text-[var(--theme-danger)]' : 'border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'}`}
             aria-label={`Copy ${threadTitle} ${issueNumber}`}
             data-testid="copy-title-button"
           >
@@ -104,7 +104,7 @@ export function DecisionCard({
               <path d="M20 4.5A2.5 2.5 0 0 0 17.5 2H14"></path>
               <path d="M20 4.5v17A2.5 2.5 0 0 0 17.5 19H14"></path>
             </svg>
-            {copyStatus === 'copied' ? 'COPIED' : copyStatus === 'failed' ? 'Retry' : 'Copy title'}
+            {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry' : 'Copy title'}
           </button>
         )}
       </div>
@@ -184,7 +184,7 @@ export function DecisionCard({
             type="button"
             onClick={onSnooze}
             disabled={snoozeIsPending}
-            className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-sm font-medium text-[var(--theme-text-muted)] transition hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
             {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
           </button>
@@ -195,7 +195,7 @@ export function DecisionCard({
               disabled={skipIsPending}
               data-testid="skip-roll"
               aria-label="Skip current roll"
-              className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+              className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-sm font-medium text-[var(--theme-text-muted)] transition hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
             >
               {skipIsPending ? 'Skipping…' : 'Skip'}
             </button>
@@ -204,7 +204,7 @@ export function DecisionCard({
             type="button"
             onClick={onCancel}
             disabled={dismissIsPending}
-            className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-sm font-medium text-[var(--theme-text-muted)] transition hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
             Cancel roll
           </button>
@@ -232,7 +232,7 @@ export function DecisionCard({
               onClick={() => setIsSkipConfirmOpen(false)}
               disabled={skipIsPending}
               data-testid="skip-cancel"
-              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-sm font-medium text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
             >
               Keep this comic
             </button>
@@ -241,7 +241,7 @@ export function DecisionCard({
               onClick={handleConfirmSkip}
               disabled={skipIsPending}
               data-testid="skip-confirm"
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
             >
               {skipIsPending ? 'Skipping…' : 'Skip comic'}
             </button>

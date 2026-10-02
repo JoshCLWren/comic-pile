@@ -64,7 +64,7 @@ export function RatingActionPanel({
             type="button"
             onClick={handleCopyComicReference}
             disabled={!threadTitle}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] transition hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[10px] font-medium text-[var(--theme-text-muted)] transition hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40"
             aria-label={`Copy ${threadTitle} ${issueNumber}`}
           >
             <svg
@@ -83,7 +83,7 @@ export function RatingActionPanel({
             </svg>
             {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title'}
           </button>
-          <p className="text-[10px] font-semibold text-[var(--theme-text-dim)]">
+          <p className="text-[10px] font-medium text-[var(--theme-text-dim)]">
             Copies “{threadTitle} {issueNumber}”
           </p>
           {copyStatus === 'failed' ? (
@@ -112,7 +112,7 @@ export function RatingActionPanel({
           type="button"
           onClick={onSnooze}
           disabled={snoozeIsPending}
-          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-sm font-medium text-[var(--theme-text-muted)] transition hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
         >
           {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
         </button>
@@ -123,7 +123,7 @@ export function RatingActionPanel({
             disabled={skipIsPending}
             data-testid="skip-roll"
             aria-label="Skip current roll"
-            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-sm font-medium text-[var(--theme-text-muted)] transition hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
             {skipIsPending ? 'Skipping…' : 'Skip'}
           </button>
@@ -132,7 +132,7 @@ export function RatingActionPanel({
           type="button"
           onClick={onCancel}
           disabled={dismissIsPending}
-          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-sm font-medium text-[var(--theme-text-muted)] transition hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
         >
           Cancel roll
         </button>
@@ -159,7 +159,7 @@ export function RatingActionPanel({
               onClick={() => setIsSkipConfirmOpen(false)}
               disabled={skipIsPending}
               data-testid="skip-cancel"
-              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-sm font-medium text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
             >
               Keep this comic
             </button>
@@ -168,7 +168,7 @@ export function RatingActionPanel({
               onClick={handleConfirmSkip}
               disabled={skipIsPending}
               data-testid="skip-confirm"
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
             >
               {skipIsPending ? 'Skipping…' : 'Skip comic'}
             </button>

@@ -132,7 +132,7 @@ export function ComicPillar({
                   type="button"
                   onClick={() => setIsCorrectionDialogOpen(true)}
                   disabled={!activeRatingThread?.id}
-                  className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
+                  className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-medium text-stone-300 transition disabled:opacity-30"
                   style={{
                     border: '1px solid rgba(255,255,255,0.1)',
                     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -147,7 +147,7 @@ export function ComicPillar({
                 <button
                   type="button"
                   onClick={() => { setSearchMode('confirm'); setIsSearchDialogOpen(true) }}
-                  className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-900 bg-amber-500 hover:bg-amber-400 transition"
+                  className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-medium text-stone-900 bg-amber-500 hover:bg-amber-400 transition"
                 >
                   Find ComicVine match
                 </button>
@@ -162,7 +162,7 @@ export function ComicPillar({
                   <button
                     type="button"
                     onClick={() => { setSearchMode('replace'); setIsSearchDialogOpen(true) }}
-                    className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-400 hover:text-amber-400 transition"
+                    className="min-h-9 max-w-full rounded-lg px-3 text-[10px] font-medium text-stone-400 hover:text-amber-400 transition"
                     style={{
                       border: '1px solid rgba(255,255,255,0.1)',
                       backgroundColor: 'rgba(255,255,255,0.05)',
