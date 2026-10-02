@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import clear_settings_cache
 from app.models import Event, ReadingSession, Snapshot, Thread, User
-from app.models import ReadingSession
 from app.services.session_response import get_active_thread
 from comic_pile.reading_session import (
     end_session,
