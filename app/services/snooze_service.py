@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Thread
 from app.models.thread import normalize_format_value
 from app.repositories.rate_repository import fetch_source_roll_event
-from app.repositories.session_repository import (
+from app.repositories.reading_session_repository import (
     count_snapshots,
-    fetch_active_session,
-    recent_session_events,
+    fetch_active_reading_session,
+    recent_reading_session_events,
     recent_snooze_events,
 )
 from app.repositories.snooze_repository import (
@@ -185,7 +185,7 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
     Raises:
         HTTPException: If no active session exists or no pending thread to snooze.
     """
-    current_session = await fetch_active_session(db, user_id)
+    current_session = await fetch_active_reading_session(db, user_id)
     if not current_session:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -204,7 +204,7 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
     # Combined query: fetch all die-changing events and latest roll event in one shot.
     # die-changing events -> current die + ladder path
     # roll events -> active thread info
-    all_events = await recent_session_events(db, current_session_id)
+    all_events = await recent_reading_session_events(db, current_session_id)
 
     # Current die: latest rate/snooze/undo event with die_after, or session start_die.
     current_die = current_session.manual_die
@@ -384,7 +384,7 @@ async def unsnooze_thread(db: AsyncSession, user_id: int, thread_id: int) -> Ses
     Raises:
         HTTPException: If no active session exists.
     """
-    current_session = await fetch_active_session(db, user_id)
+    current_session = await fetch_active_reading_session(db, user_id)
     if not current_session:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

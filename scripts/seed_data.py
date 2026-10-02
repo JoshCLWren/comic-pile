@@ -9,7 +9,7 @@ from faker import Faker
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
-from app.models import Event, Session, Thread, User
+from app.models import Event, ReadingSession, Thread, User
 from comic_pile import DICE_LADDER
 
 load_dotenv()
@@ -81,7 +81,7 @@ async def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
                 end_time = fake.date_time_between(start_date=start_time, end_date="now")
                 start_die = random.choice(DICE_LADDER)
 
-                session = Session(
+                session = ReadingSession(
                     started_at=start_time,
                     ended_at=end_time,
                     start_die=start_die,
@@ -144,7 +144,7 @@ async def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
 
             result = await db.execute(select(Thread).where(Thread.user_id == user.id))
             final_threads = result.scalars().all()
-            result = await db.execute(select(Session).where(Session.user_id == user.id))
+            result = await db.execute(select(ReadingSession).where(ReadingSession.user_id == user.id))
             final_sessions = result.scalars().all()
             result = await db.execute(select(Event))
             final_events = result.scalars().all()

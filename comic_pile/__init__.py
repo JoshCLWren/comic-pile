@@ -34,7 +34,7 @@ from comic_pile.reading_effort import (
     median,
     resolve_issue_effort,
 )
-from comic_pile.session import (
+from comic_pile.reading_session import (
     end_session,
     get_or_create,
     is_active,

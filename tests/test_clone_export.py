@@ -22,7 +22,7 @@ from app.models import (
     Issue,
     ReadingOrder,
     ReadingOrderItem,
-    Session,
+    ReadingSession,
     Snapshot,
     Thread,
     User,
@@ -222,7 +222,7 @@ async def export_data(db_engine, export_user: User) -> dict[str, object]:
             )
         )
 
-        session_model = Session(
+        session_model = ReadingSession(
             start_die=6,
             manual_die=0,
             user_id=export_user.id,

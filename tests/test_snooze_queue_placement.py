@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 
 async def _create_pending_snooze_session(
@@ -44,7 +44,7 @@ async def _create_pending_snooze_session(
 
     snoozed_ids = [threads[index].id for index in snoozed_indexes or []]
     target = threads[0]
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=user.id,
         pending_thread_id=target.id,
@@ -156,7 +156,7 @@ async def test_high_affinity_thread_returns_with_position_after_session_expiry(
     async_db.add_all([target, other])
     await async_db.flush()
 
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=user.id,
         pending_thread_id=target.id,
@@ -190,7 +190,7 @@ async def test_high_affinity_thread_returns_with_position_after_session_expiry(
 
     # Session snooze state expires with the session itself.
     session_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.user_id == user.id)
+        select(ReadingSession).where(ReadingSession.user_id == user.id)
     )
     expired_session = session_result.scalars().one()
     expired_session.ended_at = datetime.now(UTC)

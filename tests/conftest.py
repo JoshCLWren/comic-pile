@@ -28,7 +28,7 @@ from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.database import Base, get_db
 from app.main import app
 from app.models import Event, Thread, User
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 load_dotenv(".env.test")
 
@@ -566,23 +566,23 @@ async def _create_async_db_override(
 @pytest_asyncio.fixture(scope="function")
 async def sample_data(
     async_db: SQLAlchemyAsyncSession,
-) -> dict[str, Thread | SessionModel | Event | User | list | object]:
+) -> dict[str, Thread | ReadingSession | Event | User | list | object]:
     """Create sample threads, sessions for async testing."""
     from sqlalchemy import delete
-    from app.models import Issue, Snapshot, Event, Thread, Session, User
+    from app.models import Issue, Snapshot, Event, Thread, ReadingSession, User
 
     batman_issues = []
 
     await async_db.execute(delete(Snapshot))
     await async_db.execute(delete(Event))
     await async_db.execute(delete(Thread))
-    await async_db.execute(delete(Session))
+    await async_db.execute(delete(ReadingSession))
     await async_db.execute(delete(User))
 
     await async_db.execute(delete(Snapshot))
     await async_db.execute(delete(Event))
     await async_db.execute(delete(Thread))
-    await async_db.execute(delete(Session))
+    await async_db.execute(delete(ReadingSession))
     await async_db.execute(delete(User))
     await async_db.flush()
 
@@ -678,13 +678,13 @@ async def sample_data(
     await async_db.flush()
 
     sessions = [
-        SessionModel(
+        ReadingSession(
             id=1,
             start_die=6,
             user_id=user.id,
             started_at=now,
         ),
-        SessionModel(
+        ReadingSession(
             id=2,
             start_die=8,
             user_id=user.id,

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Event, Issue, Snapshot, Thread, User
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     SNAPSHOT_VERSION,
@@ -44,7 +44,7 @@ async def test_delta_undo_restores_completed_session_state(
     Returns:
         None.
     """
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),
@@ -111,7 +111,7 @@ async def test_delta_undo_restores_dependency_blocked_transition(
     Returns:
         None.
     """
-    session = SessionModel(
+    session = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=datetime.now(UTC),

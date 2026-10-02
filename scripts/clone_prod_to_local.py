@@ -45,7 +45,7 @@ from app.models import (
     Issue,
     ReadingOrder,
     ReadingOrderItem,
-    Session,
+    ReadingSession,
     Snapshot,
     Thread,
     User,
@@ -326,7 +326,7 @@ def _export_reading_order_item(item: ReadingOrderItem) -> ExportReadingOrderItem
     })
 
 
-def _export_session(session: Session) -> ExportSessionRecord:
+def _export_session(session: ReadingSession) -> ExportSessionRecord:
     return ExportSessionRecord(**{
         "id": session.id,
         "started_at": _datetime_to_iso(session.started_at),
@@ -488,7 +488,7 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
             ]
 
         result = await db.execute(
-            select(Session).where(Session.user_id == user_id).order_by(Session.id)
+            select(ReadingSession).where(ReadingSession.user_id == user_id).order_by(ReadingSession.id)
         )
         sessions = list(result.scalars().all())
         export["sessions"] = [_export_session(s) for s in sessions]
@@ -599,7 +599,7 @@ async def _delete_local_user_data(db: AsyncSession, user_id: int) -> None:
     """Delete the local user's imported data in foreign-key-safe order."""
     thread_ids = select(Thread.id).where(Thread.user_id == user_id)
     issue_ids = select(Issue.id).where(Issue.thread_id.in_(thread_ids))
-    session_ids = select(Session.id).where(Session.user_id == user_id)
+    session_ids = select(ReadingSession.id).where(ReadingSession.user_id == user_id)
     order_ids = select(ReadingOrder.id).where(ReadingOrder.user_id == user_id)
     await db.execute(delete(Snapshot).where(Snapshot.session_id.in_(session_ids)))
     await db.execute(delete(Event).where(Event.session_id.in_(session_ids)))
@@ -608,7 +608,7 @@ async def _delete_local_user_data(db: AsyncSession, user_id: int) -> None:
     await db.execute(delete(Dependency).where(
         Dependency.source_issue_id.in_(issue_ids) | Dependency.target_issue_id.in_(issue_ids)
     ))
-    await db.execute(delete(Session).where(Session.user_id == user_id))
+    await db.execute(delete(ReadingSession).where(ReadingSession.user_id == user_id))
     await db.execute(delete(Issue).where(Issue.thread_id.in_(thread_ids)))
     await db.execute(delete(Thread).where(Thread.user_id == user_id))
 
@@ -755,7 +755,7 @@ async def _import_document(
                 session_map: dict[int, int] = {}
                 for record in export["sessions"]:
                     snoozed = record.get("snoozed_thread_ids")
-                    item = Session(
+                    item = ReadingSession(
                         started_at=_parse_datetime(record.get("started_at")) or datetime.now(UTC), ended_at=_parse_datetime(record.get("ended_at")),
                         start_die=record.get("start_die", 6), manual_die=record.get("manual_die"), user_id=local_user.id,
                         pending_thread_id=_remap(record.get("pending_thread_id"), thread_map), pending_issue_id=_remap(record.get("pending_issue_id"), issue_map),

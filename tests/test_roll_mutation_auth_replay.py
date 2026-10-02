@@ -9,14 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 from tests.conftest import get_or_create_user_async
 
 
-async def _pending_roll(async_db: AsyncSession, *, start_die: int = 6) -> tuple[SessionModel, Thread]:
+async def _pending_roll(async_db: AsyncSession, *, start_die: int = 6) -> tuple[ReadingSession, Thread]:
     """Create one active session with one pending rolled thread."""
     user = await get_or_create_user_async(async_db)
-    session = SessionModel(start_die=start_die, user_id=user.id)
+    session = ReadingSession(start_die=start_die, user_id=user.id)
     thread = Thread(
         title="Auth replay thread",
         format="Comic",

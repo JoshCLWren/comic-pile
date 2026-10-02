@@ -6,9 +6,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Session, User
+from app.models import ReadingSession, User
 from app.performance_diagnostics import begin_request_diagnostics, end_request_diagnostics
-from comic_pile.session import get_or_create
+from comic_pile.reading_session import get_or_create
 
 
 def _resolution_record(caplog: pytest.LogCaptureFixture) -> logging.LogRecord:
@@ -31,12 +31,12 @@ async def test_reused_session_logs_resolution_and_request_context(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Reusing a current session emits enough context to trace the decision."""
-    current = Session(
+    current = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(minutes=5),
         start_die=12,
         user_id=default_user.id,
     )
-    stale = Session(
+    stale = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=9),
         start_die=6,
         user_id=default_user.id,
@@ -49,7 +49,7 @@ async def test_reused_session_logs_resolution_and_request_context(
         route="/api/v1/roll/bootstrap",
     )
     try:
-        with caplog.at_level(logging.INFO, logger="comic_pile.session"):
+        with caplog.at_level(logging.INFO, logger="comic_pile.reading_session"):
             resolved = await get_or_create(async_db, default_user.id)
     finally:
         end_request_diagnostics(token)
@@ -73,7 +73,7 @@ async def test_created_session_logs_reason_and_candidate_count(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Creating a session explains why no prior row was reused."""
-    stale = Session(
+    stale = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=9),
         start_die=10,
         user_id=default_user.id,
@@ -86,7 +86,7 @@ async def test_created_session_logs_reason_and_candidate_count(
         route="/api/v1/roll/bootstrap",
     )
     try:
-        with caplog.at_level(logging.INFO, logger="comic_pile.session"):
+        with caplog.at_level(logging.INFO, logger="comic_pile.reading_session"):
             created = await get_or_create(async_db, default_user.id)
     finally:
         end_request_diagnostics(token)

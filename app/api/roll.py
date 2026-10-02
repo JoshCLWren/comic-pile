@@ -18,7 +18,7 @@ from app.auth import get_current_user
 from app.config import get_recommendation_settings
 from app.database import get_db
 from app.middleware import limiter
-from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Snapshot, Thread
+from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
@@ -68,7 +68,7 @@ from comic_pile.recommendation_version import (
     RECOMMENDATION_ALGORITHM_VERSION,
     recommendation_algorithm_version,
 )
-from comic_pile.session import get_current_die_for_session, get_or_create
+from comic_pile.reading_session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
 v2_router = APIRouter(tags=["roll"])
@@ -128,7 +128,7 @@ async def _select_pending_thread(
     *,
     db: AsyncSession,
     user_id: int,
-    current_session: Session,
+    current_session: ReadingSession,
     current_die: int,
     excluded_ids: list[int],
     selection_bandwidth: str,
@@ -516,10 +516,10 @@ async def unskip_thread(
     """
     _ = request
     result = await db.execute(
-        select(Session)
-        .where(Session.user_id == current_user.id)
-        .where(Session.ended_at.is_(None))
-        .order_by(Session.started_at.desc())
+        select(ReadingSession)
+        .where(ReadingSession.user_id == current_user.id)
+        .where(ReadingSession.ended_at.is_(None))
+        .order_by(ReadingSession.started_at.desc())
     )
     current_session = result.scalars().first()
 
@@ -1553,8 +1553,8 @@ async def get_roll_recommendation_explanation(
         HTTPException 422: When the event type is not ``"roll"``.
     """
     result = await db.execute(
-        select(Event, Session.user_id)
-        .join(Session, Event.session_id == Session.id)
+        select(Event, ReadingSession.user_id)
+        .join(ReadingSession, Event.session_id == ReadingSession.id)
         .where(Event.id == event_id)
     )
     row = result.one_or_none()

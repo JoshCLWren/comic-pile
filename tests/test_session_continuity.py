@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Session, Thread, User
-from comic_pile.session import get_or_create, should_start_new
+from app.models import ReadingSession, Thread, User
+from comic_pile.reading_session import get_or_create, should_start_new
 
 
 @pytest.mark.asyncio
@@ -33,7 +33,7 @@ async def test_recent_pending_roll_keeps_old_open_session_authoritative(
     async_db.add(thread)
     await async_db.flush()
 
-    original_session = Session(
+    original_session = ReadingSession(
         user_id=default_user.id,
         started_at=datetime.now(UTC) - timedelta(hours=7),
         start_die=6,
@@ -56,9 +56,9 @@ async def test_recent_pending_roll_keeps_old_open_session_authoritative(
 
     open_count = await async_db.scalar(
         select(func.count())
-        .select_from(Session)
-        .where(Session.user_id == default_user.id)
-        .where(Session.ended_at.is_(None))
+        .select_from(ReadingSession)
+        .where(ReadingSession.user_id == default_user.id)
+        .where(ReadingSession.ended_at.is_(None))
     )
     assert open_count == 1
 
@@ -86,7 +86,7 @@ async def test_stale_session_without_recent_pending_activity_can_roll_over(
     async_db.add(thread)
     await async_db.flush()
 
-    stale_session = Session(
+    stale_session = ReadingSession(
         user_id=default_user.id,
         started_at=datetime.now(UTC) - timedelta(hours=8),
         start_die=6,
@@ -116,7 +116,7 @@ async def test_recent_timestamp_without_pending_thread_does_not_keep_session_act
         async_db: Async database fixture.
         default_user: User fixture that owns the reading session.
     """
-    stale_session = Session(
+    stale_session = ReadingSession(
         user_id=default_user.id,
         started_at=datetime.now(UTC) - timedelta(hours=8),
         start_die=6,

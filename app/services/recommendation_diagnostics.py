@@ -67,7 +67,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from app.config import get_recommendation_settings
-from app.models import Event, Session
+from app.models import Event, ReadingSession
 from app.schemas.recommendation_diagnostics import (
     ControlModeGroup,
     CoverageInfo,
@@ -163,12 +163,12 @@ async def compute_recommendation_diagnostics(
     recommendation_settings = get_recommendation_settings()
 
     result = await db.execute(
-        select(Event, Session.started_at)
-        .join(Session, Event.session_id == Session.id)
-        .where(Session.user_id == user_id)
+        select(Event, ReadingSession.started_at)
+        .join(ReadingSession, Event.session_id == ReadingSession.id)
+        .where(ReadingSession.user_id == user_id)
         .where(Event.timestamp >= range_start)
         .where(Event.timestamp < range_end)
-        .order_by(Session.id, Event.timestamp)
+        .order_by(ReadingSession.id, Event.timestamp)
     )
     rows = result.all()
 

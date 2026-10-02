@@ -28,7 +28,7 @@ from app.models.reading_plan_membership import (
 )
 from app.models.release import Release
 from app.models.revoked_token import RevokedToken
-from app.models.session import Session
+from app.models.reading_session import ReadingSession
 from app.models.snapshot import Snapshot
 from app.models.taste_signal import TasteSignal
 from app.models.thread import Thread
@@ -67,7 +67,7 @@ __all__ = [
     "ReadingPlanSourcePlacement",
     "Release",
     "RevokedToken",
-    "Session",
+    "ReadingSession",
     "Snapshot",
     "TasteSignal",
     "Thread",

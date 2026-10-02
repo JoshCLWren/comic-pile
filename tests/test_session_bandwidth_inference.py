@@ -12,9 +12,9 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Thread, User
+from app.models import Event, ReadingSession, Thread, User
 from comic_pile.bandwidth import apply_bandwidth_state
-from comic_pile.session import get_or_create, resolve_current_session
+from comic_pile.reading_session import get_or_create, resolve_current_session
 
 
 @pytest.mark.asyncio
@@ -44,7 +44,7 @@ async def test_seeded_light_history_sessions_infer_light_with_meaningful_confide
     await async_db.flush()
 
     # Create a session
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 
@@ -115,7 +115,7 @@ async def test_seeded_heavy_history_sessions_infer_deep_where_evidence_supports_
     await async_db.flush()
 
     # Create a session
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 
@@ -187,7 +187,7 @@ async def test_sparse_contradictory_history_falls_back_to_balanced(
     await async_db.flush()
 
     # Create a session
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 
@@ -259,7 +259,7 @@ async def test_session_initialization_does_not_continuously_rewrite_mode_on_refr
     await async_db.flush()
 
     # Create a session
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 
@@ -329,7 +329,7 @@ async def test_bootstrap_exposes_the_same_canonical_state(
     await async_db.flush()
 
     # Create a session
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 
@@ -372,7 +372,7 @@ async def test_bootstrap_exposes_the_same_canonical_state(
 
     # Method 3: direct query
     session_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.id == session.id)
+        select(ReadingSession).where(ReadingSession.id == session.id)
     )
     session3 = session_result.scalar_one()
 
@@ -419,7 +419,7 @@ async def test_roll_selection_remains_legacy_unweighted(
     await async_db.flush()
 
     # Create a session
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
 

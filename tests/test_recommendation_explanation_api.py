@@ -17,7 +17,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.models import Event, Session as SessionModel, Thread, User
+from app.models import Event, ReadingSession, Thread, User
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 
 
@@ -69,7 +69,7 @@ async def test_explanation_with_full_context(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    session = SessionModel(
+    session = ReadingSession(
         user_id=user.id,
         start_die=8,
         manual_die=None,
@@ -143,7 +143,7 @@ async def test_explanation_absent_context_returns_selection_bypass(
     """Absent context still explains a random roll's weighting bypass."""
     user = await _get_auth_user(async_db, test_username)
 
-    session = SessionModel(
+    session = ReadingSession(
         user_id=user.id,
         start_die=8,
         manual_die=None,
@@ -188,7 +188,7 @@ async def test_explanation_unknown_legacy_context_falls_back(
     """GET succeeds even when context contains only unrecognized future codes."""
     user = await _get_auth_user(async_db, test_username)
 
-    session = SessionModel(
+    session = ReadingSession(
         user_id=user.id,
         start_die=8,
         manual_die=None,
@@ -251,7 +251,7 @@ async def test_explanation_422_for_non_roll_event(
     """GET returns 422 when the event type is not 'roll'."""
     user = await _get_auth_user(async_db, test_username)
 
-    session = SessionModel(
+    session = ReadingSession(
         user_id=user.id,
         start_die=8,
         manual_die=None,
@@ -286,7 +286,7 @@ async def test_explanation_random_selection_mentions_bypass(
     """The random-selection explanation explicitly notes that weighting was bypassed."""
     user = await _get_auth_user(async_db, test_username)
 
-    session = SessionModel(
+    session = ReadingSession(
         user_id=user.id,
         start_die=8,
         manual_die=None,

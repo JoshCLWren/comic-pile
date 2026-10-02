@@ -12,7 +12,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 from app.models import User
 
 
@@ -58,7 +58,7 @@ async def test_history_shows_rated_issue_not_current_next(
     await async_db.flush()
 
     # Session 1: rolled thread, rated #5 at Sep 10
-    session1 = SessionModel(
+    session1 = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=now - timedelta(days=1, hours=2),
@@ -98,7 +98,7 @@ async def test_history_shows_rated_issue_not_current_next(
     await async_db.flush()
 
     # Session 2: rolled same thread, rated #6 Sep 11 morning
-    session2 = SessionModel(
+    session2 = ReadingSession(
         start_die=6,
         user_id=default_user.id,
         started_at=now - timedelta(hours=1),
@@ -195,7 +195,7 @@ async def test_history_without_rate_falls_back_to_current_next(
     thread.next_unread_issue_id = [i for i in issues if i.issue_number == "4"][0].id
     await async_db.flush()
 
-    session = SessionModel(start_die=6, user_id=default_user.id, started_at=now)
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=now)
     async_db.add(session)
     await async_db.flush()
     async_db.add(

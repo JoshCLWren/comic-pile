@@ -26,7 +26,7 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, ExternalIdentity, Thread, ThreadExternalSeriesMapping
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 from app.models.user import User
 from app.repositories.rate_repository import fetch_user_recent_rated_threads
 from app.services.correction_examples import generate_correction_examples
@@ -69,7 +69,7 @@ async def _seed_thread(async_db: AsyncSession, user: User, title: str) -> Thread
     return thread
 
 
-async def _new_session(async_db: AsyncSession, user: User) -> SessionModel:
+async def _new_session(async_db: AsyncSession, user: User) -> ReadingSession:
     """Create a session to attach reading events to.
 
     Args:
@@ -79,7 +79,7 @@ async def _new_session(async_db: AsyncSession, user: User) -> SessionModel:
     Returns:
         The created session.
     """
-    session = SessionModel(start_die=6, user_id=user.id)
+    session = ReadingSession(start_die=6, user_id=user.id)
     async_db.add(session)
     await async_db.flush()
     return session
@@ -94,7 +94,7 @@ async def _seed_rated_reads(
     read_seconds: int,
     minutes_ago: int,
     occurrences: int = OBSERVATIONS_PER_THREAD,
-    session: SessionModel | None = None,
+    session: ReadingSession | None = None,
 ) -> None:
     """Record explicit roll -> rate reads so the canonical effort model sees them.
 

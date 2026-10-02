@@ -10,14 +10,14 @@ from datetime import UTC, datetime
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Session, Snapshot, Thread
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.schemas.roll import RollRecoveryInfo
 
 
 async def fetch_session_for_roll(
     db: AsyncSession, user_id: int,
-) -> Session | None:
+) -> ReadingSession | None:
     """Return the active session for a user.
 
     Args:
@@ -28,10 +28,10 @@ async def fetch_session_for_roll(
         The active (non-ended) session, or None when none exists.
     """
     result = await db.execute(
-        select(Session)
-        .where(Session.user_id == user_id)
-        .where(Session.ended_at.is_(None))
-        .order_by(Session.started_at.desc())
+        select(ReadingSession)
+        .where(ReadingSession.user_id == user_id)
+        .where(ReadingSession.ended_at.is_(None))
+        .order_by(ReadingSession.started_at.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -39,7 +39,7 @@ async def fetch_session_for_roll(
 
 async def fetch_session_by_id(
     db: AsyncSession, session_id: int,
-) -> Session | None:
+) -> ReadingSession | None:
     """Return a session by primary key.
 
     Args:
@@ -49,7 +49,7 @@ async def fetch_session_by_id(
     Returns:
         The session, or None when it does not exist.
     """
-    return await db.get(Session, session_id)
+    return await db.get(ReadingSession, session_id)
 
 
 async def fetch_thread_by_id(
@@ -169,8 +169,8 @@ async def update_session_pending_thread(
         now: Timestamp for the update.
     """
     await db.execute(
-        update(Session)
-        .where(Session.id == session_id)
+        update(ReadingSession)
+        .where(ReadingSession.id == session_id)
         .values(
             pending_thread_id=thread_id,
             pending_thread_updated_at=now,
@@ -187,8 +187,8 @@ async def clear_session_pending(db: AsyncSession, session_id: int, now: datetime
         now: Timestamp for the update.
     """
     await db.execute(
-        update(Session)
-        .where(Session.id == session_id)
+        update(ReadingSession)
+        .where(ReadingSession.id == session_id)
         .values(pending_thread_id=None, pending_thread_updated_at=now)
     )
 
@@ -206,15 +206,15 @@ async def update_session_skipped(
         skipped_ids: New list of skipped thread IDs.
     """
     await db.execute(
-        update(Session)
-        .where(Session.id == session_id)
+        update(ReadingSession)
+        .where(ReadingSession.id == session_id)
         .values(skipped_thread_ids=skipped_ids)
     )
 
 
 async def fetch_session_for_unskip(
     db: AsyncSession, user_id: int,
-) -> Session | None:
+) -> ReadingSession | None:
     """Return the active session for unskip operations.
 
     Args:
@@ -225,10 +225,10 @@ async def fetch_session_for_unskip(
         The active session, or None when none exists.
     """
     result = await db.execute(
-        select(Session)
-        .where(Session.user_id == user_id)
-        .where(Session.ended_at.is_(None))
-        .order_by(Session.started_at.desc())
+        select(ReadingSession)
+        .where(ReadingSession.user_id == user_id)
+        .where(ReadingSession.ended_at.is_(None))
+        .order_by(ReadingSession.started_at.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -427,7 +427,7 @@ async def fetch_bootstrap_pool_data(
 
 async def fetch_active_session(
     db: AsyncSession, user_id: int,
-) -> Session | None:
+) -> ReadingSession | None:
     """Return the active session for a user.
 
     Args:
@@ -438,10 +438,10 @@ async def fetch_active_session(
         The active session, or None when none exists.
     """
     result = await db.execute(
-        select(Session)
-        .where(Session.user_id == user_id)
-        .where(Session.ended_at.is_(None))
-        .order_by(Session.started_at.desc())
+        select(ReadingSession)
+        .where(ReadingSession.user_id == user_id)
+        .where(ReadingSession.ended_at.is_(None))
+        .order_by(ReadingSession.started_at.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -459,9 +459,9 @@ async def fetch_current_die_for_session(
     Returns:
         The current die size.
     """
-    from comic_pile.session import get_current_die_for_session as _get_die
-    from app.models import Session as SessionModel
-    session = await db.get(SessionModel, session_id)
+    from comic_pile.reading_session import get_current_die_for_session as _get_die
+    from app.models import ReadingSession
+    session = await db.get(ReadingSession, session_id)
     if session is None:
         return 1
     return await _get_die(session, db)
@@ -543,7 +543,7 @@ async def fetch_bootstrap_recovery_data(
 
 async def fetch_recommendation_explanation(
     db: AsyncSession, event_id: int, user_id: int,
-) -> tuple[Event | None, Session | None]:
+) -> tuple[Event | None, ReadingSession | None]:
     """Fetch event and session for recommendation explanation.
 
     Args:
@@ -555,8 +555,8 @@ async def fetch_recommendation_explanation(
         Tuple of (Event, Session) or (None, None) when not found.
     """
     result = await db.execute(
-        select(Event, Session)
-        .join(Session, Event.session_id == Session.id)
+        select(Event, ReadingSession)
+        .join(ReadingSession, Event.session_id == ReadingSession.id)
         .where(Event.id == event_id)
     )
     row = result.one_or_none()

@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import Session as SessionModel
+from app.models import ReadingSession
 
 
 async def _create_session_with_thread(
@@ -17,9 +17,9 @@ async def _create_session_with_thread(
     title: str = "Test Thread",
     start_die: int = 6,
     queue_position: int = 1,
-) -> tuple[SessionModel, Thread]:
+) -> tuple[ReadingSession, Thread]:
     """Create one active reading session with one active thread."""
-    session = SessionModel(start_die=start_die, user_id=user_id)
+    session = ReadingSession(start_die=start_die, user_id=user_id)
     async_db.add(session)
     await async_db.flush()
 
@@ -38,7 +38,7 @@ async def _create_session_with_thread(
 
 async def _add_thread_to_session(
     async_db: AsyncSession,
-    session: SessionModel,
+    session: ReadingSession,
     user_id: int,
     *,
     title: str = "Test Thread",

@@ -29,7 +29,7 @@ from app.schemas import (
     ThreadUpdate,
 )
 from app.schemas.migration import MigrateToIssuesSimpleRequest
-from app.repositories.session_repository import fetch_active_session
+from app.repositories.reading_session_repository import fetch_active_reading_session
 from app.services import thread_service
 from app.services.errors import (
     ConflictError,
@@ -79,7 +79,7 @@ async def list_stale_threads(
     The result is bounded at the database to ``page_size`` items (default 200, max 200).
     """
     try:
-        session = await fetch_active_session(db, current_user.id)
+        session = await fetch_active_reading_session(db, current_user.id)
         snoozed = session.snoozed_thread_ids if session else None
         snoozed_ids = list(snoozed) if snoozed else None
         derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(
