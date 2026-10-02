@@ -305,11 +305,11 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                   coverage != null &&
                   (coverage.upcoming_complete || summary.upcoming_count > 0)
                         return (
-                          <div
-                            key={`${creator.name}-${index}`}
-                            data-testid="creator-row"
-                            className="flex flex-col gap-0.5 py-1 border-b border-white/5 last:border-none"
-                          >
+                             <div
+                               key={`${creator.name}-${index}`}
+                               data-testid="creator-row"
+                               className="flex flex-col gap-0.5 py-1 border-b border-white/5 last:border-none flex-wrap break-words min-w-0"
+                             >
                             <div className="flex items-baseline gap-x-1.5 min-w-0">
                               <span className="font-bold text-stone-200 break-words min-w-0">{creator.name}</span>
                               {creator.roles.length > 0 && (
@@ -319,17 +319,19 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                               )}
                             </div>
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-stone-400 min-w-0">
-                              {hasRatedStats && summary.average_rating != null ? (
-                                <span
-                                  className="inline-flex items-center gap-0.5"
-                                  aria-label={`Average rating ${formatRating(summary.average_rating)} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}${coverage && !coverage.ratings_complete ? ', partial coverage' : ''}`}
-                                >
-                                  <span aria-hidden="true" className="text-amber-400/80">
-                                    ★
-                                  </span>
-                                  <span>{formatRating(summary.average_rating)} ({summary.ratings_count}${coverage && !coverage.ratings_complete && summary.ratings_count > 0 ? '+' : ''})</span>
-                                </span>
-                              ) : hasRatedStats ? null : null}
+                                 {hasRatedStats && summary.average_rating != null ? (
+                                   <span
+                                     className="inline-flex items-center gap-0.5"
+                                     aria-label={`Average rating ${formatRating(summary.average_rating)} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}${coverage && !coverage.ratings_complete ? ', partial coverage — lower bound' : ''}`}
+                                   >
+                                     <span aria-hidden="true" className="text-amber-400/80">
+                                       ★
+                                     </span>
+                                     <span>{formatRating(summary.average_rating)} ({summary.ratings_count}${coverage && !coverage.ratings_complete && summary.ratings_count > 0 ? '+' : ''} rated)</span>
+                                   </span>
+                                 ) : hasRatedStats ? (
+                                   <span className="inline-flex items-center gap-0.5">0 rated</span>
+                                 ) : null}
                               {upcomingVisible ? (
                                 <span
                                   className="inline-flex items-center gap-0.5"
