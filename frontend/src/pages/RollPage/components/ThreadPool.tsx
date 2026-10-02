@@ -164,8 +164,8 @@ export function ThreadPool({
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
                   {thread.route_labels?.length ? (
-                    <p className="mt-1 truncate text-[10px] text-sky-300">
-                      Connected to: {thread.route_labels.join(' · ')}
+                    <p className="mt-1 text-[10px] text-sky-300">
+                      <span className="truncate">Connected to: {thread.route_labels.filter(Boolean).join(' · ')}</span>
                     </p>
                   ) : null}
                 </div>

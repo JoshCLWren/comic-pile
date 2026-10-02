@@ -41,9 +41,9 @@ export function ComicPillar({
     if (!raw) return null
     const [y, m, d] = raw.split('-').map(Number)
     if (!y || !m || !d) return raw
+    // Use more concise format to reduce redundancy
     return new Intl.DateTimeFormat(undefined, {
       month: 'short',
-      day: 'numeric',
       year: 'numeric',
       timeZone: 'UTC',
     }).format(new Date(Date.UTC(y, m - 1, d)))
@@ -156,28 +156,23 @@ export function ComicPillar({
                 COMICVINE #{identityState.comicvine_issue_id}
               </div>
             )}
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2">
               <h2 data-testid="comic-header-title" className="text-xl font-black text-stone-100 leading-tight break-words">
                 {threadTitle}
-                {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
+                {issueNumber != null ? <span className="text-[var(--theme-comic-accent)] ml-1"> #{issueNumber}</span> : null}
               </h2>
               {(issueNumber != null || displayDate) && (
                 <div data-testid="comic-progress-line" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
-                  {issueNumber != null && totalIssues != null && (
-                    <>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {issueNumber != null && totalIssues != null && (
                       <span>Issue {issueNumber} of {totalIssues}</span>
-                      <span aria-hidden="true">·</span>
-                    </>
-                  )}
-                  <span>{progress}% complete</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{issuesRemaining} left</span>
-                  {displayDate && (
-                    <>
-                      <span aria-hidden="true">·</span>
+                    )}
+                    <span>{progress}% complete</span>
+                    <span>{issuesRemaining} left</span>
+                    {displayDate && (
                       <span>{displayDate}</span>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
               )}
             </div>

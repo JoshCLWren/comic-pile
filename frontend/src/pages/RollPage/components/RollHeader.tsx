@@ -70,7 +70,7 @@ export function RollHeader({
     : null
   const manualDie = bootstrap.manual_die
   return (
-    <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-2 py-2 shrink-0 z-10 md:px-3">
+    <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-2 py-3 shrink-0 z-10 md:px-3 md:py-4">
       <div className="min-w-0">
         <h1 className="text-xl font-black uppercase tracking-tighter text-glow md:text-2xl">
           Roll
