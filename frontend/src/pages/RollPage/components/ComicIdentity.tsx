@@ -320,15 +320,21 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                             </div>
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-stone-400 min-w-0">
                                  {hasRatedStats && summary.average_rating != null ? (
-                                   <span
-                                     className="inline-flex items-center gap-0.5"
-                                     aria-label={`Average rating ${formatRating(summary.average_rating)} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}${coverage && !coverage.ratings_complete ? ', partial coverage — lower bound' : ''}`}
-                                   >
-                                     <span aria-hidden="true" className="text-amber-400/80">
-                                       ★
+                                   <>
+                                     <span
+                                       className="inline-flex items-center gap-0.5"
+                                       aria-label={`Average rating ${formatRating(summary.average_rating)} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}${coverage && !coverage.ratings_complete ? ', partial coverage — lower bound' : ''}`}
+                                     >
+                                       <span aria-hidden="true" className="text-amber-400/80">
+                                         ★
+                                       </span>
+                                       <span>{formatRating(summary.average_rating)}</span>
                                      </span>
-                                     <span>{formatRating(summary.average_rating)} ({summary.ratings_count}${coverage && !coverage.ratings_complete && summary.ratings_count > 0 ? '+' : ''} rated)</span>
-                                   </span>
+                                     <span>
+                                       {summary.ratings_count}
+                                       {coverage && !coverage.ratings_complete && summary.ratings_count > 0 ? '+' : ''} rated
+                                     </span>
+                                   </>
                                  ) : hasRatedStats ? (
                                    <span className="inline-flex items-center gap-0.5">0 rated</span>
                                  ) : null}
