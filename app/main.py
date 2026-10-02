@@ -191,6 +191,12 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import traffic_metrics
     from app.api import undo
 
+    # Compose the dependency sub-routers into ``dependency.router`` before the
+    # router is copied into the app: ``include_router`` snapshots routes at call
+    # time, so sub-routes added afterwards would never be reachable. See
+    # ``app.api.dependency.mount_subrouters``.
+    dependency.mount_subrouters()
+
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     # Roll v2: versioned-only, no unversioned alias per #2716
@@ -279,17 +285,65 @@ def register_all_routers(app: FastAPI, environment: str) -> None:
         environment: Current application environment string.
     """
     _register_lightweight_routers(app)
+    register_deferred_routers(app, environment)
+
+
+def register_deferred_routers(app: FastAPI, environment: str) -> None:
+    """Register every router that is not needed to answer ``/api/ping``.
+
+    Split out of :func:`register_all_routers` so a cold serverless start can
+    register the core and heavy routers on the first non-ping request instead of
+    at import time. The first request that needs a deferred router pays the
+    import cost once; every ping before that stays light.
+
+    Args:
+        app: The FastAPI application instance.
+        environment: Current application environment string.
+    """
     _register_core_routers(app)
     _register_heavy_routers(app)
     _register_debug_routers(app, environment)
     _register_test_routers(app)
 
 
-def create_app(*, serve_frontend: bool = True) -> FastAPI:
+def _register_api_not_found_route(app: FastAPI) -> None:
+    """Register the JSON 404 fallback for unknown ``/api/*`` paths.
+
+    This must be registered after every real API route: Starlette matches
+    routes in order, so the ``/api/{path:path}`` catch-all would otherwise
+    shadow the deferred routers.
+
+    Args:
+        app: The FastAPI application instance.
+    """
+
+    @app.api_route(
+        "/api/{path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+        include_in_schema=False,
+    )
+    async def api_not_found(path: str) -> JSONResponse:
+        """Return a JSON 404 for unknown API routes.
+
+        Args:
+            path: API path that was not found.
+
+        Returns:
+            JSON response with 404 status code.
+        """
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
+
+
+def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = False) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
         serve_frontend: Whether to mount frontend static assets and SPA routes.
+        defer_router_imports: Whether to defer core, heavy, debug, and test
+            router registration until the first non-ping request. The Vercel
+            entry path enables this so a cold ``/api/ping`` start never imports
+            the API surface; every other caller keeps eager registration so the
+            complete route table is inspectable after construction.
 
     Returns:
         Configured FastAPI application instance.
@@ -364,8 +418,33 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
         return await call_next(request)
 
-    # Register all routers with deferred imports to reduce cold-start cost.
-    register_all_routers(app, app_settings.environment)
+    # Register routers with deferred module imports to reduce cold-start cost.
+    # In deferred mode only the lightweight ping/metrics routers are registered
+    # now; the rest land on the first non-ping request and are spliced back into
+    # this position so the catch-all and SPA routes keep matching last.
+    deferred_route_index: list[int | None] = [None]
+
+    def register_pending_routers() -> None:
+        """Register the deferred routers at their original position, exactly once."""
+        if deferred_route_index[0] is None:
+            return
+        route_index = deferred_route_index[0]
+        deferred_route_index[0] = None
+        existing_count = len(app.router.routes)
+        register_deferred_routers(app, app_settings.environment)
+        _register_api_not_found_route(app)
+        if len(app.router.routes) <= existing_count:
+            return
+        deferred_routes = app.router.routes[existing_count:]
+        del app.router.routes[existing_count:]
+        app.router.routes[route_index:route_index] = deferred_routes
+
+    if defer_router_imports:
+        _register_lightweight_routers(app)
+        deferred_route_index[0] = len(app.router.routes)
+    else:
+        register_all_routers(app, app_settings.environment)
+        _register_api_not_found_route(app)
 
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)
@@ -392,22 +471,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 "Missing built frontend artifacts in production. "
                 "Expected static/react/index.html and static/react/assets with JS/CSS files."
             )
-
-    @app.api_route(
-        "/api/{path:path}",
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-        include_in_schema=False,
-    )
-    async def api_not_found(path: str) -> JSONResponse:
-        """Return a JSON 404 for unknown API routes.
-
-        Args:
-            path: API path that was not found.
-
-        Returns:
-            JSON response with 404 status code.
-        """
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
     class CacheControlledStaticFiles(StarletteStaticFiles):
         """StaticFiles with explicit cache-control headers for hashed assets."""
@@ -629,6 +692,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         # Starlette would otherwise slash-redirect only after heavy init ran.
         request_path = request.url.path
         is_ping_probe = request_path == "/api/ping" or request_path.startswith("/api/ping/")
+        if not is_ping_probe:
+            # Registration is synchronous, so concurrent cold requests cannot
+            # interleave it; this runs before routing so the deferred routers
+            # are part of the table the router matches against.
+            register_pending_routers()
         if not is_ping_probe and not defer_heavy_init:
             await _ensure_heavy_init()
         response = await call_next(request)
@@ -652,4 +720,39 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     return app
 
 
-app = create_app()
+_default_app: FastAPI | None = None
+
+
+def get_app() -> FastAPI:
+    """Return the process-wide default application, building it on first use.
+
+    ``app.main:app`` stays a valid ASGI target for uvicorn and every
+    ``from app.main import app`` importer, but importing this module no longer
+    constructs an application. That removes the duplicate construction the
+    Vercel entry path paid for, where importing :mod:`app.main` built a full
+    frontend-serving app before ``api/index.py`` built its own.
+
+    Returns:
+        The cached default application instance.
+    """
+    global _default_app
+    if _default_app is None:
+        _default_app = create_app()
+    return _default_app
+
+
+def __getattr__(name: str) -> FastAPI:
+    """Resolve the module-level ``app`` attribute on first access (PEP 562).
+
+    Args:
+        name: Attribute name requested on this module.
+
+    Returns:
+        The default application instance.
+
+    Raises:
+        AttributeError: If the module has no such attribute.
+    """
+    if name == "app":
+        return get_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

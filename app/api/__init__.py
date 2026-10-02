@@ -1,35 +1,18 @@
-"""API route handlers."""
+"""API route handlers.
 
-from app.api import analytics as analytics
-from app.api import cbl_sources as cbl_sources
-from app.api import continuity_plan as continuity_plan
-from app.api import continuity_rule as continuity_rule
-from app.api import continuity_template as continuity_template
-from app.api import custom_cbl as custom_cbl
-from app.api import dependency as dependency
-from app.api import dependency_group as dependency_group
-from app.api import dependency_group_batch as dependency_group_batch
-from app.api import health as health
-from app.api import issue_dependency_batch as issue_dependency_batch
-from app.api import reading_order_projection as reading_order_projection
-from app.api import recommendation_diagnostics as recommendation_diagnostics
-from app.api import releases as releases
-from app.api import roll_recovery_switch as roll_recovery_switch
-from app.api import taste_signal as taste_signal
+This package intentionally imports nothing. Cold serverless starts serve
+``/api/ping`` without paying for the whole API import graph, so every router
+submodule is imported by the registration function that needs it (see
+``app.main.register_all_routers`` and ``app.api.dependency.mount_subrouters``).
 
-dependency.router.include_router(issue_dependency_batch.router)
-dependency.router.include_router(dependency_group.router)
-dependency.router.include_router(dependency_group_batch.router)
-dependency.router.include_router(continuity_rule.router)
-dependency.router.include_router(continuity_plan.router)
-dependency.router.include_router(continuity_template.router)
-dependency.router.include_router(reading_order_projection.router)
-dependency.router.include_router(cbl_sources.router)
-dependency.router.include_router(custom_cbl.router)
-dependency.router.include_router(roll_recovery_switch.router, prefix="/roll")
-dependency.router.include_router(releases.router, prefix="/releases")
+Import a router submodule explicitly (``from app.api import thread``) instead of
+relying on package-attribute access, which this package no longer provides.
+"""
 
-__all__ = [
+#: Router submodules this package composes during application registration.
+#: Listed for discoverability only: the names are not bound as attributes of
+#: this package, so ``from app.api import *`` does not resolve them.
+ROUTER_SUBMODULES = (
     "analytics",
     "cbl_sources",
     "continuity_plan",
@@ -46,4 +29,4 @@ __all__ = [
     "releases",
     "roll_recovery_switch",
     "taste_signal",
-]
+)

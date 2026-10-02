@@ -44,7 +44,12 @@ def test_vercel_builds_static_frontend_and_api_function_separately() -> None:
             "config": {"distDir": "static/react"},
         },
     ]
-    assert "create_app(serve_frontend=False)" in VERCEL_ENTRYPOINT.read_text(encoding="utf-8")
+    entrypoint = VERCEL_ENTRYPOINT.read_text(encoding="utf-8")
+    # The Vercel function must never serve the frontend (vercel.json builds the
+    # SPA separately) and must keep the core/heavy router imports out of the
+    # cold start, registering them on the first non-ping request instead.
+    assert "serve_frontend=False" in entrypoint
+    assert "defer_router_imports=True" in entrypoint
 
 
 def test_vercel_routes_backend_before_spa_fallback() -> None:
