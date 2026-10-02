@@ -59,7 +59,6 @@ async def test_first_request_is_correlated_with_startup_event(
     assert len(error.headers["X-Request-ID"]) == 32
     assert "Server-Timing" in error.headers
     assert "X-App-DB-Queries" in error.headers
-    assert "X-App-Cache" in error.headers
 
     startup_records = [
         record for record in caplog.records if getattr(record, "event", None) == "application_startup"

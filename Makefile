@@ -6,7 +6,6 @@
 .PHONY: test-e2e-prod-smoke check-prod-assets clone-prod-export clone-prod-import
 .PHONY: verify-reading-order railway-control-baseline railway-control-compare
 .PHONY: railway-control-results railway-control-c32-diagnostic railway-control-c32-compare
-.PHONY: cache-upstash-report
 
 # Configuration
 PREFIX ?= /usr/local

@@ -589,7 +589,6 @@ async def test_list_threads_issues_remaining_correct(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """issues_remaining reflects live unread count for migrated threads."""
-    from app.cache import invalidate_cache
 
     user = await get_or_create_user_async(async_db)
 
@@ -629,7 +628,6 @@ async def test_list_threads_issues_remaining_correct(
             )
     await async_db.commit()
 
-    await invalidate_cache("cache:*")
     response = await auth_client.get("/api/v1/threads/?page_size=10")
     assert response.status_code == 200
     data = response.json()
@@ -646,7 +644,6 @@ async def test_list_threads_mixed_migrated_unmigrated(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """Unmigrated threads report legacy column; migrated threads report true count."""
-    from app.cache import invalidate_cache
 
     user = await get_or_create_user_async(async_db)
 
@@ -688,7 +685,6 @@ async def test_list_threads_mixed_migrated_unmigrated(
         )
     await async_db.commit()
 
-    await invalidate_cache("cache:*")
     response = await auth_client.get("/api/v1/threads/?page_size=10")
     assert response.status_code == 200
     data = response.json()
@@ -706,7 +702,6 @@ async def test_bulk_issues_remaining_no_n_plus_one(
     db_engine: AsyncEngine,
 ) -> None:
     """List endpoint uses a single GROUP BY query instead of N per-thread COUNTs."""
-    from app.cache import invalidate_cache
     from sqlalchemy import event
 
     user = await get_or_create_user_async(async_db)
@@ -739,7 +734,6 @@ async def test_bulk_issues_remaining_no_n_plus_one(
             )
     await async_db.commit()
 
-    await invalidate_cache("cache:*")
 
     captured: list[str] = []
 

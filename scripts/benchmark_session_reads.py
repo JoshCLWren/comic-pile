@@ -36,7 +36,6 @@ class Sample:
     status: int
     response_bytes: int
     request_id: str | None
-    app_cache: str | None
     db_queries: int | None
     server_timing: str | None
 
@@ -79,7 +78,6 @@ def _request(
                 status=response.status,
                 response_bytes=len(body),
                 request_id=response.headers.get("X-Request-ID"),
-                app_cache=response.headers.get("X-App-Cache"),
                 db_queries=_parse_db_queries(response.headers.get("X-App-DB-Queries")),
                 server_timing=response.headers.get("Server-Timing"),
             )
@@ -103,7 +101,6 @@ def _sample_evidence(sample: Sample) -> dict[str, Any]:
         "status": sample.status,
         "response_bytes": sample.response_bytes,
         "request_id": sample.request_id,
-        "app_cache": sample.app_cache,
         "db_queries": sample.db_queries,
         "server_timing": sample.server_timing,
     }
@@ -115,10 +112,6 @@ def _aggregate(samples: list[Sample]) -> dict[str, Any] | None:
 
     elapsed = [sample.elapsed_ms for sample in samples]
     db_queries = [sample.db_queries for sample in samples if sample.db_queries is not None]
-    cache_states: dict[str, int] = {}
-    for sample in samples:
-        key = sample.app_cache or "missing"
-        cache_states[key] = cache_states.get(key, 0) + 1
 
     return {
         "samples": len(samples),
@@ -137,7 +130,6 @@ def _aggregate(samples: list[Sample]) -> dict[str, Any] | None:
             "min": min(db_queries) if db_queries else None,
             "max": max(db_queries) if db_queries else None,
         },
-        "cache_states": cache_states,
         "missing_server_timing": sum(sample.server_timing is None for sample in samples),
     }
 
