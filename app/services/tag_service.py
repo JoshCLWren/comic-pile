@@ -8,14 +8,16 @@ routers.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.constants.tags import (
+from app.constants import (
     DEFAULT_TAG_COLOR_NAME,
     NEAR_MATCH_DISTANCE,
     NEAR_MATCH_LIMIT,
@@ -63,37 +65,113 @@ class DeleteTagResult:
     references_removed_by_consumers: dict[str, int] = field(default_factory=dict)
 
 
+# Loads one polymorphic target row by primary key, or ``None`` when
+# the target does not exist. Loaders must issue explicit queries and
+# must never lazy-load relationships inside an async session.
+TargetLoader = Callable[
+    [AsyncSession, int], Awaitable[Issue | Thread | ContinuityPlan | None]
+]
+
+
 class TargetValidator:
     """Validation for one polymorphic target type.
 
     Attributes:
         type_name: The ``target_type`` value this validator handles.
-        model: The SQLAlchemy model class for the target.
     """
 
-    def __init__(self, type_name: str, model: Issue | Thread | ContinuityPlan) -> None:
+    def __init__(self, type_name: str, loader: TargetLoader) -> None:
         """Initialize a target validator.
 
         Args:
-            type_name: The target type name to register under.
-            model: The SQLAlchemy model class.
+            type_name: The ``target_type`` value this validator handles.
+            loader: Async callable that loads a target row by id.
         """
         self.type_name = type_name
-        self.model = model
+        self._loader = loader
+
+    async def load(
+        self, db: AsyncSession, target_id: int
+    ) -> Issue | Thread | ContinuityPlan | None:
+        """Load the target row for this validator's type.
+
+        Args:
+            db: Database session.
+            target_id: Primary key of the target.
+
+        Returns:
+            The target row, or ``None`` when it does not exist.
+        """
+        return await self._loader(db, target_id)
+
+
+async def _load_issue(
+    db: AsyncSession, target_id: int
+) -> Issue | None:
+    """Load an issue by primary key.
+
+    Args:
+        db: Database session.
+        target_id: Primary key of the issue.
+
+    Returns:
+        The issue, or ``None`` when it does not exist.
+    """
+    result = await db.execute(select(Issue).where(Issue.id == target_id))
+    return result.scalar_one_or_none()
+
+
+async def _load_thread(
+    db: AsyncSession, target_id: int
+) -> Thread | None:
+    """Load a thread by primary key.
+
+    Args:
+        db: Database session.
+        target_id: Primary key of the thread.
+
+    Returns:
+        The thread, or ``None`` when it does not exist.
+    """
+    result = await db.execute(select(Thread).where(Thread.id == target_id))
+    return result.scalar_one_or_none()
+
+
+async def _load_continuity_plan(
+    db: AsyncSession, target_id: int
+) -> ContinuityPlan | None:
+    """Load a reading plan by primary key.
+
+    Args:
+        db: Database session.
+        target_id: Primary key of the reading plan.
+
+    Returns:
+        The reading plan, or ``None`` when it does not exist.
+    """
+    result = await db.execute(
+        select(ContinuityPlan).where(ContinuityPlan.id == target_id)
+    )
+    return result.scalar_one_or_none()
 
 
 # Registry of target validators keyed by ``target_type``.
 _target_validators: dict[str, TargetValidator] = {}
 
 
-def register_target_validator(type_name: str, model: Issue | Thread | ContinuityPlan) -> None:
+def register_target_validator(type_name: str, loader: TargetLoader) -> None:
     """Register a validator for a polymorphic target type.
 
     Args:
         type_name: The ``target_type`` value this validator handles.
-        model: The SQLAlchemy model class.
+        loader: Async callable that loads a target row by id.
     """
-    _target_validators[type_name] = TargetValidator(type_name, model)
+    _target_validators[type_name] = TargetValidator(type_name, loader)
+
+
+register_target_validator("Issue", _load_issue)
+register_target_validator("Thread", _load_thread)
+register_target_validator("ContinuityPlan", _load_continuity_plan)
 
 
 def _get_target_validator(type_name: str) -> TargetValidator:
@@ -114,13 +192,15 @@ def _get_target_validator(type_name: str) -> TargetValidator:
     return validator
 
 
-def _validate_target(
+async def _validate_target(
     db: AsyncSession, user: User, target_type: str, target_id: int
-) -> bool:
-    """Validate that a polymorphic target exists and check ownership.
+) -> None:
+    """Validate that a polymorphic target exists and is owned by the user.
 
-    Returns ``True`` when the target exists; ``False`` when it does not.
-    Raises ``NotFoundError`` when the target does not exist.
+    Private tags may only be assigned to targets the requesting user
+    owns (admins may assign to any target). Issue ownership is
+    resolved through the owning thread with an explicit query so no
+    relationship is ever lazy-loaded inside the async session.
 
     Args:
         db: Database session.
@@ -128,32 +208,29 @@ def _validate_target(
         target_type: The target type.
         target_id: The target primary key.
 
-    Returns:
-        ``True`` when the target exists and ownership rules pass.
+    Raises:
+        NotFoundError: When the target does not exist.
+        ForbiddenError: When the user does not own the target.
     """
     validator = _get_target_validator(target_type)
-    model = validator.model
-
-    result = await db.execute(
-        select(model).where(model.id == target_id)
-    )
-    target = result.scalar_one_or_none()
+    target = await validator.load(db, target_id)
     if target is None:
         raise NotFoundError(
             f"{target_type} with id {target_id} does not exist"
         )
 
-    # Private tags may only be assigned to targets the user owns.
-    owner_id: int | None = None
-    if hasattr(model, "user_id"):
-        owner_id = getattr(target, "user_id", None)  # type: ignore[attr-defined]
+    if isinstance(target, Issue):
+        owner_row = await db.execute(
+            select(Thread.user_id).where(Thread.id == target.thread_id)
+        )
+        owner_id = owner_row.scalar_one_or_none()
+    else:
+        owner_id = target.user_id
 
     if owner_id is not None and owner_id != user.id and not user.is_admin:
         raise ForbiddenError(
             "You may only assign private tags to targets you own"
         )
-
-    return True
 
 
 class TagDeletionHook:
@@ -196,6 +273,16 @@ def register_tag_deletion_hook(hook: TagDeletionHook) -> None:
     if hook in _tag_deletion_hooks:
         return
     _tag_deletion_hooks.append(hook)
+
+
+def unregister_tag_deletion_hook(hook: TagDeletionHook) -> None:
+    """Remove a previously registered deletion hook consumer.
+
+    Args:
+        hook: The deletion hook consumer to remove.
+    """
+    if hook in _tag_deletion_hooks:
+        _tag_deletion_hooks.remove(hook)
 
 
 class TagService:
@@ -329,7 +416,8 @@ class TagService:
         Raises:
             ForbiddenError: When a non-admin requests a global tag.
             InvalidRequestError: When the color is invalid or the name is empty.
-            ConflictError: When a rename would collide with an existing global.
+            ConflictError: When the normalized name already exists as a
+                global tag or as another private tag of the same user.
         """
         normalized = self.normalize_name(name)
         if not normalized:
@@ -356,7 +444,7 @@ class TagService:
             return CreateTagResult(
                 tag=existing_global,
                 redirected_to_global=True,
-                near_matches=[] if not include_near_matches else [],
+                near_matches=[],
             )
 
         # Compute near matches on request.
@@ -376,8 +464,15 @@ class TagService:
             owner_user_id=user.id if effective_scope == "private" else None,
             color=color_hex,
         )
+        try:
+            created = await tag_repository.create_tag(self._db, tag)
+        except IntegrityError as exc:
+            # The unique indexes reject a duplicate global name or a
+            # second private tag with the same normalized name for one
+            # user; report it as a conflict instead of a server error.
+            raise ConflictError("A tag with this name already exists") from exc
         return CreateTagResult(
-            tag=await tag_repository.create_tag(self._db, tag),
+            tag=created,
             near_matches=near_matches,
         )
 
@@ -546,15 +641,10 @@ class TagService:
         # Validate the polymorphic target exists and ownership rules pass.
         await _validate_target(self._db, user, target_type, target_id)
 
-        assignment_id = await tag_repository.assign_tag(
+        await tag_repository.assign_tag(
             self._db, tag_id, target_type, target_id
         )
-        if assignment_id is None:
-            assignment = await self._get_assignment(tag_id, target_type, target_id)
-        else:
-            assignment = await self._get_assignment(tag_id, target_type, target_id)
-
-        return assignment
+        return await self._get_assignment(tag_id, target_type, target_id)
 
     async def unassign_tag(
         self,
@@ -591,12 +681,12 @@ class TagService:
             raise ForbiddenError("You can only unassign your own private tags")
 
         removed = await tag_repository.unassign_tag(self._db, tag_id, target_type, target_id)
-        if removed == 0:
+        if removed is None:
             raise NotFoundError(
                 f"Tag {tag_id} is not assigned to this {target_type}"
             )
 
-        return await self._get_assignment(tag_id, target_type, target_id)
+        return removed
 
     async def _get_assignment(
         self, tag_id: int, target_type: str, target_id: int

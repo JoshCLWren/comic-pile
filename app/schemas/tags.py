@@ -1,14 +1,14 @@
 """Pydantic schemas for the tag API.
 
 Request and response models use the fixed palette names from
-``app.constants.tags`` and map them to hex values on the wire.
+``app.constants`` and map them to hex values on the wire.
 """
 
 from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.constants.tags import DEFAULT_TAG_COLOR_NAME
+from app.constants import DEFAULT_TAG_COLOR_NAME
 
 
 class TagScope(str):
@@ -102,19 +102,19 @@ class TagCreateResponse(BaseModel):
     tag: TagResponse
     redirected_to_global: bool = False
     near_matches: list[NearMatchResponse] = []
-
-
 class TagUpdate(BaseModel):
     """Request to update a tag.
 
     Attributes:
-        name: New display name. Casing is preserved; name is lowercased for
-            matching. Refused if it would collide with an existing global tag.
-        color: New palette name or hex value. Defaults to red when omitted.
+        name: New display name. Casing is preserved; name is
+            lowercased for matching. Refused if it would collide
+            with an existing global tag.
+        color: New palette name or hex value. ``None`` leaves the
+            color unchanged.
     """
 
     name: str | None = Field(None, min_length=1, max_length=100)
-    color: str = DEFAULT_TAG_COLOR_NAME
+    color: str | None = None
 
 
 class TagAssignmentRequest(BaseModel):

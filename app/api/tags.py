@@ -6,7 +6,7 @@ status mapping, and exactly one service call. Business logic lives in
 ``app/repositories/tag_repository.py``.
 """
 
-from collections.abc import Annotated
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -114,7 +114,7 @@ async def create_tag(
         current_user,
         name=request.name,
         color=request.color,
-        scope=request.scope.value if hasattr(request.scope, "value") else request.scope,
+        scope=request.scope,
         include_near_matches=request.include_near_matches,
     )
     response = tag_schemas.TagCreateResponse(
@@ -222,7 +222,7 @@ async def assign_tag(
     assignment = await service.assign_tag(
         current_user,
         tag_id,
-        request.target_type.value if hasattr(request.target_type, "value") else request.target_type,
+        request.target_type,
         request.target_id,
     )
     return tag_assignment_to_response(assignment)
@@ -237,8 +237,8 @@ async def unassign_tag(
 ) -> tag_schemas.TagAssignmentResponse:
     """Remove an assignment from a target.
 
-    Global tags can be unassigned only by admins; private tags by their owner
-    or an admin.
+    Global tags can be unassigned only by admins; private tags by their
+    owner or an admin.
 
     Args:
         tag_id: Primary key of the tag.
@@ -257,7 +257,7 @@ async def unassign_tag(
     assignment = await service.unassign_tag(
         current_user,
         tag_id,
-        request.target_type.value if hasattr(request.target_type, "value") else request.target_type,
+        request.target_type,
         request.target_id,
     )
     return tag_assignment_to_response(assignment)

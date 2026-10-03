@@ -76,22 +76,6 @@ async def get_tag_by_name(db: AsyncSession, normalized_name: str, scope: str) ->
     return result.scalar_one_or_none()
 
 
-async def get_tag_by_normalized_name(db: AsyncSession, normalized_name: str) -> list[Tag]:
-    """Return all tags matching a normalized name across both scopes.
-
-    Args:
-        db: Database session.
-        normalized_name: Lowercased, trimmed tag name.
-
-    Returns:
-        List of matching tags (global and private).
-    """
-    result = await db.execute(
-        select(Tag).where(Tag.normalized_name == normalized_name)
-    )
-    return list(result.scalars().all())
-
-
 async def list_tags_for_user(db: AsyncSession, user_id: int) -> list[Tag]:
     """Return global tags plus the private tags owned by a user.
 
@@ -122,22 +106,6 @@ async def list_global_tags(db: AsyncSession) -> list[Tag]:
     """
     result = await db.execute(
         select(Tag).where(Tag.scope == "global").order_by(Tag.normalized_name)
-    )
-    return list(result.scalars().all())
-
-
-async def list_assignments_for_tag(db: AsyncSession, tag_id: int) -> list[TagAssignment]:
-    """Return all assignments of a tag.
-
-    Args:
-        db: Database session.
-        tag_id: Primary key of the tag.
-
-    Returns:
-        List of tag assignments.
-    """
-    result = await db.execute(
-        select(TagAssignment).where(TagAssignment.tag_id == tag_id)
     )
     return list(result.scalars().all())
 
@@ -254,17 +222,6 @@ async def assign_tag(db: AsyncSession, tag_id: int, target_type: str, target_id:
     if existing:
         return None
 
-    result = await db.execute(
-        select(TagAssignment).where(
-            TagAssignment.tag_id == tag_id,
-            TagAssignment.target_type == target_type,
-            TagAssignment.target_id == target_id,
-        )
-    )
-    assignment = result.scalar_one_or_none()
-    if assignment is not None:
-        return assignment.id
-
     assignment = TagAssignment(
         tag_id=tag_id,
         target_type=target_type,
@@ -278,8 +235,8 @@ async def assign_tag(db: AsyncSession, tag_id: int, target_type: str, target_id:
 
 async def unassign_tag(
     db: AsyncSession, tag_id: int, target_type: str, target_id: int
-) -> int:
-    """Remove one assignment and return how many rows were affected.
+) -> TagAssignment | None:
+    """Remove one assignment and return the removed row.
 
     Args:
         db: Database session.
@@ -288,7 +245,7 @@ async def unassign_tag(
         target_id: Primary key of the target.
 
     Returns:
-        Number of assignments removed (0 or 1).
+        The removed assignment, or ``None`` when no such assignment exists.
     """
     result = await db.execute(
         select(TagAssignment).where(
@@ -299,10 +256,11 @@ async def unassign_tag(
     )
     assignment = result.scalar_one_or_none()
     if assignment is None:
-        return 0
+        return None
 
     await db.delete(assignment)
-    return 1
+    await db.flush()
+    return assignment
 
 
 async def delete_tag_assignments(db: AsyncSession, tag_id: int) -> int:
@@ -316,21 +274,32 @@ async def delete_tag_assignments(db: AsyncSession, tag_id: int) -> int:
         Number of assignments removed.
     """
     result = await db.execute(
-        select(TagAssignment).where(TagAssignment.tag_id == tag_id)
-    )
-    assignment_ids: list[int] = [a.id for a in result.scalars().all()]
-    if not assignment_ids:
-        return 0
-
-    await db.execute(
-        select(TagAssignment).where(TagAssignment.id.in_(assignment_ids))
+        delete(TagAssignment)
+        .where(TagAssignment.tag_id == tag_id)
         .execution_options(synchronize_session=False)
     )
-    count = len(assignment_ids)
-    await db.execute(
-        delete(TagAssignment).where(TagAssignment.id.in_(assignment_ids))
+    return result.rowcount or 0
+
+
+async def delete_tag(db: AsyncSession, tag_id: int) -> int:
+    """Delete a tag row and return how many rows were removed.
+
+    Assignment rows are removed separately (and cascade at the
+    database level) before this runs.
+
+    Args:
+        db: Database session.
+        tag_id: Primary key of the tag.
+
+    Returns:
+        Number of tag rows removed (0 or 1).
+    """
+    result = await db.execute(
+        delete(Tag)
+        .where(Tag.id == tag_id)
+        .execution_options(synchronize_session=False)
     )
-    return count
+    return result.rowcount or 0
 
 
 async def find_nearly_matching_global_tags(
@@ -356,7 +325,7 @@ async def find_nearly_matching_global_tags(
     """
     global_tags = await list_global_tags(db)
 
-    matches: list[Tag] = []
+    matches: list[tuple[int, Tag]] = []
     for tag in global_tags:
         tag_name = tag.normalized_name
         distance = _levenshtein(normalized_name, tag_name)
@@ -368,24 +337,3 @@ async def find_nearly_matching_global_tags(
 
     matches.sort(key=lambda item: item[0])
     return [tag for _distance, tag in matches[:limit]]
-
-
-async def get_tag_with_counts(
-    db: AsyncSession, tag_id: int
-) -> tuple[Tag, int, dict[str, int]]:
-    """Fetch a tag together with its assignment totals.
-
-    Args:
-        db: Database session.
-        tag_id: Primary key of the tag.
-
-    Returns:
-        Tuple of ``(tag, total_count, counts_by_target_type)``.
-    """
-    tag = await get_tag_by_id(db, tag_id)
-    if tag is None:
-        return tag, 0, {}  # type: ignore[return-value]
-
-    total = await count_assignments_for_tag(db, tag_id)
-    by_type = await count_assignments_for_tag_by_target_type(db, tag_id)
-    return tag, total, by_type

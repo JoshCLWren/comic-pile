@@ -221,7 +221,7 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
     app.include_router(creators.router, tags=["creators"])
     app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
-    app.include_router(tags.router, prefix="/api/tags", tags=["tags"])
+    app.include_router(tags.router, tags=["tags"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])

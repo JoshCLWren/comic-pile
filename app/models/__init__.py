@@ -37,8 +37,6 @@ from app.models.user_preferences import UserPreferences
 from app.models.tag import Tag, TagAssignment
 
 __all__ = [
-    "Tag",
-    "TagAssignment",
     "CBLSource",
     "CBLSourceEntry",
     "CBLSourceList",
