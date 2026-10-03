@@ -24,7 +24,7 @@ const { getIssueIntelligenceSpy, getIssueIdentitySpy } = vi.hoisted(() => ({
   }),
 }))
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-comicvine', () => ({
   comicVineApi: {
     searchSeries: vi.fn().mockResolvedValue({ query: '', results: [], total_available: 0 }),
     getSeriesIssues: vi.fn().mockResolvedValue({ comicvine_volume_id: 42, series_name: '', issues: [] }),

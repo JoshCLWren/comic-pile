@@ -3,15 +3,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useRollRating } from '../pages/RollPage/useRollRating'
 import { readingOrdersApi } from '../services/api-reading-orders'
-import { dependenciesApi } from '../services/api'
+import { dependenciesApi } from '../services/api-dependencies'
 import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useRollPageState'
 import type { RatingThread, ThreadMetadata } from '../pages/RollPage/types'
 
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { getForThread: vi.fn() },
 }))
-vi.mock('../services/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../services/api')>()
+vi.mock('../services/api-dependencies', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-dependencies')>()
   return {
     ...actual,
     dependenciesApi: { getConnectedThreads: vi.fn() },

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '../query/queryKeys'
-import { dependenciesApi } from '../services/api'
+import { dependenciesApi } from '../services/api-dependencies'
 import type { BatchBlockingInfoResponse, BlockingDependency } from '../types'
 
 const EMPTY_BLOCKING_MAP: Record<number, BlockingDependency[]> = {}

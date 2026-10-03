@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { comicVineApi } from '../services/api'
+import { comicVineApi } from '../services/api-comicvine'
 import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { queryKeys } from '../query/queryKeys'
 

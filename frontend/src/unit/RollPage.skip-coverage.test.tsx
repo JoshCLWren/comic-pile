@@ -79,7 +79,8 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
     useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
   }
 })
-vi.mock('../services/api', () => ({ default: {}, threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) }, dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
+vi.mock('../services/api', () => ({ default: {} }))
+vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
 vi.mock('../components/LazyDice3D', () => ({ default: ({ onRollComplete }: { onRollComplete?: () => void }) => <div data-testid="dice"><button type="button" onClick={onRollComplete}>complete dice</button></div> }))
 vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))

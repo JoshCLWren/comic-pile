@@ -36,12 +36,6 @@ vi.mock('../services/api', () => {
   return {
     default: apiMock,
     api: apiMock,
-    preferencesApi: {
-      get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-        apiMock.get('/v1/users/me/preferences', options),
-      patch: (data: { theme?: string | null }) =>
-        apiMock.patch('/v1/users/me/preferences', data),
-    },
     clearAccessToken: mocks.clearAccessToken,
     setAccessToken: mocks.setAccessToken,
     getAccessToken: mocks.getAccessToken,
@@ -50,6 +44,23 @@ vi.mock('../services/api', () => {
     isSessionRefreshRejected: () => false,
   }
 })
+
+vi.mock('../services/api-preferences', () => ({
+  preferencesApi: {
+    get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
+      mocks.get('/v1/users/me/preferences', options),
+    patch: (data: { theme?: string | null }) => mocks.patch('/v1/users/me/preferences', data),
+  },
+}))
+
+// The navigation shell reads the identity inbox through `api-identity`. Keep it
+// stubbed so the ordered preferences `mocks.get` sequence below stays
+// deterministic for this theme-only test.
+vi.mock('../services/api-identity', () => ({
+  identityInboxApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),
+  },
+}))
 
 function axiosError(status: number): Error & { isAxiosError: true; response: { status: number } } {
   return Object.assign(new Error(`HTTP ${status}`), {

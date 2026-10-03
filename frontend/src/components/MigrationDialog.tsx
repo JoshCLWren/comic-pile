@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Thread } from '../types'
 import axios from 'axios'
-import { migrationApi } from '../services/api'
+import { migrationApi } from '../services/api-migration'
 import Modal from './Modal'
 import './MigrationDialog.css'
 

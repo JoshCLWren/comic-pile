@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { creatorsApi } from '../services/api'
+import { creatorsApi } from '../services/api-creators'
 import type { CreatorDetailResponse, CreatorIssueRow } from '../services/api-creators'
 import { queryKeys } from '../query/queryKeys'
 

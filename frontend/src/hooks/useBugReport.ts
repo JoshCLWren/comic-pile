@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { bugReportsApi } from '../services/api'
+import { bugReportsApi } from '../services/api-bug-reports'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ReportType } from '../components/BugReportModal'
 import type { DiagnosticData } from './useDiagnostics'

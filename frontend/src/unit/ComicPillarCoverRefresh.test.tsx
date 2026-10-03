@@ -16,7 +16,7 @@ const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentit
     getIntelligenceSpy: vi.fn(),
   }))
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-comicvine', () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: getSeriesIssuesSpy,
