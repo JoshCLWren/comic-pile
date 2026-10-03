@@ -136,3 +136,19 @@ def test_opencode_longcat_lane_pins_gateway_id_not_analytics_slug(validate) -> N
             pinned.append(fields[2])
     assert "longcat-2.5-preview-free" in pinned
     assert "longcat-2.5-preview" not in pinned
+
+
+def test_new_slots_pin_apodex_and_native_ling_31(validate) -> None:
+    """Workers 74 and 75 are the hand-grown Apodex and native Ling slots."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    by_worker = {row["worker"]: row for row in rows}
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["74"]["source"] == "openrouter-free"
+    assert by_worker["74"]["model"] == "apodex/apodex-1.1-mini:free"
+    assert validate.openrouter_model_is_free(by_worker["74"]["model"])
+    assert by_worker["75"]["source"] == "opencode-free"
+    assert by_worker["75"]["model"] == "ling-3.1-flash-free"
+    assert by_worker["75"]["model"] != "inclusionai/ling-3.1-flash"
+    assert validate.opencode_model_is_free(by_worker["75"]["model"])
+    assert "deepseek-v4-flash-free" not in {row["model"] for row in rows}
+    assert "z-ai/glm-5.2:free" not in {row["model"] for row in rows}
