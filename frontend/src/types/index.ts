@@ -284,21 +284,11 @@ export interface SessionListResponse {
   next_page_token: string | null;
 }
 
-export interface BlockingDependency {
-  thread_id: number
-  thread_title: string
-  issue_number: string
-  label: string
-}
+export type BlockingDependency = components['schemas']['BlockingDependency']
 
-export interface BlockingInfoResponse {
-  blocking_reasons: string[]
-  blocking_dependencies?: BlockingDependency[]
-}
+export type BlockingInfoResponse = components['schemas']['BlockingExplanation']
 
-export interface BatchBlockingInfoResponse {
-  threads: Record<string, BlockingInfoResponse>
-}
+export type BatchBlockingInfoResponse = components['schemas']['BatchBlockingExplanationResponse']
 
 export interface DependencyCreatePayload {
   sourceType?: 'thread' | 'issue';
@@ -341,102 +331,17 @@ export interface IssueListResponse {
   next_page_token: string | null;
 }
 
-/**
- * Represents a dependency between threads or issues.
- * The API returns all fields as nullable; is_issue_level indicates the type.
- */
-export interface Dependency {
-  /** Unique identifier for the dependency */
-  id: number;
-  /** ID of the source thread (null for issue-level deps) */
-  source_thread_id: number | null;
-  /** ID of the target thread (null for issue-level deps) */
-  target_thread_id: number | null;
-  /** Source issue ID (null for thread-level deps) */
-  source_issue_id: number | null;
-  /** Target issue ID (null for thread-level deps) */
-  target_issue_id: number | null;
-  /** True if this is an issue-level dependency */
-  is_issue_level?: boolean;
-  /** ISO 8601 timestamp when the dependency was created */
-  created_at: string;
-  /** Human-readable label for the source */
-  source_label?: string | null;
-  /** Human-readable label for the target */
-  target_label?: string | null;
-  /** Parent thread ID of the source issue (only for issue-level deps) */
-  source_issue_thread_id?: number | null;
-  /** Parent thread ID of the target issue (only for issue-level deps) */
-  target_issue_thread_id?: number | null;
-  /** Optional note explaining why this dependency exists */
-  note?: string | null;
-  /** Warning message when target issue is ahead of next-unread position */
-  warning?: string | null;
-}
+export type Dependency = components['schemas']['DependencyResponse']
 
-/**
- * Response from the thread dependencies endpoint
- */
-export interface ThreadDependenciesResponse {
-  /** Dependencies where this thread blocks others */
-  blocking: Dependency[];
-  /** Dependencies where this thread is blocked by others */
-  blocked_by: Dependency[];
-}
+export type ThreadDependenciesResponse = components['schemas']['ThreadDependenciesResponse']
 
-/**
- * A thread connected via issue-level dependencies
- */
-export interface ConnectedThreadInfo {
-  /** ID of the connected thread */
-  thread_id: number;
-  /** Title of the connected thread */
-  title: string;
-  /** Direction of the relationship */
-  connection_type: 'blocks' | 'blocked_by' | 'blocks & blocked_by';
-  /** ID of the dependency edge */
-  dependency_id: number;
-  /** Issue number of the connected thread's relevant dependency issue, when known */
-  issue_number?: string;
-}
+export type ConnectedThreadInfo = components['schemas']['ConnectedThreadInfo']
 
-/**
- * Response from the thread connected-dependencies endpoint
- */
-export interface ConnectedDependenciesResponse {
-  /** The queried thread ID */
-  thread_id: number;
-  /** Threads connected via dependency edges */
-  connected_threads: ConnectedThreadInfo[];
-}
+export type ConnectedDependenciesResponse = components['schemas']['ThreadConnectedResponse']
 
-/**
- * Represents a single dependency edge for an issue
- */
-export interface IssueDependencyEdge {
-  /** Unique identifier for the dependency */
-  dependency_id: number;
-  /** ID of the source issue */
-  source_issue_id: number;
-  /** Issue number of the source issue */
-  source_issue_number: string;
-  /** ID of the thread containing the source issue */
-  source_thread_id: number;
-  /** Title of the thread containing the source issue */
-  source_thread_title: string;
-}
+export type IssueDependencyEdge = components['schemas']['IssueDependencyEdge']
 
-/**
- * Response from the issue dependencies endpoint
- */
-export interface IssueDependenciesResponse {
-  /** ID of the issue */
-  issue_id: number;
-  /** Dependencies where this issue is the target (incoming edges) */
-  incoming: IssueDependencyEdge[];
-  /** Dependencies where this issue is the source (outgoing edges) */
-  outgoing: IssueDependencyEdge[];
-}
+export type IssueDependenciesResponse = components['schemas']['IssueDependenciesResponse']
 
 /**
  * A positioned node for the dependency flowchart
