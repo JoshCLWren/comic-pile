@@ -98,6 +98,29 @@ async def get_tag_by_name(db: AsyncSession, normalized_name: str, scope: str) ->
     return result.scalar_one_or_none()
 
 
+async def get_private_tag_for_owner(
+    db: AsyncSession, owner_user_id: int, normalized_name: str
+) -> Tag | None:
+    """Return one of an owner's private tags by normalized name.
+
+    Args:
+        db: Database session.
+        owner_user_id: Owner of the private tag.
+        normalized_name: Tag name; normalized before matching.
+
+    Returns:
+        The private tag, or ``None`` when the owner has no such tag.
+    """
+    result = await db.execute(
+        select(Tag).where(
+            Tag.scope == "private",
+            Tag.owner_user_id == owner_user_id,
+            Tag.normalized_name == normalize_tag_name(normalized_name),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_tags_for_user(db: AsyncSession, user_id: int) -> list[Tag]:
     """Return global tags plus the private tags owned by a user.
 

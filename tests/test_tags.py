@@ -421,6 +421,33 @@ class TestDuplicatePrevention:
             await service.update_tag(non_admin_user, my_tag.tag.id, name="global name")
         assert "global" in str(exc_info.value).lower()
 
+    async def test_rename_private_to_duplicate_private_is_refused(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Renaming onto another of the same owner's names is a conflict."""
+        service = TagService(async_db)
+        await service.create_tag(non_admin_user, "First Private")
+        second = await service.create_tag(non_admin_user, "Second Private")
+        with pytest.raises(ConflictError) as exc_info:
+            await service.update_tag(
+                non_admin_user, second.tag.id, name="first private"
+            )
+        assert "already exists" in str(exc_info.value).lower()
+        untouched = await async_db.get(Tag, second.tag.id)
+        assert untouched is not None
+        assert untouched.name == "Second Private"
+
+    async def test_rename_private_to_another_users_name_is_allowed(
+        self, non_admin_user: User, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Private vocabulary stays independent between different owners."""
+        service = TagService(async_db)
+        await service.create_tag(admin_user, "Shared Name")
+        mine = await service.create_tag(non_admin_user, "My Copy")
+        updated = await service.update_tag(non_admin_user, mine.tag.id, name="Shared Name")
+        assert updated.normalized_name == "shared name"
+        assert updated.owner_user_id == non_admin_user.id
+
 
 class TestNearMatch:
     """Tests for fuzzy near-match detection."""
@@ -910,12 +937,12 @@ class TestAPILayer:
         admin_user: User,
         async_db: AsyncSession,
     ) -> None:
-        """GET /api/tags/ lists global tags and the caller's private tags."""
+        """GET /api/v1/tags/ lists global tags and the caller's private tags."""
         service = TagService(async_db)
         await service.create_tag(admin_user, "Global 1", color="red", scope="global")
         await service.create_tag(admin_user, "Admin Private", color="blue")
 
-        resp = await admin_auth_client.get("/api/tags/")
+        resp = await admin_auth_client.get("/api/v1/tags/")
         assert resp.status_code == 200
         data = resp.json()
         tag_names = {t["name"] for t in data["tags"]}
@@ -928,9 +955,9 @@ class TestAPILayer:
         non_admin_user: User,
         async_db: AsyncSession,
     ) -> None:
-        """POST /api/tags/ creates a private tag for a non-admin user."""
+        """POST /api/v1/tags/ creates a private tag for a non-admin user."""
         resp = await user_auth_client.post(
-            "/api/tags/", json={"name": "API Tag", "color": "red"}
+            "/api/v1/tags/", json={"name": "API Tag", "color": "red"}
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -941,9 +968,9 @@ class TestAPILayer:
     async def test_create_global_tag_requires_admin(
         self, user_auth_client: AsyncClient, async_db: AsyncSession
     ) -> None:
-        """POST /api/tags/ with global scope is refused for non-admins."""
+        """POST /api/v1/tags/ with global scope is refused for non-admins."""
         resp = await user_auth_client.post(
-            "/api/tags/", json={"name": "Global", "color": "red", "scope": "global"}
+            "/api/v1/tags/", json={"name": "Global", "color": "red", "scope": "global"}
         )
         assert resp.status_code == 403
 
@@ -953,12 +980,12 @@ class TestAPILayer:
         non_admin_user: User,
         async_db: AsyncSession,
     ) -> None:
-        """POST /api/tags/{id}/assign/ attaches a private tag to an issue."""
+        """POST /api/v1/tags/{id}/assign/ attaches a private tag to an issue."""
         _thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
-        tag_resp = await user_auth_client.post("/api/tags/", json={"name": "API Tag"})
+        tag_resp = await user_auth_client.post("/api/v1/tags/", json={"name": "API Tag"})
         tag_id = tag_resp.json()["tag"]["id"]
         resp = await user_auth_client.post(
-            f"/api/tags/{tag_id}/assign/",
+            f"/api/v1/tags/{tag_id}/assign/",
             json={"target_type": "Issue", "target_id": issue.id},
         )
         assert resp.status_code == 200
@@ -972,25 +999,70 @@ class TestAPILayer:
         non_admin_user: User,
         async_db: AsyncSession,
     ) -> None:
-        """DELETE /api/tags/{id}/ cascades assignments and reports usage."""
+        """DELETE /api/v1/tags/{id}/ cascades assignments and reports usage."""
         thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
         tag_resp = await user_auth_client.post(
-            "/api/tags/", json={"name": "Cascade Test"}
+            "/api/v1/tags/", json={"name": "Cascade Test"}
         )
         tag_id = tag_resp.json()["tag"]["id"]
         await user_auth_client.post(
-            f"/api/tags/{tag_id}/assign/",
+            f"/api/v1/tags/{tag_id}/assign/",
             json={"target_type": "Issue", "target_id": issue.id},
         )
         await user_auth_client.post(
-            f"/api/tags/{tag_id}/assign/",
+            f"/api/v1/tags/{tag_id}/assign/",
             json={"target_type": "Thread", "target_id": thread.id},
         )
-        resp = await user_auth_client.delete(f"/api/tags/{tag_id}/")
+        resp = await user_auth_client.delete(f"/api/v1/tags/{tag_id}/")
         assert resp.status_code == 200
         data = resp.json()
         assert data["assignments_removed"] == 2
         assert data["references_removed_by_consumers"] == {}
+
+    async def test_created_tag_survives_session_rollback(
+        self,
+        user_auth_client: AsyncClient,
+        async_db: AsyncSession,
+    ) -> None:
+        """The route commits, so rolling the request session back keeps the tag."""
+        resp = await user_auth_client.post(
+            "/api/v1/tags/", json={"name": "Durable Tag"}
+        )
+        assert resp.status_code == 200
+        tag_id = resp.json()["tag"]["id"]
+
+        await async_db.rollback()
+
+        stored = await async_db.execute(select(Tag).where(Tag.id == tag_id))
+        persisted = stored.scalar_one_or_none()
+        assert persisted is not None
+        assert persisted.name == "Durable Tag"
+
+    async def test_assigned_tag_survives_session_rollback(
+        self,
+        user_auth_client: AsyncClient,
+        non_admin_user: User,
+        async_db: AsyncSession,
+    ) -> None:
+        """Assignment writes commit too, not only tag rows."""
+        _thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
+        tag_resp = await user_auth_client.post(
+            "/api/v1/tags/", json={"name": "Durable Assignment"}
+        )
+        tag_id = tag_resp.json()["tag"]["id"]
+        assign_resp = await user_auth_client.post(
+            f"/api/v1/tags/{tag_id}/assign/",
+            json={"target_type": "Issue", "target_id": issue.id},
+        )
+        assert assign_resp.status_code == 200
+        assignment_id = assign_resp.json()["id"]
+
+        await async_db.rollback()
+
+        stored = await async_db.execute(
+            select(TagAssignment).where(TagAssignment.id == assignment_id)
+        )
+        assert stored.scalar_one_or_none() is not None
 
 
 class TestTagScopeEnum:
@@ -1223,7 +1295,7 @@ class TestSchemaRoundTrip:
     ) -> None:
         """An unsupported scope value is rejected by request validation."""
         resp = await admin_auth_client.post(
-            "/api/tags/", json={"name": "Bad Scope", "scope": "everyone"}
+            "/api/v1/tags/", json={"name": "Bad Scope", "scope": "everyone"}
         )
         assert resp.status_code == 422
 
@@ -1232,10 +1304,10 @@ class TestSchemaRoundTrip:
     ) -> None:
         """An unsupported target type is rejected by request validation."""
         _thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
-        tag_resp = await user_auth_client.post("/api/tags/", json={"name": "Target Enum"})
+        tag_resp = await user_auth_client.post("/api/v1/tags/", json={"name": "Target Enum"})
         tag_id = tag_resp.json()["tag"]["id"]
         resp = await user_auth_client.post(
-            f"/api/tags/{tag_id}/assign/",
+            f"/api/v1/tags/{tag_id}/assign/",
             json={"target_type": "Publisher", "target_id": issue.id},
         )
         assert resp.status_code == 422
@@ -1245,7 +1317,7 @@ class TestSchemaRoundTrip:
     ) -> None:
         """The detail route never confirms another user's private tag exists."""
         await TagService(async_db).create_tag(non_admin_user, "Hidden")
-        resp = await user_auth_client.get("/api/tags/1/")
+        resp = await user_auth_client.get("/api/v1/tags/1/")
         assert resp.status_code == 404
 
     async def test_usage_route_is_hidden_for_other_users(
@@ -1253,5 +1325,5 @@ class TestSchemaRoundTrip:
     ) -> None:
         """Usage counts cannot be probed for another user's private tag."""
         await TagService(async_db).create_tag(non_admin_user, "Hidden Usage")
-        resp = await user_auth_client.get("/api/tags/1/usage/")
+        resp = await user_auth_client.get("/api/v1/tags/1/usage/")
         assert resp.status_code == 404

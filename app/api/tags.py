@@ -19,7 +19,7 @@ from app.schemas import tags as tag_schemas
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.tag_service import TagService
 
-router = APIRouter(prefix="/api/tags", tags=["tags"])
+router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
 
 _ERROR_STATUS: dict[type[Exception], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
@@ -143,8 +143,9 @@ async def update_tag(
 ) -> tag_schemas.TagResponse:
     """Update an existing tag.
 
-    Global tags require admin access; private tags require ownership or admin
-    access. Renaming a private tag to a global name is refused.
+    Global tags require admin access. Private tags require ownership: they are
+    invisible to every other user, administrators included. Renaming a private
+    tag to a global name is refused.
 
     Args:
         tag_id: Primary key of the tag.
@@ -181,9 +182,9 @@ async def delete_tag(
 ) -> tag_schemas.TagDeleteResponse:
     """Delete a tag and cascade its assignments.
 
-    Global tags require admin access; private tags require ownership or admin
-    access. Deletion removes all assignments and runs registered deletion hook
-    consumers.
+    Global tags require admin access. Private tags require ownership: they are
+    invisible to every other user, administrators included. Deletion removes
+    all assignments and runs registered deletion hook consumers.
 
     Args:
         tag_id: Primary key of the tag.
@@ -305,15 +306,13 @@ async def get_tag_usage(
     """
     service = TagService(db)
     try:
-        _ = await service.get_tag(current_user, tag_id)
-        total = await service.count_assignments(tag_id)
-        by_type = await service.count_assignments_by_target_type(tag_id)
+        usage = await service.get_tag_usage(current_user, tag_id)
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return tag_schemas.TagUsageResponse(
         tag_id=tag_id,
-        total_assignments=total,
-        assignments_by_target_type=by_type,
+        total_assignments=usage.total_assignments,
+        assignments_by_target_type=usage.assignments_by_target_type,
         references_removed_by_consumers={},
     )
 

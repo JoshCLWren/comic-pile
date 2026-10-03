@@ -50,6 +50,19 @@ class CreateTagResult:
 
 
 @dataclass
+class TagUsageResult:
+    """Assignment usage for one tag.
+
+    Attributes:
+        total_assignments: Number of ``tag_assignments`` rows for the tag.
+        assignments_by_target_type: Assignment counts grouped by target type.
+    """
+
+    total_assignments: int
+    assignments_by_target_type: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
 class DeleteTagResult:
     """Result of a tag deletion.
 
@@ -497,6 +510,15 @@ class TagService:
                 near_matches=[],
             )
 
+        # A second private tag of the same owner with the same normalized name
+        # is refused; other owners keep their own identically named vocabulary.
+        if effective_scope == TagScope.PRIVATE.value:
+            existing_private = await tag_repository.get_private_tag_for_owner(
+                self._db, user.id, normalized
+            )
+            if existing_private is not None:
+                raise ConflictError("A tag with this name already exists")
+
         # Compute near matches on request.
         near_matches: list[Tag] = []
         if include_near_matches:
@@ -518,10 +540,12 @@ class TagService:
         )
         try:
             created = await tag_repository.create_tag(self._db, tag)
+            await self._db.commit()
         except IntegrityError as exc:
             # The unique indexes reject a duplicate global name or a
             # second private tag with the same normalized name for one
             # user; report it as a conflict instead of a server error.
+            await self._db.rollback()
             raise ConflictError("A tag with this name already exists") from exc
         return CreateTagResult(
             tag=created,
@@ -582,6 +606,15 @@ class TagService:
                     raise ConflictError(
                         f"A global tag named '{name}' already exists"
                     )
+                if (
+                    tag.scope == TagScope.PRIVATE.value
+                    and tag.owner_user_id is not None
+                ):
+                    duplicate = await tag_repository.get_private_tag_for_owner(
+                        self._db, tag.owner_user_id, normalized
+                    )
+                    if duplicate is not None and duplicate.id != tag.id:
+                        raise ConflictError("A tag with this name already exists")
             updates.append(("name", name))
             updates.append(("normalized_name", normalized))
 
@@ -593,7 +626,12 @@ class TagService:
             for attr, value in updates:
                 setattr(tag, attr, value)
             tag.updated_at = await self._now()
-            tag = await tag_repository.update_tag(self._db, tag)
+            try:
+                tag = await tag_repository.update_tag(self._db, tag)
+                await self._db.commit()
+            except IntegrityError as exc:
+                await self._db.rollback()
+                raise ConflictError("A tag with this name already exists") from exc
 
         return tag
 
@@ -644,6 +682,7 @@ class TagService:
                 references_removed_by_consumers[hook.consumer_name] = count
 
         await tag_repository.delete_tag(self._db, tag_id_value)
+        await self._db.commit()
 
         return DeleteTagResult(
             tag=tag,
@@ -705,8 +744,10 @@ class TagService:
             await tag_repository.assign_tag(
                 self._db, tag_id, target_type, target_id
             )
+            await self._db.commit()
         except IntegrityError as exc:
             # A concurrent identical assignment won the unique index race.
+            await self._db.rollback()
             raise ConflictError(
                 "This tag is already assigned to that target"
             ) from exc
@@ -752,6 +793,7 @@ class TagService:
             raise NotFoundError(
                 f"Tag {tag_id} is not assigned to this {target_type}"
             )
+        await self._db.commit()
 
         return removed
 
@@ -815,6 +857,32 @@ class TagService:
         """
         return await tag_repository.count_assignments_for_tag_by_target_type(
             self._db, tag_id
+        )
+
+    async def get_tag_usage(self, user: User, tag_id: int) -> TagUsageResult:
+        """Return assignment usage for a tag the requesting user may see.
+
+        Visibility follows :meth:`get_tag`, so usage counts for another user's
+        private tag are reported as not found rather than leaked.
+
+        Args:
+            user: The requesting user.
+            tag_id: Primary key of the tag.
+
+        Returns:
+            The TagUsageResult with total and per-target-type counts.
+
+        Raises:
+            NotFoundError: When the tag does not exist or is not visible.
+        """
+        tag = await self.get_tag(user, tag_id)
+        total = await tag_repository.count_assignments_for_tag(self._db, tag.id)
+        by_type = await tag_repository.count_assignments_for_tag_by_target_type(
+            self._db, tag.id
+        )
+        return TagUsageResult(
+            total_assignments=total,
+            assignments_by_target_type=by_type,
         )
 
     async def _now(self) -> datetime:
