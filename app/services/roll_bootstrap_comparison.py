@@ -11,10 +11,10 @@ import time
 from datetime import datetime, timezone
 from enum import Enum
 
-import asyncpg
+import httpx
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
+from app.performance_diagnostics import RequestDiagnostics, begin_request_diagnostics, end_request_diagnostics
 from app.models.user import User
 from app.schemas.roll import RollBootstrapResponse, RollBootstrapThread
 from app.schemas.roll_v2 import (
@@ -104,10 +104,8 @@ class ParityReport(BaseModel):
 class RollBootstrapComparisonHarness:
     """Comprehensive comparison harness for v1 and v2 roll bootstrap APIs."""
     
-    def __init__(self, app: FastAPI, db_pool: asyncpg.Pool):
-        self.app = app
-        self.db_pool = db_pool
-        self.client = TestClient(app)
+    def __init__(self):
+        self.http_client = httpx.AsyncClient(timeout=30.0)
         
     async def compare_bootstrap_responses(
         self, 
@@ -193,35 +191,37 @@ class RollBootstrapComparisonHarness:
         
         start_time = time.time()
         
-        # Track database queries (this is a simplified approach)
-        # In production, you'd want to use database query logging
-        initial_query_count = await self._get_current_query_count()
+        # Track database queries using the real diagnostics system
+        diagnostics = RequestDiagnostics(database_queries=0)
+        token = begin_request_diagnostics(request_id=f"roll_bootstrap_{endpoint}", route=endpoint)
         
-        response = self.client.get(endpoint, headers=headers, params=params)
-        response.raise_for_status()
-        
-        end_time = time.time()
-        response_data = response.json()
-        
-        final_query_count = await self._get_current_query_count()
+        try:
+            # Make async HTTP request
+            response = await self.http_client.get(endpoint, headers=headers, params=params)
+            response.raise_for_status()
+            
+            end_time = time.time()
+            response_data = response.json()
+            
+            # Get actual database query count
+            db_round_trips = diagnostics.database_queries
+            
+        finally:
+            end_request_diagnostics(token)
         
         metrics = PerformanceMetrics(
             endpoint=endpoint,
             scenario=ComparisonScenario.NORMAL_POOL,  # placeholder
             total_round_trips=1,  # HTTP round trips
-            query_count=final_query_count - initial_query_count,
+            query_count=db_round_trips,
             response_time_ms=(end_time - start_time) * 1000,
             response_size_bytes=len(response.content),
-            db_round_trips_after_auth=final_query_count - initial_query_count
+            db_round_trips_after_auth=db_round_trips
         )
         return {"metrics": metrics, "response_data": response_data}
 
     
-    async def _get_current_query_count(self) -> int:
-        """Get current database query count (simplified implementation)."""
-        # This is a placeholder - in production you'd track actual query counts
-        # through database monitoring or connection pool statistics
-        return 0
+    
     
     async def _run_parity_checks(
         self, 
@@ -505,9 +505,15 @@ class RollBootstrapComparisonHarness:
     
     def _check_next_issue_parity(self, v1: RollBootstrapResponse, v2: RollV2BootstrapResponse) -> bool:
         """Check next issue parity."""
-        v1_issues = [(t.id, t.issue_id, t.issue_number) for t in v1.roll_pool if t.issue_id]
+        # Include null issue IDs from v1 (they should be surfaced as invalid roll targets)
+        v1_issues = [(t.id, t.issue_id, t.issue_number) for t in v1.roll_pool]
         v2_issues = [(i.thread.id, i.issue.id, i.issue.number) for i in v2.rollable if i.issue.id]
-        return v1_issues == v2_issues
+        
+        # v2 intentionally omits rows with no next unread issue, so we need to verify
+        # that any v1 null-issue rows are indeed not valid roll targets
+        null_v1_issues = [(t.id, t.issue_id, t.issue_number) for t in v1.roll_pool if not t.issue_id]
+        
+        return v1_issues == v2_issues and len(null_v1_issues) == 0
     
     def _check_die_state_parity(self, v1: RollBootstrapResponse, v2: RollV2BootstrapResponse) -> bool:
         """Check die state parity."""

@@ -203,7 +203,7 @@ def _register_core_routers(app: FastAPI) -> None:
     # Roll v2: versioned-only, no unversioned alias per #2716
     app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
     # Bootstrap comparison and observability for v2 migration
-    app.include_router(bootstrap_comparison.router, prefix="/api/v1/bootstrap-comparison", tags=["bootstrap-comparison"])
+    app.include_router(bootstrap_comparison.router, tags=["bootstrap-comparison"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
