@@ -368,6 +368,50 @@ Rate the current reading and update thread status, issues remaining, and dice la
 
 ---
 
+## Demo
+
+Bounded guest demo surface (issue #2757). It is read-only and identity-free: the
+logged-out landing page links to `/demo`, where a visitor can see exactly one
+seeded sample Roll moment before signing up.
+
+This family is intentionally unauthenticated and versioned-only (no bare `/api/*`
+twin). It serves fabricated fixtures rather than database reads, so a demo
+interaction cannot create library, queue, rating, or reading-history rows, and
+nothing here is imported into a real account.
+
+### GET /v1/demo/roll
+
+Return the single deterministic seeded sample roll.
+
+**Auth**: none required
+**Response**: `200 OK`
+
+```json
+{
+  "thread_id": 999,
+  "title": "Sample: The Dark Knight Returns (Demo)",
+  "format": "comic",
+  "issues_remaining": 3,
+  "queue_position": 1,
+  "die_size": 6,
+  "result": 4,
+  "offset": 0,
+  "snoozed_count": 0,
+  "issue_id": 1001,
+  "issue_number": "#4",
+  "next_issue_id": 1002,
+  "next_issue_number": "#5",
+  "total_issues": 12,
+  "reading_progress": "Late in arc — the final act is building.",
+  "explanation": "Demo roll: seeded sample data, no account state."
+}
+```
+
+There is deliberately no demo write endpoint. Guest ratings stay in the browser
+until the visitor explicitly signs up and separately chooses a save action.
+
+---
+
 ## Session
 
 Session tracking and history.
