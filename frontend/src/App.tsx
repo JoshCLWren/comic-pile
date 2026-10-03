@@ -66,6 +66,7 @@ const ForgotPasswordPage = lazyRoute('forgotPassword')
 const ResetPasswordPage = lazyRoute('resetPassword')
 const IdentityInboxPage = lazyRoute('identityInbox')
 const LandingPage = lazyRoute('landing')
+const DemoRollPage = lazyRoute('demoRoll')
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient()
@@ -519,6 +520,7 @@ function AppRoutes() {
         <Route path="/register" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><RegisterPage /></PublicLayout></PublicRoute>} />
         <Route path="/forgot-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ForgotPasswordPage /></PublicLayout></PublicRoute>} />
         <Route path="/reset-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ResetPasswordPage /></PublicLayout></PublicRoute>} />
+        <Route path="/demo" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><DemoRollPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
         <Route path="/" element={<RootRoute onBugReportSubmit={submit} />} />
