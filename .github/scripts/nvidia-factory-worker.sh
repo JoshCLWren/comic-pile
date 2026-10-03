@@ -414,6 +414,14 @@ while (( $(remaining) > 480 )); do
         SKIP_PRS+=("$pr")
         continue
       fi
+      # Record the original producer as a contributor to the initial head
+      current_head="$(git rev-parse HEAD)"
+      python3 "$TRUSTED_REVIEW_CONTROLLER" record-contribution \
+        --worker "$WORKER" \
+        --pr "$pr" \
+        --head "$current_head" || {
+        log "failed to record original producer as contributor for PR #${pr}" >&2
+      }
       replace_labels "$pr" "$OWNER" 'factory:review'
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       SKIP_PRS+=("$pr")
@@ -432,6 +440,14 @@ while (( $(remaining) > 480 )); do
   fi
 
   if persist_pr_changes "$NUMBER" "$BRANCH"; then
+    log "pushed repairs to PR #${NUMBER}; recording contributor provenance"
+    current_head="$(git rev-parse HEAD)"
+    python3 "$TRUSTED_REVIEW_CONTROLLER" record-contribution \
+      --worker "$WORKER" \
+      --pr "$NUMBER" \
+      --head "$current_head" || {
+      log "failed to record contributor provenance for PR #${NUMBER}" >&2
+    }
     log "pushed repairs to PR #${NUMBER}; review/CI must refresh"
     SKIP_PRS+=("$NUMBER")
     continue

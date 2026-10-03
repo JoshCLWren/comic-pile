@@ -18,12 +18,15 @@ sys.path.insert(0, os.path.dirname(__file__))
 _review_policy = importlib.import_module("factory_review_policy")
 approval_can_promote = _review_policy.approval_can_promote
 current_head_approvers = _review_policy.current_head_approvers
+current_head_contributors = _review_policy.current_head_contributors
 classify_ci_reconciliation = _review_policy.classify_ci_reconciliation
+head_contributor_marker = _review_policy.head_contributor_marker
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
+parse_head_contributor_marker = _review_policy.parse_head_contributor_marker
+parse_review_marker = _review_policy.parse_review_marker
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
 semantic_repair_heads = _review_policy.semantic_repair_heads
-parse_review_marker = _review_policy.parse_review_marker
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
@@ -585,13 +588,14 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
         return {"pr": pr_number, "status": status, "reason": checks["reason"]}
 
     head = str(pr.get("headRefOid") or "")
-    branch = str(pr.get("headRefName") or "")
     if not HEAD_RE.fullmatch(head):
         return {"pr": pr_number, "status": "retry-ci", "reason": "current head unavailable"}
 
-    producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
     try:
         approvers = current_head_approvers(
+            review_comment_bodies(pr_number), pr=pr_number, head=head
+        )
+        contributors = current_head_contributors(
             review_comment_bodies(pr_number), pr=pr_number, head=head
         )
     except (RuntimeError, json.JSONDecodeError) as exc:
@@ -600,7 +604,12 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
             "status": "retry-ci",
             "reason": f"semantic authorization could not be determined: {exc}",
         }
-    authorized = head_has_authorized_approval(producer=producer, approvers=approvers)
+    has_provenance = len(contributors) > 0
+    authorized = head_has_authorized_approval(
+        contributors=contributors,
+        approvers=approvers,
+        has_provenance=has_provenance,
+    )
     if not authorized:
         replace_factory_labels(pr_number, "factory:unowned", "factory:review")
         return {"pr": pr_number, "status": "review", "head": head}
@@ -1209,16 +1218,21 @@ def handle_review(
         }
 
     # Fetch after posting so concurrent approvals are observed atomically.
-    # approval_can_promote unions reviewer, so even with eventual-consistency
-    # lag the current approval counts; the re-read ensures a second distinct
-    # reviewer for producer==None is eventually visible and can promote to ready.
+    # Get contributors for the exact head being reviewed
+    contributors = current_head_contributors(
+        review_comment_bodies(pr_number),
+        pr=pr_number,
+        head=reviewed_head,
+    )
+    has_provenance = len(contributors) > 0
     prior_approvers = current_head_approvers(
         review_comment_bodies(pr_number),
         pr=pr_number,
         head=reviewed_head,
     )
     authorized = approval_can_promote(
-        producer=producer,
+        contributors=contributors,
+        has_provenance=has_provenance,
         reviewer=worker,
         reviewed_head=reviewed_head,
         current_head=latest_head,
@@ -1228,10 +1242,10 @@ def handle_review(
     )
     if not authorized:
         note = (
-            "Historical producer provenance is unavailable, so one additional distinct "
-            "factory approval is required for this exact head."
-            if producer is None and mechanical_passed and latest_head == reviewed_head
-            else f"Approval was denied by controller-side gates: {mechanical['reason']}."
+            "Contributor provenance unavailable for this head, so two distinct "
+            "factory approvals are required for this exact head."
+            if not has_provenance and mechanical_passed and latest_head == reviewed_head
+            else f"Reviewer is a contributor to this head or approval denied by controller-side gates: {mechanical['reason']}."
         )
         result = return_to_review(
             pr_number=pr_number,
@@ -1367,17 +1381,28 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
         pr=pr_number,
         head=head,
     )
+    contributors = current_head_contributors(
+        review_comment_bodies(pr_number),
+        pr=pr_number,
+        head=head,
+    )
+    has_provenance = len(contributors) > 0
     authorized = (
         str(pr.get("state")) == "OPEN"
         and "factory:ready" in labels_of(pr)
         and HEAD_RE.fullmatch(head) is not None
-        and head_has_authorized_approval(producer=producer, approvers=approvers)
+        and head_has_authorized_approval(
+            contributors=contributors,
+            approvers=approvers,
+            has_provenance=has_provenance,
+        )
     )
     if authorized:
         return {
             "authorized": True,
             "head": head,
             "producer": producer,
+            "contributors": sorted(contributors),
             "approvers": sorted(approvers),
         }
 
@@ -1400,7 +1425,45 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
         "authorized": False,
         "head": head,
         "producer": producer,
+        "contributors": sorted(contributors),
         "approvers": sorted(approvers),
+    }
+
+
+def record_contribution(*, worker: str, pr_number: int, head: str) -> dict[str, Any]:
+    """Record a factory worker's contribution to a PR head.
+
+    This is called by the worker after pushing changes to a PR. The controller
+    writes a durable, machine-parseable contributor marker that cannot be
+    forged by worker-authored PR body text or commit messages.
+    """
+    if not FIXED_WORKER_RE.fullmatch(worker):
+        raise RuntimeError(f"unsupported fixed-model worker: {worker}")
+    if not HEAD_RE.fullmatch(head):
+        raise RuntimeError("head must be a full lowercase Git SHA")
+
+    pr = pr_json(pr_number)
+    if str(pr.get("state")) != "OPEN":
+        raise RuntimeError(f"PR #{pr_number} is not open")
+    current_head = str(pr.get("headRefOid") or "")
+    if current_head != head:
+        raise RuntimeError(f"PR #{pr_number} head {current_head} does not match expected {head}")
+
+    epoch = int(time.time())
+    marker = head_contributor_marker(
+        pr=pr_number,
+        head=head,
+        worker=worker,
+        epoch=epoch,
+    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+
+    return {
+        "status": "recorded",
+        "pr": pr_number,
+        "head": head,
+        "worker": worker,
+        "epoch": epoch,
     }
 
 
@@ -1430,6 +1493,11 @@ def main() -> int:
     gates.add_argument("--pr", type=int, required=True)
     gates.add_argument("--expected-head", required=True)
 
+    record = subparsers.add_parser("record-contribution")
+    record.add_argument("--worker", required=True)
+    record.add_argument("--pr", type=int, required=True)
+    record.add_argument("--head", required=True)
+
     subparsers.add_parser("reconcile-ci")
     subparsers.add_parser("reconcile-terminal")
 
@@ -1446,6 +1514,12 @@ def main() -> int:
         result = authorize_ready(args.pr)
     elif args.command == "demote-ready":
         result = demote_ready(args.pr)
+    elif args.command == "record-contribution":
+        result = record_contribution(
+            worker=args.worker,
+            pr_number=args.pr,
+            head=args.head,
+        )
     elif args.command == "reconcile-ci":
         result = {"results": reconcile_ci()}
     elif args.command == "reconcile-terminal":

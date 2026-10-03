@@ -393,6 +393,14 @@ if [[ "$MODE" == 'issue' ]]; then
       log "assignment complete; remaining budget $(remaining)s"
       exit 0
     fi
+    # Record the original producer as a contributor to the initial head
+    current_head="$(git rev-parse HEAD)"
+    python3 "$TRUSTED_REVIEW_CONTROLLER" record-contribution \
+      --worker "$WORKER" \
+      --pr "$pr" \
+      --head "$current_head" || {
+      log "failed to record original producer as contributor for PR #${pr}" >&2
+    }
     replace_labels "$pr" "$OWNER" 'factory:review'
     log "opened/updated PR #${pr} for issue #${NUMBER}"
     release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
@@ -416,6 +424,15 @@ if [[ "$MODE" == 'issue' ]]; then
 fi
 
 if persist_pr_changes "$NUMBER" "$BRANCH"; then
+  log "pushed repairs to PR #${NUMBER}; recording contributor provenance"
+  current_head="$(git rev-parse HEAD)"
+  python3 "$TRUSTED_REVIEW_CONTROLLER" record-contribution \
+    --worker "$WORKER" \
+    --pr "$NUMBER" \
+    --head "$current_head" || {
+    log "failed to record contributor provenance for PR #${NUMBER}" >&2
+    # Don't fail the push, but log the error
+  }
   log "pushed repairs to PR #${NUMBER}; handing it to the merge controller for exact-head review"
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
