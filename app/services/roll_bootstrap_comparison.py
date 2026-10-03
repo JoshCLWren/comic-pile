@@ -120,18 +120,18 @@ class RollBootstrapComparisonHarness:
         start_time = time.time()
         
         # Get v1 response
-        v1_metrics = await self._measure_endpoint_performance(
+        v1_metrics_res = await self._measure_endpoint_performance(
             "/api/v1/roll/bootstrap", user, timezone_str
         )
+        v1_metrics = v1_metrics_res["metrics"]
+        v1_response = RollBootstrapResponse.model_validate(v1_metrics_res["response_data"])
         
         # Get v2 response  
-        v2_metrics = await self._measure_endpoint_performance(
+        v2_metrics_res = await self._measure_endpoint_performance(
             "/api/v2/roll/bootstrap", user, timezone_str
         )
-        
-        # Parse responses
-        v1_response = RollBootstrapResponse.model_validate(v1_metrics.response_data)
-        v2_response = RollV2BootstrapResponse.model_validate(v2_metrics.response_data)
+        v2_metrics = v2_metrics_res["metrics"]
+        v2_response = RollV2BootstrapResponse.model_validate(v2_metrics_res["response_data"])
         
         # Perform parity checks
         parity_checks = await self._run_parity_checks(v1_response, v2_response)
@@ -178,14 +178,19 @@ class RollBootstrapComparisonHarness:
         endpoint: str, 
         user: User, 
         timezone_str: str | None = None
-    ) -> PerformanceMetrics:
-        """Measure performance characteristics of an endpoint."""
+    ) -> dict[str, Any]:
+        """Measure performance characteristics of an endpoint and return data.
+        Returns a dict with keys 'metrics' (PerformanceMetrics instance) and
+        'response_data' (decoded JSON). The `scenario` field is set to the
+        provided argument by caller; default NORMAL_POOL for backward
+        compatibility.
+        """
         
         headers = {"Authorization": f"Bearer {user.access_token}"}
-        params = {}
+        params: dict[str, Any] = {}
         if timezone_str:
             params["timezone"] = timezone_str
-            
+        
         start_time = time.time()
         
         # Track database queries (this is a simplified approach)
@@ -200,15 +205,17 @@ class RollBootstrapComparisonHarness:
         
         final_query_count = await self._get_current_query_count()
         
-        return PerformanceMetrics(
+        metrics = PerformanceMetrics(
             endpoint=endpoint,
-            scenario=ComparisonScenario.NORMAL_POOL,  # Default, will be overridden
+            scenario=ComparisonScenario.NORMAL_POOL,  # placeholder
             total_round_trips=1,  # HTTP round trips
             query_count=final_query_count - initial_query_count,
             response_time_ms=(end_time - start_time) * 1000,
             response_size_bytes=len(response.content),
             db_round_trips_after_auth=final_query_count - initial_query_count
         )
+        return {"metrics": metrics, "response_data": response_data}
+
     
     async def _get_current_query_count(self) -> int:
         """Get current database query count (simplified implementation)."""
