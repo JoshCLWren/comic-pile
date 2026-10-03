@@ -21,6 +21,7 @@ interface RollHeaderProps {
   onOpenOverride: () => void
   onOpenDieModal: () => void
   onOpenModeSelector?: () => void
+  onBackToQueue?: () => void
 }
 
 /**
@@ -75,14 +76,19 @@ export function RollHeader({
         <h1 className="text-xl font-black uppercase tracking-tighter text-glow md:text-2xl">
           Roll
         </h1>
-        {snoozedThreads.length > 0 && currentDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
+        {isRatingView && (
+          <span className="block text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            A random comic from your library
+          </span>
+        )}
+        {!isRatingView && snoozedThreads.length > 0 && currentDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
           <div className="mt-1 flex items-center gap-2">
             <span className="text-[9px] uppercase tracking-wider text-stone-500">
               pool at max size (d{dieSize}) - snoozing won&apos;t increase it further
             </span>
           </div>
         )}
-        {snoozedThreads.length > 0 && pool.length + snoozedThreads.length > dieSize && (
+        {!isRatingView && snoozedThreads.length > 0 && pool.length + snoozedThreads.length > dieSize && (
           <div className="mt-1 flex items-center gap-2">
             <Tooltip content="Snoozed offset">
               <span className="modifier-badge cursor-help border-b border-dashed border-stone-600 text-[10px] font-black text-amber-500">
@@ -98,105 +104,121 @@ export function RollHeader({
         )}
       </div>
       <div
-        className={`flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-2 w-full lg:w-auto ${isRatingView ? 'hidden' : 'flex'}`}
+        className={`flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-2 w-full lg:w-auto ${!isRatingView ? 'flex' : 'flex'}`}
       >
-        <div id="die-selector" data-roll-die-selector="primary" className="flex min-w-0 flex-wrap items-center gap-2">
-          <div
-            className="hidden min-w-0 flex-wrap items-center gap-x-0 gap-y-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-0.5 md:flex"
-            role="group"
-            aria-label="Die sizes"
-          >
-            {DICE_LADDER.map((die) => {
-              const activeDie = manualDie === null ? currentDie : manualDie
-              const selected = die === activeDie
-              return (
+        {!isRatingView && (
+          <>
+            <div id="die-selector" data-roll-die-selector="primary" className="flex min-w-0 flex-wrap items-center gap-2">
+              <div
+                className="hidden min-w-0 flex-wrap items-center gap-x-0 gap-y-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-0.5 md:flex"
+                role="group"
+                aria-label="Die sizes"
+              >
+                {DICE_LADDER.map((die) => {
+                  const activeDie = manualDie === null ? currentDie : manualDie
+                  const selected = die === activeDie
+                  return (
+                    <button
+                      key={die}
+                      type="button"
+                      onClick={() => onSetDie(die)}
+                      disabled={setDiePending}
+                      aria-pressed={selected}
+                      className={`die-btn min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${selected
+                        ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
+                        : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
+                    >
+                      d{die}
+                    </button>
+                  )
+                })}
+                <span
+                  aria-hidden="true"
+                  className="mx-0.5 h-5 w-px bg-[var(--theme-border)]"
+                />
                 <button
-                  key={die}
                   type="button"
-                  onClick={() => onSetDie(die)}
-                  disabled={setDiePending}
-                  aria-pressed={selected}
-                  className={`die-btn min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${selected
+                  onClick={onClearManualDie}
+                  disabled={clearManualDiePending}
+                  aria-pressed={manualDie === null}
+                  title={
+                    manualDie
+                      ? `Exit manual mode (currently d${manualDie})`
+                      : 'Automatic die mode is active'
+                  }
+                  className={`min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${manualDie === null
                     ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
                     : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
                 >
-                  d{die}
+                  Auto
                 </button>
-              )
-            })}
-            <span
-              aria-hidden="true"
-              className="mx-0.5 h-5 w-px bg-[var(--theme-border)]"
-            />
-            <button
-              type="button"
-              onClick={onClearManualDie}
-              disabled={clearManualDiePending}
-              aria-pressed={manualDie === null}
-              title={
-                manualDie
-                  ? `Exit manual mode (currently d${manualDie})`
-                  : 'Automatic die mode is active'
-              }
-              className={`min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${manualDie === null
-                ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
-                : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
-            >
-              Auto
-            </button>
-          </div>
-          <div className="md:hidden">
-            <button
-              type="button"
-              onClick={onOpenDieModal}
-              aria-haspopup="dialog"
-              aria-label={`Current die d${currentDie}, ${manualDie ? 'manual mode' : 'automatic mode'}`}
-              className="min-h-11 rounded-xl border border-transparent bg-[var(--theme-primary-action)] px-3 py-1 text-stone-900 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-            >
-              <span className="block text-[11px] font-black">d{currentDie}</span>
-              <span className="block text-[8px] font-bold uppercase tracking-wide">
-                {manualDie ? 'Manual' : 'Auto'}
-              </span>
-            </button>
-          </div>
-          <div className="hidden items-center gap-2 md:flex">
-            <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
-              <div className="h-full w-full">
-                <LazyDice3D
-                  sides={displayDie}
-                  value={1}
-                  isRolling={false}
-                  showValue={false}
-                  color={0xffffff}
-                />
+              </div>
+              <div className="md:hidden">
+                <button
+                  type="button"
+                  onClick={onOpenDieModal}
+                  aria-haspopup="dialog"
+                  aria-label={`Current die d${currentDie}, ${manualDie ? 'manual mode' : 'automatic mode'}`}
+                  className="min-h-11 rounded-xl border border-transparent bg-[var(--theme-primary-action)] px-3 py-1 text-stone-900 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                >
+                  <span className="block text-[11px] font-black">d{currentDie}</span>
+                  <span className="block text-[8px] font-bold uppercase tracking-wide">
+                    {manualDie ? 'Manual' : 'Auto'}
+                  </span>
+                </button>
+              </div>
+              <div className="hidden items-center gap-2 md:flex">
+                <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
+                  <div className="h-full w-full">
+                    <LazyDice3D
+                      sides={displayDie}
+                      value={1}
+                      isRolling={false}
+                      showValue={false}
+                      color={0xffffff}
+                    />
+                  </div>
+                </div>
+                <div className="text-right">
+                  <Tooltip content="The die picks randomly from the series that are ready to read. Sizes run d4→d6→d8→d10→d12→d20→d30→d50→d100 — a larger die means more series in the roll.">
+                    <GlossaryLink id="die-ladder">
+                      <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-black uppercase tracking-wider text-stone-500">
+                        Die
+                      </span>
+                    </GlossaryLink>
+                  </Tooltip>
+                  <span id="header-die-label" className="block text-[10px] font-black text-[var(--theme-comic-accent)]">
+                    d{currentDie}
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="text-right">
-              <Tooltip content="The die picks randomly from the series that are ready to read. Sizes run d4→d6→d8→d10→d12→d20→d30→d50→d100 — a larger die means more series in the roll.">
-                <GlossaryLink id="die-ladder">
-                  <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-black uppercase tracking-wider text-stone-500">
-                    Die
-                  </span>
-                </GlossaryLink>
-              </Tooltip>
-              <span id="header-die-label" className="block text-[10px] font-black text-[var(--theme-comic-accent)]">
-                d{currentDie}
-              </span>
-            </div>
-          </div>
-        </div>
-        <ReadingModeControl mode={sessionMode} onOpenSelector={onOpenModeSelector} />
-        <Tooltip content="Pick a specific series for the next result.">
+            <ReadingModeControl mode={sessionMode} onOpenSelector={onOpenModeSelector} />
+            <Tooltip content="Pick a specific series for the next result.">
+              <button
+                type="button"
+                onClick={onOpenOverride}
+                data-roll-primary-action="pick-manually"
+                aria-haspopup="dialog"
+                className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] transition-colors hover:border-[var(--theme-comic-accent)]/40 hover:text-[var(--theme-comic-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] md:px-4 md:py-2"
+              >
+                Pick manually
+              </button>
+            </Tooltip>
+          </>
+        )}
+        {isRatingView && (
           <button
             type="button"
-            onClick={onOpenOverride}
-            data-roll-primary-action="pick-manually"
-            aria-haspopup="dialog"
-            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] transition-colors hover:border-[var(--theme-comic-accent)]/40 hover:text-[var(--theme-comic-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] md:px-4 md:py-2"
+            onClick={() => {
+              if (onBackToQueue) onBackToQueue()
+            }}
+            className="flex items-center gap-2 rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-stone-400 transition-colors hover:border-stone-500 hover:text-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
           >
-            Pick manually
+            <span className="text-xs">←</span>
+            Back to queue
           </button>
-        </Tooltip>
+        )}
       </div>
     </header>
   )
