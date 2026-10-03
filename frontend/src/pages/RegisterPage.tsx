@@ -93,11 +93,12 @@ export default function RegisterPage() {
               <label htmlFor="username" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Username
               </label>
-              <p className="text-xs text-[var(--theme-text-dim)]">What you use to sign in.</p>
+              <p id="username-hint" className="text-xs text-[var(--theme-text-dim)]">What you use to sign in.</p>
               <input
                 id="username"
                 type="text"
                 name="username"
+                aria-describedby="username-hint"
                 autoComplete="username"
                 required
                 value={username}
@@ -111,13 +112,14 @@ export default function RegisterPage() {
               <label htmlFor="email" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Email
               </label>
-              <p className="text-xs text-[var(--theme-text-dim)]">
+              <p id="email-hint" className="text-xs text-[var(--theme-text-dim)]">
                 Recovery and contact identity — used for password recovery, never to sign in.
               </p>
               <input
                 id="email"
                 type="email"
                 name="email"
+                aria-describedby="email-hint"
                 autoComplete="email"
                 required
                 value={email}
@@ -131,11 +133,12 @@ export default function RegisterPage() {
               <label htmlFor="password" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Password
               </label>
-              <p className="text-xs text-[var(--theme-text-dim)]">Minimum 6 characters.</p>
+              <p id="password-hint" className="text-xs text-[var(--theme-text-dim)]">Minimum 6 characters.</p>
               <input
                 id="password"
                 type="password"
                 name="password"
+                aria-describedby="password-hint"
                 autoComplete="new-password"
                 required
                 value={password}

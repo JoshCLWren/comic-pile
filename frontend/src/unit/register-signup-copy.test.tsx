@@ -49,4 +49,13 @@ describe('RegisterPage signup copy (issue #2756)', () => {
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
   })
+
+  it('associates each visible helper copy with its field for assistive tech', () => {
+    renderRoute(<RegisterPage />)
+    for (const field of ['Username', 'Email', 'Password']) {
+      expect(screen.getByLabelText(field)).toHaveAccessibleDescription()
+    }
+    expect(screen.getByLabelText('Username')).toHaveAccessibleDescription('What you use to sign in.')
+    expect(screen.getByLabelText('Password')).toHaveAccessibleDescription('Minimum 6 characters.')
+  })
 })

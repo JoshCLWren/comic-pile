@@ -477,12 +477,12 @@ export function formatA11yViolations(violations: Violation[]): string {
 }
 
 export const SELECTORS = {
-		auth: {
-			usernameInput: 'input[name="username"]',
-			emailInput: 'input[name="email"]',
-			passwordInput: 'input[name="password"]',
-			submitButton: 'button[type="submit"]',
-		},
+	auth: {
+		usernameInput: 'input[name="username"]',
+		emailInput: 'input[name="email"]',
+		passwordInput: 'input[name="password"]',
+		submitButton: 'button[type="submit"]',
+	},
 	threadList: {
 		container: '#queue-container',
 		threadItem: '[data-testid="queue-thread-item"]',
