@@ -34,8 +34,11 @@ from app.models.taste_signal import TasteSignal
 from app.models.thread import Thread
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
+from app.models.tag import Tag, TagAssignment
 
 __all__ = [
+    "Tag",
+    "TagAssignment",
     "CBLSource",
     "CBLSourceEntry",
     "CBLSourceList",
@@ -67,6 +70,8 @@ __all__ = [
     "ReadingSession",
     "Snapshot",
     "TasteSignal",
+    "Tag",
+    "TagAssignment",
     "Thread",
     "ThreadExternalSeriesMapping",
     "User",
