@@ -427,7 +427,7 @@ while (( $(remaining) > 480 )); do
       fi
       # The controller records this producer against the exact head it just
       # created so a later repair cannot make it an eligible reviewer.
-      record_head_contribution "$pr" 'pr-opened-handoff'
+      record_head_contribution "$pr" 'pr-opened-handoff' || true
       replace_labels "$pr" "$OWNER" 'factory:review'
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       SKIP_PRS+=("$pr")
@@ -447,7 +447,7 @@ while (( $(remaining) > 480 )); do
 
   if persist_pr_changes "$NUMBER" "$BRANCH"; then
     log "pushed repairs to PR #${NUMBER}; recording contributor provenance"
-    record_head_contribution "$NUMBER" 'repairs-pushed-handoff'
+    record_head_contribution "$NUMBER" 'repairs-pushed-handoff' || true
     log "pushed repairs to PR #${NUMBER}; review and CI must refresh"
     SKIP_PRS+=("$NUMBER")
     continue

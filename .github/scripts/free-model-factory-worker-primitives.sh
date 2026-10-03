@@ -664,7 +664,7 @@ while (( $(remaining) > 480 )); do
         SKIP_PRS+=("$pr")
         continue
       fi
-      record_head_contribution "$pr" 'pr-opened-handoff'
+      record_head_contribution "$pr" 'pr-opened-handoff' || true
       replace_labels "$pr" "$OWNER" 'factory:review'
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
@@ -682,7 +682,7 @@ while (( $(remaining) > 480 )); do
 
   if persist_pr_changes "$NUMBER" "$BRANCH"; then
     log "pushed repairs to PR #${NUMBER}; review/CI must refresh"
-    record_head_contribution "$NUMBER" 'repairs-pushed-handoff'
+    record_head_contribution "$NUMBER" 'repairs-pushed-handoff' || true
     release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
     SKIP_PRS+=("$NUMBER")
     continue

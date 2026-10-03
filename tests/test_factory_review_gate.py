@@ -734,6 +734,7 @@ def test_parse_head_contributor_marker() -> None:
     assert result["worker"] == "42"
     assert result["epoch"] == "1234567890"
 
+
 def test_head_contributor_marker_roundtrip() -> None:
     """Marker generation and parsing are inverses."""
     marker = head_contributor_marker(

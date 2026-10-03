@@ -395,7 +395,7 @@ if [[ "$MODE" == 'issue' ]]; then
     fi
     # The controller records this producer against the exact head it just
     # created so a later repair cannot make it an eligible reviewer.
-    record_head_contribution "$pr" 'pr-opened-handoff'
+    record_head_contribution "$pr" 'pr-opened-handoff' || true
     replace_labels "$pr" "$OWNER" 'factory:review'
     log "opened/updated PR #${pr} for issue #${NUMBER}"
     release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
@@ -420,7 +420,7 @@ fi
 
 if persist_pr_changes "$NUMBER" "$BRANCH"; then
   log "pushed repairs to PR #${NUMBER}; recording contributor provenance"
-  record_head_contribution "$NUMBER" 'repairs-pushed-handoff'
+  record_head_contribution "$NUMBER" 'repairs-pushed-handoff' || true
   log "pushed repairs to PR #${NUMBER}; handing it to the merge controller for exact-head review"
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
