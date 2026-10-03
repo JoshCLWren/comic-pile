@@ -115,7 +115,7 @@ export default function LandingPage() {
             </Link>
             <Link
               to="/demo"
-              className="w-full md:w-auto h-12 bg-[var(--theme-bg-card)] hover:bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-sm font-bold text-[var(--theme-text-primary)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] px-8 inline-block"
+              className="w-full md:w-auto h-12 bg-[var(--theme-bg-panel)] hover:bg-[var(--theme-bg-page)] border border-[var(--theme-border)] rounded-xl text-sm font-bold text-[var(--theme-text-primary)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] px-8 inline-block"
               data-landing-try-demo
             >
               Try demo
