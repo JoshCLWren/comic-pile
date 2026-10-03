@@ -1,9 +1,7 @@
 import type { HttpClient } from '../services/httpClient'
-import {
-  createBugReportsApi,
-  createMigrationApi,
-  createTasksApi,
-} from '../services/api'
+import { createBugReportsApi } from '../services/api-bug-reports'
+import { createMigrationApi } from '../services/api-migration'
+import { createTasksApi } from '../services/api-tasks'
 import { createCreatorsApi } from '../services/api-creators'
 import { createDependenciesApi } from '../services/api-dependencies'
 import { createQueueApi } from '../services/api-queue'

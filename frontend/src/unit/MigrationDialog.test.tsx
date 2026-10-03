@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import axios from 'axios'
 import MigrationDialog from '../components/MigrationDialog'
-import { migrationApi } from '../services/api'
+import { migrationApi } from '../services/api-migration'
 
 vi.mock('../services/api', () => ({ migrationApi: { migrateThread: vi.fn() } }))
 

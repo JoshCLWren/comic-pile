@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import Modal from './Modal'
-import { comicVineApi } from '../services/api'
+import { comicVineApi } from '../services/api-comicvine'
 import { readingOrdersApi, type ReadingOrderSummary } from '../services/api-reading-orders'
 import { optimizedImageUrl } from '../services/imageDelivery'
 import { useToast } from '../contexts/useToast'

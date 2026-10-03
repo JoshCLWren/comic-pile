@@ -8,7 +8,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { MarqueeTitle } from '../components/MarqueeTitle'
 
 const migrate = vi.hoisted(() => vi.fn())
-vi.mock('../services/api', () => ({ migrationApi: { migrateThread: migrate } }))
+vi.mock('../services/api-migration', () => ({ migrationApi: { migrateThread: migrate } }))
 
 const thread = { id: 1, title: 'Saga' }
 

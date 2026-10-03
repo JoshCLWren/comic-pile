@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { identityInboxApi } from '../services/api'
+import { identityInboxApi } from '../services/api-identity'
 import type { IdentityInboxConfirmPayload, IdentityInboxRejectPayload } from '../services/api-identity'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateIdentityInbox } from '../query/cacheEffects'

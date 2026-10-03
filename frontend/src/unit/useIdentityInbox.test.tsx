@@ -10,11 +10,11 @@ import {
   useDeferInboxItem,
   useSkipInboxItem,
 } from '../hooks/useIdentityInbox'
-import * as api from '../services/api'
+import { identityInboxApi } from '../services/api-identity'
 import type { IdentityInboxItem } from '../services/api-identity'
 import { queryKeys } from '../query/queryKeys'
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-identity', () => ({
   identityInboxApi: {
     list: vi.fn(),
     confirm: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-const mockedInboxApi = vi.mocked(api.identityInboxApi)
+const mockedInboxApi = vi.mocked(identityInboxApi)
 
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

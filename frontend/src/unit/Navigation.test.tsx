@@ -10,7 +10,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { createRouterHarness } from './routerTestHarness'
-import * as api from '../services/api'
+import { identityInboxApi } from '../services/api-identity'
 
 const toast = createToastSpy()
 
@@ -30,24 +30,13 @@ const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn(() => 'test-token')
 
-vi.mock('../services/api', () => {
-  return {
-    default: {
-      get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
-      post: (...args: Parameters<typeof mockApiPost>) => mockApiPost(...args),
-    },
-    setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
-    clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
-    getAccessToken: () => mockGetAccessToken(),
-    refreshSession: vi.fn(),
-    isSessionRefreshRejected: () => false,
-    identityInboxApi: {
-      list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),
-    },
-  }
-})
+vi.mock('../services/api-identity', () => ({
+  identityInboxApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),
+  },
+}))
 
-const mockIdentityInboxList = vi.mocked(api.identityInboxApi.list)
+const mockIdentityInboxList = vi.mocked(identityInboxApi.list)
 
 beforeEach(() => {
   const width = 390
