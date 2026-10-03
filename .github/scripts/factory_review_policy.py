@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
+
+TRUSTED_COMMENT_LOGIN = "github-actions[bot]"
+TRUSTED_COMMENT_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 
 REVIEW_MARKER_RE = re.compile(
     r"^<!-- comic-pile-factory-semantic-review-v1:"
@@ -91,6 +95,31 @@ def parse_head_contributor_marker(line: str) -> dict[str, str] | None:
     """Parse one exact head contributor marker line."""
     match = HEAD_CONTRIBUTOR_RE.fullmatch(line.strip())
     return match.groupdict() if match else None
+
+
+def trusted_comment_bodies(comments: Iterable[Mapping[str, Any]]) -> list[str]:
+    """Return comment bodies written by the actors trusted to forge no marker.
+
+    Factory workers post through ``GITHUB_TOKEN`` as ``github-actions[bot]``, and
+    the repository owner may run the review controller during incidents, so an
+    owner/member/collaborator body is honored alongside it. Every consumer of
+    review provenance must apply this identical filter; if the controller, the
+    Rotisserie capture, and the dispatcher disagree about who authored a marker
+    they can disagree about who authored a head.
+    """
+    bodies: list[str] = []
+    for comment in comments:
+        if not isinstance(comment, Mapping):
+            continue
+        user = comment.get("user")
+        if not isinstance(user, Mapping):
+            continue
+        login = str(user.get("login") or "")
+        association = str(comment.get("author_association") or "")
+        if login != TRUSTED_COMMENT_LOGIN and association not in TRUSTED_COMMENT_ASSOCIATIONS:
+            continue
+        bodies.append(str(comment.get("body") or ""))
+    return bodies
 
 
 def head_contributor_marker(

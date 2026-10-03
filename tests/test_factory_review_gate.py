@@ -1142,9 +1142,51 @@ def test_controller_refuses_to_record_provenance_for_a_stale_head(
             "labels": [{"name": "factory"}],
         },
     )
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
 
     with pytest.raises(RuntimeError, match="does not match expected"):
         module.record_contribution(worker="42", pr_number=1390, head="e" * 40)
+
+
+def test_controller_retries_while_the_pushed_head_propagates(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Normal GitHub ref lag must not silently discard contributor provenance.
+
+    The worker records the commit its own push just created, and the PR head can
+    still report the previous SHA for a moment. Dropping the record there would
+    leave every repaired head needing two distinct reviewers.
+    """
+    module = load_review_controller()
+    head = "e" * 40
+    reads: list[str] = ["f" * 40, "f" * 40, head]
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def pr_json(_pr: int) -> dict[str, object]:
+        return {
+            "state": "OPEN",
+            "headRefOid": reads.pop(0),
+            "labels": [{"name": "factory"}],
+        }
+
+    monkeypatch.setattr(module, "pr_json", pr_json)
+    monkeypatch.setattr(module, "run_gh", lambda args, **_kwargs: commands.append(list(args)) or Result())
+    monkeypatch.setattr(module.time, "time", lambda: 1234567890)
+    sleeps: list[float] = []
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    result = module.record_contribution(worker="42", pr_number=1390, head=head)
+
+    assert result["status"] == "recorded"
+    assert sleeps == [module.CONTRIBUTION_HEAD_SYNC_INTERVAL_SECONDS] * 2
+    assert current_head_contributors(
+        [commands[0][-1]], pr=1390, head=head
+    ) == {"42"}
 
 
 def test_controller_refuses_contributor_provenance_for_non_factory_prs(

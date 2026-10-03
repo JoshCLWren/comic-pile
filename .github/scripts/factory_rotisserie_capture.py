@@ -13,13 +13,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from factory_review_policy import current_head_contributors, parse_review_marker
+from factory_review_policy import (
+    current_head_contributors,
+    parse_review_marker,
+    trusted_comment_bodies,
+)
 from factory_work_policy import FIXED_LEASE_TTL_SECONDS, LOCAL_LEASE_TTL_SECONDS, owner_of
 
 REPOSITORY = "JoshCLWren/comic-pile"
 FACTORY_OWNER_RE = re.compile(r"^factory:(?P<worker>local|[1-9]|[1-7][0-9])$")
-TRUSTED_COMMENT_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
-TRUSTED_COMMENT_LOGIN = "github-actions[bot]"
 JsonCommand = Callable[[list[str]], object]
 
 
@@ -57,27 +59,6 @@ def _check_status(check: dict[str, Any]) -> str:
     if state in {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "STALE", "ACTION_REQUIRED"}:
         return "failed"
     return "pending"
-
-
-def _trusted_bodies(comments: list[dict[str, Any]]) -> list[str]:
-    """Return comment bodies written by the same trusted actors as the controller.
-
-    The review controller only honors markers posted by ``github-actions[bot]``
-    or an owner/member/collaborator. Contributor provenance has to be captured
-    under the identical filter, otherwise the shadow decision and the real
-    controller would disagree about who authored a head.
-    """
-    bodies: list[str] = []
-    for comment in comments:
-        user = comment.get("user")
-        if not isinstance(user, dict):
-            continue
-        login = str(user.get("login") or "")
-        association = str(comment.get("author_association") or "")
-        if login != TRUSTED_COMMENT_LOGIN and association not in TRUSTED_COMMENT_ASSOCIATIONS:
-            continue
-        bodies.append(str(comment.get("body") or ""))
-    return bodies
 
 
 def _reviews(comments: list[dict[str, Any]], *, pr: int, head: str) -> list[dict[str, object]]:
@@ -157,15 +138,13 @@ def capture_view(
             if isinstance(check, dict)
         ]
         head = str(pr.get("headRefOid") or "")
-        pr["reviews"] = _reviews(
-            [comment for comment in comments if isinstance(comment, dict)], pr=number, head=head
-        )
+        rows = [comment for comment in comments if isinstance(comment, dict)]
+        pr["reviews"] = _reviews(rows, pr=number, head=head)
+        # Contributor provenance must be captured under the identical trusted
+        # filter the review controller applies, otherwise the shadow decision
+        # and the real controller would disagree about who authored a head.
         pr["head_contributors"] = sorted(
-            current_head_contributors(
-                _trusted_bodies([comment for comment in comments if isinstance(comment, dict)]),
-                pr=number,
-                head=head,
-            )
+            current_head_contributors(trusted_comment_bodies(rows), pr=number, head=head)
         )
         lease = _lease(raw)
         if lease:

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -20,6 +21,7 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
+from factory_review_policy import current_head_contributors, trusted_comment_bodies
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, stage_of)
 from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
@@ -39,6 +41,12 @@ LEASE_ACTIVITY_PATTERNS = (
     re.compile(r"comic-pile-factory-fix-(?:claim|progress)-v3:[^:>]+:[^:>]+:(\d{10})"),
     re.compile(r"comic-pile-factory-review-claim-v2:[^:>]+:[^:>]+:(\d{10})"),
     re.compile(r"comic-pile-factory-controller-claim-v1:(?:issue|pr)-\d+:\d+:(\d{10})"),
+)
+# Bound on exact-head contributor reads per dispatch pass. Resolving provenance
+# costs one paginated comment read per review-stage candidate, so the pass is
+# capped rather than scaled with the whole review backlog.
+REVIEW_CONTRIBUTOR_LOOKUP_LIMIT = env_positive_int(
+    "FACTORY_REVIEW_CONTRIBUTOR_LOOKUP_LIMIT", 40
 )
 __all__ = ["linked_issue_from_branch", "plan_distinct_assignments", "signal_completion_mode", "signal_roster_mode"]
 
@@ -384,6 +392,68 @@ def flatten_pages(pages: object | None) -> list[dict[str, Any]]:
         elif isinstance(page, dict):
             result.append(page)
     return result
+
+
+def pr_head_contributor_workers(number: int, head: str) -> set[str]:
+    """Return controller-recorded contributors of one PR's current exact head.
+
+    An unreadable record resolves to an empty set on purpose: the dispatcher then
+    keeps only its declared-producer knowledge, and the review controller still
+    refuses a contributor's verdict and requires two distinct reviewers. Reading
+    provenance must never be able to widen eligibility.
+    """
+    try:
+        pages = gh_json([
+            'api',
+            '--paginate',
+            '--slurp',
+            f'repos/{REPO}/issues/{number}/comments?per_page=100',
+        ])
+    except RuntimeError as exc:
+        print(
+            f'[factory-controller] contributor provenance for PR #{number} unreadable; '
+            f'review falls back to controller enforcement: {exc}',
+            file=sys.stderr,
+        )
+        return set()
+    return current_head_contributors(
+        trusted_comment_bodies(flatten_pages(pages)), pr=number, head=head
+    )
+
+
+def resolve_review_head_contributors(
+    candidates: list[Candidate],
+    prs: list[dict[str, Any]],
+) -> list[Candidate]:
+    """Bind exact-head contributors to the review candidates about to be ordered.
+
+    #3059 makes every worker that authored the exact head ineligible to attest
+    it. Excluding those workers during selection is what lets queue selection
+    hand the head to another eligible reviewer on its own, instead of repeatedly
+    dispatching a contributor whose verdict the controller must refuse. Only
+    ``factory:review`` candidates need the record, and the number of comment
+    reads is bounded so a large review backlog cannot multiply API traffic.
+    """
+    heads = {int(pr['number']): str(pr.get('headRefOid') or '') for pr in prs if 'number' in pr}
+    review_numbers = [
+        candidate.number
+        for candidate in candidates
+        if candidate.kind == 'pr' and candidate.stage == 'factory:review' and not candidate.head_contributors
+    ]
+    resolved: dict[int, frozenset[str]] = {}
+    for number in review_numbers[:REVIEW_CONTRIBUTOR_LOOKUP_LIMIT]:
+        head = heads.get(number, '')
+        if not re.fullmatch(r'[0-9a-f]{40}', head):
+            continue
+        resolved[number] = frozenset(pr_head_contributor_workers(number, head))
+    if not resolved:
+        return candidates
+    return [
+        replace(candidate, head_contributors=resolved[candidate.number])
+        if candidate.kind == 'pr' and candidate.number in resolved
+        else candidate
+        for candidate in candidates
+    ]
 
 
 def latest_lease_activity_epoch(number: int) -> int | None:
@@ -839,7 +909,9 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
         candidates = [candidate for candidate in candidates if candidate.kind in kinds]
     elif attempt_records is None:
         candidates = [candidate for candidate in candidates if candidate.kind == 'pr']
-    candidates = order_candidates_for_worker(candidates, worker)
+    candidates = order_candidates_for_worker(
+        resolve_review_head_contributors(candidates, prs), worker
+    )
     for candidate in candidates:
         if not candidate_is_live_executable(candidate):
             continue

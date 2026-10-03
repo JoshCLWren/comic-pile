@@ -373,6 +373,67 @@ def test_assign_respects_pr_no_diff_retry_budget(
     }
 
 
+def test_assign_skips_a_head_the_requesting_worker_contributed_to(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#3059: a repairer is never dispatched to review its own repair.
+
+    The producer opened the pull request and factory 59 pushed the head that is
+    now under review. The review controller would refuse factory 59's verdict,
+    so selection itself has to route that head to another eligible worker
+    instead of burning factory 59's lease on a guaranteed refusal.
+    """
+    monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    head = "cccccccccccccccccccccccccccccccccccccccc"
+    pr = {
+        "number": 3073,
+        "state": "OPEN",
+        "isDraft": False,
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:unowned"},
+            {"name": "factory:review"},
+        ],
+        "headRefName": "factory/29-3059-catalog-free",
+        "headRefOid": head,
+        "body": "Closes #3059.\n\nWorker: opencode-free-model-factory-29\n",
+        "createdAt": "2026-09-03T00:25:29Z",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+    }
+
+    def comment(body: str) -> dict[str, Any]:
+        return {"user": {"login": "github-actions[bot]"}, "author_association": "NONE", "body": body}
+
+    marker = (
+        "<!-- comic-pile-factory-head-contributor-v1:"
+        f"pr-3073:head-{head}:worker-59:epoch-1234567890 -->"
+    )
+    monkeypatch.setattr(controller, "gh_json", lambda *args, **kwargs: [[comment(marker)]])
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: False)
+    monkeypatch.setattr(
+        controller,
+        "omniroute_free_entry_capacity",
+        lambda: {"in_flight": 0, "cap": 3, "remaining": 3},
+    )
+    monkeypatch.setattr(controller, "reconcile_stale_leases", lambda: [])
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [pr])
+    monkeypatch.setattr(controller, "load_no_diff_attempt_records", lambda: [])
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda number: {"labels": [{"name": "factory:review"}]},
+    )
+    monkeypatch.setattr(controller, "assign_candidate", lambda candidate, worker: True)
+
+    assert controller.assign("59") is None
+    assignment = controller.assign("17")
+    assert assignment is not None
+    assert (assignment.kind, assignment.number) == ("pr", 3073)
+
+
 def test_assign_wakes_exhausted_pr_after_new_head(
     controller: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,

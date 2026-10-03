@@ -26,6 +26,7 @@ parse_review_marker = _review_policy.parse_review_marker
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
 semantic_repair_heads = _review_policy.semantic_repair_heads
+trusted_comment_bodies = _review_policy.trusted_comment_bodies
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
@@ -62,6 +63,11 @@ STAGE_LABELS = {
     "factory:blocked",
 }
 GH_TIMEOUT_SECONDS = 120
+# A worker records the commit its own push just created, so the authoritative PR
+# head can still report the previous SHA for a moment. Retry that read a bounded
+# number of times before abandoning the contributor record.
+CONTRIBUTION_HEAD_SYNC_ATTEMPTS = 4
+CONTRIBUTION_HEAD_SYNC_INTERVAL_SECONDS = 1.0
 MERGEABLE_POLL_ATTEMPTS = 10
 MERGEABLE_POLL_INTERVAL_SECONDS = 2.0
 PASSING_CHECK_STATES = {"SUCCESS", "SKIPPED", "NEUTRAL"}
@@ -294,21 +300,7 @@ def review_comment_bodies(pr_number: int) -> list[str]:
             f"repos/{REPO}/issues/{pr_number}/comments?per_page=100",
         ]
     )
-    bodies: list[str] = []
-    for comment in flatten_pages(pages):
-        user = comment.get("user") or {}
-        if not isinstance(user, dict):
-            continue
-        login = str(user.get("login") or "")
-        association = str(comment.get("author_association") or "")
-        if login != "github-actions[bot]" and association not in {
-            "OWNER",
-            "MEMBER",
-            "COLLABORATOR",
-        }:
-            continue
-        bodies.append(str(comment.get("body") or ""))
-    return bodies
+    return trusted_comment_bodies(flatten_pages(pages))
 
 
 def redact_review_text(text: str) -> str:
@@ -1458,37 +1450,48 @@ def record_contribution(*, worker: str, pr_number: int, head: str) -> dict[str, 
     stale SHA, and writes the marker as the entire comment body so worker PR
     body text, commit messages, resume packets, and review prose can never be
     read as trusted contributor provenance.
+
+    A worker records the commit its own push just created, and GitHub publishes
+    the new ref asynchronously, so the first read can still report the previous
+    head. That lag is transient rather than a genuine stale push, so the head
+    match is retried a bounded number of times before the record is abandoned.
+    Losing the record entirely is survivable (the head then needs two distinct
+    reviewers), but losing it to normal ref propagation would quietly halve
+    review throughput on every repaired pull request.
     """
     if not FIXED_WORKER_RE.fullmatch(worker):
         raise RuntimeError(f"unsupported fixed-model worker: {worker}")
     if not HEAD_RE.fullmatch(head):
         raise RuntimeError("head must be a full lowercase Git SHA")
 
-    pr = pr_json(pr_number)
-    if str(pr.get("state")) != "OPEN":
-        raise RuntimeError(f"PR #{pr_number} is not open")
-    if "factory" not in labels_of(pr):
-        raise RuntimeError(f"PR #{pr_number} is not a factory pull request")
-    current_head = str(pr.get("headRefOid") or "")
-    if current_head != head:
-        raise RuntimeError(f"PR #{pr_number} head {current_head} does not match expected {head}")
-
-    epoch = int(time.time())
-    marker = head_contributor_marker(
-        pr=pr_number,
-        head=head,
-        worker=worker,
-        epoch=epoch,
-    )
-    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
-
-    return {
-        "status": "recorded",
-        "pr": pr_number,
-        "head": head,
-        "worker": worker,
-        "epoch": epoch,
-    }
+    mismatch = f"PR #{pr_number} head did not reach expected {head}"
+    for attempt in range(CONTRIBUTION_HEAD_SYNC_ATTEMPTS):
+        pr = pr_json(pr_number)
+        if str(pr.get("state")) != "OPEN":
+            raise RuntimeError(f"PR #{pr_number} is not open")
+        if "factory" not in labels_of(pr):
+            raise RuntimeError(f"PR #{pr_number} is not a factory pull request")
+        current_head = str(pr.get("headRefOid") or "")
+        if current_head == head:
+            epoch = int(time.time())
+            marker = head_contributor_marker(
+                pr=pr_number,
+                head=head,
+                worker=worker,
+                epoch=epoch,
+            )
+            run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+            return {
+                "status": "recorded",
+                "pr": pr_number,
+                "head": head,
+                "worker": worker,
+                "epoch": epoch,
+            }
+        mismatch = f"PR #{pr_number} head {current_head} does not match expected {head}"
+        if attempt + 1 < CONTRIBUTION_HEAD_SYNC_ATTEMPTS:
+            time.sleep(CONTRIBUTION_HEAD_SYNC_INTERVAL_SECONDS)
+    raise RuntimeError(mismatch)
 
 
 def main() -> int:
