@@ -152,3 +152,19 @@ def test_new_slots_pin_apodex_and_native_ling_31(validate) -> None:
     assert validate.opencode_model_is_free(by_worker["75"]["model"])
     assert "deepseek-v4-flash-free" not in {row["model"] for row in rows}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in rows}
+
+
+def test_worker_76_pins_native_fledge_alpha_free(validate) -> None:
+    """Worker 76 is the native OpenCode fledge-alpha-free slot."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    by_worker = {row["worker"]: row for row in rows}
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["74"]["model"] == "apodex/apodex-1.1-mini:free"
+    assert by_worker["75"]["model"] == "ling-3.1-flash-free"
+    assert by_worker["75"]["model"] != "inclusionai/ling-3.1-flash"
+    assert by_worker["76"]["source"] == "opencode-free"
+    assert by_worker["76"]["model"] == "fledge-alpha-free"
+    assert by_worker["76"]["minute"] == "30"
+    assert validate.opencode_model_is_free(by_worker["76"]["model"])
+    assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in rows}
