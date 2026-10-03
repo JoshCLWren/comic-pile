@@ -6,8 +6,16 @@ import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from factory_review_policy import producer_worker_from_pr as producer_worker_from_values
+import factory_eligibility as eligibility
+
+# Ensure scripts directory is in path for factory_eligibility
+scripts_dir = Path("scripts").resolve()
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->'
 # A body-declared product-acceptance parent even without an epic/prd label
@@ -828,16 +836,7 @@ def lease_is_stale(owner: str, *, active_fixed_workers: set[int], has_unresolved
     return False
 
 
-# Import shared eligibility functions to ensure both selectors delegate to the same source
-import sys
-from pathlib import Path
-scripts_dir = Path("scripts").resolve()
-if str(scripts_dir) not in sys.path:
-    sys.path.insert(0, str(scripts_dir))
-
-import factory_eligibility as eligibility
-
-
+# Shared eligibility functions exported for consistency across selectors
 def is_manual_only(body: str | None) -> bool:
     """Return whether a body carries the structured manual-only directive.
     
@@ -860,3 +859,6 @@ def parse_declared_dependencies(body: str | None) -> set[int]:
     Delegates to the shared eligibility module to ensure consistency across selectors.
     """
     return eligibility.parse_declared_dependencies(body)
+
+
+
