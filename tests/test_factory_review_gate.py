@@ -761,15 +761,74 @@ def contributor_comment(*, pr: int = 123, head: str, worker: str, epoch: int) ->
     return head_contributor_marker(pr=pr, head=head, worker=worker, epoch=epoch)
 
 
-def latest_commit_identity() -> str:
-    """Return the Git author/committer identity shared by factory pushes."""
-    completed = subprocess.run(
-        ["git", "log", "-1", "--format=%an <%ae>|%cn <%ce>"],
-        capture_output=True,
-        text=True,
-        check=True,
+FACTORY_GIT_IDENTITY = (
+    "opencode-free-model-factory[bot] "
+    "<41898282+github-actions[bot]@users.noreply.github.com>"
+)
+
+
+def shared_factory_git_identity(repo: Path) -> str:
+    """Return the one Git identity two different factory pushes share.
+
+    Commits are made in a disposable repository owned by the repository owner's
+    bot identity, which is what every fixed-model worker push uses. Worker
+    identity is a local ``git config`` value, so two workers can produce
+    byte-identical author and committer identities.
+    """
+    name, email = FACTORY_GIT_IDENTITY.split(" <")
+    email = email.rstrip(">")
+    repo.mkdir(parents=True, exist_ok=True)
+    identity = (
+        "-c",
+        f"user.name={name}",
+        "-c",
+        f"user.email={email}",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
     )
-    return completed.stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "init.defaultBranch=main", "init", "--quiet"],
+        check=True,
+        capture_output=True,
+    )
+    identities: list[str] = []
+    for index in (1, 2):
+        (repo / f"change-{index}.txt").write_text(f"{index}\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                *identity,
+                "commit",
+                "--quiet",
+                "-m",
+                f"factory: advance PR #3073 {index}",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        completed = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "log",
+                "-1",
+                "--format=%an <%ae>%n%cn <%ce>",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        author, committer = completed.stdout.strip().splitlines()[:2]
+        assert author == committer == FACTORY_GIT_IDENTITY
+        identities.append(author)
+    assert identities[0] == identities[1]
+    return identities[0]
 
 
 def test_current_head_contributors_filters_by_pr_and_head() -> None:
@@ -944,7 +1003,7 @@ def test_pr2846_shape_repairer_b_cannot_approve_its_own_repair() -> None:
     )
 
 
-def test_shared_git_identity_cannot_attribute_two_workers() -> None:
+def test_shared_git_identity_cannot_attribute_two_workers(tmp_path: Path) -> None:
     """Factory pushes share one Git identity, so attribution stays marker-based."""
     head_1 = "a" * 40
     head_2 = "b" * 40
@@ -952,12 +1011,17 @@ def test_shared_git_identity_cannot_attribute_two_workers() -> None:
         contributor_comment(head=head_1, worker="29", epoch=1),
         contributor_comment(head=head_2, worker="59", epoch=2),
     ]
-    # Every factory commit carries the same author and committer, so Git identity
-    # cannot tell worker 29 apart from worker 59.
-    assert latest_commit_identity() == latest_commit_identity()
-    # Trusted provenance still keeps the two workers distinct per exact head.
+    # Two separate factory commits really can carry byte-identical author and
+    # committer identities, so Git identity collapses workers 29 and 59 into one
+    # indistinguishable author...
+    git_identity = shared_factory_git_identity(tmp_path / "shared-identity")
+    assert git_identity == FACTORY_GIT_IDENTITY
+    # ...while trusted provenance still keeps the two workers distinct per exact
+    # head, and no Git identity string can ever be read as a contributor.
     assert current_head_contributors(comments, pr=123, head=head_1) == {"29"}
     assert current_head_contributors(comments, pr=123, head=head_2) == {"59"}
+    assert git_identity not in current_head_contributors(comments, pr=123, head=head_1)
+    assert git_identity not in current_head_contributors(comments, pr=123, head=head_2)
 
 
 def test_multiple_repairers_are_all_excluded() -> None:
@@ -1181,3 +1245,66 @@ def test_controller_promotes_once_provenance_is_recorded(
 
     assert result["status"] == "ready"
     assert transitions[-1]["pr_stage"] == "factory:ready"
+
+
+def test_controller_rechecks_contributor_record_before_promoting(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A contribution recorded during the review window still blocks promotion.
+
+    The controller reads comments before it decides whether the reviewer is a
+    contributor and again after it posts the verdict. A repairer's record for
+    this exact head can land in between, so promotion must use the second read
+    rather than the snapshot taken before the review was written.
+    """
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, _posted, _commands = wire_controller(
+        monkeypatch,
+        module,
+        [payload, payload],
+        include_diff_inspection=True,
+    )
+    reads: list[list[str]] = [
+        [],
+        [contributor_comment(pr=1390, head=REVIEWED_HEAD, worker="17", epoch=2)],
+    ]
+    monkeypatch.setattr(
+        module,
+        "review_comment_bodies",
+        lambda _pr: list(reads.pop(0)) if reads else [],
+    )
+
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+
+    assert result["status"] == "approved-not-ready"
+    assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+    assert transitions[-1]["pr_stage"] == "factory:review"
+
+
+def test_worker_records_head_contribution_after_labeling_a_new_pr() -> None:
+    """Provenance survives the factory-label precondition on the open path.
+
+    ``record_contribution`` refuses anything that is not a factory pull request
+    and ``gh pr create`` leaves a new PR unlabeled. Recording before the label
+    write therefore always fails, leaving every fresh PR with no controller
+    provenance and permanently needing two distinct reviewers.
+    """
+    for script in (
+        "free-model-factory-worker-primitives.sh",
+        "free-model-factory-worker.sh",
+        "nvidia-factory-worker.sh",
+        "omniroute-factory-worker.sh",
+    ):
+        source = (SCRIPTS / script).read_text(encoding="utf-8")
+        record_index = source.index('record_head_contribution "$pr" \'pr-opened-handoff\'')
+        label_index = source.rindex('replace_labels "$pr"', 0, record_index)
+        assert label_index < record_index, script
+        assert "|| true" in source[record_index : record_index + 80], script
+        assert source.count('record_head_contribution "') == 2, script

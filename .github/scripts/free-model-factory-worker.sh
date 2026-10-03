@@ -393,10 +393,12 @@ if [[ "$MODE" == 'issue' ]]; then
       log "assignment complete; remaining budget $(remaining)s"
       exit 0
     fi
-    # The controller records this producer against the exact head it just
-    # created so a later repair cannot make it an eligible reviewer.
-    record_head_contribution "$pr" 'pr-opened-handoff' || true
     replace_labels "$pr" "$OWNER" 'factory:review'
+    # The controller records this producer against the exact head it just
+    # created so a later repair cannot make it an eligible reviewer. A newly
+    # created PR is unlabeled, and record_contribution refuses anything that is
+    # not a factory pull request, so this must follow the label write.
+    record_head_contribution "$pr" 'pr-opened-handoff' || true
     log "opened/updated PR #${pr} for issue #${NUMBER}"
     release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
     release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'

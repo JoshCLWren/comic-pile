@@ -1241,11 +1241,18 @@ def handle_review(
             "mechanical": mechanical,
         }
 
-    # Fetch after posting so concurrent approvals are observed atomically.
+    # Fetch after posting so concurrent approvals are observed atomically. The
+    # contributor set is re-read from the same snapshot: a repairer's record for
+    # this exact head can land while the reviewer is working, and promotion must
+    # not reuse the pre-post view that could not see it.
+    promoted_comments = review_comment_bodies(pr_number)
     prior_approvers = current_head_approvers(
-        review_comment_bodies(pr_number),
+        promoted_comments,
         pr=pr_number,
         head=reviewed_head,
+    )
+    contributors, provenance_complete = head_contributor_provenance(
+        promoted_comments, pr=pr_number, head=reviewed_head, producer=producer
     )
     authorized = approval_can_promote(
         contributors=contributors,

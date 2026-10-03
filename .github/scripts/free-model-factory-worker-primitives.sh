@@ -664,8 +664,11 @@ while (( $(remaining) > 480 )); do
         SKIP_PRS+=("$pr")
         continue
       fi
-      record_head_contribution "$pr" 'pr-opened-handoff' || true
       replace_labels "$pr" "$OWNER" 'factory:review'
+      # record_contribution only accepts a factory pull request, and a freshly
+      # created PR has no labels yet. Record after the label write so the
+      # producer's own head is covered by trusted provenance.
+      record_head_contribution "$pr" 'pr-opened-handoff' || true
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
       release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'

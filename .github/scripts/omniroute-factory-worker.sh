@@ -425,10 +425,12 @@ while (( $(remaining) > 480 )); do
         SKIP_PRS+=("$pr")
         continue
       fi
-      # The controller records this producer against the exact head it just
-      # created so a later repair cannot make it an eligible reviewer.
-      record_head_contribution "$pr" 'pr-opened-handoff' || true
       replace_labels "$pr" "$OWNER" 'factory:review'
+      # A newly created PR is unlabeled and record_contribution refuses anything
+      # that is not a factory pull request, so the producer's exact-head record
+      # must follow the label write. Without it this producer is covered only by
+      # the weaker branch/body fallback and the head fails closed to two reviews.
+      record_head_contribution "$pr" 'pr-opened-handoff' || true
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       SKIP_PRS+=("$pr")
     elif (( transient_failure == 1 )); then
