@@ -34,9 +34,10 @@ describe('useQueueBlockingInfo', () => {
   it('batch-loads named blockers keyed by numeric thread id', async () => {
     const response: BatchBlockingInfoResponse = {
       threads: {
-        '12': { blocking_reasons: ['Blocked'] },
+        '12': { blocking_reasons: ['Blocked'], is_blocked: true },
         '7': {
           blocking_reasons: [],
+          is_blocked: true,
           blocking_dependencies: [
             { thread_id: 3, thread_title: 'Prequel', issue_number: '2', label: 'Read Prequel first' },
           ],
