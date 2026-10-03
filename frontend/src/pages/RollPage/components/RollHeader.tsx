@@ -58,6 +58,7 @@ export function RollHeader({
   onOpenOverride,
   onOpenDieModal,
   onOpenModeSelector,
+  onBackToQueue,
 }: RollHeaderProps) {
   const rawMode = bootstrap.session_mode
   const sessionMode: SessionModeState | null | undefined = rawMode
@@ -104,7 +105,7 @@ export function RollHeader({
         )}
       </div>
       <div
-        className={`flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-2 w-full lg:w-auto ${!isRatingView ? 'flex' : 'flex'}`}
+        className={`flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-2 w-full lg:w-auto ${isRatingView ? 'flex' : 'flex'}`}
       >
         {!isRatingView && (
           <>

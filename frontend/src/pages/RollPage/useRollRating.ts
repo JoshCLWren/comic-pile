@@ -339,6 +339,14 @@ export function useRollRating({
     setErrorMessage('')
   }
 
+  const exitRatingView = useCallback(() => {
+    setIsRatingView(false)
+    setRolledResult(null)
+    setSelectedThreadId(null)
+    setActiveRatingThread(null)
+    setErrorMessage('')
+  }, [setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+
   return {
     readingOrders,
     connectedThreads,
@@ -364,5 +372,6 @@ export function useRollRating({
     handleSubmitRating,
     handleRefreshThread,
     handleCancelRating,
+    exitRatingView,
   }
 }
