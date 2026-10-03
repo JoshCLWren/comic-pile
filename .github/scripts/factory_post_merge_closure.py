@@ -53,15 +53,27 @@ CLOSED_STATE = "CLOSED"
 PRODUCT_ACCEPTANCE_MARKER = "product-acceptance:v1"
 ACCEPTED_VERDICT_RE = re.compile(r"^\s*ACCEPTED\s*$", re.MULTILINE)
 NOT_ACCEPTED_VERDICT_RE = re.compile(r"^\s*NOT ACCEPTED\s*$", re.MULTILINE)
-# Body language that declares an issue a product-acceptance parent even when it
-# carries no epic/prd label (the #1615 incident shape: enhancement-only label
-# with a child graph and acceptance contract in the body).
+# Issues that opt out of autonomous execution, including human/interactive
+# operator acceptance and cutover parents such as #2129. Merge automation must
+# not close them either: their transition is human-controlled by contract.
+MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
+# Self-declared parent-contract language. A body only declares an acceptance
+# parent when it presents itself as the parent; merely mentioning production
+# acceptance is not a declaration. #3037 ("Production acceptance split"), #2718,
+# and #2128 are executable implementation issues that explicitly defer the
+# operator acceptance pass to a separate issue, so a looser phrase match would
+# silently remove user-reported bugs and narrow children from delivery.
 ACCEPTANCE_PARENT_BODY_RE = re.compile(
-    r"acceptance parent|parent acceptance criteria|production acceptance",
+    r"acceptance parent|parent acceptance criteria",
     re.IGNORECASE,
 )
 CHECKBOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.*)$")
-CHILD_REF_RE = re.compile(r"#\d+")
+# A declared child graph (``- [x] #123``) is the structural discriminator
+# between a parent contract and an ordinary issue that carries a checklist.
+# Child extraction and parent-contract detection share this pattern so a parent
+# can never declare a child graph the child gate cannot see.
+CHILD_ITEM_RE = re.compile(r"^[ \t]*-[ \t]*\[[ xX]\][ \t]*#(\d+)\b", re.MULTILINE)
+CHILD_REF_RE = re.compile(r"^#\d+\b")
 
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
 ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
@@ -182,10 +194,22 @@ def _child_numbers(body: str, issue_number: int) -> set[int]:
         A set of child issue numbers.
     """
     return {
-        int(num)
-        for num in re.findall(r"- \[[ xX]\] #(\d+)", body)
-        if int(num) != issue_number
+        int(match.group(1))
+        for match in CHILD_ITEM_RE.finditer(body)
+        if int(match.group(1)) != issue_number
     }
+
+
+def _declares_child_graph(body: str | None) -> bool:
+    """Return whether the body declares at least one checkbox child issue.
+
+    Args:
+        body: The issue body text, or None.
+
+    Returns:
+        True when a ``- [x] #NNN`` child reference is present.
+    """
+    return bool(CHILD_ITEM_RE.search(body or ""))
 
 
 def _issue_has_label(labels: list[str], target: str) -> bool:
@@ -206,11 +230,17 @@ def _issue_is_acceptance_parent(labels: list[str], body: str | None) -> bool:
 
     An acceptance parent is an issue with epic or prd labels — which always
     require an explicit product-acceptance verdict before completion, even when
-    no child graph is declared — OR an issue whose body explicitly declares a
-    product-acceptance contract (acceptance-parent language plus at least one
-    checkbox criterion) even when it carries no epic/prd label. The second
-    shape is the #1615 incident: an enhancement-labeled parent whose child
-    graph and acceptance contract lived only in the body.
+    no child graph is declared — OR an issue whose body both declares itself a
+    product-acceptance parent and ships a checkbox child graph, even when it
+    carries no epic/prd label. The second shape is the #1615 incident: an
+    enhancement-labeled parent whose child graph and acceptance contract lived
+    only in the body.
+
+    Both halves are required for the body shape. A bare mention of production
+    acceptance is not a parent declaration: #3037, #2718, and #2128 are
+    executable implementation issues that defer the operator acceptance pass to
+    a separate issue, and a phrase-only match would strand them and remove
+    user-reported work from the factory queue.
 
     Args:
         labels: The issue's current label names.
@@ -223,9 +253,7 @@ def _issue_is_acceptance_parent(labels: list[str], body: str | None) -> bool:
     if any(_issue_has_label(labels, label) for label in EPIC_ACCEPTANCE_LABELS):
         return True
     text = body or ""
-    if not ACCEPTANCE_PARENT_BODY_RE.search(text):
-        return False
-    return any(CHECKBOX_RE.match(line) for line in text.splitlines())
+    return bool(ACCEPTANCE_PARENT_BODY_RE.search(text)) and _declares_child_graph(text)
 
 
 def _acceptance_parent_has_incomplete_gates(
@@ -269,7 +297,7 @@ def _acceptance_parent_has_incomplete_gates(
 def _unmet_parent_criteria(body: str | None) -> list[str]:
     """Return the parent's own unchecked acceptance criteria (issue #1620).
 
-    Only unchecked boxes that do NOT reference a child issue count: child
+    Only unchecked boxes that are not child declarations count: child
     checkboxes are gated by child open/closed state instead. A controlled epic
     with every child closed but one unchecked parent criterion still has an
     unmet contract and must remain incomplete.
@@ -286,7 +314,7 @@ def _unmet_parent_criteria(body: str | None) -> list[str]:
         if match is None or match.group(1) != " ":
             continue
         text = match.group(2).strip()
-        if not text or CHILD_REF_RE.search(text):
+        if not text or CHILD_REF_RE.match(text):
             continue
         unmet.append(text)
     return unmet
@@ -629,8 +657,8 @@ def close_merged_pr_issue(
     Returns:
         One of ``closed``, ``already-closed``, ``no-linked-issue``,
         ``protected-issue``, ``successor-open``, ``active-work``,
-        ``acceptance-parent-incomplete``, ``acceptance-parent-requires-verdict``,
-        or ``dry-run:<action>``.
+        ``manual-only-issue``, ``acceptance-parent-incomplete``,
+        ``acceptance-parent-requires-verdict``, or ``dry-run:<action>``.
     """
     info = _pr_info(pr_number)
     issue_number = linked_issue(info["branch"], info["body"])
@@ -645,6 +673,11 @@ def close_merged_pr_issue(
 
     labels = list(issue["labels"])
     issue_body = str(issue.get("body") or "")
+    if MANUAL_ONLY_MARKER in issue_body:
+        # Issue #1620: an issue that declares itself human/interactive
+        # controlled — including an operator production-acceptance or cutover
+        # parent — is never completed by merge automation.
+        return "manual-only-issue"
     if _acceptance_parent_has_incomplete_gates(labels, issue_body, issue_number):
         return "acceptance-parent-incomplete"
     if _issue_is_acceptance_parent(labels, issue_body):
@@ -969,6 +1002,66 @@ This issue is a product contract and acceptance parent.
         body = "Refs #2127 for context.\n- [x] polish\n- [ ] follow-up tweak"
         self.assertFalse(_issue_is_acceptance_parent(["enhancement", "factory"], body))
 
+    def test_executable_child_defining_acceptance_split_is_not_a_parent(self) -> None:
+        """#3037/#2718/#2128: implementation work is not an acceptance parent.
+
+        Each of these issues carries a checklist and defers the operator
+        production-acceptance pass to a separate issue. Treating the deferral
+        as a parent contract would strand a user-reported bug and its delivery
+        PR closure, so only a self-declared parent contract counts.
+        """
+        deferred = (
+            "## Production acceptance split\n"
+            "- [ ] #3042 owns the production-wide audit and reconciliation.\n"
+            "- [ ] The invariant is enforced at the database layer.\n"
+            "- [ ] API paths handle an already-present issue predictably.\n"
+        )
+        self.assertFalse(_issue_is_acceptance_parent(["bug", "user-reported"], deferred))
+        self.assertFalse(
+            _issue_is_acceptance_parent(
+                ["enhancement"],
+                "Refs #2129 so it can use this path for production acceptance.\n"
+                "- [ ] Reader can adopt after one confirmation\n",
+            )
+        )
+
+    def test_acceptance_parent_language_without_child_graph_is_not_a_parent(self) -> None:
+        """Parent language alone, without a declared child graph, stays ordinary."""
+        body = "This issue is the acceptance parent for the rollout.\n- [ ] ship it\n"
+        self.assertFalse(_issue_is_acceptance_parent(["enhancement", "factory"], body))
+
+    def test_executable_child_issue_still_closes_on_delivery_merge(self) -> None:
+        """The guard must not refuse ordinary closure for deferred-acceptance work."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        issue_body = (
+            "## Production acceptance split\n"
+            "- [ ] #3042 owns the production-wide audit.\n"
+            "- [ ] Uniqueness is enforced at the database layer.\n"
+        )
+        with patch.object(
+            mod,
+            "_issue_view",
+            return_value={
+                "state": "OPEN",
+                "body": issue_body,
+                "labels": ["bug", "user-reported", "factory", "factory:unowned"],
+            },
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/21-3037-opencode-free",
+                    "body": "Closes #3037.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(mod, "_issue_has_open_successor_pr", return_value=False):
+                    result = close_merged_pr_issue(2150, dry_run=True)
+        self.assertTrue(result.startswith("dry-run:"), result)
+
     def test_unmet_parent_criterion_blocks_despite_closed_children(self) -> None:
         """All children closed but one unchecked parent criterion stays open."""
         body = (
@@ -995,6 +1088,18 @@ This issue is a product contract and acceptance parent.
         """Checked criteria (either case) leave no unmet contract."""
         body = "- [x] #2127\n- [X] Roll honors hard boundaries\n- [x] Reload preserves intent\n"
         self.assertEqual(_unmet_parent_criteria(body), [])
+
+    def test_criterion_quoting_an_issue_is_still_a_criterion(self) -> None:
+        """Only leading ``#NNN`` child declarations defer to the child gate."""
+        body = (
+            "- [x] #2127\n"
+            "- [ ] Adoption uses the #2551 Dependency model\n"
+        )
+        self.assertEqual(
+            _unmet_parent_criteria(body),
+            ["Adoption uses the #2551 Dependency model"],
+        )
+        self.assertEqual(_child_numbers(body, 1615), {2127})
 
     def test_acceptance_parent_with_verdict_may_close(self) -> None:
         """A fully verified parent with an ACCEPTED report may transition."""
@@ -1142,6 +1247,40 @@ This issue is a product contract and acceptance parent.
             ):
                 result = close_merged_pr_issue(2142, dry_run=True)
         self.assertEqual(result, "acceptance-parent-incomplete")
+
+    def test_merge_closure_refuses_manual_only_acceptance_parent(self) -> None:
+        """An operator acceptance/cutover parent is never closed by automation."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        issue_body = (
+            "Part of #1615. Child D. **Manual-only production acceptance/cutover.**\n"
+            "<!-- factory-execution:manual-only -->\n"
+            "- [ ] Ultimate Universe has one canonical Reading Plan\n"
+            "- [ ] CBL source positions/provenance are preserved\n"
+        )
+        with patch.object(
+            mod,
+            "_issue_view",
+            return_value={
+                "state": "OPEN",
+                "body": issue_body,
+                "labels": ["enhancement", "factory", "factory:blocked", "factory:unowned"],
+            },
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/46-2129-opencode-free",
+                    "body": "Closes #2129.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(mod, "_issue_has_open_successor_pr") as mock_successor:
+                    result = close_merged_pr_issue(2143, dry_run=True)
+        self.assertEqual(result, "manual-only-issue")
+        mock_successor.assert_not_called()
 
 
 def main() -> int:

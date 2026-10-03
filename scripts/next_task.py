@@ -53,10 +53,10 @@ EXCLUDED_LABELS = {
 EPIC_ACCEPTANCE_LABELS = {"epic", "prd"}
 MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
 ACCEPTANCE_PARENT_BODY_RE = re.compile(
-    r"acceptance parent|parent acceptance criteria|production acceptance",
+    r"acceptance parent|parent acceptance criteria",
     re.IGNORECASE,
 )
-ACCEPTANCE_PARENT_CHECKBOX_RE = re.compile(r"(?m)^\s*-\s*\[(?: |x|X)\]")
+ACCEPTANCE_PARENT_CHILD_RE = re.compile(r"(?m)^[ \t]*-[ \t]*\[[ xX]\][ \t]*#\d+")
 
 
 def _labels(issue: IssuePayload) -> set[str]:
@@ -90,17 +90,19 @@ def _is_manual_only(issue: IssuePayload) -> bool:
 
 
 def _is_acceptance_parent(issue: IssuePayload) -> bool:
-    """Return whether the issue declares a product-acceptance contract.
+    """Return whether the issue declares a product-acceptance parent contract.
 
     Covers the #1615 incident shape: a parent whose acceptance contract lives
-    in the body (acceptance-parent language plus checkbox criteria) even when
-    it carries no epic/prd label. Such parents are human/interactive
-    acceptance work, never ordinary autonomous implementation.
+    in the body even when it carries no epic/prd label. Both halves are
+    required — the body must present itself as the acceptance parent and
+    declare a checkbox child graph — so ordinary implementation issues that
+    merely defer an operator acceptance pass (#3037, #2718, #2128) stay
+    executable.
     """
     body = issue.get("body") or ""
     return bool(
         ACCEPTANCE_PARENT_BODY_RE.search(body)
-        and ACCEPTANCE_PARENT_CHECKBOX_RE.search(body)
+        and ACCEPTANCE_PARENT_CHILD_RE.search(body)
     )
 
 
@@ -221,6 +223,11 @@ def _start_task(issue_number: int) -> int:
         raise RuntimeError(f"#{issue_number} is a parent PRD/epic; autonomous start is not allowed")
     if _is_manual_only(issue):
         raise RuntimeError(f"#{issue_number} is marked manual-only; autonomous start is not allowed")
+    if _is_acceptance_parent(issue):
+        raise RuntimeError(
+            f"#{issue_number} declares a product-acceptance parent contract; "
+            "autonomous start is not allowed"
+        )
 
     closed_numbers = {
         closed_issue["number"] for closed_issue in _gh_issue_list("closed")

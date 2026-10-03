@@ -10,14 +10,17 @@ from typing import Any
 from factory_review_policy import producer_worker_from_pr as producer_worker_from_values
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->'
-# Body language that declares a product-acceptance parent even without an
-# epic/prd label (issue #1620; the #1615 incident shape). Such parents are
-# human/interactive acceptance work, never ordinary factory implementation.
+# A body-declared product-acceptance parent even without an epic/prd label
+# (issue #1620; the #1615 incident shape) is human/interactive acceptance work,
+# never ordinary factory implementation. Both halves are required: the body
+# must present itself as the acceptance parent *and* declare a checkbox child
+# graph. A phrase-only match removes executable work — #3037, #2718, and #2128
+# are implementation issues that defer the operator acceptance pass elsewhere.
 ACCEPTANCE_PARENT_BODY_RE = re.compile(
-    'acceptance parent|parent acceptance criteria|production acceptance',
+    'acceptance parent|parent acceptance criteria',
     re.IGNORECASE,
 )
-ACCEPTANCE_PARENT_CHECKBOX_RE = re.compile(r'(?m)^\s*-\s*\[(?: |x|X)\]')
+ACCEPTANCE_PARENT_CHILD_RE = re.compile(r'(?m)^[ \t]*-[ \t]*\[[ xX]\][ \t]*#\d+')
 
 OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$')
 
@@ -465,7 +468,7 @@ def issue_is_static_candidate(
         return False
     if MANUAL_ONLY_MARKER in body:
         return False
-    if ACCEPTANCE_PARENT_BODY_RE.search(body) and ACCEPTANCE_PARENT_CHECKBOX_RE.search(body):
+    if ACCEPTANCE_PARENT_BODY_RE.search(body) and ACCEPTANCE_PARENT_CHILD_RE.search(body):
         return False
     if labels & BLOCKED_LABELS:
         return False

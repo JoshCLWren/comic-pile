@@ -1,6 +1,6 @@
 # Product Acceptance Protocol
 
-Version: 3
+Version: 4
 
 This document defines the mandatory product-acceptance stage for PRDs and epics in Comic Pile. It is the canonical source for distinguishing implementation completion from parent-level product acceptance.
 
@@ -18,6 +18,11 @@ Merge automation must never close an acceptance parent. `factory_post_merge_clos
   with an ACCEPTED verdict never authorizes merge automation to
   close the parent on its own.
 
+A third outcome, `manual-only-issue`, covers issues that opt out of autonomous
+execution with `<!-- factory-execution:manual-only -->`, including operator
+production-acceptance and cutover parents such as #2129. Those transitions are
+human-controlled by contract, so a merged delivery PR never closes them.
+
 The transition helper `acceptance_parent_may_close` returns true only when
 every declared child is closed, every parent criterion is checked, and the
 latest acceptance report verdict is ACCEPTED. Child-count completion, CI
@@ -25,12 +30,27 @@ success, code coverage, semantic review, and duplicate factory PRs that
 re-close already-delivered child work never satisfy it.
 
 An acceptance parent is any issue labeled `epic` or `prd` (even with no child
-graph), or any issue whose body declares a product-acceptance contract
-(`acceptance parent`, `parent acceptance criteria`, or `production acceptance`
-language plus checkbox criteria) — the #1615 incident shape, where the parent
-carried only an `enhancement` label and the guard missed it. Factory intake
-(`factory_work_policy.py`, `scripts/next_task.py`) likewise excludes
-body-declared acceptance parents from ordinary autonomous implementation.
+graph), or any issue whose body both **declares itself a parent** and
+**declares a checkbox child graph** — the #1615 incident shape, where the parent
+carried only an `enhancement` label and the guard missed it. Parent declaration
+means `acceptance parent` or `parent acceptance criteria` language; the child
+graph means at least one `- [x] #NNN` reference, the same shape the child gate
+reads. Both halves are required, and the guard never infers a parent from a bare
+mention of production acceptance.
+
+An executable implementation issue may legitimately discuss acceptance — for
+example, a user-reported bug whose body has a "Production acceptance split"
+section naming the issue that owns the operator verification pass (#3037), a
+harness issue that hands its go/no-go to another issue (#2718), or a narrow
+child that says a parent "can use this path for production acceptance" (#2128).
+Those issues are ordinary implementation work: they stay in factory intake and
+intake/claim fences (`factory_work_policy.py`, `scripts/next_task.py`) and merge
+closure still closes them when their delivery PR merges. Over-broad detection
+here is a delivery defect, not a safe default.
+
+Every parent criterion checkbox must also be checked before acceptance. Only a
+leading `#NNN` child declaration defers to the child open/closed gate; a
+criterion that merely quotes an issue reference is still an unmet criterion.
 
 ## Problem
 
