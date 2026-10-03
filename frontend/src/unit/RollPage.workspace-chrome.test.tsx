@@ -16,6 +16,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import { cast } from '../utils/cast'
 import { RollFooter } from '../pages/RollPage/components/RollFooter'
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
 import {
@@ -33,10 +34,10 @@ vi.mock('../components/GlossaryLink', () => ({
 }))
 
 // SAFETY: test fixture supplies only the fields the header component reads for session state
-const BOOTSTRAP = {
+const BOOTSTRAP = cast<RollBootstrapResponse>({
   session_mode: null,
   manual_die: null,
-} as unknown as RollBootstrapResponse
+})
 
 function headerProps(overrides: Partial<React.ComponentProps<typeof RollHeader>> = {}) {
   return {
