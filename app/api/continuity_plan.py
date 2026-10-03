@@ -26,6 +26,7 @@ from app.schemas.reading_plan_membership import (
     ReadingPlanDependencyLinkRequest,
     ReadingPlanMembershipResponse,
 )
+from app.schemas.tags import TagTargetType
 from app.services.continuity import _refresh_blocked_state, _to_plan_response as _to_response
 from app.services.continuity_plan_writer import (
     list_continuity_plan_items,
@@ -40,6 +41,7 @@ from app.services.reading_plan_normalization import (
     link_dependency_to_plan,
     unlink_dependency_from_plan,
 )
+from app.services.tag_service import purge_target_assignments
 
 router = APIRouter(tags=["continuity-plans"])
 
@@ -284,6 +286,8 @@ async def delete_continuity_plan(
     await delete_continuity_plan_rules_for_marker(
         db, user_id=current_user.id, marker=_marker(plan.id)
     )
+    # Tag assignments point at polymorphic target ids with no foreign key.
+    await purge_target_assignments(db, TagTargetType.CONTINUITY_PLAN.value, [plan.id])
     await db.delete(plan)
     await db.commit()
     await _refresh_blocked_state(current_user.id, db)
