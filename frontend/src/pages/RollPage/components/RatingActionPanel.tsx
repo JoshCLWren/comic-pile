@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
 import Modal from '../../../components/Modal'
+import {
+  rollDangerActionClass,
+  rollDialogSecondaryActionClass,
+  rollPrimaryActionClass,
+  rollSecondaryActionClass,
+  rollSecondaryActionGroupClass,
+  rollUtilityActionClass,
+} from '../actionClasses'
 
 interface RatingActionPanelProps {
   errorMessage: string
@@ -64,8 +72,9 @@ export function RatingActionPanel({
             type="button"
             onClick={handleCopyComicReference}
             disabled={!threadTitle}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] transition hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40"
+            className={`min-h-11 ${rollUtilityActionClass(copyStatus)}`}
             aria-label={`Copy ${threadTitle} ${issueNumber}`}
+            aria-live="polite"
           >
             <svg
               className="h-4 w-4 shrink-0"
@@ -83,18 +92,18 @@ export function RatingActionPanel({
             </svg>
             {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title'}
           </button>
-          <p className="text-[10px] font-semibold text-[var(--theme-text-dim)]">
+          <p className="text-[10px] font-medium text-[var(--theme-text-dim)]">
             Copies “{threadTitle} {issueNumber}”
           </p>
           {copyStatus === 'failed' ? (
-            <p className="text-[10px] font-bold text-rose-400" role="status">
+            <p className="text-[10px] font-bold text-[var(--theme-danger)]" role="status">
               Copy failed. Use Retry copy to try again.
             </p>
           ) : null}
         </div>
       ) : null}
       {errorMessage ? (
-        <div id="error-message" className="text-center text-[10px] font-bold text-rose-500" role="alert">
+        <div id="error-message" className="text-center text-[10px] font-bold text-[var(--theme-danger)]" role="alert">
           {errorMessage}
         </div>
       ) : null}
@@ -103,16 +112,16 @@ export function RatingActionPanel({
         onClick={() => onSubmitRating(false)}
         disabled={rateIsPending}
         data-testid="save-and-continue"
-        className="w-full rounded-xl border border-[var(--theme-comic-accent)]/50 bg-[var(--theme-comic-accent)]/25 py-3.5 text-xs font-black uppercase tracking-[0.15em] transition hover:bg-[var(--theme-comic-accent)]/35 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50 active:scale-[0.98]"
+        className={rollPrimaryActionClass}
       >
         {rateIsPending ? 'Saving…' : issuesRemaining === 1 ? 'Mark read & complete' : 'Mark read & save'}
       </button>
-      <div className="flex flex-wrap gap-2" data-testid="rating-secondary-actions">
+      <div className={rollSecondaryActionGroupClass} data-testid="rating-secondary-actions">
         <button
           type="button"
           onClick={onSnooze}
           disabled={snoozeIsPending}
-          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+          className={rollSecondaryActionClass}
         >
           {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
         </button>
@@ -123,7 +132,7 @@ export function RatingActionPanel({
             disabled={skipIsPending}
             data-testid="skip-roll"
             aria-label="Skip current roll"
-            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            className={rollSecondaryActionClass}
           >
             {skipIsPending ? 'Skipping…' : 'Skip'}
           </button>
@@ -132,7 +141,8 @@ export function RatingActionPanel({
           type="button"
           onClick={onCancel}
           disabled={dismissIsPending}
-          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+          data-testid="cancel-roll"
+          className={rollSecondaryActionClass}
         >
           Cancel roll
         </button>
@@ -159,7 +169,7 @@ export function RatingActionPanel({
               onClick={() => setIsSkipConfirmOpen(false)}
               disabled={skipIsPending}
               data-testid="skip-cancel"
-              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+              className={`min-h-11 sm:min-h-9 ${rollDialogSecondaryActionClass}`}
             >
               Keep this comic
             </button>
@@ -168,7 +178,7 @@ export function RatingActionPanel({
               onClick={handleConfirmSkip}
               disabled={skipIsPending}
               data-testid="skip-confirm"
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+              className={`min-h-11 sm:min-h-9 ${rollDangerActionClass}`}
             >
               {skipIsPending ? 'Skipping…' : 'Skip comic'}
             </button>

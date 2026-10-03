@@ -37,6 +37,7 @@ import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
+import { RollFooter } from './components/RollFooter'
 import { RollModals } from './components/RollModals'
 import { RollCta } from './components/RollCta'
 import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
@@ -344,12 +345,21 @@ export default function RollPage() {
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
         onOpenModeSelector={() => setIsModeSelectorOpen(true)}
+        onBackToQueue={() => {
+          void rating.handleCancelRating()
+        }}
       />
 
       <ReadingModeLauncher />
 
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-1 flex flex-col relative md:surface-panel md:rounded-xl">
+        {/* Rating mode is a page-level composition, not one giant generic
+            rounded panel: the ambient glow stays as page atmosphere while the
+            workspace keeps its own region framing (issue #2712). */}
+        <div
+          data-testid="roll-workspace"
+          className={`flex-1 flex flex-col relative ${state.isRatingView ? '' : 'md:surface-panel md:rounded-xl'}`}
+        >
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 md:w-80 md:h-80 bg-amber-900/15 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
           <div className="flex-1 flex flex-col">
             {!state.isRatingView && hasRollableContent ? (
@@ -434,6 +444,8 @@ export default function RollPage() {
         </div>
 
         <div id="explosion-layer" className="explosion-wrap"></div>
+
+        {state.isRatingView && <RollFooter />}
 
         <RollModals
           showMigrationDialog={state.showMigrationDialog}

@@ -52,6 +52,11 @@ EXCLUDED_LABELS = {
 
 EPIC_ACCEPTANCE_LABELS = {"epic", "prd"}
 MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
+ACCEPTANCE_PARENT_BODY_RE = re.compile(
+    r"acceptance parent|parent acceptance criteria",
+    re.IGNORECASE,
+)
+ACCEPTANCE_PARENT_CHILD_RE = re.compile(r"(?m)^[ \t]*-[ \t]*\[[ xX]\][ \t]*#\d+")
 
 
 def _labels(issue: IssuePayload) -> set[str]:
@@ -84,6 +89,23 @@ def _is_manual_only(issue: IssuePayload) -> bool:
     return MANUAL_ONLY_MARKER in (issue.get("body") or "")
 
 
+def _is_acceptance_parent(issue: IssuePayload) -> bool:
+    """Return whether the issue declares a product-acceptance parent contract.
+
+    Covers the #1615 incident shape: a parent whose acceptance contract lives
+    in the body even when it carries no epic/prd label. Both halves are
+    required — the body must present itself as the acceptance parent and
+    declare a checkbox child graph — so ordinary implementation issues that
+    merely defer an operator acceptance pass (#3037, #2718, #2128) stay
+    executable.
+    """
+    body = issue.get("body") or ""
+    return bool(
+        ACCEPTANCE_PARENT_BODY_RE.search(body)
+        and ACCEPTANCE_PARENT_CHILD_RE.search(body)
+    )
+
+
 def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candidate | None:
     """Select the highest-priority executable pending issue."""
     candidates: list[Candidate] = []
@@ -92,6 +114,8 @@ def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candida
         if "ralph-status:pending" not in labels or labels & EXCLUDED_LABELS:
             continue
         if labels & EPIC_ACCEPTANCE_LABELS or _is_manual_only(issue):
+            continue
+        if _is_acceptance_parent(issue):
             continue
         if _has_unresolved_dependency(issue, closed_numbers):
             continue
@@ -199,6 +223,11 @@ def _start_task(issue_number: int) -> int:
         raise RuntimeError(f"#{issue_number} is a parent PRD/epic; autonomous start is not allowed")
     if _is_manual_only(issue):
         raise RuntimeError(f"#{issue_number} is marked manual-only; autonomous start is not allowed")
+    if _is_acceptance_parent(issue):
+        raise RuntimeError(
+            f"#{issue_number} declares a product-acceptance parent contract; "
+            "autonomous start is not allowed"
+        )
 
     closed_numbers = {
         closed_issue["number"] for closed_issue in _gh_issue_list("closed")

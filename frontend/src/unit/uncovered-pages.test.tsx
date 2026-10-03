@@ -130,7 +130,7 @@ describe('RegisterPage', () => {
     api.post.mockReset()
   })
 
-  it('validates registration fields and mismatched passwords', () => {
+  it('validates registration fields', () => {
     renderRoute(<RegisterPage />)
     const form = screen.getByRole('button', { name: 'Create Account' }).closest('form')!
     fireEvent.submit(form)
@@ -142,10 +142,9 @@ describe('RegisterPage', () => {
     fireEvent.submit(form)
     expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
-    fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'different' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } })
     fireEvent.submit(form)
-    expect(screen.getByText('Passwords do not match')).toBeInTheDocument()
+    expect(screen.getByText('Password must be at least 6 characters')).toBeInTheDocument()
   })
 
   it('rejects email-shaped usernames without calling the API', () => {
@@ -158,7 +157,6 @@ describe('RegisterPage', () => {
       target: { value: 'reader@example.com' },
     })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
-    fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'password' } })
     fireEvent.submit(form)
     expect(
       screen.getByText("Username cannot contain an '@' character"),
@@ -173,7 +171,6 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'reader' } })
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
-    fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Create Account' }).closest('form')!)
     await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
     expect(api.post).toHaveBeenCalledWith('/v1/auth/register', {

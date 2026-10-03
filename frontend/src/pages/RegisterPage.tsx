@@ -12,7 +12,6 @@ export default function RegisterPage() {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
@@ -44,10 +43,6 @@ export default function RegisterPage() {
     }
     if (password.length < 6) {
       setError('Password must be at least 6 characters')
-      return false
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
       return false
     }
     return true
@@ -98,10 +93,12 @@ export default function RegisterPage() {
               <label htmlFor="username" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Username
               </label>
+              <p id="username-hint" className="text-xs text-[var(--theme-text-dim)]">What you use to sign in.</p>
               <input
                 id="username"
                 type="text"
                 name="username"
+                aria-describedby="username-hint"
                 autoComplete="username"
                 required
                 value={username}
@@ -115,10 +112,14 @@ export default function RegisterPage() {
               <label htmlFor="email" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Email
               </label>
+              <p id="email-hint" className="text-xs text-[var(--theme-text-dim)]">
+                Recovery and contact identity — used for password recovery, never to sign in.
+              </p>
               <input
                 id="email"
                 type="email"
                 name="email"
+                aria-describedby="email-hint"
                 autoComplete="email"
                 required
                 value={email}
@@ -132,33 +133,18 @@ export default function RegisterPage() {
               <label htmlFor="password" className="text-sm font-medium text-[var(--theme-text-muted)]">
                 Password
               </label>
+              <p id="password-hint" className="text-xs text-[var(--theme-text-dim)]">Minimum 6 characters.</p>
               <input
                 id="password"
                 type="password"
                 name="password"
+                aria-describedby="password-hint"
                 autoComplete="new-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full h-12 px-4 rounded-xl text-sm form-control"
                 placeholder="Min 6 characters"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium text-[var(--theme-text-muted)]">
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                name="confirmPassword"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl text-sm form-control"
-                placeholder="Re-enter password"
               />
             </div>
           </div>
