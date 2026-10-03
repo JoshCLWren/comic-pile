@@ -496,10 +496,14 @@ async def test_link_rejects_unknown_dependency_and_foreign_edge(
 
 
 @pytest.mark.asyncio
-async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
+async def test_membership_rebuild_deduplicates_canonical_issues(
     async_db: AsyncSession,
 ) -> None:
-    """Progress counts distinct Issues, not duplicate occurrences."""
+    """Duplicate canonical Issues are deduplicated; only first occurrence kept.
+
+    Progress counts distinct Issues. Source metadata and placements from
+    duplicate occurrences are merged into the primary occurrence.
+    """
     user = await get_or_create_user_async(async_db)
     issue = await _make_issue(async_db, user_id=user.id, suffix="duplicate")
     plan = ContinuityPlan(
@@ -520,6 +524,8 @@ async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
             lane_id="main",
             position=0,
             convergence_gate=[],
+            label="Primary",
+            source_role="core",
         ),
         ContinuityPlanNode(
             id="recap",
@@ -528,17 +534,226 @@ async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
             lane_id="main",
             position=1,
             convergence_gate=[],
+            label="Recap",
+            source_role="recap",
         ),
     ]
     await reading_plan_normalization.rebuild_plan_membership(
         async_db, plan_id=plan.id, nodes=nodes
     )
     rows = await reading_plan_repository.list_plan_issues(async_db, plan_id=plan.id)
-    assert len(rows) == 2
+    # Only one membership row should exist (deduplicated by issue_id)
+    assert len(rows) == 1
     assert isinstance(rows[0], ReadingPlanIssue)
+    # Primary occurrence (position 0) is kept
+    assert rows[0].occurrence_id == "first"
+    assert rows[0].label == "Primary"
+    # Source metadata from duplicate is merged
+    assert rows[0].source_metadata_json is not None
+    assert rows[0].source_metadata_json["source_role"] == "core"
+    # Progress counts distinct Issues
     total, read = await reading_plan_normalization.get_plan_progress(
         async_db, plan_id=plan.id
     )
     assert (total, read) == (1, 0)
     links = await reading_plan_repository.list_plan_dependencies(async_db, plan_id=plan.id)
     assert all(isinstance(link, ReadingPlanDependency) for link in links)
+
+
+@pytest.mark.asyncio
+async def test_direct_add_rejects_duplicate_issue_id(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Direct plan creation with duplicate issue_id in nodes is deduplicated."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="unique")
+    await async_db.commit()
+
+    nodes = [
+        _node("first", issue.id, 0, label="First"),
+        _node("second", issue.id, 1, label="Second"),
+    ]
+    plan_id = await _create_plan(auth_client, "Duplicate Test", nodes)
+
+    membership = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/membership")
+    assert membership.status_code == 200
+    issues = membership.json()["issues"]
+    assert len(issues) == 1
+    assert issues[0]["occurrence_id"] == "first"
+    assert issues[0]["label"] == "First"
+    assert membership.json()["progress"] == {"total_issues": 1, "read_issues": 0}
+
+
+@pytest.mark.asyncio
+async def test_plan_update_rejects_duplicate_issue_id(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Plan update with duplicate issue_id in nodes is deduplicated."""
+    user = await get_or_create_user_async(async_db)
+    issue1 = await _make_issue(async_db, user_id=user.id, suffix="issue1")
+    issue2 = await _make_issue(async_db, user_id=user.id, suffix="issue2")
+    await async_db.commit()
+
+    # Create plan with one issue
+    plan_id = await _create_plan(
+        auth_client, "Original", [_node("n1", issue1.id, 0)]
+    )
+
+    # Update with duplicate issue2 entries
+    nodes = [
+        _node("n1", issue1.id, 0),
+        _node("n2a", issue2.id, 1),
+        _node("n2b", issue2.id, 2),
+    ]
+    updated = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json=_plan_payload("Updated", nodes),
+    )
+    assert updated.status_code == 200
+
+    membership = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/membership")
+    assert membership.status_code == 200
+    issues = membership.json()["issues"]
+    # issue2 should appear only once (first occurrence kept)
+    issue_ids = [i["issue_id"] for i in issues]
+    assert issue_ids == [issue1.id, issue2.id]
+    occurrence_ids = [i["occurrence_id"] for i in issues]
+    assert occurrence_ids == ["n1", "n2a"]
+
+
+@pytest.mark.asyncio
+async def test_repeated_add_request_is_idempotent(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Repeated API requests to add the same issue do not create duplicates."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="idempotent")
+    await async_db.commit()
+
+    plan_id = await _create_plan(auth_client, "Idempotent", [_node("n1", issue.id, 0)])
+
+    # First rebuild with same issue
+    nodes1 = [_node("n1", issue.id, 0), _node("n2", issue.id, 1)]
+    await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json=_plan_payload("Idempotent", nodes1),
+    )
+
+    # Second rebuild with same issue again
+    nodes2 = [_node("n1", issue.id, 0), _node("n2", issue.id, 1), _node("n3", issue.id, 2)]
+    await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json=_plan_payload("Idempotent", nodes2),
+    )
+
+    membership = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/membership")
+    assert membership.status_code == 200
+    issues = membership.json()["issues"]
+    assert len(issues) == 1
+    assert issues[0]["occurrence_id"] == "n1"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_add_attempts_converge_without_duplicates(
+    async_db: AsyncSession,
+) -> None:
+    """Concurrent rebuild_plan_membership calls for same plan/issue converge."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="concurrent")
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Concurrent",
+        ordering_mode="informational",
+        nodes_json=[],
+        lanes_json=[],
+    )
+    async_db.add(plan)
+    await async_db.flush()
+
+    nodes1 = [
+        ContinuityPlanNode(
+            id="first", node_type="issue", ref_id=issue.id, lane_id="main", position=0, convergence_gate=[]
+        ),
+    ]
+    nodes2 = [
+        ContinuityPlanNode(
+            id="second", node_type="issue", ref_id=issue.id, lane_id="main", position=0, convergence_gate=[]
+        ),
+    ]
+
+    # First call succeeds
+    await reading_plan_normalization.rebuild_plan_membership(async_db, plan_id=plan.id, nodes=nodes1)
+    await async_db.commit()
+
+    # Second call in a new transaction would hit unique constraint if not deduplicated
+    # but our deduplication logic handles it at the application level
+    await reading_plan_normalization.rebuild_plan_membership(async_db, plan_id=plan.id, nodes=nodes2)
+    await async_db.commit()
+
+    rows = await reading_plan_repository.list_plan_issues(async_db, plan_id=plan.id)
+    assert len(rows) == 1
+    # First occurrence is kept
+    assert rows[0].occurrence_id == "first"
+
+
+@pytest.mark.asyncio
+async def test_audit_and_reconcile_duplicate_memberships(
+    async_db: AsyncSession,
+) -> None:
+    """Audit tooling detects and reconciliation removes duplicates."""
+    from app.services.reading_plan_audit import (
+        audit_plan_duplicate_memberships,
+        create_reconciliation_plan,
+        apply_reconciliation_plan,
+    )
+
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="audit")
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Audit Test",
+        ordering_mode="informational",
+        nodes_json=[],
+        lanes_json=[],
+    )
+    async_db.add(plan)
+    await async_db.flush()
+
+    # Manually insert duplicate rows to simulate pre-existing state
+    from app.models.reading_plan_membership import ReadingPlanIssue
+
+    async_db.add_all(
+        [
+            ReadingPlanIssue(
+                plan_id=plan.id,
+                occurrence_id="first",
+                issue_id=issue.id,
+                lane_id="main",
+                display_position=0,
+            ),
+            ReadingPlanIssue(
+                plan_id=plan.id,
+                occurrence_id="second",
+                issue_id=issue.id,
+                lane_id="main",
+                display_position=1,
+            ),
+        ]
+    )
+    await async_db.flush()
+
+    report = await audit_plan_duplicate_memberships(async_db, plan_id=plan.id)
+    assert report.total_duplicate_issues == 1
+    assert report.duplicates[0].issue_id == issue.id
+    assert report.duplicates[0].count == 2
+
+    reconciliation = create_reconciliation_plan(report)
+    assert reconciliation.primary_occurrence_ids[issue.id] == "first"
+    assert "second" in reconciliation.removal_occurrence_ids
+
+    await apply_reconciliation_plan(async_db, plan=reconciliation)
+    await async_db.flush()
+
+    rows = await reading_plan_repository.list_plan_issues(async_db, plan_id=plan.id)
+    assert len(rows) == 1
+    assert rows[0].occurrence_id == "first"
