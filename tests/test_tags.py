@@ -29,6 +29,7 @@ from app.constants import (
     DEFAULT_TAG_COLOR_NAME,
     TAG_COLOR_NAMES,
     TAG_COLOR_PALETTE,
+    TAG_TARGET_TYPES,
     validate_tag_color,
 )
 from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
@@ -36,9 +37,16 @@ from app.database import get_db
 from app.main import app
 from app.models import ContinuityPlan, Issue, Tag, TagAssignment, Thread, User
 from app.repositories import tag_repository
+from app.services.errors import (
+    ConflictError,
+    ForbiddenError,
+    InvalidRequestError,
+    NotFoundError,
+)
 from app.services.tag_service import (
     TagDeletionHook,
     TagService,
+    purge_target_assignments,
     register_tag_deletion_hook,
     unregister_tag_deletion_hook,
 )
@@ -287,7 +295,7 @@ class TestGlobalAndPrivateScoping:
     ) -> None:
         """Non-admin requests for global scope are refused."""
         service = TagService(async_db)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ForbiddenError) as exc_info:
             await service.create_tag(
                 non_admin_user, "Bad", color="red", scope="global"
             )
@@ -328,10 +336,15 @@ class TestGlobalAndPrivateScoping:
     async def test_private_tag_detail_returns_404_to_other_users(
         self, non_admin_user: User, admin_user: User, async_db: AsyncSession
     ) -> None:
-        """Fetching another user's private tag reports it as missing."""
+        """Fetching another user's private tag reports it as missing.
+
+        Administrators are not exempt: a private tag is visible only to its
+        owner, so admin governance over global vocabulary must not become a
+        window into anyone's private vocabulary.
+        """
         service = TagService(async_db)
         my_tag = await service.create_tag(non_admin_user, "Secret")
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(NotFoundError) as exc_info:
             await service.get_tag(admin_user, my_tag.tag.id)
         assert "does not exist" in str(exc_info.value).lower()
 
@@ -391,7 +404,7 @@ class TestDuplicatePrevention:
         """A second private tag with the same normalized name is refused."""
         service = TagService(async_db)
         _tag_a = await service.create_tag(non_admin_user, "Same Name")
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ConflictError) as exc_info:
             await service.create_tag(non_admin_user, "same name ", color="blue")
         assert "already exists" in str(exc_info.value).lower()
 
@@ -404,7 +417,7 @@ class TestDuplicatePrevention:
             admin_user, "Global Name", color="red", scope="global"
         )
         my_tag = await service.create_tag(non_admin_user, "Private Copy")
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ConflictError) as exc_info:
             await service.update_tag(non_admin_user, my_tag.tag.id, name="global name")
         assert "global" in str(exc_info.value).lower()
 
@@ -478,7 +491,7 @@ class TestColorValidation:
     ) -> None:
         """A hex value outside the palette is refused."""
         service = TagService(async_db)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(InvalidRequestError) as exc_info:
             await service.create_tag(non_admin_user, "Test", color="#999999")
         assert "palette" in str(exc_info.value).lower()
 
@@ -487,7 +500,7 @@ class TestColorValidation:
     ) -> None:
         """A non-string color value is refused."""
         service = TagService(async_db)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(InvalidRequestError) as exc_info:
             await service.create_tag(non_admin_user, "Test", color=123)
         assert "string" in str(exc_info.value).lower()
 
@@ -554,7 +567,7 @@ class TestPolymorphicAssignments:
             admin_user, "Test", color="red", scope="global"
         )
         tag = created.tag
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(NotFoundError) as exc_info:
             await TagService(async_db).assign_tag(admin_user, tag.id, "Thread", 99999)
         assert "does not exist" in str(exc_info.value).lower()
 
@@ -566,7 +579,7 @@ class TestPolymorphicAssignments:
             admin_user, "Test", color="red", scope="global"
         )
         tag = created.tag
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(InvalidRequestError) as exc_info:
             await TagService(async_db).assign_tag(admin_user, tag.id, "FooBar", 1)
         assert "Unsupported target type" in str(exc_info.value)
 
@@ -606,23 +619,50 @@ class TestOwnershipValidation:
             non_admin_user, "Mine", color="red"
         )
         tag = created.tag
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ForbiddenError) as exc_info:
             await TagService(async_db).assign_tag(
                 non_admin_user, tag.id, "Issue", issue_a.id
             )
         assert "own" in str(exc_info.value).lower()
 
-    async def test_admin_can_assign_private_tag_across_users(
+    async def test_admin_cannot_assign_another_users_private_tag(
         self, admin_user: User, non_admin_user: User, async_db: AsyncSession
     ) -> None:
-        """Admins may attach a private tag to any target."""
+        """Admins may not push a user's private tag onto any target."""
         _thread, issue_a, _plan = await _create_target_entities(async_db, admin_user)
         created = await TagService(async_db).create_tag(
             non_admin_user, "Mine", color="red"
         )
         tag = created.tag
+        with pytest.raises(ForbiddenError) as exc_info:
+            await TagService(async_db).assign_tag(
+                admin_user, tag.id, "Issue", issue_a.id
+            )
+        assert "own private" in str(exc_info.value).lower()
+
+    async def test_admin_cannot_assign_private_tag_to_other_users_target(
+        self, admin_user: User, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """An owner's own private tag never lands on another user's target."""
+        _thread, issue_a, _plan = await _create_target_entities(async_db, non_admin_user)
+        created = await TagService(async_db).create_tag(admin_user, "Mine", color="red")
+        tag = created.tag
+        with pytest.raises(ForbiddenError) as exc_info:
+            await TagService(async_db).assign_tag(
+                admin_user, tag.id, "Issue", issue_a.id
+            )
+        assert "targets you own" in str(exc_info.value).lower()
+
+    async def test_admin_assigns_global_tag_to_other_users_target(
+        self, admin_user: User, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Global tags remain assignable by admins to any existing target."""
+        _thread, issue_a, _plan = await _create_target_entities(async_db, non_admin_user)
+        created = await TagService(async_db).create_tag(
+            admin_user, "Shared", color="red", scope="global"
+        )
         assignment = await TagService(async_db).assign_tag(
-            admin_user, tag.id, "Issue", issue_a.id
+            admin_user, created.tag.id, "Issue", issue_a.id
         )
         assert assignment.target_id == issue_a.id
 
@@ -635,7 +675,7 @@ class TestOwnershipValidation:
             admin_user, "Others", color="red"
         )
         other_tag = other_created.tag
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ForbiddenError) as exc_info:
             await TagService(async_db).assign_tag(
                 non_admin_user, other_tag.id, "Issue", issue_a.id
             )
@@ -650,7 +690,7 @@ class TestGlobalAdminGovernance:
     ) -> None:
         """Only admins can create global tags."""
         service = TagService(async_db)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ForbiddenError) as exc_info:
             await service.create_tag(non_admin_user, "Bad", color="red", scope="global")
         assert "administrator" in str(exc_info.value).lower()
 
@@ -662,7 +702,7 @@ class TestGlobalAdminGovernance:
         global_tag = await service.create_tag(
             admin_user, "Global", color="red", scope="global"
         )
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ForbiddenError) as exc_info:
             await service.update_tag(
                 non_admin_user, global_tag.tag.id, color="blue"
             )
@@ -676,7 +716,7 @@ class TestGlobalAdminGovernance:
         global_tag = await service.create_tag(
             admin_user, "Global", color="red", scope="global"
         )
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ForbiddenError) as exc_info:
             await service.delete_tag(non_admin_user, global_tag.tag.id)
         assert "administrator" in str(exc_info.value).lower()
 
@@ -689,7 +729,7 @@ class TestGlobalAdminGovernance:
             admin_user, "Global", color="red", scope="global"
         )
         _thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ForbiddenError) as exc_info:
             await service.assign_tag(non_admin_user, global_tag.tag.id, "Issue", issue.id)
         assert "administrator" in str(exc_info.value).lower()
 
@@ -703,7 +743,7 @@ class TestGlobalAdminGovernance:
         )
         _thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
         await service.assign_tag(admin_user, global_tag.tag.id, "Issue", issue.id)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ForbiddenError) as exc_info:
             await service.unassign_tag(
                 non_admin_user, global_tag.tag.id, "Issue", issue.id
             )
@@ -725,7 +765,7 @@ class TestPrivateTagCRUD:
         )
         assert updated.name == "New Name"
         assert updated.normalized_name == "new name"
-        assert updated.color == "#10B981"
+        assert updated.color == TAG_COLOR_PALETTE["green"]
         assert updated.updated_at >= tag.created_at
 
     async def test_private_tag_delete_cascades_assignments(
@@ -749,24 +789,25 @@ class TestPrivateTagCRUD:
         stored = await async_db.get(Tag, tag.id)
         assert stored is None
 
-    async def test_admin_can_delete_anyone_private_tag(
+    async def test_admin_cannot_delete_another_users_private_tag(
         self, admin_user: User, non_admin_user: User, async_db: AsyncSession
     ) -> None:
-        """Admins can delete another user's private tag and its assignments."""
+        """Admins cannot reach another user's private tag, even to delete it."""
         _thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
         service = TagService(async_db)
         created = await service.create_tag(non_admin_user, "Others Tag", color="red")
         tag = created.tag
         await service.assign_tag(non_admin_user, tag.id, "Issue", issue.id)
-        result = await service.delete_tag(admin_user, tag.id)
-        assert result.assignments_removed == 1
+        with pytest.raises(NotFoundError):
+            await service.delete_tag(admin_user, tag.id)
+        assert await async_db.get(Tag, tag.id) is not None
 
     async def test_delete_nonexistent_tag_raises(
         self, non_admin_user: User, async_db: AsyncSession
     ) -> None:
         """Deleting a missing tag reports it as not found."""
         service = TagService(async_db)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(NotFoundError) as exc_info:
             await service.delete_tag(non_admin_user, 99999)
         assert "does not exist" in str(exc_info.value).lower()
 
@@ -796,7 +837,7 @@ class TestPrivateTagCRUD:
             non_admin_user, "Test", color="red"
         )
         tag = created.tag
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(NotFoundError) as exc_info:
             await TagService(async_db).unassign_tag(non_admin_user, tag.id, "Issue", 1)
         assert "not assigned" in str(exc_info.value).lower()
 
@@ -973,3 +1014,244 @@ class TestTagScopeEnum:
         assert TagTargetType.ISSUE == "Issue"
         assert TagTargetType.THREAD == "Thread"
         assert TagTargetType.CONTINUITY_PLAN == "ContinuityPlan"
+
+    def test_target_type_enum_matches_registry(self) -> None:
+        """The schema enum and the service's supported-type tuple agree.
+
+        ``TAG_TARGET_TYPES`` drives the "Unsupported target type" error text and
+        the request schema drives validation; a drift between them would make
+        the API accept or reject different vocabularies.
+        """
+        from app.schemas.tags import TagTargetType
+
+        assert tuple(member.value for member in TagTargetType) == TAG_TARGET_TYPES
+
+    def test_scope_enum_drives_request_validation(self) -> None:
+        """The request model validates scope against the enum, not free text."""
+        from app.schemas.tags import TagCreate, TagScope
+
+        request = TagCreate(name="X", scope="global")
+        assert request.scope == TagScope.GLOBAL
+
+        with pytest.raises(ValueError):
+            TagCreate(name="X", scope="everyone")
+
+    def test_scope_enum_covers_private_default(self) -> None:
+        """An omitted scope defaults to private."""
+        from app.schemas.tags import TagCreate, TagScope
+
+        assert TagCreate(name="X").scope == TagScope.PRIVATE
+
+
+class TestScopeCoercion:
+    """Tests for enum-valued scope requests reaching the service."""
+
+    async def test_enum_scope_private_creates_private_tag(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Passing the ``TagScope`` enum member behaves like the wire string."""
+        from app.schemas.tags import TagScope
+
+        result = await TagService(async_db).create_tag(
+            non_admin_user, "Enum Scope", color="red", scope=TagScope.PRIVATE
+        )
+        assert result.tag.scope == "private"
+        assert result.tag.owner_user_id == non_admin_user.id
+
+    async def test_enum_scope_global_requires_admin(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """The enum-valued global scope still requires an administrator."""
+        from app.schemas.tags import TagScope
+
+        with pytest.raises(ForbiddenError):
+            await TagService(async_db).create_tag(
+                non_admin_user, "Enum Global", color="red", scope=TagScope.GLOBAL
+            )
+
+    async def test_enum_scope_global_allowed_for_admin(
+        self, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """An admin may create a global tag with the enum scope."""
+        from app.schemas.tags import TagScope
+
+        result = await TagService(async_db).create_tag(
+            admin_user, "Enum Global", color="red", scope=TagScope.GLOBAL
+        )
+        assert result.tag.scope == "global"
+        assert result.tag.owner_user_id is None
+
+    async def test_unknown_scope_rejected(
+        self, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """An unrecognized scope string is refused rather than defaulted."""
+        with pytest.raises(InvalidRequestError):
+            await TagService(async_db).create_tag(
+                admin_user, "Bad Scope", color="red", scope="everyone"
+            )
+
+
+class TestColorNormalization:
+    """Tests for canonical palette hex normalization."""
+
+    def test_lowercase_hex_normalizes_to_palette_value(self) -> None:
+        """A lowercase hex request stores the canonical palette casing."""
+        name, hex_value = validate_tag_color("#3b82f6")
+        assert (name, hex_value) == ("blue", TAG_COLOR_PALETTE["blue"])
+
+    async def test_lowercase_hex_stored_canonically(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Tag rows store the palette's canonical hex, not the request casing."""
+        result = await TagService(async_db).create_tag(
+            non_admin_user, "Lower Hex", color="#dc2626"
+        )
+        assert result.tag.color == DEFAULT_TAG_COLOR_HEX
+
+    async def test_padded_name_is_trimmed(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Surrounding whitespace on a palette name is tolerated."""
+        result = await TagService(async_db).create_tag(
+            non_admin_user, "Padded Color", color="  red  "
+        )
+        assert result.tag.color == DEFAULT_TAG_COLOR_HEX
+
+
+class TestTargetDeletionCleanup:
+    """Tests for explicit cleanup of assignments on target deletion.
+
+    Polymorphic ``target_id`` values have no foreign key, so every target
+    deletion path must remove the assignments that pointed at the deleted rows.
+    """
+
+    async def test_purge_removes_assignments_for_target(
+        self, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Assignments for one target type and id are removed together."""
+        thread, issue, plan = await _create_target_entities(async_db, admin_user)
+        service = TagService(async_db)
+        created = await service.create_tag(admin_user, "Cleanup", color="red")
+        tag_id = created.tag.id
+        await service.assign_tag(admin_user, tag_id, "Issue", issue.id)
+        await service.assign_tag(admin_user, tag_id, "Thread", thread.id)
+        await service.assign_tag(admin_user, tag_id, "ContinuityPlan", plan.id)
+
+        removed = await purge_target_assignments(async_db, "Issue", [issue.id])
+        assert removed == 1
+
+        remaining = await async_db.execute(
+            select(TagAssignment).where(TagAssignment.tag_id == tag_id)
+        )
+        assert {row.target_type for row in remaining.scalars().all()} == {
+            "Thread",
+            "ContinuityPlan",
+        }
+
+    async def test_purge_with_no_ids_is_a_noop(
+        self, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """An empty target list never reaches the database."""
+        assert await purge_target_assignments(async_db, "Thread", []) == 0
+
+    async def test_issue_deletion_removes_its_assignments(
+        self, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """``delete_issue`` leaves no assignment pointing at the deleted issue."""
+        from app.services.issue import delete_issue
+
+        _thread, issue, _plan = await _create_target_entities(async_db, admin_user)
+        service = TagService(async_db)
+        created = await service.create_tag(admin_user, "Issue Cleanup", color="red")
+        tag_id = created.tag.id
+        await service.assign_tag(admin_user, tag_id, "Issue", issue.id)
+
+        await delete_issue(async_db, issue.id, admin_user.id)
+
+        remaining = await async_db.execute(
+            select(TagAssignment).where(TagAssignment.tag_id == tag_id)
+        )
+        assert remaining.scalars().all() == []
+
+    async def test_thread_deletion_removes_thread_and_issue_assignments(
+        self, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """``delete_thread`` clears the thread's and its issues' assignments."""
+        from app.services.thread_service import delete_thread
+
+        thread, issue, _plan = await _create_target_entities(async_db, admin_user)
+        service = TagService(async_db)
+        created = await service.create_tag(admin_user, "Thread Cleanup", color="red")
+        tag_id = created.tag.id
+        await service.assign_tag(admin_user, tag_id, "Thread", thread.id)
+        await service.assign_tag(admin_user, tag_id, "Issue", issue.id)
+
+        await delete_thread(async_db, admin_user.id, thread.id)
+
+        remaining = await async_db.execute(
+            select(TagAssignment).where(TagAssignment.tag_id == tag_id)
+        )
+        assert remaining.scalars().all() == []
+
+    async def test_continuity_plan_deletion_removes_its_assignments(
+        self, admin_auth_client: AsyncClient, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Deleting a reading plan clears the assignments that pointed at it."""
+        _thread, _issue, plan = await _create_target_entities(async_db, admin_user)
+        created = await TagService(async_db).create_tag(
+            admin_user, "Plan Cleanup", color="red", scope="global"
+        )
+        tag_id = created.tag.id
+        await TagService(async_db).assign_tag(
+            admin_user, tag_id, "ContinuityPlan", plan.id
+        )
+
+        resp = await admin_auth_client.delete(f"/api/v1/continuity-plans/{plan.id}")
+        assert resp.status_code == 204
+
+        remaining = await async_db.execute(
+            select(TagAssignment).where(TagAssignment.tag_id == tag_id)
+        )
+        assert remaining.scalars().all() == []
+
+
+class TestSchemaRoundTrip:
+    """Tests for the tag API request/response contracts."""
+
+    async def test_invalid_scope_returns_422(
+        self, admin_auth_client: AsyncClient, async_db: AsyncSession
+    ) -> None:
+        """An unsupported scope value is rejected by request validation."""
+        resp = await admin_auth_client.post(
+            "/api/tags/", json={"name": "Bad Scope", "scope": "everyone"}
+        )
+        assert resp.status_code == 422
+
+    async def test_invalid_target_type_returns_422(
+        self, user_auth_client: AsyncClient, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """An unsupported target type is rejected by request validation."""
+        _thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
+        tag_resp = await user_auth_client.post("/api/tags/", json={"name": "Target Enum"})
+        tag_id = tag_resp.json()["tag"]["id"]
+        resp = await user_auth_client.post(
+            f"/api/tags/{tag_id}/assign/",
+            json={"target_type": "Publisher", "target_id": issue.id},
+        )
+        assert resp.status_code == 422
+
+    async def test_private_tag_detail_is_404_for_other_users(
+        self, user_auth_client: AsyncClient, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """The detail route never confirms another user's private tag exists."""
+        await TagService(async_db).create_tag(non_admin_user, "Hidden")
+        resp = await user_auth_client.get("/api/tags/1/")
+        assert resp.status_code == 404
+
+    async def test_usage_route_is_hidden_for_other_users(
+        self, user_auth_client: AsyncClient, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Usage counts cannot be probed for another user's private tag."""
+        await TagService(async_db).create_tag(non_admin_user, "Hidden Usage")
+        resp = await user_auth_client.get("/api/tags/1/usage/")
+        assert resp.status_code == 404

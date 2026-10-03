@@ -171,7 +171,9 @@ def validate_tag_color(color: object) -> tuple[str, str]:
         color: The color to validate.
 
     Returns:
-        Tuple of ``(color_name, color_hex)``.
+        Tuple of ``(color_name, color_hex)``. The hex is always the canonical
+        palette value, so a lowercase request such as ``"#3b82f6"`` resolves to
+        the stored ``"#3B82F6"``.
 
     Raises:
         ValueError: When ``color`` is not a string or is not in the palette.
@@ -187,12 +189,9 @@ def validate_tag_color(color: object) -> tuple[str, str]:
         return normalized, TAG_COLOR_PALETTE[normalized]
 
     if normalized.startswith("#") and len(normalized) == 7:
-        candidates: list[str] = [
-            name for name, hex_value in TAG_COLOR_PALETTE.items()
-            if hex_value.lower() == normalized
-        ]
-        if candidates:
-            return candidates[0], normalized
+        for name, hex_value in TAG_COLOR_PALETTE.items():
+            if hex_value.lower() == normalized:
+                return name, hex_value
 
     raise ValueError(
         f"Color '{color}' is not in the fixed tag color palette of "

@@ -7,6 +7,8 @@ transactions and authorization.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +45,23 @@ def _levenshtein(a: str, b: str) -> int:
     return previous_row[-1]
 
 
+def normalize_tag_name(name: str) -> str:
+    """Normalize a tag name the same way ``tags.normalized_name`` is stored.
+
+    Display casing is preserved in ``tags.name``; this helper produces the
+    trimmed, lowercased form used for matching and uniqueness. Normalizing at
+    the matching boundary keeps lookups case- and whitespace-insensitive no
+    matter what a caller passes.
+
+    Args:
+        name: Raw tag name.
+
+    Returns:
+        Normalized name.
+    """
+    return name.strip().lower()
+
+
 async def get_tag_by_id(db: AsyncSession, tag_id: int) -> Tag | None:
     """Return a tag by primary key.
 
@@ -57,11 +76,14 @@ async def get_tag_by_id(db: AsyncSession, tag_id: int) -> Tag | None:
 
 
 async def get_tag_by_name(db: AsyncSession, normalized_name: str, scope: str) -> Tag | None:
-    """Return a tag by normalized name and scope.
+    """Return a tag by name and scope.
+
+    ``normalized_name`` is normalized again here so a raw or oddly cased
+    argument still matches the stored ``normalized_name``.
 
     Args:
         db: Database session.
-        normalized_name: Lowercased, trimmed tag name.
+        normalized_name: Tag name; normalized before matching.
         scope: Either ``"global"`` or ``"private"``.
 
     Returns:
@@ -69,7 +91,7 @@ async def get_tag_by_name(db: AsyncSession, normalized_name: str, scope: str) ->
     """
     result = await db.execute(
         select(Tag).where(
-            Tag.normalized_name == normalized_name,
+            Tag.normalized_name == normalize_tag_name(normalized_name),
             Tag.scope == scope,
         )
     )
@@ -276,7 +298,39 @@ async def delete_tag_assignments(db: AsyncSession, tag_id: int) -> int:
     result = await db.execute(
         delete(TagAssignment)
         .where(TagAssignment.tag_id == tag_id)
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
+    )
+    return getattr(result, "rowcount", 0) or 0
+
+
+async def delete_assignments_for_target(
+    db: AsyncSession, target_type: str, target_ids: Iterable[int]
+) -> int:
+    """Delete every assignment pointing at a target that is being deleted.
+
+    Polymorphic ``target_id`` values have no foreign key to guard them, so the
+    owner of a deletion path is responsible for removing the dangling
+    assignments explicitly.
+
+    Args:
+        db: Database session.
+        target_type: Type of the deleted target.
+        target_ids: Primary keys of the deleted target rows.
+
+    Returns:
+        Number of assignment rows removed.
+    """
+    ids = [int(target_id) for target_id in target_ids]
+    if not ids:
+        return 0
+
+    result = await db.execute(
+        delete(TagAssignment)
+        .where(
+            TagAssignment.target_type == target_type,
+            TagAssignment.target_id.in_(ids),
+        )
+        .execution_options(synchronize_session="fetch")
     )
     return getattr(result, "rowcount", 0) or 0
 
@@ -297,7 +351,7 @@ async def delete_tag(db: AsyncSession, tag_id: int) -> int:
     result = await db.execute(
         delete(Tag)
         .where(Tag.id == tag_id)
-        .execution_options(synchronize_session=False)
+        .execution_options(synchronize_session="fetch")
     )
     return getattr(result, "rowcount", 0) or 0
 

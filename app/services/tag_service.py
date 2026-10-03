@@ -8,7 +8,7 @@ routers.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from datetime import UTC, datetime
 
 from dataclasses import dataclass, field
@@ -26,6 +26,7 @@ from app.constants import (
 )
 from app.models import ContinuityPlan, Issue, Tag, TagAssignment, Thread, User
 from app.repositories import tag_repository
+from app.schemas.tags import TagScope
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
 
 
@@ -193,24 +194,29 @@ def _get_target_validator(type_name: str) -> TargetValidator:
 
 
 async def _validate_target(
-    db: AsyncSession, user: User, target_type: str, target_id: int
+    db: AsyncSession, user: User, target_type: str, target_id: int, *, enforce_ownership: bool
 ) -> None:
-    """Validate that a polymorphic target exists and is owned by the user.
+    """Validate that a polymorphic target exists and is visible to the user.
 
-    Private tags may only be assigned to targets the requesting user
-    owns (admins may assign to any target). Issue ownership is
-    resolved through the owning thread with an explicit query so no
-    relationship is ever lazy-loaded inside the async session.
+    ``enforce_ownership`` is ``True`` for private tags: the tag owner may only
+    attach their own tag to a target they own, so a private vocabulary can
+    never be pushed onto another user's object. It is ``False`` for global
+    tags, which only administrators may assign and which must be assignable to
+    any existing target. Issue ownership is resolved through the owning thread
+    with an explicit query so no relationship is ever lazy-loaded inside the
+    async session.
 
     Args:
         db: Database session.
         user: The requesting user.
         target_type: The target type.
         target_id: The target primary key.
+        enforce_ownership: Whether the user must own the target.
 
     Raises:
         NotFoundError: When the target does not exist.
-        ForbiddenError: When the user does not own the target.
+        ForbiddenError: When the user does not own the target and ownership is
+            enforced.
     """
     validator = _get_target_validator(target_type)
     target = await validator.load(db, target_id)
@@ -218,6 +224,9 @@ async def _validate_target(
         raise NotFoundError(
             f"{target_type} with id {target_id} does not exist"
         )
+
+    if not enforce_ownership:
+        return
 
     if isinstance(target, Issue):
         owner_row = await db.execute(
@@ -227,10 +236,32 @@ async def _validate_target(
     else:
         owner_id = target.user_id
 
-    if owner_id is not None and owner_id != user.id and not user.is_admin:
+    if owner_id != user.id:
         raise ForbiddenError(
             "You may only assign private tags to targets you own"
         )
+
+
+async def purge_target_assignments(
+    db: AsyncSession, target_type: str, target_ids: Iterable[int]
+) -> int:
+    """Remove assignments that point at targets being deleted.
+
+    Polymorphic ``target_id`` values carry no foreign key, so every path that
+    deletes a taggable target must call this before the delete to avoid
+    dangling assignments.
+
+    Args:
+        db: Database session.
+        target_type: Type of the deleted target.
+        target_ids: Primary keys of the deleted target rows.
+
+    Returns:
+        Number of assignment rows removed.
+    """
+    return await tag_repository.delete_assignments_for_target(
+        db, target_type, target_ids
+    )
 
 
 class TagDeletionHook:
@@ -320,7 +351,21 @@ class TagService:
         Returns:
             Normalized name.
         """
-        return name.strip().lower()
+        return tag_repository.normalize_tag_name(name)
+
+    @staticmethod
+    def _require_global_scope_admin(user: User, action: str) -> None:
+        """Refuse a global-tag mutation from a non-administrator.
+
+        Args:
+            user: The requesting user.
+            action: Human-readable action used in the error message.
+
+        Raises:
+            ForbiddenError: When the user is not an administrator.
+        """
+        if not user.is_admin:
+            raise ForbiddenError(f"Only administrators can {action} global tags")
 
     def validate_color(self, color: object) -> tuple[str, str]:
         """Validate a color and return ``(name, hex)``.
@@ -360,8 +405,10 @@ class TagService:
     async def get_tag(self, user: User, tag_id: int) -> Tag:
         """Return a tag, enforcing visibility.
 
-        Global tags are visible to any authenticated user; private tags are
-        visible only to their owner.
+        Global tags are visible to any authenticated user. Private tags are
+        visible only to their owner; every other caller, administrators
+        included, is told the tag does not exist so private vocabulary never
+        leaks across users.
 
         Args:
             user: The requesting user.
@@ -377,7 +424,7 @@ class TagService:
         if tag is None:
             raise NotFoundError(f"Tag {tag_id} does not exist")
 
-        if tag.scope == "private" and tag.owner_user_id != user.id:
+        if tag.scope == TagScope.PRIVATE and tag.owner_user_id != user.id:
             raise NotFoundError(f"Tag {tag_id} does not exist")
 
         return tag
@@ -392,7 +439,7 @@ class TagService:
         name: str,
         color: str | None = None,
         *,
-        scope: str | None = None,
+        scope: TagScope | str | None = None,
         include_near_matches: bool = False,
     ) -> CreateTagResult:
         """Create a tag or return an existing global tag.
@@ -415,7 +462,8 @@ class TagService:
 
         Raises:
             ForbiddenError: When a non-admin requests a global tag.
-            InvalidRequestError: When the color is invalid or the name is empty.
+            InvalidRequestError: When the color is invalid, the name is empty,
+                or the scope is unknown.
             ConflictError: When the normalized name already exists as a
                 global tag or as another private tag of the same user.
         """
@@ -427,18 +475,20 @@ class TagService:
 
         # Determine the effective scope.
         if scope is None:
-            effective_scope = "private"
-        elif scope == "global":
+            effective_scope = TagScope.PRIVATE.value
+        elif scope == TagScope.GLOBAL:
             if not user.is_admin:
                 raise ForbiddenError("Only administrators can create global tags")
-            effective_scope = "global"
+            effective_scope = TagScope.GLOBAL.value
+        elif scope == TagScope.PRIVATE:
+            effective_scope = TagScope.PRIVATE.value
         else:
             raise InvalidRequestError(f"Unknown tag scope '{scope}'")
 
         # Exact match against a global tag redirects to it instead of creating
         # a private duplicate.
         existing_global = await tag_repository.get_tag_by_name(
-            self._db, normalized, "global"
+            self._db, normalized, TagScope.GLOBAL.value
         )
         if existing_global is not None:
             return CreateTagResult(
@@ -461,7 +511,9 @@ class TagService:
             name=name,
             normalized_name=normalized,
             scope=effective_scope,
-            owner_user_id=user.id if effective_scope == "private" else None,
+            owner_user_id=(
+                user.id if effective_scope == TagScope.PRIVATE.value else None
+            ),
             color=color_hex,
         )
         try:
@@ -490,9 +542,10 @@ class TagService:
     ) -> Tag:
         """Update an existing tag.
 
-        Global tags require admin access; private tags require ownership or
-        admin access. Renaming a private tag to a normalized name already used
-        by a global tag is refused to avoid vocabulary collision.
+        Global tags require admin access. Private tags require ownership: a
+        private tag is invisible to everyone but its owner, administrators
+        included. Renaming a private tag to a normalized name already used by a
+        global tag is refused to avoid vocabulary collision.
 
         Args:
             user: The requesting user.
@@ -511,9 +564,9 @@ class TagService:
         """
         tag = await self.get_tag(user, tag_id)
 
-        if tag.scope == "global" and not user.is_admin:
-            raise ForbiddenError("Only administrators can edit global tags")
-        if tag.scope == "private" and tag.owner_user_id != user.id and not user.is_admin:
+        if tag.scope == TagScope.GLOBAL.value:
+            self._require_global_scope_admin(user, "edit")
+        elif tag.owner_user_id != user.id:
             raise ForbiddenError("You can only edit your own private tags")
 
         updates: list[tuple[str, object]] = []
@@ -523,7 +576,7 @@ class TagService:
                 raise InvalidRequestError("Tag name cannot be empty")
             if normalized != tag.normalized_name:
                 existing = await tag_repository.get_tag_by_name(
-                    self._db, normalized, "global"
+                    self._db, normalized, TagScope.GLOBAL.value
                 )
                 if existing is not None:
                     raise ConflictError(
@@ -555,8 +608,9 @@ class TagService:
     ) -> DeleteTagResult:
         """Delete a tag and cascade its assignments.
 
-        Global tags require admin access; private tags require ownership or
-        admin access. Deletion removes all ``tag_assignments`` rows and runs
+        Global tags require admin access. Private tags require ownership: a
+        private tag is invisible to everyone but its owner, administrators
+        included. Deletion removes all ``tag_assignments`` rows and runs
         registered deletion hook consumers (used by roll-filter and exclusion
         modules once they exist).
 
@@ -571,22 +625,25 @@ class TagService:
             NotFoundError: When the tag does not exist or is not visible.
             ForbiddenError: When the user lacks permission.
         """
-        tag = await self.get_tag(user, tag_id)
+        tag_id_value = tag_id
+        tag = await self.get_tag(user, tag_id_value)
 
-        if tag.scope == "global" and not user.is_admin:
-            raise ForbiddenError("Only administrators can delete global tags")
-        if tag.scope == "private" and tag.owner_user_id != user.id and not user.is_admin:
+        if tag.scope == TagScope.GLOBAL.value:
+            self._require_global_scope_admin(user, "delete")
+        elif tag.owner_user_id != user.id:
             raise ForbiddenError("You can only delete your own private tags")
 
-        assignments_removed = await tag_repository.delete_tag_assignments(self._db, tag_id)
+        assignments_removed = await tag_repository.delete_tag_assignments(
+            self._db, tag_id_value
+        )
 
         references_removed_by_consumers: dict[str, int] = {}
         for hook in _tag_deletion_hooks:
-            count = await hook.cleanup_tag_references(self._db, tag_id)
+            count = await hook.cleanup_tag_references(self._db, tag_id_value)
             if count:
                 references_removed_by_consumers[hook.consumer_name] = count
 
-        await tag_repository.delete_tag(self._db, tag_id)
+        await tag_repository.delete_tag(self._db, tag_id_value)
 
         return DeleteTagResult(
             tag=tag,
@@ -607,9 +664,9 @@ class TagService:
     ) -> TagAssignment:
         """Assign a tag to a target.
 
-        Global tags require admin access to assign. Private tags require
-        ownership of the tag (or admin access) and ownership of the target
-        (or admin access). Assignment is idempotent: an existing assignment is
+        Global tags require admin access to assign. Private tags are visible
+        only to their owner, so only the owner may assign them, and only to a
+        target they own. Assignment is idempotent: an existing assignment is
         returned.
 
         Args:
@@ -625,25 +682,34 @@ class TagService:
             NotFoundError: When the tag or target does not exist.
             ForbiddenError: When the user lacks permission.
             InvalidRequestError: When the target type is unsupported.
+            ConflictError: When a concurrent request already created the same
+                assignment.
         """
         tag = await tag_repository.get_tag_by_id(self._db, tag_id)
         if tag is None:
             raise NotFoundError(f"Tag {tag_id} does not exist")
 
-        # Global tag: only admins can assign it.
-        if tag.scope == "global" and not user.is_admin:
-            raise ForbiddenError("Only administrators can assign global tags")
-
-        # Private tag: must own the tag (or be admin).
-        if tag.scope == "private" and tag.owner_user_id != user.id and not user.is_admin:
+        is_global = tag.scope == TagScope.GLOBAL.value
+        if is_global:
+            self._require_global_scope_admin(user, "assign")
+        elif tag.owner_user_id != user.id:
             raise ForbiddenError("You can only assign your own private tags")
 
-        # Validate the polymorphic target exists and ownership rules pass.
-        await _validate_target(self._db, user, target_type, target_id)
-
-        await tag_repository.assign_tag(
-            self._db, tag_id, target_type, target_id
+        # Validate the polymorphic target exists and, for a private tag, that
+        # the user owns it so private vocabulary never crosses users.
+        await _validate_target(
+            self._db, user, target_type, target_id, enforce_ownership=not is_global
         )
+
+        try:
+            await tag_repository.assign_tag(
+                self._db, tag_id, target_type, target_id
+            )
+        except IntegrityError as exc:
+            # A concurrent identical assignment won the unique index race.
+            raise ConflictError(
+                "This tag is already assigned to that target"
+            ) from exc
         return await self._get_assignment(tag_id, target_type, target_id)
 
     async def unassign_tag(
@@ -656,7 +722,7 @@ class TagService:
         """Remove an assignment from a target.
 
         Global tags can be unassigned only by admins. Private tags can be
-        unassigned by their owner or an admin.
+        unassigned only by their owner.
 
         Args:
             user: The requesting user.
@@ -670,14 +736,15 @@ class TagService:
         Raises:
             NotFoundError: When the tag does not exist or no assignment is found.
             ForbiddenError: When the user lacks permission.
+            InvalidRequestError: When the target type is unsupported.
         """
         tag = await tag_repository.get_tag_by_id(self._db, tag_id)
         if tag is None:
             raise NotFoundError(f"Tag {tag_id} does not exist")
 
-        if tag.scope == "global" and not user.is_admin:
-            raise ForbiddenError("Only administrators can unassign global tags")
-        if tag.scope == "private" and tag.owner_user_id != user.id and not user.is_admin:
+        if tag.scope == TagScope.GLOBAL.value:
+            self._require_global_scope_admin(user, "unassign")
+        elif tag.owner_user_id != user.id:
             raise ForbiddenError("You can only unassign your own private tags")
 
         removed = await tag_repository.unassign_tag(self._db, tag_id, target_type, target_id)

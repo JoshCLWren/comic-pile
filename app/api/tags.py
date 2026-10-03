@@ -202,7 +202,7 @@ async def delete_tag(
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return tag_schemas.TagDeleteResponse(
-        tag_id=result.tag.id,
+        tag_id=tag_id,
         assignments_removed=result.assignments_removed,
         references_removed_by_consumers=result.references_removed_by_consumers,
     )

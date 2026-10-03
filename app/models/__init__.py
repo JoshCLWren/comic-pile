@@ -30,11 +30,11 @@ from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.reading_session import ReadingSession
 from app.models.snapshot import Snapshot
+from app.models.tag import Tag, TagAssignment
 from app.models.taste_signal import TasteSignal
 from app.models.thread import Thread
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
-from app.models.tag import Tag, TagAssignment
 
 __all__ = [
     "CBLSource",

@@ -83,10 +83,11 @@ def upgrade() -> None:
         ["target_type", "target_id"],
         unique=False,
     )
-    op.create_unique_constraint(
+    op.create_index(
         "uq_tag_assignments_target",
         "tag_assignments",
         ["tag_id", "target_type", "target_id"],
+        unique=True,
     )
 
 
@@ -99,7 +100,7 @@ def downgrade() -> None:
     Returns:
         None.
     """
-    op.drop_unique_constraint("uq_tag_assignments_target", "tag_assignments")
+    op.drop_index("uq_tag_assignments_target", table_name="tag_assignments")
     op.drop_index("ix_tag_assignments_target", table_name="tag_assignments")
     op.drop_index("ix_tag_assignments_tag_id", table_name="tag_assignments")
     op.drop_table("tag_assignments")

@@ -5,21 +5,25 @@ Request and response models use the fixed palette names from
 """
 
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 from app.constants import DEFAULT_TAG_COLOR_NAME
 
 
-class TagScope(str):
+class TagScope(StrEnum):
     """A tag's visibility scope."""
 
     GLOBAL = "global"
     PRIVATE = "private"
 
 
-class TagTargetType(str):
-    """A taggable entity type."""
+class TagTargetType(StrEnum):
+    """A taggable entity type.
+
+    Mirrors ``app.constants.TAG_TARGET_TYPES``; the two must stay in sync.
+    """
 
     ISSUE = "Issue"
     THREAD = "Thread"
@@ -102,6 +106,8 @@ class TagCreateResponse(BaseModel):
     tag: TagResponse
     redirected_to_global: bool = False
     near_matches: list[NearMatchResponse] = []
+
+
 class TagUpdate(BaseModel):
     """Request to update a tag.
 
