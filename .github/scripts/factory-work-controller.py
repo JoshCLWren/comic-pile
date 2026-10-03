@@ -20,7 +20,7 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, stage_of)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FACTORY_PR_WIP_LIMIT, FACTORY_REVIEW_BACKLOG_LIMIT, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, NON_EXECUTABLE_ISSUES, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, eligibility, env_positive_int, factory_pr_wip_count, factory_review_backlog_count, item_is_unowned, issue_bypasses_wip_limit, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, pr_suppresses_issue_candidate, stage_of)
 from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -1109,6 +1109,136 @@ def selectivity_conflict_recovery(worker: str) -> dict[str, Any]:
     return result
 
 
+def explain_issue(
+    number: int,
+    *,
+    issue: dict[str, Any] | None = None,
+    issues: list[dict[str, Any]] | None = None,
+    prs: list[dict[str, Any]] | None = None,
+    no_diff_attempts_by_issue: dict[int, int] | None = None,
+    include_dynamic_gates: bool = True,
+) -> dict[str, Any]:
+    """Explain why one issue is or is not currently queue-eligible.
+
+    Answers the operator question documented in
+    ``docs/FACTORY_QUEUE_ELIGIBILITY.md`` without requiring anyone to read the
+    selection code or interpret historical claim comments by hand. The static
+    verdict comes from the shared eligibility module used by both selectors, so
+    the report cannot drift from what dispatch actually enforces; the
+    controller-only dynamic gates are appended after it.
+
+    Args:
+        number: The issue number to explain.
+        issue: Pre-fetched issue payload; fetched on demand when omitted.
+        issues: Pre-fetched issue rows used for dependency resolution.
+        prs: Pre-fetched open-PR rows used for canonical-PR suppression.
+        no_diff_attempts_by_issue: Rolling no-diff retry counts by issue.
+        include_dynamic_gates: Whether to evaluate the live GitHub gates.
+
+    Returns:
+        A JSON-serializable report with the verdict, its reasons, the canonical
+        owning PR when one exists, and the dynamic gate results.
+    """
+    issue_rows = list_issues() if issues is None else list(issues)
+    pr_rows = list_prs() if prs is None else list(prs)
+    payload = issue
+    if payload is None:
+        payload = next((row for row in issue_rows if int(row['number']) == number), None)
+    if payload is None:
+        payload = target_json(number)
+        issue_rows = [*issue_rows, payload]
+    issue_map = {int(row['number']): row for row in issue_rows}
+    suppressing = {
+        linked
+        for pr in pr_rows
+        if (linked := linked_issue_from_pr(pr)) is not None
+        and pr_suppresses_issue_candidate(pr, issue_map)
+    }
+    non_executable = set(NON_EXECUTABLE_ISSUES)
+    intake = rotisserie_issue_intake(issue_rows, pr_rows)
+    rotisserie_unauthorized: set[int] = set()
+    if intake is not None:
+        rotisserie_unauthorized = {int(row['number']) for row in issue_rows} - intake
+        non_executable |= rotisserie_unauthorized
+    counts = (
+        load_no_diff_attempts() if no_diff_attempts_by_issue is None else no_diff_attempts_by_issue
+    )
+    verdict = eligibility.explain_issue_eligibility(
+        number=number,
+        state=str(payload.get('state') or 'OPEN'),
+        labels=labels_of(payload),
+        body=str(payload.get('body') or ''),
+        open_numbers={int(row['number']) for row in issue_rows},
+        suppressing_issue_numbers=suppressing,
+        non_executable_numbers=non_executable,
+        no_diff_attempts=counts.get(number, 0),
+        no_diff_limit=FACTORY_NO_DIFF_RETRY_LIMIT,
+    )
+    owning_prs = sorted(
+        int(pr['number'])
+        for pr in pr_rows
+        if linked_issue_from_pr(pr) == number and pr_suppresses_issue_candidate(pr, issue_map)
+    )
+    pr_wip = factory_pr_wip_count(pr_rows)
+    review_backlog = factory_review_backlog_count(pr_rows)
+    gates: dict[str, Any] = {
+        'factory_pr_wip': pr_wip,
+        'factory_pr_wip_limit': FACTORY_PR_WIP_LIMIT,
+        'review_backlog': review_backlog,
+        'review_backlog_limit': FACTORY_REVIEW_BACKLOG_LIMIT,
+        'bypasses_wip_limit': issue_bypasses_wip_limit(payload),
+        'bypasses_saturated_review_backlog': issue_bypasses_wip_limit(
+            payload, review_backlog_saturated=True
+        ),
+        'rotisserie_intake': (
+            'legacy-unrestricted'
+            if intake is None
+            else ('authorized' if number not in rotisserie_unauthorized else 'not-authorized')
+        ),
+    }
+    if include_dynamic_gates:
+        gates['open_dependency_blocker'] = issue_has_open_blocker(number)
+        gates['worker_specific_note'] = (
+            'strike-retry producer exclusion is per worker and evaluated at assignment'
+        )
+    report: dict[str, Any] = {
+        'issue': number,
+        'eligible': verdict.eligible,
+        'reasons': list(verdict.reasons),
+        'labels': sorted(labels_of(payload)),
+        'open_canonical_prs': owning_prs,
+        'dynamic_gates': gates,
+    }
+    if verdict.eligible and include_dynamic_gates and gates['open_dependency_blocker']:
+        report['eligible'] = False
+        report['reasons'] = [
+            reason
+            for reason in verdict.reasons
+            if not reason.startswith('eligible: ')
+        ] + ['a live open dependency blocker is reported by GitHub']
+    return report
+
+
+def render_explain_report(report: dict[str, Any]) -> str:
+    """Render an ``explain_issue`` report as operator-readable plain text.
+
+    Args:
+        report: The report returned by :func:`explain_issue`.
+
+    Returns:
+        Human-readable lines naming the verdict, each reason, and each gate.
+    """
+    verdict = 'eligible' if report['eligible'] else 'not eligible'
+    lines = [f"#{report['issue']}: {verdict}"]
+    lines.extend(f"  - {reason}" for reason in report['reasons'])
+    prs = report.get('open_canonical_prs') or []
+    lines.append(f"  open canonical PRs: {', '.join(f'#{n}' for n in prs) if prs else 'none'}")
+    lines.append(f"  labels: {', '.join(report['labels']) or 'none'}")
+    for name, value in report.get('dynamic_gates', {}).items():
+        lines.append(f"  gate {name}: {value}")
+    return '\n'.join(lines)
+
+
 def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
     """Evaluate open Factory PRs for staleness and expire any that cross the threshold.
 
@@ -1146,6 +1276,9 @@ def main() -> int:
     release_parser.add_argument('--reason', default='controller-release')
     recovery_parser = subparsers.add_parser('conflict-recovery')
     recovery_parser.add_argument('--worker', required=True)
+    explain_parser = subparsers.add_parser('explain')
+    explain_parser.add_argument('--issue', required=True, type=int)
+    explain_parser.add_argument('--json', action='store_true', help='Emit JSON instead of text')
     subparsers.add_parser('signal-completion')
     subparsers.add_parser('signal-roster')
     args = parser.parse_args()
@@ -1173,6 +1306,10 @@ def main() -> int:
     if args.command == 'conflict-recovery':
         result = selectivity_conflict_recovery(args.worker)
         print(json.dumps(result))
+        return 0
+    if args.command == 'explain':
+        report = explain_issue(args.issue)
+        print(json.dumps(report, sort_keys=True) if args.json else render_explain_report(report))
         return 0
     if args.command == 'signal-completion':
         print(json.dumps(signal_completion_mode(), sort_keys=True))

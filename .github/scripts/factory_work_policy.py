@@ -1,26 +1,25 @@
 """Pure ranking and lease policy for the factory work controller."""
 from __future__ import annotations
+import importlib
 import os
 import re
 import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+
 from factory_review_policy import producer_worker_from_pr as producer_worker_from_values
+
+# factory_eligibility lives in scripts/ (the shared home for both selectors).
+# Resolve it relative to this file and load it explicitly so the module
+# imports cleanly no matter which directory the caller placed on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+eligibility = importlib.import_module("factory_eligibility")
+
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->'
-# A body-declared product-acceptance parent even without an epic/prd label
-# (issue #1620; the #1615 incident shape) is human/interactive acceptance work,
-# never ordinary factory implementation. Both halves are required: the body
-# must present itself as the acceptance parent *and* declare a checkbox child
-# graph. A phrase-only match removes executable work — #3037, #2718, and #2128
-# are implementation issues that defer the operator acceptance pass elsewhere.
-ACCEPTANCE_PARENT_BODY_RE = re.compile(
-    'acceptance parent|parent acceptance criteria',
-    re.IGNORECASE,
-)
-ACCEPTANCE_PARENT_CHILD_RE = re.compile(r'(?m)^[ \t]*-[ \t]*\[[ xX]\][ \t]*#\d+')
 
 OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$')
 
@@ -466,9 +465,9 @@ def issue_is_static_candidate(
         return False
     if labels & {'epic', 'prd'}:
         return False
-    if MANUAL_ONLY_MARKER in body:
+    if eligibility.is_manual_only(body):
         return False
-    if ACCEPTANCE_PARENT_BODY_RE.search(body) and ACCEPTANCE_PARENT_CHILD_RE.search(body):
+    if eligibility.is_acceptance_parent(body):
         return False
     if labels & BLOCKED_LABELS:
         return False
@@ -826,3 +825,31 @@ def lease_is_stale(owner: str, *, active_fixed_workers: set[int], has_unresolved
             return False
         return now_epoch - latest_activity_epoch > fixed_ttl_seconds
     return False
+
+
+# Shared eligibility functions exported for consistency across selectors
+def is_manual_only(body: str | None) -> bool:
+    """Return whether a body carries the structured manual-only directive.
+    
+    Delegates to the shared eligibility module to ensure consistency across selectors.
+    """
+    return eligibility.is_manual_only(body)
+
+
+def is_acceptance_parent(body: str | None) -> bool:
+    """Return whether a body declares a product-acceptance parent contract.
+    
+    Delegates to the shared eligibility module to ensure consistency across selectors.
+    """
+    return eligibility.is_acceptance_parent(body)
+
+
+def parse_declared_dependencies(body: str | None) -> set[int]:
+    """Return every issue number declared as an explicit prerequisite.
+    
+    Delegates to the shared eligibility module to ensure consistency across selectors.
+    """
+    return eligibility.parse_declared_dependencies(body)
+
+
+

@@ -22,11 +22,11 @@ from factory_work_policy import (
     BLOCKED_LABELS,
     FACTORY_REVIEW_BACKLOG_LIMIT,
     FACTORY_PR_WIP_LIMIT,
-    MANUAL_ONLY_MARKER,
     NON_EXECUTABLE_ISSUES,
     build_candidates,
     factory_review_backlog_count,
     factory_pr_wip_count,
+    is_manual_only,
     labels_of,
     linked_issue_from_pr,
     owner_of,
@@ -93,7 +93,7 @@ def _human_gate(issue: dict[str, Any]) -> bool:
     return (
         int(issue["number"]) in NON_EXECUTABLE_ISSUES
         or bool(labels & {"epic", "prd"})
-        or MANUAL_ONLY_MARKER in str(issue.get("body") or "")
+        or is_manual_only(issue.get("body"))
         or bool(labels & BLOCKED_LABELS)
         or "ralph-status:done" in labels
         or "factory:ready" in labels
