@@ -72,6 +72,42 @@ def test_frozen_corrective_child_remains_executable() -> None:
     assert [candidate.number for candidate in candidates] == [2004]
 
 
+def test_body_declared_acceptance_parent_is_not_executable() -> None:
+    """The #1615 incident shape: contract in the body, no epic/prd label."""
+    candidates = build_candidates(
+        [
+            issue(
+                2007,
+                "CBL browser and adoption workflow",
+                "bug",
+                body="This is the acceptance parent for CBL adoption.\n"
+                "- [x] #2127 — transactional adoption\n"
+                "- [ ] #2128 — production browser UI\n",
+            )
+        ],
+        [],
+    )
+
+    assert candidates == []
+
+
+def test_casual_acceptance_mention_stays_executable() -> None:
+    """A passing mention without checkbox criteria is not a parent contract."""
+    candidates = build_candidates(
+        [
+            issue(
+                2008,
+                "Fix roll boundary",
+                "bug",
+                body="Verify in production acceptance later; no subtasks.",
+            )
+        ],
+        [],
+    )
+
+    assert [candidate.number for candidate in candidates] == [2008]
+
+
 def test_blocked_work_remains_ineligible() -> None:
     """Existing explicit blockers remain fail-closed."""
     candidates = build_candidates(

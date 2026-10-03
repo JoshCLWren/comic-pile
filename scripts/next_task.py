@@ -52,6 +52,11 @@ EXCLUDED_LABELS = {
 
 EPIC_ACCEPTANCE_LABELS = {"epic", "prd"}
 MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
+ACCEPTANCE_PARENT_BODY_RE = re.compile(
+    r"acceptance parent|parent acceptance criteria|production acceptance",
+    re.IGNORECASE,
+)
+ACCEPTANCE_PARENT_CHECKBOX_RE = re.compile(r"(?m)^\s*-\s*\[(?: |x|X)\]")
 
 
 def _labels(issue: IssuePayload) -> set[str]:
@@ -84,6 +89,21 @@ def _is_manual_only(issue: IssuePayload) -> bool:
     return MANUAL_ONLY_MARKER in (issue.get("body") or "")
 
 
+def _is_acceptance_parent(issue: IssuePayload) -> bool:
+    """Return whether the issue declares a product-acceptance contract.
+
+    Covers the #1615 incident shape: a parent whose acceptance contract lives
+    in the body (acceptance-parent language plus checkbox criteria) even when
+    it carries no epic/prd label. Such parents are human/interactive
+    acceptance work, never ordinary autonomous implementation.
+    """
+    body = issue.get("body") or ""
+    return bool(
+        ACCEPTANCE_PARENT_BODY_RE.search(body)
+        and ACCEPTANCE_PARENT_CHECKBOX_RE.search(body)
+    )
+
+
 def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candidate | None:
     """Select the highest-priority executable pending issue."""
     candidates: list[Candidate] = []
@@ -92,6 +112,8 @@ def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candida
         if "ralph-status:pending" not in labels or labels & EXCLUDED_LABELS:
             continue
         if labels & EPIC_ACCEPTANCE_LABELS or _is_manual_only(issue):
+            continue
+        if _is_acceptance_parent(issue):
             continue
         if _has_unresolved_dependency(issue, closed_numbers):
             continue

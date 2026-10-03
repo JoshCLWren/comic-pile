@@ -1,8 +1,33 @@
 # Product Acceptance Protocol
 
-Version: 2
+Version: 3
 
 This document defines the mandatory product-acceptance stage for PRDs and epics in Comic Pile. It is the canonical source for distinguishing implementation completion from parent-level product acceptance.
+
+## Merge-automation guard (issue #1620)
+
+Merge automation must never close an acceptance parent. `factory_post_merge_closure.py` refuses closure for any acceptance parent and reports one of:
+
+- `acceptance-parent-incomplete` — a declared child is still open, or one of
+  the parent's own acceptance-criterion checkboxes is still unchecked (even
+  when every child is closed);
+- `acceptance-parent-requires-verdict` — children and criteria are complete
+  but no durable `<!-- product-acceptance:v1 -->` report with an ACCEPTED
+  verdict exists on the parent.
+
+The transition helper `acceptance_parent_may_close` returns true only when
+every declared child is closed, every parent criterion is checked, and the
+latest acceptance report verdict is ACCEPTED. Child-count completion, CI
+success, code coverage, semantic review, and duplicate factory PRs that
+re-close already-delivered child work never satisfy it.
+
+An acceptance parent is any issue labeled `epic` or `prd` (even with no child
+graph), or any issue whose body declares a product-acceptance contract
+(`acceptance parent`, `parent acceptance criteria`, or `production acceptance`
+language plus checkbox criteria) — the #1615 incident shape, where the parent
+carried only an `enhancement` label and the guard missed it. Factory intake
+(`factory_work_policy.py`, `scripts/next_task.py`) likewise excludes
+body-declared acceptance parents from ordinary autonomous implementation.
 
 ## Problem
 

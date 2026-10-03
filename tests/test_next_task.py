@@ -65,6 +65,43 @@ def test_select_next_ignores_manual_only_issue() -> None:
     assert candidate.issue["number"] == 20
 
 
+def test_select_next_ignores_body_declared_acceptance_parent() -> None:
+    """A #1615-shaped parent (contract in body, no epic/prd label) is not executable."""
+    issues = [
+        _issue(
+            10,
+            "CBL browser and adoption workflow",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:critical"],
+            "This is the acceptance parent for CBL adoption.\n"
+            "- [x] #2127 — transactional adoption\n"
+            "- [ ] #2128 — production browser UI\n",
+        ),
+        _issue(20, "Ready task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"]),
+    ]
+
+    candidate = select_next(issues, set())
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 20
+
+
+def test_select_next_keeps_casual_acceptance_mention_executable() -> None:
+    """A casual 'production acceptance' mention without criteria stays executable."""
+    issues = [
+        _issue(
+            10,
+            "Fix roll boundary",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:critical"],
+            "Verify in production acceptance later; no subtasks.",
+        ),
+    ]
+
+    candidate = select_next(issues, set())
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 10
+
+
 def test_select_next_skips_issue_with_open_dependency() -> None:
     """An issue should wait until its referenced dependency is closed."""
     issues = [
