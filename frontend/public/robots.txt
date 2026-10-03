@@ -1,0 +1,33 @@
+# ComicPile crawler policy (issue #3065).
+#
+# Only the public landing page is indexable. Crawlers match the longest
+# (most specific) rule, so the Disallow lines below win over `Allow: /`
+# for utility, auth, demo, and authenticated routes while `/` stays allowed.
+# Hashed JS/CSS under /assets/ and /static/ must stay allowed or crawlers
+# cannot render the landing page.
+User-agent: *
+Allow: /
+Allow: /assets/
+Allow: /static/
+Allow: /vite.svg
+Allow: /favicon.svg
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /demo
+Disallow: /rate
+Disallow: /analytics
+Disallow: /help
+Disallow: /queue
+Disallow: /thread/
+Disallow: /creators
+Disallow: /history
+Disallow: /sessions/
+Disallow: /crossovers
+Disallow: /continuity-plans
+Disallow: /whats-new
+Disallow: /glossary
+Disallow: /identity-inbox
+Disallow: /api/
+Disallow: /debug/

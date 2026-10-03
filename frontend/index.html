@@ -4,7 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Comic Pile</title>
+    <title>ComicPile — A dice-driven reading queue for your comic collection</title>
+    <meta
+      name="description"
+      content="ComicPile is a dice-driven reading queue for your comic collection. Build your stack, roll the die, and read what comes up — continuity-aware and self-hosted."
+    />
+    <link rel="canonical" href="/" />
     <style>
       #bootstrap-shell {
         position: fixed;
@@ -49,6 +54,29 @@
         min-height: 3rem;
         margin: 0 auto;
         color: #b8aea1;
+        line-height: 1.5;
+      }
+
+      .bootstrap-shell__lede {
+        margin: 0.5rem auto 0;
+        max-width: 30rem;
+        color: #f5f0e8;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.5;
+      }
+
+      .bootstrap-shell__points {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem 1.25rem;
+        margin: 1rem auto 0;
+        padding: 0;
+        max-width: 32rem;
+        list-style: none;
+        color: #b8aea1;
+        font-size: 0.8125rem;
         line-height: 1.5;
       }
 
@@ -106,6 +134,16 @@
       <main class="bootstrap-shell__main">
         <div class="bootstrap-shell__mark" aria-hidden="true">📚</div>
         <h1 class="bootstrap-shell__title">ComicPile</h1>
+        <div data-prerendered-landing>
+          <p class="bootstrap-shell__lede">
+            A dice-driven reading queue for your comic collection.
+          </p>
+          <ul class="bootstrap-shell__points">
+            <li>Build your queue of series and issues remaining</li>
+            <li>Roll the die to pick your next read</li>
+            <li>Read, rate, and keep your place</li>
+          </ul>
+        </div>
         <p class="bootstrap-shell__status" data-bootstrap-status data-state="loading">
           Opening your reading desk and checking your session…
         </p>
@@ -119,6 +157,13 @@
       </nav>
     </div>
     <div id="root"></div>
+    <noscript>
+      <p style="max-width: 32rem; margin: 2rem auto; text-align: center; line-height: 1.5;">
+        ComicPile is a dice-driven reading queue for your comic collection: build your
+        stack, roll the die, and read what comes up. The interactive queue needs
+        JavaScript; please enable it to sign in and roll.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
