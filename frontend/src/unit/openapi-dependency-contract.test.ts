@@ -72,8 +72,8 @@ describe('OpenAPI Dependency contract adoption (#2782)', () => {
     // FlowchartNode is a presentation model, not an API response contract.
     // It must not collide with generated dependency schemas.
     expectTypeOf<FlowchartNode>().toHaveProperty('x')
-    expectTypeOf<FlowchartEdge>().toHaveProperty('source')
-    expectTypeOf<FlowchartDependency>().toHaveProperty('sourceThreadId')
+    expectTypeOf<FlowchartEdge>().toHaveProperty('sourceId')
+    expectTypeOf<FlowchartDependency>().toHaveProperty('source_id')
   })
 
   it('does not leave handwritten duplicate of migrated API response shapes', () => {
