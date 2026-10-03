@@ -13,7 +13,7 @@ export function useSessionMode(deps: SessionModeMutationDeps = {}) {
 
   const mutation = useMutation<SessionModeResponse, Error, SessionModeUpdateRequest>({
     mutationFn: async (data: SessionModeUpdateRequest) => {
-        const apiSession = sessionInstance ?? (await import('../services/api')).sessionApi;
+        const apiSession = sessionInstance ?? (await import('../services/api-sessions')).sessionApi;
         return apiSession.updateMode(data);
       },
     onSuccess: async () => {

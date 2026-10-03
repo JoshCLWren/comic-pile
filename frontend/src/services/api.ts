@@ -18,6 +18,12 @@ export interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'dele
   patch<T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
 }
 
+/**
+ * Transport `createApiClient` configures.
+ *
+ * The production factory returns a real axios instance; tests can return a
+ * double that records requests and captures the registered interceptors.
+ */
 export type ApiClientTransport = HttpClient & Pick<AxiosInstance, 'interceptors'>
 
 const CSRF_COOKIE_NAME = 'csrf_token'
@@ -30,6 +36,8 @@ const AUTH_ENDPOINT_PATHS = new Set([
   '/v1/auth/forgot-password',
   '/v1/auth/reset-password',
 ])
+// Request bodies for these paths carry single-use secrets (reset token, new
+// password). They must never reach console output or error telemetry.
 const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v1/auth/reset-password'])
 
 export interface ForgotPasswordRequest {
@@ -92,6 +100,7 @@ function writeStoredAccessToken(token: string | null): void {
 export function setAccessToken(token: string | null): void {
   accessToken = token
   writeStoredAccessToken(token)
+  // A new explicit token write (login or test setup) allows another cookie probe.
   sessionRefreshRejected = false
 }
 
@@ -156,6 +165,7 @@ async function refreshSessionOn(
       setAccessToken(response.access_token)
       return response.access_token
     } catch (error) {
+      // SAFETY: catch clause is unknown; axios interceptor always receives AxiosError.
       if (isAuthenticationFailure(error as AxiosError)) {
         markSessionRefreshRejected()
       }
@@ -203,6 +213,7 @@ async function ensureCsrfToken(client: ApiClient): Promise<string | null> {
   }
 
   if (!csrfTokenPromise) {
+    // SAFETY: only the skipAuthRedirect flag is needed from ApiRequestConfig; other fields have sensible defaults.
     csrfTokenPromise = client
       .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
@@ -249,10 +260,14 @@ function isAuthenticationFailure(error: AxiosError): boolean {
     return false
   }
 
+  // SAFETY: axios 403 responses always carry a JSON body; narrowing to check for auth-failure detail.
   const responseData = error.response.data as { detail?: unknown } | undefined
   return responseData?.detail === 'Not authenticated'
 }
 
+/**
+ * Redacted stand-in logged for a failed request whose body carried a secret.
+ */
 export interface RedactedRequestDiagnostic {
   name: string
   message: string
@@ -260,6 +275,16 @@ export interface RedactedRequestDiagnostic {
   status: number | null
 }
 
+/**
+ * Build the value that is safe to hand to `console.error` for a failed request.
+ *
+ * Axios errors carry the full request config, so logging one verbatim would
+ * print the request body. For auth paths whose body is a single-use secret the
+ * raw error is replaced with a minimal, redacted summary.
+ *
+ * @param error - The rejected axios error.
+ * @returns The error itself, or a redacted summary for sensitive auth requests.
+ */
 function errorForDiagnosticLog(error: AxiosError): AxiosError | RedactedRequestDiagnostic {
   const requestPathname = getRequestPathname(error.config?.url ?? '')
   if (!SENSITIVE_AUTH_BODY_PATHS.has(requestPathname)) {
@@ -280,12 +305,14 @@ function createRequestInterceptor(client: ApiClient) {
     config.headers = config.headers ?? {}
 
     if (token) {
+      // SAFETY: InternalAxiosRequestHeaders is indexable by string key; setting Authorization is safe.
       (config.headers as Record<string, string>).Authorization = `Bearer ${token}`
     }
 
     if (shouldAttachCsrfToken(config)) {
       const csrfToken = await ensureCsrfToken(client)
       if (csrfToken) {
+        // SAFETY: InternalAxiosRequestHeaders is indexable by string key; CSRF header assignment is safe.
         (config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
       }
     }
@@ -300,6 +327,7 @@ function processQueue(error: unknown | null, token: string | null = null): void 
       prom.reject(error)
     } else {
       prom.config.headers = prom.config.headers ?? {}
+      // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
       const authHeaders = prom.config.headers as Record<string, string>
       authHeaders.Authorization = `Bearer ${token}`
       prom.resolve(prom.client.request(prom.config))
@@ -310,6 +338,7 @@ function processQueue(error: unknown | null, token: string | null = null): void 
 
 function createResponseErrorInterceptor(client: ApiClient) {
   return async (error: AxiosError) => {
+    // SAFETY: error.config may be absent for network errors; default to empty object and widen to ApiRequestConfig.
     const originalRequest = (error.config ?? {}) as ApiRequestConfig
 
     if (!error.response) {
@@ -347,6 +376,7 @@ function createResponseErrorInterceptor(client: ApiClient) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ client, resolve, reject, config: originalRequest })
         }).then((token) => token).catch((err) => {
+          // SAFETY: rejected value from refresh queue is either an AxiosError or a plain error from processQueue.
           if ((err as AxiosError)?.response?.status === 401) {
             return Promise.reject(error)
           }
@@ -366,12 +396,14 @@ function createResponseErrorInterceptor(client: ApiClient) {
         isRefreshing = false
 
         originalRequest.headers = originalRequest.headers ?? {}
+        // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
         const authHeaders = originalRequest.headers as Record<string, string>
         authHeaders.Authorization = `Bearer ${access_token}`
         return client.request(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
         isRefreshing = false
+        // SAFETY: catch clause is unknown; refreshSession rethrows AxiosError on auth failure.
         if (
           !originalRequest.skipAuthRedirect &&
           isAuthenticationFailure(refreshError as AxiosError)
@@ -390,7 +422,20 @@ function createResponseErrorInterceptor(client: ApiClient) {
   }
 }
 
+/**
+ * Build an API client that carries the production interceptor pipeline.
+ *
+ * Every request the client makes, including CSRF bootstrap, token refresh, and
+ * retry replays, goes back through that same client, so a test can substitute
+ * the transport and still exercise the real auth and CSRF behaviour.
+ *
+ * @param factory - Produces the underlying axios instance to configure.
+ * @returns The configured client exposing payload-returning request methods.
+ */
 export function createApiClient(factory: () => ApiClientTransport): ApiClient {
+  // SAFETY: the factory produces the request methods and the interceptor
+  // registry; the interceptors registered below unwrap responses to payloads,
+  // which is the ApiClient contract those methods already promise.
   const client = factory() as ApiClient
   client.interceptors.request.use(
     createRequestInterceptor(client),
@@ -404,32 +449,33 @@ export function createApiClient(factory: () => ApiClientTransport): ApiClient {
 }
 
 function createRawApiInstance(): ApiClientTransport {
+  // SAFETY: axios.create returns an AxiosInstance; createApiClient registers the
+  // response interceptor that unwraps `.data`, which is the payload contract.
   return axios.create({
     baseURL: '/api',
     timeout: 10000,
   }) as ApiClientTransport
 }
 
+// Axios returns AxiosResponse by default, but the response interceptor unwraps to
+// response.data, so the client hands callers strongly typed payload methods.
 const api = createApiClient(createRawApiInstance)
 
+// Service modules are evaluated before this module body runs, so they bind
+// their default singletons through `defaultHttpClient()` and resolve the real
+// transport here.
 setDefaultHttpClient(api)
 
 export default api
 
-export interface UserPreferencesResponse {
-  theme: 'classic' | 'ink-gold' | 'command-center'
-  user_id: number
-}
-
-export interface UserPreferencesPatchRequest {
-  theme?: 'classic' | 'ink-gold' | 'command-center' | null
-}
-
-export const preferencesApi = {
-  get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-    api.get<UserPreferencesResponse>('/v1/users/me/preferences', options),
-  patch: (data: UserPreferencesPatchRequest) =>
-    api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
-}
-
+// Auth transport boundary (final inventory for #2785).
+//
+// `api.ts` now owns no product endpoint collection. Every domain client lives in
+// a focused `api-*.ts` module and binds its transport through `defaultHttpClient()`.
+// The only endpoint object left here is `authApi`, which is retained
+// deliberately: its two password-reset paths are already enumerated by the
+// CSRF/refresh transport below (`AUTH_ENDPOINT_PATHS`,
+// `SENSITIVE_AUTH_BODY_PATHS`), so its secret-bearing bodies are redacted and
+// its requests share this stack's token refresh. It is auth infrastructure, not
+// a product domain client, and splitting it would fragment one transport.
 export const authApi = createAuthApi(api)

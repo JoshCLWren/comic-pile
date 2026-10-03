@@ -6,7 +6,7 @@ const { getIssueIdentitySpy } = vi.hoisted(() => ({
   getIssueIdentitySpy: vi.fn(),
 }))
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-comicvine', () => ({
   comicVineApi: {
     searchSeries: vi.fn(),
     getSeriesIssues: vi.fn(),

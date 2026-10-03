@@ -30,6 +30,20 @@ const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn(() => 'test-token')
 
+vi.mock('../services/api', () => {
+  return {
+    default: {
+      get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
+      post: (...args: Parameters<typeof mockApiPost>) => mockApiPost(...args),
+    },
+    setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
+    clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
+    getAccessToken: () => mockGetAccessToken(),
+    refreshSession: vi.fn(),
+    isSessionRefreshRejected: () => false,
+  }
+})
+
 vi.mock('../services/api-identity', () => ({
   identityInboxApi: {
     list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),

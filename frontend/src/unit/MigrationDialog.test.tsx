@@ -5,7 +5,7 @@ import axios from 'axios'
 import MigrationDialog from '../components/MigrationDialog'
 import { migrationApi } from '../services/api-migration'
 
-vi.mock('../services/api', () => ({ migrationApi: { migrateThread: vi.fn() } }))
+vi.mock('../services/api-migration', () => ({ migrationApi: { migrateThread: vi.fn() } }))
 
 const thread = { id: 7, title: 'Saga' }
 

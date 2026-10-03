@@ -33,11 +33,6 @@ vi.mock('../services/api', () => {
   return {
     default: apiMock,
     api: apiMock,
-    preferencesApi: {
-      get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-        apiMock.get('/v1/users/me/preferences', options),
-      patch: (data: { theme?: string | null }) => apiMock.patch('/v1/users/me/preferences', data),
-    },
     clearAccessToken: vi.fn(),
     setAccessToken: vi.fn(),
     getAccessToken: mocks.getAccessToken,
@@ -46,6 +41,14 @@ vi.mock('../services/api', () => {
     isSessionRefreshRejected: () => false,
   }
 })
+
+vi.mock('../services/api-preferences', () => ({
+  preferencesApi: {
+    get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
+      mocks.get('/v1/users/me/preferences', options),
+    patch: (data: { theme?: string | null }) => mocks.patch('/v1/users/me/preferences', data),
+  },
+}))
 
 function setViewport(width: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })

@@ -33,7 +33,7 @@ interface UseRollActionsParams {
     result?: number | null,
     metadata?: ThreadMetadata | null,
   ) => Promise<void>
-  threadsApi: typeof import('../../services/api').threadsApi
+  threadsApi: typeof import('../../services/api-threads').threadsApi
 }
 
 /**

@@ -35,12 +35,16 @@ vi.mock('../hooks/useThread', async () => {
 vi.mock('../services/api-threads', () => ({
   threadsApi: { get: vi.fn() },
 }))
-vi.mock('../services/api-dependencies', () => ({
-  dependenciesApi: {
-    getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
-    getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
-  },
-}))
+vi.mock('../services/api-dependencies', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-dependencies')>()
+  return {
+    ...actual,
+    dependenciesApi: {
+      getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
+      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
+    },
+  }
+})
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
 
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
