@@ -2,53 +2,26 @@
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_recommendation_settings
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, ReadingSession, Snapshot, Thread
+from app.models import Event, Issue, ReadingSession, Thread
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
-from app.services.explanation_projection import get_primary_explanation
-from app.services.reading_effort import (
-    EffortEstimate,
-    build_recommendation_context,
-    compute_effort_estimate,
-)
-from app.services.recommendation_explanation import RecommendationExplanationProjection
-from app.services.roll_service import RollService
-from app.services.session_response import (
-    build_session_response,
-    get_session_with_thread_safe,
-)
 from app.schemas import (
     RollBootstrapResponse,
     RollBootstrapThread,
     RollRequest,
     RollResponse,
     SessionMode,
-    SessionModeResponse,
-    SessionModeUpdateRequest,
-    SessionResponse,
 )
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
-from comic_pile.recommendation_selection import (
-    DEFAULT_BANDWIDTH,
-    DEFAULT_INTENT,
-)
-from comic_pile.recommendation_version import (
-    CONTROL_MODE_CONTEXTUAL,
-    RECOMMENDATION_ALGORITHM_VERSION,
-    recommendation_algorithm_version,
-)
-from comic_pile.reading_session import get_current_die_for_session
 
 router = APIRouter(tags=["guest-demo"])
 logger = logging.getLogger(__name__)
@@ -57,7 +30,12 @@ logger = logging.getLogger(__name__)
 class GuestDemoService:
     """Service for managing guest demo state and data."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
+        """Initialize the guest demo service.
+        
+        Args:
+            db: Async database session for operations.
+        """
         self._db = db
     
     async def get_demo_threads(self) -> list[Thread]:
@@ -65,9 +43,9 @@ class GuestDemoService:
         # Fetch sample threads that are marked as demo threads
         result = await self._db.execute(
             select(Thread)
-            .where(Thread.is_demo_thread == True)
+            .where(Thread.is_demo_thread)
             .where(Thread.status == "active")
-            .where(Thread.is_blocked == False)
+            .where(not Thread.is_blocked)
             .order_by(Thread.queue_position)
             .limit(20)  # Limit to a reasonable number for demo
         )
@@ -276,11 +254,14 @@ async def guest_demo_roll(
     current_session.pending_thread_id = selected_thread.id
     current_session.pending_thread_updated_at = datetime.now(UTC)
     
+    # Extract thread data before commit to avoid MissingGreenlet
+    issues_remaining = selected_thread.get_issues_remaining(db) if hasattr(selected_thread, 'get_issues_remaining') else 1
+    
     await db.commit()
     
     return _build_guest_roll_response(
         selected_thread=selected_thread,
-        unread_count=selected_thread.get_issues_remaining(db) if hasattr(selected_thread, 'get_issues_remaining') else 1,
+        unread_count=issues_remaining,
         issue_number=selected_thread_issue_number,
         selected_thread_issue_id=selected_thread_issue_id,
         selected_thread_issue_number=selected_thread_issue_number,

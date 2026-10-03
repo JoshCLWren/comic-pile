@@ -5,18 +5,14 @@ to experience the ComicPile roll functionality without creating an account.
 """
 
 import asyncio
-import logging
 from datetime import UTC, datetime
-from typing import List
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import get_database_url
-from app.database import Base
 from app.models.thread import Thread
-from app.models.user import User
 
 # Sample demo data
 DEMO_THREADS = [
@@ -130,7 +126,7 @@ async def create_demo_threads() -> None:
         try:
             # Check if demo threads already exist
             result = await session.execute(
-                sa.select(Thread).where(Thread.is_demo_thread == True)
+                sa.select(Thread).where(Thread.is_demo_thread)
             )
             existing_demo_threads = result.scalars().all()
             
