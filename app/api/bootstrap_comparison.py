@@ -9,7 +9,7 @@ Issue #2718: Roll v2: prove parity, performance, and migration observability
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -39,7 +39,7 @@ class ComparisonRequest(BaseModel):
         description="Test scenario to run",
         default=ComparisonScenario.NORMAL_POOL
     )
-    timezone: Optional[str] = Field(
+    timezone: str | None = Field(
         default="America/Chicago",
         description="Optional timezone for the comparison"
     )
@@ -56,10 +56,10 @@ class ComparisonResponse(BaseModel):
     status: str
     scenario: ComparisonScenario
     started_at: datetime
-    completed_at: Optional[datetime] = None
-    parity_report: Optional[ParityReport] = None
-    performance_validation: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
+    completed_at: datetime | None = None
+    parity_report: ParityReport | None = None
+    performance_validation: dict[str, Any | None] = None
+    error_message: str | None = None
 
 
 class ComparisonJob(BaseModel):
@@ -70,14 +70,14 @@ class ComparisonJob(BaseModel):
     scenario: ComparisonScenario
     status: str = "pending"
     created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    result: dict[str, Any | None] = None
+    error: str | None = None
 
 
 # In-memory job storage (in production, use a proper job queue)
-comparison_jobs: Dict[str, ComparisonJob] = {}
+comparison_jobs: dict[str, ComparisonJob] = {}
 
 
 @router.post("/run", response_model=ComparisonResponse)
@@ -211,12 +211,12 @@ async def get_comparison_status(
     return response
 
 
-@router.get("/jobs", response_model=List[ComparisonResponse])
+@router.get("/jobs", response_model=list[ComparisonResponse])
 async def list_comparison_jobs(
     current_user: User = Depends(get_current_user),
     limit: int = Query(default=10, le=100),
     offset: int = Query(default=0, ge=0)
-) -> List[ComparisonResponse]:
+) -> list[ComparisonResponse]:
     """List recent comparison jobs for the current user."""
     
     user_jobs = [
@@ -251,10 +251,10 @@ async def list_comparison_jobs(
     return responses
 
 
-@router.post("/validate-performance", response_model=Dict[str, Any])
+@router.post("/validate-performance", response_model=dict[str, Any])
 async def validate_performance_contract(
     current_user: User = Depends(get_current_user)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Validate that both v1 and v2 meet the 1-3 DB round trip performance contract."""
     
     # This would typically run against recent comparison results
@@ -275,7 +275,7 @@ class ObservabilityRequest(BaseModel):
         description="Endpoint being called",
         regex=r"^/api/(v1|v2)/roll/bootstrap$"
     )
-    client_info: Optional[Dict[str, Any]] = Field(
+    client_info: dict[str, Any | None] = Field(
         default=None,
         description="Optional client information for tracking"
     )
@@ -297,7 +297,7 @@ class ObservabilityRequest(BaseModel):
 async def track_observability(
     request: ObservabilityRequest,
     current_user: User = Depends(get_current_user)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Track observability data for migration monitoring."""
     
     # Log the observability data
@@ -326,8 +326,8 @@ async def track_observability(
 async def get_observability_summary(
     current_user: User = Depends(get_current_user),
     hours: int = Query(default=24, ge=1, le=168),  # 1 hour to 1 week
-    endpoint: Optional[str] = Query(default=None)
-) -> Dict[str, Any]:
+    endpoint: str | None = Query(default=None)
+) -> dict[str, Any]:
     """Get observability summary for the specified time period."""
     
     # This would query actual observability data from storage
@@ -368,8 +368,8 @@ async def get_observability_summary(
     }
 
 
-@router.get("/scenarios", response_model=List[Dict[str, Any]])
-async def list_comparison_scenarios() -> List[Dict[str, Any]]:
+@router.get("/scenarios", response_model=list[dict[str, Any]])
+async def list_comparison_scenarios() -> list[dict[str, Any]]:
     """List available comparison scenarios."""
     
     scenarios = [
@@ -391,7 +391,7 @@ async def list_comparison_scenarios() -> List[Dict[str, Any]]:
 @router.get("/readiness")
 async def get_migration_readiness(
     current_user: User = Depends(get_current_user)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get overall migration readiness assessment."""
     
     # This would analyze recent comparison results and observability data
@@ -418,7 +418,7 @@ async def get_migration_readiness(
     }
 
 
-async def _validate_performance_contract(report: ParityReport) -> Dict[str, Any]:
+async def _validate_performance_contract(report: ParityReport) -> dict[str, Any]:
     """Validate performance contract against a comparison report."""
     
     validation = {

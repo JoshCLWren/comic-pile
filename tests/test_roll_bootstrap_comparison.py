@@ -46,7 +46,7 @@ class RollBootstrapTestFixtures:
         self.test_threads = []
         self.test_issues = []
     
-    async def setup_empty_pool_scenario(self) -> Tuple[User, ReadingSession]:
+    async def setup_empty_pool_scenario(self) -> tuple[User, ReadingSession]:
         """Set up test scenario with empty roll pool."""
         # Create test user
         self.test_user = User(
@@ -73,7 +73,7 @@ class RollBootstrapTestFixtures:
         
         return self.test_user, self.test_session
     
-    async def setup_normal_pool_scenario(self) -> Tuple[User, ReadingSession, List[Thread], List[Issue]]:
+    async def setup_normal_pool_scenario(self) -> tuple[User, ReadingSession, list[Thread], list[Issue]]:
         """Set up test scenario with normal roll pool."""
         # Create test user and session
         self.test_user, self.test_session = await self.setup_empty_pool_scenario()
@@ -115,7 +115,7 @@ class RollBootstrapTestFixtures:
         
         return self.test_user, self.test_session, self.test_threads, self.test_issues
     
-    async def setup_d100_pool_scenario(self) -> Tuple[User, ReadingSession, List[Thread], List[Issue]]:
+    async def setup_d100_pool_scenario(self) -> tuple[User, ReadingSession, list[Thread], list[Issue]]:
         """Set up test scenario with d100 roll pool (100 threads)."""
         # Create test user and session
         self.test_user, self.test_session = await self.setup_empty_pool_scenario()
@@ -157,7 +157,7 @@ class RollBootstrapTestFixtures:
         
         return self.test_user, self.test_session, self.test_threads, self.test_issues
     
-    async def setup_pending_state_scenario(self) -> Tuple[User, ReadingSession, Thread]:
+    async def setup_pending_state_scenario(self) -> tuple[User, ReadingSession, Thread]:
         """Set up test scenario with pending roll state."""
         # Create test user and session
         self.test_user, self.test_session = await self.setup_empty_pool_scenario()
@@ -197,7 +197,7 @@ class RollBootstrapTestFixtures:
         
         return self.test_user, self.test_session, thread
     
-    async def setup_recovery_state_scenario(self) -> Tuple[User, ReadingSession, Thread]:
+    async def setup_recovery_state_scenario(self) -> tuple[User, ReadingSession, Thread]:
         """Set up test scenario with roll recovery state."""
         # Create test user and session
         self.test_user, self.test_session = await self.setup_empty_pool_scenario()
@@ -265,7 +265,7 @@ class RollBootstrapComparisonTester:
         self.harness = RollBootstrapComparisonHarness(app, db_pool)
         self.fixtures = None
     
-    async def run_all_scenarios(self) -> Dict[str, ParityReport]:
+    async def run_all_scenarios(self) -> dict[str, ParityReport]:
         """Run comparison across all test scenarios."""
         
         results = {}
@@ -336,7 +336,7 @@ class RollBootstrapComparisonTester:
         
         return report
     
-    async def validate_performance_contract(self, report: ParityReport) -> Dict[str, Any]:
+    async def validate_performance_contract(self, report: ParityReport) -> dict[str, Any]:
         """Validate that performance contract is met."""
         
         validation = {
@@ -371,7 +371,7 @@ class RollBootstrapComparisonTester:
         
         return validation
     
-    async def generate_comparison_summary(self, results: Dict[str, ParityReport]) -> Dict[str, Any]:
+    async def generate_comparison_summary(self, results: dict[str, ParityReport]) -> dict[str, Any]:
         """Generate a comprehensive summary of all comparison results."""
         
         summary = {

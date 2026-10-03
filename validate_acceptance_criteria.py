@@ -44,8 +44,8 @@ class ValidationResult(BaseModel):
     criterion_name: str
     description: str
     passed: bool
-    details: Dict[str, Any]
-    error_message: Optional[str] = None
+    details: dict[str, Any]
+    error_message: str | None = None
     timestamp: datetime
 
 
@@ -65,10 +65,10 @@ class AcceptanceCriteriaValidator:
         self.logger = logging.getLogger(__name__)
         
         # Validation results
-        self.results: List[ValidationResult] = []
+        self.results: list[ValidationResult] = []
         
         # Test user
-        self.test_user: Optional[User] = None
+        self.test_user: User | None = None
         
     async def setup_test_user(self) -> User:
         """Create a test user for validation."""
@@ -85,7 +85,7 @@ class AcceptanceCriteriaValidator:
         
         return self.test_user
     
-    async def make_api_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict[str, Any]:
+    async def make_api_request(self, endpoint: str, params: Dict | None = None) -> dict[str, Any]:
         """Make an API request and return response data."""
         
         user = await self.setup_test_user()
@@ -624,7 +624,7 @@ class AcceptanceCriteriaValidator:
                 timestamp=datetime.now(timezone.utc)
             )
     
-    async def run_all_validations(self) -> List[ValidationResult]:
+    async def run_all_validations(self) -> list[ValidationResult]:
         """Run all acceptance criterion validations."""
         
         self.logger.info("Starting acceptance criteria validation...")
@@ -656,7 +656,7 @@ class AcceptanceCriteriaValidator:
         
         return self.results
     
-    async def generate_validation_report(self) -> Dict[str, Any]:
+    async def generate_validation_report(self) -> dict[str, Any]:
         """Generate comprehensive validation report."""
         
         # Calculate summary statistics

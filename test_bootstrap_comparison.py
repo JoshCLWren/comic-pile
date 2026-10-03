@@ -48,9 +48,9 @@ class ComparisonTestResult(BaseModel):
     
     scenario: str
     passed: bool
-    error_message: Optional[str] = None
-    parity_report: Optional[Dict[str, Any]] = None
-    performance_metrics: Optional[Dict[str, Any]] = None
+    error_message: str | None = None
+    parity_report: dict[str, Any | None] = None
+    performance_metrics: dict[str, Any | None] = None
     execution_time_ms: float
     timestamp: datetime
 
@@ -71,7 +71,7 @@ class ComprehensiveTestSuite:
         self.logger = logging.getLogger(__name__)
         
         # Test results
-        self.results: List[ComparisonTestResult] = []
+        self.results: list[ComparisonTestResult] = []
         
     async def setup_test_user(self) -> User:
         """Create a test user for the comparison tests."""
@@ -91,7 +91,7 @@ class ComprehensiveTestSuite:
         
         return test_user
     
-    async def test_endpoint_response(self, endpoint: str, user: User) -> Dict[str, Any]:
+    async def test_endpoint_response(self, endpoint: str, user: User) -> dict[str, Any]:
         """Test response from a specific endpoint."""
         
         headers = {"Authorization": f"Bearer {user.access_token}"}
@@ -112,7 +112,7 @@ class ComprehensiveTestSuite:
                 "data": response.json()
             }
     
-    async def test_parity_between_versions(self, user: User) -> Dict[str, Any]:
+    async def test_parity_between_versions(self, user: User) -> dict[str, Any]:
         """Test parity between v1 and v2 bootstrap endpoints."""
         
         # Get v1 response
@@ -185,7 +185,7 @@ class ComprehensiveTestSuite:
             "overall_parity": all(check["equal"] for check in parity_checks)
         }
     
-    async def run_scenario_tests(self, scenario: Optional[ComparisonScenario] = None) -> List[ComparisonTestResult]:
+    async def run_scenario_tests(self, scenario: ComparisonScenario | None = None) -> list[ComparisonTestResult]:
         """Run tests for specific scenario(s)."""
         
         test_user = await self.setup_test_user()
@@ -243,7 +243,7 @@ class ComprehensiveTestSuite:
         
         return results
     
-    async def validate_performance_contract(self) -> Dict[str, Any]:
+    async def validate_performance_contract(self) -> dict[str, Any]:
         """Validate that the 1-3 DB round trip contract is met."""
         
         self.logger.info("Validating performance contract...")
@@ -285,7 +285,7 @@ class ComprehensiveTestSuite:
                 "error": str(e)
             }
     
-    async def generate_comprehensive_report(self) -> Dict[str, Any]:
+    async def generate_comprehensive_report(self) -> dict[str, Any]:
         """Generate a comprehensive test report."""
         
         self.logger.info("Generating comprehensive report...")

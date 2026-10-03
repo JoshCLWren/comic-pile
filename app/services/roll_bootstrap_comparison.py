@@ -9,18 +9,12 @@ Issue #2718: Roll v2: prove parity, performance, and migration observability
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
 from enum import Enum
 
 import asyncpg
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import BaseModel, Field, validator
-
-from app.api.roll import roll_router, v2_router
-from app.core.auth import get_current_user
-from app.core.config import get_db
-from app.core.security import get_password_hash
+from pydantic import BaseModel, Field
 from app.models.user import User
 from app.schemas.roll import RollBootstrapResponse, RollBootstrapThread
 from app.schemas.roll_v2 import (
@@ -90,9 +84,9 @@ class ParityReport(BaseModel):
     timezone_match: bool
     
     # Detailed comparisons
-    parity_checks: List[ParityCheck]
-    v1_only_differences: List[str]
-    v2_only_enrichment: List[str]
+    parity_checks: list[ParityCheck]
+    v1_only_differences: list[str]
+    v2_only_enrichment: list[str]
     
     # Performance metrics
     v1_metrics: PerformanceMetrics
@@ -100,11 +94,11 @@ class ParityReport(BaseModel):
     
     # Validation results
     v2_validation_passed: bool
-    v2_validation_errors: List[str]
+    v2_validation_errors: list[str]
     
     # Summary
     overall_parity: bool
-    critical_failures: List[str]
+    critical_failures: list[str]
 
 
 class RollBootstrapComparisonHarness:
@@ -119,7 +113,7 @@ class RollBootstrapComparisonHarness:
         self, 
         user: User, 
         scenario: ComparisonScenario,
-        timezone_str: Optional[str] = None
+        timezone_str: str | None = None
     ) -> ParityReport:
         """Compare v1 and v2 bootstrap responses for a given scenario."""
         
@@ -183,7 +177,7 @@ class RollBootstrapComparisonHarness:
         self, 
         endpoint: str, 
         user: User, 
-        timezone_str: Optional[str] = None
+        timezone_str: str | None = None
     ) -> PerformanceMetrics:
         """Measure performance characteristics of an endpoint."""
         
@@ -226,7 +220,7 @@ class RollBootstrapComparisonHarness:
         self, 
         v1_response: RollBootstrapResponse, 
         v2_response: RollV2BootstrapResponse
-    ) -> List[ParityCheck]:
+    ) -> list[ParityCheck]:
         """Run detailed parity checks between v1 and v2 responses."""
         
         checks = []
@@ -249,7 +243,7 @@ class RollBootstrapComparisonHarness:
         self, 
         v1_response: RollBootstrapResponse, 
         v2_response: RollV2BootstrapResponse
-    ) -> List[ParityCheck]:
+    ) -> list[ParityCheck]:
         """Check session state fields for parity."""
         
         checks = []
@@ -299,7 +293,7 @@ class RollBootstrapComparisonHarness:
         self, 
         v1_response: RollBootstrapResponse, 
         v2_response: RollV2BootstrapResponse
-    ) -> List[ParityCheck]:
+    ) -> list[ParityCheck]:
         """Check pool/rollable content for parity."""
         
         checks = []
@@ -356,7 +350,7 @@ class RollBootstrapComparisonHarness:
         self, 
         v1_response: RollBootstrapResponse, 
         v2_response: RollV2BootstrapResponse
-    ) -> List[ParityCheck]:
+    ) -> list[ParityCheck]:
         """Check summary counts and collections for parity."""
         
         checks = []
@@ -387,7 +381,7 @@ class RollBootstrapComparisonHarness:
         
         return checks
     
-    async def _validate_v2_enrichment(self, v2_response: RollV2BootstrapResponse) -> Dict[str, Any]:
+    async def _validate_v2_enrichment(self, v2_response: RollV2BootstrapResponse) -> dict[str, Any]:
         """Validate v2-specific enrichment fields against source data."""
         
         errors = []
@@ -428,7 +422,7 @@ class RollBootstrapComparisonHarness:
         self, 
         v1_response: RollBootstrapResponse, 
         v2_response: RollV2BootstrapResponse
-    ) -> List[str]:
+    ) -> list[str]:
         """Identify fields that exist only in v1."""
         
         differences = []
@@ -443,7 +437,7 @@ class RollBootstrapComparisonHarness:
         self, 
         v1_response: RollBootstrapResponse, 
         v2_response: RollV2BootstrapResponse
-    ) -> List[str]:
+    ) -> list[str]:
         """Identify v2-specific enrichment fields."""
         
         enrichment = []
@@ -467,9 +461,9 @@ class RollBootstrapComparisonHarness:
     
     def _identify_critical_failures(
         self, 
-        parity_checks: List[ParityCheck], 
-        v2_validation: Dict[str, Any]
-    ) -> List[str]:
+        parity_checks: list[ParityCheck], 
+        v2_validation: dict[str, Any]
+    ) -> list[str]:
         """Identify critical failures that block parity."""
         
         failures = []
@@ -543,7 +537,7 @@ class RollBootstrapComparisonHarness:
         """Check timezone parity."""
         return v1.timezone == v2.timezone
     
-    def _check_active_thread_parity_detailed(self, v1: RollBootstrapResponse, v2: RollV2BootstrapResponse) -> List[ParityCheck]:
+    def _check_active_thread_parity_detailed(self, v1: RollBootstrapResponse, v2: RollV2BootstrapResponse) -> list[ParityCheck]:
         """Detailed active thread parity checks."""
         checks = []
         
