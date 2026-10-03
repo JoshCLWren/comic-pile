@@ -826,3 +826,37 @@ def lease_is_stale(owner: str, *, active_fixed_workers: set[int], has_unresolved
             return False
         return now_epoch - latest_activity_epoch > fixed_ttl_seconds
     return False
+
+
+# Import shared eligibility functions to ensure both selectors delegate to the same source
+import sys
+from pathlib import Path
+scripts_dir = Path("scripts").resolve()
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+
+import factory_eligibility as eligibility
+
+
+def is_manual_only(body: str | None) -> bool:
+    """Return whether a body carries the structured manual-only directive.
+    
+    Delegates to the shared eligibility module to ensure consistency across selectors.
+    """
+    return eligibility.is_manual_only(body)
+
+
+def is_acceptance_parent(body: str | None) -> bool:
+    """Return whether a body declares a product-acceptance parent contract.
+    
+    Delegates to the shared eligibility module to ensure consistency across selectors.
+    """
+    return eligibility.is_acceptance_parent(body)
+
+
+def parse_declared_dependencies(body: str | None) -> set[int]:
+    """Return every issue number declared as an explicit prerequisite.
+    
+    Delegates to the shared eligibility module to ensure consistency across selectors.
+    """
+    return eligibility.parse_declared_dependencies(body)
