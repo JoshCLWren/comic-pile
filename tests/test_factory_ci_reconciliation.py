@@ -247,7 +247,14 @@ def test_passing_checks_continue_through_authorization_and_mechanical_gates(
         "required_checks_gate",
         lambda _pr: {"decision": "pass", "reason": "all required checks are successful"},
     )
-    monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: [approval])
+    monkeypatch.setattr(
+        module,
+        "review_comment_bodies",
+        lambda _pr: [
+            module.head_contributor_marker(pr=PR_NUMBER, head=HEAD, worker="43", epoch=1),
+            approval,
+        ],
+    )
 
     def mechanical_gate(pr_number: int, head: str) -> dict[str, str]:
         mechanical_calls.append((pr_number, head))

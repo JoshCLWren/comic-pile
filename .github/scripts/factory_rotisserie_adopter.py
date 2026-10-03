@@ -87,6 +87,21 @@ def _producer(pr: dict[str, Any]) -> str | None:
     return producer_worker_from_pr(pr)
 
 
+def _contributors(pr: dict[str, Any]) -> tuple[set[str], bool]:
+    """Return the captured contributor set and whether provenance was recorded.
+
+    The declared producer authored every head of its own branch, so it is
+    always part of the contributor set even when the capture predates trusted
+    contributor markers.
+    """
+    recorded = {str(worker) for worker in pr.get("head_contributors") or [] if worker}
+    producer = _producer(pr)
+    contributors = set(recorded)
+    if producer is not None:
+        contributors.add(producer)
+    return contributors, bool(recorded)
+
+
 def _human_gate(issue: dict[str, Any]) -> bool:
     """Return whether ComicPile policy requires an explicit non-worker gate."""
     labels = set(_labels(issue))
@@ -343,8 +358,8 @@ def legacy_decisions(view: dict[str, Any]) -> dict[str, object]:
         linked = linked_issue_from_pr(pr)
         if linked is None or linked not in open_numbers or str(pr.get("state", "OPEN")).upper() != "OPEN":
             continue
-        producer = _producer(pr)
         head = str(pr.get("headRefOid") or "")
+        contributors, provenance_complete = _contributors(pr)
         reviews = [
             dict(review)
             for review in pr.get("reviews") or []
@@ -355,8 +370,9 @@ def legacy_decisions(view: dict[str, Any]) -> dict[str, object]:
         elif not reviews or any(review["decision"] == "pending" for review in reviews):
             review_outcome = "pending"
         elif head_has_authorized_approval(
-            producer=producer,
+            contributors=contributors,
             approvers=(str(review["reviewer"]) for review in reviews if review["decision"] == "approved"),
+            provenance_complete=provenance_complete,
         ):
             review_outcome = "approved"
         else:

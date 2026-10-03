@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import importlib
+import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -21,6 +22,7 @@ approval_can_promote = _review_policy.approval_can_promote
 current_head_approvers = _review_policy.current_head_approvers
 current_head_contributors = _review_policy.current_head_contributors
 head_contributor_marker = _review_policy.head_contributor_marker
+head_contributor_provenance = _review_policy.head_contributor_provenance
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
 parse_head_contributor_marker = _review_policy.parse_head_contributor_marker
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
@@ -149,6 +151,7 @@ def test_raw_ready_token_is_not_controller_authorization() -> None:
     assert "FACTORY_GATE_READY" in malicious_output
     assert not approval_can_promote(
         producer="43",
+        provenance_complete=True,
         reviewer="43",
         reviewed_head=REVIEWED_HEAD,
         current_head=REVIEWED_HEAD,
@@ -161,6 +164,7 @@ def test_independent_exact_head_approval_can_promote() -> None:
     """A distinct reviewer with green mechanical gates can authorize one exact head."""
     assert approval_can_promote(
         producer="43",
+        provenance_complete=True,
         reviewer="17",
         reviewed_head=REVIEWED_HEAD,
         current_head=REVIEWED_HEAD,
@@ -173,6 +177,7 @@ def test_head_change_invalidates_semantic_authorization() -> None:
     """Semantic approval never floats forward to a changed head."""
     assert not approval_can_promote(
         producer="43",
+        provenance_complete=True,
         reviewer="17",
         reviewed_head=REVIEWED_HEAD,
         current_head=MOVED_HEAD,
@@ -193,6 +198,7 @@ def test_mechanical_failure_blocks_ready_promotion() -> None:
     """Semantic confidence cannot bypass merge mechanics."""
     assert not approval_can_promote(
         producer="43",
+        provenance_complete=True,
         reviewer="17",
         reviewed_head=REVIEWED_HEAD,
         current_head=REVIEWED_HEAD,
@@ -206,6 +212,7 @@ def test_repair_and_reject_verdicts_never_authorize_ready() -> None:
     for verdict in ("repair", "reject"):
         assert not approval_can_promote(
             producer="43",
+            provenance_complete=True,
             reviewer="17",
             reviewed_head=REVIEWED_HEAD,
             current_head=REVIEWED_HEAD,
@@ -216,8 +223,8 @@ def test_repair_and_reject_verdicts_never_authorize_ready() -> None:
 
 def test_unknown_historical_producer_requires_two_distinct_reviewers() -> None:
     """Backlog PRs without provenance can move safely without fabricated history."""
-    assert not head_has_authorized_approval(producer=None, approvers={"17"})
-    assert head_has_authorized_approval(producer=None, approvers={"17", "21"})
+    assert not head_has_authorized_approval(approvers={"17"})
+    assert head_has_authorized_approval(approvers={"17", "21"})
 
 
 def test_review_text_redacts_common_secrets() -> None:
@@ -345,6 +352,7 @@ def test_controller_promotes_independent_green_review(monkeypatch: MonkeyPatch) 
         monkeypatch,
         module,
         [payload, payload],
+        comments=producer_contribution(),
         mechanical=True,
         include_diff_inspection=True,
     )
@@ -547,7 +555,13 @@ def test_controller_allows_approval_without_findings(monkeypatch: MonkeyPatch) -
     """A clean semantic approval does not need a detailed findings payload, but requires diff inspection."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
-    transitions, _posted, _commands = wire_controller(monkeypatch, module, [payload, payload], include_diff_inspection=True)
+    transitions, _posted, _commands = wire_controller(
+        monkeypatch,
+        module,
+        [payload, payload],
+        comments=producer_contribution(),
+        include_diff_inspection=True,
+    )
     # Diff inspection evidence is required even without detailed findings
     monkeypatch.setattr(module, "review_excerpt", lambda _path, **_kwargs: "gh pr diff\n")
 
@@ -720,7 +734,6 @@ def test_parse_head_contributor_marker() -> None:
     assert result["worker"] == "42"
     assert result["epoch"] == "1234567890"
 
-
 def test_head_contributor_marker_roundtrip() -> None:
     """Marker generation and parsing are inverses."""
     marker = head_contributor_marker(
@@ -737,101 +750,144 @@ def test_head_contributor_marker_roundtrip() -> None:
     assert parsed["epoch"] == "1234567890"
 
 
+def producer_contribution(*, worker: str = "43") -> list[str]:
+    """Return the controller-written producer record a real factory PR carries."""
+    return [contributor_comment(pr=1390, head=REVIEWED_HEAD, worker=worker, epoch=1)]
+
+
+def contributor_comment(*, pr: int = 123, head: str, worker: str, epoch: int) -> str:
+    """Build the exact single-line comment the controller writes at push time."""
+    return head_contributor_marker(pr=pr, head=head, worker=worker, epoch=epoch)
+
+
+def latest_commit_identity() -> str:
+    """Return the Git author/committer identity shared by factory pushes."""
+    completed = subprocess.run(
+        ["git", "log", "-1", "--format=%an <%ae>|%cn <%ce>"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return completed.stdout.strip()
+
+
 def test_current_head_contributors_filters_by_pr_and_head() -> None:
     """Contributor extraction respects PR number and head SHA."""
     head_aaa = "a" * 40
     head_bbb = "b" * 40
     comments = [
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-123:head-{head_aaa}:worker-1:epoch-1 -->",
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-123:head-{head_aaa}:worker-2:epoch-2 -->",
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-123:head-{head_bbb}:worker-1:epoch-3 -->",
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-456:head-{head_aaa}:worker-3:epoch-4 -->",
+        contributor_comment(head=head_aaa, worker="1", epoch=1),
+        contributor_comment(head=head_aaa, worker="2", epoch=2),
+        contributor_comment(head=head_bbb, worker="1", epoch=3),
+        contributor_comment(pr=456, head=head_aaa, worker="3", epoch=4),
     ]
     contributors = current_head_contributors(comments, pr=123, head=head_aaa)
     assert contributors == {"1", "2"}
 
 
+def test_current_head_contributors_rejects_embedded_markers() -> None:
+    """A marker pasted into worker prose never reads as controller provenance."""
+    head = "a" * 40
+    marker = head_contributor_marker(pr=123, head=head, worker="59", epoch=2)
+    worker_authored = [
+        f"{marker}\n\n### Factory resume packet\nHead: `{head}`",
+        f"factory: advance PR #123\n{marker}",
+        f"{marker} <!-- claimed by worker 59 -->",
+        "",
+    ]
+    assert current_head_contributors(worker_authored, pr=123, head=head) == set()
+
+
+def test_head_contributor_provenance_includes_declared_producer() -> None:
+    """The branch/body producer authored every head of its own branch."""
+    head = "a" * 40
+    contributors, provenance_complete = head_contributor_provenance(
+        [contributor_comment(head=head, worker="59", epoch=2)],
+        pr=123,
+        head=head,
+        producer="29",
+    )
+    assert contributors == {"29", "59"}
+    assert provenance_complete is True
+
+    without_markers, complete = head_contributor_provenance([], pr=123, head=head, producer="29")
+    assert without_markers == {"29"}
+    assert complete is False
+
+
 def test_head_has_authorized_approval_with_contributors() -> None:
-    """Reviewer eligibility is determined by contributor set, not just producer."""
-    # Reviewer not in contributors -> authorized
+    """Reviewer eligibility is determined by the contributor set, not only the producer."""
+    # A reviewer outside the contributor set authorizes a head with provenance.
     assert head_has_authorized_approval(
-        contributors={"42"},
         approvers={"17"},
-        has_provenance=True,
+        contributors={"42"},
+        provenance_complete=True,
     )
-    # Reviewer in contributors -> not authorized
+    # The only approver is a contributor, so no eligible reviewer exists.
     assert not head_has_authorized_approval(
+        approvers={"17"},
         contributors={"42", "17"},
-        approvers={"17"},
-        has_provenance=True,
+        provenance_complete=True,
     )
-    # Multiple approvers, one not in contributors -> authorized
+    # One eligible reviewer is enough even when another contributor also approved.
     assert head_has_authorized_approval(
-        contributors={"42"},
         approvers={"42", "17"},
-        has_provenance=True,
+        contributors={"42"},
+        provenance_complete=True,
     )
-    # No provenance (historical PR) -> requires two distinct reviewers
-    assert not head_has_authorized_approval(
-        contributors=set(),
-        approvers={"17"},
-        has_provenance=False,
-    )
-    assert head_has_authorized_approval(
-        contributors=set(),
-        approvers={"17", "42"},
-        has_provenance=False,
-    )
+    # No provenance (historical PR) still requires two distinct reviewers.
+    assert not head_has_authorized_approval(approvers={"17"})
+    assert head_has_authorized_approval(approvers={"17", "42"})
 
 
 def test_approval_can_promote_blocks_contributors() -> None:
-    """A contributor cannot approve the head they contributed to."""
+    """A contributor cannot promote the exact head they contributed to."""
     head_aaa = "a" * 40
     head_bbb = "b" * 40
-    # Independent reviewer can promote
+    # Independent reviewer can promote.
     assert approval_can_promote(
         contributors={"42"},
-        has_provenance=True,
+        provenance_complete=True,
         reviewer="17",
         reviewed_head=head_aaa,
         current_head=head_aaa,
         verdict="approve",
         mechanical_gates_passed=True,
     )
-    # Contributor cannot promote
+    # Contributor cannot promote.
     assert not approval_can_promote(
         contributors={"42", "17"},
-        has_provenance=True,
+        provenance_complete=True,
         reviewer="17",
         reviewed_head=head_aaa,
         current_head=head_aaa,
         verdict="approve",
         mechanical_gates_passed=True,
     )
-    # Head changed -> not authorized
+    # Head changed -> not authorized.
     assert not approval_can_promote(
         contributors={"42"},
-        has_provenance=True,
+        provenance_complete=True,
         reviewer="17",
         reviewed_head=head_aaa,
         current_head=head_bbb,
         verdict="approve",
         mechanical_gates_passed=True,
     )
-    # Mechanical gates failed -> not authorized
+    # Mechanical gates failed -> not authorized.
     assert not approval_can_promote(
         contributors={"42"},
-        has_provenance=True,
+        provenance_complete=True,
         reviewer="17",
         reviewed_head=head_aaa,
         current_head=head_aaa,
         verdict="approve",
         mechanical_gates_passed=False,
     )
-    # Verdict not approve -> not authorized
+    # Verdict not approve -> not authorized.
     assert not approval_can_promote(
         contributors={"42"},
-        has_provenance=True,
+        provenance_complete=True,
         reviewer="17",
         reviewed_head=head_aaa,
         current_head=head_aaa,
@@ -840,76 +896,97 @@ def test_approval_can_promote_blocks_contributors() -> None:
     )
 
 
-def test_pr2846_shape_producer_a_repairer_b_b_cannot_approve() -> None:
-    """Regression test for #2846: producer A creates PR, repairer B repairs, B cannot approve."""
-    # Producer A (worker 29) creates PR, head = HEAD1
-    # Repairer B (worker 59) pushes repair, head = HEAD2
-    # Contributor markers: A for HEAD1, B for HEAD2
-    # When B reviews HEAD2, they are in contributor set -> blocked
-    
-    head1 = "a" * 40
-    head2 = "b" * 40
-    
-    # Comments with contributor markers for both heads
+def test_pr2846_shape_repairer_b_cannot_approve_its_own_repair() -> None:
+    """Producer A opens the PR, repairer B repairs it, B still cannot approve."""
+    head_1 = "a" * 40
+    head_2 = "b" * 40
     comments = [
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-123:head-{head1}:worker-29:epoch-1 -->",
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-123:head-{head2}:worker-59:epoch-2 -->",
+        contributor_comment(head=head_1, worker="29", epoch=1),
+        contributor_comment(head=head_2, worker="59", epoch=2),
     ]
-    
-    # For HEAD2, contributors = {59}
-    contributors_head2 = current_head_contributors(comments, pr=123, head=head2)
-    assert contributors_head2 == {"59"}
-    
-    # Repairer B (59) cannot approve HEAD2
+
+    contributors, provenance_complete = head_contributor_provenance(
+        comments, pr=123, head=head_2, producer="29"
+    )
+    assert contributors == {"29", "59"}
+    assert provenance_complete is True
+
+    # Repairer B cannot approve the head containing B's own repair.
     assert not approval_can_promote(
-        contributors=contributors_head2,
-        has_provenance=True,
+        contributors=contributors,
+        provenance_complete=provenance_complete,
         reviewer="59",
-        reviewed_head=head2,
-        current_head=head2,
+        reviewed_head=head_2,
+        current_head=head_2,
         verdict="approve",
         mechanical_gates_passed=True,
     )
-    
-    # Worker C (17) can approve HEAD2
+    # Producer A cannot approve the head either.
+    assert not approval_can_promote(
+        contributors=contributors,
+        provenance_complete=provenance_complete,
+        reviewer="29",
+        reviewed_head=head_2,
+        current_head=head_2,
+        verdict="approve",
+        mechanical_gates_passed=True,
+    )
+    # Worker C, who authored none of this head, can approve it.
     assert approval_can_promote(
-        contributors=contributors_head2,
-        has_provenance=True,
+        contributors=contributors,
+        provenance_complete=provenance_complete,
         reviewer="17",
-        reviewed_head=head2,
-        current_head=head2,
+        reviewed_head=head_2,
+        current_head=head_2,
         verdict="approve",
         mechanical_gates_passed=True,
     )
 
 
-def test_multiple_repairers_all_excluded() -> None:
-    """Multiple repairers are all excluded from reviewing a head containing their changes."""
+def test_shared_git_identity_cannot_attribute_two_workers() -> None:
+    """Factory pushes share one Git identity, so attribution stays marker-based."""
+    head_1 = "a" * 40
+    head_2 = "b" * 40
+    comments = [
+        contributor_comment(head=head_1, worker="29", epoch=1),
+        contributor_comment(head=head_2, worker="59", epoch=2),
+    ]
+    # Every factory commit carries the same author and committer, so Git identity
+    # cannot tell worker 29 apart from worker 59.
+    assert latest_commit_identity() == latest_commit_identity()
+    # Trusted provenance still keeps the two workers distinct per exact head.
+    assert current_head_contributors(comments, pr=123, head=head_1) == {"29"}
+    assert current_head_contributors(comments, pr=123, head=head_2) == {"59"}
+
+
+def test_multiple_repairers_are_all_excluded() -> None:
+    """Every worker that authored the head is excluded from reviewing it."""
     head = "c" * 40
     comments = [
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-123:head-{head}:worker-10:epoch-1 -->",
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-123:head-{head}:worker-20:epoch-2 -->",
-        f"<!-- comic-pile-factory-head-contributor-v1:pr-123:head-{head}:worker-30:epoch-3 -->",
+        contributor_comment(head=head, worker="10", epoch=1),
+        contributor_comment(head=head, worker="20", epoch=2),
+        contributor_comment(head=head, worker="30", epoch=3),
     ]
-    contributors = current_head_contributors(comments, pr=123, head=head)
+    contributors, provenance_complete = head_contributor_provenance(
+        comments, pr=123, head=head, producer="10"
+    )
     assert contributors == {"10", "20", "30"}
-    
-    # None of the contributors can approve
-    for worker in ["10", "20", "30"]:
+    assert provenance_complete is True
+
+    for worker in ("10", "20", "30"):
         assert not approval_can_promote(
             contributors=contributors,
-            has_provenance=True,
+            provenance_complete=provenance_complete,
             reviewer=worker,
             reviewed_head=head,
             current_head=head,
             verdict="approve",
             mechanical_gates_passed=True,
-        ), f"Worker {worker} should not be able to approve"
-    
-    # Independent worker can approve
+        ), f"worker {worker} must not approve a head it authored"
+
     assert approval_can_promote(
         contributors=contributors,
-        has_provenance=True,
+        provenance_complete=provenance_complete,
         reviewer="40",
         reviewed_head=head,
         current_head=head,
@@ -918,68 +995,188 @@ def test_multiple_repairers_all_excluded() -> None:
     )
 
 
-def test_missing_provenance_fails_closed() -> None:
-    """Missing contributor provenance for a factory-mutated head fails closed."""
-    # When has_provenance=False (no contributor markers), need 2 reviewers
-    # But if the PR has factory labels, it should have provenance
-    # This tests the fail-closed behavior when provenance is missing
-    
-    # No contributors recorded -> has_provenance=False
+def test_missing_provenance_fails_closed_instead_of_assuming_independence() -> None:
+    """A head with no controller provenance needs two distinct eligible reviewers."""
+    head = "d" * 40
+    contributors, provenance_complete = head_contributor_provenance(
+        [], pr=123, head=head, producer="29"
+    )
+    assert contributors == {"29"}
+    assert provenance_complete is False
+
+    # The producer plus one other reviewer is not enough to assume independence.
     assert not head_has_authorized_approval(
-        contributors=set(),
-        approvers={"17"},
-        has_provenance=False,
+        approvers={"29", "17"},
+        contributors=contributors,
     )
-    # Two distinct reviewers can approve without provenance
+    # Two reviewers other than the producer authorize the head.
     assert head_has_authorized_approval(
-        contributors=set(),
-        approvers={"17", "42"},
-        has_provenance=False,
+        approvers={"17", "21"},
+        contributors=contributors,
     )
-    
-    # With provenance but empty contributors (malformed) -> fail closed
-    # Empty contributors with has_provenance=True means markers exist but parsed empty
-    # This should not happen in practice but fail closed if it does
-    # (any reviewer not in empty set is authorized, which is correct fail-open for this edge)
-    # Actually, if has_provenance=True but contributors is empty, any reviewer passes
-    # This is the correct behavior - if markers exist but no valid workers, allow review
-    
-    # The key test: missing provenance (has_provenance=False) requires 2 reviewers
-    # This prevents silently treating a reviewer as independent
+    # The same fail-closed rule applies to a head with no provenance at all.
+    assert not head_has_authorized_approval(approvers={"17"}, contributors=set())
+    assert head_has_authorized_approval(approvers={"17", "21"}, contributors=set())
 
 
-def test_worker_authored_text_cannot_forge_contributor_provenance() -> None:
-    """Worker-authored PR body/comment/commit text cannot forge controller contributor provenance."""
-    # The controller only trusts markers from github-actions[bot] or trusted collaborators
-    # Worker-authored text in PR body, commit messages, or review prose is not parsed
-    # by current_head_contributors because it only reads comments from trusted sources
-    # (see review_comment_bodies in factory-review-controller.py)
-    
-    # This test documents the trust boundary: the policy functions themselves
-    # don't enforce source trust; the controller does via review_comment_bodies
-    pass
-
-
-def test_controller_record_contribution_command() -> None:
-    """Test the record-contribution controller command."""
+def test_controller_records_contribution_for_the_exact_head(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The controller binds the pushing worker to the head it actually produced."""
     module = load_review_controller()
-    
-    # Check that record_contribution function exists
-    assert hasattr(module, "record_contribution")
-    assert callable(module.record_contribution)
-    
-    # Check that the command is registered in main()
-    import argparse
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    record = subparsers.add_parser("record-contribution")
-    record.add_argument("--worker", required=True)
-    record.add_argument("--pr", type=int, required=True)
-    record.add_argument("--head", required=True)
-    
-    # Parse a test command
-    args = parser.parse_args(["record-contribution", "--worker", "42", "--pr", "123", "--head", "a" * 40])
-    assert args.command == "record-contribution"
-    assert args.worker == "42"
-    assert args.pr == 123
-    assert args.head == "a" * 40
+    head = "e" * 40
+    commands: list[list[str]] = []
+    posted: list[dict[str, object]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": head,
+            "labels": [{"name": "factory"}, {"name": "factory:review"}],
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "run_gh",
+        lambda args, **_kwargs: commands.append(list(args)) or Result(),
+    )
+    monkeypatch.setattr(
+        module.time,
+        "time",
+        lambda: 1234567890,
+    )
+    monkeypatch.setattr(module, "post_review_comment", lambda **kwargs: posted.append(kwargs))
+
+    result = module.record_contribution(worker="42", pr_number=1390, head=head)
+
+    assert result["status"] == "recorded"
+    assert result["head"] == head
+    marker = head_contributor_marker(pr=1390, head=head, worker="42", epoch=1234567890)
+    assert ["issue", "comment", "1390", "--repo", module.REPO, "--body", marker] in commands
+    assert current_head_contributors([marker], pr=1390, head=head) == {"42"}
+
+
+def test_controller_refuses_to_record_provenance_for_a_stale_head(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A racing push cannot be misattributed to the worker that recorded it."""
+    module = load_review_controller()
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": "f" * 40,
+            "labels": [{"name": "factory"}],
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="does not match expected"):
+        module.record_contribution(worker="42", pr_number=1390, head="e" * 40)
+
+
+def test_controller_refuses_contributor_provenance_for_non_factory_prs(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Only factory pull requests participate in factory review independence."""
+    module = load_review_controller()
+    head = "e" * 40
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": head,
+            "labels": [{"name": "enhancement"}],
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="not a factory pull request"):
+        module.record_contribution(worker="42", pr_number=1390, head=head)
+
+
+def test_controller_blocks_a_repairer_from_attesting_its_own_repair(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The #2846 shape is refused by the controller, not just the pure policy."""
+    module = load_review_controller()
+    payload = pr_payload(worker="59", branch_worker="29")
+    contributions = [
+        contributor_comment(pr=1390, head=REVIEWED_HEAD, worker="29", epoch=1),
+        contributor_comment(pr=1390, head=REVIEWED_HEAD, worker="59", epoch=2),
+    ]
+    transitions, posted, _commands = wire_controller(
+        monkeypatch, module, [payload], comments=contributions, include_diff_inspection=True
+    )
+
+    result = module.handle_review(
+        worker="59",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+
+    assert result["status"] == "self-review-blocked"
+    assert transitions[-1]["pr_stage"] == "factory:review"
+    assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+    assert not any(item.get("marker") for item in posted)
+
+
+def test_controller_fails_closed_without_recorded_contributors(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """One reviewer cannot promote a head whose contributor record is missing."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, _posted, _commands = wire_controller(
+        monkeypatch, module, [payload, payload], include_diff_inspection=True
+    )
+
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+
+    assert result["status"] == "approved-not-ready"
+    assert transitions[-1]["pr_stage"] == "factory:review"
+    assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+
+
+def test_controller_promotes_once_provenance_is_recorded(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Recorded provenance keeps ordinary single-reviewer promotion working."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    contributions = [
+        contributor_comment(pr=1390, head=REVIEWED_HEAD, worker="43", epoch=1)
+    ]
+    transitions, _posted, _commands = wire_controller(
+        monkeypatch,
+        module,
+        [payload, payload],
+        comments=contributions,
+        include_diff_inspection=True,
+    )
+
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+
+    assert result["status"] == "ready"
+    assert transitions[-1]["pr_stage"] == "factory:ready"

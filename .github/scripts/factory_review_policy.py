@@ -16,9 +16,9 @@ BODY_PRODUCER_RE = re.compile(
     r"(?P<worker>\d+)\s*$"
 )
 HEAD_CONTRIBUTOR_RE = re.compile(
-    r"^<!--\s*comic-pile-factory-head-contributor-v1:"
+    r"^<!-- comic-pile-factory-head-contributor-v1:"
     r"pr-(?P<pr>\d+):head-(?P<head>[0-9a-f]{40}):"
-    r"worker-(?P<worker>\d+):epoch-(?P<epoch>\d+)\s*-->$"
+    r"worker-(?P<worker>\d+):epoch-(?P<epoch>\d+) -->$"
 )
 
 
@@ -100,7 +100,12 @@ def head_contributor_marker(
     worker: str,
     epoch: int,
 ) -> str:
-    """Build one controller-authored head contributor marker."""
+    """Build one controller-authored head contributor marker.
+
+    The controller writes this marker as the entire comment body. Requiring a
+    whole-body match keeps worker-authored resume packets, review prose, PR
+    body text, and commit messages from ever reading as trusted provenance.
+    """
     return (
         "<!-- comic-pile-factory-head-contributor-v1:"
         f"pr-{pr}:head-{head}:worker-{worker}:epoch-{epoch} -->"
@@ -113,17 +118,47 @@ def current_head_contributors(
     pr: int,
     head: str,
 ) -> set[str]:
-    """Return distinct factory workers that contributed to one exact PR head."""
+    """Return distinct factory workers that contributed to one exact PR head.
+
+    Only a comment whose whole body is one contributor marker is honored, so a
+    worker cannot forge provenance by pasting a marker into a resume packet or
+    a review comment. Marker binding is exact-head: a repairer recorded
+    against the head it created does not leak onto other heads.
+    """
     contributors: set[str] = set()
     for body in comments:
-        for line in str(body or "").splitlines():
-            marker = parse_head_contributor_marker(line)
-            if not marker:
-                continue
-            if int(marker["pr"]) != pr or marker["head"] != head:
-                continue
-            contributors.add(marker["worker"])
+        stripped = str(body or "").strip()
+        if not stripped or "\n" in stripped:
+            continue
+        marker = parse_head_contributor_marker(stripped)
+        if not marker:
+            continue
+        if int(marker["pr"]) != pr or marker["head"] != head:
+            continue
+        contributors.add(marker["worker"])
     return contributors
+
+
+def head_contributor_provenance(
+    comments: Iterable[str],
+    *,
+    pr: int,
+    head: str,
+    producer: str | None = None,
+) -> tuple[set[str], bool]:
+    """Return the trusted contributor set and whether provenance was recorded.
+
+    The declared branch/body producer authored every head of its own branch, so
+    the producer is always part of the contributor set. ``provenance_complete``
+    reports whether controller-authored markers exist for this exact head; when
+    they do not, review independence must fail closed instead of assuming the
+    apparent reviewer never touched the head.
+    """
+    recorded = current_head_contributors(comments, pr=pr, head=head)
+    contributors = set(recorded)
+    if producer is not None:
+        contributors.add(producer)
+    return contributors, bool(recorded)
 
 
 def semantic_repair_heads(
@@ -182,40 +217,46 @@ def current_head_approvers(
 
 def head_has_authorized_approval(
     *,
-    contributors: set[str],
     approvers: Iterable[str],
-    has_provenance: bool,
+    contributors: Iterable[str] = (),
+    producer: str | None = None,
+    provenance_complete: bool = False,
 ) -> bool:
     """Return whether exact-head approvals satisfy worker-independent review policy.
 
-    A reviewer is eligible only if they are NOT in the trusted contributor set
-    for the exact head being reviewed. This is a factory-identity boundary, not
-    a model or provider boundary: OmniRoute may route both workers through the
-    same upstream model.
+    A reviewer is eligible only if they are absent from the trusted contributor
+    set for the exact head being reviewed. This is a factory-identity boundary,
+    not a model or provider boundary: OmniRoute may route both workers through
+    the same upstream model.
 
-    If contributor provenance is missing/malformed for a factory-mutated head,
-    fail closed rather than silently treating a reviewer as independent.
-    Historical PRs with genuinely missing provenance (has_provenance=False)
-    require two distinct factory reviewers.
+    ``provenance_complete`` reports whether controller-authored contributor
+    markers exist for this head. When they do, one eligible reviewer authorizes
+    the head. When they do not, the head is fail-closed: two distinct eligible
+    reviewers are required, because a missing or incomplete record must never
+    be read as proof that the apparent reviewer never authored the head.
     """
-    reviewer_set = set(approvers)
-    if has_provenance:
-        # Fail closed: reviewer must not be in the contributor set
-        return any(reviewer not in contributors for reviewer in reviewer_set)
-    # Historical PR without contributor provenance: require two distinct reviewers
-    return len(reviewer_set) >= 2
+    excluded = {str(worker) for worker in contributors}
+    if producer is not None:
+        excluded.add(str(producer))
+    eligible = {str(reviewer) for reviewer in approvers} - excluded
+    if not eligible:
+        return False
+    if provenance_complete:
+        return True
+    return len(eligible) >= 2
 
 
 def approval_can_promote(
     *,
-    contributors: set[str],
-    has_provenance: bool,
     reviewer: str,
     reviewed_head: str,
     current_head: str,
     verdict: str,
     mechanical_gates_passed: bool,
+    contributors: Iterable[str] = (),
     prior_approvers: Iterable[str] = (),
+    producer: str | None = None,
+    provenance_complete: bool = False,
 ) -> bool:
     """Apply the controller-side semantic promotion trust boundary."""
     if verdict != "approve":
@@ -224,11 +265,9 @@ def approval_can_promote(
         return False
     if not mechanical_gates_passed:
         return False
-    # Reviewer must not be a contributor to the exact head being reviewed
-    if has_provenance and reviewer in contributors:
-        return False
     return head_has_authorized_approval(
         contributors=contributors,
         approvers={*prior_approvers, reviewer},
-        has_provenance=has_provenance,
+        producer=producer,
+        provenance_complete=provenance_complete,
     )

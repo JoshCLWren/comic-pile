@@ -113,6 +113,46 @@ def test_retry_suppression_is_visible() -> None:
     assert ("ranking", "work:3002") not in observations
 
 
+def test_recorded_repairer_cannot_authorize_a_head_it_repaired() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    pr = view["pull_requests"][0]
+    pr["head_contributors"] = ["8", "9"]
+    pr["reviews"] = [{"reviewer": "9", "decision": "approved", "required": True}]
+
+    legacy = adapter.legacy_decisions(view)
+    observations = {
+        (item["dimension"], item["subject"]): item for item in legacy["observations"]
+    }
+
+    assert observations[("review", "change:4001")]["outcome"] == "blocked"
+    assert observations[("completion", "change:4001")]["outcome"] == "blocked"
+
+
+def test_missing_contributor_provenance_requires_two_reviewers() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    pr = view["pull_requests"][0]
+    pr["head_contributors"] = []
+    pr["reviews"] = [{"reviewer": "9", "decision": "approved", "required": True}]
+
+    single = adapter.legacy_decisions(view)
+    observations = {
+        (item["dimension"], item["subject"]): item for item in single["observations"]
+    }
+    assert observations[("review", "change:4001")]["outcome"] == "blocked"
+
+    pr["reviews"] = [
+        {"reviewer": "9", "decision": "approved", "required": True},
+        {"reviewer": "10", "decision": "approved", "required": True},
+    ]
+    two_reviewers = adapter.legacy_decisions(view)
+    observations = {
+        (item["dimension"], item["subject"]): item for item in two_reviewers["observations"]
+    }
+    assert observations[("review", "change:4001")]["outcome"] == "approved"
+
+
 def test_projection_pressure_uses_factory_wip_policy() -> None:
     adapter = load_adapter()
     view = json.loads(FIXTURE.read_text(encoding="utf-8"))

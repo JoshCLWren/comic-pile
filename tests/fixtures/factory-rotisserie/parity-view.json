@@ -21,6 +21,7 @@
       "headRefOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "labels": ["factory", "factory:ready", "factory:unowned"],
       "producer_worker": "8",
+      "head_contributors": ["8"],
       "checks": [{"name": "test", "status": "passed", "required": true}],
       "reviews": [{"reviewer": "9", "decision": "approved", "required": true}]
     }

@@ -274,6 +274,37 @@ record_pr_provenance() {
   fi
 }
 
+stage_trusted_review_controller() {
+  # Review independence is only meaningful when the contributor record is written
+  # by trusted controller code, so copy the controller and its policy module to a
+  # stable location BEFORE any checkout_target switches onto an adopted PR
+  # branch. A stale PR-branch copy must never be able to record provenance.
+  if [[ -z "${TRUSTED_REVIEW_CONTROLLER:-}" ]]; then
+    local trusted_dir
+    trusted_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/comic-pile-review-controller.XXXXXX")"
+    cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
+    cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+    chmod +x "$trusted_dir/factory-review-controller.py"
+    TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
+    export TRUSTED_REVIEW_CONTROLLER
+  fi
+}
+
+record_head_contribution() {
+  # Every push that changes a PR head must bind this worker to that exact head,
+  # including when the worker leaves no resume packet or other comment. Losing
+  # this record is not fatal here: review independence then fails closed and the
+  # head needs two distinct reviewers instead.
+  local pr="$1" reason="$2" head
+  stage_trusted_review_controller
+  head="$(git rev-parse HEAD)"
+  if ! python3 "$TRUSTED_REVIEW_CONTROLLER" record-contribution \
+    --worker "$WORKER" --pr "$pr" --head "$head" >/dev/null; then
+    log "unable to record trusted contributor provenance for PR #${pr} (${reason}); review will require two distinct reviewers" >&2
+    return 1
+  fi
+}
+
 checkout_target() {
   local mode="$1" number="$2" branch="$3"
   git fetch --prune origin
@@ -513,6 +544,7 @@ persist_pr_changes() {
 
 ensure_owner_label
 stage_trusted_guard
+stage_trusted_review_controller
 release_owned_targets 'previous-run-stale-lease'
 trap 'release_owned_targets session-end-handoff || true' EXIT
 log "starting fixed-model session with runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
@@ -632,6 +664,7 @@ while (( $(remaining) > 480 )); do
         SKIP_PRS+=("$pr")
         continue
       fi
+      record_head_contribution "$pr" 'pr-opened-handoff'
       replace_labels "$pr" "$OWNER" 'factory:review'
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
@@ -649,6 +682,7 @@ while (( $(remaining) > 480 )); do
 
   if persist_pr_changes "$NUMBER" "$BRANCH"; then
     log "pushed repairs to PR #${NUMBER}; review/CI must refresh"
+    record_head_contribution "$NUMBER" 'repairs-pushed-handoff'
     release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
     SKIP_PRS+=("$NUMBER")
     continue
