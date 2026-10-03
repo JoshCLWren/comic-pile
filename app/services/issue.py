@@ -16,6 +16,7 @@ from app.models import Event, Issue, Thread
 from app.repositories import issue_repository
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
+from app.utils.issue_natural_order import natural_issue_order
 from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
 
@@ -75,6 +76,64 @@ async def list_issues(
     return issues_to_return, total_count, next_token
 
 
+async def _insert_new_issues_in_natural_order(
+    db: AsyncSession,
+    thread_id: int,
+    new_issue_numbers: list[str],
+    natural_order: list[str],
+) -> list[Issue]:
+    """Create new issues at their natural position in the thread order.
+
+    Existing issues whose position changes are re-seated through the same
+    ``Issue.position`` column the thread reorder path writes, so no second
+    ordering field, dependency edge, or Reading Plan node is introduced. Only
+    ``position`` is assigned, which leaves read state, ratings, reading history,
+    ComicVine identities, dependencies, and plan membership untouched.
+
+    Args:
+        db: Database session.
+        thread_id: Thread receiving the new issues.
+        new_issue_numbers: Issue numbers to create.
+        natural_order: Every issue number of the resulting thread in ascending
+            natural order.
+
+    Returns:
+        The newly created issues, ordered by their persisted position.
+    """
+    target_positions = {
+        issue_number: position
+        for position, issue_number in enumerate(natural_order, start=1)
+    }
+
+    existing_issues = await issue_repository.locked_issues(db, thread_id)
+    shifted_issues = [
+        issue
+        for issue in existing_issues
+        if issue.issue_number in target_positions
+        and target_positions[issue.issue_number] != issue.position
+    ]
+
+    if shifted_issues:
+        await issue_repository.defer_position_unique_constraint(db)
+        for issue in shifted_issues:
+            issue.position = target_positions[issue.issue_number]
+
+    new_issues: list[Issue] = []
+    for issue_number in new_issue_numbers:
+        issue = Issue(
+            thread_id=thread_id,
+            issue_number=issue_number,
+            position=target_positions[issue_number],
+            status="unread",
+        )
+        await issue_repository.add_issue(db, issue)
+        new_issues.append(issue)
+
+    new_issues.sort(key=lambda created_issue: created_issue.position)
+
+    return new_issues
+
+
 async def create_issues(
     db: AsyncSession,
     thread_id: int,
@@ -83,6 +142,16 @@ async def create_issues(
     insert_after_issue_id: int | None,
 ) -> tuple[list[Issue], int]:
     """Create issues from a range and integrate them into the thread order.
+
+    Ordinary numeric issue numbers are placed at their natural position in the
+    series so adding ``#2`` to a series of ``#33, #34, #35`` saves
+    ``#2, #33, #34, #35`` instead of appending ``#2`` at the end.
+
+    Placement stays append-only whenever automatic ordering would be ambiguous:
+    an explicit ``insert_after_issue_id`` anchor, irregular numbering such as
+    ``Annual 1``, ``0``, or fractions, or a series the reader already reordered
+    by hand. In those cases the existing canonical order is preserved so the
+    reader can correct it through the thread reorder path.
 
     Args:
         db: Database session.
@@ -111,6 +180,7 @@ async def create_issues(
         )
 
     existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
+    existing_issue_numbers = [row[1] for row in existing_rows]
     existing_issues = {row[1]: row[2] for row in existing_rows}
 
     max_position = max((row[2] for row in existing_rows), default=0)
@@ -138,39 +208,50 @@ async def create_issues(
 
     new_issues_count = len(new_issue_numbers)
 
-    if insert_after_issue_id is not None:
-        await issue_repository.defer_position_unique_constraint(db)
-        await issue_repository.shift_positions_after(
-            db, thread_id, after_position=insert_position, delta=new_issues_count
-        )
+    natural_order = (
+        natural_issue_order(existing_issue_numbers, new_issue_numbers)
+        if insert_after_issue_id is None
+        else None
+    )
 
-    new_issues = []
-    next_new_position = insert_position + 1
-    for num in new_issue_numbers:
-        issue = Issue(
-            thread_id=thread_id,
-            issue_number=num,
-            position=next_new_position,
-            status="unread",
+    if natural_order is not None:
+        new_issues = await _insert_new_issues_in_natural_order(
+            db, thread_id, new_issue_numbers, natural_order
         )
-        await issue_repository.add_issue(db, issue)
-        new_issues.append(issue)
-        next_new_position += 1
+    else:
+        if insert_after_issue_id is not None:
+            await issue_repository.defer_position_unique_constraint(db)
+            await issue_repository.shift_positions_after(
+                db, thread_id, after_position=insert_position, delta=new_issues_count
+            )
 
-    # Validation
-    position_values = [i.position for i in new_issues]
-    if len(position_values) != len(set(position_values)):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error: Duplicate positions calculated",
-        )
+        new_issues = []
+        next_new_position = insert_position + 1
+        for num in new_issue_numbers:
+            issue = Issue(
+                thread_id=thread_id,
+                issue_number=num,
+                position=next_new_position,
+                status="unread",
+            )
+            await issue_repository.add_issue(db, issue)
+            new_issues.append(issue)
+            next_new_position += 1
 
-    reserved_positions = {row[2] for row in existing_rows if row[2] <= insert_position}
-    if any(p in reserved_positions for p in position_values):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error: Position conflict with existing issues",
-        )
+        # Validation
+        position_values = [i.position for i in new_issues]
+        if len(position_values) != len(set(position_values)):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal error: Duplicate positions calculated",
+            )
+
+        reserved_positions = {row[2] for row in existing_rows if row[2] <= insert_position}
+        if any(p in reserved_positions for p in position_values):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal error: Position conflict with existing issues",
+            )
 
     await db.flush()
 
