@@ -93,6 +93,8 @@ jobs:
   deploy:
     name: Migrate Neon and deploy exact main SHA
     needs: preflight
+    environment:
+      name: production
     if: needs.preflight.outputs.deployment_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
