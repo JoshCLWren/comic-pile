@@ -37,6 +37,7 @@ import re
 import subprocess
 import sys
 import unittest
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 
 PROTECTED_ISSUES = frozenset({679, 1093, 1109})
@@ -45,6 +46,34 @@ FACTORY_LABEL = "factory"
 DONE_STATUS_LABEL = "ralph-status:done"
 EPIC_ACCEPTANCE_LABELS = frozenset({"epic", "prd"})
 CLOSED_STATE = "CLOSED"
+
+# Explicit product-acceptance verdict marker from docs/PRODUCT_ACCEPTANCE_PROTOCOL.md.
+# Only a trusted comment carrying this marker with an ACCEPTED verdict lets an
+# acceptance parent transition to completed. Merge automation never manufactures it.
+PRODUCT_ACCEPTANCE_MARKER = "product-acceptance:v1"
+ACCEPTED_VERDICT_RE = re.compile(r"^\s*ACCEPTED\s*$", re.MULTILINE)
+NOT_ACCEPTED_VERDICT_RE = re.compile(r"^\s*NOT ACCEPTED\s*$", re.MULTILINE)
+# Issues that opt out of autonomous execution, including human/interactive
+# operator acceptance and cutover parents such as #2129. Merge automation must
+# not close them either: their transition is human-controlled by contract.
+MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
+# Self-declared parent-contract language. A body only declares an acceptance
+# parent when it presents itself as the parent; merely mentioning production
+# acceptance is not a declaration. #3037 ("Production acceptance split"), #2718,
+# and #2128 are executable implementation issues that explicitly defer the
+# operator acceptance pass to a separate issue, so a looser phrase match would
+# silently remove user-reported bugs and narrow children from delivery.
+ACCEPTANCE_PARENT_BODY_RE = re.compile(
+    r"acceptance parent|parent acceptance criteria",
+    re.IGNORECASE,
+)
+CHECKBOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.*)$")
+# A declared child graph (``- [x] #123``) is the structural discriminator
+# between a parent contract and an ordinary issue that carries a checklist.
+# Child extraction and parent-contract detection share this pattern so a parent
+# can never declare a child graph the child gate cannot see.
+CHILD_ITEM_RE = re.compile(r"^[ \t]*-[ \t]*\[[ xX]\][ \t]*#(\d+)\b", re.MULTILINE)
+CHILD_REF_RE = re.compile(r"^#\d+\b")
 
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
 ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
@@ -154,8 +183,8 @@ def closure_blocked_by_active_work(labels: list[str], require_quiescent: bool) -
 def _child_numbers(body: str, issue_number: int) -> set[int]:
     """Extract child issue numbers from checkbox-style references in the body.
 
-    Only matches ``- [ ] #NNN`` or ``- [x] #NNN`` lines, ignoring unrelated
-    issue references such as "Related prior work".
+    Only matches ``- [ ] #NNN``, ``- [x] #NNN``, or ``- [X] #NNN`` lines,
+    ignoring unrelated issue references such as "Related prior work".
 
     Args:
         body: The issue body text.
@@ -165,10 +194,22 @@ def _child_numbers(body: str, issue_number: int) -> set[int]:
         A set of child issue numbers.
     """
     return {
-        int(num)
-        for num in re.findall(r"- \[[ x]\] #(\d+)", body)
-        if int(num) != issue_number
+        int(match.group(1))
+        for match in CHILD_ITEM_RE.finditer(body)
+        if int(match.group(1)) != issue_number
     }
+
+
+def _declares_child_graph(body: str | None) -> bool:
+    """Return whether the body declares at least one checkbox child issue.
+
+    Args:
+        body: The issue body text, or None.
+
+    Returns:
+        True when a ``- [x] #NNN`` child reference is present.
+    """
+    return bool(CHILD_ITEM_RE.search(body or ""))
 
 
 def _issue_has_label(labels: list[str], target: str) -> bool:
@@ -187,25 +228,32 @@ def _issue_has_label(labels: list[str], target: str) -> bool:
 def _issue_is_acceptance_parent(labels: list[str], body: str | None) -> bool:
     """Return whether the issue is an acceptance parent (epic/PRD with children).
 
-    An acceptance parent is an issue with epic or prd labels, OR an issue
-    explicitly marked as an acceptance parent in its body, that has child
-    issues declared in its body.
+    An acceptance parent is an issue with epic or prd labels — which always
+    require an explicit product-acceptance verdict before completion, even when
+    no child graph is declared — OR an issue whose body both declares itself a
+    product-acceptance parent and ships a checkbox child graph, even when it
+    carries no epic/prd label. The second shape is the #1615 incident: an
+    enhancement-labeled parent whose child graph and acceptance contract lived
+    only in the body.
+
+    Both halves are required for the body shape. A bare mention of production
+    acceptance is not a parent declaration: #3037, #2718, and #2128 are
+    executable implementation issues that defer the operator acceptance pass to
+    a separate issue, and a phrase-only match would strand them and remove
+    user-reported work from the factory queue.
 
     Args:
         labels: The issue's current label names.
         body: The issue body text, or None.
 
     Returns:
-        True when the issue is an acceptance parent with at least one child.
+        True when the issue is an acceptance parent whose completion requires
+        an explicit product-acceptance verdict.
     """
-    has_epic_prd_label = any(_issue_has_label(labels, label) for label in EPIC_ACCEPTANCE_LABELS)
-    has_acceptance_parent_language = bool(
-        re.search(r"acceptance parent", body or "", re.IGNORECASE)
-    )
-    if not (has_epic_prd_label or has_acceptance_parent_language):
-        return False
-    child_count = len(_child_numbers(body or "", 0))
-    return child_count > 0
+    if any(_issue_has_label(labels, label) for label in EPIC_ACCEPTANCE_LABELS):
+        return True
+    text = body or ""
+    return bool(ACCEPTANCE_PARENT_BODY_RE.search(text)) and _declares_child_graph(text)
 
 
 def _acceptance_parent_has_incomplete_gates(
@@ -244,6 +292,118 @@ def _acceptance_parent_has_incomplete_gates(
             return True
 
     return False
+
+
+def _unmet_parent_criteria(body: str | None) -> list[str]:
+    """Return the parent's own unchecked acceptance criteria (issue #1620).
+
+    Only unchecked boxes that are not child declarations count: child
+    checkboxes are gated by child open/closed state instead. A controlled epic
+    with every child closed but one unchecked parent criterion still has an
+    unmet contract and must remain incomplete.
+
+    Args:
+        body: The issue body text, or None.
+
+    Returns:
+        The raw text of each unchecked non-child criterion, in body order.
+    """
+    unmet: list[str] = []
+    for line in (body or "").splitlines():
+        match = CHECKBOX_RE.match(line)
+        if match is None or match.group(1) != " ":
+            continue
+        text = match.group(2).strip()
+        if not text or CHILD_REF_RE.match(text):
+            continue
+        unmet.append(text)
+    return unmet
+
+
+def _acceptance_verdicts(comment_bodies: Iterable[str]) -> list[str]:
+    """Return the product-acceptance verdicts posted in durable comments.
+
+    Args:
+        comment_bodies: The raw bodies of comments on the parent issue.
+
+    Returns:
+        One ``ACCEPTED``/``NOT ACCEPTED`` entry per comment carrying the
+        canonical ``product-acceptance:v1`` marker, in comment order. A marker
+        comment whose verdict section names NOT ACCEPTED (or names no ACCEPTED
+        verdict) records ``NOT ACCEPTED`` so a silent or failed report can
+        never read as acceptance.
+    """
+    verdicts: list[str] = []
+    for comment_body in comment_bodies:
+        if PRODUCT_ACCEPTANCE_MARKER not in (comment_body or ""):
+            continue
+        if NOT_ACCEPTED_VERDICT_RE.search(comment_body or ""):
+            verdicts.append("NOT ACCEPTED")
+        elif ACCEPTED_VERDICT_RE.search(comment_body or ""):
+            verdicts.append("ACCEPTED")
+        else:
+            verdicts.append("NOT ACCEPTED")
+    return verdicts
+
+
+def _has_accepted_product_acceptance(comment_bodies: Iterable[str]) -> bool:
+    """Return whether the latest acceptance report accepts the parent.
+
+    The latest verdict wins: a newer NOT ACCEPTED report revokes an older
+    ACCEPTED one, so acceptance always reflects the most recent integrated
+    verification against current ``main``.
+
+    Args:
+        comment_bodies: The raw bodies of comments on the parent issue.
+
+    Returns:
+        True only when at least one acceptance report exists and the latest
+        verdict is ACCEPTED.
+    """
+    verdicts = _acceptance_verdicts(comment_bodies)
+    return bool(verdicts) and verdicts[-1] == "ACCEPTED"
+
+
+def acceptance_parent_may_close(
+    labels: list[str],
+    body: str | None,
+    issue_number: int,
+    child_states: Mapping[str, str],
+    acceptance_comments: Iterable[str],
+) -> bool:
+    """Return whether an acceptance parent may transition to completed.
+
+    This is the pure issue-#1620 completion gate: child closure, CI success,
+    code coverage, and semantic review are evidence of progress but never
+    satisfy it on their own. All of these must hold:
+
+    1. every declared child issue is closed;
+    2. every parent acceptance criterion checkbox is checked;
+    3. the latest durable ``product-acceptance:v1`` report verdict is ACCEPTED.
+
+    Args:
+        labels: The parent issue's current label names.
+        body: The parent issue body text, or None.
+        issue_number: The parent issue number (excluded from child refs).
+        child_states: Mapping of child issue number to its state string
+            (``"OPEN"``/``"CLOSED"``); children absent from the map are
+            treated as still open (fail closed).
+        acceptance_comments: Raw bodies of comments on the parent issue.
+
+    Returns:
+        True only when the issue is an acceptance parent whose children are
+        all closed, whose own criteria are all met, and whose latest
+        acceptance verdict is ACCEPTED.
+    """
+    if not _issue_is_acceptance_parent(labels, body):
+        return False
+    children = _child_numbers(body or "", issue_number)
+    for child_number in children:
+        if str(child_states.get(child_number, "OPEN")) != CLOSED_STATE:
+            return False
+    if _unmet_parent_criteria(body):
+        return False
+    return _has_accepted_product_acceptance(acceptance_comments)
 
 
 def closure_comment(pr_number: int, issue_number: int) -> str:
@@ -497,7 +657,8 @@ def close_merged_pr_issue(
     Returns:
         One of ``closed``, ``already-closed``, ``no-linked-issue``,
         ``protected-issue``, ``successor-open``, ``active-work``,
-        ``acceptance-parent-incomplete``, or ``dry-run:<action>``.
+        ``manual-only-issue``, ``acceptance-parent-incomplete``,
+        ``acceptance-parent-requires-verdict``, or ``dry-run:<action>``.
     """
     info = _pr_info(pr_number)
     issue_number = linked_issue(info["branch"], info["body"])
@@ -512,8 +673,25 @@ def close_merged_pr_issue(
 
     labels = list(issue["labels"])
     issue_body = str(issue.get("body") or "")
+    if MANUAL_ONLY_MARKER in issue_body:
+        # Issue #1620: an issue that declares itself human/interactive
+        # controlled — including an operator production-acceptance or cutover
+        # parent — is never completed by merge automation.
+        return "manual-only-issue"
     if _acceptance_parent_has_incomplete_gates(labels, issue_body, issue_number):
         return "acceptance-parent-incomplete"
+    if _issue_is_acceptance_parent(labels, issue_body):
+        # Issue #1620: merge automation must never close an acceptance parent,
+        # even when every child is closed and every parent criterion is
+        # checked. Child-count completion, CI success, coverage, and semantic
+        # review are not product acceptance, and a duplicate factory PR that
+        # re-closes already-delivered child work must not satisfy it either.
+        # The parent transitions only through the explicit
+        # product-acceptance:v1 ACCEPTED verdict owned by Josh/interactive
+        # acceptance (see acceptance_parent_may_close).
+        if _unmet_parent_criteria(issue_body):
+            return "acceptance-parent-incomplete"
+        return "acceptance-parent-requires-verdict"
     if closure_blocked_by_active_work(labels, require_quiescent):
         return "active-work"
     if _issue_has_open_successor_pr(issue_number, pr_number):
@@ -800,6 +978,308 @@ This issue is a product contract and acceptance parent.
         self.assertEqual(result, "acceptance-parent-incomplete")
         # The guard must halt before the successor check: the parent stays open
         # even though the PR body carries a closing reference.
+        mock_successor.assert_not_called()
+
+    # Issue #1620 closure-critical contract: explicit product acceptance.
+
+    def test_epic_label_alone_is_an_acceptance_parent(self) -> None:
+        """An epic/PRD always needs a verdict, even with no child graph."""
+        self.assertTrue(_issue_is_acceptance_parent(["epic", "factory"], "Ship it."))
+        self.assertTrue(_issue_is_acceptance_parent(["prd", "factory"], ""))
+        self.assertFalse(_issue_is_acceptance_parent(["enhancement", "factory"], "Ship it."))
+
+    def test_acceptance_parent_language_without_epic_label_is_protected(self) -> None:
+        """The #1615 incident shape: contract in the body, no epic/prd label."""
+        body = (
+            "This is the acceptance parent for CBL adoption.\n"
+            "- [x] #2127 — transactional adoption\n"
+            "- [ ] #2128 — production browser UI\n"
+        )
+        self.assertTrue(_issue_is_acceptance_parent(["enhancement", "factory"], body))
+
+    def test_ordinary_child_references_are_not_a_parent_contract(self) -> None:
+        """Casual cross-references without acceptance language stay ordinary."""
+        body = "Refs #2127 for context.\n- [x] polish\n- [ ] follow-up tweak"
+        self.assertFalse(_issue_is_acceptance_parent(["enhancement", "factory"], body))
+
+    def test_executable_child_defining_acceptance_split_is_not_a_parent(self) -> None:
+        """#3037/#2718/#2128: implementation work is not an acceptance parent.
+
+        Each of these issues carries a checklist and defers the operator
+        production-acceptance pass to a separate issue. Treating the deferral
+        as a parent contract would strand a user-reported bug and its delivery
+        PR closure, so only a self-declared parent contract counts.
+        """
+        deferred = (
+            "## Production acceptance split\n"
+            "- [ ] #3042 owns the production-wide audit and reconciliation.\n"
+            "- [ ] The invariant is enforced at the database layer.\n"
+            "- [ ] API paths handle an already-present issue predictably.\n"
+        )
+        self.assertFalse(_issue_is_acceptance_parent(["bug", "user-reported"], deferred))
+        self.assertFalse(
+            _issue_is_acceptance_parent(
+                ["enhancement"],
+                "Refs #2129 so it can use this path for production acceptance.\n"
+                "- [ ] Reader can adopt after one confirmation\n",
+            )
+        )
+
+    def test_acceptance_parent_language_without_child_graph_is_not_a_parent(self) -> None:
+        """Parent language alone, without a declared child graph, stays ordinary."""
+        body = "This issue is the acceptance parent for the rollout.\n- [ ] ship it\n"
+        self.assertFalse(_issue_is_acceptance_parent(["enhancement", "factory"], body))
+
+    def test_executable_child_issue_still_closes_on_delivery_merge(self) -> None:
+        """The guard must not refuse ordinary closure for deferred-acceptance work."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        issue_body = (
+            "## Production acceptance split\n"
+            "- [ ] #3042 owns the production-wide audit.\n"
+            "- [ ] Uniqueness is enforced at the database layer.\n"
+        )
+        with patch.object(
+            mod,
+            "_issue_view",
+            return_value={
+                "state": "OPEN",
+                "body": issue_body,
+                "labels": ["bug", "user-reported", "factory", "factory:unowned"],
+            },
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/21-3037-opencode-free",
+                    "body": "Closes #3037.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(mod, "_issue_has_open_successor_pr", return_value=False):
+                    result = close_merged_pr_issue(2150, dry_run=True)
+        self.assertTrue(result.startswith("dry-run:"), result)
+
+    def test_unmet_parent_criterion_blocks_despite_closed_children(self) -> None:
+        """All children closed but one unchecked parent criterion stays open."""
+        body = (
+            "- [x] #2127\n"
+            "- [x] #2128\n"
+            "- [ ] Roll honors applicable adopted hard boundaries\n"
+            "- [x] Reload preserves plan intent\n"
+        )
+        self.assertEqual(
+            _unmet_parent_criteria(body),
+            ["Roll honors applicable adopted hard boundaries"],
+        )
+        self.assertFalse(
+            acceptance_parent_may_close(
+                ["epic", "factory"],
+                body,
+                1615,
+                {2127: "CLOSED", 2128: "CLOSED"},
+                ["<!-- product-acceptance:v1 -->\n### Verdict\n ACCEPTED"],
+            )
+        )
+
+    def test_checked_parent_criteria_do_not_block(self) -> None:
+        """Checked criteria (either case) leave no unmet contract."""
+        body = "- [x] #2127\n- [X] Roll honors hard boundaries\n- [x] Reload preserves intent\n"
+        self.assertEqual(_unmet_parent_criteria(body), [])
+
+    def test_criterion_quoting_an_issue_is_still_a_criterion(self) -> None:
+        """Only leading ``#NNN`` child declarations defer to the child gate."""
+        body = (
+            "- [x] #2127\n"
+            "- [ ] Adoption uses the #2551 Dependency model\n"
+        )
+        self.assertEqual(
+            _unmet_parent_criteria(body),
+            ["Adoption uses the #2551 Dependency model"],
+        )
+        self.assertEqual(_child_numbers(body, 1615), {2127})
+
+    def test_acceptance_parent_with_verdict_may_close(self) -> None:
+        """A fully verified parent with an ACCEPTED report may transition."""
+        body = "- [x] #2127\n- [x] #2128\n- [x] Roll honors hard boundaries\n"
+        report = (
+            "<!-- product-acceptance:v1 -->\n"
+            "## Product acceptance report\n"
+            "### Verdict\n ACCEPTED"
+        )
+        self.assertTrue(
+            acceptance_parent_may_close(
+                ["epic", "factory"], body, 1615,
+                {2127: "CLOSED", 2128: "CLOSED"}, [report],
+            )
+        )
+
+    def test_child_count_alone_never_satisfies_acceptance(self) -> None:
+        """Closed children without any verdict report cannot complete a parent."""
+        body = "- [x] #2127\n- [x] #2128\n- [x] Roll honors hard boundaries\n"
+        self.assertFalse(
+            acceptance_parent_may_close(
+                ["epic", "factory"], body, 1615,
+                {2127: "CLOSED", 2128: "CLOSED"}, [],
+            )
+        )
+        self.assertFalse(
+            acceptance_parent_may_close(
+                ["epic", "factory"], body, 1615,
+                {2127: "CLOSED", 2128: "CLOSED"},
+                ["LGTM, CI green, coverage 94%."],
+            )
+        )
+
+    def test_failed_verdict_keeps_parent_open(self) -> None:
+        """NOT ACCEPTED retains the parent even with closed children."""
+        body = "- [x] #2127\n- [x] Roll honors hard boundaries\n"
+        report = "<!-- product-acceptance:v1 -->\n### Verdict\n NOT ACCEPTED"
+        self.assertFalse(
+            acceptance_parent_may_close(
+                ["epic", "factory"], body, 1615, {2127: "CLOSED"}, [report],
+            )
+        )
+
+    def test_latest_verdict_wins(self) -> None:
+        """A newer failed report revokes an older acceptance."""
+        body = "- [x] #2127\n"
+        accepted = "<!-- product-acceptance:v1 -->\n### Verdict\n ACCEPTED"
+        failed = "<!-- product-acceptance:v1 -->\n### Verdict\n NOT ACCEPTED"
+        self.assertFalse(
+            acceptance_parent_may_close(
+                ["epic", "factory"], body, 1615, {2127: "CLOSED"}, [accepted, failed],
+            )
+        )
+        self.assertTrue(
+            acceptance_parent_may_close(
+                ["epic", "factory"], body, 1615, {2127: "CLOSED"}, [failed, accepted],
+            )
+        )
+
+    def test_open_child_blocks_despite_accepted_verdict(self) -> None:
+        """A stale ACCEPTED report cannot close over a reopened child."""
+        body = "- [x] #2127\n- [ ] #2128\n"
+        report = "<!-- product-acceptance:v1 -->\n### Verdict\n ACCEPTED"
+        self.assertFalse(
+            acceptance_parent_may_close(
+                ["epic", "factory"], body, 1615,
+                {2127: "CLOSED", 2128: "OPEN"}, [report],
+            )
+        )
+
+    def test_non_parent_never_satisfies_acceptance_gate(self) -> None:
+        """Ordinary issues stay outside the acceptance gate entirely."""
+        self.assertFalse(
+            acceptance_parent_may_close(
+                ["bug", "factory"], "- [x] fixed", 500, {},
+                ["<!-- product-acceptance:v1 -->\n ACCEPTED"],
+            )
+        )
+
+    def test_merge_closure_refuses_verified_parent_without_verdict_path(self) -> None:
+        """Merge automation defers even fully-checked parents to the verdict path.
+
+        A duplicate factory PR re-closing already-delivered child work must not
+        satisfy product acceptance: without a verdict comment on the issue, the
+        merge path parks the parent instead of closing it.
+        """
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        issue_body = (
+            "This issue is a product contract and acceptance parent.\n"
+            "- [x] #2127 — transactional selective materialization\n"
+            "- [x] #2128 — production CBL browser/import-review UI\n"
+            "- [x] Reader can adopt with one compact confirmation\n"
+        )
+        with patch.object(mod, "_issue_view") as mock_view:
+            mock_view.side_effect = [
+                {
+                    "state": "OPEN",
+                    "body": issue_body,
+                    "labels": ["epic", "factory", "factory:ready", "factory:unowned"],
+                },
+                {"state": "CLOSED", "body": "", "labels": []},
+                {"state": "CLOSED", "body": "", "labels": []},
+            ]
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/58-1615-duplicate",
+                    "body": "Closes #1615.",
+                    "state": "MERGED",
+                },
+            ):
+                result = close_merged_pr_issue(2141, dry_run=True)
+        self.assertEqual(result, "acceptance-parent-requires-verdict")
+
+    def test_merge_closure_blocks_parent_with_unmet_criterion(self) -> None:
+        """A parent with an unchecked criterion reports incomplete, not closable."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        issue_body = (
+            "## Parent acceptance criteria\n"
+            "- [x] #2127 — transactional selective materialization\n"
+            "- [ ] Roll honors applicable adopted hard boundaries\n"
+        )
+        with patch.object(
+            mod,
+            "_issue_view",
+            return_value={
+                "state": "OPEN",
+                "body": issue_body,
+                "labels": ["epic", "factory", "factory:unowned"],
+            },
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/58-1615-work",
+                    "body": "Closes #1615.",
+                    "state": "MERGED",
+                },
+            ):
+                result = close_merged_pr_issue(2142, dry_run=True)
+        self.assertEqual(result, "acceptance-parent-incomplete")
+
+    def test_merge_closure_refuses_manual_only_acceptance_parent(self) -> None:
+        """An operator acceptance/cutover parent is never closed by automation."""
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        issue_body = (
+            "Part of #1615. Child D. **Manual-only production acceptance/cutover.**\n"
+            "<!-- factory-execution:manual-only -->\n"
+            "- [ ] Ultimate Universe has one canonical Reading Plan\n"
+            "- [ ] CBL source positions/provenance are preserved\n"
+        )
+        with patch.object(
+            mod,
+            "_issue_view",
+            return_value={
+                "state": "OPEN",
+                "body": issue_body,
+                "labels": ["enhancement", "factory", "factory:blocked", "factory:unowned"],
+            },
+        ):
+            with patch.object(
+                mod,
+                "_pr_info",
+                return_value={
+                    "branch": "factory/46-2129-opencode-free",
+                    "body": "Closes #2129.",
+                    "state": "MERGED",
+                },
+            ):
+                with patch.object(mod, "_issue_has_open_successor_pr") as mock_successor:
+                    result = close_merged_pr_issue(2143, dry_run=True)
+        self.assertEqual(result, "manual-only-issue")
         mock_successor.assert_not_called()
 
 
