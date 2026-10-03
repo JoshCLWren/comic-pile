@@ -141,24 +141,21 @@ def test_owner_helpers() -> None:
     assert not eligibility.is_factory_unowned({"factory:7"})
 
 
-def test_machine_marker_trust_requires_workflow_provenance() -> None:
-    """Only workflow-posted comments prove machine-marker provenance."""
-    app_comment = {
-        "author_association": "CONTRIBUTOR",
-        "performed_via_github_app": {"slug": "github-actions"},
-    }
-    assert eligibility.machine_marker_is_trusted(app_comment)
-    assert not eligibility.machine_marker_is_trusted({"author_association": "OWNER"})
-    assert not eligibility.machine_marker_is_trusted({"author_association": "MEMBER"})
-    assert not eligibility.machine_marker_is_trusted({"author_association": "COLLABORATOR"})
-    assert not eligibility.machine_marker_is_trusted({"author_association": "CONTRIBUTOR"})
-    assert not eligibility.machine_marker_is_trusted(
-        {
-            "author_association": "CONTRIBUTOR",
-            "performed_via_github_app": {"slug": "other-app"},
-        }
-    )
-    assert not eligibility.machine_marker_is_trusted({})
+def test_comment_trust_is_not_an_eligibility_rule() -> None:
+    """Marker provenance stays in the policy module, not the eligibility module."""
+    for name in ("machine_marker_is_trusted", "comment_is_trusted"):
+        assert not hasattr(eligibility, name), name
+
+
+def test_terminal_labels_match_controller_exclusions() -> None:
+    """Terminal labels mirror every terminal check in issue_is_static_candidate."""
+    assert eligibility.TERMINAL_LABELS == frozenset({"ralph-status:done", "factory:ready"})
+    ready = _verdict({"factory:ready", "factory:unowned"})
+    assert not ready.eligible
+    assert any("factory:ready" in reason for reason in ready.reasons)
+    done = _verdict({"ralph-status:done"})
+    assert not done.eligible
+    assert any("ralph-status:done" in reason for reason in done.reasons)
 
 
 def test_explain_marks_fully_eligible_issue() -> None:
@@ -281,3 +278,209 @@ def test_selectors_agree_with_shared_semantics() -> None:
         assert next_task._dependency_numbers(body) == (
             eligibility.parse_declared_dependencies(body)
         )
+
+
+def _controller():
+    """Load the fixed-model work controller module, reusing a cached instance."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    name = "factory_work_controller_under_test"
+    cached = sys.modules.get(name)
+    if cached is not None:
+        return cached
+    scripts_dir = Path("scripts").resolve()
+    controller_dir = Path(".github/scripts").resolve()
+    for entry in (str(scripts_dir), str(controller_dir)):
+        if entry not in sys.path:
+            sys.path.insert(0, entry)
+    spec = importlib.util.spec_from_file_location(
+        name,
+        controller_dir / "factory-work-controller.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _legacy_intake(monkeypatch) -> None:
+    """Neutralize Rotisserie intake so shared rules are tested in isolation."""
+    controller = _controller()
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda issues, prs: None)
+
+
+def _issue(number: int, *labels: str, body: str = "", state: str = "OPEN") -> dict:
+    """Build a minimal issue payload for controller diagnostics."""
+    return {
+        "number": number,
+        "state": state,
+        "title": f"Issue {number}",
+        "body": body,
+        "labels": [{"name": label} for label in labels],
+        "createdAt": "2026-08-16T00:00:00Z",
+    }
+
+
+def _pr(number: int, *, issue: int) -> dict:
+    """Build a minimal open-PR payload that canonically owns an issue."""
+    return {
+        "number": number,
+        "state": "OPEN",
+        "isDraft": False,
+        "title": f"PR {number}",
+        "body": f"Closes #{issue}",
+        "headRefName": f"factory/58-{issue}-work",
+        "headRefOid": "a" * 40,
+        "labels": [],
+        "createdAt": "2026-08-16T00:00:00Z",
+        "updatedAt": "2026-08-16T00:00:00Z",
+    }
+
+
+def test_controller_explain_reports_static_exclusion_with_gates(monkeypatch) -> None:
+    """`explain` names every static exclusion and the dynamic gate state."""
+    _legacy_intake(monkeypatch)
+    controller = _controller()
+    issues = [_issue(10, "factory:unowned"), _issue(11, "factory:unowned", "epic")]
+    report = controller.explain_issue(
+        11,
+        issues=issues,
+        prs=[],
+        no_diff_attempts_by_issue={},
+        include_dynamic_gates=False,
+    )
+
+    assert report["eligible"] is False
+    assert any("epic/prd" in reason for reason in report["reasons"])
+    assert "non-executable" not in " ".join(report["reasons"])
+    gates = report["dynamic_gates"]
+    assert gates["factory_pr_wip_limit"] == controller.FACTORY_PR_WIP_LIMIT
+    assert gates["review_backlog_limit"] == controller.FACTORY_REVIEW_BACKLOG_LIMIT
+    assert gates["rotisserie_intake"] == "legacy-unrestricted"
+    assert "open_dependency_blocker" not in gates
+
+
+def test_controller_explain_names_the_canonical_owning_pr(monkeypatch) -> None:
+    """`explain` reports the open canonical PR that suppresses an issue."""
+    _legacy_intake(monkeypatch)
+    controller = _controller()
+    issues = [_issue(20, "factory:unowned")]
+    report = controller.explain_issue(
+        20,
+        issues=issues,
+        prs=[_pr(900, issue=20)],
+        no_diff_attempts_by_issue={},
+        include_dynamic_gates=False,
+    )
+
+    assert report["eligible"] is False
+    assert report["open_canonical_prs"] == [900]
+    assert any("canonical PR" in reason for reason in report["reasons"])
+
+
+def test_controller_explain_renders_operator_text(monkeypatch) -> None:
+    """The text renderer names the verdict, reasons, PRs, and every gate."""
+    _legacy_intake(monkeypatch)
+    controller = _controller()
+    report = controller.explain_issue(
+        20,
+        issues=[_issue(20, "factory:unowned")],
+        prs=[_pr(900, issue=20)],
+        no_diff_attempts_by_issue={},
+        include_dynamic_gates=False,
+    )
+    rendered = controller.render_explain_report(report)
+
+    assert rendered.startswith("#20: not eligible")
+    assert "canonical PR" in rendered
+    assert "#900" in rendered
+    assert "gate factory_pr_wip_limit:" in rendered
+
+
+def test_stale_claim_history_cannot_starve_an_unowned_issue(monkeypatch) -> None:
+    """Many historical claim/release markers never block an unowned issue."""
+    _legacy_intake(monkeypatch)
+    controller = _controller()
+    history = "\n".join(
+        "<!-- comic-pile-factory-implement-claim-v3:issue-2553:opencode-free-model-factory-58:"
+        "1750000000:attempt-1 -->"
+        for _ in range(5)
+    ) + (
+        "\n<!-- comic-pile-factory-claim-released-v3:issue-2553:"
+        "opencode-free-model-factory-58:1750000000:controller-release -->\n"
+    )
+    issues = [
+        _issue(2553, "factory", "factory:unowned", body=f"Frozen contract.\n{history}"),
+        _issue(2554, "factory:unowned"),
+    ]
+    report = controller.explain_issue(
+        2553,
+        issues=issues,
+        prs=[],
+        no_diff_attempts_by_issue={},
+        include_dynamic_gates=False,
+    )
+
+    assert report["eligible"] is True
+    assert list(report["reasons"]) == ["eligible: no static exclusion applies"]
+    assert report["open_canonical_prs"] == []
+
+
+def test_active_lease_blocks_double_claim(monkeypatch) -> None:
+    """An active lease owner is reported as blocking, never as assignable."""
+    _legacy_intake(monkeypatch)
+    controller = _controller()
+    issues = [_issue(30, "factory", "factory:building", "factory:58")]
+    report = controller.explain_issue(
+        30,
+        issues=issues,
+        prs=[],
+        no_diff_attempts_by_issue={},
+        include_dynamic_gates=False,
+    )
+
+    assert report["eligible"] is False
+    assert any("factory:58" in reason for reason in report["reasons"])
+
+
+def test_next_task_explain_requires_ralph_metadata() -> None:
+    """The Ralph-queue report requires Ralph metadata and names what it skips."""
+    report = next_task.explain_issue(
+        {
+            "number": 2553,
+            "title": "t",
+            "body": "Depends on #2721",
+            "labels": [{"name": "factory:unowned"}],
+            "url": "u",
+        },
+        open_numbers={2553, 2721},
+    )
+
+    assert report["eligible"] is False
+    assert any("ralph-task" in reason for reason in report["reasons"])
+    assert any("#2721" in reason for reason in report["reasons"])
+    assert report["not_evaluated"]
+
+
+def test_next_task_explain_reports_an_eligible_issue() -> None:
+    """A pending, unowned, dependency-free issue explains as Ralph-eligible."""
+    report = next_task.explain_issue(
+        {
+            "number": 3071,
+            "title": "t",
+            "body": "Ordinary work.",
+            "labels": [
+                {"name": "ralph-task"},
+                {"name": "ralph-status:pending"},
+                {"name": "factory:unowned"},
+            ],
+            "url": "u",
+        },
+        open_numbers={3071},
+    )
+
+    assert report["eligible"] is True
+    assert report["selector"] == "next_task"

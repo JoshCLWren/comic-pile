@@ -46,27 +46,24 @@ Ralph queue. The fixed-model controller (which owns fixed-model dispatch)
 never requires them and selects on factory labels instead. See
 ``docs/FACTORY_QUEUE_ELIGIBILITY.md`` for the authoritative role table.
 
-Trust tiers for GitHub comments
--------------------------------
-Machine-consumed markers (lease activity, no-diff retry accounting,
-strike-reset scans) must be workflow-posted: ``machine_marker_is_trusted``
-requires ``performed_via_github_app.slug == github-actions``. A bare
-``OWNER``/``MEMBER``/``COLLABORATOR`` association also arises from
-token-authenticated API calls, so it proves nothing about workflow provenance
-and must not authorize machine markers. Explicit human authorization remains a
-separate, human-interpreted signal — never a marker-shaped comment.
+Comment trust
+-------------
+Marker trust is not an eligibility rule and is deliberately not duplicated
+here. ``factory_work_policy.comment_is_trusted`` is the single gate used by
+every lease-activity, no-diff, and strike-reset scan: it accepts a trusted
+``OWNER``/``MEMBER``/``COLLABORATOR`` association or a workflow-posted comment
+(``performed_via_github_app.slug == github-actions``), matching
+``docs/FACTORY_GITHUB_VISIBILITY.md``. Eligibility itself reads issue state,
+labels, and body only.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
 
 MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
-
-_TRUSTED_FACTORY_APP_SLUGS = frozenset({"github-actions"})
 
 _FENCED_CODE_RE = re.compile(
     r"(?m)^[ \t]*```[^\n]*\n.*?^[ \t]*```[ \t]*$",
@@ -87,10 +84,12 @@ EPIC_PRD_LABELS = frozenset({"epic", "prd"})
 BLOCKED_LABELS = frozenset(
     {"factory:blocked", "ralph-status:blocked", "wontfix", "invalid", "duplicate"}
 )
-TERMINAL_LABELS = frozenset({"ralph-status:done"})
+# Mirrors ``issue_is_static_candidate``: ``ralph-status:done`` is the terminal
+# task label and ``factory:ready`` is the terminal workflow label, so neither
+# may be reported as queue-eligible by the diagnostic.
+TERMINAL_LABELS = frozenset({"ralph-status:done", "factory:ready"})
 
 FACTORY_OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
-FIXED_FACTORY_OWNER_RE = re.compile(r"^factory:(?P<worker>[6-9]|[1-3][0-9]|[4-7][0-9])$")
 
 _DEP_ON_RE = re.compile(r"(?:[Dd]epends?\s+on)\s+([^\n]+)")
 _NUMBER_REF_RE = re.compile(r"#(\d+)")
@@ -249,18 +248,6 @@ def is_factory_unowned(labels: Iterable[str]) -> bool:
     return owner_of(labels) in (None, "factory:unowned")
 
 
-def machine_marker_is_trusted(comment: Mapping[str, Any]) -> bool:
-    """Return whether a comment is proven workflow-posted machine output.
-
-    Machine-consumed markers must arrive via the factory workflow identity
-    (``github-actions`` app). A bare trusted association (OWNER/MEMBER/
-    COLLABORATOR) also arises from token-authenticated API calls, so it
-    cannot prove workflow provenance on its own.
-    """
-    app = comment.get("performed_via_github_app")
-    return isinstance(app, Mapping) and app.get("slug") in _TRUSTED_FACTORY_APP_SLUGS
-
-
 @dataclass(frozen=True)
 class EligibilityVerdict:
     """One issue's queue-eligibility outcome with stable human reasons."""
@@ -328,8 +315,9 @@ def explain_issue_eligibility(
     blocked = sorted(labels & set(BLOCKED_LABELS))
     if blocked:
         block(f"blocked labels present: {', '.join(blocked)}")
-    if labels & set(TERMINAL_LABELS):
-        block("terminal label ralph-status:done present")
+    terminal = sorted(labels & set(TERMINAL_LABELS))
+    if terminal:
+        block(f"terminal label present: {', '.join(terminal)}")
     owner = owner_of(labels)
     if owner is not None and owner != "factory:unowned":
         block(f"active factory lease held by {owner}")

@@ -36,6 +36,17 @@ class IssuePayload(TypedDict):
     url: str
 
 
+class ExplainReport(TypedDict):
+    """Ralph-queue eligibility report for one issue."""
+
+    issue: int
+    selector: str
+    eligible: bool
+    reasons: list[str]
+    labels: list[str]
+    not_evaluated: list[str]
+
+
 @dataclass(frozen=True)
 class Candidate:
     """An eligible issue and its selection metadata."""
@@ -261,12 +272,66 @@ def _start_task(issue_number: int) -> int:
     return 0
 
 
+def explain_issue(
+    issue: IssuePayload,
+    *,
+    open_numbers: set[int],
+) -> ExplainReport:
+    """Explain whether one issue is currently visible to the Ralph queue.
+
+    Uses the same shared eligibility module as the fixed-model controller, with
+    ``require_ralph_labels`` enabled because this selector serves the Ralph
+    queue. Canonical open-PR suppression is a controller-only gate that this
+    selector has no view of, so the report says so explicitly instead of
+    implying the issue is dispatchable.
+
+    Args:
+        issue: The GitHub issue payload to explain.
+        open_numbers: Numbers of currently open issues.
+
+    Returns:
+        A JSON-serializable verdict with human-readable reasons.
+    """
+    number = int(issue["number"])
+    verdict = eligibility.explain_issue_eligibility(
+        number=number,
+        state="OPEN",
+        labels=_labels(issue),
+        body=issue.get("body"),
+        open_numbers=open_numbers,
+        require_ralph_labels=True,
+    )
+    return {
+        "issue": number,
+        "selector": "next_task",
+        "eligible": verdict.eligible,
+        "reasons": list(verdict.reasons),
+        "labels": sorted(_labels(issue)),
+        "not_evaluated": [
+            "canonical open-PR suppression (controller-only gate)",
+        ],
+    }
+
+
+def _explain_task(issue_number: int) -> int:
+    """Print the Ralph-queue eligibility report for one issue."""
+    issue = _gh_issue(issue_number)
+    open_numbers = {row["number"] for row in _gh_issue_list("open")}
+    report = explain_issue(issue, open_numbers=open_numbers)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
 def main() -> int:
-    """Select the next issue or start a validated issue."""
+    """Select the next issue, start one, or explain its eligibility."""
     parser = ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command")
     start_parser = subparsers.add_parser("start", help="validate and start an issue")
     start_parser.add_argument("issue", type=int)
+    explain_parser = subparsers.add_parser(
+        "explain", help="explain why an issue is or is not queue-eligible"
+    )
+    explain_parser.add_argument("issue", type=int)
     args = parser.parse_args()
 
     if args.command == "start":
@@ -274,6 +339,13 @@ def main() -> int:
             return _start_task(args.issue)
         except RuntimeError as error:
             print(f"start-task: {error}", file=sys.stderr)
+            return 1
+
+    if args.command == "explain":
+        try:
+            return _explain_task(args.issue)
+        except RuntimeError as error:
+            print(f"explain: {error}", file=sys.stderr)
             return 1
 
     try:
