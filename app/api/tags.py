@@ -53,7 +53,10 @@ async def list_tags(
         List of visible tags.
     """
     service = TagService(db)
-    tags = await service.list_tags(current_user)
+    try:
+        tags = await service.list_tags(current_user)
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
     return tag_schemas.TagListResponse(tags=[tag_to_response(tag) for tag in tags])
 
 
@@ -80,7 +83,10 @@ async def get_tag(
         HTTPException 404: When the tag does not exist or is not visible.
     """
     service = TagService(db)
-    tag = await service.get_tag(current_user, tag_id)
+    try:
+        tag = await service.get_tag(current_user, tag_id)
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
     return tag_to_response(tag)
 
 
@@ -110,13 +116,16 @@ async def create_tag(
         HTTPException 409: When a requested name collides with an existing global.
     """
     service = TagService(db)
-    result = await service.create_tag(
-        current_user,
-        name=request.name,
-        color=request.color,
-        scope=request.scope,
-        include_near_matches=request.include_near_matches,
-    )
+    try:
+        result = await service.create_tag(
+            current_user,
+            name=request.name,
+            color=request.color,
+            scope=request.scope,
+            include_near_matches=request.include_near_matches,
+        )
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
     response = tag_schemas.TagCreateResponse(
         tag=tag_to_response(result.tag),
         redirected_to_global=result.redirected_to_global,
@@ -152,12 +161,15 @@ async def update_tag(
         HTTPException 409: When the new name collides with a global tag.
     """
     service = TagService(db)
-    tag = await service.update_tag(
-        current_user,
-        tag_id,
-        name=request.name,
-        color=request.color,
-    )
+    try:
+        tag = await service.update_tag(
+            current_user,
+            tag_id,
+            name=request.name,
+            color=request.color,
+        )
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
     return tag_to_response(tag)
 
 
@@ -185,7 +197,10 @@ async def delete_tag(
         HTTPException 403: When the user lacks permission.
     """
     service = TagService(db)
-    result = await service.delete_tag(current_user, tag_id)
+    try:
+        result = await service.delete_tag(current_user, tag_id)
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
     return tag_schemas.TagDeleteResponse(
         tag_id=result.tag.id,
         assignments_removed=result.assignments_removed,
@@ -219,12 +234,15 @@ async def assign_tag(
         HTTPException 404: When the tag or target does not exist.
     """
     service = TagService(db)
-    assignment = await service.assign_tag(
-        current_user,
-        tag_id,
-        request.target_type,
-        request.target_id,
-    )
+    try:
+        assignment = await service.assign_tag(
+            current_user,
+            tag_id,
+            request.target_type,
+            request.target_id,
+        )
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
     return tag_assignment_to_response(assignment)
 
 
@@ -254,12 +272,15 @@ async def unassign_tag(
         HTTPException 404: When the tag or assignment does not exist.
     """
     service = TagService(db)
-    assignment = await service.unassign_tag(
-        current_user,
-        tag_id,
-        request.target_type,
-        request.target_id,
-    )
+    try:
+        assignment = await service.unassign_tag(
+            current_user,
+            tag_id,
+            request.target_type,
+            request.target_id,
+        )
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
     return tag_assignment_to_response(assignment)
 
 
@@ -283,9 +304,12 @@ async def get_tag_usage(
         Assignment counts by target type and total.
     """
     service = TagService(db)
-    _ = await service.get_tag(current_user, tag_id)
-    total = await service.count_assignments(tag_id)
-    by_type = await service.count_assignments_by_target_type(tag_id)
+    try:
+        _ = await service.get_tag(current_user, tag_id)
+        total = await service.count_assignments(tag_id)
+        by_type = await service.count_assignments_by_target_type(tag_id)
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
     return tag_schemas.TagUsageResponse(
         tag_id=tag_id,
         total_assignments=total,
