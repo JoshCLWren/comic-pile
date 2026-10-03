@@ -278,7 +278,7 @@ async def delete_tag_assignments(db: AsyncSession, tag_id: int) -> int:
         .where(TagAssignment.tag_id == tag_id)
         .execution_options(synchronize_session=False)
     )
-    return result.rowcount or 0
+    return getattr(result, "rowcount", 0) or 0
 
 
 async def delete_tag(db: AsyncSession, tag_id: int) -> int:
@@ -299,7 +299,7 @@ async def delete_tag(db: AsyncSession, tag_id: int) -> int:
         .where(Tag.id == tag_id)
         .execution_options(synchronize_session=False)
     )
-    return result.rowcount or 0
+    return getattr(result, "rowcount", 0) or 0
 
 
 async def find_nearly_matching_global_tags(
