@@ -189,6 +189,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import taste_signal
     from app.api import thread
     from app.api import traffic_metrics
+    from app.api import bootstrap_comparison
     from app.api import undo
 
     # Compose the dependency sub-routers into ``dependency.router`` before the
@@ -201,6 +202,8 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     # Roll v2: versioned-only, no unversioned alias per #2716
     app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
+    # Bootstrap comparison and observability for v2 migration
+    app.include_router(bootstrap_comparison.router, tags=["bootstrap-comparison"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
