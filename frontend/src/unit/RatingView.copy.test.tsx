@@ -102,7 +102,9 @@ describe('RatingView copy comic reference', () => {
     await user.click(copyButton)
 
     expect(writeText).toHaveBeenCalledWith('Ultimate X-Men 12')
-    expect(screen.getByText('COPIED')).toBeInTheDocument()
+    // Issue #3009 demotes the copy utility to sentence case, so the
+    // success state reads 'Copied' rather than an uppercase eyebrow label.
+    expect(screen.getByText('Copied')).toBeInTheDocument()
     expect(copyButton.getAttribute('aria-label')).toBe('Copy Ultimate X-Men 12')
     expect(copyButton.className).toContain('min-h-9')
   })
@@ -151,6 +153,8 @@ describe('RatingView copy comic reference', () => {
     // Retry succeeds — aria-label stays "Copy …" even when button text is "Retry"
     vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValueOnce(undefined)
     await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
-    expect(screen.getByText('COPIED')).toBeInTheDocument()
+    // Issue #3009 demotes the copy utility to sentence case, so the
+    // success state reads 'Copied' rather than an uppercase eyebrow label.
+    expect(screen.getByText('Copied')).toBeInTheDocument()
   })
 })
