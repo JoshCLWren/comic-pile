@@ -2,7 +2,7 @@ import type { FormEvent } from 'react'
 import axios from 'axios'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { authApi } from '../services/api'
+import { authApi } from '../services/api-auth'
 import { isNonEmptyString, isString } from '../utils/runtimeChecks'
 
 const INVALID_LINK_MESSAGE =

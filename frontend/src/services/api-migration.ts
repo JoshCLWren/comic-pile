@@ -1,6 +1,11 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { Thread } from '../types'
 
+export interface MigrateThreadRequest {
+  last_issue_read: number
+  total_issues: number
+}
+
 /**
  * Build the migration service bound to an HTTP client.
  *
@@ -9,8 +14,11 @@ import type { Thread } from '../types'
  */
 export function createMigrationApi(client: HttpClient) {
   return {
-    migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
-      client.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
+    migrateThread: (threadId: number, data: MigrateThreadRequest) =>
+      client.post<Thread, MigrateThreadRequest>(
+        `/v1/threads/${threadId}:migrateToIssues`,
+        data,
+      ),
   }
 }
 

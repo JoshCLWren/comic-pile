@@ -2,7 +2,7 @@ import type { FormEvent } from 'react'
 import axios from 'axios'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { authApi } from '../services/api'
+import { authApi } from '../services/api-auth'
 import { isNonEmptyString } from '../utils/runtimeChecks'
 
 // FastAPI reports a successful-but-pessimistic 200 for unknown accounts, so any

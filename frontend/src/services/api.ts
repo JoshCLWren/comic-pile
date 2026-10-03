@@ -40,28 +40,6 @@ const AUTH_ENDPOINT_PATHS = new Set([
 // password). They must never reach console output or error telemetry.
 const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v1/auth/reset-password'])
 
-export interface ForgotPasswordRequest {
-  email: string
-}
-
-export interface ResetPasswordRequest {
-  token: string
-  new_password: string
-}
-
-export interface PasswordResetResponse {
-  message: string
-}
-
-export function createAuthApi(client: ApiClient) {
-  return {
-    forgotPassword: (data: ForgotPasswordRequest) =>
-      client.post<PasswordResetResponse, ForgotPasswordRequest>('/v1/auth/forgot-password', data),
-    resetPassword: (data: ResetPasswordRequest) =>
-      client.post<PasswordResetResponse, ResetPasswordRequest>('/v1/auth/reset-password', data),
-  }
-}
-
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
 let isRedirectingToLogin = false
@@ -468,14 +446,12 @@ setDefaultHttpClient(api)
 
 export default api
 
-// Auth transport boundary (final inventory for #2785).
+// Transport boundary (final inventory for #2785).
 //
-// `api.ts` now owns no product endpoint collection. Every domain client lives in
-// a focused `api-*.ts` module and binds its transport through `defaultHttpClient()`.
-// The only endpoint object left here is `authApi`, which is retained
-// deliberately: its two password-reset paths are already enumerated by the
-// CSRF/refresh transport below (`AUTH_ENDPOINT_PATHS`,
-// `SENSITIVE_AUTH_BODY_PATHS`), so its secret-bearing bodies are redacted and
-// its requests share this stack's token refresh. It is auth infrastructure, not
-// a product domain client, and splitting it would fragment one transport.
-export const authApi = createAuthApi(api)
+// `api.ts` implements no product/domain endpoint collection. Every domain
+// client, including the password-reset `authApi`, lives in a focused `api-*.ts`
+// module and binds its transport through `defaultHttpClient()`. What remains
+// here is the single shared axios/auth/refresh/CSRF stack those clients depend
+// on, including `AUTH_ENDPOINT_PATHS` and `SENSITIVE_AUTH_BODY_PATHS`, which
+// still keep `api-auth.ts`'s secret-bearing bodies out of CSRF attachment and
+// error telemetry.

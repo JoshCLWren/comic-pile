@@ -1,6 +1,8 @@
 import type { HttpClient } from '../services/httpClient'
+import { createAuthApi } from '../services/api-auth'
 import { createBugReportsApi } from '../services/api-bug-reports'
 import { createMigrationApi } from '../services/api-migration'
+import { createPreferencesApi } from '../services/api-preferences'
 import { createTasksApi } from '../services/api-tasks'
 import { createCreatorsApi } from '../services/api-creators'
 import { createDependenciesApi } from '../services/api-dependencies'
@@ -20,10 +22,12 @@ import { createUndoApi } from '../services/api-undo'
  */
 export function createApiServiceSet(client: HttpClient) {
   return {
+    authApi: createAuthApi(client),
     bugReportsApi: createBugReportsApi(client),
     creatorsApi: createCreatorsApi(client),
     dependenciesApi: createDependenciesApi(client),
     migrationApi: createMigrationApi(client),
+    preferencesApi: createPreferencesApi(client),
     queueApi: createQueueApi(client),
     rateApi: createRateApi(client),
     rollApi: createRollApi(client),
