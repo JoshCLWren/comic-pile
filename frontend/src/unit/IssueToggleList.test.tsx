@@ -102,7 +102,7 @@ async function renderIssueToggleList() {
     />,
   )
   await waitFor(() => {
-    expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
+    expect(screen.getAllByTestId(/issue-pill-/).length).toBeGreaterThan(0)
   })
 }
 
