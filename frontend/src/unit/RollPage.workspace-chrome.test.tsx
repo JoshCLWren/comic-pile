@@ -32,6 +32,7 @@ vi.mock('../components/GlossaryLink', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+// SAFETY: test fixture supplies only the fields the header component reads for session state
 const BOOTSTRAP = {
   session_mode: null,
   manual_die: null,
