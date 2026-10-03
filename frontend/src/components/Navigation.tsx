@@ -488,8 +488,12 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           ))}
           <div className="space-y-1 border-t border-[var(--theme-border)] pt-2 md:hidden">
             <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
-            <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-panel)] hover:text-[var(--theme-text-primary)]" aria-label="Log out">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {/* Issue #3009: the mobile logout action is a quiet utility peer, not a
+                danger action. The visible "Sign out" label is the accessible name —
+                adding an `aria-label="Log out"` here would override it and break the
+                WCAG 2.5.3 Label in Name contract the sidebar variant keeps. */}
+            <button type="button" onClick={handleLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-panel)] hover:text-[var(--theme-text-primary)]">
+              <svg aria-hidden="true" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 6l-6 6 6 6"></path>
                 <path d="M6 12h12"></path>
               </svg>
