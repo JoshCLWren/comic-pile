@@ -184,6 +184,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import recommendation_diagnostics
     from app.api import roll
     from app.api import session
+    from app.api import guest_demo
     from app.api import snooze
     from app.api import taste
     from app.api import taste_signal
@@ -201,6 +202,8 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     # Roll v2: versioned-only, no unversioned alias per #2716
     app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
+    # Guest demo routes for unauthenticated users
+    app.include_router(guest_demo.router, prefix="/api", tags=["guest-demo"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
