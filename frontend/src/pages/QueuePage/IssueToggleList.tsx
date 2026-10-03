@@ -71,6 +71,7 @@ export function IssueToggleList({
   const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
   const [selectedDepsIssue, setSelectedDepsIssue] = useState<Issue | null>(null)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isReorderMode, setIsReorderMode] = useState(false)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -388,7 +389,7 @@ export function IssueToggleList({
       return
     }
 
-    if (!isExpanded) {
+    if (!isExpanded && !isReorderMode) {
       const nextUnreadId = nextIssues.find((i) => i.status === 'unread')?.id ?? null
       const { startIndex, endIndex } = getVisibilityWindow(nextIssues, nextUnreadId)
       const movedIssueIndex = nextIssues.findIndex((i) => i.id === issue.id)
@@ -403,21 +404,38 @@ export function IssueToggleList({
 if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
   const visibleIssues = getVisibleIssues()
-  const hasHiddenIssues = issues.length > 5 && !isExpanded
+  const hasHiddenIssues = issues.length > 5 && !isExpanded && !isReorderMode
 
   return (
     <div className="space-y-2">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
-        {issues.length > 5 && (
+        <div className="flex items-center gap-2">
+          {issues.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              {isExpanded ? 'Show fewer' : `Show all ${issues.length}`}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
+            onClick={() => setIsReorderMode((previous) => !previous)}
+            aria-pressed={isReorderMode}
+            aria-label={isReorderMode ? 'Finish reordering issues' : 'Reorder issues'}
+            data-testid="issue-reorder-toggle"
+            className={[
+              'min-h-[36px] md:min-h-[44px] px-2 rounded-lg border text-xs font-bold transition-colors',
+              isReorderMode
+                ? 'border-amber-400/60 bg-amber-500/10 text-amber-300'
+                : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]',
+            ].join(' ')}
           >
-            {isExpanded ? 'Show fewer' : `Show all ${issues.length}`}
+            {isReorderMode ? 'Done' : 'Reorder'}
           </button>
-        )}
+        </div>
       </div>
       <p className="sr-only" aria-live="polite">{reorderAnnouncement}</p>
       {hasHiddenIssues && (
@@ -425,6 +443,60 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
           Showing {visibleIssues.length} of {issues.length} issues around your current position
         </p>
       )}
+      {isReorderMode ? (
+        <div className="space-y-1 max-h-64 overflow-auto" data-testid="issue-reorder-list">
+          {issues.map((issue, index) => {
+            const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
+
+            return (
+              <div
+                key={issue.id}
+                data-testid={`issue-reorder-row-${issue.id}`}
+                data-issue-number={issue.issue_number}
+                className="surface-panel flex items-center gap-2 px-2 min-h-[44px]"
+              >
+                <span className="text-xs font-bold text-[var(--theme-text-primary)]">
+                  #{issue.issue_number}
+                </span>
+                <span className="text-[10px] text-[var(--theme-text-muted)]">
+                  {issue.status === 'read' ? '✅ Read' : '🟢 Unread'}
+                </span>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => handleMoveIssue(issue, 'up')}
+                  disabled={isBusy || index === 0}
+                  className={[
+                    'min-h-[44px] min-w-[44px] flex items-center justify-center text-xs font-black transition-colors',
+                    'text-[var(--theme-text-muted)] hover:text-amber-300 disabled:opacity-40',
+                  ].join(' ')}
+                  aria-label={`Move issue #${issue.issue_number} up`}
+                  data-testid={`issue-move-up-${issue.id}`}
+                  data-move-control={`up-${issue.id}`}
+                  title={`Move issue #${issue.issue_number} up`}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMoveIssue(issue, 'down')}
+                  disabled={isBusy || index === issues.length - 1}
+                  className={[
+                    'min-h-[44px] min-w-[44px] flex items-center justify-center text-xs font-black transition-colors',
+                    'text-[var(--theme-text-muted)] hover:text-amber-300 disabled:opacity-40',
+                  ].join(' ')}
+                  aria-label={`Move issue #${issue.issue_number} down`}
+                  data-testid={`issue-move-down-${issue.id}`}
+                  data-move-control={`down-${issue.id}`}
+                  title={`Move issue #${issue.issue_number} down`}
+                >
+                  ↓
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
         {visibleIssues.map((issue) => {
     const fullIndex = issues.findIndex((i) => i.id === issue.id)
@@ -464,7 +536,7 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                      'min-h-[36px] md:min-h-[44px] min-w-[36px] md:min-w-[44px] flex items-center justify-center px-2 py-0.5 text-xs font-bold transition-all',
                      isBusy ? '' : 'hover:opacity-80 cursor-grab active:cursor-grabbing',
                    ].join(' ')}
-                   title={`#${issue.issue_number}: ${issue.status}. Drag to reorder.`}
+                    title={`#${issue.issue_number}: ${issue.status}. Reorder with the arrow buttons or by dragging.`}
                    aria-label={`Toggle issue #${issue.issue_number}`}
                    data-testid={`issue-toggle-${issue.id}`}
                  >
@@ -536,10 +608,11 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                >
                  x
                </button>
-            </div>
-          )
-        })}
+             </div>
+           )
+         })}
       </div>
+      )}
       <div className="flex gap-2">
         <input
           type="text"

@@ -202,9 +202,14 @@ async def create_issues(
 ) -> IssueListResponse:
     """Create issues from a range string and place them in thread order.
 
-    By default new issues are appended after the last existing issue. When
-    ``insert_after_issue_id`` is provided, existing issues later in the thread are
-    shifted upward so the new issues are inserted immediately after that issue.
+    Ordinary numeric issue numbers are inserted at their natural position in the
+    series rather than always appended, so adding ``#2`` to ``#33, #34, #35``
+    saves ``#2, #33, #34, #35``. When that placement would be ambiguous — an
+    ``insert_after_issue_id`` anchor, irregular numbering such as ``Annual 1``
+    or ``0``, or a series the reader reordered by hand — new issues are appended
+    after the last existing issue. When ``insert_after_issue_id`` is provided,
+    existing issues later in the thread are shifted upward so the new issues are
+    inserted immediately after that issue.
 
     Args:
         thread_id: The thread ID to create issues for.
