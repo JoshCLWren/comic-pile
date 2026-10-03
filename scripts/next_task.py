@@ -3,13 +3,21 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
 import subprocess
 import sys
 from argparse import ArgumentParser
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TypedDict, cast
+
+# Shared eligibility semantics live in scripts/factory_eligibility.py. Resolve
+# them relative to this file so the selector works both as a direct script
+# (python scripts/next_task.py) and as an imported package module.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+eligibility = importlib.import_module("factory_eligibility")
 
 
 class IssueLabel(TypedDict):
@@ -51,12 +59,6 @@ EXCLUDED_LABELS = {
 }
 
 EPIC_ACCEPTANCE_LABELS = {"epic", "prd"}
-MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
-ACCEPTANCE_PARENT_BODY_RE = re.compile(
-    r"acceptance parent|parent acceptance criteria",
-    re.IGNORECASE,
-)
-ACCEPTANCE_PARENT_CHILD_RE = re.compile(r"(?m)^[ \t]*-[ \t]*\[[ xX]\][ \t]*#\d+")
 
 
 def _labels(issue: IssuePayload) -> set[str]:
@@ -71,10 +73,7 @@ def _priority(issue: IssuePayload) -> int:
 
 def _dependency_numbers(body: str) -> set[int]:
     """Return issue numbers referenced as dependencies in an issue body."""
-    return {
-        int(number)
-        for number in re.findall(r"(?:Depends on|depends on) #([0-9]+)", body)
-    }
+    return eligibility.parse_declared_dependencies(body)
 
 
 def _has_unresolved_dependency(issue: IssuePayload, closed_numbers: set[int]) -> bool:
@@ -86,7 +85,7 @@ def _has_unresolved_dependency(issue: IssuePayload, closed_numbers: set[int]) ->
 
 def _is_manual_only(issue: IssuePayload) -> bool:
     """Return whether autonomous execution is explicitly disallowed."""
-    return MANUAL_ONLY_MARKER in (issue.get("body") or "")
+    return eligibility.is_manual_only(issue.get("body"))
 
 
 def _is_acceptance_parent(issue: IssuePayload) -> bool:
@@ -99,11 +98,7 @@ def _is_acceptance_parent(issue: IssuePayload) -> bool:
     merely defer an operator acceptance pass (#3037, #2718, #2128) stay
     executable.
     """
-    body = issue.get("body") or ""
-    return bool(
-        ACCEPTANCE_PARENT_BODY_RE.search(body)
-        and ACCEPTANCE_PARENT_CHILD_RE.search(body)
-    )
+    return eligibility.is_acceptance_parent(issue.get("body"))
 
 
 def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candidate | None:
