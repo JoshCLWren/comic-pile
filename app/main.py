@@ -170,6 +170,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import cbl_plan_adoption
     from app.api import comicvine_resolution
     from app.api import creators
+    from app.api import demo
     from app.api import dependency
     from app.api import delivery
     from app.api import health
@@ -183,7 +184,6 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import reading_orders
     from app.api import recommendation_diagnostics
     from app.api import roll
-    from app.api import demo
     from app.api import session
     from app.api import snooze
     from app.api import taste
@@ -202,7 +202,6 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     # Roll v2: versioned-only, no unversioned alias per #2716
     app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
-    app.include_router(demo.router, prefix="/api/demo", tags=["demo"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
@@ -246,6 +245,9 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(delivery.router, prefix="/api/v1", tags=["delivery"])
+    # Guest demo (#2757): versioned-only new client resource, so no bare
+    # /api/* twin. It is intentionally unauthenticated and read-only.
+    app.include_router(demo.router, prefix="/api/v1/demo", tags=["demo"])
     app.include_router(catalog.router, tags=["catalog"])
     app.include_router(identity_inbox.router, tags=["identity-inbox"])
     app.include_router(issue_identity.router, tags=["issue-identity"])
