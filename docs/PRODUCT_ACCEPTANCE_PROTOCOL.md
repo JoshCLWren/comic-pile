@@ -11,9 +11,12 @@ Merge automation must never close an acceptance parent. `factory_post_merge_clos
 - `acceptance-parent-incomplete` — a declared child is still open, or one of
   the parent's own acceptance-criterion checkboxes is still unchecked (even
   when every child is closed);
-- `acceptance-parent-requires-verdict` — children and criteria are complete
-  but no durable `<!-- product-acceptance:v1 -->` report with an ACCEPTED
-  verdict exists on the parent.
+- `acceptance-parent-requires-verdict` — children and criteria are
+  complete. The parent still must not be closed by automation: the
+  transition to completed is owned by the interactive acceptance
+  run, and even a durable `<!-- product-acceptance:v1 -->` report
+  with an ACCEPTED verdict never authorizes merge automation to
+  close the parent on its own.
 
 The transition helper `acceptance_parent_may_close` returns true only when
 every declared child is closed, every parent criterion is checked, and the

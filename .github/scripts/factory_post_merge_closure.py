@@ -37,6 +37,7 @@ import re
 import subprocess
 import sys
 import unittest
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 
 PROTECTED_ISSUES = frozenset({679, 1093, 1109})
