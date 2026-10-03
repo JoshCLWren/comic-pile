@@ -4,6 +4,11 @@ import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { DiceSide } from '../../../components/diceTypes'
 import type { RollBootstrapResponse, RollBootstrapThread, SessionModeState } from '../../../types/rollBootstrap'
+import {
+  ROLL_WORKSPACE_GUTTER,
+  ROLL_WORKSPACE_MAX_WIDTH,
+  ROLL_WORKSPACE_TRACKS,
+} from '../workspaceLayout'
 import { ReadingModeControl } from './ReadingModeControl'
 
 interface RollHeaderProps {
@@ -38,6 +43,12 @@ interface RollHeaderProps {
  *                            ReadingModeControl remains a quiet status chip
  *   4. manual pick   - demoted to a secondary control in the header row (#2197)
  *
+ * Rating chrome (issue #2712): the rating workspace is the visual contract, so
+ * the header resolves to the same bounded shell and the same Comic/Decision
+ * tracks as `RatingView`. That is what lets the accent rule belong to the
+ * Comic region and stop at the division instead of running beneath the queue
+ * action, and what keeps the header edges aligned with the composition.
+ *
  * Active-mode convention: the roll-mode control in effect gets a solid
  * `--theme-primary-action` fill; inactive/status controls stay neutral dark
  * outlines with muted text; the manual-pick action is an outlined, non-solid
@@ -71,44 +82,90 @@ export function RollHeader({
       }
     : null
   const manualDie = bootstrap.manual_die
+
+  // The page title, its supporting copy, and the die-context notices share one
+  // block so the die view keeps its existing header copy and the rating view can
+  // anchor the accent rule to the same edges as the workspace.
+  const identityBlock = (
+    <div className="min-w-0">
+      <h1 className="text-xl font-black uppercase tracking-tighter text-glow md:text-2xl">
+        Roll
+      </h1>
+      {isRatingView ? (
+        <span
+          data-testid="roll-header-subtitle"
+          className="block text-[10px] font-bold uppercase tracking-widest text-stone-500"
+        >
+          A random comic from your library
+        </span>
+      ) : (
+        <>
+          {snoozedThreads.length > 0 && currentDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-[9px] uppercase tracking-wider text-stone-500">
+                pool at max size (d{dieSize}) - snoozing won&apos;t increase it further
+              </span>
+            </div>
+          )}
+          {snoozedThreads.length > 0 && pool.length + snoozedThreads.length > dieSize && (
+            <div className="mt-1 flex items-center gap-2">
+              <Tooltip content="Snoozed offset">
+                <span className="modifier-badge cursor-help border-b border-dashed border-stone-600 text-[10px] font-black text-amber-500">
+                  +{snoozedThreads.length}
+                </span>
+              </Tooltip>
+              <Tooltip content="Snoozed offset active">
+                <span className="cursor-help border-b border-dashed border-stone-600 text-[9px] uppercase tracking-wider text-stone-500">
+                  offset active
+                </span>
+              </Tooltip>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+
   return (
-    <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-2 py-3 shrink-0 z-10 md:px-3 md:py-4">
-      <div className="min-w-0">
-        <h1 className="text-xl font-black uppercase tracking-tighter text-glow md:text-2xl">
-          Roll
-        </h1>
-        {isRatingView && (
-          <span className="block text-[10px] font-bold uppercase tracking-widest text-stone-500">
-            A random comic from your library
-          </span>
-        )}
-        {!isRatingView && snoozedThreads.length > 0 && currentDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
-          <div className="mt-1 flex items-center gap-2">
-            <span className="text-[9px] uppercase tracking-wider text-stone-500">
-              pool at max size (d{dieSize}) - snoozing won&apos;t increase it further
-            </span>
+    <header
+      className={`shrink-0 z-10 py-3 md:py-4 ${isRatingView ? 'px-3 md:px-4' : 'px-2 md:px-3'}`}
+    >
+      {isRatingView ? (
+        // The same tracks and shell as `RatingView`: the title/subtitle sit on
+        // the Comic side, the queue action sits on the Decision side, and the
+        // accent rule spans the Comic track and stops at the division.
+        <div
+          data-testid="roll-header-workspace"
+          className={`grid w-full items-start ${ROLL_WORKSPACE_MAX_WIDTH} ${ROLL_WORKSPACE_GUTTER} ${ROLL_WORKSPACE_TRACKS}`}
+        >
+          <div className="min-w-0">
+            {identityBlock}
+            <div
+              aria-hidden="true"
+              data-testid="roll-header-accent-rule"
+              className="mt-2 h-px w-full bg-[var(--theme-comic-accent)] opacity-60"
+            />
           </div>
-        )}
-        {!isRatingView && snoozedThreads.length > 0 && pool.length + snoozedThreads.length > dieSize && (
-          <div className="mt-1 flex items-center gap-2">
-            <Tooltip content="Snoozed offset">
-              <span className="modifier-badge cursor-help border-b border-dashed border-stone-600 text-[10px] font-black text-amber-500">
-                +{snoozedThreads.length}
-              </span>
-            </Tooltip>
-            <Tooltip content="Snoozed offset active">
-              <span className="cursor-help border-b border-dashed border-stone-600 text-[9px] uppercase tracking-wider text-stone-500">
-                offset active
-              </span>
-            </Tooltip>
-          </div>
-        )}
-      </div>
-      <div
-        className={`flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-2 w-full lg:w-auto ${isRatingView ? 'flex' : 'flex'}`}
-      >
-        {!isRatingView && (
-          <>
+          {onBackToQueue && (
+            <div className="flex min-w-0 items-start">
+              <button
+                type="button"
+                onClick={onBackToQueue}
+                data-testid="roll-back-to-queue"
+                className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-stone-400 transition-colors hover:border-stone-500 hover:text-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              >
+                <span aria-hidden="true" className="text-xs">
+                  &larr;
+                </span>
+                Back to queue
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          {identityBlock}
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-2 w-full lg:w-auto">
             <div id="die-selector" data-roll-die-selector="primary" className="flex min-w-0 flex-wrap items-center gap-2">
               <div
                 className="hidden min-w-0 flex-wrap items-center gap-x-0 gap-y-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-0.5 md:flex"
@@ -206,21 +263,9 @@ export function RollHeader({
                 Pick manually
               </button>
             </Tooltip>
-          </>
-        )}
-        {isRatingView && (
-          <button
-            type="button"
-            onClick={() => {
-              if (onBackToQueue) onBackToQueue()
-            }}
-            className="flex items-center gap-2 rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-stone-400 transition-colors hover:border-stone-500 hover:text-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-          >
-            <span className="text-xs">←</span>
-            Back to queue
-          </button>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </header>
   )
 }

@@ -324,28 +324,41 @@ export function useRollRating({
     }
   }
 
-  async function handleCancelRating() {
-    try {
-      await dismissPendingMutation.mutate()
-      await refetchBootstrap()
-    } catch (error) {
-      setErrorMessage(getApiErrorDetail(error))
-      return
-    }
-    setIsRatingView(false)
-    setRolledResult(null)
-    setSelectedThreadId(null)
-    setActiveRatingThread(null)
-    setErrorMessage('')
-  }
-
-  const exitRatingView = useCallback(() => {
-    setIsRatingView(false)
-    setRolledResult(null)
-    setSelectedThreadId(null)
-    setActiveRatingThread(null)
-    setErrorMessage('')
-  }, [setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+  /**
+   * Leaves the rating view without rating, discarding the in-flight pending read.
+   *
+   * Clearing local state alone is not enough: `useRollPendingSession` rehydrates
+   * the rating view from `bootstrap.pending_thread_id` whenever one exists, so a
+   * purely local exit is undone on the next render. Dismissing the pending read
+   * and refetching is what makes the exit stick. This is also the single exit
+   * path for the header's `Back to queue` chrome (issue #2712), so the header
+   * action and the decision card's cancel cannot drift into different semantics.
+   */
+  const handleCancelRating = useCallback(
+    async () => {
+      try {
+        await dismissPendingMutation.mutate()
+        await refetchBootstrap()
+      } catch (error) {
+        setErrorMessage(getApiErrorDetail(error))
+        return
+      }
+      setIsRatingView(false)
+      setRolledResult(null)
+      setSelectedThreadId(null)
+      setActiveRatingThread(null)
+      setErrorMessage('')
+    },
+    [
+      dismissPendingMutation,
+      refetchBootstrap,
+      setIsRatingView,
+      setRolledResult,
+      setSelectedThreadId,
+      setActiveRatingThread,
+      setErrorMessage,
+    ],
+  )
 
   return {
     readingOrders,
@@ -372,6 +385,5 @@ export function useRollRating({
     handleSubmitRating,
     handleRefreshThread,
     handleCancelRating,
-    exitRatingView,
   }
 }
