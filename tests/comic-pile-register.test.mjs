@@ -21,9 +21,11 @@ describe("Comic Pile - registration", () => {
       url: "https://comic-pile.vercel.app/register",
     });
 
-    // The registration form should be visible.
+    // The registration form should be visible. Signup keeps username as the
+    // sign-in identifier and email as the recovery identity (issue #2756), and
+    // no longer asks for a redundant client-side password confirmation.
     const formVisible = await testdriver.assert(
-      "a 'Create Account' registration form with Username, Email, Password and Confirm Password fields is visible",
+      "a 'Create Account' registration form with Username, Email and Password fields is visible",
     );
     expect(formVisible).toBeTruthy();
 
@@ -34,12 +36,7 @@ describe("Comic Pile - registration", () => {
     await testdriver.find("the Email input field in the registration form").click();
     await testdriver.type(email);
 
-    await testdriver
-      .find("the Password input field (not Confirm Password) in the registration form")
-      .click();
-    await testdriver.type(password);
-
-    await testdriver.find("the Confirm Password input field in the registration form").click();
+    await testdriver.find("the Password input field in the registration form").click();
     await testdriver.type(password);
 
     // Submit.
