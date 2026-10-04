@@ -298,6 +298,11 @@ async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
     await async_db.execute(
         delete(ContinuityRule).where(ContinuityRule.id == linked_reader_rule.id)
     )
+    # Canonical Dependency rows are the sole Roll authority: retiring the rule
+    # must also retire its executable edge, mirroring the supported API delete
+    # path (retire_canonical_dependencies). Raw-SQL rule deletion alone leaves
+    # an orphan edge that still blocks, which no supported path can produce.
+    await async_db.execute(delete(Dependency).where(Dependency.id == reader_order.id))
     await async_db.commit()
 
     blocked = await dependencies._get_canonical_blocked_thread_ids_uncached(user_id, async_db)

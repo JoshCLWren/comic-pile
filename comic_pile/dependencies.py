@@ -224,7 +224,8 @@ async def get_blocking_explanations_batch(
     if not thread_ids:
         return {}
 
-    return await _canonical_blocking_explanations_batch(thread_ids, user_id, db)
+    canonical_map = await _canonical_blocking_explanations_batch(thread_ids, user_id, db)
+    return {thread_id: canonical_map.get(thread_id, []) for thread_id in thread_ids}
 
 
 async def validate_position_dependency_consistency(
