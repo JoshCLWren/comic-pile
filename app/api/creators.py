@@ -1,4 +1,4 @@
-"""Bounded personal creator summary and discovery APIs.
+"""Bounded personal creator summary, discovery, and comparison APIs (issues #2028, #2775, #3091).
 
 Endpoints:
 
@@ -6,6 +6,8 @@ Endpoints:
   at least one rated issue for the authenticated user (issue #2775).
 - ``GET /api/v1/creators/summaries`` — bounded batch summary of the
   authenticated user's library statistics per canonical creator key.
+- ``GET /api/v1/creators/compare`` — bounded side-by-side comparison of 2-4
+  canonical creators using shared personal analytics semantics (issue #3091).
 - ``GET /api/v1/creators/{creator_key}`` — bounded personal creator detail,
   including series/run-level aggregates (issues #2037, #3088).
 - ``GET /api/v1/creators/{creator_key}/series/{series_key}/issues`` — bounded
@@ -25,9 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
+from app.schemas.creator_comparison import CreatorComparisonResponse
 from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
 from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
+from app.services.creator_comparison import get_creator_comparison
 from app.services.creator_detail import get_creator_detail, get_creator_series_issues
 from app.services.creator_list import get_creator_list
 from app.services.creator_summary import get_creator_summaries
@@ -37,6 +41,10 @@ router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
 #: Upper bound for a single batch summary request (issue #2028 performance scope).
 #: One request never grows past a small fixed number of queries and bounded rows.
 MAX_CREATOR_KEYS = 50
+
+#: Bounded comparison limits (issue #3091).
+MIN_COMPARISON_CREATORS = 2
+MAX_COMPARISON_CREATORS = 4
 
 
 def _split_creator_keys(raw: str) -> list[str]:
@@ -87,6 +95,61 @@ def _validate_creator_keys(raw: str | None) -> list[str]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"keys may list at most {MAX_CREATOR_KEYS} creators per request",
+        )
+
+    for key in keys:
+        parts = key.split(":")
+        valid = len(parts) == 2 and parts[0] == "creator" and parts[1].isdigit()
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Invalid creator key {key!r}: expected creator:<external-person-id> "
+                    "(stable ComicVine person id, no display names)"
+                ),
+            )
+
+    return keys
+
+
+def _validate_comparison_keys(raw: str | None) -> list[str]:
+    """Validate a creator keys query parameter for comparison (2-4 keys).
+
+    Args:
+        raw: Raw ``keys`` query parameter value.
+
+    Returns:
+        Unique validated creator keys (2-4).
+
+    Raises:
+        HTTPException: When the parameter is missing, out of bounds, or malformed.
+    """
+    if not raw or not raw.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"keys must be a comma-separated list of {MIN_COMPARISON_CREATORS}-"
+                f"{MAX_COMPARISON_CREATORS} canonical creator keys"
+            ),
+        )
+
+    keys = _split_creator_keys(raw)
+    if not keys:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"keys must be a comma-separated list of {MIN_COMPARISON_CREATORS}-"
+                f"{MAX_COMPARISON_CREATORS} canonical creator keys"
+            ),
+        )
+
+    if len(keys) < MIN_COMPARISON_CREATORS or len(keys) > MAX_COMPARISON_CREATORS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"keys must contain {MIN_COMPARISON_CREATORS} to {MAX_COMPARISON_CREATORS} "
+                f"creator keys, got {len(keys)}"
+            ),
         )
 
     for key in keys:
@@ -194,6 +257,59 @@ async def get_creator_summaries_endpoint(
     return await get_creator_summaries(db, current_user.id, requested_keys)
 
 
+@router.get("/compare", response_model=CreatorComparisonResponse)
+async def compare_creators_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    keys: str | None = Query(
+        default=None,
+        description=f"Comma-separated canonical creator keys ({MIN_COMPARISON_CREATORS}-{MAX_COMPARISON_CREATORS})",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorComparisonResponse:
+    """Return bounded personal side-by-side comparison for the requested creator keys.
+
+    Compares 2-4 canonical creators using the same explainable personal analytics
+    already available on creator detail pages. Every metric remains explicitly
+    personal to the authenticated user.
+
+    Metrics included per creator:
+    - Average rating and median rating
+    - Rated sample count
+    - Rating distribution
+    - 5★/top-rating rate (proportion of 5.0 ratings)
+    - Role-specific averages and counts
+    - Strongest series/thread aggregates
+    - Unread/upcoming attributed issue count
+    - Read-but-unrated attributed issue count
+    - Explicit "insufficient data" flag when rated sample < 3
+
+    Only creator keys visible in the authenticated user's own confirmed issue
+    metadata are compared; unknown or foreign keys are silently omitted so a
+    creator key can never leak another user's library state. Same-display-name
+    creators remain distinct via their canonical keys.
+
+    Args:
+        current_user: Authenticated user whose library is aggregated.
+        keys: Comma-separated canonical creator keys (2-4).
+        db: Async database session.
+
+    Returns:
+        Batch comparison keyed by requested visible creator keys, plus explicit
+        coverage state and list of keys with insufficient data.
+
+    Raises:
+        HTTPException: When the ``keys`` parameter is missing, out of bounds, or malformed.
+    """
+    requested_keys = _validate_comparison_keys(keys)
+    try:
+        return await get_creator_comparison(db, current_user.id, requested_keys)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+
 @router.get("/{creator_key}/series/{series_key}/issues", response_model=CreatorSeriesIssueListResponse)
 async def get_creator_series_issues_endpoint(
     creator_key: str,
@@ -292,5 +408,7 @@ async def get_creator_detail_endpoint(
 
 __all__ = [
     "MAX_CREATOR_KEYS",
+    "MIN_COMPARISON_CREATORS",
+    "MAX_COMPARISON_CREATORS",
     "router",
 ]

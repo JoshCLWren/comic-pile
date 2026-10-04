@@ -585,3 +585,53 @@ export interface ReaderContextEdge {
   note: string | null
   explanation: string | null
 }
+
+/**
+ * Creator comparison types (issue #3091)
+ */
+export interface CreatorComparisonRoleStat {
+  role: string
+  issue_count: number
+  average_rating: number | null
+}
+
+export interface CreatorComparisonSeriesAggregate {
+  thread_id: number
+  thread_title: string
+  issue_count: number
+  average_rating: number | null
+}
+
+export interface CreatorComparisonItem {
+  canonical_creator_key: string
+  display_name: string
+  normalized_roles: string[]
+  average_rating: number | null
+  median_rating: number | null
+  ratings_count: number
+  rating_distribution: Record<string, number>
+  top_rating_rate: number | null
+  role_stats: CreatorComparisonRoleStat[]
+  strongest_series: CreatorComparisonSeriesAggregate[]
+  unread_upcoming_count: number
+  read_unrated_count: number
+  insufficient_data: boolean
+}
+
+export interface CreatorComparisonCoverage {
+  rated_issues_total: number
+  rated_issues_with_creator_metadata: number
+  ratings_complete: boolean
+  read_unrated_issues_total: number
+  read_unrated_issues_with_creator_metadata: number
+  read_unrated_complete: boolean
+  unread_issues_total: number
+  unread_issues_with_creator_metadata: number
+  upcoming_complete: boolean
+}
+
+export interface CreatorComparisonResponse {
+  comparisons: Record<string, CreatorComparisonItem>
+  coverage: CreatorComparisonCoverage
+  insufficient_data_keys: string[]
+}

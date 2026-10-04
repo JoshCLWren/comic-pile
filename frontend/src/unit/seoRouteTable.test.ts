@@ -55,6 +55,7 @@ describe('canonical route indexability table', () => {
       '/thread/42',
       '/creators',
       '/creators/x-men',
+      '/creators/compare',
       '/history',
       '/sessions/abc',
       '/crossovers',
@@ -76,6 +77,8 @@ describe('canonical route indexability table', () => {
   test('exact patterns win over param patterns', () => {
     expect(matchRouteSeo('/continuity-plans/new').title).toContain('New')
     expect(matchRouteSeo('/continuity-plans/7').title).toContain('Continuity plan')
+    expect(matchRouteSeo('/creators/compare').pattern).toBe('/creators/compare')
+    expect(matchRouteSeo('/creators/creator%3A7').pattern).toBe('/creators/:creatorKey')
   })
 
   test('unknown paths safely default to private', () => {
