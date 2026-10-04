@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
 import { useDebounce } from '../hooks/useDebounce'
@@ -70,8 +70,18 @@ function CreatorRow({ item }: { item: CreatorListItem }) {
 }
 
 export default function CreatorsPage() {
-  const [search, setSearch] = useState<string>('')
-  const [sort, setSort] = useState<CreatorListSort>('name')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const search = searchParams.get('search') || ''
+  const sort = isCreatorListSort(searchParams.get('sort') || '') ? (searchParams.get('sort') as CreatorListSort) : 'name'
+  const role = searchParams.get('role') || ''
+  const minSampleRaw = searchParams.get('min_sample')
+  const minAverageRaw = searchParams.get('min_average')
+  const unread = searchParams.get('unread') === 'true'
+
+  const minSample = minSampleRaw ? Math.max(1, Math.min(500, parseInt(minSampleRaw, 10) || 1)) : 1
+  const minAverage = minAverageRaw ? Math.max(0, Math.min(5, parseFloat(minAverageRaw) || 0)) : undefined
+
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()
 
@@ -85,7 +95,7 @@ export default function CreatorsPage() {
     hasMore,
     loadMore,
     refetch,
-  } = useCreatorsList({ search: activeSearch || undefined, sort })
+  } = useCreatorsList({ search: activeSearch || undefined, sort, role: role || undefined, min_sample: minSample, min_average: minAverage, unread })
 
   const hasItems = items.length > 0
   // #2775 reports metadata coverage per selection; a lower bound must never be
@@ -116,7 +126,16 @@ export default function CreatorsPage() {
               id="creators-search"
               type="search"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                const next = new URLSearchParams(searchParams)
+                if (event.target.value.trim()) {
+                  next.set('search', event.target.value.trim())
+                } else {
+                  next.delete('search')
+                }
+                next.delete('offset')
+                setSearchParams(next)
+              }}
               maxLength={100}
               className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
             />
@@ -130,7 +149,10 @@ export default function CreatorsPage() {
               value={sort}
               onChange={(event) => {
                 if (isCreatorListSort(event.target.value)) {
-                  setSort(event.target.value)
+                  const next = new URLSearchParams(searchParams)
+                  next.set('sort', event.target.value)
+                  next.delete('offset')
+                  setSearchParams(next)
                 }
               }}
               className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm sm:w-auto"
@@ -141,6 +163,107 @@ export default function CreatorsPage() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+          <div>
+            <label htmlFor="creators-role" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+              Role
+            </label>
+            <select
+              id="creators-role"
+              value={role}
+              onChange={(event) => {
+                const next = new URLSearchParams(searchParams)
+                if (event.target.value.trim()) {
+                  next.set('role', event.target.value.trim())
+                } else {
+                  next.delete('role')
+                }
+                next.delete('offset')
+                setSearchParams(next)
+              }}
+              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+            >
+              <option value="">Any role</option>
+              <option value="writer">Writer</option>
+              <option value="artist">Artist</option>
+              <option value="penciler">Penciler</option>
+              <option value="inker">Inker</option>
+              <option value="colorist">Colorist</option>
+              <option value="letterer">Letterer</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="creators-min-sample" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+              Min rated issues
+            </label>
+            <input
+              id="creators-min-sample"
+              type="number"
+              min={1}
+              max={500}
+              value={minSample}
+              onChange={(event) => {
+                const v = parseInt(event.target.value, 10)
+                const next = new URLSearchParams(searchParams)
+                if (!isNaN(v) && v > 1) {
+                  next.set('min_sample', String(v))
+                } else {
+                  next.delete('min_sample')
+                }
+                next.delete('offset')
+                setSearchParams(next)
+              }}
+              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+            />
+          </div>
+          <div>
+            <label htmlFor="creators-min-average" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+              Min average ★
+            </label>
+            <input
+              id="creators-min-average"
+              type="number"
+              step={0.1}
+              min={0}
+              max={5}
+              value={minAverage !== undefined ? minAverage.toFixed(1) : ''}
+              onChange={(event) => {
+                const v = parseFloat(event.target.value)
+                const next = new URLSearchParams(searchParams)
+                if (!isNaN(v) && v > 0) {
+                  next.set('min_average', String(v))
+                } else {
+                  next.delete('min_average')
+                }
+                next.delete('offset')
+                setSearchParams(next)
+              }}
+              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+            />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+              <input
+                type="checkbox"
+                checked={unread}
+                onChange={(event) => {
+                  const next = new URLSearchParams(searchParams)
+                  if (event.target.checked) {
+                    next.set('unread', 'true')
+                  } else {
+                    next.delete('unread')
+                  }
+                  next.delete('offset')
+                  setSearchParams(next)
+                }}
+                className="h-4 w-4 rounded border"
+                style={{ borderColor: 'var(--theme-border)', accentColor: 'var(--theme-personal-accent)' }}
+              />
+              Unread work
+            </label>
           </div>
         </div>
       </section>
@@ -192,9 +315,9 @@ export default function CreatorsPage() {
                 ))}
               </ul>
             </>
-          ) : activeSearch ? (
+          ) : (search || role || minSample > 1 || (minAverage !== undefined && minAverage > 0) || unread) ? (
             <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-              No creators match “{activeSearch}”.
+              No creators match these filters.
             </p>
           ) : (
             <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>

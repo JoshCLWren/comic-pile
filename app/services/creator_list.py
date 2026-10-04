@@ -70,6 +70,10 @@ async def get_creator_list(
     sort: str = "name",
     limit: int = 20,
     offset: int = 0,
+    role: str | None = None,
+    min_sample: int = 1,
+    min_average: float | None = None,
+    unread: bool = False,
 ) -> CreatorListResponse:
     """Compute bounded personal creator list for the authenticated user.
 
@@ -80,6 +84,10 @@ async def get_creator_list(
         sort: Sort mode — ``name``, ``ratings_count``, or ``average_rating``.
         limit: Page size (bounded).
         offset: Page offset.
+        role: Optional normalized role filter (e.g. ``writer``).
+        min_sample: Minimum headline-rated issue count.
+        min_average: Minimum personal average rating.
+        unread: Restrict to creators with unread/upcoming attributed work.
 
     Returns:
         Bounded, deterministically ordered creator list with coverage.
@@ -146,6 +154,27 @@ async def get_creator_list(
         # Bounded name search (user-scoped).
         if search:
             if search.lower() not in display_name.lower():
+                continue
+
+        # Role filter using normalized semantics.
+        if role and role not in normalized_roles:
+            continue
+
+        # Minimum rated-issue sample size.
+        if ratings_count < min_sample:
+            continue
+
+        # Minimum personal average rating.
+        if min_average is not None:
+            if average_rating is None or average_rating < min_average:
+                continue
+
+        # Unread/upcoming attributed work filter.
+        if unread:
+            has_unread = any(
+                issue_id in unread_issue_ids for issue_id in issue_ids
+            )
+            if not has_unread:
                 continue
 
         items.append(

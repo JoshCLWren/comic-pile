@@ -15,6 +15,10 @@ export interface CreatorListSelection {
   search?: string
   sort?: CreatorListSort
   limit?: number
+  role?: string
+  min_sample?: number
+  min_average?: number
+  unread?: boolean
 }
 
 type CreatorsListApi = Pick<typeof creatorsApi, 'getList'>
@@ -36,11 +40,15 @@ export function creatorListQueryOptions(
   const search = selection.search?.trim() || undefined
   const sort = selection.sort ?? 'name'
   const limit = selection.limit ?? CREATOR_LIST_PAGE_SIZE
+  const role = selection.role?.trim() || undefined
+  const min_sample = selection.min_sample ?? 1
+  const min_average = selection.min_average ?? undefined
+  const unread = selection.unread ?? false
 
   return {
-    queryKey: queryKeys.creators.list({ search, sort, limit }),
+    queryKey: queryKeys.creators.list({ search, sort, limit, role, min_sample, min_average, unread }),
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      listApi.getList({ search, sort, limit, offset: pageParam }),
+      listApi.getList({ search, sort, limit, offset: pageParam, role, min_sample, min_average, unread }),
     initialPageParam: 0,
     getNextPageParam: (lastPage: CreatorListResponse) => {
       if (lastPage.items.length === 0) return undefined

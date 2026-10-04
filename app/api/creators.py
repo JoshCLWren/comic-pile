@@ -118,6 +118,27 @@ async def list_creators_endpoint(
         description="Browse ordering: name (alphabetical), ratings_count (most-rated), "
         "average_rating (personal average desc, nulls last)",
     ),
+    role: str | None = Query(
+        default=None,
+        description="Normalized creator role filter (e.g. writer, artist, penciler)",
+        max_length=50,
+    ),
+    min_sample: int = Query(
+        default=1,
+        ge=1,
+        le=500,
+        description="Minimum number of headline-rated issues for the creator",
+    ),
+    min_average: float | None = Query(
+        default=None,
+        ge=0.0,
+        le=5.0,
+        description="Minimum personal average rating (0-5)",
+    ),
+    unread: bool = Query(
+        default=False,
+        description="Restrict to creators with unread/upcoming attributed work",
+    ),
     limit: int = Query(
         default=20,
         ge=1,
@@ -156,6 +177,7 @@ async def list_creators_endpoint(
     bounded_search = search.strip() if search and search.strip() else None
     if bounded_search and len(bounded_search) > 100:
         bounded_search = bounded_search[:100]
+    bounded_role = role.strip().lower() if role and role.strip() else None
     return await get_creator_list(
         db,
         current_user.id,
@@ -163,6 +185,10 @@ async def list_creators_endpoint(
         sort=sort,
         limit=limit,
         offset=offset,
+        role=bounded_role,
+        min_sample=min_sample,
+        min_average=min_average,
+        unread=unread,
     )
 
 

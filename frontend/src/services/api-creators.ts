@@ -81,6 +81,10 @@ export interface CreatorListParams {
   sort?: 'name' | 'ratings_count' | 'average_rating'
   limit?: number
   offset?: number
+  role?: string
+  min_sample?: number
+  min_average?: number
+  unread?: boolean
 }
 
 /**
@@ -119,6 +123,18 @@ export function createCreatorsApi(client: HttpClient) {
       }
       if (params.offset !== undefined && params.offset > 0) {
         queryParams.offset = params.offset
+      }
+      if (params.role !== undefined && params.role.trim()) {
+        queryParams.role = params.role.trim()
+      }
+      if (params.min_sample !== undefined && params.min_sample > 1) {
+        queryParams.min_sample = params.min_sample
+      }
+      if (params.min_average !== undefined && params.min_average > 0) {
+        queryParams.min_average = params.min_average
+      }
+      if (params.unread) {
+        queryParams.unread = true
       }
       return client.get<CreatorListResponse>('/v1/creators', { params: queryParams })
     },
