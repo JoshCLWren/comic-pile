@@ -31,6 +31,9 @@ PREVIEW_TOKEN_TTL_SECONDS = 600
 PREVIEW_ROW_ID_PREFIX = "issue:"
 """Prefix for stable preview row identifiers such as ``issue:789``."""
 
+PREVIEW_ROSTER_ROW_ID_PREFIX = "roster:"
+"""Prefix for provider-inventory preview rows, which are never ComicPile issues."""
+
 PREVIEW_CLASSIFICATIONS = (
     "already_confirmed",
     "safe_exact_match",
@@ -48,6 +51,15 @@ MAPPING_STATUS_PRECEDENCE = {
     "rejected": 3,
 }
 """Deterministic tie-break order used when one issue yields several candidate rows."""
+
+SIBLING_ROSTER_UNIQUE = "unique"
+"""The selected volume holds exactly one issue with this exact normalized issue number."""
+
+SIBLING_ROSTER_DUPLICATE = "duplicate"
+"""The selected volume holds several issues with this normalized issue number."""
+
+SIBLING_ROSTER_NONE = "none"
+"""The selected volume holds no issue with this normalized issue number."""
 
 
 async def upsert_catalog_series(
@@ -488,7 +500,12 @@ async def build_series_mapping_plan(
         Plan dict with ``scope``, ``provider_series``, ``counts``, ``rows``, ``scope_key``,
         ``issue_numbers``, and ``state_digest``.
     """
-    from app.repositories.catalog_repository import get_series_with_issues, get_issue_by_id
+    from app.repositories.catalog_repository import (
+        get_issue_by_id,
+        get_series_with_issues,
+        get_thread_issues_for_sibling_scope,
+        has_confirmed_series_mapping_for_origin,
+    )
 
     # Get the origin issue to establish context
     origin_issue = await get_issue_by_id(db, origin_issue_id, user_id)
@@ -500,63 +517,54 @@ async def build_series_mapping_plan(
         db, provider=provider, series_external_id=provider_series_external_id, user_id=user_id
     )
 
-    from app.repositories.catalog_repository import has_confirmed_series_mapping_for_origin
+    origin_issue_thread_id = origin_issue.get("thread_id")
+    if not isinstance(origin_issue_thread_id, int):
+        origin_issue_thread_id = None
 
-    # If the origin issue has a confirmed series mapping, we need to include ALL issues
-    # from that series in the preview (not just the user-mapped ones) so siblings can be
-    # identified and offered for safe bulk confirmation. Fall back to ComicVine API roster
-    # when the local catalog does not already contain the full series.
-    series_external_id_for_check: str | None = None
-    if series_info is not None:
-        raw_id = series_info.get("id")
-        if isinstance(raw_id, str):
-            series_external_id_for_check = raw_id
-        elif isinstance(raw_id, int):
-            series_external_id_for_check = str(raw_id)
-
-    origin_issue_thread_id_for_check: int | None = None
-    raw_thread = origin_issue.get("thread_id")
-    if isinstance(raw_thread, int):
-        origin_issue_thread_id_for_check = raw_thread
-
+    # A confirmed origin is the only evidence that licenses sibling scope: thread membership
+    # alone is not proof that every issue in the thread belongs to the selected volume.
     origin_has_confirmed_series = await has_confirmed_series_mapping_for_origin(
         db,
         provider=provider,
-        series_external_id=series_external_id_for_check,
+        series_external_id=provider_series_external_id,
         origin_issue_id=origin_issue_id,
-        origin_issue_thread_id=origin_issue_thread_id_for_check,
+        origin_issue_thread_id=origin_issue_thread_id,
     )
 
-    if origin_has_confirmed_series and series_info is not None:
-        # Fetch the full volume roster from ComicVine to include all series issues as siblings
-        try:
-            roster_series_info, roster_rows = await _load_provider_volume_roster(
-                provider_series_external_id,
-                issues_with_mappings,
-            )
-            # Merge: locally-mapped issues keep their thread context; provider roster fills gaps
-            if roster_rows:
-                _merge_roster_into_mappings(issues_with_mappings, roster_rows, series_info)
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
-                # Provider unavailable; skip roster loading and continue with local mappings only
-                pass
-            else:
-                raise
-
-    # If not found locally, try ComicVine API (local-first)
+    roster_rows: list[dict[str, object]] = []
     if series_info is None:
+        # The volume is unknown locally, so live provider data is required. Provider
+        # unavailability is an explicit 503 here rather than a silent empty scope.
+        series_info, roster_rows = await _load_provider_volume_roster(
+            provider_series_external_id,
+            issues_with_mappings,
+        )
+        issues_with_mappings = roster_rows
+    elif origin_has_confirmed_series:
+        # The local catalog answers the preview, so a sibling roster lookup is best-effort:
+        # a provider outage degrades to local rows instead of failing the whole preview.
         try:
-            series_info, issues_with_mappings = await _load_provider_volume_roster(
+            _, roster_rows = await _load_provider_volume_roster(
                 provider_series_external_id,
-                issues_with_mappings,
+                [],
             )
         except HTTPException as exc:
-            if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
-                # Provider unavailable; no local series info either
-                pass
-            else:
+            if exc.status_code != status.HTTP_503_SERVICE_UNAVAILABLE:
                 raise
+            roster_rows = []
+
+    # Issue #2769: once the user has confirmed the origin issue's provider volume, offer the
+    # thread's other issues as siblings so one correction can enrich the whole series.
+    if origin_has_confirmed_series and roster_rows and origin_issue_thread_id is not None:
+        sibling_issues = await get_thread_issues_for_sibling_scope(
+            db,
+            thread_id=origin_issue_thread_id,
+            user_id=user_id,
+            exclude_issue_id=origin_issue_id,
+        )
+        issues_with_mappings.extend(
+            _build_sibling_mapping_rows(sibling_issues, roster_rows, provider=provider)
+        )
 
     # Ensure origin issue is included in the mapping check for conflict detection
     # even if it's mapped to a different series
@@ -750,8 +758,9 @@ async def _load_provider_volume_roster(
                     pid = int(provider_issue_id) if provider_issue_id is not None else 0
                 except (TypeError, ValueError):
                     pid = 0
-                # Roster rows carry no ComicPile thread. ``thread_id`` stays ``None`` so commit
-                # refuses to bulk-confirm a provider roster id as if it were a local issue.
+                # Roster rows carry no ComicPile thread. ``thread_id`` stays ``None`` and the row
+                # is flagged ``_roster_only`` so it is reported as provider inventory and can
+                # never be bulk-confirmed as if it were a local issue.
                 roster.append({
                     "issue_id": pid if pid != 0 else 0,
                     "issue_number": str(issue_number),
@@ -762,6 +771,7 @@ async def _load_provider_volume_roster(
                     "provider": "comicvine",
                     "external_id": str(provider_issue_id),
                     "classification": "unresolved",
+                    "_roster_only": True,
                 })
         return series_info, roster
     except HTTPException:

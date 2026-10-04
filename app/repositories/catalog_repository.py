@@ -280,46 +280,129 @@ async def has_confirmed_series_mapping_for_origin(
     origin_issue_id: int,
     origin_issue_thread_id: int | None,
 ) -> bool:
-    """Check whether an origin issue has a confirmed series or issue-level mapping.
+    """Return whether the origin issue carries confirmed evidence for one provider series.
 
-    This supports both confirmed thread-series mappings (via the series
-    external identity) and confirmed issue-level identity mappings.
+    Issue-level corrections do not store the provider on the mapping row, so the provider
+    filter is resolved through the mapped external identity. Both a confirmed issue identity
+    for ``provider`` and a confirmed thread-series mapping to ``series_external_id`` count as
+    confirmed evidence; thread membership alone does not.
+
+    Args:
+        db: Database session.
+        provider: Provider name (e.g., "comicvine").
+        series_external_id: Selected provider series external id.
+        origin_issue_id: Anchor ComicPile issue id.
+        origin_issue_thread_id: Anchor issue's thread id, or ``None`` when unknown.
+
+    Returns:
+        ``True`` when confirmed provider-series evidence exists for the origin issue.
     """
     from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 
-    # Issue-level confirmed mapping
-    ei_result = await db.execute(
-        select(IssueExternalIdentityMapping).where(
+    normalized_provider = provider.strip().lower()
+
+    issue_identity_result = await db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
             IssueExternalIdentityMapping.issue_id == origin_issue_id,
             IssueExternalIdentityMapping.status == "confirmed",
-            IssueExternalIdentityMapping.provider == provider.strip().lower(),
+            ExternalIdentity.entity_type == "issue",
+            ExternalIdentity.provider == normalized_provider,
         )
     )
-    if ei_result.scalar_one_or_none() is not None:
+    if issue_identity_result.scalars().first() is not None:
         return True
 
-    # Thread-series confirmed mapping (only when series info is present)
-    if series_external_id is not None and origin_issue_thread_id is not None:
-        series_identity_result = await db.execute(
-            select(ExternalIdentity).where(
-                ExternalIdentity.entity_type == "series",
-                ExternalIdentity.provider == provider.strip().lower(),
-                ExternalIdentity.external_id == series_external_id,
-            )
-        )
-        external_identity = series_identity_result.scalar_one_or_none()
-        if external_identity is not None:
-            thread_result = await db.execute(
-                select(ThreadExternalSeriesMapping).where(
-                    ThreadExternalSeriesMapping.thread_id == origin_issue_thread_id,
-                    ThreadExternalSeriesMapping.external_identity_id == external_identity.id,
-                    ThreadExternalSeriesMapping.status == "confirmed",
-                )
-            )
-            if thread_result.scalar_one_or_none() is not None:
-                return True
+    if series_external_id is None or origin_issue_thread_id is None:
+        return False
 
-    return False
+    series_identity_result = await db.execute(
+        select(ExternalIdentity).where(
+            ExternalIdentity.entity_type == "series",
+            ExternalIdentity.provider == normalized_provider,
+            ExternalIdentity.external_id == series_external_id,
+        )
+    )
+    series_identity = series_identity_result.scalars().first()
+    if series_identity is None:
+        return False
+
+    thread_mapping_result = await db.execute(
+        select(ThreadExternalSeriesMapping).where(
+            ThreadExternalSeriesMapping.thread_id == origin_issue_thread_id,
+            ThreadExternalSeriesMapping.external_identity_id == series_identity.id,
+            ThreadExternalSeriesMapping.status == "confirmed",
+        )
+    )
+    return thread_mapping_result.scalars().first() is not None
+
+
+async def get_thread_issues_for_sibling_scope(
+    db: AsyncSession,
+    *,
+    thread_id: int,
+    user_id: int,
+    exclude_issue_id: int,
+) -> list[dict[str, object]]:
+    """Return the anchor thread's remaining issues with their current mapping state.
+
+    Sibling scoping (issue #2769) reuses the series preview the user already triggered from a
+    corrected issue. Only issues the caller owns are returned, and the anchor issue itself is
+    excluded because the preview reports it through its own confirmed mapping row.
+
+    Args:
+        db: Database session.
+        thread_id: Anchor issue's thread id.
+        user_id: User ID for ownership filtering.
+        exclude_issue_id: Anchor issue id to omit from the sibling scope.
+
+    Returns:
+        Plain row dicts matching the preview candidate-row shape. An issue without any mapping
+        row reports ``current_mapping_status``, ``provider``, and ``external_id`` as ``None``.
+    """
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+    from app.models.issue import Issue
+    from app.models.thread import Thread
+
+    result = await db.execute(
+        select(Issue, Thread, IssueExternalIdentityMapping, ExternalIdentity)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .outerjoin(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
+        )
+        .outerjoin(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
+            Issue.thread_id == thread_id,
+            Thread.user_id == user_id,
+            Issue.id != exclude_issue_id,
+        )
+        .order_by(Issue.position, Issue.id)
+    )
+
+    rows: list[dict[str, object]] = []
+    for issue, thread, mapping, identity in result:
+        rows.append(
+            {
+                "issue_id": issue.id,
+                "issue_number": issue.issue_number,
+                "title": identity.metadata_json.get("name") if identity and identity.metadata_json else None,
+                "thread_id": thread.id,
+                "thread_title": thread.title,
+                "current_mapping_status": mapping.status if mapping is not None else None,
+                "provider": identity.provider if identity is not None else None,
+                "external_id": identity.external_id if identity is not None else None,
+                "confidence": mapping.confidence if mapping is not None else None,
+            }
+        )
+    return rows
 
 
 async def get_issue_by_id(
