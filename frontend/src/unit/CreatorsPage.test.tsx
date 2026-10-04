@@ -343,3 +343,49 @@ describe('CreatorsPage', () => {
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
   })
 })
+
+describe('CreatorsPage minimum-rated-sample control', () => {
+  it('passes the selected minimum sample through to the bounded contract', () => {
+    const seen: CreatorListSelection[] = []
+    mockedHook.mockImplementation((selection) => {
+      seen.push(selection)
+      return baseState()
+    })
+
+    renderPage()
+
+    fireEvent.change(screen.getByLabelText('Minimum rated'), { target: { value: '5' } })
+    fireEvent.change(screen.getByLabelText('Minimum rated'), { target: { value: '0' } })
+
+    expect(seen.map((selection) => selection.minRatings)).toEqual([undefined, 5, undefined])
+  })
+
+  it('offers the bounded choices Any/3+/5+/10+/25+', () => {
+    renderPage()
+
+    const select = screen.getByLabelText('Minimum rated') as HTMLSelectElement
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      'Any',
+      '3+',
+      '5+',
+      '10+',
+      '25+',
+    ])
+  })
+
+  it('flags a high average backed by a tiny sample', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [
+          makeItem({ canonical_creator_key: 'creator:1', average_rating: 5.0, ratings_count: 2 }),
+          makeItem({ canonical_creator_key: 'creator:2', average_rating: 5.0, ratings_count: 12 }),
+        ],
+        total: 2,
+      }),
+    )
+
+    renderPage()
+
+    expect(screen.getByText('small sample')).toBeTruthy()
+  })
+})

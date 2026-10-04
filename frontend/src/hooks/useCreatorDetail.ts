@@ -38,6 +38,7 @@ export interface CreatorDetailState {
   summary: CreatorDetailResponse['summary'] | null
   coverage: CreatorDetailResponse['coverage'] | null
   roleStats: CreatorDetailResponse['role_stats']
+  ratingDistribution: CreatorDetailResponse['rating_distribution']
   ratedIssues: CreatorIssueRow[]
   readUnratedIssues: CreatorIssueRow[]
   upcomingIssues: CreatorIssueRow[]
@@ -87,6 +88,7 @@ export function useCreatorDetail(
     summary: firstPage?.summary ?? null,
     coverage: firstPage?.coverage ?? null,
     roleStats: firstPage?.role_stats ?? [],
+    ratingDistribution: firstPage?.rating_distribution ?? null,
     ratedIssues,
     readUnratedIssues,
     upcomingIssues,

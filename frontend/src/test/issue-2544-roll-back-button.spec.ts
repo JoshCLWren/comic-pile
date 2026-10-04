@@ -81,6 +81,7 @@ function creatorDetailPayload() {
     read_unrated_issues: [],
     upcoming_issues: [],
     next_cursor: null,
+    rating_distribution: null,
   }
 }
 

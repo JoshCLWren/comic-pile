@@ -15,6 +15,7 @@ export interface CreatorListSelection {
   search?: string
   sort?: CreatorListSort
   limit?: number
+  minRatings?: number
 }
 
 type CreatorsListApi = Pick<typeof creatorsApi, 'getList'>
@@ -36,11 +37,15 @@ export function creatorListQueryOptions(
   const search = selection.search?.trim() || undefined
   const sort = selection.sort ?? 'name'
   const limit = selection.limit ?? CREATOR_LIST_PAGE_SIZE
+  const minRatings =
+    selection.minRatings !== undefined && selection.minRatings > 0
+      ? selection.minRatings
+      : undefined
 
   return {
-    queryKey: queryKeys.creators.list({ search, sort, limit }),
+    queryKey: queryKeys.creators.list({ search, sort, limit, minRatings }),
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      listApi.getList({ search, sort, limit, offset: pageParam }),
+      listApi.getList({ search, sort, limit, offset: pageParam, min_ratings: minRatings }),
     initialPageParam: 0,
     getNextPageParam: (lastPage: CreatorListResponse) => {
       if (lastPage.items.length === 0) return undefined

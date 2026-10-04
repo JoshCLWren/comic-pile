@@ -125,6 +125,11 @@ async def list_creators_endpoint(
         ge=0,
         description="Page offset",
     ),
+    min_ratings: int = Query(
+        default=0,
+        ge=0,
+        description="Minimum rated-sample filter (0 = any sample size)",
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> CreatorListResponse:
     """Return bounded personal creator discovery list for the authenticated user.
@@ -144,6 +149,7 @@ async def list_creators_endpoint(
         sort: Deterministic browse ordering.
         limit: Bounded page size.
         offset: Page offset.
+        min_ratings: Minimum rated-sample filter for browse.
         db: Async database session.
 
     Returns:
@@ -159,6 +165,7 @@ async def list_creators_endpoint(
         sort=sort,
         limit=limit,
         offset=offset,
+        min_ratings=min_ratings,
     )
 
 

@@ -37,6 +37,7 @@ function baseState(overrides: Partial<CreatorDetailState> = {}): CreatorDetailSt
       { role: 'writer', issue_count: 5, average_rating: 4.5 },
       { role: 'cover', issue_count: 1, average_rating: null },
     ],
+    ratingDistribution: null,
     ratedIssues: [
       {
         issue_id: 11,
@@ -263,5 +264,67 @@ describe('CreatorDetailPage', () => {
 
     expect(mockedHook).toHaveBeenCalledWith(null)
     expect(screen.getByRole('heading', { name: 'Creator not found' })).toBeInTheDocument()
+  })
+})
+
+describe('CreatorDetailPage rating distribution', () => {
+  const distribution = {
+    buckets: [
+      { rating: 0.5, count: 0 },
+      { rating: 1.0, count: 0 },
+      { rating: 1.5, count: 0 },
+      { rating: 2.0, count: 0 },
+      { rating: 2.5, count: 1 },
+      { rating: 3.0, count: 0 },
+      { rating: 3.5, count: 0 },
+      { rating: 4.0, count: 0 },
+      { rating: 4.5, count: 1 },
+      { rating: 5.0, count: 0 },
+    ],
+    sample_count: 2,
+    mean_rating: 3.5,
+    median_rating: 3.5,
+    min_rating: 2.5,
+    max_rating: 4.5,
+  }
+
+  it('renders median, range, average, and sample strength', () => {
+    mockedHook.mockReturnValue(baseState({ ratingDistribution: distribution }))
+
+    renderAt('creator:7')
+
+    expect(screen.getByRole('heading', { name: 'Rating distribution' })).toBeTruthy()
+    expect(screen.getByText('Median').parentElement?.textContent).toContain('3.5★')
+    expect(screen.getByText('Range').parentElement?.textContent).toContain('2.5★–4.5★')
+    expect(screen.getByText('Average').parentElement?.textContent).toContain('3.50★')
+    expect(screen.getByText('Sample').parentElement?.textContent).toContain('2 issues')
+  })
+
+  it('renders an accessible per-bucket histogram', () => {
+    mockedHook.mockReturnValue(baseState({ ratingDistribution: distribution }))
+
+    renderAt('creator:7')
+
+    expect(screen.getByLabelText('1 rating at 2.5 stars')).toBeTruthy()
+    expect(screen.getByLabelText('1 rating at 4.5 stars')).toBeTruthy()
+    expect(screen.getByLabelText('0 ratings at 1.0 stars')).toBeTruthy()
+  })
+
+  it('marks a partial distribution as a lower bound, not exhaustive', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        ratingDistribution: distribution,
+        coverage: {
+          ...baseState().coverage!,
+          rated_issues_total: 5,
+          rated_issues_with_creator_metadata: 2,
+          ratings_complete: false,
+        },
+      }),
+    )
+
+    renderAt('creator:7')
+
+    expect(screen.getAllByRole('note').map((n) => n.textContent).join(' ')).toContain('Distribution reflects only')
   })
 })

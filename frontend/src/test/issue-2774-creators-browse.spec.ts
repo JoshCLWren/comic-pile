@@ -116,6 +116,7 @@ async function installCreatorsDetail(page: Page) {
           read_unrated_issues: [],
           upcoming_issues: [],
           next_cursor: null,
+          rating_distribution: null,
         },
       }),
   )
