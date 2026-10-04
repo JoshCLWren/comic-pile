@@ -58,13 +58,18 @@ describe('sitemap generation regression', () => {
 
   test('indexable routes have stable canonical URLs', () => {
     const indexable = indexableRoutes()
-    
+
     for (const entry of indexable) {
+      // `indexableRoutes()` only returns public-indexable entries, and the
+      // route table contract gives every one of them a canonical path.
+      const canonicalPath = entry.canonicalPath
+      if (canonicalPath === null) {
+        throw new Error(`indexable route ${entry.pattern} has no canonicalPath`)
+      }
+
       // Canonical path must be a non-empty string starting with /
-      // indexableRoutes() only returns public-indexable entries which have canonicalPath
-      const canonicalPath = entry.canonicalPath as string
       expect(canonicalPath).toMatch(/^\//)
-      
+
       // No trailing slash except root
       if (canonicalPath !== '/') {
         expect(canonicalPath).not.toMatch(/\/$/)
@@ -74,20 +79,20 @@ describe('sitemap generation regression', () => {
 
   test('route table and sitemap generation logic stay in sync', () => {
     // This test ensures that if someone adds a new route to routeSeo.ts
-    // and marks it as public-indexable, they must also ensure it has
-    // a proper canonicalPath. The sitemap generation script will fail
-    // otherwise.
+    // and marks it as public-indexable, they must also give it a canonical
+    // path. `scripts/generate-sitemap.mjs` refuses to build a sitemap for an
+    // indexable entry without one, and `scripts/generate-sitemap.test.mjs`
+    // asserts the generated artifact lists exactly these canonical URLs.
     const indexable = indexableRoutes()
-    
+
     for (const entry of indexable) {
-      // Every indexable entry must have a canonicalPath
-      const canonicalPath = entry.canonicalPath as string
-      expect(canonicalPath).not.toBeNull()
-      expect(canonicalPath).not.toBeUndefined()
-      
-      // And it must be a valid path
-      expect(typeof canonicalPath).toBe('string')
+      const canonicalPath = entry.canonicalPath
+      if (canonicalPath === null) {
+        throw new Error(`indexable route ${entry.pattern} has no canonicalPath`)
+      }
+
       expect(canonicalPath.length).toBeGreaterThan(0)
+      expect(canonicalPath.startsWith('/')).toBe(true)
     }
   })
 

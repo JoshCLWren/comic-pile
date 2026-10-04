@@ -8,16 +8,23 @@ disallowed in ``robots.txt`` so private routes never become crawl targets.
 """
 
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
 
-from app.main import _robots_tag_for_spa_path
+from app.main import (
+    PRODUCTION_ORIGIN,
+    _render_sitemap_xml,
+    _robots_tag_for_spa_path,
+    _SPA_INDEXABLE_PATHS,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_INDEX = REPO_ROOT / "frontend" / "index.html"
 ROBOTS_SOURCE = REPO_ROOT / "frontend" / "public" / "robots.txt"
+SITEMAP_NAMESPACE = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
 UTILITY_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/demo"]
 PRIVATE_PATHS = [
@@ -36,6 +43,25 @@ PRIVATE_PATHS = [
     "/glossary",
     "/identity-inbox",
 ]
+NON_INDEXABLE_PATHS = UTILITY_PATHS + PRIVATE_PATHS + ["/rate", "/analytics", "/help"]
+
+
+def _sitemap_locations(sitemap_text: str) -> list[str]:
+    """Parse the ``<loc>`` values out of sitemap XML.
+
+    Args:
+        sitemap_text: Sitemap document text.
+
+    Returns:
+        Every absolute canonical URL listed in the document.
+    """
+    root = ET.fromstring(sitemap_text)
+    locations: list[str] = []
+    for element in root.findall("s:url/s:loc", SITEMAP_NAMESPACE):
+        text = element.text
+        assert text is not None
+        locations.append(text)
+    return locations
 
 
 def test_robots_tag_helper_only_indexes_landing_page() -> None:
@@ -120,6 +146,42 @@ async def test_robots_txt_matches_source_policy(auth_client: AsyncClient) -> Non
     response = await auth_client.get("/robots.txt")
     assert response.status_code == 200
     assert response.text == ROBOTS_SOURCE.read_text()
+
+
+@pytest.mark.asyncio
+async def test_robots_txt_advertises_the_sitemap(auth_client: AsyncClient) -> None:
+    """``robots.txt`` must advertise the sitemap with an absolute URL."""
+    response = await auth_client.get("/robots.txt")
+    assert response.status_code == 200
+    assert re.search(r"(?m)^Sitemap: https://\S+/sitemap\.xml\s*$", response.text) is not None
+
+
+@pytest.mark.asyncio
+async def test_sitemap_xml_served_as_xml_not_spa_html(auth_client: AsyncClient) -> None:
+    """``/sitemap.xml`` must answer with XML, never the SPA HTML shell."""
+    response = await auth_client.get("/sitemap.xml")
+    assert response.status_code == 200
+    assert "application/xml" in response.headers["content-type"]
+    assert "public" in response.headers["cache-control"]
+
+
+@pytest.mark.asyncio
+async def test_sitemap_xml_lists_only_indexable_routes(auth_client: AsyncClient) -> None:
+    """The served sitemap must list every indexable route and nothing else."""
+    response = await auth_client.get("/sitemap.xml")
+    assert response.status_code == 200
+
+    locations = _sitemap_locations(response.text)
+    assert locations == [f"{PRODUCTION_ORIGIN}/"]
+    for path in NON_INDEXABLE_PATHS:
+        assert f"{PRODUCTION_ORIGIN}{path}" not in locations
+
+
+def test_rendered_sitemap_matches_the_canonical_indexable_paths() -> None:
+    """The fallback sitemap must mirror ``_SPA_INDEXABLE_PATHS`` exactly."""
+    locations = _sitemap_locations(_render_sitemap_xml())
+    expected = [f"{PRODUCTION_ORIGIN}{path}" for path in sorted(_SPA_INDEXABLE_PATHS)]
+    assert locations == expected
 
 
 def test_frontend_index_prerenders_crawlable_landing() -> None:

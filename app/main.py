@@ -6,6 +6,7 @@ import os
 import secrets
 from pathlib import Path
 from typing import cast
+from xml.sax.saxutils import escape as escape_xml
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,6 +47,12 @@ logger = logging.getLogger(__name__)
 # policy for client-side head management (`Seo` component).
 _SPA_INDEXABLE_PATHS = frozenset({"/"})
 
+# Canonical production origin for absolute SEO URLs (`/sitemap.xml` and the
+# `Sitemap:` line in `robots.txt`). Mirrors `DEFAULT_PRODUCTION_ORIGIN` in
+# `frontend/scripts/generate-sitemap.mjs`; a build may override its own copy
+# through `VITE_PRODUCTION_ORIGIN`.
+PRODUCTION_ORIGIN = "https://comic-pile.vercel.app"
+
 
 def _robots_tag_for_spa_path(request_path: str) -> str | None:
     """Return the robots header value for an SPA path, if it must not be indexed.
@@ -61,6 +68,27 @@ def _robots_tag_for_spa_path(request_path: str) -> str | None:
     if normalized in _SPA_INDEXABLE_PATHS:
         return None
     return "noindex, nofollow"
+
+
+def _render_sitemap_xml() -> str:
+    """Render the sitemap for the canonical indexable path set.
+
+    Served when a build has not published ``static/react/sitemap.xml`` (local
+    development and test checkouts), so ``/sitemap.xml`` always answers with
+    valid XML instead of the SPA shell.
+
+    Returns:
+        Sitemap XML listing every path in ``_SPA_INDEXABLE_PATHS`` with an
+        absolute canonical URL on the production origin.
+    """
+    locations = [escape_xml(PRODUCTION_ORIGIN + path) for path in sorted(_SPA_INDEXABLE_PATHS)]
+    entries = "".join(f"  <url><loc>{loc}</loc></url>\n" for loc in locations)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{entries}"
+        "</urlset>\n"
+    )
 
 
 def _default_log_level(environment: str) -> int:
@@ -592,9 +620,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         async def serve_robots_txt():
             """Serve the crawler indexability policy.
 
-            Prefers the built ``static/react/robots.txt`` (copied verbatim from
-            ``frontend/public/robots.txt`` by Vite), falling back to the source
-            file in development and test checkouts.
+            Prefers the built ``static/react/robots.txt`` (derived from
+            ``frontend/public/robots.txt`` at build time), falling back to the
+            source file in development and test checkouts.
 
             Returns:
                 Plain-text robots.txt response with a short public cache.
@@ -613,6 +641,32 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                     str(source_robots), media_type="text/plain", headers=robots_headers
                 )
             raise StarletteHTTPException(status_code=503, detail="Crawler policy unavailable")
+
+        @app.get("/sitemap.xml")
+        async def serve_sitemap_xml():
+            """Serve the sitemap of public indexable URLs.
+
+            Prefers the build-generated ``static/react/sitemap.xml`` so a
+            deployment that overrides ``VITE_PRODUCTION_ORIGIN`` serves its own
+            absolute URLs, then falls back to rendering the canonical indexable
+            path set so ``/sitemap.xml`` never returns the SPA shell.
+
+            Returns:
+                XML sitemap response with a short public cache.
+            """
+            from fastapi.responses import FileResponse
+
+            sitemap_headers = {"Cache-Control": "public, max-age=3600"}
+            built_sitemap = Path("static/react/sitemap.xml")
+            if built_sitemap.exists():
+                return FileResponse(
+                    str(built_sitemap), media_type="application/xml", headers=sitemap_headers
+                )
+            return Response(
+                content=_render_sitemap_xml(),
+                media_type="application/xml",
+                headers=sitemap_headers,
+            )
 
         @app.get("/react")
         async def serve_react_redirect():
@@ -673,7 +727,15 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                 StarletteHTTPException: If path is blocked.
             """
             blocked_prefixes = ("api", "static", "assets", "debug")
-            blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg", "robots.txt"}
+            blocked_exact = {
+                "health",
+                "openapi.json",
+                "docs",
+                "redoc",
+                "vite.svg",
+                "robots.txt",
+                "sitemap.xml",
+            }
 
             if (
                 full_path in blocked_exact

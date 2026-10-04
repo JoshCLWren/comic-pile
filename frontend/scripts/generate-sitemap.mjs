@@ -1,179 +1,178 @@
 /**
- * Sitemap generation script for ComicPile.
+ * Sitemap and robots.txt generation for ComicPile builds (issue #3066).
  *
- * Reads the canonical route indexability table from routeSeo.ts and generates
- * a sitemap.xml file containing only public-indexable routes with canonical
- * absolute URLs for the production origin. Also generates robots.txt with
- * the correct sitemap URL.
- *
- * Runs as a Vite build hook to keep the sitemap synchronized with route changes.
+ * The canonical route indexability table lives in `frontend/src/seo/routeSeo.ts`
+ * and the canonical crawler policy lives in `frontend/public/robots.txt`.
+ * Neither is duplicated here: this module derives both build artifacts from
+ * those sources so a route or policy change can never drift away from what is
+ * deployed. It runs as a Vite `closeBundle` hook (see `frontend/vite.config.ts`).
  */
 
-import { fileURLToPath } from 'node:url'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+import { indexableRoutes } from '../src/seo/routeSeo.ts'
 
-/**
- * Route indexability classification from routeSeo.ts.
- * This must stay in sync with frontend/src/seo/routeSeo.ts.
- */
-const ROUTE_SEO_TABLE = [
-  { pattern: '/', visibility: 'public-indexable', canonicalPath: '/', title: 'ComicPile — A dice-driven reading queue for your comic collection', description: 'ComicPile is a dice-driven reading queue for your comic collection. Build your stack, roll the die, and read what comes up — continuity-aware and self-hosted.' },
-  { pattern: '/login', visibility: 'public-noindex', canonicalPath: null, title: 'Sign in — Comic Pile', description: 'ComicPile account utility page. This page is not indexed by search engines.' },
-  { pattern: '/register', visibility: 'public-noindex', canonicalPath: null, title: 'Create your queue — Comic Pile', description: 'ComicPile account utility page. This page is not indexed by search engines.' },
-  { pattern: '/forgot-password', visibility: 'public-noindex', canonicalPath: null, title: 'Forgot password — Comic Pile', description: 'ComicPile account utility page. This page is not indexed by search engines.' },
-  { pattern: '/reset-password', visibility: 'public-noindex', canonicalPath: null, title: 'Reset password — Comic Pile', description: 'ComicPile account utility page. This page is not indexed by search engines.' },
-  { pattern: '/demo', visibility: 'public-noindex', canonicalPath: null, title: 'Try the demo — Comic Pile', description: 'ComicPile account utility page. This page is not indexed by search engines.' },
-  { pattern: '/rate', visibility: 'public-noindex', canonicalPath: null, title: 'Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/analytics', visibility: 'public-noindex', canonicalPath: null, title: 'Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/help', visibility: 'public-noindex', canonicalPath: null, title: 'Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/queue', visibility: 'private', canonicalPath: null, title: 'Queue — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/thread/:id', visibility: 'private', canonicalPath: null, title: 'Thread — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/creators', visibility: 'private', canonicalPath: null, title: 'Creators — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/creators/:creatorKey', visibility: 'private', canonicalPath: null, title: 'Creator — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/history', visibility: 'private', canonicalPath: null, title: 'History — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/sessions/:id', visibility: 'private', canonicalPath: null, title: 'Session — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/crossovers', visibility: 'private', canonicalPath: null, title: 'Crossovers — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/crossovers/:group', visibility: 'private', canonicalPath: null, title: 'Crossover — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/continuity-plans', visibility: 'private', canonicalPath: null, title: "Continuity plans — Comic Pile", description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/continuity-plans/new', visibility: 'private', canonicalPath: null, title: 'New continuity plan — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/continuity-plans/:id', visibility: 'private', canonicalPath: null, title: 'Continuity plan — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/whats-new', visibility: 'private', canonicalPath: null, title: "What's new — Comic Pile", description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/glossary', visibility: 'private', canonicalPath: null, title: 'Glossary — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-  { pattern: '/identity-inbox', visibility: 'private', canonicalPath: null, title: 'Identity inbox — Comic Pile', description: 'ComicPile personal comic reading queue. Sign in to roll for your next read.' },
-]
+const scriptDirectory = dirname(fileURLToPath(import.meta.url))
+
+/** Version-controlled crawler policy that becomes the built `robots.txt`. */
+export const SOURCE_ROBOTS_PATH = resolve(scriptDirectory, '..', 'public', 'robots.txt')
+
+/** Default build output directory, matching `build.outDir` in `vite.config.ts`. */
+export const DEFAULT_OUT_DIR = resolve(scriptDirectory, '..', '..', 'static', 'react')
 
 /**
- * Get the production origin from environment.
- * Must be set via VITE_PRODUCTION_ORIGIN at build time.
+ * Canonical production origin used when the build does not override it.
+ * Must stay aligned with `PRODUCTION_ORIGIN` in `app/main.py`.
  */
-function getProductionOrigin() {
-  const origin = process.env.VITE_PRODUCTION_ORIGIN
-  if (!origin) {
+export const DEFAULT_PRODUCTION_ORIGIN = 'https://comic-pile.vercel.app'
+
+/**
+ * Resolve the absolute origin used for every generated URL.
+ *
+ * `VITE_PRODUCTION_ORIGIN` overrides the canonical production origin so a
+ * deployment on another host can emit its own absolute URLs. An unset variable
+ * falls back to the canonical origin instead of failing the build, because
+ * every developer build, CI job, and container build runs without it.
+ *
+ * @param env - Environment variables to read.
+ * @returns The origin with no trailing slash and no path.
+ * @throws If the override is set but is not an absolute HTTP(S) origin.
+ */
+export function resolveProductionOrigin(env) {
+  const raw = env.VITE_PRODUCTION_ORIGIN
+  if (raw === undefined || raw.trim() === '') {
+    return DEFAULT_PRODUCTION_ORIGIN
+  }
+
+  let parsed
+  try {
+    parsed = new URL(raw.trim())
+  } catch {
     throw new Error(
-      'VITE_PRODUCTION_ORIGIN environment variable is required for sitemap generation. ' +
-      'Set it to your production origin (e.g., https://comicpile.example.com).'
+      `VITE_PRODUCTION_ORIGIN must be an absolute URL, received "${raw}". ` +
+      'Example: https://comic-pile.vercel.app',
     )
   }
-  return origin.replace(/\/+$/, '') // Remove trailing slash
-}
-
-/**
- * Generate sitemap.xml content from indexable routes.
- */
-function generateSitemap(productionOrigin) {
-  const indexableRoutes = ROUTE_SEO_TABLE.filter(entry => entry.visibility === 'public-indexable')
-  
-  if (indexableRoutes.length === 0) {
-    throw new Error('No public-indexable routes found in ROUTE_SEO_TABLE')
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`VITE_PRODUCTION_ORIGIN must be an HTTP(S) URL, received "${raw}".`)
   }
-
-  const urls = indexableRoutes.map(entry => {
-    const canonicalPath = entry.canonicalPath
-    if (!canonicalPath) {
-      throw new Error(`Indexable route ${entry.pattern} has no canonicalPath`)
-    }
-    const url = `${productionOrigin}${canonicalPath}`
-    return `  <url>\n    <loc>${escapeXml(url)}</loc>\n  </url>`
-  }).join('\n')
-
-  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>
-`
-
-  return sitemap
+  if (parsed.pathname !== '/' || parsed.search !== '' || parsed.hash !== '') {
+    throw new Error(
+      `VITE_PRODUCTION_ORIGIN must be an origin only, received "${raw}". ` +
+      'Drop the path, query, and fragment.',
+    )
+  }
+  return parsed.origin
 }
 
 /**
- * Generate robots.txt content with the correct sitemap URL.
+ * Escape a string so it is safe to embed in XML text.
+ *
+ * @param value - Raw text.
+ * @returns Text with every XML special character replaced by an entity.
  */
-function generateRobotsTxt(productionOrigin) {
-  const sitemapUrl = `${productionOrigin}/sitemap.xml`
-  
-  return `# ComicPile crawler policy (issue #3065).
-#
-# Only the public landing page is indexable. Crawlers match the longest
-# (most specific) rule, so the Disallow lines below win over \`Allow: /\`
-# for utility, auth, demo, and authenticated routes while \`/\` stays allowed.
-# Hashed JS/CSS under /assets/ and /static/ must stay allowed or crawlers
-# cannot render the landing page.
-User-agent: *
-Allow: /
-Allow: /assets/
-Allow: /static/
-Allow: /vite.svg
-Allow: /favicon.svg
-Disallow: /login
-Disallow: /register
-Disallow: /forgot-password
-Disallow: /reset-password
-Disallow: /demo
-Disallow: /rate
-Disallow: /analytics
-Disallow: /help
-Disallow: /queue
-Disallow: /thread/
-Disallow: /creators
-Disallow: /history
-Disallow: /sessions/
-Disallow: /crossovers
-Disallow: /continuity-plans
-Disallow: /whats-new
-Disallow: /glossary
-Disallow: /identity-inbox
-Disallow: /api/
-Disallow: /debug/
-
-Sitemap: ${sitemapUrl}
-`
-}
-
-/**
- * Escape XML special characters.
- */
-function escapeXml(str) {
-  return str
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+export function escapeXml(value) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
 }
 
 /**
- * Main generation function.
+ * Render `sitemap.xml` for the given indexable routes.
+ *
+ * @param entries - Canonical route entries with `visibility: 'public-indexable'`.
+ * @param productionOrigin - Absolute origin, e.g. `https://comic-pile.vercel.app`.
+ * @returns Sitemap XML text ending in one newline.
+ * @throws If there are no indexable routes or an entry lacks a canonical path.
  */
-function main() {
-  try {
-    const productionOrigin = getProductionOrigin()
-    const sitemap = generateSitemap(productionOrigin)
-    const robotsTxt = generateRobotsTxt(productionOrigin)
+export function generateSitemapXml(entries, productionOrigin) {
+  if (entries.length === 0) {
+    throw new Error('No public-indexable routes found in the canonical route table')
+  }
 
-    // Output to build directory (../static/react from frontend root)
-    const outDir = resolve(__dirname, '..', '..', 'static', 'react')
-    if (!existsSync(outDir)) {
-      mkdirSync(outDir, { recursive: true })
+  const urlBlocks = entries.map((entry) => {
+    const canonicalPath = entry.canonicalPath
+    if (!canonicalPath) {
+      throw new Error(`Indexable route ${entry.pattern} has no canonicalPath`)
     }
+    const location = escapeXml(`${productionOrigin}${canonicalPath}`)
+    return `  <url>\n    <loc>${location}</loc>\n  </url>`
+  })
 
-    const sitemapPath = resolve(outDir, 'sitemap.xml')
-    const robotsPath = resolve(outDir, 'robots.txt')
-    
-    writeFileSync(sitemapPath, sitemap, 'utf-8')
-    writeFileSync(robotsPath, robotsTxt, 'utf-8')
+  return `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    `${urlBlocks.join('\n')}\n` +
+    `</urlset>\n`
+}
 
-    console.log(`✓ Generated sitemap.xml at ${sitemapPath}`)
-    console.log(`✓ Generated robots.txt at ${robotsPath}`)
-    console.log(`  Production origin: ${productionOrigin}`)
-    console.log(`  Indexable routes: ${ROUTE_SEO_TABLE.filter(e => e.visibility === 'public-indexable').length}`)
+/**
+ * Render `robots.txt` by rewriting only the `Sitemap:` origin of the policy source.
+ *
+ * Every other line is passed through untouched, so the crawler rules in
+ * `frontend/public/robots.txt` stay the single source of truth. When the
+ * resolved origin matches the one already in the source, the result is
+ * byte-identical to it.
+ *
+ * @param sourceRobotsTxt - Contents of `frontend/public/robots.txt`.
+ * @param productionOrigin - Absolute origin for the sitemap reference.
+ * @returns Complete `robots.txt` text.
+ */
+export function generateRobotsTxt(sourceRobotsTxt, productionOrigin) {
+  const sitemapLine = `Sitemap: ${productionOrigin}/sitemap.xml`
+  if (!/^Sitemap: \S+$/m.test(sourceRobotsTxt)) {
+    return `${sourceRobotsTxt.trimEnd()}\n\n${sitemapLine}\n`
+  }
+  return sourceRobotsTxt.replace(/^Sitemap: \S+$/m, sitemapLine)
+}
+
+/**
+ * Generate `sitemap.xml` and `robots.txt` from the canonical sources.
+ *
+ * @param outDir - Directory that receives both artifacts.
+ * @param productionOrigin - Absolute origin used for every generated URL.
+ * @returns Paths of the written artifacts and the number of sitemap URLs.
+ * @throws If the policy source is missing or generation fails.
+ */
+export function writeArtifacts(outDir, productionOrigin) {
+  const entries = indexableRoutes()
+  const sitemapXml = generateSitemapXml(entries, productionOrigin)
+  const sourceRobotsTxt = readFileSync(SOURCE_ROBOTS_PATH, 'utf-8')
+  const robotsTxt = generateRobotsTxt(sourceRobotsTxt, productionOrigin)
+
+  if (!existsSync(outDir)) {
+    mkdirSync(outDir, { recursive: true })
+  }
+
+  const sitemapPath = resolve(outDir, 'sitemap.xml')
+  const robotsPath = resolve(outDir, 'robots.txt')
+  writeFileSync(sitemapPath, sitemapXml, 'utf-8')
+  writeFileSync(robotsPath, robotsTxt, 'utf-8')
+
+  return { sitemapPath, robotsPath, urlCount: entries.length }
+}
+
+function main() {
+  const productionOrigin = resolveProductionOrigin(process.env)
+  const result = writeArtifacts(DEFAULT_OUT_DIR, productionOrigin)
+
+  console.log(`✓ Generated sitemap.xml at ${result.sitemapPath}`)
+  console.log(`✓ Generated robots.txt at ${result.robotsPath}`)
+  console.log(`  Production origin: ${productionOrigin}`)
+  console.log(`  Indexable URLs: ${result.urlCount}`)
+}
+
+const executedPath = process.argv[1]
+if (executedPath && executedPath === fileURLToPath(import.meta.url)) {
+  try {
+    main()
   } catch (error) {
-    console.error('✗ Sitemap generation failed:', error instanceof Error ? error.message : String(error))
+    const reason = error instanceof Error ? error.message : String(error)
+    console.error('✗ Sitemap generation failed:', reason)
     process.exit(1)
   }
 }
-
-main()
