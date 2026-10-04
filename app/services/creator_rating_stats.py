@@ -49,8 +49,9 @@ def compute_rating_distribution(ratings: list[float]) -> CreatorRatingDistributi
     counts: dict[float, int] = dict.fromkeys(RATING_BUCKETS, 0)
     for value in ratings:
         counts[bucket_for_rating(value)] += 1
+    buckets = [CreatorRatingBucket(rating=bucket, count=counts[bucket]) for bucket in RATING_BUCKETS]
     return CreatorRatingDistribution(
-        buckets=[CreatorRatingBucket(rating=bucket, count=counts[bucket]) for bucket in RATING_BUCKETS],
+        buckets=buckets,
         sample_count=len(ratings),
         mean_rating=round(mean(ratings), 2),
         median_rating=round(median(ratings), 2),
