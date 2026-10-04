@@ -86,6 +86,8 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     readingOrdersError: null,
     connectedThreadsIsLoading: false,
     connectedThreadsError: null,
+    onRequestReadingContext: vi.fn(),
+    onRequestReadingBoundaries: vi.fn(),
     ...overrides,
   }
 }
@@ -184,8 +186,9 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(cells[1].dataset.testid).toBe('rating-region-decision')
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
+    // #2764 restores the two collapsed optional cards inside the decision region.
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
 
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
@@ -200,16 +203,20 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 
-  it('stacks the decision card and context disclosure in the decision region', () => {
+  it('stacks the decision card and the two optional cards in the decision region', () => {
     const { container } = render(ratingView({ readerContext: richReaderContext() }))
     const decisionRegion = container.querySelector<HTMLElement>('[data-testid="rating-region-decision"]')
     const decisionCard = container.querySelector<HTMLElement>('[data-testid="decision-card"]')
-    const contextDisclosure = container.querySelector<HTMLElement>('[data-testid="context-disclosure"]')
+    const contextCard = container.querySelector<HTMLElement>('[data-testid="reading-context-card"]')
+    const boundariesCard = container.querySelector<HTMLElement>('[data-testid="reading-boundaries-card"]')
     expect(decisionRegion).not.toBeNull()
     expect(decisionCard).not.toBeNull()
-    expect(contextDisclosure).not.toBeNull()
+    expect(contextCard).not.toBeNull()
+    expect(boundariesCard).not.toBeNull()
     expect(decisionRegion!.contains(decisionCard)).toBe(true)
-    expect(decisionRegion!.contains(contextDisclosure)).toBe(true)
+    expect(decisionRegion!.contains(contextCard)).toBe(true)
+    expect(decisionRegion!.contains(boundariesCard)).toBe(true)
+    expect(container.querySelector('[data-testid="context-disclosure"]')).toBeNull()
     expect(decisionCard!.className).not.toContain('xl:col-span-full')
     expect(container.querySelector('[data-testid="rating-actions"]')).not.toBeNull()
   })
@@ -256,14 +263,13 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
   })
 })
 
-describe('RatingView reading-context affordances retired (#2711)', () => {
-  it('contains no Why this?, Reading Context or Reading Boundaries affordance', () => {
+describe('RatingView reading-context affordances restored (#2764)', () => {
+  it('contains the two optional cards but no Why this? or third disclosure', () => {
     render(ratingView())
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('context-disclosure')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 })

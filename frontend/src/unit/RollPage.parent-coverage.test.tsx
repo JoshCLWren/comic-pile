@@ -727,16 +727,18 @@ describe('RollPage parent handlers', () => {
     expect(spies.navigate).toHaveBeenCalledWith('/login')
   })
 
-  it('keeps rating view usable without reading context controls (#2711)', async () => {
+  it('keeps rating view usable without firing optional reading detail requests (#2764)', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    // NOTE: this suite mocks RatingView, so the #2764 collapsed cards are not
+    // rendered here; their presence is covered by the RatingView.* suites.
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    // Rating workflow remains usable even though reading context requests are not made
+    // Rating workflow remains usable even though optional reading detail requests are not made
     expect(relatedApi.readingOrders).not.toHaveBeenCalled()
     expect(relatedApi.connectedThreads).not.toHaveBeenCalled()
   })
@@ -1112,16 +1114,18 @@ describe('RollPage parent handlers', () => {
     vi.useRealTimers()
   })
 
-  it('keeps rating view usable without reading context controls (#2711)', async () => {
+  it('keeps rating view usable without firing optional reading detail requests (#2764)', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    // NOTE: this suite mocks RatingView, so the #2764 collapsed cards are not
+    // rendered here; their presence is covered by the RatingView.* suites.
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    // Rating workflow remains usable even though reading context requests are not made
+    // Rating workflow remains usable even though optional reading detail requests are not made
     expect(relatedApi.readingOrders).not.toHaveBeenCalled()
     expect(relatedApi.connectedThreads).not.toHaveBeenCalled()
   })

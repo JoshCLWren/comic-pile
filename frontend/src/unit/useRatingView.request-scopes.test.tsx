@@ -149,6 +149,8 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
     dismissPendingMutation,
     skipMutation,
     ratingViewTopRef,
+    onRequestReadingContext: vi.fn(),
+    onRequestReadingBoundaries: vi.fn(),
     ...initialScopes,
   }
   const { result, rerender } = renderHook((props: typeof params) => useRatingView(props), {
@@ -212,6 +214,39 @@ it('exposes both optional request scopes through the rating-view boundary', () =
   expect(result.current.readingBoundariesRequested).toBe(false)
 })
 
+it('forwards the optional request callbacks through the rating-view boundary', () => {
+  const onRequestReadingContext = vi.fn()
+  const onRequestReadingBoundaries = vi.fn()
+  const state = mockState({ activeRatingThread: ACTIVE_THREAD })
+  const { result } = renderHook(
+    () =>
+      useRatingView({
+        state,
+        readerContextRequested: false,
+        readingContextRequested: false,
+        readingBoundariesRequested: false,
+        readingOrdersIsLoading: false,
+        readingOrdersError: null,
+        connectedThreadsIsLoading: false,
+        connectedThreadsError: null,
+        rating,
+        snooze,
+        onSkip: vi.fn(),
+        rateMutation,
+        snoozeMutation,
+        dismissPendingMutation,
+        skipMutation,
+        ratingViewTopRef,
+        onRequestReadingContext,
+        onRequestReadingBoundaries,
+      }),
+    { wrapper: createWrapper() },
+  )
+
+  expect(result.current.onRequestReadingContext).toBe(onRequestReadingContext)
+  expect(result.current.onRequestReadingBoundaries).toBe(onRequestReadingBoundaries)
+})
+
 it('exposes bounded optional loading and error state for the cards', () => {
   const readingOrdersError = new Error('reading orders unavailable')
   const connectedThreadsError = new Error('connected threads unavailable')
@@ -254,6 +289,8 @@ it('a failed reader-context request stays out of the shared rating error channel
         dismissPendingMutation,
         skipMutation,
         ratingViewTopRef,
+        onRequestReadingContext: vi.fn(),
+        onRequestReadingBoundaries: vi.fn(),
       }),
     { wrapper: createWrapper() },
   )

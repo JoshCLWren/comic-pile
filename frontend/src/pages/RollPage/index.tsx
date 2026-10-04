@@ -277,6 +277,8 @@ export default function RollPage() {
     dismissPendingMutation,
     skipMutation,
     ratingViewTopRef,
+    onRequestReadingContext: () => rating.fetchReadingContext(state.activeRatingThread?.id ?? null),
+    onRequestReadingBoundaries: () => rating.fetchReadingBoundaries(),
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []

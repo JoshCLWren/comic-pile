@@ -71,6 +71,8 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     readingOrdersError: null,
     connectedThreadsIsLoading: false,
     connectedThreadsError: null,
+    onRequestReadingContext: vi.fn(),
+    onRequestReadingBoundaries: vi.fn(),
     ...overrides,
   }
 }
@@ -84,8 +86,8 @@ function renderRatingView(overrides: Partial<RatingViewData> = {}) {
   )
 }
 
-describe('RatingView crossovers retired from rating screen (#2711)', () => {
-  it('does not show Reading Context button even when active thread would have owned crossovers', () => {
+describe('RatingView crossover chrome stays out of the rating screen (#2764)', () => {
+  it('shows the optional cards but no crossover chrome even when active thread would have owned crossovers', () => {
     renderRatingView({
       activeRatingThread: {
         id: 42,
@@ -102,7 +104,8 @@ describe('RatingView crossovers retired from rating screen (#2711)', () => {
       },
     })
 
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Crossovers' })).not.toBeInTheDocument()
     expect(screen.queryByText('Cosmic bridge')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()

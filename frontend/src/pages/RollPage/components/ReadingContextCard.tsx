@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { readingContextType } from '../readingContextTypography'
 import { ReadingContextStatusCard } from './ReadingContextStatusCard'
 
@@ -6,17 +7,18 @@ interface ReadingContextCardProps {
   error: string | null
   isOpen: boolean
   onToggle: () => void
-  children: React.ReactNode
+  children: ReactNode
 }
 
 export function ReadingContextCard({ isLoading, error, isOpen, onToggle, children }: ReadingContextCardProps) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-testid="reading-context-card">
       <button
         type="button"
         onClick={onToggle}
         className="w-full flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2.5 text-left transition hover:bg-white/5 focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
         aria-expanded={isOpen}
+        data-testid="reading-context-button"
       >
         <div className="flex items-center gap-3">
           <svg
@@ -47,7 +49,10 @@ export function ReadingContextCard({ isLoading, error, isOpen, onToggle, childre
       </button>
 
       {isOpen && (
-        <div className="animate-in slide-in-from-top-2 duration-150">
+        <div
+          className="animate-in slide-in-from-top-2 duration-150"
+          data-testid="reading-context-content"
+        >
           {isLoading ? (
             <ReadingContextStatusCard isLoading error={error} />
           ) : error ? (

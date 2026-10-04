@@ -27,6 +27,8 @@ interface UseRatingViewParams {
   dismissPendingMutation: { isPending: boolean }
   skipMutation: { isPending: boolean }
   ratingViewTopRef: React.RefObject<HTMLDivElement | null> | null
+  onRequestReadingContext: () => void
+  onRequestReadingBoundaries: () => void
 }
 
 export interface RatingViewData {
@@ -57,6 +59,8 @@ export interface RatingViewData {
   readingOrdersError: Error | null
   connectedThreadsIsLoading: boolean
   connectedThreadsError: Error | null
+  onRequestReadingContext: () => void
+  onRequestReadingBoundaries: () => void
 }
 
 /**
@@ -91,6 +95,8 @@ export function useRatingView({
   dismissPendingMutation,
   skipMutation,
   ratingViewTopRef,
+  onRequestReadingContext,
+  onRequestReadingBoundaries,
 }: UseRatingViewParams): RatingViewData {
   const {
     activeRatingThread,
@@ -141,5 +147,7 @@ export function useRatingView({
     readingOrdersError,
     connectedThreadsIsLoading,
     connectedThreadsError,
+    onRequestReadingContext,
+    onRequestReadingBoundaries,
   }
 }
