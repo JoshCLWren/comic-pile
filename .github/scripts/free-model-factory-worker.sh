@@ -154,6 +154,13 @@ stage_trusted_kilo_helper() {
 # checkout_target switch so a stale or contaminated PR cannot replace the
 # authority code that interprets its model verdict.
 stage_trusted_review_controller() {
+  # Stage exactly once. This definition overrides the shared primitive that
+  # free-model-factory-worker.sh sources at startup, so without the guard every
+  # later caller -- record_head_contribution runs after checkout_target has
+  # switched onto the PR branch -- would re-copy the controller out of that
+  # branch's working tree and the PR could supply the code that records its own
+  # contributor provenance.
+  [[ -z "${TRUSTED_REVIEW_CONTROLLER:-}" ]] || return 0
   local trusted_dir
   trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
   cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
@@ -394,6 +401,11 @@ if [[ "$MODE" == 'issue' ]]; then
       exit 0
     fi
     replace_labels "$pr" "$OWNER" 'factory:review'
+    # The controller records this producer against the exact head it just
+    # created so a later repair cannot make it an eligible reviewer. A newly
+    # created PR is unlabeled, and record_contribution refuses anything that is
+    # not a factory pull request, so this must follow the label write.
+    record_head_contribution "$pr" 'pr-opened-handoff' || true
     log "opened/updated PR #${pr} for issue #${NUMBER}"
     release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
     release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
@@ -416,6 +428,8 @@ if [[ "$MODE" == 'issue' ]]; then
 fi
 
 if persist_pr_changes "$NUMBER" "$BRANCH"; then
+  log "pushed repairs to PR #${NUMBER}; recording contributor provenance"
+  record_head_contribution "$NUMBER" 'repairs-pushed-handoff' || true
   log "pushed repairs to PR #${NUMBER}; handing it to the merge controller for exact-head review"
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"

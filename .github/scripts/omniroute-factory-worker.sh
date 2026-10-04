@@ -268,7 +268,7 @@ persist_pr_changes() {
   local pr="$1" branch="$2"
   [[ -n "$(git status --porcelain)" ]] || return 1
   if ! reject_unclean_git_state; then
-    git reset --hard "$EXPECTED_HEAD" >/dev/null
+    git reset --hard "$EXPECTED_HEAD" >/dev/null 2>&1
     git clean -fd >/dev/null
     return 1
   fi
@@ -282,12 +282,42 @@ persist_pr_changes() {
   replace_labels "$pr" "$OWNER" 'factory:review'
 }
 
+# Review independence is only meaningful when the contributor record is written
+# by trusted controller code, so stage the controller and its pure policy module
+# before any checkout switch onto an adopted PR branch.
+stage_trusted_review_controller() {
+  if [[ -z "${TRUSTED_REVIEW_CONTROLLER:-}" ]]; then
+    local trusted_dir
+    trusted_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/comic-pile-review-controller.XXXXXX")"
+    cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
+    cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+    chmod +x "$trusted_dir/factory-review-controller.py"
+    TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
+    export TRUSTED_REVIEW_CONTROLLER
+  fi
+}
+
+record_head_contribution() {
+  # Every push that changes a PR head must bind this worker to that exact head,
+  # including when the worker leaves no resume packet. Losing this record is not
+  # fatal here: review independence then fails closed and needs two reviewers.
+  local pr="$1" reason="$2" head
+  stage_trusted_review_controller
+  head="$(git rev-parse HEAD)"
+  if ! python3 "$TRUSTED_REVIEW_CONTROLLER" record-contribution \
+    --worker "$WORKER" --pr "$pr" --head "$head" >/dev/null; then
+    log "unable to record trusted contributor provenance for PR #${pr} (${reason}); review will require two distinct reviewers" >&2
+    return 1
+  fi
+}
+
 if [[ "$MODE" == "smoke" ]]; then
   smoke_agent
   exit 0
 fi
 
 ensure_owner_label
+stage_trusted_review_controller
 log "starting normal factory session; budget ${BUDGET_SECONDS}s"
 
 while (( $(remaining) > 480 )); do
@@ -396,6 +426,11 @@ while (( $(remaining) > 480 )); do
         continue
       fi
       replace_labels "$pr" "$OWNER" 'factory:review'
+      # A newly created PR is unlabeled and record_contribution refuses anything
+      # that is not a factory pull request, so the producer's exact-head record
+      # must follow the label write. Without it this producer is covered only by
+      # the weaker branch/body fallback and the head fails closed to two reviews.
+      record_head_contribution "$pr" 'pr-opened-handoff' || true
       log "opened/updated PR #${pr} for issue #${NUMBER}"
       SKIP_PRS+=("$pr")
     elif (( transient_failure == 1 )); then
@@ -413,6 +448,8 @@ while (( $(remaining) > 480 )); do
   fi
 
   if persist_pr_changes "$NUMBER" "$BRANCH"; then
+    log "pushed repairs to PR #${NUMBER}; recording contributor provenance"
+    record_head_contribution "$NUMBER" 'repairs-pushed-handoff' || true
     log "pushed repairs to PR #${NUMBER}; review and CI must refresh"
     SKIP_PRS+=("$NUMBER")
     continue

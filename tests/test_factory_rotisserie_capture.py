@@ -60,10 +60,26 @@ def test_live_capture_contract() -> None:
             return {"statusCheckRollup": [{"name": "test", "conclusion": "SUCCESS"}]}
         return [
             {
+                "user": {"login": "github-actions[bot]"},
+                "author_association": "NONE",
                 "body": "<!-- comic-pile-factory-semantic-review-v1:pr-20:head-"
                 + ("a" * 40)
-                + ":reviewer-9:producer-8:verdict-approve -->"
-            }
+                + ":reviewer-9:producer-8:verdict-approve -->",
+            },
+            {
+                "user": {"login": "github-actions[bot]"},
+                "author_association": "NONE",
+                "body": "<!-- comic-pile-factory-head-contributor-v1:pr-20:head-"
+                + ("a" * 40)
+                + ":worker-8:epoch-17 -->",
+            },
+            {
+                "user": {"login": "github-actions[bot]"},
+                "author_association": "NONE",
+                "body": "<!-- comic-pile-factory-head-contributor-v1:pr-20:head-"
+                + ("9" * 40)
+                + ":worker-6:epoch-19 -->",
+            },
         ]
 
     view = capture.capture_view(revision="b" * 40, captured_at=100, run_json=run_json)
@@ -73,4 +89,38 @@ def test_live_capture_contract() -> None:
     assert view["issues"][0]["lease"]["expires_at"] > view["issues"][0]["lease"]["acquired_at"]
     assert view["pull_requests"][0]["checks"][0]["status"] == "passed"
     assert view["pull_requests"][0]["reviews"][0]["head"] == "a" * 40
+    # The captured lineage spans every recorded head of the PR, not just the
+    # current one, so the shadow adapter blocks the same reviewers the real
+    # controller blocks.
+    assert view["pull_requests"][0]["head_contributors"] == ["6", "8"]
     assert all("create" not in command and "edit" not in command for command in commands)
+
+
+def test_untrusted_authors_cannot_supply_contributor_provenance() -> None:
+    """Only controller-trusted comment authors feed captured provenance."""
+    capture = load_capture()
+    marker = (
+        "<!-- comic-pile-factory-head-contributor-v1:pr-20:head-"
+        + ("a" * 40)
+        + ":worker-8:epoch-17 -->"
+    )
+
+    def run_json(command: list[str]) -> object:
+        if command[1:3] == ["issue", "list"]:
+            return []
+        if command[1:3] == ["pr", "list"]:
+            return [
+                {
+                    "number": 20,
+                    "labels": [{"name": "factory"}],
+                    "headRefName": "factory/8-20-work",
+                    "headRefOid": "a" * 40,
+                }
+            ]
+        if command[1:3] == ["pr", "view"]:
+            return {"statusCheckRollup": []}
+        return [{"user": {"login": "somebody-else"}, "author_association": "CONTRIBUTOR", "body": marker}]
+
+    view = capture.capture_view(revision="b" * 40, captured_at=100, run_json=run_json)
+
+    assert view["pull_requests"][0]["head_contributors"] == []

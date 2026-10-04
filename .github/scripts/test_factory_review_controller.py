@@ -159,6 +159,7 @@ def test_reconcile_ci_promotes_green_authorized_pr_without_worker(monkeypatch):
         controller,
         "review_comment_bodies",
         lambda _pr: [
+            controller.head_contributor_marker(pr=123, head=head, worker="10", epoch=1),
             controller.review_marker(
                 pr=123, head=head, reviewer="11", producer="10", verdict="approve"
             )
@@ -199,6 +200,7 @@ def test_reconcile_ci_routes_conflicted_green_pr_to_repair(monkeypatch):
         controller,
         "review_comment_bodies",
         lambda _pr: [
+            controller.head_contributor_marker(pr=123, head=head, worker="10", epoch=1),
             controller.review_marker(
                 pr=123, head=head, reviewer="11", producer="10", verdict="approve"
             )
@@ -255,6 +257,7 @@ def test_reconcile_ci_does_not_transition_when_findings_persistence_fails(monkey
         controller,
         "review_comment_bodies",
         lambda _pr: [
+            controller.head_contributor_marker(pr=123, head=head, worker="10", epoch=1),
             controller.review_marker(
                 pr=123, head=head, reviewer="11", producer="10", verdict="approve"
             )
@@ -468,6 +471,7 @@ def test_reconcile_ci_returns_changed_head_to_review(monkeypatch):
         controller,
         "review_comment_bodies",
         lambda _pr: [
+            controller.head_contributor_marker(pr=123, head=head, worker="10", epoch=1),
             controller.review_marker(
                 pr=123, head=head, reviewer="11", producer="10", verdict="approve"
             )

@@ -108,6 +108,7 @@ class Candidate:
     stage: str | None = None
     producer_worker: str | None = None
     conflicted: bool = False
+    head_contributors: frozenset[str] = frozenset()
 
     def sort_key(self) -> tuple[int, int, float, int]:
         """Return the deterministic queue ordering key (oldest work first)."""
@@ -230,6 +231,19 @@ def is_factory_managed_pr(pr: dict[str, Any]) -> bool:
 def producer_worker_from_pr(pr: dict[str, Any]) -> str | None:
     """Recover producer identity using the shared review provenance policy."""
     return producer_worker_from_values(branch=str(pr.get('headRefName') or ''), body=str(pr.get('body') or ''))
+
+
+def head_contributors_from_pr(pr: dict[str, Any]) -> frozenset[str]:
+    """Recover controller-recorded contributors of the PR's exact head.
+
+    Only the Rotisserie capture view carries the trusted marker set; the live
+    dispatcher list payload does not, and an absent key means "not resolved
+    yet" rather than "nobody contributed".
+    """
+    recorded = pr.get('head_contributors')
+    if not isinstance(recorded, (list, tuple, set, frozenset)):
+        return frozenset()
+    return frozenset(str(worker) for worker in recorded if worker)
 
 
 def stage_of(labels: Iterable[str]) -> str | None:
@@ -673,6 +687,7 @@ def build_candidates(
                 stage=stage_of(pr_labels),
                 producer_worker=producer_worker_from_pr(pr),
                 conflicted=pr_is_conflicted(pr),
+                head_contributors=head_contributors_from_pr(pr),
             )
         )
     return sorted(candidates, key=Candidate.sort_key)
@@ -700,12 +715,19 @@ def review_capacity_worker(worker: str, *, review_backlog: int = 0) -> bool:
 
 
 def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bool:
-    """Prevent a producing factory from being assigned semantic review of its PR."""
-    return not (
-        candidate.kind == 'pr'
-        and candidate.stage == 'factory:review'
-        and candidate.producer_worker == worker
-    )
+    """Prevent a contributing factory from being assigned semantic review of its PR.
+
+    Issue #3059 makes every worker that authored the exact head ineligible to
+    attest it, not only the worker that opened the PR. Excluding contributors at
+    selection time is what lets queue selection hand the head to another
+    eligible reviewer automatically instead of churning the same worker
+    through a controller refusal.
+    """
+    if candidate.kind != 'pr' or candidate.stage != 'factory:review':
+        return True
+    if candidate.producer_worker == worker:
+        return False
+    return worker not in candidate.head_contributors
 
 
 def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> list[Candidate]:
