@@ -20,6 +20,14 @@ from app.models.thread import Thread
 MAPPING_STATUSES = frozenset({"unresolved", "candidate", "confirmed", "rejected", "deferred"})
 ENTITY_TYPES = frozenset({"issue", "series"})
 
+USER_SERIES_CONFIRMATION_EVIDENCE_SOURCE = "user_series_confirmation"
+"""Provenance recorded when a user bulk-confirms a provider series selection.
+
+``evidence_source`` is a free-form string column, so this constant is the single canonical
+spelling for series confirmations that a user approved deliberately (through the series
+mapping preview/commit contract) rather than through automated resolution.
+"""
+
 _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE = 500
 """Max identities per batch statement.
 
