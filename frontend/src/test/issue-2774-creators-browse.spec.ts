@@ -236,7 +236,7 @@ test.describe('Issue #2774: creators browse page', () => {
     })
 
     await page.getByLabel('Search creators by name').fill('Nobody')
-    await expect(page.getByText('No creators match “Nobody”.')).toBeVisible({ timeout: 20000 })
+    await expect(page.getByText('No creators match these filters.')).toBeVisible({ timeout: 20000 })
   })
 
   test('load more appends a later page without duplicating a repeated row', async ({

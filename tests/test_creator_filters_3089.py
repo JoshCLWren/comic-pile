@@ -4,13 +4,11 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from tests.test_creator_list_api import D1, _confirm_identity, _make_thread
-
 pytestmark = pytest.mark.asyncio
 
 
 async def test_creators_role_filter(auth_client: AsyncClient, db, user, sample_data) -> None:
-    # At least writer-filtered results come back with only writer roles.
+    """At least writer-filtered results come back with only writer roles."""
     resp = await auth_client.get("/api/v1/creators?role=writer&sort=name")
     assert resp.status_code == 200
     data = resp.json()
@@ -19,6 +17,7 @@ async def test_creators_role_filter(auth_client: AsyncClient, db, user, sample_d
 
 
 async def test_creators_min_sample_filter(auth_client: AsyncClient, db, user, sample_data) -> None:
+    """Minimum sample size filtering returns only creators with enough rated issues."""
     resp = await auth_client.get("/api/v1/creators?min_sample=2")
     assert resp.status_code == 200
     for item in resp.json()["items"]:
@@ -26,6 +25,7 @@ async def test_creators_min_sample_filter(auth_client: AsyncClient, db, user, sa
 
 
 async def test_creators_min_average_filter(auth_client: AsyncClient, db, user, sample_data) -> None:
+    """Minimum average rating filtering returns only creators meeting the threshold."""
     resp = await auth_client.get("/api/v1/creators?min_average=4.0")
     assert resp.status_code == 200
     for item in resp.json()["items"]:
@@ -34,9 +34,7 @@ async def test_creators_min_average_filter(auth_client: AsyncClient, db, user, s
 
 
 async def test_creators_unread_filter_composes(auth_client: AsyncClient, db, user, sample_data) -> None:
-    # Unread restriction should not crash and should return a bounded list.
+    """Unread restriction should not crash and should return a bounded list."""
     resp = await auth_client.get("/api/v1/creators?unread=true")
     assert resp.status_code == 200
-    # Must preserve pagination state (offset resets when filters change is handled
-    # by client; server just delivers bounded page).
     assert "items" in resp.json()

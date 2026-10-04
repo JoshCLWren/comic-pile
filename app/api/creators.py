@@ -169,6 +169,10 @@ async def list_creators_endpoint(
         sort: Deterministic browse ordering.
         limit: Bounded page size.
         offset: Page offset.
+        role: Optional normalized role filter (e.g. ``writer``).
+        min_sample: Minimum headline-rated issue count.
+        min_average: Minimum personal average rating.
+        unread: Restrict to creators with unread/upcoming attributed work.
         db: Async database session.
 
     Returns:
