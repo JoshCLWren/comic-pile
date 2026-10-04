@@ -508,16 +508,27 @@ async def build_series_mapping_plan(
     if series_info is not None:
         # Check if origin issue has a confirmed thread-series mapping
         series_identity_id = series_info.get("id")
-        if isinstance(series_identity_id, int):
-            thread_result = await db.execute(
-                select(ThreadExternalSeriesMapping).where(
-                    ThreadExternalSeriesMapping.thread_id == origin_issue.get("thread_id"),
-                    ThreadExternalSeriesMapping.external_identity_id == series_identity_id,
-                    ThreadExternalSeriesMapping.status == "confirmed",
+        # Since we're using external_id (string), we need to find the ExternalIdentity by external_id
+        if isinstance(series_identity_id, str):
+            from app.models.external_identity import ExternalIdentity
+            external_identity_result = await db.execute(
+                select(ExternalIdentity).where(
+                    ExternalIdentity.provider == provider.strip().lower(),
+                    ExternalIdentity.entity_type == "series",
+                    ExternalIdentity.external_id == series_identity_id,
                 )
             )
-            if thread_result.scalar_one_or_none() is not None:
-                origin_has_confirmed_series = True
+            external_identity = external_identity_result.scalar_one_or_none()
+            if external_identity:
+                thread_result = await db.execute(
+                    select(ThreadExternalSeriesMapping).where(
+                        ThreadExternalSeriesMapping.thread_id == origin_issue.get("thread_id"),
+                        ThreadExternalSeriesMapping.external_identity_id == external_identity.id,
+                        ThreadExternalSeriesMapping.status == "confirmed",
+                    )
+                )
+                if thread_result.scalar_one_or_none() is not None:
+                    origin_has_confirmed_series = True
         # Also check issue-external identity mapping
         if not origin_has_confirmed_series:
             from app.models.issue import IssueExternalIdentityMapping
