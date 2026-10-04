@@ -42,14 +42,36 @@ class CreatorCredit:
 
 
 @dataclass(frozen=True)
+class OwnedIssueThread:
+    """Stable local series/run identity attached to one owned issue.
+
+    One thread is one series or one creator run in the reader's own library
+    (``#3088``). The title is carried for display only and is never a grouping
+    identity.
+    """
+
+    thread_id: int
+    thread_title: str
+
+
+@dataclass(frozen=True)
 class CreatorComparisonInputs:
-    """Plain, user-scoped inputs for the creator comparison aggregation."""
+    """Plain, user-scoped inputs for the creator comparison aggregation.
+
+    ``issues_with_creator_metadata`` deliberately reflects *every* owned issue
+    carrying at least one usable confirmed creator credit, exactly like the
+    shared ``#2028`` summary inputs. Coverage describes the whole owned library,
+    not just the compared subset: a rated issue whose confirmed credits name
+    only creators outside the current selection is still fully attributed and
+    must never be reported as missing metadata.
+    """
 
     owned_issues: dict[int, str] = field(default_factory=dict)
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = field(default_factory=dict)
     issues_with_creator_metadata: frozenset[int] = field(default_factory=frozenset)
     effective_ratings: dict[int, float] = field(default_factory=dict)
     requested_creator_ids: frozenset[int] = field(default_factory=frozenset)
+    owned_issue_threads: dict[int, OwnedIssueThread] = field(default_factory=dict)
 
 
 def _coerce_creator_id(value: object) -> int | None:
@@ -104,7 +126,8 @@ async def load_creator_comparison_inputs(
     The batch is served by exactly three queries no matter how many creator
     keys are requested (max 4):
 
-    1. the authenticated user's owned issues and their read/unread status;
+    1. the authenticated user's owned issues, their read/unread status, and
+       their stable local thread/series identity;
     2. confirmed ComicVine issue metadata for those issues (creator credits);
     3. the latest effective ``rate`` event rating per owned issue.
 
@@ -116,17 +139,23 @@ async def load_creator_comparison_inputs(
     Returns:
         User-scoped :class:`CreatorComparisonInputs`.
     """
-    # 1. Owned issues and statuses.
+    # 1. Owned issues, statuses, and stable local series identity.
     issue_result = await db.execute(
-        select(Issue.id, Issue.status)
+        select(Issue.id, Issue.status, Issue.thread_id, Thread.title)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
-    owned_issues: dict[int, str] = {
-        int(issue_id): str(status) for issue_id, status in issue_result.all()
-    }
+    owned_issues: dict[int, str] = {}
+    owned_issue_threads: dict[int, OwnedIssueThread] = {}
+    for issue_id, status, thread_id, thread_title in issue_result.all():
+        owned_issue_id = int(issue_id)
+        owned_issues[owned_issue_id] = str(status)
+        owned_issue_threads[owned_issue_id] = OwnedIssueThread(
+            thread_id=int(thread_id),
+            thread_title=str(thread_title),
+        )
 
-    # 2. Confirmed creator credits per owned issue (filtered to requested creators).
+    # 2. Confirmed creator credits per owned issue.
     metadata_result = await db.execute(
         select(Issue.id, ExternalIdentity.metadata_json)
         .join(Thread, Thread.id == Issue.thread_id)
@@ -149,18 +178,21 @@ async def load_creator_comparison_inputs(
             continue
         credits = extract_creator_credits(metadata)
         owned_issue_id = int(issue_id)
-        # Filter to only requested creator IDs
-        filtered_credits = [c for c in credits if c.external_id in requested_creator_ids]
-        if filtered_credits:
+        # Coverage follows the shared #2028 semantics: any usable confirmed
+        # credit marks the issue as attributed, even when the credited creators
+        # are all outside this comparison's selection.
+        if credits:
             issues_with_creator_metadata.add(owned_issue_id)
         by_key = per_issue_credits.setdefault(owned_issue_id, {})
-        for credit in filtered_credits:
-            by_key.setdefault((credit.external_id, credit.roles), credit)
+        for credit in credits:
+            if credit.external_id in requested_creator_ids:
+                by_key.setdefault((credit.external_id, credit.roles), credit)
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = {
         issue_id: tuple(
             sorted(by_key.values(), key=lambda credit: (credit.external_id, credit.roles))
         )
         for issue_id, by_key in per_issue_credits.items()
+        if by_key
     }
 
     # 3. Latest effective rating per owned issue (latest event wins).
@@ -185,48 +217,47 @@ async def load_creator_comparison_inputs(
         issues_with_creator_metadata=frozenset(issues_with_creator_metadata),
         effective_ratings=effective_ratings,
         requested_creator_ids=requested_creator_ids,
+        owned_issue_threads=owned_issue_threads,
     )
 
 
-async def load_series_aggregates(
-    db: AsyncSession,
-    user_id: int,
+def build_series_aggregates(
+    owned_issue_threads: dict[int, OwnedIssueThread],
     creator_issue_ids: frozenset[int],
     effective_ratings: dict[int, float],
     limit: int = MAX_SERIES_AGGREGATES,
 ) -> list[tuple[int, str, int, float | None]]:
-    """Load strongest series/thread aggregates for a creator's issues.
+    """Build strongest series/thread aggregates for a creator's issues.
 
     Series averages use the latest effective rating per issue (shared
-    #2028/#2037 semantics): an issue re-rated later contributes its current
-    rating once, never the mean of its rating history.
+    ``#2028``/``#2037`` semantics): an issue re-rated later contributes its
+    current rating once, never the mean of its rating history.
+
+    The aggregates are derived from the already-loaded user-scoped inputs, so
+    every creator in one bounded batch is served without any further query.
 
     Args:
-        db: Async database session.
-        user_id: Authenticated user owning the aggregated library.
+        owned_issue_threads: Mapping of owned issue id to its local thread.
         creator_issue_ids: Owned issue ids attributed to the creator.
         effective_ratings: Latest effective rating per owned issue.
         limit: Maximum aggregates returned.
 
-    Returns list of (thread_id, thread_title, issue_count, average_rating)
-    ordered by issue_count desc, average_rating desc (nulls last), then
-    case-insensitive title and stable thread id.
+    Returns:
+        List of ``(thread_id, thread_title, issue_count, average_rating)``
+        ordered by issue_count desc, average_rating desc (nulls last), then
+        case-insensitive title and stable thread id.
     """
     if not creator_issue_ids:
         return []
 
-    result = await db.execute(
-        select(Thread.id, Thread.title, Issue.id)
-        .join(Issue, Issue.thread_id == Thread.id)
-        .where(Thread.user_id == user_id)
-        .where(Issue.id.in_(creator_issue_ids))
-    )
     titles: dict[int, str] = {}
     thread_issues: dict[int, list[int]] = {}
-    for thread_id, thread_title, issue_id in result.all():
-        thread_id_int = int(thread_id)
-        titles.setdefault(thread_id_int, str(thread_title))
-        thread_issues.setdefault(thread_id_int, []).append(int(issue_id))
+    for issue_id in creator_issue_ids:
+        owned_thread = owned_issue_threads.get(issue_id)
+        if owned_thread is None:
+            continue
+        titles.setdefault(owned_thread.thread_id, owned_thread.thread_title)
+        thread_issues.setdefault(owned_thread.thread_id, []).append(issue_id)
 
     aggregates: list[tuple[int, str, int, float | None]] = []
     for thread_id_int, issue_ids in thread_issues.items():
@@ -257,7 +288,8 @@ __all__ = [
     "MIN_COMPARISON_CREATORS",
     "MIN_RATED_FOR_RELIABLE",
     "MAX_SERIES_AGGREGATES",
+    "OwnedIssueThread",
+    "build_series_aggregates",
     "extract_creator_credits",
     "load_creator_comparison_inputs",
-    "load_series_aggregates",
 ]

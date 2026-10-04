@@ -24,13 +24,13 @@ from statistics import median
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.creator_comparison import (
-    CreatorComparisonInputs,
     MAX_COMPARISON_CREATORS,
+    MAX_SERIES_AGGREGATES,
     MIN_COMPARISON_CREATORS,
     MIN_RATED_FOR_RELIABLE,
-    MAX_SERIES_AGGREGATES,
+    CreatorComparisonInputs,
+    build_series_aggregates,
     load_creator_comparison_inputs,
-    load_series_aggregates,
 )
 from app.schemas.creator_comparison import (
     CreatorComparisonCoverage,
@@ -219,9 +219,9 @@ async def get_creator_comparison(
 
         # Strongest series/thread aggregates (effective-rating semantics shared
         # with creator detail: latest rating per issue, never rating history).
-        series_aggregates = await load_series_aggregates(
-            db,
-            user_id,
+        # Derived from the batch inputs, so no per-creator query is issued.
+        series_aggregates = build_series_aggregates(
+            inputs.owned_issue_threads,
             frozenset(issue_ids),
             inputs.effective_ratings,
             limit=MAX_SERIES_AGGREGATES,

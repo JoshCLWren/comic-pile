@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
@@ -30,8 +30,8 @@ function InsufficientDataBadge() {
 
 function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate }) {
   return (
-    <a
-      href={`/thread/${aggregate.thread_id}`}
+    <Link
+      to={`/thread/${aggregate.thread_id}`}
       className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
     >
       <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
@@ -43,7 +43,7 @@ function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate
           <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} />
         )}
       </span>
-    </a>
+    </Link>
   )
 }
 
@@ -105,13 +105,13 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             {detailPath ? (
-              <a
-                href={detailPath}
+              <Link
+                to={detailPath}
                 className="break-words text-xl font-bold leading-tight hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
                 style={{ color: 'var(--theme-text-primary)' }}
               >
                 {item.display_name}
-              </a>
+              </Link>
             ) : (
               <h2 className="break-words text-xl font-bold leading-tight" style={{ color: 'var(--theme-text-primary)' }}>
                 {item.display_name}
@@ -244,7 +244,7 @@ export default function CreatorComparisonPage() {
           Creator Comparison
         </h1>
         <p className="mt-4 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          Select 2 to 4 creators from the <a href="/creators" className="underline">Creators page</a> to compare them.
+          Select 2 to 4 creators from the <Link to="/creators" className="underline">Creators page</Link> to compare them.
         </p>
       </div>
     )
@@ -291,20 +291,25 @@ export default function CreatorComparisonPage() {
           </button>
         )}
         <div className="mt-2">
-          <a
-            href="/creators"
+          <Link
+            to="/creators"
             className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             style={{ color: 'var(--theme-text-muted)' }}
           >
             Back to Creators
-          </a>
+          </Link>
         </div>
       </div>
     )
   }
 
   const comparisonItems = Object.values(data.comparisons)
-  const hasInsufficientData = data.insufficient_data_keys.length > 0
+  // Name the affected creators the way the reader knows them. A key the
+  // response could not resolve (omitted because it is not in the library) still
+  // falls back to its canonical key so the caveat is never silently dropped.
+  const affectedNames = data.insufficient_data_keys.map(
+    (key) => data.comparisons[key]?.display_name ?? key
+  )
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
@@ -318,11 +323,11 @@ export default function CreatorComparisonPage() {
         </p>
       </header>
 
-      {hasInsufficientData && (
+      {affectedNames.length > 0 && (
         <div className="mt-4 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--theme-warning)', backgroundColor: 'var(--theme-warning)/10' }}>
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
             <strong>Note:</strong> Some creators have fewer than 3 rated issues, making their statistics less reliable.
-            <span className="ml-2">Affected: {data.insufficient_data_keys.map((k) => k.replace('creator:', '')).join(', ')}</span>
+            <span className="ml-2">Affected: {affectedNames.join(', ')}</span>
           </p>
         </div>
       )}

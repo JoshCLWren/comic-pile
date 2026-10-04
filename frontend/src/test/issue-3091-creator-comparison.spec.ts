@@ -19,11 +19,16 @@
  */
 import { expect, type Page, type Route } from '@playwright/test'
 import { test } from './fixtures'
+import type {
+  CreatorComparisonCoverage,
+  CreatorComparisonItem,
+  CreatorComparisonResponse,
+} from '../types/index'
 
 const DESKTOP_VIEWPORT = { width: 1280, height: 900 }
 const MOBILE_VIEWPORT = { width: 390, height: 844 }
 
-const COMPLETE_COVERAGE = {
+const COMPLETE_COVERAGE: CreatorComparisonCoverage = {
   rated_issues_total: 9,
   rated_issues_with_creator_metadata: 9,
   ratings_complete: true,
@@ -45,7 +50,11 @@ function listRow(key: string, displayName: string) {
   }
 }
 
-function comparisonItem(key: string, displayName: string, overrides: Record<string, unknown> = {}) {
+function comparisonItem(
+  key: string,
+  displayName: string,
+  overrides: Partial<CreatorComparisonItem> = {},
+): CreatorComparisonItem {
   return {
     canonical_creator_key: key,
     display_name: displayName,
@@ -85,8 +94,8 @@ async function installCreatorsList(page: Page) {
 /** The bounded comparison endpoint; records the requested key sets. */
 async function installCreatorComparison(
   page: Page,
-  comparisons: Record<string, unknown>,
-  extra: Record<string, unknown> = {},
+  comparisons: Record<string, CreatorComparisonItem>,
+  extra: Partial<Pick<CreatorComparisonResponse, 'insufficient_data_keys'>> = {},
 ) {
   const requests: string[] = []
   await page.route(

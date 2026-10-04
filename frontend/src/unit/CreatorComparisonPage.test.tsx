@@ -189,8 +189,23 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getByText('Comparing 1 creator')).toBeInTheDocument()
     expect(screen.getByText('Insufficient data')).toBeInTheDocument()
     expect(screen.getByText(/less reliable/)).toBeInTheDocument()
-    expect(screen.getByText(/Affected: 12/)).toBeInTheDocument()
+    expect(screen.getByText(/Affected: Steve McNiven/)).toBeInTheDocument()
     expect(screen.getByRole('note')).toHaveTextContent('Counts shown are lower bounds.')
+  })
+
+  it('names unresolved affected keys by their canonical key instead of dropping them', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {},
+          insufficient_data_keys: ['creator:404'],
+        }),
+      }),
+    )
+
+    renderAt('creator:404,creator:405')
+
+    expect(screen.getByText(/Affected: creator:404/)).toBeInTheDocument()
   })
 
   it('renders unrated and keyless creators without manufacturing equivalence', () => {

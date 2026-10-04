@@ -13,7 +13,8 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
@@ -198,6 +199,146 @@ async def test_compare_validates_key_bounds(auth_client: AsyncClient) -> None:
         await auth_client.get("/api/v1/creators/compare?keys=creator:1,not-a-key")
     ).status_code == 400
     assert (await auth_client.get("/api/v1/creators/compare")).status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_coverage_ignores_creators_outside_the_comparison(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Confirmed metadata naming unselected creators is still complete coverage.
+
+    Coverage describes the whole owned library, not the compared subset. A
+    rated issue whose confirmed credits name only creators outside the current
+    selection is fully attributed, so the comparison must not report it as
+    missing metadata or present the totals as a lower bound.
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Mixed", issue_count=2, queue_position=1, read_through=2
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 77, "name": "Unrelated Letterer", "role": "letterer"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=5.0, timestamp=D2)
+
+    _thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Other", issue_count=1, queue_position=2, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues_b[0], creators=[{"id": 2, "name": "Artist Two", "role": "artist"}]
+    )
+
+    response = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["comparisons"]) == {"creator:1", "creator:2"}
+
+    coverage = body["coverage"]
+    assert coverage["rated_issues_total"] == 2
+    assert coverage["rated_issues_with_creator_metadata"] == 2
+    assert coverage["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_coverage_reports_true_partial_metadata(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """An owned rated issue with no confirmed metadata is a real lower bound."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Unattributed", issue_count=2, queue_position=1, read_through=2
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+    )
+    await _confirm_identity(async_db, issues[1], metadata={"creator_credits": []})
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=5.0, timestamp=D2)
+
+    _thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Other", issue_count=1, queue_position=2, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues_b[0], creators=[{"id": 2, "name": "Artist Two", "role": "artist"}]
+    )
+
+    response = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
+
+    assert response.status_code == 200
+    coverage = response.json()["coverage"]
+    assert coverage["rated_issues_total"] == 2
+    assert coverage["rated_issues_with_creator_metadata"] == 1
+    assert coverage["ratings_complete"] is False
+
+
+@pytest.mark.asyncio
+async def test_compare_issues_a_creator_independent_query_count(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """Comparing more creators must not add one query per creator.
+
+    Issue #3091 requires a bounded batch contract rather than a detail request
+    per selected creator. Every comparison must be served by the same small,
+    fixed number of SELECTs whether two or four creators are selected.
+    """
+    for creator_index in range(1, 5):
+        _thread, issues = await _make_thread(
+            async_db,
+            default_user,
+            title=f"Book {creator_index}",
+            issue_count=1,
+            queue_position=creator_index,
+            read_through=1,
+        )
+        await _confirm_identity(
+            async_db,
+            issues[0],
+            creators=[{"id": creator_index, "name": f"Creator {creator_index}", "role": "writer"}],
+        )
+        await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+
+    sync_engine = db_engine.sync_engine
+    counted: list[str] = []
+
+    def _record(
+        _conn: object,
+        _cursor: object,
+        statement: str,
+        _params: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        counted.append(statement)
+
+    event.listen(sync_engine, "before_cursor_execute", _record)
+    try:
+        two = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
+        two_creator_selects = [s for s in counted if s.lstrip().upper().startswith("SELECT")]
+        counted.clear()
+        four = await auth_client.get(
+            "/api/v1/creators/compare?keys=creator:1,creator:2,creator:3,creator:4"
+        )
+        four_creator_selects = [s for s in counted if s.lstrip().upper().startswith("SELECT")]
+    finally:
+        event.remove(sync_engine, "before_cursor_execute", _record)
+
+    assert two.status_code == 200
+    assert four.status_code == 200
+    assert len(two.json()["comparisons"]) == 2
+    assert len(four.json()["comparisons"]) == 4
+    # Auth lookup plus the three fixed batch queries; never one per creator.
+    assert len(four_creator_selects) == len(two_creator_selects)
+    assert len(four_creator_selects) <= 4, four_creator_selects
 
 
 @pytest.mark.asyncio
