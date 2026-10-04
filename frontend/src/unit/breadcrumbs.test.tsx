@@ -55,6 +55,7 @@ test('breadcrumb UI and BreadcrumbList schema agree', () => {
   const script = breadcrumbScript()
   expect(script).not.toBeNull()
   expect(script?.type).toBe('application/ld+json')
+  // SAFETY: script.textContent is valid JSON from the scaffolded BreadcrumbList structure
   const schema = JSON.parse(script?.textContent ?? '') as BreadcrumbList
   expect(schema['@context']).toBe('https://schema.org')
   expect(schema['@type']).toBe('BreadcrumbList')

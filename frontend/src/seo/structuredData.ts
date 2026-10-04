@@ -85,7 +85,7 @@ export function buildLandingStructuredData(siteUrl: string): StructuredDataGraph
  * @param scriptId Stable id for the script tag.
  * @param data Structured data payload; serialized with JSON.stringify.
  */
-export function upsertStructuredDataScript(scriptId: string, data: unknown): void {
+export function upsertStructuredDataScript<T>(scriptId: string, data: T): void {
   const selector = `script#${scriptId}`
   const content = JSON.stringify(data)
   const existing = document.head.querySelector<HTMLScriptElement>(selector)

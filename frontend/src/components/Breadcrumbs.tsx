@@ -54,6 +54,7 @@ export default function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   const itemsKey = JSON.stringify(items)
 
   useEffect(() => {
+    // SAFETY: itemsKey is JSON.stringify of BreadcrumbItem[], parsing it back yields the same structure
     const parsed: BreadcrumbItem[] = JSON.parse(itemsKey) as BreadcrumbItem[]
     upsertStructuredDataScript(
       BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID,
