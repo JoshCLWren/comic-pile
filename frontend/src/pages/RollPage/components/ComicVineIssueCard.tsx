@@ -74,6 +74,8 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
     <details className="group bg-white/5 border border-white/10 rounded-2xl overflow-hidden text-left">
       <summary className="min-h-16 p-3 flex items-center gap-3 cursor-pointer list-none focus:ring-2 focus:ring-amber-500">
         {metadata.image_url && metadata.image_url !== failedImageUrl && (
+          // ALT: decorative — the cover thumbnail is redundant with the full issue
+          // identity (series, issue number, name, date) shown immediately beside it.
           <ImageWithLoading
             src={optimizedImageUrl(metadata.image_url, 240) ?? metadata.image_url}
             srcSet={optimizedImageSrcSet(metadata.image_url, [96, 240]) ?? undefined}

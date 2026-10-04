@@ -4,14 +4,22 @@ export const IMAGE_WIDTH_VARIANTS = [96, 240, 480, 720] as const
 
 export type ImageWidthVariant = (typeof IMAGE_WIDTH_VARIANTS)[number]
 
+export type ImageFormat = 'webp' | 'avif' | 'auto'
+
+interface ImageUrlOptions {
+  format?: ImageFormat
+}
+
 /**
  * Convert a canonical external image URL into the ComicPile-owned URL the
  * browser should request.
  *
  * External http(s) sources are routed through the edge-cacheable
  * `/api/v1/images/optimize` endpoint, which allowlists upstream hosts and
- * serves resized WebP variants. Local, data, and blob URLs are returned
- * unchanged so the optimizer never sees non-remote sources.
+ * serves resized modern-format variants (WebP by default; AVIF on request when
+ * libavif is available; `auto` prefers AVIF and falls back to WebP). Local,
+ * data, and blob URLs are returned unchanged so the optimizer never sees
+ * non-remote sources.
  *
  * Canonical source URLs are never rewritten at rest; this transformation is a
  * render-time delivery concern only.
@@ -19,6 +27,7 @@ export type ImageWidthVariant = (typeof IMAGE_WIDTH_VARIANTS)[number]
 export function optimizedImageUrl(
   sourceUrl: string | null | undefined,
   width: ImageWidthVariant | number,
+  options?: ImageUrlOptions,
 ): string | null {
   if (!sourceUrl) return null
 
@@ -32,6 +41,9 @@ export function optimizedImageUrl(
       url: parsed.href,
       width: String(width),
     })
+    if (options?.format) {
+      params.set('format', options.format)
+    }
     return `${IMAGE_OPTIMIZATION_PATH}?${params.toString()}`
   } catch {
     // Relative or otherwise unparseable source: pass through untouched.
@@ -45,16 +57,36 @@ export function optimizedImageUrl(
  *
  * Returns null when there is no usable source or fewer than one variant, so
  * callers can omit the attribute entirely instead of rendering an empty hint.
+ *
+ * @param sourceUrl - Canonical external image URL.
+ * @param widths - Width variants; defaults to the standard 96/240/480/720 buckets.
+ * @param options.withFormats - When true, emit `type="image/avif"` and
+ *   `type="image/webp"` hints alongside each width so the browser picks the
+ *   smallest modern-format variant; widths are served through the `format`
+ *   query parameter the endpoint understands.
  */
 export function optimizedImageSrcSet(
   sourceUrl: string | null | undefined,
   widths: readonly (ImageWidthVariant | number)[] = IMAGE_WIDTH_VARIANTS,
+  options?: { withFormats?: boolean },
 ): string | null {
   if (!sourceUrl) return null
 
-  const entries = widths.flatMap((width) => {
-    const url = optimizedImageUrl(sourceUrl, width)
-    return url ? [`${url} ${width}w`] : []
+  const entries: string[] = []
+  widths.forEach((width) => {
+    const base = optimizedImageUrl(sourceUrl, width)
+    if (!base) return
+    if (options?.withFormats) {
+      // WebP is the broadly supported default variant.
+      entries.push(`${base} ${width}w`)
+      // AVIF is the modern, smaller alternative; browsers with AVIF support
+      // select it via the type hint.
+      entries.push(
+        `${optimizedImageUrl(sourceUrl, width, { format: 'avif' })} type="image/avif" ${width}w`,
+      )
+    } else {
+      entries.push(`${base} ${width}w`)
+    }
   })
 
   return entries.length > 0 ? entries.join(', ') : null

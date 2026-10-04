@@ -504,6 +504,13 @@ class ImageDeliverySettings(BaseSettings):
         description="WebP encoder quality used for resized variants.",
         json_schema_extra={"env": "IMAGE_OPTIMIZER_WEBP_QUALITY"},
     )
+    image_optimizer_avif_quality: int = Field(
+        default=75,
+        ge=1,
+        le=100,
+        description="AVIF encoder quality used for resized variants; ignored when libavif is unavailable (falls back to WebP).",
+        json_schema_extra={"env": "IMAGE_OPTIMIZER_AVIF_QUALITY"},
+    )
 
 
 class Settings(BaseSettings):

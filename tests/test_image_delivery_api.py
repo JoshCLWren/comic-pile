@@ -23,6 +23,8 @@ from app.services.image_delivery import (
     fetch_upstream,
     optimize_remote_image,
     resolve_variant_width,
+    transcode_to_avif,
+    transcode_to_modern_format,
     validate_source_url,
 )
 
@@ -78,6 +80,24 @@ def _canned_fetch(monkeypatch: pytest.MonkeyPatch, payload: bytes, media_type: s
         return payload, media_type
 
     monkeypatch.setattr(image_delivery, "fetch_upstream", _fetch)
+
+
+ENDPOINT = "/api/v1/images/optimize"
+
+
+@pytest.fixture
+def endpoint_url() -> str:
+    """Expose the canonical endpoint path to individual tests."""
+    return ENDPOINT
+
+
+@pytest.fixture
+async def client() -> AsyncIterator[httpx.AsyncClient]:
+    """ASGI client bound to one application instance per test."""
+    application = create_app(serve_frontend=False)
+    transport = httpx.ASGITransport(app=application)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http_client:
+        yield http_client
 
 
 class TestVariantWidthBuckets:
@@ -332,21 +352,6 @@ class TestOptimizeRemoteImage:
 class TestOptimizeEndpoint:
     """HTTP contract of GET /api/v1/images/optimize."""
 
-    ENDPOINT = "/api/v1/images/optimize"
-
-    @pytest.fixture
-    def endpoint_url(self) -> str:
-        """Expose the canonical endpoint path to individual tests."""
-        return self.ENDPOINT
-
-    @pytest.fixture
-    async def client(self) -> AsyncIterator[httpx.AsyncClient]:
-        """ASGI client bound to one application instance per test."""
-        application = create_app(serve_frontend=False)
-        transport = httpx.ASGITransport(app=application)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http_client:
-            yield http_client
-
     async def test_success_serves_webp_with_edge_cache_headers(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -459,4 +464,160 @@ class TestOptimizeEndpoint:
         """Widths outside the supported range fail request validation."""
         response = await client.get(endpoint_url, params={"url": ALLOWED_SOURCE, "width": 8})
 
+        assert response.status_code == 422
+
+
+class TestAvifDelivery:
+    """AVIF format support on top of the existing WebP pipeline (issue #3069)."""
+
+    def test_avif_transcode_renders_avif_when_libavif_is_available(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Pillow's AVIF encoder yields an image/avif payload."""
+        payload = _png_bytes(width=800, height=1200)
+        avif = transcode_to_avif(payload, 240)
+        if avif is None:
+            pytest.skip("libavif not available in this environment")
+        assert avif[1] == "image/avif"
+        assert _image_dimensions(avif[0])[0] <= 240
+
+    def test_transcode_to_modern_format_dispatches_webp(self) -> None:
+        """``format=webp`` delegates to the proven WebP path unchanged."""
+        payload = _png_bytes(width=800, height=1200)
+        webp = transcode_to_modern_format(payload, 240, "webp")
+        assert webp is not None
+        assert webp[1] == "image/webp"
+        assert _image_dimensions(webp[0])[0] <= 240
+
+    def test_transcode_to_modern_format_dispatches_avif(self) -> None:
+        """``format=avif`` delegates to the AVIF path."""
+        payload = _png_bytes(width=800, height=1200)
+        avif = transcode_to_modern_format(payload, 240, "avif")
+        assert avif is None or avif[1] == "image/avif"
+        if avif is not None:
+            assert _image_dimensions(avif[0])[0] <= 240
+
+    async def test_optimize_remote_image_serves_avif_on_request(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``format=avif`` is served only when libavif is available."""
+        _allow_all_resolver(monkeypatch)
+        payload = _png_bytes(width=800, height=1200)
+
+        result = await optimize_remote_image(
+            f"https://{ALLOWED_HOST}/cover.avif",
+            240,
+            format="avif",
+            transport=_transport_with(payload, media_type="image/png"),
+        )
+        if result.transcoded:
+            assert result.media_type == "image/avif"
+            assert _image_dimensions(result.content)[0] <= 240
+        else:
+            # libavif unavailable: validated original bytes are served unchanged.
+            assert result.media_type == "image/png"
+
+    async def test_optimize_remote_image_auto_picks_avif_when_available(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``format=auto`` prefers AVIF over WebP when encodable."""
+        _allow_all_resolver(monkeypatch)
+        payload = _png_bytes(width=800, height=1200)
+
+        result = await optimize_remote_image(
+            f"https://{ALLOWED_HOST}/cover.auto",
+            240,
+            format="auto",
+            transport=_transport_with(payload, media_type="image/png"),
+        )
+        # Auto tries AVIF first; fall back to WebP only if the codec is missing.
+        assert result.media_type in ("image/avif", "image/webp")
+        assert _image_dimensions(result.content)[0] <= 240
+
+    async def test_optimize_remote_image_auto_falls_back_to_webp_when_avif_unavailable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``format=auto`` falls back to WebP when AVIF cannot be produced."""
+        _allow_all_resolver(monkeypatch)
+        monkeypatch.setattr(image_delivery, "transcode_to_avif", lambda p, w: None)
+
+        result = await optimize_remote_image(
+            f"https://{ALLOWED_HOST}/cover.fallback",
+            240,
+            format="auto",
+            transport=_transport_with(_png_bytes(width=800, height=1200), media_type="image/png"),
+        )
+
+        assert result.transcoded is True
+        assert result.media_type == "image/webp"
+
+    async def test_avif_endpoint_variant_has_avif_content_type(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        client: httpx.AsyncClient,
+        endpoint_url: str,
+    ) -> None:
+        """The ``format=avif`` query parameter serves AVIF with cache headers."""
+        _allow_all_resolver(monkeypatch)
+        _canned_fetch(monkeypatch, _png_bytes(width=900, height=1350), "image/png")
+
+        response = await client.get(
+            endpoint_url, params={"url": ALLOWED_SOURCE, "width": 240, "format": "avif"}
+        )
+
+        assert response.status_code == 200
+        if "image/avif" in response.headers.get("content-type", ""):
+            assert "max-age=31536000" in response.headers["cache-control"]
+            assert _image_dimensions(response.content)[0] <= 240
+        else:
+            # libavif unavailable: validated original bytes served instead.
+            assert "image/png" in response.headers.get("content-type", "")
+
+
+class TestModernFormatDelivery:
+    """WebP/AVIF format selection on the optimize endpoint (issue #3069)."""
+
+    async def test_default_format_is_webp(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        client: httpx.AsyncClient,
+        endpoint_url: str,
+    ) -> None:
+        """The endpoint defaults to WebP for backwards-compatible delivery."""
+        _allow_all_resolver(monkeypatch)
+        _canned_fetch(monkeypatch, _png_bytes(width=900, height=1350), "image/jpeg")
+        response = await client.get(endpoint_url, params={"url": ALLOWED_SOURCE, "width": 240})
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("image/webp")
+
+    async def test_auto_format_serves_when_encodable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        client: httpx.AsyncClient,
+        endpoint_url: str,
+    ) -> None:
+        """``format=auto`` succeeds when a modern codec is available."""
+        _allow_all_resolver(monkeypatch)
+        _canned_fetch(monkeypatch, _png_bytes(width=900, height=1350), "image/png")
+
+        response = await client.get(
+            endpoint_url, params={"url": ALLOWED_SOURCE, "width": 240, "format": "auto"}
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] in ("image/avif", "image/webp")
+
+    async def test_unknown_format_fails_validation(
+        self,
+        client: httpx.AsyncClient,
+        endpoint_url: str,
+    ) -> None:
+        """Formats outside the allowlist fail request validation."""
+        response = await client.get(
+            endpoint_url, params={"url": ALLOWED_SOURCE, "width": 240, "format": "tiff"}
+        )
         assert response.status_code == 422

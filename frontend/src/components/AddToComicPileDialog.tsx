@@ -108,6 +108,8 @@ export default function AddToComicPileDialog({
 
         <div className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/50 border border-stone-700/50">
           {imageUrl && (
+            // ALT: decorative — the cover thumbnail is redundant with the issue
+            // identity (series, issue number, ComicVine ID) shown immediately beside it.
             <img
               src={optimizedImageUrl(imageUrl, 240) ?? imageUrl}
               alt=""

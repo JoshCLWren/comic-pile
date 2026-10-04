@@ -185,11 +185,14 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       >
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
           <>
+            {/* ALT: meaningful content — the comic cover is the visual subject of this
+              identity panel (LCP hero). Described by its canonical issue name so screen
+              readers and crawlers understand what is shown. */}
             <ImageWithLoading
               src={optimizedImageUrl(metadata.image_url, 720) ?? metadata.image_url}
               srcSet={optimizedImageSrcSet(metadata.image_url, [240, 480, 720]) ?? undefined}
               sizes="(min-width: 1024px) 30vh, calc((45vh * 2) / 3)"
-              alt=""
+              alt={metadata.name ?? 'Comic cover'}
               loading="eager"
               className="h-full w-full object-contain"
               placeholderClassName="animate-pulse bg-white/10"
@@ -503,6 +506,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       size="large"
     >
       {metadata.image_url && (
+        // ALT: meaningful content — enlarged cover viewer; described by the
+        // canonical issue name.
         <img
           src={optimizedImageUrl(metadata.image_url, 1200) ?? metadata.image_url}
           srcSet={optimizedImageSrcSet(metadata.image_url, [480, 720, 1200]) ?? undefined}

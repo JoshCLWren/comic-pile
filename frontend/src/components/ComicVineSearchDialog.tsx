@@ -424,6 +424,8 @@ export default function ComicVineSearchDialog({
                   >
                     <div className="flex items-start gap-3">
                       {series.image_url && (
+                        // ALT: decorative — the series cover thumbnail is redundant with the
+                        // series name and metadata shown immediately beside it in the results.
                         <ImageWithLoading
                           src={optimizedImageUrl(series.image_url, 240) ?? series.image_url}
                           srcSet={optimizedImageSrcSet(series.image_url, [96, 240]) ?? undefined}

@@ -1,9 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type JSX } from 'react'
 import LoadingSpinner from './LoadingSpinner'
 
 interface ImageWithLoadingProps {
+  /** Image source URL. */
   src: string
-  alt?: string
+  /**
+   * Alt text for this image. The caller must make an explicit accessibility
+   * decision: provide meaningful descriptive text for content images
+   * (e.g. the comic title/cover) or an empty string for decorative images
+   * whose meaning is fully conveyed by surrounding text. Omitting the prop is
+   * not permitted — every render-time image needs a deliberate decision.
+   */
+  alt: string
   className?: string
   loading?: 'eager' | 'lazy'
   width?: number | string
@@ -31,7 +39,7 @@ interface ImageWithLoadingProps {
  */
 export default function ImageWithLoading({
   src,
-  alt = '',
+  alt,
   className = '',
   loading = 'lazy',
   width,

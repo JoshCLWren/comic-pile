@@ -5,7 +5,7 @@ import ImageWithLoading from '../components/ImageWithLoading'
 describe('ImageWithLoading', () => {
   it('shows loading spinner initially', () => {
     const { getByRole, queryByText } = render(
-      <ImageWithLoading src="https://example.com/image.jpg" />
+      <ImageWithLoading src="https://example.com/image.jpg" alt="" />
     )
 
     // Should show loading spinner (role="status")
@@ -23,6 +23,7 @@ describe('ImageWithLoading', () => {
     const { getByRole, container } = render(
       <ImageWithLoading
         src="https://example.com/image.jpg"
+        alt=""
         className="w-10 h-14 shrink-0"
       />
     )
@@ -74,7 +75,7 @@ describe('ImageWithLoading', () => {
   it('handles image error', async () => {
     const onErrorMock = vi.fn()
     const { getByRole } = render(
-      <ImageWithLoading src="https://example.com/image.jpg" onError={onErrorMock} />
+      <ImageWithLoading src="https://example.com/image.jpg" alt="" onError={onErrorMock} />
     )
 
     // Should show loading spinner initially
@@ -97,6 +98,7 @@ describe('ImageWithLoading', () => {
     const { getByRole } = render(
       <ImageWithLoading
         src="https://example.com/image.jpg"
+        alt=""
         placeholderClassName="animate-pulse bg-white/10"
       />
     )
@@ -111,7 +113,7 @@ describe('ImageWithLoading', () => {
   it('invokes onLoad with the loaded image element', () => {
     const onLoadMock = vi.fn<(img: HTMLImageElement) => void>()
     const { getByRole } = render(
-      <ImageWithLoading src="https://example.com/image.jpg" onLoad={onLoadMock} />
+      <ImageWithLoading src="https://example.com/image.jpg" alt="" onLoad={onLoadMock} />
     )
 
     expect(getByRole('status')).toBeInTheDocument()
@@ -132,5 +134,23 @@ describe('ImageWithLoading', () => {
     expect(loadedImg.naturalHeight).toBe(400)
     // Spinner is gone once loaded
     // Removed noopWrite check
+  })
+
+  it('passes a meaningful alt decision through to the img element', () => {
+    const { container } = render(
+      <ImageWithLoading src="https://example.com/cover.jpg" alt="Cover of Detective Comics #27" />
+    )
+    const img = container.querySelector('img')
+    expect(img).toBeInTheDocument()
+    expect(img).toHaveAttribute('alt', 'Cover of Detective Comics #27')
+  })
+
+  it('renders a decorative image with an explicit empty alt decision', () => {
+    const { container } = render(
+      <ImageWithLoading src="https://example.com/decor.png" alt="" />
+    )
+    const img = container.querySelector('img')
+    expect(img).toBeInTheDocument()
+    expect(img).toHaveAttribute('alt', '')
   })
 })

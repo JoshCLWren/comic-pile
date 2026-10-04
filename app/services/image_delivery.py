@@ -21,6 +21,7 @@ import ipaddress
 import logging
 import socket
 from dataclasses import dataclass
+from typing import Literal
 from urllib.parse import urlsplit
 
 import httpx
@@ -237,6 +238,45 @@ async def fetch_upstream(
     return b"".join(chunks), content_type
 
 
+def transcode_to_avif(payload: bytes, target_width: int) -> tuple[bytes, str] | None:
+    """Downscale and re-encode an image payload as AVIF.
+
+    Never upscales; smaller sources are returned at their intrinsic size. When
+    the payload cannot be transcoded (Pillow/libavif unavailable or corrupted
+    payload) the caller falls back to serving validated original bytes.
+
+    Args:
+        payload: Raw upstream image bytes of a verified ``image/*`` type.
+        target_width: Maximum output width in pixels.
+
+    Returns:
+        Tuple of AVIF bytes and the AVIF media type, or ``None`` when the
+        payload cannot be transcoded in this environment.
+    """
+    settings = get_image_delivery_settings()
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(io.BytesIO(payload)) as source:
+            source.load()
+            image = ImageOps.exif_transpose(source)
+            if image.width > target_width:
+                new_height = max(1, round(image.height * target_width / image.width))
+                image = image.resize((target_width, new_height), Image.Resampling.LANCZOS)
+            has_alpha = image.mode in ("RGBA", "LA") or (
+                image.mode == "P" and "transparency" in image.info
+            )
+            converted = image.convert("RGBA" if has_alpha else "RGB")
+            buffer = io.BytesIO()
+            converted.save(buffer, format="AVIF", quality=settings.image_optimizer_avif_quality)
+            return buffer.getvalue(), "image/avif"
+    except ImportError:
+        logger.warning("Pillow or libavif unavailable; serving remote covers without transformation")
+    except Exception as exc:
+        logger.warning("Remote cover AVIF transcode failed; serving original bytes: %s", exc)
+    return None
+
+
 def transcode_to_webp(payload: bytes, target_width: int) -> tuple[bytes, str] | None:
     """Downscale and re-encode an image payload as WebP.
 
@@ -276,10 +316,34 @@ def transcode_to_webp(payload: bytes, target_width: int) -> tuple[bytes, str] | 
     return None
 
 
+def transcode_to_modern_format(
+    payload: bytes, target_width: int, format: Literal["webp", "avif"] = "webp",
+) -> tuple[bytes, str] | None:
+    """Downscale and re-encode an image payload as a modern lossy format.
+
+    Never upscales; smaller sources are returned at their intrinsic size. When
+    the payload cannot be transcoded (Pillow/transcoder unavailable or corrupt
+    payload) the caller falls back to serving validated original bytes.
+
+    Args:
+        payload: Raw upstream image bytes of a verified ``image/*`` type.
+        target_width: Maximum output width in pixels.
+        format: ``webp`` or ``avif``.
+
+    Returns:
+        Tuple of encoded bytes and the encoded media type, or ``None`` when
+        the payload cannot be transcoded in this environment.
+    """
+    if format == "avif":
+        return transcode_to_avif(payload, target_width)
+    return transcode_to_webp(payload, target_width)
+
+
 async def optimize_remote_image(
     source_url: str,
     requested_width: int,
     *,
+    format: Literal["webp", "avif", "auto"] = "webp",
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> OptimizedImage:
     """Turn a canonical external image URL into optimized, cacheable bytes.
@@ -287,6 +351,9 @@ async def optimize_remote_image(
     Args:
         source_url: Canonical external image URL (never rewritten at rest).
         requested_width: Desired rendered width in pixels.
+        format: Preferred modern output format. ``webp`` is served deterministically;
+            ``avif`` is served only when libavif is available; ``auto`` tries AVIF
+            first and falls back to WebP so the pipeline never degrades the source.
         transport: Optional httpx transport override (used by tests).
 
     Returns:
@@ -303,14 +370,23 @@ async def optimize_remote_image(
     target_width = resolve_variant_width(requested_width)
     payload, content_type = await fetch_upstream(validated_url, transport=transport)
 
-    transcoded = transcode_to_webp(payload, target_width)
-    if transcoded is not None:
-        return OptimizedImage(
-            content=transcoded[0],
-            media_type=transcoded[1],
-            width=target_width,
-            transcoded=True,
-        )
+    if format == "auto":
+        avif = transcode_to_avif(payload, target_width)
+        if avif is not None:
+            return OptimizedImage(
+                content=avif[0], media_type=avif[1], width=target_width, transcoded=True
+            )
+        transcoded = transcode_to_webp(payload, target_width)
+        if transcoded is not None:
+            return OptimizedImage(
+                content=transcoded[0], media_type=transcoded[1], width=target_width, transcoded=True
+            )
+    else:
+        transcoded = transcode_to_modern_format(payload, target_width, format)
+        if transcoded is not None:
+            return OptimizedImage(
+                content=transcoded[0], media_type=transcoded[1], width=target_width, transcoded=True
+            )
 
     return OptimizedImage(
         content=payload,
