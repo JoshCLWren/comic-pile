@@ -500,46 +500,19 @@ async def build_series_mapping_plan(
         db, provider=provider, series_external_id=provider_series_external_id, user_id=user_id
     )
 
+    from app.repositories.catalog_repository import has_confirmed_series_mapping_for_origin
+
     # If the origin issue has a confirmed series mapping, we need to include ALL issues
     # from that series in the preview (not just the user-mapped ones) so siblings can be
     # identified and offered for safe bulk confirmation. Fall back to ComicVine API roster
     # when the local catalog does not already contain the full series.
-    origin_has_confirmed_series = False
-    if series_info is not None:
-        # Check if origin issue has a confirmed thread-series mapping
-        series_identity_id = series_info.get("id")
-        # Since we're using external_id (string), we need to find the ExternalIdentity by external_id
-        if isinstance(series_identity_id, str):
-            from app.models.external_identity import ExternalIdentity
-            external_identity_result = await db.execute(
-                select(ExternalIdentity).where(
-                    ExternalIdentity.provider == provider.strip().lower(),
-                    ExternalIdentity.entity_type == "series",
-                    ExternalIdentity.external_id == series_identity_id,
-                )
-            )
-            external_identity = external_identity_result.scalar_one_or_none()
-            if external_identity:
-                thread_result = await db.execute(
-                    select(ThreadExternalSeriesMapping).where(
-                        ThreadExternalSeriesMapping.thread_id == origin_issue.get("thread_id"),
-                        ThreadExternalSeriesMapping.external_identity_id == external_identity.id,
-                        ThreadExternalSeriesMapping.status == "confirmed",
-                    )
-                )
-                if thread_result.scalar_one_or_none() is not None:
-                    origin_has_confirmed_series = True
-        # Also check issue-external identity mapping
-        if not origin_has_confirmed_series:
-            ei_result = await db.execute(
-                select(IssueExternalIdentityMapping).where(
-                    IssueExternalIdentityMapping.issue_id == origin_issue_id,
-                    IssueExternalIdentityMapping.status == "confirmed",
-                    IssueExternalIdentityMapping.provider == provider.strip().lower(),
-                )
-            )
-            if ei_result.scalar_one_or_none() is not None:
-                origin_has_confirmed_series = True
+    origin_has_confirmed_series = await has_confirmed_series_mapping_for_origin(
+        db,
+        provider=provider,
+        series_external_id=series_info.get("id") if series_info is not None else None,
+        origin_issue_id=origin_issue_id,
+        origin_issue_thread_id=origin_issue.get("thread_id"),
+    )
 
     if origin_has_confirmed_series and series_info is not None:
         # Fetch the full volume roster from ComicVine to include all series issues as siblings

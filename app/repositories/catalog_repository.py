@@ -272,6 +272,56 @@ async def get_series_with_issues(
     return series_info, issues_with_mappings
 
 
+async def has_confirmed_series_mapping_for_origin(
+    db: AsyncSession,
+    *,
+    provider: str,
+    series_external_id: str | None,
+    origin_issue_id: int,
+    origin_issue_thread_id: int | None,
+) -> bool:
+    """Check whether an origin issue has a confirmed series or issue-level mapping.
+
+    This supports both confirmed thread-series mappings (via the series
+    external identity) and confirmed issue-level identity mappings.
+    """
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
+
+    # Issue-level confirmed mapping
+    ei_result = await db.execute(
+        select(IssueExternalIdentityMapping).where(
+            IssueExternalIdentityMapping.issue_id == origin_issue_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            IssueExternalIdentityMapping.provider == provider.strip().lower(),
+        )
+    )
+    if ei_result.scalar_one_or_none() is not None:
+        return True
+
+    # Thread-series confirmed mapping (only when series info is present)
+    if series_external_id is not None and origin_issue_thread_id is not None:
+        series_identity_result = await db.execute(
+            select(ExternalIdentity).where(
+                ExternalIdentity.entity_type == "series",
+                ExternalIdentity.provider == provider.strip().lower(),
+                ExternalIdentity.external_id == series_external_id,
+            )
+        )
+        external_identity = series_identity_result.scalar_one_or_none()
+        if external_identity is not None:
+            thread_result = await db.execute(
+                select(ThreadExternalSeriesMapping).where(
+                    ThreadExternalSeriesMapping.thread_id == origin_issue_thread_id,
+                    ThreadExternalSeriesMapping.external_identity_id == external_identity.id,
+                    ThreadExternalSeriesMapping.status == "confirmed",
+                )
+            )
+            if thread_result.scalar_one_or_none() is not None:
+                return True
+
+    return False
+
+
 async def get_issue_by_id(
     db: AsyncSession,
     issue_id: int,
