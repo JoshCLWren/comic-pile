@@ -35,8 +35,9 @@ tests_e2e/
 # Repository docs and non-runtime material
 docs/
 
-# CI / automation / factory scripts (not imported by api/index.py)
-scripts/
+# Root-only CI / automation / factory scripts (not imported by api/index.py).
+# Anchored so frontend/scripts/ (sitemap generator) is still uploaded.
+/scripts/
 .github/
 
 # Migration files not needed at serverless request time
