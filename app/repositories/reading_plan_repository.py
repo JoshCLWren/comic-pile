@@ -17,7 +17,7 @@ Lifecycle contract (``docs/READING_GRAPH_PERSISTENCE_DESIGN.md`` section 2):
 
 from __future__ import annotations
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dependency import Dependency
@@ -342,3 +342,163 @@ async def count_distinct_read_issues(
         .where(ReadingPlanIssue.plan_id == plan_id, Issue.status == "read")
     )
     return int(result.scalar_one())
+
+
+async def list_plan_issue_occurrences_by_issue(
+    db: AsyncSession, *, plan_id: int
+) -> list[ReadingPlanIssue]:
+    """Return every membership row for one plan in deterministic audit order.
+
+    Ordering by canonical Issue, then display position, then occurrence ID makes
+    the deterministic duplicate-collapse rule reproducible without relying on
+    physical row order.
+
+    Args:
+        db: Database session.
+        plan_id: Plan to inspect.
+
+    Returns:
+        Membership rows ordered by issue ID, display position, occurrence ID.
+    """
+    result = await db.execute(
+        select(ReadingPlanIssue)
+        .where(ReadingPlanIssue.plan_id == plan_id)
+        .order_by(
+            ReadingPlanIssue.issue_id,
+            ReadingPlanIssue.display_position,
+            ReadingPlanIssue.occurrence_id,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def list_plan_ids_with_membership(db: AsyncSession) -> list[int]:
+    """Return every plan ID that owns at least one membership row.
+
+    Args:
+        db: Database session.
+
+    Returns:
+        Distinct plan IDs in ascending order.
+    """
+    result = await db.execute(
+        select(ReadingPlanIssue.plan_id).distinct().order_by(ReadingPlanIssue.plan_id)
+    )
+    return list(result.scalars().all())
+
+
+async def prune_redundant_plan_source_placements(
+    db: AsyncSession, *, plan_id: int, occurrence_map: dict[str, str]
+) -> None:
+    """Drop provenance that a collapse would make indistinguishable.
+
+    Re-pointing a collapsed occurrence's placements onto its survivor can
+    collide with provenance the survivor already owns, and the unique placement
+    key forbids the rewrite. Within each post-collapse
+    ``(occurrence, source, position)`` group the lowest-ID placement survives, so
+    collapsing membership never discards an observation another row already
+    duplicates exactly.
+
+    Args:
+        db: Database session.
+        plan_id: Plan whose placements are pruned.
+        occurrence_map: Collapsed occurrence ID to surviving occurrence ID.
+    """
+    result = await db.execute(
+        select(ReadingPlanSourcePlacement)
+        .where(ReadingPlanSourcePlacement.plan_id == plan_id)
+        .order_by(ReadingPlanSourcePlacement.id)
+    )
+    seen: set[tuple[str, int, int | None]] = set()
+    redundant: list[int] = []
+    for placement in result.scalars():
+        target = occurrence_map.get(
+            placement.occurrence_id, placement.occurrence_id
+        )
+        key = (target, placement.plan_source_id, placement.source_position)
+        if key in seen:
+            redundant.append(placement.id)
+            continue
+        seen.add(key)
+    if not redundant:
+        return
+    await db.execute(
+        delete(ReadingPlanSourcePlacement).where(
+            ReadingPlanSourcePlacement.id.in_(redundant)
+        )
+    )
+    await db.flush()
+
+
+async def repoint_plan_source_placements(
+    db: AsyncSession, *, plan_id: int, occurrence_map: dict[str, str]
+) -> None:
+    """Re-point source placements from collapsed occurrences to their survivor.
+
+    A placement whose re-pointed row would collide with a placement the
+    survivor already owns is left untouched so the caller can decide to drop it;
+    collapsing membership must never silently discard an existing observation.
+
+    Args:
+        db: Database session.
+        plan_id: Plan whose placements are re-pointed.
+        occurrence_map: Collapsed occurrence ID to surviving occurrence ID.
+    """
+    if not occurrence_map:
+        return
+    await db.execute(
+        update(ReadingPlanSourcePlacement)
+        .where(
+            ReadingPlanSourcePlacement.plan_id == plan_id,
+            ReadingPlanSourcePlacement.occurrence_id.in_(occurrence_map),
+        )
+        .values(
+            occurrence_id=case(
+                occurrence_map,
+                value=ReadingPlanSourcePlacement.occurrence_id,
+            )
+        )
+    )
+    await db.flush()
+
+
+async def delete_plan_source_placements_for_occurrences(
+    db: AsyncSession, *, plan_id: int, occurrence_ids: list[str]
+) -> None:
+    """Delete source placements that still reference collapsed occurrences.
+
+    Args:
+        db: Database session.
+        plan_id: Plan whose placements are pruned.
+        occurrence_ids: Occurrence IDs that no longer exist as membership rows.
+    """
+    if not occurrence_ids:
+        return
+    await db.execute(
+        delete(ReadingPlanSourcePlacement).where(
+            ReadingPlanSourcePlacement.plan_id == plan_id,
+            ReadingPlanSourcePlacement.occurrence_id.in_(occurrence_ids),
+        )
+    )
+    await db.flush()
+
+
+async def delete_plan_issue_occurrences(
+    db: AsyncSession, *, plan_id: int, occurrence_ids: list[str]
+) -> None:
+    """Delete the collapsed membership rows for one plan.
+
+    Args:
+        db: Database session.
+        plan_id: Plan whose membership rows are collapsed.
+        occurrence_ids: Occurrence IDs to remove.
+    """
+    if not occurrence_ids:
+        return
+    await db.execute(
+        delete(ReadingPlanIssue).where(
+            ReadingPlanIssue.plan_id == plan_id,
+            ReadingPlanIssue.occurrence_id.in_(occurrence_ids),
+        )
+    )
+    await db.flush()

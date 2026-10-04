@@ -33,7 +33,10 @@ from app.schemas.continuity_plan import (
 )
 from app.schemas.continuity_rule import ContinuityNodeType
 from app.repositories.continuity_repository import plans_for_user
-from app.services.reading_plan_normalization import rebuild_plan_membership
+from app.services.reading_plan_normalization import (
+    normalize_plan_nodes,
+    rebuild_plan_membership,
+)
 
 
 PLAN_RULE_MARKER_PREFIX = "continuity-plan"
@@ -217,7 +220,20 @@ async def replace_compiled_rules(
 
     Returns:
         True when all rules compiled without cycle conflicts.
+
+    Raises:
+        HTTPException: 409 when a compiled rule conflicts or closes a cycle.
     """
+    # One canonical writer owns the membership invariant for every plan path.
+    # Collapsing first keeps nodes_json, the compiled rules, and normalized
+    # membership describing the same plan: a repeated canonical Issue must not
+    # compile a self-referential rule, and strict sequential positions must stay
+    # contiguous after a collapse so the saved plan round-trips through the API.
+    nodes = normalize_plan_nodes(
+        nodes, compact_positions=ordering_mode == "strict_sequential"
+    )
+    plan.nodes_json = [node.model_dump() for node in nodes]
+
     # Normalized membership/provenance always reflects the latest nodes in the
     # same transaction: informational plans with no compiled edges still own
     # relational membership, and a later rule-compilation failure rolls the

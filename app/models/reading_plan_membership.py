@@ -38,12 +38,13 @@ from app.database import Base
 
 
 class ReadingPlanIssue(Base):
-    """One Issue occurrence inside a Reading Plan.
+    """One canonical Issue membership inside a Reading Plan.
 
-    The composite primary key (plan_id, occurrence_id) supports multiple
-    occurrences with separate lane/label context. The unique constraint
-    uq_reading_plan_issue_plan_issue enforces the invariant that a canonical
-    Issue may belong to a Reading Plan at most once.
+    The composite primary key (plan_id, occurrence_id) keeps each surviving
+    occurrence addressable by its node ID. The unique constraint
+    ``uq_reading_plan_issue_plan_issue`` enforces the invariant that a canonical
+    Issue may belong to a Reading Plan at most once, so repeated occurrences of
+    one Issue can no longer be persisted.
     """
 
     __tablename__ = "reading_plan_issues"
