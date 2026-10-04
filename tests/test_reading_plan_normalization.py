@@ -60,6 +60,7 @@ def _node(
     position: int,
     *,
     lane_id: str = "main",
+    label: str | None = None,
     extra: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Build one issue plan node payload with optional provenance fields."""
@@ -70,6 +71,8 @@ def _node(
         "lane_id": lane_id,
         "position": position,
     }
+    if label is not None:
+        node["label"] = label
     if extra:
         node.update(extra)
     return node
@@ -535,7 +538,7 @@ async def test_membership_rebuild_deduplicates_canonical_issues(
             position=1,
             convergence_gate=[],
             label="Recap",
-            source_role="recap",
+            source_role="context/prelude",
         ),
     ]
     await reading_plan_normalization.rebuild_plan_membership(
