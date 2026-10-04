@@ -102,7 +102,7 @@ async function renderIssueToggleList() {
     />,
   )
   await waitFor(() => {
-    expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
+    expect(screen.getAllByTestId(/issue-pill-/).length).toBeGreaterThan(0)
   })
 }
 
@@ -767,6 +767,148 @@ describe('IssueToggleList', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(onIssueChanged).not.toHaveBeenCalled()
     expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
+  })
+})
+
+describe('IssueToggleList reorder mode (#2950)', () => {
+  const NON_ASCENDING_ISSUES: Issue[] = [
+    {
+      id: 7,
+      thread_id: 99,
+      issue_number: '3',
+      status: 'read',
+      read_at: '2026-03-08T00:00:00Z',
+      created_at: '2026-03-08T00:00:00Z',
+    },
+    {
+      id: 8,
+      thread_id: 99,
+      issue_number: '1',
+      status: 'unread',
+      read_at: null,
+      created_at: '2026-03-08T00:00:00Z',
+    },
+    {
+      id: 9,
+      thread_id: 99,
+      issue_number: '2',
+      status: 'unread',
+      read_at: null,
+      created_at: '2026-03-08T00:00:00Z',
+    },
+  ]
+
+  function getReorderOrder(): Array<string | null> {
+    return screen
+      .getAllByTestId(/issue-reorder-row-/)
+      .map((row) => row.getAttribute('data-issue-number'))
+  }
+
+  async function enterReorderMode() {
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-reorder-toggle'))
+  }
+
+  it('exposes an explicit, touch-reachable reorder control outside the drag affordance', async () => {
+    await renderIssueToggleList()
+
+    const toggle = screen.getByTestId('issue-reorder-toggle')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(toggle).toHaveAccessibleName('Reorder issues')
+
+    fireEvent.click(toggle)
+
+    expect(screen.getByTestId('issue-reorder-toggle')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('issue-reorder-list')).toBeInTheDocument()
+    expect(getReorderOrder()).toEqual(['1', '2', '3'])
+
+    // The pill view is replaced, so the compact desktop-only arrow buttons
+    // cannot be the only reorder path.
+    expect(screen.queryByTestId('issue-pill-1')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Move issue #1 up')).toHaveAttribute(
+      'data-move-control',
+      'up-1',
+    )
+    expect(screen.getByLabelText('Move issue #1 down')).toHaveAttribute(
+      'data-move-control',
+      'down-1',
+    )
+  })
+
+  it('shows the whole series in reorder mode even when the pill list is windowed', async () => {
+    // Nine issues push the pill list into its collapsed visibility window.
+    const manyIssues: Issue[] = Array.from({ length: 9 }, (_unused, index) => ({
+      id: index + 1,
+      thread_id: 99,
+      issue_number: String(index + 1),
+      status: 'unread' as const,
+      read_at: null,
+      created_at: '2026-03-08T00:00:00Z',
+    }))
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse(manyIssues))
+
+    await renderIssueToggleList()
+
+    expect(screen.getByText(/around your current position/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('issue-pill-9')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('issue-reorder-toggle'))
+
+    expect(getReorderOrder()).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+    expect(screen.queryByText(/around your current position/i)).not.toBeInTheDocument()
+  })
+
+  it('persists the visible order through the existing reorder contract', async () => {
+    await enterReorderMode()
+
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+
+    expect(getReorderOrder()).toEqual(['2', '1', '3'])
+    expect(mockedIssuesApi.reorder).toHaveBeenCalledWith(99, [2, 1, 3])
+    expect(screen.getByText('Moved issue #1 down.')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('issue-move-down-1')).toHaveFocus()
+    })
+  })
+
+  it('disables the boundary move controls without dropping them from the list', async () => {
+    await enterReorderMode()
+
+    expect(screen.getByTestId('issue-move-up-1')).toBeDisabled()
+    expect(screen.getByTestId('issue-move-down-3')).toBeDisabled()
+    expect(screen.getByTestId('issue-move-down-1')).not.toBeDisabled()
+    expect(screen.getByTestId('issue-move-up-3')).not.toBeDisabled()
+
+    fireEvent.click(screen.getByTestId('issue-move-up-1'))
+    fireEvent.click(screen.getByTestId('issue-move-down-3'))
+
+    expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
+    expect(getReorderOrder()).toEqual(['1', '2', '3'])
+  })
+
+  it('keeps a deliberately non-numeric order instead of re-sorting it back', async () => {
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse(NON_ASCENDING_ISSUES))
+
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-reorder-toggle'))
+
+    expect(getReorderOrder()).toEqual(['3', '1', '2'])
+
+    fireEvent.click(screen.getByTestId('issue-move-down-7'))
+
+    expect(getReorderOrder()).toEqual(['1', '3', '2'])
+    expect(mockedIssuesApi.reorder).toHaveBeenCalledWith(99, [8, 7, 9])
+  })
+
+  it('returns to the pill view when reordering is finished', async () => {
+    await enterReorderMode()
+
+    fireEvent.click(screen.getByTestId('issue-reorder-toggle'))
+
+    expect(screen.queryByTestId('issue-reorder-list')).not.toBeInTheDocument()
+    expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
+    expect(screen.getByTestId('issue-reorder-toggle')).toHaveAccessibleName('Reorder issues')
   })
 })
 })

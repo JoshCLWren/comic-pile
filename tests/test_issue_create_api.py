@@ -711,3 +711,162 @@ async def test_create_issues_validates_no_position_conflicts_with_existing(
     )
     assert db_positions == list(range(1, 11))
 
+
+async def test_create_issues_natural_placement_inserts_reported_case(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Adding #2 to a series of #33, #34, #35 saves #2, #33, #34, #35 (#2950).
+
+    The new issue lands before the existing series numbers, the shifted rows
+    keep their read state, and thread progression follows the corrected order.
+    """
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Secret Origins",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    read_at = datetime.now(UTC)
+    issues = [
+        Issue(thread_id=thread.id, issue_number="33", position=1, status="unread"),
+        Issue(thread_id=thread.id, issue_number="34", position=2, status="read", read_at=read_at),
+        Issue(thread_id=thread.id, issue_number="35", position=3, status="unread"),
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+    thread.next_unread_issue_id = issues[0].id
+    await async_db.commit()
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "2"}
+    )
+    assert response.status_code == 201
+
+    data = response.json()
+    assert [issue["issue_number"] for issue in data["issues"]] == ["2"]
+    assert [issue["position"] for issue in data["issues"]] == [1]
+    assert data["total_count"] == 4
+
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    issues_in_order = result.scalars().all()
+    assert [issue.issue_number for issue in issues_in_order] == ["2", "33", "34", "35"]
+    assert [issue.position for issue in issues_in_order] == [1, 2, 3, 4]
+
+    re_seated = next(issue for issue in issues_in_order if issue.issue_number == "34")
+    assert re_seated.status == "read"
+    assert re_seated.read_at is not None
+
+    await async_db.refresh(thread)
+    assert thread.total_issues == 4
+    assert thread.issues_remaining == 3
+    assert thread.reading_progress == "in_progress"
+    assert thread.next_unread_issue_id == issues_in_order[0].id
+
+async def test_create_issues_natural_placement_is_deterministic_for_ranges(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Adding a multi-issue range lands in natural order independent of input order."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Range Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issues = [
+        Issue(thread_id=thread.id, issue_number=str(number), position=position, status="unread")
+        for position, number in enumerate((33, 34, 35), start=1)
+    ]
+    async_db.add_all(issues)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "2, 1"}
+    )
+    assert response.status_code == 201
+
+    data = response.json()
+    assert [issue["issue_number"] for issue in data["issues"]] == ["1", "2"]
+    assert [issue["position"] for issue in data["issues"]] == [1, 2]
+    assert data["total_count"] == 5
+
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    issues_in_order = result.scalars().all()
+    assert [issue.issue_number for issue in issues_in_order] == ["1", "2", "33", "34", "35"]
+    assert [issue.position for issue in issues_in_order] == [1, 2, 3, 4, 5]
+
+async def test_create_issues_preserves_manual_series_order(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A series the reader reordered by hand is not re-sorted on new additions."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Manual Order Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    # Deliberately non-ascending: the reader ordered 3, 1, 2 by hand.
+    issues = [
+        Issue(thread_id=thread.id, issue_number="3", position=1, status="unread"),
+        Issue(thread_id=thread.id, issue_number="1", position=2, status="unread"),
+        Issue(thread_id=thread.id, issue_number="2", position=3, status="unread"),
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+    thread.next_unread_issue_id = issues[0].id
+    await async_db.commit()
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "4"}
+    )
+    assert response.status_code == 201
+
+    data = response.json()
+    assert [issue["issue_number"] for issue in data["issues"]] == ["4"]
+    assert [issue["position"] for issue in data["issues"]] == [4]
+    assert data["total_count"] == 4
+
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    issues_in_order = result.scalars().all()
+    assert [issue.issue_number for issue in issues_in_order] == ["3", "1", "2", "4"]
+    assert [issue.position for issue in issues_in_order] == [1, 2, 3, 4]
+
+    await async_db.refresh(thread)
+    assert thread.total_issues == 4
+    assert thread.issues_remaining == 4
+    assert thread.next_unread_issue_id == issues[0].id
