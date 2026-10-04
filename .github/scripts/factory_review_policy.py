@@ -141,18 +141,41 @@ def head_contributor_marker(
     )
 
 
+def recorded_pr_contributors(comments: Iterable[str], *, pr: int) -> set[str]:
+    """Return every worker with a trusted contribution record on one pull request.
+
+    Only a comment whose whole body is one contributor marker is honored, so a
+    worker cannot forge provenance by pasting a marker into a resume packet or
+    a review comment. Every marker for one PR names a head of that PR's branch,
+    and factory repairs build on the previous head instead of rewriting history,
+    so a worker recorded on any head of the branch authored commits that are
+    still reachable from every later head of that branch.
+    """
+    workers: set[str] = set()
+    for body in comments:
+        stripped = str(body or "").strip()
+        if not stripped or "\n" in stripped:
+            continue
+        marker = parse_head_contributor_marker(stripped)
+        if not marker or int(marker["pr"]) != pr:
+            continue
+        workers.add(marker["worker"])
+    return workers
+
+
 def current_head_contributors(
     comments: Iterable[str],
     *,
     pr: int,
     head: str,
 ) -> set[str]:
-    """Return distinct factory workers that contributed to one exact PR head.
+    """Return distinct factory workers recorded against one exact PR head.
 
-    Only a comment whose whole body is one contributor marker is honored, so a
-    worker cannot forge provenance by pasting a marker into a resume packet or
-    a review comment. Marker binding is exact-head: a repairer recorded
-    against the head it created does not leak onto other heads.
+    This is the marker set for the head itself, which is what
+    ``provenance_complete`` is derived from: a head whose own record is absent
+    is a head whose history is not accounted for, so review fails closed.
+    Eligibility to review that head additionally excludes the whole recorded
+    lineage; see :func:`head_contributor_provenance`.
     """
     contributors: set[str] = set()
     for body in comments:
@@ -177,17 +200,21 @@ def head_contributor_provenance(
 ) -> tuple[set[str], bool]:
     """Return the trusted contributor set and whether provenance was recorded.
 
-    The declared branch/body producer authored every head of its own branch, so
-    the producer is always part of the contributor set. ``provenance_complete``
-    reports whether controller-authored markers exist for this exact head; when
-    they do not, review independence must fail closed instead of assuming the
-    apparent reviewer never touched the head.
+    The excluded set is every worker with a trusted record anywhere on this
+    pull request plus the declared branch/body producer, because a repair
+    stacks commits onto the previous head rather than replacing it. Excluding
+    only the workers recorded against ``head`` would let an earlier repairer
+    approve a later head that still carries its own commits, which is the #2846
+    defect one repair cycle later. ``provenance_complete`` reports whether a
+    controller-authored marker exists for this exact head; when one does not,
+    review independence must fail closed instead of assuming the apparent
+    reviewer never touched the head.
     """
-    recorded = current_head_contributors(comments, pr=pr, head=head)
-    contributors = set(recorded)
+    exact = current_head_contributors(comments, pr=pr, head=head)
+    contributors = recorded_pr_contributors(comments, pr=pr)
     if producer is not None:
         contributors.add(producer)
-    return contributors, bool(recorded)
+    return contributors, bool(exact)
 
 
 def semantic_repair_heads(

@@ -154,6 +154,13 @@ stage_trusted_kilo_helper() {
 # checkout_target switch so a stale or contaminated PR cannot replace the
 # authority code that interprets its model verdict.
 stage_trusted_review_controller() {
+  # Stage exactly once. This definition overrides the shared primitive that
+  # free-model-factory-worker.sh sources at startup, so without the guard every
+  # later caller -- record_head_contribution runs after checkout_target has
+  # switched onto the PR branch -- would re-copy the controller out of that
+  # branch's working tree and the PR could supply the code that records its own
+  # contributor provenance.
+  [[ -z "${TRUSTED_REVIEW_CONTROLLER:-}" ]] || return 0
   local trusted_dir
   trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
   cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"

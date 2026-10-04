@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import importlib
+import re
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -25,6 +26,7 @@ head_contributor_marker = _review_policy.head_contributor_marker
 head_contributor_provenance = _review_policy.head_contributor_provenance
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
 parse_head_contributor_marker = _review_policy.parse_head_contributor_marker
+recorded_pr_contributors = _review_policy.recorded_pr_contributors
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
 
@@ -1003,6 +1005,139 @@ def test_pr2846_shape_repairer_b_cannot_approve_its_own_repair() -> None:
     )
 
 
+def test_earlier_repairer_cannot_approve_a_head_that_still_carries_its_commits() -> None:
+    """A superseded repairer's record still excludes it from the newer head.
+
+    #2846's shape one repair cycle later: producer A opens, repairer B pushes,
+    then repairer C pushes again. C's head is stacked on B's, so B's commits are
+    still reachable from it, yet B has no marker bound to C's exact head. Binding
+    exclusion to the exact head alone would let B attest its own code.
+    """
+    head_1 = "a" * 40
+    head_2 = "b" * 40
+    head_3 = "c" * 40
+    comments = [
+        contributor_comment(head=head_1, worker="29", epoch=1),
+        contributor_comment(head=head_2, worker="59", epoch=2),
+        contributor_comment(head=head_3, worker="77", epoch=3),
+    ]
+
+    # The exact-head record alone proves insufficient, which is why it must not
+    # be what eligibility is derived from.
+    assert current_head_contributors(comments, pr=123, head=head_3) == {"77"}
+    assert recorded_pr_contributors(comments, pr=123) == {"29", "59", "77"}
+
+    contributors, provenance_complete = head_contributor_provenance(
+        comments, pr=123, head=head_3, producer="29"
+    )
+    assert contributors == {"29", "59", "77"}
+    assert provenance_complete is True
+
+    for worker in ("29", "59", "77"):
+        assert not approval_can_promote(
+            contributors=contributors,
+            provenance_complete=provenance_complete,
+            reviewer=worker,
+            reviewed_head=head_3,
+            current_head=head_3,
+            verdict="approve",
+            mechanical_gates_passed=True,
+        ), f"worker {worker} authored commits reachable from head 3"
+
+    assert approval_can_promote(
+        contributors=contributors,
+        provenance_complete=provenance_complete,
+        reviewer="17",
+        reviewed_head=head_3,
+        current_head=head_3,
+        verdict="approve",
+        mechanical_gates_passed=True,
+    )
+
+
+def test_superseded_record_still_fails_closed_for_its_own_head() -> None:
+    """A head with no record of its own is never treated as fully accounted for.
+
+    Excluding the whole lineage widens who is disqualified, so the
+    single-reviewer shortcut must still depend on a record for the exact head.
+    """
+    head_2 = "b" * 40
+    head_3 = "c" * 40
+    unrecorded_head = "d" * 40
+    comments = [
+        contributor_comment(head=head_2, worker="59", epoch=2),
+        contributor_comment(head=head_3, worker="77", epoch=3),
+    ]
+
+    contributors, provenance_complete = head_contributor_provenance(
+        comments, pr=123, head=unrecorded_head, producer="29"
+    )
+    assert contributors == {"29", "59", "77"}
+    assert provenance_complete is False
+    # Without a record for its own head, one eligible reviewer is never enough,
+    # however many disqualified workers are stacked in the approver list.
+    assert not head_has_authorized_approval(
+        approvers={"17", "29", "59", "77"}, contributors=contributors
+    )
+    assert head_has_authorized_approval(
+        approvers={"17", "21"}, contributors=contributors, provenance_complete=provenance_complete
+    )
+    assert head_has_authorized_approval(
+        approvers={"17"}, contributors=contributors, provenance_complete=True
+    )
+
+
+def test_lineage_exclusion_does_not_leak_across_pull_requests() -> None:
+    """Contributor records are per pull request, never repository-wide."""
+    head = "a" * 40
+    comments = [
+        contributor_comment(pr=123, head=head, worker="59", epoch=2),
+        contributor_comment(pr=456, head=head, worker="77", epoch=3),
+    ]
+
+    assert recorded_pr_contributors(comments, pr=123) == {"59"}
+    contributors, _complete = head_contributor_provenance(comments, pr=123, head=head, producer="29")
+    assert contributors == {"29", "59"}
+    assert approval_can_promote(
+        contributors=contributors,
+        provenance_complete=True,
+        reviewer="77",
+        reviewed_head=head,
+        current_head=head,
+        verdict="approve",
+        mechanical_gates_passed=True,
+    )
+
+
+def test_controller_blocks_a_superseded_repairer_on_a_later_head(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The controller refuses the lineage, not just the current head's marker."""
+    module = load_review_controller()
+    payload = pr_payload(worker="59", branch_worker="29")
+    contributions = [
+        contributor_comment(pr=1390, head="b" * 40, worker="29", epoch=1),
+        contributor_comment(pr=1390, head="c" * 40, worker="59", epoch=2),
+        contributor_comment(pr=1390, head=REVIEWED_HEAD, worker="77", epoch=3),
+    ]
+    transitions, posted, _commands = wire_controller(
+        monkeypatch, module, [payload], comments=contributions, include_diff_inspection=True
+    )
+
+    result = module.handle_review(
+        worker="59",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+
+    assert result["status"] == "self-review-blocked"
+    assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+    assert transitions[-1]["pr_stage"] == "factory:review"
+    assert not any(item.get("marker") for item in posted)
+
+
 def test_shared_git_identity_cannot_attribute_two_workers(tmp_path: Path) -> None:
     """Factory pushes share one Git identity, so attribution stays marker-based."""
     head_1 = "a" * 40
@@ -1350,3 +1485,41 @@ def test_worker_records_head_contribution_after_labeling_a_new_pr() -> None:
         assert label_index < record_index, script
         assert "|| true" in source[record_index : record_index + 80], script
         assert source.count('record_head_contribution "') == 2, script
+
+
+def shell_function_body(source: str, name: str) -> str:
+    """Return the body of one top-level shell function definition."""
+    start = source.index(f"\n{name}() {{")
+    end = source.index("\n}\n", start)
+    return source[start:end]
+
+
+def test_worker_stages_the_controller_once_from_the_pre_checkout_tree() -> None:
+    """The provenance writer never comes out of the branch it is recording.
+
+    ``record_head_contribution`` runs after ``checkout_target`` has switched the
+    working tree onto the pull request, so a staging helper that re-copies on
+    every call would let that PR supply the controller -- and the policy module
+    that parses contributor markers -- which records its own provenance. Every
+    worker's staging helper must therefore be idempotent, and the first call must
+    still land before any branch checkout.
+    """
+    for script in (
+        "free-model-factory-worker-primitives.sh",
+        "free-model-factory-worker.sh",
+        "nvidia-factory-worker.sh",
+        "omniroute-factory-worker.sh",
+    ):
+        source = (SCRIPTS / script).read_text(encoding="utf-8")
+        body = shell_function_body(source, "stage_trusted_review_controller")
+        guard = '[[ -z "${TRUSTED_REVIEW_CONTROLLER:-}" ]]'
+        copy = 'cp .github/scripts/factory-review-controller.py'
+        assert guard in body, script
+        # The guard has to be tested before the copy runs, whether it is spelled
+        # as an early return or as the condition of a wrapping if block.
+        assert body.index(guard) < body.index(copy), script
+
+        first_call = source.index("\nstage_trusted_review_controller\n")
+        checkout = re.search(r"^\s*checkout_target \S", source, re.MULTILINE)
+        assert checkout is not None, script
+        assert first_call < checkout.start(), script

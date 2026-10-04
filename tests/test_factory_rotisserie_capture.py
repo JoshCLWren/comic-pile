@@ -73,6 +73,13 @@ def test_live_capture_contract() -> None:
                 + ("a" * 40)
                 + ":worker-8:epoch-17 -->",
             },
+            {
+                "user": {"login": "github-actions[bot]"},
+                "author_association": "NONE",
+                "body": "<!-- comic-pile-factory-head-contributor-v1:pr-20:head-"
+                + ("9" * 40)
+                + ":worker-6:epoch-19 -->",
+            },
         ]
 
     view = capture.capture_view(revision="b" * 40, captured_at=100, run_json=run_json)
@@ -82,7 +89,10 @@ def test_live_capture_contract() -> None:
     assert view["issues"][0]["lease"]["expires_at"] > view["issues"][0]["lease"]["acquired_at"]
     assert view["pull_requests"][0]["checks"][0]["status"] == "passed"
     assert view["pull_requests"][0]["reviews"][0]["head"] == "a" * 40
-    assert view["pull_requests"][0]["head_contributors"] == ["8"]
+    # The captured lineage spans every recorded head of the PR, not just the
+    # current one, so the shadow adapter blocks the same reviewers the real
+    # controller blocks.
+    assert view["pull_requests"][0]["head_contributors"] == ["6", "8"]
     assert all("create" not in command and "edit" not in command for command in commands)
 
 

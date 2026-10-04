@@ -487,6 +487,36 @@ def test_dispatcher_routes_a_repairers_head_to_another_reviewer(
     assert controller.order_candidates_for_worker(candidates, "17") == candidates
 
 
+def test_dispatcher_excludes_a_superseded_repairer_from_the_newer_head(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker recorded on an earlier head of the PR stays out of its review pool.
+
+    Repairs stack onto the previous head, so the third repairer's head still
+    carries the second repairer's commits. Selecting on the current head's record
+    alone would hand that head back to the worker that authored part of it.
+    """
+    pr = review_pr(3073, "c" * 40)
+    monkeypatch.setattr(
+        controller,
+        "gh_json",
+        lambda *args, **kwargs: [[
+            trusted_comment(contributor_marker(3073, "a" * 40, "29")),
+            trusted_comment(contributor_marker(3073, "b" * 40, "59")),
+            trusted_comment(contributor_marker(3073, "c" * 40, "77")),
+        ]],
+    )
+
+    candidates = controller.resolve_review_head_contributors(
+        controller.build_candidates([], [pr]), [pr]
+    )
+
+    assert [item.head_contributors for item in candidates] == [frozenset({"29", "59", "77"})]
+    for contributor in ("29", "59", "77"):
+        assert controller.order_candidates_for_worker(candidates, contributor) == []
+    assert controller.order_candidates_for_worker(candidates, "17") == candidates
+
+
 def test_dispatcher_keeps_captured_contributors_without_extra_reads(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:

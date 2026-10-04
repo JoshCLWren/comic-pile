@@ -23,7 +23,7 @@ from factory_capacity_policy import (
 )
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, stage_of)
 from stale_pr_decay import StalePRGuard
-from factory_review_policy import current_head_contributors, trusted_comment_bodies
+from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -394,8 +394,8 @@ def flatten_pages(pages: object | None) -> list[dict[str, Any]]:
     return result
 
 
-def pr_head_contributor_workers(number: int, head: str) -> set[str]:
-    """Return controller-recorded contributors of one PR's current exact head.
+def pr_contributor_workers(number: int) -> set[str]:
+    """Return controller-recorded contributors of one pull request's head lineage.
 
     An unreadable record resolves to an empty set on purpose: the dispatcher then
     keeps only its declared-producer knowledge, and the review controller still
@@ -416,9 +416,7 @@ def pr_head_contributor_workers(number: int, head: str) -> set[str]:
             file=sys.stderr,
         )
         return set()
-    return current_head_contributors(
-        trusted_comment_bodies(flatten_pages(pages)), pr=number, head=head
-    )
+    return recorded_pr_contributors(trusted_comment_bodies(flatten_pages(pages)), pr=number)
 
 
 def resolve_review_head_contributors(
@@ -442,10 +440,9 @@ def resolve_review_head_contributors(
     ]
     resolved: dict[int, frozenset[str]] = {}
     for number in review_numbers[:REVIEW_CONTRIBUTOR_LOOKUP_LIMIT]:
-        head = heads.get(number, '')
-        if not re.fullmatch(r'[0-9a-f]{40}', head):
+        if not re.fullmatch(r'[0-9a-f]{40}', heads.get(number, '')):
             continue
-        resolved[number] = frozenset(pr_head_contributor_workers(number, head))
+        resolved[number] = frozenset(pr_contributor_workers(number))
     if not resolved:
         return candidates
     return [

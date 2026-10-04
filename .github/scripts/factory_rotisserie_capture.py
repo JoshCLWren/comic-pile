@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from factory_review_policy import (
-    current_head_contributors,
     parse_review_marker,
+    recorded_pr_contributors,
     trusted_comment_bodies,
 )
 from factory_work_policy import FIXED_LEASE_TTL_SECONDS, LOCAL_LEASE_TTL_SECONDS, owner_of
@@ -144,7 +144,7 @@ def capture_view(
         # filter the review controller applies, otherwise the shadow decision
         # and the real controller would disagree about who authored a head.
         pr["head_contributors"] = sorted(
-            current_head_contributors(trusted_comment_bodies(rows), pr=number, head=head)
+            recorded_pr_contributors(trusted_comment_bodies(rows), pr=number)
         )
         lease = _lease(raw)
         if lease:
