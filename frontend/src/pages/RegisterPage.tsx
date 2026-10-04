@@ -84,7 +84,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">Create Account</h1>
-          <p className="text-sm text-[var(--theme-text-muted)]">Welcome to Comic Pile. Start your dice-rolling journey.</p>
+          <p className="text-sm text-[var(--theme-text-muted)]">Welcome to Comic Pile. Build your queue and roll for your next read.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">

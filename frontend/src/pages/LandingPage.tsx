@@ -103,6 +103,27 @@ export default function LandingPage() {
           </dl>
         </section>
 
+        {/* About / maintainer identity (issue #3071) */}
+        <section className="space-y-3 border-t border-[var(--theme-border)] pt-8" aria-labelledby="about-heading">
+          <h2 id="about-heading" className="text-xl font-bold text-[var(--theme-text-primary)] text-center">
+            About Comic Pile
+          </h2>
+          <p className="text-sm text-[var(--theme-text-muted)] leading-relaxed max-w-2xl mx-auto">
+            Comic Pile is a personal open-source project maintained by{' '}
+            <a
+              href="https://github.com/JoshCLWren"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity"
+            >
+              Josh
+            </a>{' '}
+            (JoshCLWren on GitHub). It turns a comic backlog into an actual reading
+            habit: “what should I read next?” becomes a roll instead of another
+            round of sorting the pile.
+          </p>
+        </section>
+
         {/* CTA Section */}
         <section className="text-center space-y-4 border-t border-[var(--theme-border)] pt-8" aria-labelledby="cta-heading">
           <h2 id="cta-heading" className="sr-only">Get started</h2>

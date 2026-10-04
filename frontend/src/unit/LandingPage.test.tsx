@@ -72,6 +72,34 @@ describe('LandingPage product voice (issue #2928)', () => {
     expect(sourceLinks[0]).toHaveAttribute('rel', 'noreferrer')
   })
 
+  it('identifies the maintainer so a first-time visitor knows who built it (issue #3071)', () => {
+    renderLanding()
+    const about = screen.getByRole('region', { name: 'About Comic Pile' })
+    expect(about).toHaveTextContent(/maintained by/i)
+    expect(about).toHaveTextContent(/joshclwren/i)
+    const maintainerLink = within(about).getByRole('link', { name: 'Josh' })
+    expect(maintainerLink).toHaveAttribute('href', 'https://github.com/JoshCLWren')
+    expect(maintainerLink).toHaveAttribute('rel', 'noreferrer')
+  })
+
+  it('states why the project exists in concrete product terms, not marketing filler', () => {
+    renderLanding()
+    const about = screen.getByRole('region', { name: 'About Comic Pile' })
+    expect(about).toHaveTextContent(/what should i read next\?/i)
+    expect(about).toHaveTextContent(/sorting the pile/i)
+  })
+
+  it('carries no fabricated author byline or bio on the product page', () => {
+    renderLanding()
+    expect(screen.queryByText(/written by/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/by our team/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /author/i })).not.toBeInTheDocument()
+    // The only personal attribution on the page is the real maintainer profile.
+    const personalLinks = screen.queryAllByRole('link', { name: /josh/i })
+    expect(personalLinks).toHaveLength(1)
+    expect(personalLinks[0]).toHaveAttribute('href', 'https://github.com/JoshCLWren')
+  })
+
   it('routes a first-time visitor to register and offers the sign-in path', () => {
     renderLanding()
     expect(screen.getByRole('link', { name: /create your queue/i })).toHaveAttribute(

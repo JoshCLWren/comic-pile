@@ -52,20 +52,24 @@ describe('LoginPage auth chrome (issue #2754)', () => {
     api.post.mockReset()
   })
 
+  // Issue #3071 replaced the generic "journey" marketing filler with copy
+  // specific to the roll/queue behavior; the branch distinction is preserved.
   it('welcomes first-time visitors without saying "Welcome Back"', () => {
     renderRoute(<LoginPage />)
     expect(
       screen.getByRole('heading', { name: 'Welcome to Comic Pile' }),
     ).toBeInTheDocument()
     expect(screen.queryByText('Welcome Back')).not.toBeInTheDocument()
-    expect(screen.getByText(/start your journey/i)).toBeInTheDocument()
+    expect(screen.getByText(/build your queue/i)).toBeInTheDocument()
+    expect(screen.queryByText(/roll from your queue/i)).not.toBeInTheDocument()
   })
 
   it('keeps "Welcome Back" for returning visitors', () => {
     markReturningVisitor()
     renderRoute(<LoginPage />)
     expect(screen.getByRole('heading', { name: 'Welcome Back' })).toBeInTheDocument()
-    expect(screen.getByText(/continue your journey/i)).toBeInTheDocument()
+    expect(screen.getByText(/roll from your queue/i)).toBeInTheDocument()
+    expect(screen.queryByText(/build your queue/i)).not.toBeInTheDocument()
   })
 
   it('treats a prior-session token as a returning signal', () => {
@@ -108,7 +112,7 @@ describe('RegisterPage auth chrome (issue #2754)', () => {
     ).toBeInTheDocument()
     expect(screen.getByText(/welcome to comic pile/i)).toBeInTheDocument()
     expect(screen.queryByText('Welcome Back')).not.toBeInTheDocument()
-    expect(screen.queryByText(/continue your journey/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/roll from your queue/i)).not.toBeInTheDocument()
   })
 
   it('marks the browser as returning after a successful sign-up', async () => {

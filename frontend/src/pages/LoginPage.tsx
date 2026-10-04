@@ -75,8 +75,8 @@ export default function LoginPage() {
           <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">{isReturning ? 'Welcome Back' : 'Welcome to Comic Pile'}</h1>
           <p className="text-sm text-[var(--theme-text-muted)]">
             {isReturning
-              ? 'An open-source, dice-driven comic reading tracker. Sign in to continue your journey.'
-              : 'An open-source, dice-driven comic reading tracker. Sign in or create an account to start your journey.'}
+              ? 'An open-source, dice-driven comic reading tracker. Sign in to roll from your queue and pick up where you left off.'
+              : 'An open-source, dice-driven comic reading tracker. Sign in to roll for your next read, or create an account to build your queue.'}
           </p>
         </div>
 

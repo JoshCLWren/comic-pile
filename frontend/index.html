@@ -80,6 +80,20 @@
         line-height: 1.5;
       }
 
+      .bootstrap-shell__maintainer {
+        margin: 1rem auto 0;
+        max-width: 30rem;
+        color: #b8aea1;
+        font-size: 0.8125rem;
+        line-height: 1.5;
+      }
+
+      .bootstrap-shell__maintainer a {
+        color: #d4a35f;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
       .bootstrap-shell__pulse {
         width: 2.5rem;
         height: 0.25rem;
@@ -143,6 +157,11 @@
             <li>Roll the die to pick your next read</li>
             <li>Read, rate, and keep your place</li>
           </ul>
+          <p class="bootstrap-shell__maintainer">
+            A personal open-source project maintained by
+            <a href="https://github.com/JoshCLWren" target="_blank" rel="noreferrer">Josh</a>
+            (JoshCLWren on GitHub).
+          </p>
         </div>
         <p class="bootstrap-shell__status" data-bootstrap-status data-state="loading">
           Opening your reading desk and checking your session…
@@ -160,8 +179,11 @@
     <noscript>
       <p style="max-width: 32rem; margin: 2rem auto; text-align: center; line-height: 1.5;">
         ComicPile is a dice-driven reading queue for your comic collection: build your
-        stack, roll the die, and read what comes up. The interactive queue needs
-        JavaScript; please enable it to sign in and roll.
+        stack, roll the die, and read what comes up. It is a personal open-source
+        project maintained by
+        <a href="https://github.com/JoshCLWren" target="_blank" rel="noreferrer">Josh</a>
+        (JoshCLWren on GitHub). The interactive queue needs JavaScript; please enable
+        it to sign in and roll.
       </p>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>
