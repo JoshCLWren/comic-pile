@@ -6,6 +6,19 @@ from logging.config import fileConfig
 from dotenv import load_dotenv
 
 from sqlalchemy import engine_from_config, pool
+from greenlet import greenlet
+
+# Initialize greenlet
+if not greenlet.getcurrent():
+    greenlet.greenlet_spawn(lambda: None).switch()
+
+# Ensure greenlet is initialized
+if not greenlet.getcurrent():
+    greenlet.greenlet_spawn(lambda: None).switch()
+
+# Ensure greenlet is initialized
+if not greenlet.getcurrent():
+    greenlet.greenlet_spawn(lambda: None).switch()
 
 from alembic import context
 
