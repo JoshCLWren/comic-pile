@@ -2,6 +2,7 @@
 
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
+from app.models.catalog_commit_receipt import CatalogCommitReceipt
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
@@ -40,6 +41,7 @@ __all__ = [
     "CBLSource",
     "CBLSourceEntry",
     "CBLSourceList",
+    "CatalogCommitReceipt",
     "ContinuityPlan",
     "ContinuityRule",
     "ContinuityRuleSelectedMember",

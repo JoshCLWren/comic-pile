@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
+ROW_ID_PREFIX = "issue:"
+"""Prefix for stable series-mapping preview row identifiers such as ``issue:789``."""
+
 
 class ExternalIdentityUpsert(BaseModel):
     """Schema for upserting an external identity (series or issue)."""
@@ -197,6 +200,7 @@ class SeriesMappingPreviewCounts(BaseModel):
 class SeriesMappingPreviewRow(BaseModel):
     """Schema for individual rows in preview responses."""
 
+    row_id: str = Field(..., description="Stable row identifier, for example 'issue:789'")
     issue_id: int = Field(..., description="Internal issue ID")
     issue_number: str = Field(..., description="Issue number")
     title: str | None = Field(default=None, description="Issue title")
@@ -231,3 +235,64 @@ class SeriesMappingPreviewResponse(BaseModel):
     rows: list[SeriesMappingPreviewRow] = Field(default_factory=list, description="Individual issue mappings")
     issued_at: float = Field(..., description="Token issuance timestamp (Unix epoch)")
     expires_at: float | None = Field(default=None, description="Token expiration timestamp (Unix epoch)")
+
+
+class SeriesMappingCommitRequest(BaseModel):
+    """Schema for committing user-approved series mappings."""
+
+    preview_token: str = Field(
+        ...,
+        min_length=1,
+        description="User-bound signed token returned by the series mapping preview",
+    )
+    idempotency_key: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Caller-supplied key applied to the complete material commit request",
+    )
+    approved_row_ids: list[str] = Field(
+        default_factory=list,
+        description="Preview row ids the caller approved; every entry must be safe_exact_match",
+    )
+
+    @field_validator("approved_row_ids")
+    @classmethod
+    def validate_approved_row_ids(cls, approved_row_ids: list[str]) -> list[str]:
+        """Reject row ids that are not stable preview identifiers."""
+        for row_id in approved_row_ids:
+            if not row_id.startswith(ROW_ID_PREFIX) or not row_id.removeprefix(ROW_ID_PREFIX).isdigit():
+                raise ValueError(f"unsupported approved row id: {row_id}")
+        return approved_row_ids
+
+
+class SeriesMappingCommitSeriesMapping(BaseModel):
+    """Schema for the series evidence established by a commit."""
+
+    provider: str = Field(..., description="External provider name")
+    external_id: str = Field(..., description="Provider-specific series identifier")
+    status: str = Field(..., description="Mapping status of the confirmed series evidence")
+    evidence_source: str = Field(..., description="Provenance recorded for the confirmation")
+
+
+class SeriesMappingCommitResponse(BaseModel):
+    """Schema for series mapping commit responses."""
+
+    idempotency_key: str = Field(..., description="Idempotency key that produced this result")
+    confirmed_issue_ids: list[int] = Field(
+        default_factory=list,
+        description="Issues whose provider identity was confirmed by this commit",
+    )
+    already_confirmed_issue_ids: list[int] = Field(
+        default_factory=list,
+        description="Issues that already carried an agreeing confirmed mapping and required no write",
+    )
+    needs_review_issue_ids: list[int] = Field(
+        default_factory=list,
+        description="Ambiguous, conflicting, special, cross-volume, or unresolved issues left for issue-level repair",
+    )
+    hydration_queued_issue_ids: list[int] = Field(
+        default_factory=list,
+        description="Newly confirmed issues handed to post-commit metadata hydration",
+    )
+    series_mapping: SeriesMappingCommitSeriesMapping = Field(..., description="Confirmed series evidence")
