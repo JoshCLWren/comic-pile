@@ -363,6 +363,7 @@ describe('CreatorsPage minimum-rated-sample control', () => {
   it('offers the bounded choices Any/3+/5+/10+/25+', () => {
     renderPage()
 
+    // SAFETY: getByLabelText('Minimum rated') returns the select rendered by CreatorsPage for the minimum-sample control, so the element is an HTMLSelectElement.
     const select = screen.getByLabelText('Minimum rated') as HTMLSelectElement
     expect([...select.options].map((option) => option.textContent)).toEqual([
       'Any',
