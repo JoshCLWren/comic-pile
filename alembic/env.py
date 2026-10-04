@@ -9,49 +9,6 @@ from sqlalchemy import engine_from_config, pool
 from greenlet import greenlet
 
 # Initialize greenlet
-import greenlet
-
-# Initialize greenlet
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
-if not greenlet.getcurrent():
-    greenlet.greenlet_spawn(lambda: None).switch()
-
-# Ensure greenlet is initialized
 if not greenlet.getcurrent():
     greenlet.greenlet_spawn(lambda: None).switch()
 
