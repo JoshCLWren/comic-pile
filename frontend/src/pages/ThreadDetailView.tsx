@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
@@ -18,13 +18,13 @@ import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
+import Breadcrumbs from '../components/Breadcrumbs'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const location = useLocation()
   const client = useQueryClient()
   const updateMutation = useUpdateThread()
@@ -195,13 +195,7 @@ export default function ThreadDetailView() {
     <div className="space-y-6 md:space-y-8 pb-20">
       <header className="flex justify-between items-start px-2 gap-2 md:gap-4">
         <div className="flex-1 min-w-0">
-          <button
-            type="button"
-            onClick={() => navigate('/queue')}
-            className="text-xs font-black uppercase tracking-widest text-stone-500 hover:text-stone-300 mb-2"
-          >
-            ← Back to Queue
-          </button>
+          <Breadcrumbs items={[{ label: 'Queue', to: '/queue' }, { label: 'Thread' }]} />
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase truncate">
             {thread.title}
           </h1>

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -282,15 +282,24 @@ it('navigates back and survives issue and edit failures', async () => {
   const mutate = vi.fn().mockRejectedValue(new Error('update failed'))
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
-  renderPage()
+  render(
+    <MemoryRouter initialEntries={['/thread/1']}>
+      <ToastProvider>
+        <Routes>
+          <Route path="/thread/:id" element={<ThreadDetailView />} />
+          <Route path="/queue" element={<p>Queue landing</p>} />
+        </Routes>
+      </ToastProvider>
+    </MemoryRouter>,
+  )
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Edit' }))
   await user.clear(screen.getByDisplayValue('5'))
   await user.click(screen.getByRole('button', { name: 'Save Changes' }))
   await waitFor(() => expect(mutate).toHaveBeenCalled())
-  await user.click(screen.getByRole('button', { name: /back to queue/i }))
-  expect(navigateSpy).toHaveBeenCalledWith('/queue')
+  await user.click(screen.getByRole('link', { name: 'Queue' }))
+  await waitFor(() => expect(screen.getByText('Queue landing')).toBeInTheDocument())
 })
 
 it('edits migrated threads and displays the all-read boundary', async () => {

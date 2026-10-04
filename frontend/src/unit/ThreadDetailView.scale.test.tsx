@@ -1,10 +1,21 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
+
+function renderThreadDetail() {
+  return render(
+    <MemoryRouter>
+      <ToastProvider>
+        <ThreadDetailView />
+      </ToastProvider>
+    </MemoryRouter>,
+  )
+}
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -60,7 +71,7 @@ it.each([25, 250, 1_000, 10_000])(
       notes: null,
     } as never)
 
-    render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+renderThreadDetail()
 
     await waitFor(() => {
       expect(screen.getByText(`Scale Test ${totalIssues}`)).toBeInTheDocument()
@@ -85,7 +96,7 @@ it('keeps unmigrated threads independent from the issue-list endpoint', async ()
     notes: null,
   } as never)
 
-  render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  renderThreadDetail()
 
   await waitFor(() => {
     expect(screen.getByText('Legacy Thread')).toBeInTheDocument()

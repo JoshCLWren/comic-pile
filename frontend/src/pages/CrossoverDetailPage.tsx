@@ -1,6 +1,7 @@
 
 import { useCrossoverDetail } from '../hooks/useCrossoverDetail'
 import { useParams, Link } from 'react-router-dom'
+import Breadcrumbs from '../components/Breadcrumbs'
 
 
 export default function CrossoverDetailPage() {
@@ -85,11 +86,11 @@ export default function CrossoverDetailPage() {
 
   return (
     <div className="space-y-6 md:space-y-8 px-4 pb-6">
-      <div className="flex justify-between items-center">
+      <div className="space-y-3">
+        <Breadcrumbs
+          items={[{ label: 'Crossovers', to: '/crossovers' }, { label: 'Crossover' }]}
+        />
         <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">Crossover Detail</h1>
-        <Link to="/crossovers" className="text-sm text-[var(--theme-text-muted)]">
-          ← Back to Crossovers
-        </Link>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
