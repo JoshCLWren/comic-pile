@@ -4,8 +4,9 @@ Implements the relational shape from ``docs/READING_GRAPH_PERSISTENCE_DESIGN.md`
 section 2 (Chunk 1 of ``docs/READING_GRAPH_IMPLEMENTATION_PLAN.md``):
 
 - ``reading_plan_issues`` is the explicit ReadingPlan-to-Issue join. One Issue
-  may belong to many plans, including repeated occurrences with separate
-  lane/label context. ``nodes_json`` on ``ContinuityPlan`` remains temporarily
+  may belong to many plans, but at most once per plan. The unique constraint
+  ``uq_reading_plan_issue_plan_issue`` enforces this canonical membership
+  invariant. ``nodes_json`` on ``ContinuityPlan`` remains temporarily
   for compatibility/presentation but is no longer the sole canonical
   membership representation.
 - ``reading_plan_dependencies`` links many plans to one canonical executable
@@ -37,7 +38,13 @@ from app.database import Base
 
 
 class ReadingPlanIssue(Base):
-    """One Issue occurrence inside a Reading Plan."""
+    """One Issue occurrence inside a Reading Plan.
+
+    The composite primary key (plan_id, occurrence_id) supports multiple
+    occurrences with separate lane/label context. The unique constraint
+    uq_reading_plan_issue_plan_issue enforces the invariant that a canonical
+    Issue may belong to a Reading Plan at most once.
+    """
 
     __tablename__ = "reading_plan_issues"
 
@@ -59,6 +66,11 @@ class ReadingPlanIssue(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "plan_id",
+            "issue_id",
+            name="uq_reading_plan_issue_plan_issue",
+        ),
         UniqueConstraint(
             "plan_id",
             "lane_id",

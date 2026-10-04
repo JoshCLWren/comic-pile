@@ -93,31 +93,63 @@ async def rebuild_plan_membership(
     exists. Source paths and CBL placements are preserved raw with their
     original positions. The caller owns the surrounding transaction.
 
+    Duplicate issue_id occurrences are deduplicated: the first occurrence
+    (by display_position, then occurrence_id) is kept and context from
+    subsequent duplicates is merged (source metadata and placements).
+
     Args:
         db: Database session.
         plan_id: Plan whose normalized rows are replaced.
         nodes: Canonical node set just persisted to the plan.
     """
+    # Collect issue nodes, deduplicating by issue_id.
+    # Keep the first occurrence (by position, then occurrence_id) and merge
+    # context from duplicates into it.
+    issue_nodes_by_id: dict[int, list[ContinuityPlanNode]] = {}
+    for node in nodes:
+        if node.node_type != "issue":
+            continue
+        issue_nodes_by_id.setdefault(node.ref_id, []).append(node)
+
     issue_rows: list[ReadingPlanIssue] = []
     snapshots: dict[str, ReadingPlanSource] = {}
     # (occurrence_id, raw_path, source_position) triples, deduplicated.
     placement_keys: set[tuple[str, str, int | None]] = set()
 
-    for node in nodes:
-        if node.node_type != "issue":
-            continue
+    for _issue_id, issue_nodes in issue_nodes_by_id.items():
+        # Sort by display_position, then occurrence_id for deterministic ordering.
+        issue_nodes.sort(key=lambda n: (n.position, n.id))
+        primary_node = issue_nodes[0]
+        duplicate_nodes = issue_nodes[1:]
+
+        # Merge source metadata from duplicates into primary.
+        merged_metadata = _source_metadata_for_node(primary_node)
+        for dup in duplicate_nodes:
+            dup_metadata = _source_metadata_for_node(dup)
+            if dup_metadata:
+                if merged_metadata is None:
+                    merged_metadata = dup_metadata
+                else:
+                    # Merge keys, preferring primary's values.
+                    for k, v in dup_metadata.items():
+                        merged_metadata.setdefault(k, v)
+
+        # Collect all source paths and placements from primary and duplicates.
         positioned: dict[str, list[int]] = {}
-        if node.source_cbl_placements:
-            for placement in node.source_cbl_placements:
-                if placement.source_path:
-                    positioned.setdefault(placement.source_path, []).append(
-                        placement.position
-                    )
         bare_paths: list[str] = []
-        if node.source_paths:
-            for raw_path in node.source_paths:
-                if raw_path and raw_path not in bare_paths:
-                    bare_paths.append(raw_path)
+
+        for n in (primary_node, *duplicate_nodes):
+            if n.source_cbl_placements:
+                for placement in n.source_cbl_placements:
+                    if placement.source_path:
+                        positioned.setdefault(placement.source_path, []).append(
+                            placement.position
+                        )
+            if n.source_paths:
+                for raw_path in n.source_paths:
+                    if raw_path and raw_path not in bare_paths:
+                        bare_paths.append(raw_path)
+
         for raw_path in list(positioned) + bare_paths:
             if raw_path not in snapshots:
                 custom_list_id = _split_custom_cbl_reference(raw_path)
@@ -130,25 +162,31 @@ async def rebuild_plan_membership(
                     raw_source_path=raw_path,
                     custom_cbl_list_id=custom_list_id,
                 )
+
+        # Use primary node's occurrence_id for the membership row.
         issue_rows.append(
             ReadingPlanIssue(
                 plan_id=plan_id,
-                occurrence_id=node.id,
-                issue_id=node.ref_id,
-                lane_id=node.lane_id,
-                display_position=node.position,
-                label=node.label,
-                reader_role=node.reader_role,
-                reader_optional=node.reader_optional,
-                is_checkpoint=node.is_checkpoint,
-                source_metadata_json=_source_metadata_for_node(node),
+                occurrence_id=primary_node.id,
+                issue_id=primary_node.ref_id,
+                lane_id=primary_node.lane_id,
+                display_position=primary_node.position,
+                label=primary_node.label,
+                reader_role=primary_node.reader_role,
+                reader_optional=primary_node.reader_optional,
+                is_checkpoint=primary_node.is_checkpoint,
+                source_metadata_json=merged_metadata,
             )
         )
+
+        # Collect placements for all occurrences (primary + duplicates)
+        # so provenance is preserved even when membership is deduplicated.
         for raw_path, positions in positioned.items():
             for position in sorted(set(positions)):
-                placement_keys.add((node.id, raw_path, position))
+                # Associate with primary occurrence_id for deduplicated membership.
+                placement_keys.add((primary_node.id, raw_path, position))
         for raw_path in bare_paths:
-            placement_keys.add((node.id, raw_path, None))
+            placement_keys.add((primary_node.id, raw_path, None))
 
     ordered_snapshots = [snapshots[key] for key in sorted(snapshots)]
     await reading_plan_repository.replace_plan_issues(
