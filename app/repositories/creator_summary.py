@@ -39,11 +39,30 @@ class CreatorCredit:
 
 
 @dataclass(frozen=True)
+class OwnedIssueSeries:
+    """Stable local series/run identity attached to one owned issue.
+
+    ComicPile's series identity is the thread: one thread is one series or one
+    creator run in the reader's own library. The title is carried for display
+    only and is never used as a grouping identity.
+
+    Attributes:
+        thread_id: Local ComicPile thread (series/run) id owning the issue.
+        thread_title: Current local thread title, for display only.
+    """
+
+    thread_id: int
+    thread_title: str
+
+
+@dataclass(frozen=True)
 class CreatorSummaryInputs:
     """Plain, user-scoped inputs for the creator summary aggregation.
 
     Attributes:
         owned_issues: Mapping of owned issue id to its ``read``/``unread`` status.
+        owned_issue_series: Mapping of owned issue id to its stable local
+            thread/series identity (issue #3088).
         issue_creator_credits: Mapping of owned issue id to its confirmed creator credits.
         issues_with_creator_metadata: Owned issues carrying at least one usable
             confirmed creator credit.
@@ -52,6 +71,7 @@ class CreatorSummaryInputs:
     """
 
     owned_issues: dict[int, str] = field(default_factory=dict)
+    owned_issue_series: dict[int, OwnedIssueSeries] = field(default_factory=dict)
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = field(default_factory=dict)
     issues_with_creator_metadata: frozenset[int] = field(default_factory=frozenset)
     effective_ratings: dict[int, float] = field(default_factory=dict)
@@ -127,7 +147,8 @@ async def load_creator_summary_inputs(
     The batch is served by exactly three queries no matter how many creator
     keys are requested:
 
-    1. the authenticated user's owned issues and their read/unread status;
+    1. the authenticated user's owned issues, their read/unread status, and
+       their stable local thread/series identity;
     2. confirmed ComicVine issue metadata for those issues (creator credits);
     3. the latest effective ``rate`` event rating per owned issue.
 
@@ -138,15 +159,21 @@ async def load_creator_summary_inputs(
     Returns:
         User-scoped :class:`CreatorSummaryInputs`.
     """
-    # 1. Owned issues and statuses.
+    # 1. Owned issues, statuses, and stable local series identity.
     issue_result = await db.execute(
-        select(Issue.id, Issue.status)
+        select(Issue.id, Issue.status, Issue.thread_id, Thread.title)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
-    owned_issues: dict[int, str] = {
-        int(issue_id): str(status) for issue_id, status in issue_result.all()
-    }
+    owned_issues: dict[int, str] = {}
+    owned_issue_series: dict[int, OwnedIssueSeries] = {}
+    for issue_id, status, thread_id, thread_title in issue_result.all():
+        owned_issue_id = int(issue_id)
+        owned_issues[owned_issue_id] = str(status)
+        owned_issue_series[owned_issue_id] = OwnedIssueSeries(
+            thread_id=int(thread_id),
+            thread_title=str(thread_title),
+        )
 
     # 2. Confirmed creator credits per owned issue.
     metadata_result = await db.execute(
@@ -201,6 +228,7 @@ async def load_creator_summary_inputs(
 
     return CreatorSummaryInputs(
         owned_issues=owned_issues,
+        owned_issue_series=owned_issue_series,
         issue_creator_credits=issue_creator_credits,
         issues_with_creator_metadata=frozenset(issues_with_creator_metadata),
         effective_ratings=effective_ratings,
@@ -211,6 +239,7 @@ __all__ = [
     "COMICVINE_PROVIDER",
     "CreatorCredit",
     "CreatorSummaryInputs",
+    "OwnedIssueSeries",
     "extract_creator_credits",
     "load_creator_summary_inputs",
 ]

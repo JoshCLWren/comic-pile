@@ -25,6 +25,30 @@ from app.models.external_identity import ExternalIdentity, IssueExternalIdentity
 
 MAPPING_STATUSES = frozenset({"unresolved", "candidate", "confirmed", "rejected"})
 
+PREVIEW_TOKEN_TTL_SECONDS = 600
+"""Lifetime of a signed series-mapping preview token (10 minutes)."""
+
+PREVIEW_ROW_ID_PREFIX = "issue:"
+"""Prefix for stable preview row identifiers such as ``issue:789``."""
+
+PREVIEW_CLASSIFICATIONS = (
+    "already_confirmed",
+    "safe_exact_match",
+    "needs_review_ambiguous",
+    "needs_review_conflict",
+    "unresolved",
+    "excluded_special",
+)
+"""The closed preview classification contract."""
+
+MAPPING_STATUS_PRECEDENCE = {
+    "confirmed": 0,
+    "candidate": 1,
+    "unresolved": 2,
+    "rejected": 3,
+}
+"""Deterministic tie-break order used when one issue yields several candidate rows."""
+
 
 async def upsert_catalog_series(
     db: AsyncSession,
@@ -439,7 +463,7 @@ async def list_issue_mappings(
     return await repo_list(db, issue_id=issue_id, status=status, limit=limit)
 
 
-async def preview_series_mapping(
+async def build_series_mapping_plan(
     db: AsyncSession,
     *,
     user_id: int,
@@ -447,113 +471,42 @@ async def preview_series_mapping(
     provider: str,
     provider_series_external_id: str,
 ) -> dict[str, object]:
-    """Preview a series mapping with safe scoping and classification.
-    
+    """Build the read-only series-mapping plan that a preview token binds.
+
+    This performs no writes and mints no token. Commit reuses it to re-derive the current
+    material facts, so the returned ``state_digest`` must stay deterministic for an unchanged
+    database: rows are de-duplicated per issue and ordered before the digest is computed.
+
     Args:
         db: Database session.
         user_id: User ID for authorization.
         origin_issue_id: The anchor issue ID for the mapping preview.
         provider: External provider name (e.g., "comicvine").
         provider_series_external_id: Provider-specific series identifier.
-        
+
     Returns:
-        Preview response with scope information, counts, and classified rows.
+        Plan dict with ``scope``, ``provider_series``, ``counts``, ``rows``, ``scope_key``,
+        ``issue_numbers``, and ``state_digest``.
     """
     from app.repositories.catalog_repository import get_series_with_issues, get_issue_by_id
 
     # Get the origin issue to establish context
     origin_issue = await get_issue_by_id(db, origin_issue_id, user_id)
     if origin_issue is None:
-        return {
-            "preview_token": None,
-            "scope": {
-                "status": "unavailable",
-                "scope_key": None,
-                "origin_issue_id": origin_issue_id,
-                "series_label": None,
-                "basis": "origin_issue_not_found",
-            },
-            "provider_series": None,
-            "counts": {
-                "already_confirmed": 0,
-                "safe_exact_match": 0,
-                "needs_review_ambiguous": 0,
-                "needs_review_conflict": 0,
-                "unresolved": 0,
-                "excluded_special": 0,
-            },
-            "rows": [],
-            "issued_at": time.time(),
-            "expires_at": None,
-        }
-    
+        return _unavailable_series_mapping_plan(origin_issue_id, basis="origin_issue_not_found")
+
     # Try local catalog first
     series_info, issues_with_mappings = await get_series_with_issues(
         db, provider=provider, series_external_id=provider_series_external_id, user_id=user_id
     )
-    
+
     # If not found locally, try ComicVine API (local-first)
-    client = None
     if series_info is None:
-        client = _get_comicvine_client()
-        if client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="provider_unavailable",
-            )
-        try:
-            volume_response = await client.fetch_volume(int(provider_series_external_id))
-            volume_data = volume_response.payload.get("results")
-            if isinstance(volume_data, dict):
-                series_info = {
-                    "id": str(volume_data.get("id")),
-                    "name": volume_data.get("name"),
-                    "publisher": volume_data.get("publisher", {}).get("name") if volume_data.get("publisher") else None,
-                    "start_year": volume_data.get("start_year"),
-                    "count_of_issues": volume_data.get("count_of_issues"),
-                    "site_detail_url": volume_data.get("site_detail_url"),
-                    "image": volume_data.get("image"),
-                }
+        series_info, issues_with_mappings = await _load_provider_volume_roster(
+            provider_series_external_id,
+            issues_with_mappings,
+        )
 
-                # Fetch issues from ComicVine
-                issues_rows = await client.fetch_volume_issues(int(provider_series_external_id))
-                issues_with_mappings = []
-
-                for row in issues_rows:
-                    if isinstance(row, dict):
-                        issue_number = row.get("issue_number")
-                        if issue_number is None:
-                            continue
-
-                        provider_issue_id = row.get("id")
-                        try:
-                            pid = int(provider_issue_id) if provider_issue_id is not None else 0
-                        except (TypeError, ValueError):
-                            pid = 0
-                        issue_info = {
-                            "issue_id": pid if pid != 0 else 0,
-                            "issue_number": str(issue_number),
-                            "title": row.get("name"),
-                            "thread_id": None,
-                            "thread_title": None,
-                            "current_mapping_status": "unresolved",
-                            "classification": "unresolved",
-                        }
-                        issues_with_mappings.append(issue_info)
-
-        except HTTPException:
-            raise
-        except (ComicVineError, ValueError, TypeError, OSError) as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="provider_unavailable",
-            ) from exc
-        except Exception as exc:  # pragma: no cover - safety net
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="provider_unavailable",
-            ) from exc
-    
     # Ensure origin issue is included in the mapping check for conflict detection
     # even if it's mapped to a different series
     origin_mapping_provider = origin_issue.get("provider")
@@ -579,146 +532,44 @@ async def preview_series_mapping(
                 "classification": "unresolved",
                 "_is_origin": True,
             })
-    
+
     # If we still don't have series info, return unavailable scope
     if series_info is None:
-        return {
-            "preview_token": None,
-            "scope": {
-                "status": "unavailable",
-                "scope_key": None,
-                "origin_issue_id": origin_issue_id,
-                "series_label": None,
-                "basis": "series_not_found",
-            },
-            "provider_series": None,
-            "counts": {
-                "already_confirmed": 0,
-                "safe_exact_match": 0,
-                "needs_review_ambiguous": 0,
-                "needs_review_conflict": 0,
-                "unresolved": 0,
-                "excluded_special": 0,
-            },
-            "rows": [],
-            "issued_at": time.time(),
-            "expires_at": None,
-        }
+        return _unavailable_series_mapping_plan(origin_issue_id, basis="series_not_found")
 
     assert series_info is not None
 
     # Classify issues and determine safe scope
-    counts = {
-        "already_confirmed": 0,
-        "safe_exact_match": 0,
-        "needs_review_ambiguous": 0,
-        "needs_review_conflict": 0,
-        "unresolved": 0,
-        "excluded_special": 0,
-    }
-    
-    classified_rows = []
-    scope_key = None
+    counts = _empty_preview_counts()
 
-    origin_number_raw = origin_issue.get("issue_number")
-    origin_number = str(origin_number_raw) if isinstance(origin_number_raw, str) else ""
+    classified_rows = _classify_series_mapping_rows(
+        issues_with_mappings,
+        provider=provider,
+        origin_issue_number=_issue_number_text(origin_issue.get("issue_number")),
+        counts=counts,
+    )
+    scope_key = _derive_scope_key(classified_rows, origin_issue_id)
 
-    # Pre-compute normalized counts for duplicate detection (unique exact requirement)
-    # Exclude the origin issue (_is_origin flag) since it's the anchor, not part of the series issues
-    normalized_counts: dict[str, int] = {}
-    for info in issues_with_mappings:
-        if info.get("_is_origin"):
-            continue
-        num = info.get("issue_number", "")
-        if isinstance(num, str) and not _is_special_issue(num) and not _is_ambiguous(num):
-            norm = _normalize_issue_number(num)
-            if norm:
-                normalized_counts[norm] = normalized_counts.get(norm, 0) + 1
-
-    for issue_info in issues_with_mappings:
-        raw_number = issue_info.get("issue_number", "")
-        issue_number = str(raw_number) if isinstance(raw_number, str) else ""
-
-        # Check if it's a special issue (annual, special, etc.)
-        if _is_special_issue(issue_number):
-            classification = "excluded_special"
-            counts["excluded_special"] += 1
-        elif _is_conflicting_mapping(issue_info, provider):
-            classification = "needs_review_conflict"
-            counts["needs_review_conflict"] += 1
-        elif _is_ambiguous(issue_number):
-            classification = "needs_review_ambiguous"
-            counts["needs_review_ambiguous"] += 1
-        elif issue_info.get("current_mapping_status") == "confirmed":
-            classification = "already_confirmed"
-            counts["already_confirmed"] += 1
-        elif _is_exact_match(issue_number, origin_number):
-            norm = _normalize_issue_number(issue_number)
-            if norm and normalized_counts.get(norm, 0) == 1:
-                classification = "safe_exact_match"
-                counts["safe_exact_match"] += 1
-                if scope_key is None:
-                    scope_key = f"exact:{origin_issue_id}:{issue_number}"
-            else:
-                classification = "needs_review_ambiguous"
-                counts["needs_review_ambiguous"] += 1
-        else:
-            classification = "unresolved"
-            counts["unresolved"] += 1
-
-        issue_info["classification"] = classification
-        issue_info["proposed_mapping"] = classification in ["safe_exact_match", "already_confirmed"]
-        issue_info["default_selected"] = classification == "safe_exact_match"
-
-        classified_rows.append(issue_info)
-    
     # Determine if scope is available
     scope_status = "available" if scope_key is not None else "unavailable"
     scope_basis = "insufficient_non_thread_evidence" if scope_key is None else "exact_match_found"
 
     # Spec: unavailable scope due to insufficient evidence returns zero counts and empty rows
     if scope_status == "unavailable":
-        counts = {
-            "already_confirmed": 0,
-            "safe_exact_match": 0,
-            "needs_review_ambiguous": 0,
-            "needs_review_conflict": 0,
-            "unresolved": 0,
-            "excluded_special": 0,
-        }
+        counts = _empty_preview_counts()
         classified_rows = []
 
-    # Generate preview token if scope is available
-    preview_token = None
-    issued_at = time.time()
-    expires_at = issued_at + 600 if scope_status == "available" else None
-    if scope_status == "available":
-        issue_numbers = [str(row.get("issue_number", "")) for row in classified_rows if row.get("issue_number")]
-        classification_digest = "|".join(
-            f"{cls}:{counts[cls]}"
-            for cls in [
-                "already_confirmed",
-                "safe_exact_match",
-                "needs_review_ambiguous",
-                "needs_review_conflict",
-                "unresolved",
-                "excluded_special",
-            ]
-        )
-        preview_token = _generate_preview_token(
-            user_id=user_id,
-            provider=provider,
-            provider_series_external_id=provider_series_external_id,
-            origin_issue_id=origin_issue_id,
-            scope_key=scope_key or "",
-            issued_at=issued_at,
-            expires_at=expires_at or issued_at,
-            issue_numbers=issue_numbers,
-            classification_digest=classification_digest,
-        )
+    issue_numbers = [str(row.get("issue_number", "")) for row in classified_rows if row.get("issue_number")]
+    state_digest = _plan_state_digest(
+        provider=provider,
+        provider_series_external_id=provider_series_external_id,
+        origin_issue_id=origin_issue_id,
+        scope_key=scope_key,
+        scope_basis=scope_basis,
+        rows=classified_rows,
+    )
 
     return {
-        "preview_token": preview_token,
         "scope": {
             "status": scope_status,
             "scope_key": scope_key,
@@ -729,9 +580,377 @@ async def preview_series_mapping(
         "provider_series": series_info,
         "counts": counts,
         "rows": classified_rows,
+        "scope_key": scope_key,
+        "issue_numbers": issue_numbers,
+        "state_digest": state_digest,
+    }
+
+
+async def preview_series_mapping(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    origin_issue_id: int,
+    provider: str,
+    provider_series_external_id: str,
+) -> dict[str, object]:
+    """Preview a series mapping with safe scoping and classification.
+
+    Args:
+        db: Database session.
+        user_id: User ID for authorization.
+        origin_issue_id: The anchor issue ID for the mapping preview.
+        provider: External provider name (e.g., "comicvine").
+        provider_series_external_id: Provider-specific series identifier.
+
+    Returns:
+        Preview response with scope information, counts, classified rows, and a
+        user-bound signed token when the scope is available.
+    """
+    plan = await build_series_mapping_plan(
+        db,
+        user_id=user_id,
+        origin_issue_id=origin_issue_id,
+        provider=provider,
+        provider_series_external_id=provider_series_external_id,
+    )
+
+    scope = plan["scope"] if isinstance(plan.get("scope"), dict) else plan.get("scope")
+    issued_at = time.time()
+    scope_available = isinstance(scope, dict) and scope.get("status") == "available"
+    expires_at = issued_at + PREVIEW_TOKEN_TTL_SECONDS if scope_available else None
+
+    preview_token = None
+    if scope_available:
+        preview_token = _generate_preview_token(
+            user_id=user_id,
+            provider=provider,
+            provider_series_external_id=provider_series_external_id,
+            origin_issue_id=origin_issue_id,
+            scope_key=_plan_scope_key(plan),
+            issued_at=issued_at,
+            expires_at=expires_at or issued_at,
+            issue_numbers=_plan_issue_numbers(plan),
+            classification_digest=_plan_state_digest_text(plan),
+        )
+
+    return {
+        "preview_token": preview_token,
+        "scope": scope,
+        "provider_series": plan["provider_series"],
+        "counts": plan["counts"],
+        "rows": plan["rows"],
         "issued_at": issued_at,
         "expires_at": expires_at,
     }
+
+
+async def _load_provider_volume_roster(
+    provider_series_external_id: str,
+    issues_with_mappings: list[dict[str, object]],
+) -> tuple[dict[str, object] | None, list[dict[str, object]]]:
+    """Fetch a provider volume roster when the local catalog has no stored roster.
+
+    Args:
+        provider_series_external_id: Provider-specific series identifier.
+        issues_with_mappings: Rows already resolved locally (normally empty at this point).
+
+    Returns:
+        Tuple of (series_info, roster rows). ``series_info`` is ``None`` when the provider is
+        unavailable, which the caller reports as an unavailable scope.
+
+    Raises:
+        HTTPException: 503 ``provider_unavailable`` when live provider data is required but
+            cannot be retrieved. No mutation is attempted in that case.
+    """
+    client = _get_comicvine_client()
+    if client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="provider_unavailable",
+        )
+    try:
+        volume_response = await client.fetch_volume(int(provider_series_external_id))
+        volume_data = volume_response.payload.get("results")
+        if not isinstance(volume_data, dict):
+            return None, list(issues_with_mappings)
+        series_info: dict[str, object] = {
+            "id": str(volume_data.get("id")),
+            "name": volume_data.get("name"),
+            "publisher": volume_data.get("publisher", {}).get("name") if volume_data.get("publisher") else None,
+            "start_year": volume_data.get("start_year"),
+            "count_of_issues": volume_data.get("count_of_issues"),
+            "site_detail_url": volume_data.get("site_detail_url"),
+            "image": volume_data.get("image"),
+        }
+
+        # Fetch issues from ComicVine
+        issues_rows = await client.fetch_volume_issues(int(provider_series_external_id))
+        roster: list[dict[str, object]] = []
+
+        for row in issues_rows:
+            if isinstance(row, dict):
+                issue_number = row.get("issue_number")
+                if issue_number is None:
+                    continue
+
+                provider_issue_id = row.get("id")
+                try:
+                    pid = int(provider_issue_id) if provider_issue_id is not None else 0
+                except (TypeError, ValueError):
+                    pid = 0
+                # Roster rows carry no ComicPile thread. ``thread_id`` stays ``None`` so commit
+                # refuses to bulk-confirm a provider roster id as if it were a local issue.
+                roster.append({
+                    "issue_id": pid if pid != 0 else 0,
+                    "issue_number": str(issue_number),
+                    "title": row.get("name"),
+                    "thread_id": None,
+                    "thread_title": None,
+                    "current_mapping_status": "unresolved",
+                    "provider": "comicvine",
+                    "external_id": str(provider_issue_id),
+                    "classification": "unresolved",
+                })
+        return series_info, roster
+    except HTTPException:
+        raise
+    except (ComicVineError, ValueError, TypeError, OSError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="provider_unavailable",
+        ) from exc
+    except Exception as exc:  # pragma: no cover - safety net
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="provider_unavailable",
+        ) from exc
+
+
+def _empty_preview_counts() -> dict[str, int]:
+    """Return a zeroed classification counter for every preview classification."""
+    return dict.fromkeys(PREVIEW_CLASSIFICATIONS, 0)
+
+
+def _issue_number_text(raw_value: object) -> str:
+    """Coerce a stored issue number into comparable text."""
+    if raw_value is None:
+        return ""
+    return str(raw_value)
+
+
+def _classify_series_mapping_rows(
+    issues_with_mappings: list[dict[str, object]],
+    *,
+    provider: str,
+    origin_issue_number: str,
+    counts: dict[str, int],
+) -> list[dict[str, object]]:
+    """Classify one row per issue and count each classification.
+
+    Args:
+        issues_with_mappings: Raw candidate rows from the local catalog or provider roster.
+        provider: Selected provider name.
+        origin_issue_number: Normalized-text issue number of the anchor issue.
+        counts: Counter updated in place for every classification.
+
+    Returns:
+        Deterministically ordered rows with ``row_id``, ``classification``,
+        ``proposed_mapping``, and ``default_selected`` populated.
+    """
+    candidates = _dedupe_rows_by_issue(issues_with_mappings)
+
+    # Pre-compute normalized counts for duplicate detection (unique exact requirement)
+    # Exclude the origin issue (_is_origin flag) since it's the anchor, not part of the series issues
+    normalized_counts: dict[str, int] = {}
+    for info in candidates:
+        if info.get("_is_origin"):
+            continue
+        num = _issue_number_text(info.get("issue_number"))
+        if not _is_special_issue(num) and not _is_ambiguous(num):
+            norm = _normalize_issue_number(num)
+            if norm:
+                normalized_counts[norm] = normalized_counts.get(norm, 0) + 1
+
+    classified_rows: list[dict[str, object]] = []
+    for issue_info in candidates:
+        issue_number = _issue_number_text(issue_info.get("issue_number"))
+
+        # Check if it's a special issue (annual, special, etc.)
+        if _is_special_issue(issue_number):
+            classification = "excluded_special"
+        elif _is_conflicting_mapping(issue_info, provider):
+            classification = "needs_review_conflict"
+        elif _is_ambiguous(issue_number):
+            classification = "needs_review_ambiguous"
+        elif issue_info.get("current_mapping_status") == "confirmed":
+            classification = "already_confirmed"
+        elif _is_exact_match(issue_number, origin_issue_number):
+            norm = _normalize_issue_number(issue_number)
+            if norm and normalized_counts.get(norm, 0) == 1:
+                classification = "safe_exact_match"
+            else:
+                classification = "needs_review_ambiguous"
+        else:
+            classification = "unresolved"
+
+        counts[classification] += 1
+        issue_info["row_id"] = _preview_row_id(issue_info.get("issue_id"))
+        issue_info["classification"] = classification
+        issue_info["proposed_mapping"] = classification in ("safe_exact_match", "already_confirmed")
+        issue_info["default_selected"] = classification == "safe_exact_match"
+
+        classified_rows.append(issue_info)
+
+    return classified_rows
+
+
+def _dedupe_rows_by_issue(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Collapse candidate rows to one deterministic row per issue.
+
+    A single issue can appear more than once when several provider identities are mapped to it,
+    or when the anchor issue is also joined from the local catalog. Collapsing here keeps
+    counts honest and keeps the plan digest stable across identical queries.
+
+    Args:
+        rows: Raw candidate rows.
+
+    Returns:
+        One row per issue ID, ordered by issue ID.
+    """
+    best: dict[int, dict[str, object]] = {}
+    passthrough: list[dict[str, object]] = []
+    for row in rows:
+        issue_id = row.get("issue_id")
+        if not isinstance(issue_id, int):
+            passthrough.append(row)
+            continue
+        current = best.get(issue_id)
+        if current is None or _row_precedence_key(row) < _row_precedence_key(current):
+            best[issue_id] = row
+
+    ordered = [best[issue_id] for issue_id in sorted(best)]
+    ordered.extend(sorted(passthrough, key=_row_precedence_key))
+    return ordered
+
+
+def _row_precedence_key(row: dict[str, object]) -> tuple[int, int, str, str]:
+    """Return the deterministic tie-break key used when collapsing rows for one issue."""
+    return (
+        0 if row.get("thread_id") is not None else 1,
+        MAPPING_STATUS_PRECEDENCE.get(_issue_number_text(row.get("current_mapping_status")), 4),
+        str(row.get("external_id") or ""),
+        str(row.get("issue_number") or ""),
+    )
+
+
+def _derive_scope_key(classified_rows: list[dict[str, object]], origin_issue_id: int) -> str | None:
+    """Return the opaque scope key for an available scope, otherwise ``None``."""
+    for row in classified_rows:
+        if row.get("classification") == "safe_exact_match":
+            return f"exact:{origin_issue_id}:{row.get('issue_number')}"
+    return None
+
+
+def _preview_row_id(issue_id: object) -> str:
+    """Return the stable preview row identifier for one issue."""
+    return f"{PREVIEW_ROW_ID_PREFIX}{issue_id}"
+
+
+def _plan_scope_key(plan: dict[str, object]) -> str:
+    """Return the plan's scope key, or an empty string when the scope is unavailable."""
+    scope_key = plan.get("scope_key")
+    return scope_key if isinstance(scope_key, str) else ""
+
+
+def _plan_issue_numbers(plan: dict[str, object]) -> list[str]:
+    """Return the plan's bound issue numbers."""
+    issue_numbers = plan.get("issue_numbers")
+    if not isinstance(issue_numbers, list):
+        return []
+    return [str(value) for value in issue_numbers]
+
+
+def _plan_state_digest_text(plan: dict[str, object]) -> str:
+    """Return the plan's state digest, which the preview token binds."""
+    state_digest = plan.get("state_digest")
+    return state_digest if isinstance(state_digest, str) else ""
+
+
+def _unavailable_series_mapping_plan(origin_issue_id: int, *, basis: str) -> dict[str, object]:
+    """Return a normal, non-error unavailable-scope plan."""
+    return {
+        "scope": {
+            "status": "unavailable",
+            "scope_key": None,
+            "origin_issue_id": origin_issue_id,
+            "series_label": None,
+            "basis": basis,
+        },
+        "provider_series": None,
+        "counts": _empty_preview_counts(),
+        "rows": [],
+        "scope_key": None,
+        "issue_numbers": [],
+        "state_digest": _plan_state_digest(
+            provider="",
+            provider_series_external_id="",
+            origin_issue_id=origin_issue_id,
+            scope_key=None,
+            scope_basis=basis,
+            rows=[],
+        ),
+    }
+
+
+def _plan_state_digest(
+    *,
+    provider: str,
+    provider_series_external_id: str,
+    origin_issue_id: int,
+    scope_key: str | None,
+    scope_basis: str,
+    rows: list[dict[str, object]],
+) -> str:
+    """Digest every material fact a preview token binds.
+
+    Commit recomputes this digest and refuses to write when it changes, so any change to the
+    selected provider series, scope evidence, issue numbers, mapping state, or selected
+    provider identities invalidates the preview.
+
+    Args:
+        provider: Selected provider name.
+        provider_series_external_id: Selected provider series identifier.
+        origin_issue_id: Anchor issue ID.
+        scope_key: Derived scope key, or ``None`` when the scope is unavailable.
+        scope_basis: Why the scope is available or unavailable.
+        rows: Deterministically ordered classified rows.
+
+    Returns:
+        Hex SHA-256 digest of the bound material facts.
+    """
+    parts = [
+        f"provider={provider}",
+        f"series={provider_series_external_id}",
+        f"origin={origin_issue_id}",
+        f"scope={scope_key or ''}",
+        f"basis={scope_basis}",
+    ]
+    for row in rows:
+        parts.append(
+            "|".join(
+                (
+                    _preview_row_id(row.get("issue_id")),
+                    str(row.get("issue_number") or ""),
+                    str(row.get("classification") or ""),
+                    str(row.get("current_mapping_status") or ""),
+                    str(row.get("provider") or ""),
+                    str(row.get("external_id") or ""),
+                    str(row.get("thread_id") or ""),
+                )
+            )
+        )
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
 def _get_comicvine_client():
@@ -860,12 +1079,21 @@ def _generate_preview_token(
     return json.dumps(token_data)
 
 
-def verify_preview_token(token: str, expected_user_id: int) -> dict[str, object]:
+def verify_preview_token(
+    token: str,
+    expected_user_id: int,
+    *,
+    expiry_status_code: int = status.HTTP_401_UNAUTHORIZED,
+    expiry_detail: str = "preview_token_expired",
+) -> dict[str, object]:
     """Verify an HMAC-signed preview token and check expiry and ownership.
 
     Args:
         token: JSON token string produced by ``_generate_preview_token``.
         expected_user_id: User id that must match the token payload.
+        expiry_status_code: HTTP status reported when the token is past its TTL. Commit maps
+            expiry onto ``409 preview_expired`` while the preview surface keeps ``401``.
+        expiry_detail: Response detail reported when the token is past its TTL.
 
     Returns:
         The verified payload dict.
@@ -914,8 +1142,8 @@ def verify_preview_token(token: str, expected_user_id: int) -> dict[str, object]
     expires_at = payload.get("expires_at")
     if not isinstance(expires_at, (int, float)) or float(expires_at) <= time.time():
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="preview_token_expired",
+            status_code=expiry_status_code,
+            detail=expiry_detail,
         )
 
     payload_user = payload.get("user_id")

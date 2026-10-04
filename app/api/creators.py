@@ -8,6 +8,10 @@ Endpoints:
   authenticated user's library statistics per canonical creator key.
 - ``GET /api/v1/creators/compare`` — bounded side-by-side comparison of 2-4
   canonical creators using shared personal analytics semantics (issue #3091).
+- ``GET /api/v1/creators/{creator_key}`` — bounded personal creator detail,
+  including series/run-level aggregates (issues #2037, #3088).
+- ``GET /api/v1/creators/{creator_key}/series/{series_key}/issues`` — bounded
+  drill-down of the issues behind one series/run aggregate (issue #3088).
 
 This router validates requests and delegates aggregation to the creator services.
 It performs no query construction and no direct persistence.
@@ -24,11 +28,11 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.creator_comparison import CreatorComparisonResponse
-from app.schemas.creator_detail import CreatorDetailResponse
+from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
 from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
 from app.services.creator_comparison import get_creator_comparison
-from app.services.creator_detail import get_creator_detail
+from app.services.creator_detail import get_creator_detail, get_creator_series_issues
 from app.services.creator_list import get_creator_list
 from app.services.creator_summary import get_creator_summaries
 
@@ -304,6 +308,58 @@ async def compare_creators_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
+
+
+@router.get("/{creator_key}/series/{series_key}/issues", response_model=CreatorSeriesIssueListResponse)
+async def get_creator_series_issues_endpoint(
+    creator_key: str,
+    series_key: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    limit: int = Query(50, ge=1, le=100),
+    offset: int | None = Query(None, ge=0),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorSeriesIssueListResponse:
+    """Return the bounded issues supporting one creator series/run group.
+
+    Every series aggregate on creator detail is explainable from these rows.
+    The series key must be the canonical ``thread:<id>`` identity; a group is
+    never addressed by display-title text, and a series belonging to another
+    user is indistinguishable from one that does not exist.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        series_key: Canonical series key (e.g. ``thread:7``).
+        current_user: Authenticated user owning the library.
+        limit: Max number of issue rows.
+        offset: Pagination offset.
+        db: Async database session.
+
+    Returns:
+        The bounded drill-down page plus its group-level header aggregates.
+
+    Raises:
+        HTTPException: When either key is malformed, or the creator or series
+        group is not found in the user's library.
+    """
+    try:
+        return await get_creator_series_issues(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            series_key=series_key,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Series {series_key} not found in your library",
+        ) from None
 
 
 @router.get("/{creator_key}", response_model=CreatorDetailResponse)
