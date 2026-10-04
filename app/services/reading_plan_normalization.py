@@ -184,12 +184,24 @@ def _remap_convergence_gates(
 
 
 def _compact_lane_positions(nodes: list[ContinuityPlanNode]) -> list[ContinuityPlanNode]:
-    """Renumber every lane's positions contiguously while preserving node order."""
-    next_position: dict[str, int] = {}
+    """Renumber every lane's positions contiguously in declared reading order.
+
+    New positions follow each node's declared ``position`` rank within its lane,
+    never the order the caller happened to list the nodes in. A collapse must
+    only close the gap a removed occurrence left behind; a plan submitted with
+    its nodes out of position order keeps the reading order it declared.
+    """
+    rank_by_position: dict[str, dict[int, int]] = {}
+    positions_by_lane: dict[str, set[int]] = {}
+    for node in nodes:
+        positions_by_lane.setdefault(node.lane_id, set()).add(node.position)
+    for lane_id, positions in positions_by_lane.items():
+        rank_by_position[lane_id] = {
+            position: rank for rank, position in enumerate(sorted(positions))
+        }
     compacted: list[ContinuityPlanNode] = []
     for node in nodes:
-        position = next_position.get(node.lane_id, 0)
-        next_position[node.lane_id] = position + 1
+        position = rank_by_position[node.lane_id][node.position]
         if node.position == position:
             compacted.append(node)
         else:

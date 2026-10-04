@@ -32,6 +32,7 @@ from app.models.thread import Thread
 from app.repositories import reading_plan_repository
 from app.schemas.continuity_plan import ContinuityPlanNode
 from app.services import reading_plan_normalization
+from app.services.continuity_plan_writer import replace_compiled_rules
 from tests.conftest import get_or_create_user_async
 
 
@@ -789,3 +790,134 @@ async def test_concurrent_plan_writes_cannot_duplicate_issue_membership(
     assert duplicated == []
     assert len(rows) == 1
     assert "uq_reading_plan_issue_plan_issue" in constraint_names
+
+
+@pytest.mark.asyncio
+async def test_import_and_adoption_writer_cannot_persist_duplicates(
+    async_db: AsyncSession,
+) -> None:
+    """The shared import/adoption writer collapses repeats before persisting.
+
+    Every CBL adoption, source-backed migration, and template path persists a
+    plan through ``replace_compiled_rules`` rather than the API payload
+    validators. That writer must therefore collapse a repeated canonical Issue
+    itself, so a merged or imported node set can never reach the membership table
+    with the same Issue twice.
+    """
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="adopted")
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Adopted Plan",
+        ordering_mode="informational",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[],
+    )
+    async_db.add(plan)
+    await async_db.flush()
+    plan_id = plan.id
+
+    nodes = [
+        ContinuityPlanNode(
+            id="first",
+            node_type="issue",
+            ref_id=issue.id,
+            lane_id="main",
+            position=0,
+            label="Primary",
+            convergence_gate=[],
+        ),
+        ContinuityPlanNode(
+            id="recap",
+            node_type="issue",
+            ref_id=issue.id,
+            lane_id="main",
+            position=1,
+            label="Recap",
+            convergence_gate=[],
+        ),
+    ]
+    compiled = await replace_compiled_rules(
+        async_db,
+        user_id=user.id,
+        plan=plan,
+        nodes=nodes,
+        ordering_mode="informational",
+    )
+
+    assert compiled is True
+    assert [node["id"] for node in plan.nodes_json or []] == ["first"]
+    rows = await reading_plan_repository.list_plan_issues(async_db, plan_id=plan_id)
+    assert [(row.occurrence_id, row.issue_id, row.label) for row in rows] == [
+        ("first", issue.id, "Primary")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_import_and_adoption_writer_keeps_declared_reading_order(
+    async_db: AsyncSession,
+) -> None:
+    """A collapsed strict-sequential plan keeps the order the plan declared.
+
+    Adoption and migration writers submit node lists in source order, which is
+    not always position order. Compaction closes the gap a removed occurrence
+    left behind without renumbering the plan around the submission order.
+    """
+    user = await get_or_create_user_async(async_db)
+    first_issue = await _make_issue(async_db, user_id=user.id, suffix="order-a")
+    second_issue = await _make_issue(async_db, user_id=user.id, suffix="order-b")
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Adopted Strict Plan",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[],
+    )
+    async_db.add(plan)
+    await async_db.flush()
+    plan_id = plan.id
+
+    nodes = [
+        ContinuityPlanNode(
+            id="tail",
+            node_type="issue",
+            ref_id=second_issue.id,
+            lane_id="main",
+            position=2,
+            convergence_gate=[],
+        ),
+        ContinuityPlanNode(
+            id="repeat",
+            node_type="issue",
+            ref_id=first_issue.id,
+            lane_id="main",
+            position=1,
+            convergence_gate=[],
+        ),
+        ContinuityPlanNode(
+            id="head",
+            node_type="issue",
+            ref_id=first_issue.id,
+            lane_id="main",
+            position=0,
+            convergence_gate=[],
+        ),
+    ]
+    compiled = await replace_compiled_rules(
+        async_db,
+        user_id=user.id,
+        plan=plan,
+        nodes=nodes,
+        ordering_mode="strict_sequential",
+    )
+
+    assert compiled is True
+    assert {node["id"]: node["position"] for node in plan.nodes_json or []} == {
+        "head": 0,
+        "tail": 1,
+    }
+    rows = await reading_plan_repository.list_plan_issues(async_db, plan_id=plan_id)
+    assert [(row.occurrence_id, row.display_position) for row in rows] == [
+        ("head", 0),
+        ("tail", 1),
+    ]

@@ -195,3 +195,26 @@ def test_collapse_is_idempotent() -> None:
     once = normalize_plan_nodes(nodes, compact_positions=True)
     twice = normalize_plan_nodes(once, compact_positions=True)
     assert once == twice
+
+
+def test_compact_positions_follows_declared_order_not_list_order() -> None:
+    """A collapse never reverses the reading order the plan declared.
+
+    The API accepts plan nodes in any list order, so compaction has to rank the
+    declared positions rather than the submission order. Otherwise collapsing a
+    repeat in a strict sequential plan submitted out of order would silently
+    flip its reading order.
+    """
+    nodes = [
+        _issue("b", 2, 2),
+        _issue("dup", 1, 3),
+        _issue("a", 3, 0),
+        _issue("first", 1, 1),
+    ]
+    normalized = normalize_plan_nodes(nodes, compact_positions=True)
+    assert {node.id for node in normalized} == {"a", "first", "b"}
+    assert {node.id: node.position for node in normalized} == {
+        "a": 0,
+        "first": 1,
+        "b": 2,
+    }
