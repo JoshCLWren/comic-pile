@@ -3,12 +3,29 @@ import react from '@vitejs/plugin-react'
 import sri from 'vite-plugin-sri'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spawnSync } from 'node:child_process'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+function sitemapPlugin() {
+  return {
+    name: 'sitemap-generator',
+    async closeBundle() {
+      const scriptPath = path.resolve(__dirname, 'scripts', 'generate-sitemap.mjs')
+      const result = spawnSync('node', [scriptPath], {
+        stdio: 'inherit',
+        env: { ...process.env, NODE_ENV: 'production' },
+      })
+      if (result.status !== 0) {
+        throw new Error('Sitemap generation failed')
+      }
+    },
+  }
+}
+
 export default defineConfig(() => ({
   base: '/',
-  plugins: [react(), sri({ algorithm: 'sha384' })],
+  plugins: [react(), sri({ algorithm: 'sha384' }), sitemapPlugin()],
   server: {
     host: '0.0.0.0',
     proxy: {

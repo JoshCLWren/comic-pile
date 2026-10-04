@@ -1,5 +1,9 @@
 # ComicPile crawler policy (issue #3065).
 #
+# This file is a template. The actual robots.txt is generated at build time
+# by scripts/generate-sitemap.mjs with the correct production origin.
+# The generated version replaces this file in the build output.
+#
 # Only the public landing page is indexable. Crawlers match the longest
 # (most specific) rule, so the Disallow lines below win over `Allow: /`
 # for utility, auth, demo, and authenticated routes while `/` stays allowed.
@@ -30,4 +34,7 @@ Disallow: /whats-new
 Disallow: /glossary
 Disallow: /identity-inbox
 Disallow: /api/
-Disallow: /debug/
+Disallow: /debug
+
+# Sitemap URL is injected at build time from VITE_PRODUCTION_ORIGIN
+# Sitemap: https://<production-origin>/sitemap.xml
