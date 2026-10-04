@@ -25,6 +25,7 @@ export const routeModules = {
   queue: () => import('../pages/QueuePage'),
   threadDetail: () => import('../pages/ThreadDetailView'),
   creatorDetail: () => import('../pages/CreatorDetailPage'),
+  creatorComparison: () => import('../pages/CreatorComparisonPage'),
   creators: () => import('../pages/CreatorsPage'),
   history: () => import('../pages/HistoryPage'),
   session: () => import('../pages/SessionPage'),

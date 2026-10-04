@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
@@ -192,40 +192,61 @@ async def load_series_aggregates(
     db: AsyncSession,
     user_id: int,
     creator_issue_ids: frozenset[int],
+    effective_ratings: dict[int, float],
     limit: int = MAX_SERIES_AGGREGATES,
 ) -> list[tuple[int, str, int, float | None]]:
     """Load strongest series/thread aggregates for a creator's issues.
 
+    Series averages use the latest effective rating per issue (shared
+    #2028/#2037 semantics): an issue re-rated later contributes its current
+    rating once, never the mean of its rating history.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated user owning the aggregated library.
+        creator_issue_ids: Owned issue ids attributed to the creator.
+        effective_ratings: Latest effective rating per owned issue.
+        limit: Maximum aggregates returned.
+
     Returns list of (thread_id, thread_title, issue_count, average_rating)
-    ordered by issue_count desc, average_rating desc.
+    ordered by issue_count desc, average_rating desc (nulls last), then
+    case-insensitive title and stable thread id.
     """
     if not creator_issue_ids:
         return []
 
     result = await db.execute(
-        select(
-            Thread.id,
-            Thread.title,
-            func.count(Issue.id).label("issue_count"),
-            func.avg(Event.rating).label("avg_rating"),
-        )
+        select(Thread.id, Thread.title, Issue.id)
         .join(Issue, Issue.thread_id == Thread.id)
-        .outerjoin(
-            Event,
-            (Event.issue_id == Issue.id)
-            & (Event.type == "rate")
-            & (Event.rating.is_not(None)),
-        )
         .where(Thread.user_id == user_id)
         .where(Issue.id.in_(creator_issue_ids))
-        .group_by(Thread.id, Thread.title)
-        .order_by(func.count(Issue.id).desc(), func.avg(Event.rating).desc().nulls_last())
-        .limit(limit)
     )
-    return [
-        (int(thread_id), str(thread_title), int(issue_count), float(avg_rating) if avg_rating is not None else None)
-        for thread_id, thread_title, issue_count, avg_rating in result.all()
-    ]
+    titles: dict[int, str] = {}
+    thread_issues: dict[int, list[int]] = {}
+    for thread_id, thread_title, issue_id in result.all():
+        thread_id_int = int(thread_id)
+        titles.setdefault(thread_id_int, str(thread_title))
+        thread_issues.setdefault(thread_id_int, []).append(int(issue_id))
+
+    aggregates: list[tuple[int, str, int, float | None]] = []
+    for thread_id_int, issue_ids in thread_issues.items():
+        ratings = [
+            effective_ratings[issue_id] for issue_id in issue_ids if issue_id in effective_ratings
+        ]
+        average = round(sum(ratings) / len(ratings), 2) if ratings else None
+        aggregates.append((thread_id_int, titles[thread_id_int], len(issue_ids), average))
+
+    aggregates.sort(
+        key=lambda aggregate: (
+            -aggregate[2],
+            aggregate[3] is None,
+            -(aggregate[3] or 0.0),
+            titles[aggregate[0]].casefold(),
+            titles[aggregate[0]],
+            aggregate[0],
+        )
+    )
+    return aggregates[:limit]
 
 
 __all__ = [

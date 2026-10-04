@@ -64,7 +64,9 @@ function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
 }
 
 function RatingDistributionBar({ distribution, maxCount }: { distribution: Record<string, number>; maxCount: number }) {
-  const ratings = ['5', '4', '3', '2', '1']
+  // ComicPile rates on a 1-5 scale with 0.5 increments; every bucket the API
+  // can emit gets a row so half-star ratings are never silently dropped.
+  const ratings = ['5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1']
   return (
     <div className="space-y-1" role="img" aria-label="Rating distribution">
       {ratings.map((rating) => {

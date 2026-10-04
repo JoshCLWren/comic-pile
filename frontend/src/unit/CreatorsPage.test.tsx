@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorsPage from '../pages/CreatorsPage'
 import { useCreatorsList } from '../hooks/useCreatorsList'
@@ -52,6 +52,11 @@ function baseState(overrides: Partial<CreatorsListState> = {}): CreatorsListStat
     refetch: vi.fn(),
     ...overrides,
   }
+}
+
+function CompareProbe() {
+  const [params] = useSearchParams()
+  return <div>Compare page: {params.get('keys')}</div>
 }
 
 function renderPage(extraRoutes?: { path: string; element: React.ReactNode }[]) {
@@ -341,5 +346,80 @@ describe('CreatorsPage', () => {
     renderPage()
 
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+
+  it('selects creators for comparison and opens the bounded compare route', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [
+          makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+          makeItem({ canonical_creator_key: 'creator:12', display_name: 'Steve McNiven' }),
+        ],
+        total: 2,
+      }),
+    )
+
+    renderPage([{ path: '/creators/compare', element: <CompareProbe /> }])
+
+    expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Select Brian K. Vaughan for comparison'))
+    expect(screen.getByText('1 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Select Steve McNiven for comparison'))
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(screen.getByText(/Compare page/)).toHaveTextContent('creator:7,creator:12')
+  })
+
+  it('clears the comparison selection without losing loaded rows', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [
+          makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+          makeItem({ canonical_creator_key: 'creator:12', display_name: 'Steve McNiven' }),
+        ],
+        total: 2,
+      }),
+    )
+
+    renderPage()
+
+    fireEvent.click(screen.getByLabelText('Select Brian K. Vaughan for comparison'))
+    fireEvent.click(screen.getByLabelText('Select Steve McNiven for comparison'))
+    expect(screen.getByText('2 of 4 selected for comparison')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
+
+    expect(screen.queryByText(/selected for comparison/)).not.toBeInTheDocument()
+    expect(screen.getByText('Brian K. Vaughan')).toBeInTheDocument()
+    expect(screen.getByText('Steve McNiven')).toBeInTheDocument()
+  })
+
+  it('caps comparison selection at four creators', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [1, 2, 3, 4, 5].map((id) =>
+          makeItem({ canonical_creator_key: `creator:${id}`, display_name: `Creator ${id}` }),
+        ),
+        total: 5,
+      }),
+    )
+
+    renderPage()
+
+    for (const id of [1, 2, 3, 4]) {
+      fireEvent.click(screen.getByLabelText(`Select Creator ${id} for comparison`))
+    }
+
+    expect(screen.getByText('4 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.getByLabelText('Select Creator 5 for comparison')).toBeDisabled()
+
+    fireEvent.click(screen.getByLabelText('Select Creator 1 for comparison'))
+
+    expect(screen.getByText('3 of 4 selected for comparison')).toBeInTheDocument()
+    expect(screen.getByLabelText('Select Creator 5 for comparison')).not.toBeDisabled()
   })
 })

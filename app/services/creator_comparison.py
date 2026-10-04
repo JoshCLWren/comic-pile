@@ -217,9 +217,14 @@ async def get_creator_comparison(
                 )
             )
 
-        # Strongest series/thread aggregates
+        # Strongest series/thread aggregates (effective-rating semantics shared
+        # with creator detail: latest rating per issue, never rating history).
         series_aggregates = await load_series_aggregates(
-            db, user_id, frozenset(issue_ids), limit=MAX_SERIES_AGGREGATES
+            db,
+            user_id,
+            frozenset(issue_ids),
+            inputs.effective_ratings,
+            limit=MAX_SERIES_AGGREGATES,
         )
         strongest_series = [
             CreatorComparisonSeriesAggregate(
