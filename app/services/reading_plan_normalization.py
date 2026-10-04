@@ -371,18 +371,6 @@ async def rebuild_plan_membership(
             placement_keys.add((node.id, raw_path, None))
 
     ordered_snapshots = [snapshots[key] for key in sorted(snapshots)]
-    snapshot_ids = {source.raw_source_path: source.id for source in ordered_snapshots}
-    placements = [
-        ReadingPlanSourcePlacement(
-            plan_id=plan_id,
-            occurrence_id=occurrence_id,
-            plan_source_id=snapshot_ids[raw_path],
-            source_position=position,
-        )
-        for occurrence_id, raw_path, position in sorted(
-            placement_keys, key=lambda key: (key[0], key[1], key[2] is None, key[2] or 0)
-        )
-    ]
     try:
         await reading_plan_repository.replace_plan_issues(
             db, plan_id=plan_id, rows=issue_rows
@@ -390,6 +378,18 @@ async def rebuild_plan_membership(
         await reading_plan_repository.replace_plan_sources(
             db, plan_id=plan_id, sources=ordered_snapshots, placements=[]
         )
+        snapshot_ids = {source.raw_source_path: source.id for source in ordered_snapshots}
+        placements = [
+            ReadingPlanSourcePlacement(
+                plan_id=plan_id,
+                occurrence_id=occurrence_id,
+                plan_source_id=snapshot_ids[raw_path],
+                source_position=position,
+            )
+            for occurrence_id, raw_path, position in sorted(
+                placement_keys, key=lambda key: (key[0], key[1], key[2] is None, key[2] or 0)
+            )
+        ]
         if placements:
             await reading_plan_repository.add_plan_source_placements(
                 db, plan_id=plan_id, placements=placements

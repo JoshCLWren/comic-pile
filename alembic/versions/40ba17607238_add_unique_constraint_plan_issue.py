@@ -13,7 +13,7 @@ guessing, and moves each removed occurrence's import provenance onto the
 survivor. Deployments therefore succeed whether or not duplicates exist.
 
 Revision ID: 40ba17607238
-Revises: c86400000001
+Revises: j1a2b3c4d5e6
 Create Date: 2026-10-03 18:39:26.308995
 """
 
@@ -98,7 +98,7 @@ WHERE membership.plan_id = duplicate.plan_id
 
 # revision identifiers, used by Alembic.
 revision: str = "40ba17607238"
-down_revision: str | Sequence[str] | None = "c86400000001"
+down_revision: str | Sequence[str] | None = "j1a2b3c4d5e6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

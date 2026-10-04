@@ -397,10 +397,9 @@ async def test_provenance_round_trips_through_normalized_representation(
     assert membership.status_code == 200, membership.text
     body = membership.json()
 
-    # Repeated occurrences keep display context; distinct membership is one Issue.
+    # Repeated occurrences collapse into the primary one; membership is one Issue.
     assert [(row["occurrence_id"], row["issue_id"]) for row in body["issues"]] == [
         ("first", issue.id),
-        ("recap", issue.id),
     ]
     assert body["progress"] == {"total_issues": 1, "read_issues": 0}
     first = next(row for row in body["issues"] if row["occurrence_id"] == "first")
