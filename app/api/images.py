@@ -5,9 +5,9 @@ Covers are public artwork, so this endpoint is intentionally unauthenticated
 bounded instead by the strict upstream host allowlist, DNS SSRF guard, payload
 size cap, and finite width buckets enforced by the delivery service.
 
-The endpoint serves a modern format (WebP by default; AVIF on request when
-libavif is available; ``auto`` picks the best available format) so the browser
-never downloads an unnecessarily heavy asset.
+The endpoint serves a modern format (WebP by default; AVIF on request when the
+runtime encoder is available) so the browser never downloads an unnecessarily
+heavy asset.
 """
 
 from typing import Annotated, Literal
@@ -44,12 +44,11 @@ async def api_optimize_remote_image(
         Query(ge=16, le=10000, description="Desired rendered width in pixels"),
     ],
     format: Annotated[
-        Literal["webp", "avif", "auto"],
+        Literal["webp", "avif"],
         Query(
             description=(
-                "Preferred modern output format. "
-                "'webp' is deterministic; 'avif' requires libavif; "
-                "'auto' tries AVIF and falls back to WebP."
+                "Preferred modern output format. 'webp' is deterministic; "
+                "'avif' prefers AVIF and falls back to WebP."
             ),
         ),
     ] = "webp",
@@ -60,9 +59,8 @@ async def api_optimize_remote_image(
         url: Canonical external image URL from persisted ComicPile data.
         width: Desired rendered width; snapped to a supported variant bucket.
         format: Preferred modern output format. WebP is served deterministically;
-            AVIF is served only when the environment has libavif; ``auto`` tries
-            AVIF first and falls back to WebP so the pipeline never degrades the
-            source.
+            AVIF is preferred when the runtime can encode it and otherwise falls
+            back to WebP so the variant stays downscaled.
 
     Returns:
         A binary image response with long-lived shared-cache headers, or an

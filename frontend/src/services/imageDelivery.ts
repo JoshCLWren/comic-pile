@@ -4,7 +4,7 @@ export const IMAGE_WIDTH_VARIANTS = [96, 240, 480, 720] as const
 
 export type ImageWidthVariant = (typeof IMAGE_WIDTH_VARIANTS)[number]
 
-export type ImageFormat = 'webp' | 'avif' | 'auto'
+export type ImageFormat = 'webp' | 'avif'
 
 interface ImageUrlOptions {
   format?: ImageFormat
@@ -17,9 +17,8 @@ interface ImageUrlOptions {
  * External http(s) sources are routed through the edge-cacheable
  * `/api/v1/images/optimize` endpoint, which allowlists upstream hosts and
  * serves resized modern-format variants (WebP by default; AVIF on request when
- * libavif is available; `auto` prefers AVIF and falls back to WebP). Local,
- * data, and blob URLs are returned unchanged so the optimizer never sees
- * non-remote sources.
+ * the runtime encoder is available, otherwise WebP). Local, data, and blob URLs
+ * are returned unchanged so the optimizer never sees non-remote sources.
  *
  * Canonical source URLs are never rewritten at rest; this transformation is a
  * render-time delivery concern only.
@@ -60,10 +59,11 @@ export function optimizedImageUrl(
  *
  * @param sourceUrl - Canonical external image URL.
  * @param widths - Width variants; defaults to the standard 96/240/480/720 buckets.
- * @param options.withFormats - When true, emit `type="image/avif"` and
- *   `type="image/webp"` hints alongside each width so the browser picks the
- *   smallest modern-format variant; widths are served through the `format`
- *   query parameter the endpoint understands.
+ * @param options.withFormats - When true, emit a `type="image/webp"` and a
+ *   `type="image/avif"` candidate per width so AVIF-capable browsers pick the
+ *   smaller AVIF variant. The endpoint serves WebP for an AVIF candidate when
+ *   the runtime has no AVIF encoder, so the `src` fallback stays valid either
+ *   way. Sources the optimizer does not rewrite emit only their single URL.
  */
 export function optimizedImageSrcSet(
   sourceUrl: string | null | undefined,
@@ -74,19 +74,19 @@ export function optimizedImageSrcSet(
 
   const entries: string[] = []
   widths.forEach((width) => {
-    const base = optimizedImageUrl(sourceUrl, width)
-    if (!base) return
-    if (options?.withFormats) {
-      // WebP is the broadly supported default variant.
-      entries.push(`${base} ${width}w`)
-      // AVIF is the modern, smaller alternative; browsers with AVIF support
-      // select it via the type hint.
-      entries.push(
-        `${optimizedImageUrl(sourceUrl, width, { format: 'avif' })} type="image/avif" ${width}w`,
-      )
-    } else {
-      entries.push(`${base} ${width}w`)
+    const webp = optimizedImageUrl(sourceUrl, width)
+    if (!webp) return
+    if (!options?.withFormats) {
+      entries.push(`${webp} ${width}w`)
+      return
     }
+    const avif = optimizedImageUrl(sourceUrl, width, { format: 'avif' })
+    if (!avif || avif === webp) {
+      entries.push(`${webp} ${width}w`)
+      return
+    }
+    entries.push(`${webp} type="image/webp" ${width}w`)
+    entries.push(`${avif} type="image/avif" ${width}w`)
   })
 
   return entries.length > 0 ? entries.join(', ') : null

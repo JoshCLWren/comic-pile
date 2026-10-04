@@ -9,8 +9,9 @@ URLs and the bytes the browser receives:
 - only explicitly allowlisted upstream hosts are fetched;
 - resolved addresses must be publicly routable (SSRF protection);
 - payloads are size-capped and content-type-checked;
-- images are downscaled to bounded width buckets and re-encoded as WebP when a
-  transcoder is available, falling back to validated passthrough bytes;
+- images are downscaled to bounded width buckets and re-encoded as WebP, or as
+  AVIF when the runtime encoder is available, falling back to validated
+  passthrough bytes;
 - responses are marked immutable and shared-cacheable so Vercel's CDN serves
   repeat requests from the edge instead of refetching the upstream host.
 """
@@ -21,6 +22,7 @@ import ipaddress
 import logging
 import socket
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -238,21 +240,44 @@ async def fetch_upstream(
     return b"".join(chunks), content_type
 
 
+@lru_cache
+def avif_encoding_available() -> bool:
+    """Report whether this runtime can encode AVIF payloads.
+
+    Pillow only registers the AVIF encoder when it was built against libavif, so
+    the capability is probed once per process instead of on every request. That
+    keeps the AVIF fallback deterministic and avoids logging a warning for every
+    cover a runtime without libavif is asked to deliver.
+
+    Returns:
+        True when Pillow can encode AVIF, False when it cannot.
+    """
+    try:
+        from PIL import Image
+
+        return "AVIF" in set(Image.registered_extensions().values())
+    except ImportError:
+        return False
+
+
 def transcode_to_avif(payload: bytes, target_width: int) -> tuple[bytes, str] | None:
     """Downscale and re-encode an image payload as AVIF.
 
     Never upscales; smaller sources are returned at their intrinsic size. When
-    the payload cannot be transcoded (Pillow/libavif unavailable or corrupted
-    payload) the caller falls back to serving validated original bytes.
+    the payload cannot be transcoded (libavif unavailable, Pillow unavailable,
+    or corrupted payload) the caller falls back to the WebP pipeline so the
+    delivered variant is still downscaled and modern.
 
     Args:
         payload: Raw upstream image bytes of a verified ``image/*`` type.
         target_width: Maximum output width in pixels.
 
     Returns:
-        Tuple of AVIF bytes and the AVIF media type, or ``None`` when the
-        payload cannot be transcoded in this environment.
+        Tuple of AVIF bytes and the AVIF media type, or ``None`` when this
+        environment cannot produce AVIF for the payload.
     """
+    if not avif_encoding_available():
+        return None
     settings = get_image_delivery_settings()
     try:
         from PIL import Image, ImageOps
@@ -271,9 +296,9 @@ def transcode_to_avif(payload: bytes, target_width: int) -> tuple[bytes, str] | 
             converted.save(buffer, format="AVIF", quality=settings.image_optimizer_avif_quality)
             return buffer.getvalue(), "image/avif"
     except ImportError:
-        logger.warning("Pillow or libavif unavailable; serving remote covers without transformation")
+        logger.warning("Pillow unavailable; serving remote covers without transformation")
     except Exception as exc:
-        logger.warning("Remote cover AVIF transcode failed; serving original bytes: %s", exc)
+        logger.warning("Remote cover AVIF transcode failed; falling back to WebP: %s", exc)
     return None
 
 
@@ -322,8 +347,9 @@ def transcode_to_modern_format(
     """Downscale and re-encode an image payload as a modern lossy format.
 
     Never upscales; smaller sources are returned at their intrinsic size. When
-    the payload cannot be transcoded (Pillow/transcoder unavailable or corrupt
-    payload) the caller falls back to serving validated original bytes.
+    the requested format cannot be produced (missing encoder or corrupt payload)
+    the caller decides whether to try another modern format or fall back to
+    validated passthrough bytes.
 
     Args:
         payload: Raw upstream image bytes of a verified ``image/*`` type.
@@ -331,8 +357,8 @@ def transcode_to_modern_format(
         format: ``webp`` or ``avif``.
 
     Returns:
-        Tuple of encoded bytes and the encoded media type, or ``None`` when
-        the payload cannot be transcoded in this environment.
+        Tuple of encoded bytes and the encoded media type, or ``None`` when the
+        requested format cannot be produced in this environment.
     """
     if format == "avif":
         return transcode_to_avif(payload, target_width)
@@ -343,7 +369,7 @@ async def optimize_remote_image(
     source_url: str,
     requested_width: int,
     *,
-    format: Literal["webp", "avif", "auto"] = "webp",
+    format: Literal["webp", "avif"] = "webp",
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> OptimizedImage:
     """Turn a canonical external image URL into optimized, cacheable bytes.
@@ -351,9 +377,9 @@ async def optimize_remote_image(
     Args:
         source_url: Canonical external image URL (never rewritten at rest).
         requested_width: Desired rendered width in pixels.
-        format: Preferred modern output format. ``webp`` is served deterministically;
-            ``avif`` is served only when libavif is available; ``auto`` tries AVIF
-            first and falls back to WebP so the pipeline never degrades the source.
+        format: ``webp`` is deterministic. ``avif`` prefers AVIF and falls back
+            to WebP so a browser that selected an AVIF candidate still receives
+            a downscaled modern variant instead of the full-size original.
         transport: Optional httpx transport override (used by tests).
 
     Returns:
@@ -370,23 +396,25 @@ async def optimize_remote_image(
     target_width = resolve_variant_width(requested_width)
     payload, content_type = await fetch_upstream(validated_url, transport=transport)
 
-    if format == "auto":
-        avif = transcode_to_avif(payload, target_width)
-        if avif is not None:
-            return OptimizedImage(
-                content=avif[0], media_type=avif[1], width=target_width, transcoded=True
-            )
-        transcoded = transcode_to_webp(payload, target_width)
-        if transcoded is not None:
-            return OptimizedImage(
-                content=transcoded[0], media_type=transcoded[1], width=target_width, transcoded=True
-            )
+    candidates: tuple[Literal["avif", "webp"], ...]
+    if format == "avif":
+        candidates = ("avif", "webp")
     else:
-        transcoded = transcode_to_modern_format(payload, target_width, format)
-        if transcoded is not None:
-            return OptimizedImage(
-                content=transcoded[0], media_type=transcoded[1], width=target_width, transcoded=True
-            )
+        candidates = ("webp",)
+
+    for candidate in candidates:
+        transcoded = await asyncio.to_thread(
+            transcode_to_modern_format, payload, target_width, candidate
+        )
+        if transcoded is None:
+            continue
+        content, media_type = transcoded
+        return OptimizedImage(
+            content=content,
+            media_type=media_type,
+            width=target_width,
+            transcoded=True,
+        )
 
     return OptimizedImage(
         content=payload,

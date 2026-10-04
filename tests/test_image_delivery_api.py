@@ -1,9 +1,9 @@
 """Tests for the edge-cacheable remote cover image optimizer (issue #1914).
 
-Covers URL allowlisting, SSRF guards, width bucketing, WebP transformation,
-cache headers, and failure behavior. All network access is mocked via httpx
-transports and patched resolvers, so this module needs no database or live
-upstream host.
+Covers URL allowlisting, SSRF guards, width bucketing, WebP/AVIF format
+selection and fallback, cache headers, and failure behavior. All network access is
+mocked via httpx transports and patched resolvers, so this module needs no database
+or live upstream host.
 """
 
 import asyncio
@@ -20,6 +20,7 @@ from app.services import image_delivery
 from app.services.image_delivery import (
     InvalidImageSourceError,
     UpstreamImageUnavailableError,
+    avif_encoding_available,
     fetch_upstream,
     optimize_remote_image,
     resolve_variant_width,
@@ -470,17 +471,26 @@ class TestOptimizeEndpoint:
 class TestAvifDelivery:
     """AVIF format support on top of the existing WebP pipeline (issue #3069)."""
 
-    def test_avif_transcode_renders_avif_when_libavif_is_available(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_avif_encoder_probe_is_truthy_or_falsey(self) -> None:
+        """The AVIF capability probe always returns a real boolean."""
+        assert isinstance(avif_encoding_available(), bool)
+
+    def test_avif_transcode_renders_avif_when_libavif_is_available(self) -> None:
         """Pillow's AVIF encoder yields an image/avif payload."""
         payload = _png_bytes(width=800, height=1200)
         avif = transcode_to_avif(payload, 240)
         if avif is None:
-            pytest.skip(reason="libavif not available in this environment")
+            pytest.skip("libavif not available in this environment")
         assert avif[1] == "image/avif"
         assert _image_dimensions(avif[0])[0] <= 240
+
+    def test_avif_transcode_returns_none_without_encoder_support(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A runtime without libavif declines AVIF instead of raising."""
+        monkeypatch.setattr(image_delivery, "avif_encoding_available", lambda: False)
+        assert transcode_to_avif(_png_bytes(width=800, height=1200), 240) is None
 
     def test_transcode_to_modern_format_dispatches_webp(self) -> None:
         """``format=webp`` delegates to the proven WebP path unchanged."""
@@ -502,7 +512,7 @@ class TestAvifDelivery:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """``format=avif`` is served only when libavif is available."""
+        """``format=avif`` prefers AVIF and falls back to downscaled WebP."""
         _allow_all_resolver(monkeypatch)
         payload = _png_bytes(width=800, height=1200)
 
@@ -512,56 +522,77 @@ class TestAvifDelivery:
             format="avif",
             transport=_transport_with(payload, media_type="image/png"),
         )
-        if result.transcoded:
-            assert result.media_type == "image/avif"
-            assert _image_dimensions(result.content)[0] <= 240
-        else:
-            # libavif unavailable: validated original bytes are served unchanged.
-            assert result.media_type == "image/png"
 
-    async def test_optimize_remote_image_auto_picks_avif_when_available(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """``format=auto`` prefers AVIF over WebP when encodable."""
-        _allow_all_resolver(monkeypatch)
-        payload = _png_bytes(width=800, height=1200)
-
-        result = await optimize_remote_image(
-            f"https://{ALLOWED_HOST}/cover.auto",
-            240,
-            format="auto",
-            transport=_transport_with(payload, media_type="image/png"),
-        )
-        # Auto tries AVIF first; fall back to WebP only if the codec is missing.
-        assert result.media_type in ("image/avif", "image/webp")
+        assert result.transcoded is True
+        expected = "image/avif" if image_delivery.avif_encoding_available() else "image/webp"
+        assert result.media_type == expected
         assert _image_dimensions(result.content)[0] <= 240
 
-    async def test_optimize_remote_image_auto_falls_back_to_webp_when_avif_unavailable(
+    async def test_optimize_remote_image_avif_falls_back_to_webp_without_encoder(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """``format=auto`` falls back to WebP when AVIF cannot be produced."""
+        """A runtime without libavif still downscales instead of passing through."""
+        _allow_all_resolver(monkeypatch)
+        monkeypatch.setattr(image_delivery, "avif_encoding_available", lambda: False)
+
+        result = await optimize_remote_image(
+            f"https://{ALLOWED_HOST}/cover.noavif",
+            240,
+            format="avif",
+            transport=_transport_with(_png_bytes(width=800, height=1200), media_type="image/png"),
+        )
+
+        assert result.transcoded is True
+        assert result.media_type == "image/webp"
+        assert _image_dimensions(result.content)[0] <= 240
+
+    async def test_optimize_remote_image_avif_falls_through_to_webp_when_transcode_declines(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A failed AVIF transcode falls through to the WebP candidate."""
         _allow_all_resolver(monkeypatch)
         monkeypatch.setattr(image_delivery, "transcode_to_avif", lambda p, w: None)
 
         result = await optimize_remote_image(
             f"https://{ALLOWED_HOST}/cover.fallback",
             240,
-            format="auto",
+            format="avif",
             transport=_transport_with(_png_bytes(width=800, height=1200), media_type="image/png"),
         )
 
         assert result.transcoded is True
         assert result.media_type == "image/webp"
 
-    async def test_avif_endpoint_variant_has_avif_content_type(
+    async def test_optimize_remote_image_passes_through_when_no_codec_works(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Only when both modern codecs fail do validated original bytes ship."""
+        _allow_all_resolver(monkeypatch)
+        monkeypatch.setattr(image_delivery, "transcode_to_avif", lambda p, w: None)
+        monkeypatch.setattr(image_delivery, "transcode_to_webp", lambda p, w: None)
+        original = _png_bytes(width=800, height=1200)
+
+        result = await optimize_remote_image(
+            f"https://{ALLOWED_HOST}/cover.nocodec",
+            240,
+            format="avif",
+            transport=_transport_with(original, media_type="image/png"),
+        )
+
+        assert result.transcoded is False
+        assert result.media_type == "image/png"
+        assert result.content == original
+
+    async def test_avif_endpoint_variant_serves_a_modern_variant(
         self,
         monkeypatch: pytest.MonkeyPatch,
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
-        """The ``format=avif`` query parameter serves AVIF with cache headers."""
+        """The ``format=avif`` query parameter serves AVIF or WebP with cache headers."""
         _allow_all_resolver(monkeypatch)
         _canned_fetch(monkeypatch, _png_bytes(width=900, height=1350), "image/png")
 
@@ -570,12 +601,9 @@ class TestAvifDelivery:
         )
 
         assert response.status_code == 200
-        if "image/avif" in response.headers.get("content-type", ""):
-            assert "max-age=31536000" in response.headers["cache-control"]
-            assert _image_dimensions(response.content)[0] <= 240
-        else:
-            # libavif unavailable: validated original bytes served instead.
-            assert "image/png" in response.headers.get("content-type", "")
+        assert response.headers["content-type"] in ("image/avif", "image/webp")
+        assert "max-age=31536000" in response.headers["cache-control"]
+        assert _image_dimensions(response.content)[0] <= 240
 
 
 class TestModernFormatDelivery:
@@ -594,22 +622,22 @@ class TestModernFormatDelivery:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("image/webp")
 
-    async def test_auto_format_serves_when_encodable(
+    async def test_explicit_webp_format_is_deterministic(
         self,
         monkeypatch: pytest.MonkeyPatch,
         client: httpx.AsyncClient,
         endpoint_url: str,
     ) -> None:
-        """``format=auto`` succeeds when a modern codec is available."""
+        """``format=webp`` never upgrades to AVIF for the same source and width."""
         _allow_all_resolver(monkeypatch)
         _canned_fetch(monkeypatch, _png_bytes(width=900, height=1350), "image/png")
 
         response = await client.get(
-            endpoint_url, params={"url": ALLOWED_SOURCE, "width": 240, "format": "auto"}
+            endpoint_url, params={"url": ALLOWED_SOURCE, "width": 240, "format": "webp"}
         )
 
         assert response.status_code == 200
-        assert response.headers["content-type"] in ("image/avif", "image/webp")
+        assert response.headers["content-type"].startswith("image/webp")
 
     async def test_unknown_format_fails_validation(
         self,

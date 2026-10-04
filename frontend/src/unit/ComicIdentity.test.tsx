@@ -89,6 +89,10 @@ describe('ComicIdentity', () => {
     const srcSet = cover.getAttribute('srcset') ?? ''
     expect(srcSet).toContain('/api/v1/images/optimize?url=https%3A%2F%2Fimages.example%2F100.jpg&width=240')
     expect(srcSet).toContain('720w')
+    // The hero negotiates modern formats so AVIF-capable browsers get the
+    // smaller variant while everyone else falls back to WebP.
+    expect(srcSet).toContain('type="image/webp" 720w')
+    expect(srcSet).toContain('format=avif type="image/avif" 720w')
 
     // Cover/store date
     expect(screen.getByText('Jan 1, 2026')).toBeInTheDocument()

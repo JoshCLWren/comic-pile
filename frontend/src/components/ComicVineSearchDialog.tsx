@@ -520,6 +520,8 @@ export default function ComicVineSearchDialog({
                   >
                     <div className="flex items-center gap-3">
                       {issue.image_url && (
+                        // ALT: decorative — the issue cover thumbnail is redundant with the
+                        // issue number, name, and cover date shown immediately beside it.
                         <ImageWithLoading
                           src={optimizedImageUrl(issue.image_url, 240) ?? issue.image_url}
                           srcSet={optimizedImageSrcSet(issue.image_url, [96, 240]) ?? undefined}
@@ -572,6 +574,8 @@ export default function ComicVineSearchDialog({
               <p className="text-xs font-black uppercase tracking-wider text-stone-400">Selected match</p>
               <div className="flex items-start gap-3">
                 {confirmIssue.image_url && (
+                  // ALT: decorative — the confirmation thumbnail is redundant with the
+                  // series, issue number, name, and cover date shown beside it.
                   <ImageWithLoading
                     src={optimizedImageUrl(confirmIssue.image_url, 240) ?? confirmIssue.image_url}
                     srcSet={optimizedImageSrcSet(confirmIssue.image_url, [96, 240]) ?? undefined}

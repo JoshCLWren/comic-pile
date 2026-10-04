@@ -190,7 +190,11 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
               readers and crawlers understand what is shown. */}
             <ImageWithLoading
               src={optimizedImageUrl(metadata.image_url, 720) ?? metadata.image_url}
-              srcSet={optimizedImageSrcSet(metadata.image_url, [240, 480, 720]) ?? undefined}
+              srcSet={
+                optimizedImageSrcSet(metadata.image_url, [240, 480, 720], {
+                  withFormats: true,
+                }) ?? undefined
+              }
               sizes="(min-width: 1024px) 30vh, calc((45vh * 2) / 3)"
               alt={metadata.name ?? 'Comic cover'}
               loading="eager"
@@ -510,7 +514,10 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         // canonical issue name.
         <img
           src={optimizedImageUrl(metadata.image_url, 1200) ?? metadata.image_url}
-          srcSet={optimizedImageSrcSet(metadata.image_url, [480, 720, 1200]) ?? undefined}
+          srcSet={
+            optimizedImageSrcSet(metadata.image_url, [480, 720, 1200], { withFormats: true }) ??
+            undefined
+          }
           sizes="(min-width: 1024px) 80vw, 90vw"
           alt={metadata.name ?? 'Comic cover'}
           className="w-full rounded-lg"

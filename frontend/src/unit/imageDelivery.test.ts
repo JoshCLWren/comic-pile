@@ -57,6 +57,18 @@ describe('imageDelivery', () => {
       const result = optimizedImageUrl(source, 300)
       expect(result).toContain('width=300')
     })
+
+    it('adds the format query parameter when a format is requested', () => {
+      const source = 'https://comicvine.gamespot.com/cover.jpg'
+      const result = optimizedImageUrl(source, 240, { format: 'avif' })
+      expect(result).toContain('&format=avif')
+      expect(result).toContain('width=240')
+    })
+
+    it('ignores the format option for sources the optimizer does not rewrite', () => {
+      const dataUrl = 'data:image/png;base64,abc123'
+      expect(optimizedImageUrl(dataUrl, 240, { format: 'avif' })).toBe(dataUrl)
+    })
   })
 
   describe('optimizedImageSrcSet', () => {
@@ -115,6 +127,29 @@ describe('imageDelivery', () => {
       const result = optimizedImageSrcSet(source, [96, 240])
       const entries = result?.split(', ') ?? []
       expect(entries.length).toBe(2)
+    })
+
+    it('emits typed WebP and AVIF candidates when withFormats is set', () => {
+      const source = 'https://comicvine.gamespot.com/cover.jpg'
+      const result = optimizedImageSrcSet(source, [240, 480], { withFormats: true })
+      const entries = result?.split(', ') ?? []
+      expect(entries.length).toBe(4)
+      expect(entries[0]).toBe(`${optimizedImageUrl(source, 240)} type="image/webp" 240w`)
+      expect(entries[1]).toBe(
+        `${optimizedImageUrl(source, 240, { format: 'avif' })} type="image/avif" 240w`,
+      )
+      expect(entries[2]).toBe(`${optimizedImageUrl(source, 480)} type="image/webp" 480w`)
+      expect(entries[3]).toBe(
+        `${optimizedImageUrl(source, 480, { format: 'avif' })} type="image/avif" 480w`,
+      )
+    })
+
+    it('does not duplicate pass-through sources when withFormats is set', () => {
+      const dataUrl = 'data:image/png;base64,abc123'
+      const result = optimizedImageSrcSet(dataUrl, [96, 240], { withFormats: true })
+      const entries = result?.split(', ') ?? []
+      expect(entries.length).toBe(2)
+      expect(entries.every((entry) => !entry.includes('type="image/avif"'))).toBe(true)
     })
   })
 
