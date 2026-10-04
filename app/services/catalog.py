@@ -506,12 +506,25 @@ async def build_series_mapping_plan(
     # from that series in the preview (not just the user-mapped ones) so siblings can be
     # identified and offered for safe bulk confirmation. Fall back to ComicVine API roster
     # when the local catalog does not already contain the full series.
+    series_external_id_for_check: str | None = None
+    if series_info is not None:
+        raw_id = series_info.get("id")
+        if isinstance(raw_id, str):
+            series_external_id_for_check = raw_id
+        elif isinstance(raw_id, int):
+            series_external_id_for_check = str(raw_id)
+
+    origin_issue_thread_id_for_check: int | None = None
+    raw_thread = origin_issue.get("thread_id")
+    if isinstance(raw_thread, int):
+        origin_issue_thread_id_for_check = raw_thread
+
     origin_has_confirmed_series = await has_confirmed_series_mapping_for_origin(
         db,
         provider=provider,
-        series_external_id=series_info.get("id") if series_info is not None else None,
+        series_external_id=series_external_id_for_check,
         origin_issue_id=origin_issue_id,
-        origin_issue_thread_id=origin_issue.get("thread_id"),
+        origin_issue_thread_id=origin_issue_thread_id_for_check,
     )
 
     if origin_has_confirmed_series and series_info is not None:
