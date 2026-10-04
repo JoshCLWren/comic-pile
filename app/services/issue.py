@@ -14,9 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
 from app.repositories import issue_repository
+from app.schemas.tags import TagTargetType
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from app.utils.issue_natural_order import natural_issue_order
+from app.services.tag_service import purge_target_assignments
 from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
 
@@ -405,6 +407,7 @@ async def delete_issue(
     deleted_issue_number = issue.issue_number
     remaining_issues = [i for i in thread_issues if i.id != issue_id]
 
+    await purge_target_assignments(db, TagTargetType.ISSUE.value, [issue_id])
     await issue_repository.delete_issue(db, issue)
 
     for i in remaining_issues:

@@ -2,6 +2,10 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import {
+  ROLL_WORKSPACE_MAX_WIDTH,
+  ROLL_WORKSPACE_TRACKS,
+} from '../pages/RollPage/workspaceLayout'
 import { hasNoGridColsArbitraryComma } from '../../eslint-rules/grid-cols-comma-guard'
 import { ToastProvider } from '../contexts/ToastProvider'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
@@ -167,6 +171,11 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
     expect(hasNoGridColsArbitraryComma(grid!.className)).toBe(true)
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
+    // #2712: the workspace geometry is owned once, so the header chrome that
+    // frames it cannot drift onto a different shell or a different
+    // Comic/Decision division.
+    expect(grid!.className).toContain(ROLL_WORKSPACE_MAX_WIDTH)
+    expect(grid!.className).toContain(ROLL_WORKSPACE_TRACKS)
 
     // After #2711, only Comic and the decision region remain (2 cells)
     expect(cells.length).toBe(2)

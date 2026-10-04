@@ -272,6 +272,8 @@ describe('semantic theme stylesheet contract (#1646)', () => {
     const sources = [
       'src/components/CustomCBLBuilder.tsx',
       'src/components/ReadingPlanAddMaterialImpl.tsx',
+      'src/pages/LandingPage.tsx',
+      'src/pages/DemoRollPage.tsx',
     ]
     for (const source of sources) {
       const text = loadComponentStylesheet(source)

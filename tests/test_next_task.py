@@ -65,6 +65,75 @@ def test_select_next_ignores_manual_only_issue() -> None:
     assert candidate.issue["number"] == 20
 
 
+def test_select_next_ignores_body_declared_acceptance_parent() -> None:
+    """A #1615-shaped parent (contract in body, no epic/prd label) is not executable."""
+    issues = [
+        _issue(
+            10,
+            "CBL browser and adoption workflow",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:critical"],
+            "This is the acceptance parent for CBL adoption.\n"
+            "- [x] #2127 — transactional adoption\n"
+            "- [ ] #2128 — production browser UI\n",
+        ),
+        _issue(20, "Ready task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"]),
+    ]
+
+    candidate = select_next(issues, set())
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 20
+
+
+def test_select_next_keeps_deferred_production_acceptance_executable() -> None:
+    """An issue that hands operator acceptance to another issue stays executable.
+
+    #3037, #2718, and #2128 are executable implementation work that explicitly
+    defers the operator acceptance pass. Classifying them as acceptance parents
+    would drop a user-reported bug from the first delivery queue.
+    """
+    issues = [
+        _issue(
+            10,
+            "Enforce one membership per canonical issue",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:critical"],
+            "## Production acceptance split\n"
+            "#3042 owns the production-wide audit and reconciliation.\n"
+            "- [ ] A Reading Plan cannot persist the same issue twice.\n"
+            "- [ ] The invariant is enforced at the database layer.\n",
+        ),
+        _issue(
+            11,
+            "CBL adoption browser UI",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
+            "Refs #2129 so it can use this path for production acceptance.\n"
+            "- [ ] Reader adopts after one compact confirmation\n",
+        ),
+    ]
+
+    candidate = select_next(issues, set())
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 10
+
+
+def test_select_next_keeps_casual_acceptance_mention_executable() -> None:
+    """A casual 'production acceptance' mention without criteria stays executable."""
+    issues = [
+        _issue(
+            10,
+            "Fix roll boundary",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:critical"],
+            "Verify in production acceptance later; no subtasks.",
+        ),
+    ]
+
+    candidate = select_next(issues, set())
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 10
+
+
 def test_select_next_skips_issue_with_open_dependency() -> None:
     """An issue should wait until its referenced dependency is closed."""
     issues = [
@@ -203,6 +272,57 @@ def test_start_task_rejects_manual_only_issue(monkeypatch: pytest.MonkeyPatch) -
         next_task._start_task(42)
 
     gh_runner.assert_not_called()
+
+
+def test_start_task_rejects_body_declared_acceptance_parent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit start cannot bypass the body-declared acceptance-parent fence."""
+    monkeypatch.setattr(
+        next_task,
+        "_gh_issue",
+        lambda issue_number: _issue(
+            issue_number,
+            "CBL browser and adoption workflow",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
+            "This is the acceptance parent for CBL adoption.\n"
+            "- [x] #2127 — transactional adoption\n"
+            "- [ ] #2128 — production browser UI\n",
+        ),
+    )
+    gh_runner = Mock()
+    monkeypatch.setattr(next_task, "_run_gh", gh_runner)
+
+    with pytest.raises(RuntimeError, match="product-acceptance parent"):
+        next_task._start_task(42)
+
+    gh_runner.assert_not_called()
+
+
+def test_start_task_allows_deferred_production_acceptance_split(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An issue that defers the operator acceptance pass stays startable."""
+    monkeypatch.setattr(
+        next_task,
+        "_gh_issue",
+        lambda issue_number: _issue(
+            issue_number,
+            "Enforce one membership per canonical issue",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
+            "## Production acceptance split\n"
+            "#3042 owns the production-wide audit and reconciliation.\n"
+            "- [ ] A Reading Plan cannot persist the same issue twice.\n",
+        ),
+    )
+    gh_runner = Mock()
+    monkeypatch.setattr(next_task, "_run_gh", gh_runner)
+    monkeypatch.setattr(next_task, "_gh_issue_list", lambda state: [])
+    monkeypatch.setattr(next_task, "_issue_context", lambda issue, closed: "context")
+
+    next_task._start_task(42)
+
+    gh_runner.assert_called()
 
 
 def test_start_task_rejects_unresolved_dependency(monkeypatch: pytest.MonkeyPatch) -> None:

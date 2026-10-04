@@ -2,6 +2,14 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import Modal from '../../../components/Modal'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { RATING_THRESHOLD, getRatingColorClass } from '../utils'
+import {
+  rollDangerActionClass,
+  rollDialogSecondaryActionClass,
+  rollPrimaryActionClass,
+  rollSecondaryActionClass,
+  rollSecondaryActionGroupClass,
+  rollUtilityActionClass,
+} from '../actionClasses'
 import type { RatingThread } from '../types'
 
 interface DecisionCardProps {
@@ -76,7 +84,10 @@ export function DecisionCard({
       data-testid="decision-card"
     >
       <div className="flex items-center justify-between gap-2 border-b border-[var(--theme-border)] pb-2">
-        <h3 id="decision-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+        <h3
+          id="decision-heading"
+          className="text-base font-bold text-[var(--theme-text-primary)]"
+        >
           Your rating
         </h3>
         {threadTitle && issueNumber != null && (
@@ -84,8 +95,9 @@ export function DecisionCard({
             type="button"
             onClick={handleCopyComicReference}
             disabled={!threadTitle}
-            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black uppercase tracking-wider transition focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40 shrink-0 ${copyStatus === 'copied' ? 'border-[var(--theme-continuity-accent)]/40 bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]' : copyStatus === 'failed' ? 'border-[var(--theme-danger)]/30 bg-[var(--theme-danger)]/10 text-[var(--theme-danger)]' : 'border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'}`}
+            className={`min-h-9 shrink-0 ${rollUtilityActionClass(copyStatus)}`}
             aria-label={`Copy ${threadTitle} ${issueNumber}`}
+            aria-live="polite"
             data-testid="copy-title-button"
           >
             <svg
@@ -102,13 +114,13 @@ export function DecisionCard({
               <path d="M20 4.5A2.5 2.5 0 0 0 17.5 2H14"></path>
               <path d="M20 4.5v17A2.5 2.5 0 0 0 17.5 19H14"></path>
             </svg>
-            {copyStatus === 'copied' ? 'COPIED' : copyStatus === 'failed' ? 'Retry' : 'Copy title'}
+            {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry' : 'Copy title'}
           </button>
         )}
       </div>
 
       {copyStatus === 'failed' ? (
-        <p role="status" className="text-[10px] font-bold text-rose-400">
+        <p role="status" className="text-[10px] font-bold text-[var(--theme-danger)]">
           Copy failed. Use Retry to try again.
         </p>
       ) : null}
@@ -147,15 +159,15 @@ export function DecisionCard({
       </p>
 
       {isLastIssue && (
-        <div className="rounded-xl border border-amber-600/20 bg-amber-600/10 p-3 text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-500">
+        <div className="rounded-xl border border-[var(--theme-warning)]/30 bg-[var(--theme-warning)]/10 p-3 text-center">
+          <p className="text-xs font-semibold text-[var(--theme-warning)]">
             This is the last issue in the series
           </p>
         </div>
       )}
 
       {errorMessage ? (
-        <div id="error-message" className="text-center text-[10px] font-bold text-rose-500" role="alert">
+        <div id="error-message" className="text-center text-[10px] font-bold text-[var(--theme-danger)]" role="alert">
           {errorMessage}
         </div>
       ) : null}
@@ -169,17 +181,20 @@ export function DecisionCard({
           onClick={() => onSubmitRating(false)}
           disabled={rateIsPending}
           data-testid="save-and-continue"
-          className="w-full rounded-xl border border-[var(--theme-comic-accent)]/50 bg-[var(--theme-comic-accent)]/25 py-3.5 text-xs font-black uppercase tracking-[0.15em] transition hover:bg-[var(--theme-comic-accent)]/35 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50 active:scale-[0.98]"
+          className={rollPrimaryActionClass}
         >
           {rateIsPending ? 'Saving…' : isLastIssue ? 'Mark read & complete' : 'Mark read & save'}
         </button>
 
-        <div className="flex gap-2" data-testid="rating-secondary-actions">
+        <div
+          className={rollSecondaryActionGroupClass}
+          data-testid="rating-secondary-actions"
+        >
           <button
             type="button"
             onClick={onSnooze}
             disabled={snoozeIsPending}
-            className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            className={rollSecondaryActionClass}
           >
             {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
           </button>
@@ -190,7 +205,7 @@ export function DecisionCard({
               disabled={skipIsPending}
               data-testid="skip-roll"
               aria-label="Skip current roll"
-              className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+              className={rollSecondaryActionClass}
             >
               {skipIsPending ? 'Skipping…' : 'Skip'}
             </button>
@@ -199,7 +214,8 @@ export function DecisionCard({
             type="button"
             onClick={onCancel}
             disabled={dismissIsPending}
-            className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            data-testid="cancel-roll"
+            className={rollSecondaryActionClass}
           >
             Cancel roll
           </button>
@@ -227,7 +243,7 @@ export function DecisionCard({
               onClick={() => setIsSkipConfirmOpen(false)}
               disabled={skipIsPending}
               data-testid="skip-cancel"
-              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+              className={`min-h-11 sm:min-h-9 ${rollDialogSecondaryActionClass}`}
             >
               Keep this comic
             </button>
@@ -236,7 +252,7 @@ export function DecisionCard({
               onClick={handleConfirmSkip}
               disabled={skipIsPending}
               data-testid="skip-confirm"
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+              className={`min-h-11 sm:min-h-9 ${rollDangerActionClass}`}
             >
               {skipIsPending ? 'Skipping…' : 'Skip comic'}
             </button>

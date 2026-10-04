@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { rollUtilityActionClass } from '../actionClasses'
 
 /** The just-rated comic reference offered on the post-rate copy prompt. */
 export interface PostRateReference {
@@ -57,8 +58,9 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
         <button
           type="button"
           onClick={handleCopyComicReference}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] transition hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-amber-500"
+          className={`min-h-11 ${rollUtilityActionClass(copyStatus)}`}
           aria-label={`Copy ${title} ${issueNumber}`}
+          aria-live="polite"
         >
           <svg
             className="h-4 w-4 shrink-0"
@@ -76,11 +78,11 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
           </svg>
           {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title and issue'}
         </button>
-        <p className="text-[10px] font-semibold text-[var(--theme-text-dim)]">
+        <p className="text-[10px] font-medium text-[var(--theme-text-dim)]">
           Copies “{title} {issueNumber}”
         </p>
         {copyStatus === 'failed' ? (
-          <p className="text-[10px] font-bold text-rose-400" role="status">
+          <p className="text-[10px] font-bold text-[var(--theme-danger)]" role="status">
             Copy failed. Use Retry copy to try again.
           </p>
         ) : null}
@@ -88,7 +90,7 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
       <button
         type="button"
         onClick={onDismiss}
-        className="mt-3 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-amber-500"
+        className="mt-3 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
         aria-label="Dismiss rating saved notice"
       >
         Dismiss

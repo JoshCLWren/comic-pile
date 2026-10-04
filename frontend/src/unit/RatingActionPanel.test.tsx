@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingActionPanel } from '../pages/RollPage/components/RatingActionPanel'
+import { rollSecondaryActionClass } from '../pages/RollPage/actionClasses'
 
 function renderPanel(onSkip?: () => void, skipIsPending = false) {
   return render(
@@ -307,8 +308,21 @@ describe('RatingActionPanel', () => {
       screen.getByTestId('skip-roll'),
       screen.getByRole('button', { name: /cancel roll/i }),
     ]) {
-      expect(button.className).toContain('min-w-[7.5rem]')
+      expect(button.className).toContain('min-w-28')
       expect(button.className).toContain('flex-1')
+      expect(button.className).toContain('px-4')
+    }
+  })
+
+  it('every secondary peer shares one identical visual language (issue #3009)', () => {
+    renderPanel(() => {})
+    const shared = rollSecondaryActionClass
+    for (const button of [
+      screen.getByRole('button', { name: /snooze/i }),
+      screen.getByTestId('skip-roll'),
+      screen.getByRole('button', { name: /cancel roll/i }),
+    ]) {
+      expect(button.className).toBe(shared)
     }
   })
 })

@@ -164,3 +164,15 @@ def test_manual_gate_mapping() -> None:
             "satisfied_by": None,
         }
     ]
+
+
+def test_human_gate_uses_the_structured_manual_only_contract() -> None:
+    """Discussing the marker in prose must not fabricate a human gate."""
+    adapter = load_adapter()
+
+    def issue(body: str) -> dict[str, object]:
+        return {"number": 9001, "body": body, "labels": []}
+
+    assert adapter._human_gate(issue("<!-- factory-execution:manual-only -->\nGate.")) is True
+    assert adapter._human_gate(issue("Gate: <!-- factory-execution:manual-only -->")) is False
+    assert adapter._human_gate(issue("The `<!-- factory-execution:manual-only -->` marker.")) is False

@@ -272,7 +272,7 @@ export default function OverflowMenu({
                     : 'text-[var(--theme-text-primary)] hover:bg-white/10 focus-visible:bg-white/10'
                 }`}
               >
-                <span className="text-xs font-black uppercase tracking-wider">
+                <span className="text-sm font-semibold">
                   {item.label}
                 </span>
                 {item.description ? (

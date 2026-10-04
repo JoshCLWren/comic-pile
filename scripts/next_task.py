@@ -3,13 +3,21 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
 import subprocess
 import sys
 from argparse import ArgumentParser
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TypedDict, cast
+
+# Shared eligibility semantics live in scripts/factory_eligibility.py. Resolve
+# them relative to this file so the selector works both as a direct script
+# (python scripts/next_task.py) and as an imported package module.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+eligibility = importlib.import_module("factory_eligibility")
 
 
 class IssueLabel(TypedDict):
@@ -26,6 +34,17 @@ class IssuePayload(TypedDict):
     body: str
     labels: list[IssueLabel]
     url: str
+
+
+class ExplainReport(TypedDict):
+    """Ralph-queue eligibility report for one issue."""
+
+    issue: int
+    selector: str
+    eligible: bool
+    reasons: list[str]
+    labels: list[str]
+    not_evaluated: list[str]
 
 
 @dataclass(frozen=True)
@@ -51,7 +70,6 @@ EXCLUDED_LABELS = {
 }
 
 EPIC_ACCEPTANCE_LABELS = {"epic", "prd"}
-MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
 
 
 def _labels(issue: IssuePayload) -> set[str]:
@@ -66,10 +84,7 @@ def _priority(issue: IssuePayload) -> int:
 
 def _dependency_numbers(body: str) -> set[int]:
     """Return issue numbers referenced as dependencies in an issue body."""
-    return {
-        int(number)
-        for number in re.findall(r"(?:Depends on|depends on) #([0-9]+)", body)
-    }
+    return eligibility.parse_declared_dependencies(body)
 
 
 def _has_unresolved_dependency(issue: IssuePayload, closed_numbers: set[int]) -> bool:
@@ -81,7 +96,20 @@ def _has_unresolved_dependency(issue: IssuePayload, closed_numbers: set[int]) ->
 
 def _is_manual_only(issue: IssuePayload) -> bool:
     """Return whether autonomous execution is explicitly disallowed."""
-    return MANUAL_ONLY_MARKER in (issue.get("body") or "")
+    return eligibility.is_manual_only(issue.get("body"))
+
+
+def _is_acceptance_parent(issue: IssuePayload) -> bool:
+    """Return whether the issue declares a product-acceptance parent contract.
+
+    Covers the #1615 incident shape: a parent whose acceptance contract lives
+    in the body even when it carries no epic/prd label. Both halves are
+    required — the body must present itself as the acceptance parent and
+    declare a checkbox child graph — so ordinary implementation issues that
+    merely defer an operator acceptance pass (#3037, #2718, #2128) stay
+    executable.
+    """
+    return eligibility.is_acceptance_parent(issue.get("body"))
 
 
 def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candidate | None:
@@ -92,6 +120,8 @@ def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candida
         if "ralph-status:pending" not in labels or labels & EXCLUDED_LABELS:
             continue
         if labels & EPIC_ACCEPTANCE_LABELS or _is_manual_only(issue):
+            continue
+        if _is_acceptance_parent(issue):
             continue
         if _has_unresolved_dependency(issue, closed_numbers):
             continue
@@ -199,6 +229,11 @@ def _start_task(issue_number: int) -> int:
         raise RuntimeError(f"#{issue_number} is a parent PRD/epic; autonomous start is not allowed")
     if _is_manual_only(issue):
         raise RuntimeError(f"#{issue_number} is marked manual-only; autonomous start is not allowed")
+    if _is_acceptance_parent(issue):
+        raise RuntimeError(
+            f"#{issue_number} declares a product-acceptance parent contract; "
+            "autonomous start is not allowed"
+        )
 
     closed_numbers = {
         closed_issue["number"] for closed_issue in _gh_issue_list("closed")
@@ -237,12 +272,66 @@ def _start_task(issue_number: int) -> int:
     return 0
 
 
+def explain_issue(
+    issue: IssuePayload,
+    *,
+    open_numbers: set[int],
+) -> ExplainReport:
+    """Explain whether one issue is currently visible to the Ralph queue.
+
+    Uses the same shared eligibility module as the fixed-model controller, with
+    ``require_ralph_labels`` enabled because this selector serves the Ralph
+    queue. Canonical open-PR suppression is a controller-only gate that this
+    selector has no view of, so the report says so explicitly instead of
+    implying the issue is dispatchable.
+
+    Args:
+        issue: The GitHub issue payload to explain.
+        open_numbers: Numbers of currently open issues.
+
+    Returns:
+        A JSON-serializable verdict with human-readable reasons.
+    """
+    number = int(issue["number"])
+    verdict = eligibility.explain_issue_eligibility(
+        number=number,
+        state="OPEN",
+        labels=_labels(issue),
+        body=issue.get("body"),
+        open_numbers=open_numbers,
+        require_ralph_labels=True,
+    )
+    return {
+        "issue": number,
+        "selector": "next_task",
+        "eligible": verdict.eligible,
+        "reasons": list(verdict.reasons),
+        "labels": sorted(_labels(issue)),
+        "not_evaluated": [
+            "canonical open-PR suppression (controller-only gate)",
+        ],
+    }
+
+
+def _explain_task(issue_number: int) -> int:
+    """Print the Ralph-queue eligibility report for one issue."""
+    issue = _gh_issue(issue_number)
+    open_numbers = {row["number"] for row in _gh_issue_list("open")}
+    report = explain_issue(issue, open_numbers=open_numbers)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
 def main() -> int:
-    """Select the next issue or start a validated issue."""
+    """Select the next issue, start one, or explain its eligibility."""
     parser = ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command")
     start_parser = subparsers.add_parser("start", help="validate and start an issue")
     start_parser.add_argument("issue", type=int)
+    explain_parser = subparsers.add_parser(
+        "explain", help="explain why an issue is or is not queue-eligible"
+    )
+    explain_parser.add_argument("issue", type=int)
     args = parser.parse_args()
 
     if args.command == "start":
@@ -250,6 +339,13 @@ def main() -> int:
             return _start_task(args.issue)
         except RuntimeError as error:
             print(f"start-task: {error}", file=sys.stderr)
+            return 1
+
+    if args.command == "explain":
+        try:
+            return _explain_task(args.issue)
+        except RuntimeError as error:
+            print(f"explain: {error}", file=sys.stderr)
             return 1
 
     try:

@@ -479,6 +479,8 @@ export default api
 export { threadsApi } from './api-threads'
 export { rollApi } from './api-roll'
 export { rateApi } from './api-rate'
+export { demoApi } from './api-demo'
+export type { DemoApi } from './api-demo'
 
 export { sessionApi } from './api-sessions'
 export type { SessionListParams } from './api-sessions'

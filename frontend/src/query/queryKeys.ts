@@ -125,6 +125,15 @@ export const queryKeys = {
     all: ['roll'] as const,
     bootstrap: () => ['roll', 'bootstrap'] as const,
   },
+  demo: {
+    /**
+     * Guest demo (#2757) keys. The demo reads seeded product-owned sample data
+     * with no user identity, so the keys stay constant and are never
+     * invalidated by account-scoped mutations.
+     */
+    all: ['demo'] as const,
+    roll: () => ['demo', 'roll'] as const,
+  },
   thread: {
     all: ['thread'] as const,
     list: () => ['thread', 'list'] as const,
