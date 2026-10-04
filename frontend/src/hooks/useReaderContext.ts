@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { readerContextApi, type ReaderContextResponse } from '../services/api-reader-context'
 import { readingOrdersApi } from '../services/api-reading-orders'
-import { dependenciesApi } from '../services/api'
+import { dependenciesApi } from '../services/api-dependencies'
 import { queryKeys } from '../query/queryKeys'
 
 interface ReaderContextState {

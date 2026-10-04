@@ -8,7 +8,7 @@ import MigrationDialog from '../components/MigrationDialog'
 const issuesApi = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn() }))
 vi.mock('../services/api-issues', () => ({ issuesApi }))
 const migration = vi.hoisted(() => ({ migrateThread: vi.fn() }))
-vi.mock('../services/api', () => ({ migrationApi: migration }))
+vi.mock('../services/api-migration', () => ({ migrationApi: migration }))
 
 describe('edge component behavior', () => {
   it('renders wrapped title without overflow clipping', () => {

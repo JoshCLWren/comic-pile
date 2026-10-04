@@ -8,7 +8,7 @@ import { queryKeys } from '../query/queryKeys'
 import { queryClient } from '../query/queryClient'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
-import { dependenciesApi } from '../services/api'
+import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 
 const navigateSpy = vi.fn()
@@ -35,12 +35,16 @@ vi.mock('../hooks/useThread', async () => {
 vi.mock('../services/api-threads', () => ({
   threadsApi: { get: vi.fn() },
 }))
-vi.mock('../services/api', () => ({
-  dependenciesApi: {
-    getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
-    getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
-  },
-}))
+vi.mock('../services/api-dependencies', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-dependencies')>()
+  return {
+    ...actual,
+    dependenciesApi: {
+      getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
+      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
+    },
+  }
+})
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
 
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)

@@ -15,7 +15,7 @@ import {
   useMigrateThread,
   type DependencyBuilderApiDeps,
 } from '../hooks'
-import { dependenciesApi } from '../services/api'
+import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api-threads'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse, ThreadListItem } from '../types'

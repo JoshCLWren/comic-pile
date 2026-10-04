@@ -1,4 +1,4 @@
-import { dependenciesApi } from '../../services/api'
+import { dependenciesApi } from '../../services/api-dependencies'
 import type { RollDependenciesApi } from '../../services/apiTypes'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'

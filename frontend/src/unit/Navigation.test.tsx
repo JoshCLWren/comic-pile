@@ -10,7 +10,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { createRouterHarness } from './routerTestHarness'
-import * as api from '../services/api'
+import { identityInboxApi } from '../services/api-identity'
 
 const toast = createToastSpy()
 
@@ -41,13 +41,16 @@ vi.mock('../services/api', () => {
     getAccessToken: () => mockGetAccessToken(),
     refreshSession: vi.fn(),
     isSessionRefreshRejected: () => false,
-    identityInboxApi: {
-      list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),
-    },
   }
 })
 
-const mockIdentityInboxList = vi.mocked(api.identityInboxApi.list)
+vi.mock('../services/api-identity', () => ({
+  identityInboxApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),
+  },
+}))
+
+const mockIdentityInboxList = vi.mocked(identityInboxApi.list)
 
 beforeEach(() => {
   const width = 390

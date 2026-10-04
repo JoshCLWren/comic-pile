@@ -26,10 +26,14 @@ const api = vi.hoisted(() => ({
   tasksApi: { getMetrics: vi.fn() },
   threadsApi: { listStale: vi.fn() },
   sessionApi: { getCurrent: vi.fn(), list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn(), restoreSessionStart: vi.fn() },
+  migrationApi: { migrateThread: vi.fn() },
+  bugReportsApi: { create: vi.fn() },
 }))
 const protectedApi = vi.hoisted(() => ({ rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }))
 const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
-vi.mock('../services/api', () => api)
+vi.mock('../services/api-tasks', () => ({ tasksApi: api.tasksApi }))
+vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
+vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
 vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
 vi.mock('../services/api-roll', () => ({ rollApi: api.rollApi }))
 vi.mock('../services/api-rate', () => ({ rateApi: api.rateApi }))

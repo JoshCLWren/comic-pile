@@ -4,13 +4,7 @@ import axios, {
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios'
-import type {
-  AnalyticsMetrics,
-  AuthTokens,
-  BugReportResponse,
-  RollResponse,
-  Thread,
-} from '../types'
+import type { AuthTokens } from '../types'
 import type { HttpClient, ApiRequestConfig } from './httpClient'
 import { setDefaultHttpClient } from './httpClient'
 
@@ -45,28 +39,6 @@ const AUTH_ENDPOINT_PATHS = new Set([
 // Request bodies for these paths carry single-use secrets (reset token, new
 // password). They must never reach console output or error telemetry.
 const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v1/auth/reset-password'])
-
-export interface ForgotPasswordRequest {
-  email: string
-}
-
-export interface ResetPasswordRequest {
-  token: string
-  new_password: string
-}
-
-export interface PasswordResetResponse {
-  message: string
-}
-
-export function createAuthApi(client: ApiClient) {
-  return {
-    forgotPassword: (data: ForgotPasswordRequest) =>
-      client.post<PasswordResetResponse, ForgotPasswordRequest>('/v1/auth/forgot-password', data),
-    resetPassword: (data: ResetPasswordRequest) =>
-      client.post<PasswordResetResponse, ResetPasswordRequest>('/v1/auth/reset-password', data),
-  }
-}
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -474,72 +446,12 @@ setDefaultHttpClient(api)
 
 export default api
 
-// Temporary reading-runtime re-exports keep this slice independently shippable.
-// TODO(#2785): remove these re-exports once every call site imports the focused domain clients.
-export { threadsApi } from './api-threads'
-export { rollApi } from './api-roll'
-export { rateApi } from './api-rate'
-export { demoApi } from './api-demo'
-export type { DemoApi } from './api-demo'
-
-export { sessionApi } from './api-sessions'
-export type { SessionListParams } from './api-sessions'
-export { queueApi } from './api-queue'
-export { undoApi } from './api-undo'
-
-export { dependenciesApi } from './api-dependencies'
-
-export { comicVineApi } from './api-comicvine'
-
-export function createTasksApi(client: HttpClient) {
-  return {
-    getMetrics: () => client.get<AnalyticsMetrics>('/v1/analytics/metrics'),
-  }
-}
-
-export const tasksApi = createTasksApi(api)
-
-export { creatorsApi } from './api-creators'
-
-// Temporary reading-runtime re-exports keep this slice independently shippable.
-// TODO(#2785): remove these re-exports once every call site imports the focused domain clients.
-export { snoozeApi } from './api-snooze'
-export { skipApi } from './api-skip'
-
-export function createMigrationApi(client: HttpClient) {
-  return {
-    migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
-      client.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
-  }
-}
-
-export const migrationApi = createMigrationApi(api)
-
-export function createBugReportsApi(client: HttpClient) {
-  return {
-    create: (data: { title: string; description: string; diagnostics?: unknown }) =>
-      client.post<BugReportResponse>('/v1/bug-reports/', data),
-  }
-}
-
-export const bugReportsApi = createBugReportsApi(api)
-
-export { identityInboxApi } from './api-identity'
-
-export interface UserPreferencesResponse {
-  theme: 'classic' | 'ink-gold' | 'command-center'
-  user_id: number
-}
-
-export interface UserPreferencesPatchRequest {
-  theme?: 'classic' | 'ink-gold' | 'command-center' | null
-}
-
-export const preferencesApi = {
-  get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-    api.get<UserPreferencesResponse>('/v1/users/me/preferences', options),
-  patch: (data: UserPreferencesPatchRequest) =>
-    api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
-}
-
-export const authApi = createAuthApi(api)
+// Transport boundary (final inventory for #2785).
+//
+// `api.ts` implements no product/domain endpoint collection. Every domain
+// client, including the password-reset `authApi`, lives in a focused `api-*.ts`
+// module and binds its transport through `defaultHttpClient()`. What remains
+// here is the single shared axios/auth/refresh/CSRF stack those clients depend
+// on, including `AUTH_ENDPOINT_PATHS` and `SENSITIVE_AUTH_BODY_PATHS`, which
+// still keep `api-auth.ts`'s secret-bearing bodies out of CSRF attachment and
+// error telemetry.

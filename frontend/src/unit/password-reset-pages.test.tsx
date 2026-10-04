@@ -10,8 +10,10 @@ const apiClient = vi.hoisted(() => ({ post: vi.fn() }))
 const auth = vi.hoisted(() => ({ login: vi.fn() }))
 
 vi.mock('../services/api', () => ({
-  authApi,
   default: apiClient,
+}))
+vi.mock('../services/api-auth', () => ({
+  authApi,
 }))
 vi.mock('../App', () => ({ useAuth: () => auth }))
 

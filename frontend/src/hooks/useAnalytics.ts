@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { tasksApi } from '../services/api'
+import { tasksApi } from '../services/api-tasks'
 import { queryKeys } from '../query/queryKeys'
 import type { AnalyticsMetrics } from '../types'
 

@@ -11,10 +11,12 @@ const del = transport.delete
 const patch = transport.patch
 
 const {
+  authApi,
   bugReportsApi,
   creatorsApi,
   dependenciesApi,
   migrationApi,
+  preferencesApi,
   queueApi,
   rateApi,
   rollApi,
@@ -156,7 +158,15 @@ it('calls every remaining API resource endpoint', async () => {
   await snoozeApi.unsnooze(2)
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
   await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
+  await preferencesApi.get()
+  await preferencesApi.patch({ theme: 'ink-gold' })
+  await authApi.forgotPassword({ email: 'reader@example.com' })
+  await authApi.resetPassword({ token: 'single-use', new_password: 'hunter2-hunter2' })
   expect(post).toHaveBeenCalledWith('/v1/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
+  expect(get).toHaveBeenCalledWith('/v1/users/me/preferences', undefined)
+  expect(patch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' })
+  expect(post).toHaveBeenCalledWith('/v1/auth/forgot-password', { email: 'reader@example.com' })
+  expect(post).toHaveBeenCalledWith('/v1/auth/reset-password', { token: 'single-use', new_password: 'hunter2-hunter2' })
 })
 
 

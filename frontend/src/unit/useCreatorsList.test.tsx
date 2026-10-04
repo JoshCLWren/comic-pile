@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCreatorsList, CREATOR_LIST_PAGE_SIZE } from '../hooks/useCreatorsList'
-import { creatorsApi } from '../services/api'
+import { creatorsApi } from '../services/api-creators'
 import type { CreatorListItem, CreatorListResponse } from '../services/api-creators'
 
 vi.mock('../services/api-creators', () => ({

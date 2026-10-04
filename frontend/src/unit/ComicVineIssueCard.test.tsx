@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
-import { comicVineApi } from '../services/api'
+import { comicVineApi } from '../services/api-comicvine'
 import { ComicVineIssueCard } from '../pages/RollPage/components/ComicVineIssueCard'
 
 const toast = createToastSpy()
@@ -17,8 +17,8 @@ function renderWithToast(ui: ReactElement) {
 }
 
 
-vi.mock('../services/api', async () => {
-  const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
+vi.mock('../services/api-comicvine', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-comicvine')>('../services/api-comicvine')
   return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn(), importIssue: vi.fn() } }
 })
 

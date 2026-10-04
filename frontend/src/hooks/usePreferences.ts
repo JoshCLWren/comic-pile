@@ -8,8 +8,8 @@ import {
   readStoredThemePreference,
 } from '../services/theme'
 import { queryKeys } from '../query/queryKeys'
-import { preferencesApi } from '../services/api'
-import type { UserPreferencesResponse, UserPreferencesPatchRequest } from '../services/api'
+import { preferencesApi } from '../services/api-preferences'
+import type { UserPreferencesResponse, UserPreferencesPatchRequest } from '../services/api-preferences'
 import { applyUpdatedPreferencesCache } from '../query/cacheEffects'
 import {
   clearThemeFailureNotifiedThisEpisode,
