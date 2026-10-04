@@ -1,5 +1,10 @@
 # ComicPile crawler policy (issue #3065).
 #
+# This file is the version-controlled crawler policy. At build time
+# scripts/generate-sitemap.mjs copies it into the build output and rewrites
+# only the Sitemap origin when VITE_PRODUCTION_ORIGIN overrides the canonical
+# production origin, so the served policy never drifts from this source.
+#
 # Only the public landing page is indexable. Crawlers match the longest
 # (most specific) rule, so the Disallow lines below win over `Allow: /`
 # for utility, auth, demo, and authenticated routes while `/` stays allowed.
@@ -31,3 +36,5 @@ Disallow: /glossary
 Disallow: /identity-inbox
 Disallow: /api/
 Disallow: /debug/
+
+Sitemap: https://comic-pile.vercel.app/sitemap.xml
