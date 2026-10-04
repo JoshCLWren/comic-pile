@@ -119,6 +119,40 @@ describe('ComicIdentity', () => {
     expect(screen.getByText('View issue on ComicVine')).toBeInTheDocument()
   })
 
+  it('reserves the cover viewer box with intrinsic dimensions before the bytes arrive', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '100',
+      comicvine_url: 'https://comicvine.example/100',
+      series_name: 'Alpha',
+      series_id: 8,
+      issue_number: '1',
+      name: 'Opening',
+      description: 'A bold beginning.',
+      image_url: 'https://images.example/100.jpg',
+      cover_date: '2026-01-01',
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+    })
+
+    renderWithToast(<ComicIdentity issueId={1} />)
+    await waitForLoaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'View cover larger' }))
+
+    const viewer = await screen.findByRole('dialog', { name: 'Comic Cover' })
+    const viewerImage = viewer.querySelector('img')
+    expect(viewerImage).not.toBeNull()
+    // Intrinsic dimensions let the browser reserve the viewer box up front, so
+    // the dialog never reflows when the enlarged cover finishes loading.
+    expect(viewerImage).toHaveAttribute('width', '1200')
+    expect(viewerImage).toHaveAttribute('height', '1800')
+    expect(viewerImage).toHaveAttribute(
+      'src',
+      '/api/v1/images/optimize?url=https%3A%2F%2Fimages.example%2F100.jpg&width=1200',
+    )
+  })
+
   it('renders placeholder when cover image is missing', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '200',

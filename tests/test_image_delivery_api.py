@@ -475,12 +475,16 @@ class TestAvifDelivery:
         """The AVIF capability probe always returns a real boolean."""
         assert isinstance(avif_encoding_available(), bool)
 
-    def test_avif_transcode_renders_avif_when_libavif_is_available(self) -> None:
-        """Pillow's AVIF encoder yields an image/avif payload."""
+    def test_avif_transcode_outcome_tracks_encoder_availability(self) -> None:
+        """AVIF is produced exactly when this runtime can encode it, and downscaled."""
         payload = _png_bytes(width=800, height=1200)
         avif = transcode_to_avif(payload, 240)
-        if avif is None:
-            pytest.skip("libavif not available in this environment")
+
+        if not avif_encoding_available():
+            assert avif is None
+            return
+
+        assert avif is not None
         assert avif[1] == "image/avif"
         assert _image_dimensions(avif[0])[0] <= 240
 

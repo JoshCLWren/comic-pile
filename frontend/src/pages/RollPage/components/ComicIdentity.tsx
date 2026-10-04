@@ -31,6 +31,7 @@ const STORY_ARC_LIMIT = 3
 const RELATED_ISSUES_PER_ARC_LIMIT = 5
 const COVER_HEIGHT_CAP_VH = 45
 const COVER_RATIO_FALLBACK = 2 / 3
+const COVER_VIEWER_INTRINSIC_WIDTH = 1200
 const SUMMARY_LONG_THRESHOLD = 280
 
 function formatRating(value: number): string {
@@ -511,15 +512,22 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     >
       {metadata.image_url && (
         // ALT: meaningful content — enlarged cover viewer; described by the
-        // canonical issue name.
+        // canonical issue name. Intrinsic width/height reserve the viewer box
+        // before the cover bytes arrive so opening the dialog never shifts the
+        // modal content.
         <img
-          src={optimizedImageUrl(metadata.image_url, 1200) ?? metadata.image_url}
+          src={
+            optimizedImageUrl(metadata.image_url, COVER_VIEWER_INTRINSIC_WIDTH) ??
+            metadata.image_url
+          }
           srcSet={
             optimizedImageSrcSet(metadata.image_url, [480, 720, 1200], { withFormats: true }) ??
             undefined
           }
           sizes="(min-width: 1024px) 80vw, 90vw"
           alt={metadata.name ?? 'Comic cover'}
+          width={COVER_VIEWER_INTRINSIC_WIDTH}
+          height={Math.round(COVER_VIEWER_INTRINSIC_WIDTH / coverAspectRatio)}
           className="w-full rounded-lg"
         />
       )}
