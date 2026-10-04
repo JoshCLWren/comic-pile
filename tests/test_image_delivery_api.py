@@ -480,7 +480,7 @@ class TestAvifDelivery:
         payload = _png_bytes(width=800, height=1200)
         avif = transcode_to_avif(payload, 240)
         if avif is None:
-            pytest.skip(reason="libavif not available in this environment")
+            pytest.skip("libavif not available in this environment")
         assert avif[1] == "image/avif"
         assert _image_dimensions(avif[0])[0] <= 240
 
