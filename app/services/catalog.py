@@ -500,6 +500,48 @@ async def build_series_mapping_plan(
         db, provider=provider, series_external_id=provider_series_external_id, user_id=user_id
     )
 
+    # If the origin issue has a confirmed series mapping, we need to include ALL issues
+    # from that series in the preview (not just the user-mapped ones) so siblings can be
+    # identified and offered for safe bulk confirmation. Fall back to ComicVine API roster
+    # when the local catalog does not already contain the full series.
+    origin_has_confirmed_series = False
+    if series_info is not None:
+        # Check if origin issue has a confirmed thread-series mapping
+        from app.models.thread import Thread
+        thread_result = await db.execute(
+            select(ThreadExternalSeriesMapping).where(
+                ThreadExternalSeriesMapping.thread_id == origin_issue.get("thread_id"),
+                ThreadExternalSeriesMapping.external_identity_id == series_info.get("id")
+                if isinstance(series_info.get("id"), int)
+                else None,
+                ThreadExternalSeriesMapping.status == "confirmed",
+            )
+        )
+        if thread_result.scalar_one_or_none() is not None:
+            origin_has_confirmed_series = True
+        # Also check issue-external identity mapping
+        if not origin_has_confirmed_series:
+            from app.models.issue import IssueExternalIdentityMapping
+            ei_result = await db.execute(
+                select(IssueExternalIdentityMapping).where(
+                    IssueExternalIdentityMapping.issue_id == origin_issue_id,
+                    IssueExternalIdentityMapping.status == "confirmed",
+                    IssueExternalIdentityMapping.provider == provider.strip().lower(),
+                )
+            )
+            if ei_result.scalar_one_or_none() is not None:
+                origin_has_confirmed_series = True
+
+    if origin_has_confirmed_series and series_info is not None:
+        # Fetch the full volume roster from ComicVine to include all series issues as siblings
+        roster_series_info, roster_rows = await _load_provider_volume_roster(
+            provider_series_external_id,
+            issues_with_mappings,
+        )
+        # Merge: locally-mapped issues keep their thread context; provider roster fills gaps
+        if roster_rows:
+            _merge_roster_into_mappings(issues_with_mappings, roster_rows, series_info)
+
     # If not found locally, try ComicVine API (local-first)
     if series_info is None:
         series_info, issues_with_mappings = await _load_provider_volume_roster(
@@ -803,6 +845,41 @@ def _classify_series_mapping_rows(
         classified_rows.append(issue_info)
 
     return classified_rows
+
+
+def _merge_roster_into_mappings(
+    local_mappings: list[dict[str, object]],
+    roster_rows: list[dict[str, object]],
+    series_info: dict[str, object],
+) -> None:
+    """Merge provider volume roster rows into local issue mappings.
+
+    Local-mapped issues (with thread_id set) take precedence; roster rows fill in any
+    issues from the series that are not yet locally mapped. Roster rows carry no ComicPile
+    thread, so they are only added when no local mapping exists for that issue number.
+
+    Args:
+        local_mappings: Existing issue mappings from the local catalog (modified in place).
+        roster_rows: Provider volume roster rows from ``_load_provider_volume_roster``.
+        series_info: Series info dict, used only for identity verification.
+    """
+    local_by_number: dict[str, dict[str, object]] = {}
+    for mapping in local_mappings:
+        num = _issue_number_text(mapping.get("issue_number"))
+        if num:
+            local_by_number.setdefault(num, mapping)
+
+    for roster in roster_rows:
+        rnum = _issue_number_text(roster.get("issue_number"))
+        if not rnum:
+            continue
+        if rnum not in local_by_number:
+            # Copy roster row as a local mapping placeholder; thread_id stays None so commit
+            # refuses to bulk-confirm a provider roster id as if it were a local issue, and the
+            # ownership check similarly excludes it.
+            merged = dict(roster)
+            merged.setdefault("classification", "unresolved")
+            local_mappings.append(merged)
 
 
 def _dedupe_rows_by_issue(rows: list[dict[str, object]]) -> list[dict[str, object]]:
