@@ -531,7 +531,6 @@ async def build_series_mapping_plan(
                     origin_has_confirmed_series = True
         # Also check issue-external identity mapping
         if not origin_has_confirmed_series:
-            from app.models.issue import IssueExternalIdentityMapping
             ei_result = await db.execute(
                 select(IssueExternalIdentityMapping).where(
                     IssueExternalIdentityMapping.issue_id == origin_issue_id,
@@ -544,20 +543,34 @@ async def build_series_mapping_plan(
 
     if origin_has_confirmed_series and series_info is not None:
         # Fetch the full volume roster from ComicVine to include all series issues as siblings
-        roster_series_info, roster_rows = await _load_provider_volume_roster(
-            provider_series_external_id,
-            issues_with_mappings,
-        )
-        # Merge: locally-mapped issues keep their thread context; provider roster fills gaps
-        if roster_rows:
-            _merge_roster_into_mappings(issues_with_mappings, roster_rows, series_info)
+        try:
+            roster_series_info, roster_rows = await _load_provider_volume_roster(
+                provider_series_external_id,
+                issues_with_mappings,
+            )
+            # Merge: locally-mapped issues keep their thread context; provider roster fills gaps
+            if roster_rows:
+                _merge_roster_into_mappings(issues_with_mappings, roster_rows, series_info)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+                # Provider unavailable; skip roster loading and continue with local mappings only
+                pass
+            else:
+                raise
 
     # If not found locally, try ComicVine API (local-first)
     if series_info is None:
-        series_info, issues_with_mappings = await _load_provider_volume_roster(
-            provider_series_external_id,
-            issues_with_mappings,
-        )
+        try:
+            series_info, issues_with_mappings = await _load_provider_volume_roster(
+                provider_series_external_id,
+                issues_with_mappings,
+            )
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+                # Provider unavailable; no local series info either
+                pass
+            else:
+                raise
 
     # Ensure origin issue is included in the mapping check for conflict detection
     # even if it's mapped to a different series
