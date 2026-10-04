@@ -60,8 +60,9 @@ export default function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
       BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID,
       buildBreadcrumbList(parsed, window.location.origin),
     )
-    return () => removeStructuredDataScript(BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID)
   }, [itemsKey])
+
+  useEffect(() => () => removeStructuredDataScript(BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID), [])
 
   return (
     <nav aria-label="Breadcrumb" className="mb-1">

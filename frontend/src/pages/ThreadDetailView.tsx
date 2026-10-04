@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
@@ -25,7 +25,6 @@ import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const location = useLocation()
   const client = useQueryClient()
   const updateMutation = useUpdateThread()
@@ -196,7 +195,7 @@ export default function ThreadDetailView() {
     <div className="space-y-6 md:space-y-8 pb-20">
       <header className="flex justify-between items-start px-2 gap-2 md:gap-4">
         <div className="flex-1 min-w-0">
-          <Breadcrumbs items={[{ label: 'Queue', to: '/queue' }, { label: thread.title }]} />
+          <Breadcrumbs items={[{ label: 'Queue', to: '/queue' }, { label: 'Thread' }]} />
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase truncate">
             {thread.title}
           </h1>

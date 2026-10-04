@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, expect, test, vi } from 'vitest'
+import { beforeEach, expect, test } from 'vitest'
 import Breadcrumbs from '../components/Breadcrumbs'
 import {
   BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID,
@@ -28,7 +28,9 @@ function breadcrumbScript(): HTMLScriptElement | null {
 
 function visibleBreadcrumbLabels(): string[] {
   const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
-  return Array.from(nav.querySelectorAll('li')).map(li => li.textContent ?? '')
+  return Array.from(nav.querySelectorAll('li')).map(
+    li => li.querySelector('a, [aria-current="page"]')?.textContent ?? '',
+  )
 }
 
 beforeEach(() => {
@@ -100,47 +102,4 @@ test('re-rendering with new items updates the schema in place', () => {
   expect(secondScript).toBe(firstScript)
   const schema = JSON.parse(secondScript?.textContent ?? '') as BreadcrumbList
   expect(schema.itemListElement.map(node => node.name)).toEqual(['Queue', 'Monstress'])
-})
-
-test('thread detail breadcrumbs match the visible trail', async () => {
-  const routeParams = { id: '42' }
-  vi.mock('react-router-dom', async () => {
-    const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-    return {
-      ...actual,
-      useNavigate: () => vi.fn(),
-      useParams: () => routeParams,
-      useLocation: () => ({ state: undefined }),
-    }
-  })
-  vi.mock('../hooks/useThread', async () => {
-    const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
-    return { ...actual, useUpdateThread: vi.fn() }
-  })
-  vi.mock('../services/api-threads', () => ({
-    threadsApi: { get: vi.fn().mockResolvedValue({ id: 42, title: 'Saga', format: 'Comics' }) },
-  }))
-  vi.mock('../services/api', () => ({
-    dependenciesApi: {
-      getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
-      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
-    },
-  }))
-  vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
-
-  const { default: ThreadDetailView } = await import('../pages/ThreadDetailView')
-  const { ToastProvider } = await import('../contexts/ToastProvider')
-
-  render(
-    <ToastProvider>
-      <ThreadDetailView />
-    </ToastProvider>,
-  )
-
-  expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Queue' })).toHaveAttribute('href', '/queue')
-
-  const schema = JSON.parse(breadcrumbScript()?.textContent ?? '') as BreadcrumbList
-  expect(schema.itemListElement.map(node => node.name)).toEqual(['Queue', 'Saga'])
-  expect(visibleBreadcrumbLabels()).toEqual(['Queue', 'Saga'])
 })

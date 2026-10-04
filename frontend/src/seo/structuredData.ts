@@ -21,10 +21,9 @@ export const SITE_DESCRIPTION =
  * more than the page shows.
  */
 export const LANDING_FEATURES: readonly string[] = [
-  'Dice-driven reading queue',
-  'Continuity-aware',
   'Weighted by your history',
-  'Self-hosted',
+  'Continuity-aware',
+  'No external dependencies',
   'Built for the long stack',
 ]
 

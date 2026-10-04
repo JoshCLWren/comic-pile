@@ -88,7 +88,7 @@ export default function CrossoverDetailPage() {
     <div className="space-y-6 md:space-y-8 px-4 pb-6">
       <div className="space-y-3">
         <Breadcrumbs
-          items={[{ label: 'Crossovers', to: '/crossovers' }, { label: crossover.name }]}
+          items={[{ label: 'Crossovers', to: '/crossovers' }, { label: 'Crossover' }]}
         />
         <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">Crossover Detail</h1>
       </div>

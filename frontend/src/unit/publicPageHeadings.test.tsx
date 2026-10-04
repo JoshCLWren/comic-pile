@@ -38,7 +38,7 @@ const seededDemoRoll: RollResponse = {
  * never ship a missing or duplicate page-level H1.
  */
 function expectSinglePrimaryH1(): void {
-  const h1s = screen.getAllByRole('heading', { level: 1 })
+  const h1s = screen.queryAllByRole('heading', { level: 1 })
   if (h1s.length !== 1) {
     throw new Error(`Expected exactly one primary H1 on the page, found ${h1s.length}`)
   }

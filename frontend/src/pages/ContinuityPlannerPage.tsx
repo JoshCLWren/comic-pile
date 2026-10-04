@@ -113,10 +113,7 @@ export default function ContinuityPlannerPage({
   return (
     <section className="space-y-6 pb-8" aria-labelledby="planner-heading">
       <Breadcrumbs
-        items={[
-          { label: 'Reading plans', to: '/continuity-plans' },
-          { label: planId ? editor.name : 'New Reading Plan' },
-        ]}
+        items={[{ label: 'Reading plans', to: '/continuity-plans' }, { label: 'Reading plan' }]}
       />
       <PlannerHeader
         editor={editor}

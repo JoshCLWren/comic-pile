@@ -112,8 +112,8 @@ export default function SessionPage() {
       <header className="px-2">
         <Breadcrumbs
           items={[
-            { label: 'History', to: '/history' },
-            { label: `Session #${details.session_id}` },
+            { label: 'Reading history', to: '/history' },
+            { label: 'Reading session' },
           ]}
         />
         <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Session Details</h1>

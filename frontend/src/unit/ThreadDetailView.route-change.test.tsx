@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -91,8 +92,18 @@ beforeEach(() => {
   mockedIssuesApiList.mockImplementation(async (threadId: number) => issueResult(threadId))
 })
 
+function threadDetailHarness() {
+  return (
+    <MemoryRouter>
+      <ToastProvider>
+        <ThreadDetailView />
+      </ToastProvider>
+    </MemoryRouter>
+  )
+}
+
 function renderView() {
-  return render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  return render(threadDetailHarness())
 }
 
 it('clears loaded issues and fetches the new thread after a route change', async () => {
@@ -104,7 +115,7 @@ it('clears loaded issues and fetches the new thread after a route change', async
   await waitFor(() => expect(screen.getByText('#Saga 1')).toBeInTheDocument())
 
   routeParams.id = '2'
-  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  view.rerender(threadDetailHarness())
 
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
   expect(screen.queryByText('#Saga 1')).not.toBeInTheDocument()
@@ -126,7 +137,7 @@ it('keys thread and issue caches per thread so stale issue responses never leak'
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
   routeParams.id = '2'
-  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  view.rerender(threadDetailHarness())
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
   await waitFor(() => expect(screen.getByText('#Monstress 1')).toBeInTheDocument())
@@ -154,7 +165,7 @@ it('keys thread detail caches per thread so stale thread failures never leak', a
   const view = renderView()
 
   routeParams.id = '2'
-  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  view.rerender(threadDetailHarness())
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
 
   const rejectedRequest = deferred<Thread>()
@@ -162,9 +173,9 @@ it('keys thread detail caches per thread so stale thread failures never leak', a
     id === 1 ? rejectedRequest.promise : Promise.resolve(threadResult(id))
   ))
   routeParams.id = '1'
-  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  view.rerender(threadDetailHarness())
   routeParams.id = '2'
-  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  view.rerender(threadDetailHarness())
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
   firstRequest.resolve(threadResult(1))
   rejectedRequest.reject(new Error('stale failure'))
