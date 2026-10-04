@@ -7221,6 +7221,37 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * ComicVine Mapping Health
+             * @description Compact ComicVine mapping health projection for a queue thread.
+             */
+            comicvine_mapping?: {
+                /**
+                 * Status
+                 * @description ComicVine mapping health status for a thread.
+                 */
+                status: "not_applicable" | "fully_mapped" | "partial" | "unresolved" | "needs_review";
+                /**
+                 * Tracked Issue Count
+                 * @description Total issues in this thread's scope
+                 */
+                tracked_issue_count: number;
+                /**
+                 * Confirmed Issue Count
+                 * @description Issues with confirmed ComicVine mappings
+                 */
+                confirmed_issue_count: number;
+                /**
+                 * Needs Mapping Count
+                 * @description Issues with no confirmed mapping (unresolved/candidate)
+                 */
+                needs_mapping_count: number;
+                /**
+                 * Needs Review Count
+                 * @description Issues with conflicting/ambiguous mappings
+                 */
+                needs_review_count: number;
+            } | null;
             /** Format */
             format: string;
             /** Id */
