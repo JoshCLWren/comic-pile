@@ -19,11 +19,14 @@ _review_policy = importlib.import_module("factory_review_policy")
 approval_can_promote = _review_policy.approval_can_promote
 current_head_approvers = _review_policy.current_head_approvers
 classify_ci_reconciliation = _review_policy.classify_ci_reconciliation
+head_contributor_marker = _review_policy.head_contributor_marker
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
+head_contributor_provenance = _review_policy.head_contributor_provenance
+parse_review_marker = _review_policy.parse_review_marker
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
 semantic_repair_heads = _review_policy.semantic_repair_heads
-parse_review_marker = _review_policy.parse_review_marker
+trusted_comment_bodies = _review_policy.trusted_comment_bodies
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
@@ -60,6 +63,11 @@ STAGE_LABELS = {
     "factory:blocked",
 }
 GH_TIMEOUT_SECONDS = 120
+# A worker records the commit its own push just created, so the authoritative PR
+# head can still report the previous SHA for a moment. Retry that read a bounded
+# number of times before abandoning the contributor record.
+CONTRIBUTION_HEAD_SYNC_ATTEMPTS = 4
+CONTRIBUTION_HEAD_SYNC_INTERVAL_SECONDS = 1.0
 MERGEABLE_POLL_ATTEMPTS = 10
 MERGEABLE_POLL_INTERVAL_SECONDS = 2.0
 PASSING_CHECK_STATES = {"SUCCESS", "SKIPPED", "NEUTRAL"}
@@ -292,21 +300,7 @@ def review_comment_bodies(pr_number: int) -> list[str]:
             f"repos/{REPO}/issues/{pr_number}/comments?per_page=100",
         ]
     )
-    bodies: list[str] = []
-    for comment in flatten_pages(pages):
-        user = comment.get("user") or {}
-        if not isinstance(user, dict):
-            continue
-        login = str(user.get("login") or "")
-        association = str(comment.get("author_association") or "")
-        if login != "github-actions[bot]" and association not in {
-            "OWNER",
-            "MEMBER",
-            "COLLABORATOR",
-        }:
-            continue
-        bodies.append(str(comment.get("body") or ""))
-    return bodies
+    return trusted_comment_bodies(flatten_pages(pages))
 
 
 def redact_review_text(text: str) -> str:
@@ -585,14 +579,17 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
         return {"pr": pr_number, "status": status, "reason": checks["reason"]}
 
     head = str(pr.get("headRefOid") or "")
-    branch = str(pr.get("headRefName") or "")
     if not HEAD_RE.fullmatch(head):
         return {"pr": pr_number, "status": "retry-ci", "reason": "current head unavailable"}
 
-    producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
+    producer = producer_worker_from_pr(
+        branch=str(pr.get("headRefName") or ""), body=str(pr.get("body") or "")
+    )
     try:
-        approvers = current_head_approvers(
-            review_comment_bodies(pr_number), pr=pr_number, head=head
+        comments = review_comment_bodies(pr_number)
+        approvers = current_head_approvers(comments, pr=pr_number, head=head)
+        contributors, provenance_complete = head_contributor_provenance(
+            comments, pr=pr_number, head=head, producer=producer
         )
     except (RuntimeError, json.JSONDecodeError) as exc:
         return {
@@ -600,7 +597,11 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
             "status": "retry-ci",
             "reason": f"semantic authorization could not be determined: {exc}",
         }
-    authorized = head_has_authorized_approval(producer=producer, approvers=approvers)
+    authorized = head_has_authorized_approval(
+        contributors=contributors,
+        approvers=approvers,
+        provenance_complete=provenance_complete,
+    )
     if not authorized:
         replace_factory_labels(pr_number, "factory:unowned", "factory:review")
         return {"pr": pr_number, "status": "review", "head": head}
@@ -952,23 +953,47 @@ def handle_review(
             producer=producer,
         )
 
-    # Check for self-review first (takes precedence)
-    if producer is not None and producer == worker and verdict in {"approve", "reject"}:
-        return return_to_review(
-            pr_number=pr_number,
-            branch=branch,
-            worker=worker,
-            reviewer=worker,
-            verdict=verdict,
-            excerpt=excerpt,
-            note=(
-                "Verdict ignored because the reviewer is the producing factory. "
-                "A different factory must independently review this exact head."
-            ),
-            status="self-review-blocked",
-            head=reviewed_head,
-            producer=producer,
-        )
+    # Check for self-review first (takes precedence). The declared producer
+    # authored every head of its own branch, so the producer is part of the
+    # trusted contributor set for this exact head.
+    head_comments = review_comment_bodies(pr_number)
+    contributors, provenance_complete = head_contributor_provenance(
+        head_comments, pr=pr_number, head=reviewed_head, producer=producer
+    )
+    if verdict in {"approve", "reject"}:
+        if producer is not None and producer == worker:
+            return return_to_review(
+                pr_number=pr_number,
+                branch=branch,
+                worker=worker,
+                reviewer=worker,
+                verdict=verdict,
+                excerpt=excerpt,
+                note=(
+                    "Verdict ignored because the reviewer is the producing factory. "
+                    "A different factory must independently review this exact head."
+                ),
+                status="self-review-blocked",
+                head=reviewed_head,
+                producer=producer,
+            )
+        if worker in contributors:
+            return return_to_review(
+                pr_number=pr_number,
+                branch=branch,
+                worker=worker,
+                reviewer=worker,
+                verdict=verdict,
+                excerpt=excerpt,
+                note=(
+                    "Verdict ignored because this worker contributed to the exact head under "
+                    "review, so it cannot attest its own code. A worker that authored none of "
+                    f"this head must review it; current contributors: {sorted(contributors)}."
+                ),
+                status="self-review-blocked",
+                head=reviewed_head,
+                producer=producer,
+            )
 
     # For approval, require evidence of diff / PR inspection. Failed attempts must
     # not render as APPROVE: that false signal stalls promotion while looking done.
@@ -1208,17 +1233,22 @@ def handle_review(
             "mechanical": mechanical,
         }
 
-    # Fetch after posting so concurrent approvals are observed atomically.
-    # approval_can_promote unions reviewer, so even with eventual-consistency
-    # lag the current approval counts; the re-read ensures a second distinct
-    # reviewer for producer==None is eventually visible and can promote to ready.
+    # Fetch after posting so concurrent approvals are observed atomically. The
+    # contributor set is re-read from the same snapshot: a repairer's record for
+    # this exact head can land while the reviewer is working, and promotion must
+    # not reuse the pre-post view that could not see it.
+    promoted_comments = review_comment_bodies(pr_number)
     prior_approvers = current_head_approvers(
-        review_comment_bodies(pr_number),
+        promoted_comments,
         pr=pr_number,
         head=reviewed_head,
     )
+    contributors, provenance_complete = head_contributor_provenance(
+        promoted_comments, pr=pr_number, head=reviewed_head, producer=producer
+    )
     authorized = approval_can_promote(
-        producer=producer,
+        contributors=contributors,
+        provenance_complete=provenance_complete,
         reviewer=worker,
         reviewed_head=reviewed_head,
         current_head=latest_head,
@@ -1228,9 +1258,9 @@ def handle_review(
     )
     if not authorized:
         note = (
-            "Historical producer provenance is unavailable, so one additional distinct "
-            "factory approval is required for this exact head."
-            if producer is None and mechanical_passed and latest_head == reviewed_head
+            "Contributor provenance is not recorded for this head, so two distinct "
+            "independent factory approvals are required before it can be ready."
+            if not provenance_complete
             else f"Approval was denied by controller-side gates: {mechanical['reason']}."
         )
         result = return_to_review(
@@ -1362,22 +1392,28 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
     branch = str(pr.get("headRefName") or "")
     head = str(pr.get("headRefOid") or "")
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
-    approvers = current_head_approvers(
-        review_comment_bodies(pr_number),
-        pr=pr_number,
-        head=head,
+    comments = review_comment_bodies(pr_number)
+    approvers = current_head_approvers(comments, pr=pr_number, head=head)
+    contributors, provenance_complete = head_contributor_provenance(
+        comments, pr=pr_number, head=head, producer=producer
     )
     authorized = (
         str(pr.get("state")) == "OPEN"
         and "factory:ready" in labels_of(pr)
         and HEAD_RE.fullmatch(head) is not None
-        and head_has_authorized_approval(producer=producer, approvers=approvers)
+        and head_has_authorized_approval(
+            contributors=contributors,
+            approvers=approvers,
+            provenance_complete=provenance_complete,
+        )
     )
     if authorized:
         return {
             "authorized": True,
             "head": head,
             "producer": producer,
+            "contributors": sorted(contributors),
+            "provenance_complete": provenance_complete,
             "approvers": sorted(approvers),
         }
 
@@ -1400,8 +1436,62 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
         "authorized": False,
         "head": head,
         "producer": producer,
+        "contributors": sorted(contributors),
+        "provenance_complete": provenance_complete,
         "approvers": sorted(approvers),
     }
+
+
+def record_contribution(*, worker: str, pr_number: int, head: str) -> dict[str, Any]:
+    """Record one factory worker's contribution to one exact PR head.
+
+    Worker wrappers call this immediately after every push that changes a PR
+    head. The controller re-reads the authoritative PR head, refuses to record a
+    stale SHA, and writes the marker as the entire comment body so worker PR
+    body text, commit messages, resume packets, and review prose can never be
+    read as trusted contributor provenance.
+
+    A worker records the commit its own push just created, and GitHub publishes
+    the new ref asynchronously, so the first read can still report the previous
+    head. That lag is transient rather than a genuine stale push, so the head
+    match is retried a bounded number of times before the record is abandoned.
+    Losing the record entirely is survivable (the head then needs two distinct
+    reviewers), but losing it to normal ref propagation would quietly halve
+    review throughput on every repaired pull request.
+    """
+    if not FIXED_WORKER_RE.fullmatch(worker):
+        raise RuntimeError(f"unsupported fixed-model worker: {worker}")
+    if not HEAD_RE.fullmatch(head):
+        raise RuntimeError("head must be a full lowercase Git SHA")
+
+    mismatch = f"PR #{pr_number} head did not reach expected {head}"
+    for attempt in range(CONTRIBUTION_HEAD_SYNC_ATTEMPTS):
+        pr = pr_json(pr_number)
+        if str(pr.get("state")) != "OPEN":
+            raise RuntimeError(f"PR #{pr_number} is not open")
+        if "factory" not in labels_of(pr):
+            raise RuntimeError(f"PR #{pr_number} is not a factory pull request")
+        current_head = str(pr.get("headRefOid") or "")
+        if current_head == head:
+            epoch = int(time.time())
+            marker = head_contributor_marker(
+                pr=pr_number,
+                head=head,
+                worker=worker,
+                epoch=epoch,
+            )
+            run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+            return {
+                "status": "recorded",
+                "pr": pr_number,
+                "head": head,
+                "worker": worker,
+                "epoch": epoch,
+            }
+        mismatch = f"PR #{pr_number} head {current_head} does not match expected {head}"
+        if attempt + 1 < CONTRIBUTION_HEAD_SYNC_ATTEMPTS:
+            time.sleep(CONTRIBUTION_HEAD_SYNC_INTERVAL_SECONDS)
+    raise RuntimeError(mismatch)
 
 
 def main() -> int:
@@ -1430,6 +1520,11 @@ def main() -> int:
     gates.add_argument("--pr", type=int, required=True)
     gates.add_argument("--expected-head", required=True)
 
+    record = subparsers.add_parser("record-contribution")
+    record.add_argument("--worker", required=True)
+    record.add_argument("--pr", type=int, required=True)
+    record.add_argument("--head", required=True)
+
     subparsers.add_parser("reconcile-ci")
     subparsers.add_parser("reconcile-terminal")
 
@@ -1446,6 +1541,12 @@ def main() -> int:
         result = authorize_ready(args.pr)
     elif args.command == "demote-ready":
         result = demote_ready(args.pr)
+    elif args.command == "record-contribution":
+        result = record_contribution(
+            worker=args.worker,
+            pr_number=args.pr,
+            head=args.head,
+        )
     elif args.command == "reconcile-ci":
         result = {"results": reconcile_ci()}
     elif args.command == "reconcile-terminal":

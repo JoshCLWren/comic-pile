@@ -13,7 +13,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from factory_review_policy import parse_review_marker
+from factory_review_policy import (
+    parse_review_marker,
+    recorded_pr_contributors,
+    trusted_comment_bodies,
+)
 from factory_work_policy import FIXED_LEASE_TTL_SECONDS, LOCAL_LEASE_TTL_SECONDS, owner_of
 
 REPOSITORY = "JoshCLWren/comic-pile"
@@ -134,8 +138,13 @@ def capture_view(
             if isinstance(check, dict)
         ]
         head = str(pr.get("headRefOid") or "")
-        pr["reviews"] = _reviews(
-            [comment for comment in comments if isinstance(comment, dict)], pr=number, head=head
+        rows = [comment for comment in comments if isinstance(comment, dict)]
+        pr["reviews"] = _reviews(rows, pr=number, head=head)
+        # Contributor provenance must be captured under the identical trusted
+        # filter the review controller applies, otherwise the shadow decision
+        # and the real controller would disagree about who authored a head.
+        pr["head_contributors"] = sorted(
+            recorded_pr_contributors(trusted_comment_bodies(rows), pr=number)
         )
         lease = _lease(raw)
         if lease:

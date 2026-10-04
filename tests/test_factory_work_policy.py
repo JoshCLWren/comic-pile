@@ -27,6 +27,7 @@ def candidate(
     stage: str | None = None,
     producer: str | None = None,
     lane: int = 3,
+    head_contributors: frozenset[str] = frozenset(),
 ) -> Candidate:
     """Build a deterministic candidate fixture."""
     return Candidate(
@@ -37,6 +38,7 @@ def candidate(
         created_at="2026-08-16T00:00:00Z",
         stage=stage,
         producer_worker=producer,
+        head_contributors=head_contributors,
     )
 
 
@@ -114,6 +116,59 @@ def test_producer_can_receive_repair_work_without_self_approving():
     )
     ordered = policy.order_candidates_for_worker([repair], "43")
     assert ordered == [repair]
+
+
+def test_recorded_repairer_cannot_receive_semantic_review_of_its_own_repair():
+    """Queue selection excludes every worker that authored the exact head.
+
+    #2846: the producer opened the PR and a different factory repaired it. The
+    controller refuses that repairer's verdict, so selection must not keep
+    dispatching it onto the head it wrote; the PR has to go to another
+    eligible reviewer on its own.
+    """
+    repaired = candidate(
+        kind="pr",
+        number=1390,
+        stage="factory:review",
+        producer="29",
+        head_contributors=frozenset({"29", "59"}),
+    )
+    assert repaired not in policy.order_candidates_for_worker([repaired], "59")
+    assert repaired not in policy.order_candidates_for_worker([repaired], "29")
+    assert policy.order_candidates_for_worker([repaired], "17") == [repaired]
+
+
+def test_unresolved_contributor_record_does_not_block_an_independent_worker():
+    """An unresolved record keeps producer-only knowledge, not a wider exclusion."""
+    unresolved = candidate(kind="pr", number=1390, stage="factory:review", producer="29")
+    assert unresolved not in policy.order_candidates_for_worker([unresolved], "29")
+    assert policy.order_candidates_for_worker([unresolved], "59") == [unresolved]
+
+
+def test_build_candidates_carries_captured_head_contributors():
+    """The captured contributor set reaches candidate ordering unchanged."""
+    pr = {
+        "number": 1390,
+        "state": "OPEN",
+        "isDraft": False,
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:unowned"},
+            {"name": "factory:review"},
+        ],
+        "headRefName": "factory/29-1386-opencode-free",
+        "headRefOid": "a" * 40,
+        "body": "Closes #1386.",
+        "createdAt": "2026-08-16T00:00:00Z",
+        "head_contributors": ["29", "59"],
+    }
+
+    assert policy.head_contributors_from_pr(pr) == frozenset({"29", "59"})
+    assert policy.head_contributors_from_pr({"number": 1390}) == frozenset()
+    assert policy.head_contributors_from_pr({"number": 1390, "head_contributors": "59"}) == frozenset()
+
+    built = policy.build_candidates([], [pr])
+    assert [item.head_contributors for item in built] == [frozenset({"29", "59"})]
 
 
 def test_reserved_review_worker_prefers_factory_review():

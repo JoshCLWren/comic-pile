@@ -428,6 +428,159 @@ def test_assign_accepts_kinds_parameter(controller: types.ModuleType) -> None:
     assert sig.parameters["kinds"].default is None
 
 
+def review_pr(number: int, head: str) -> dict[str, Any]:
+    """Build an open review-stage factory pull request payload."""
+    return {
+        "number": number,
+        "state": "OPEN",
+        "isDraft": False,
+        "title": f"PR {number}",
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:unowned"},
+            {"name": "factory:review"},
+        ],
+        "headRefName": f"factory/29-{number}-opencode-free",
+        "headRefOid": head,
+        "body": "Closes #1386.",
+        "createdAt": "2026-08-16T00:00:00Z",
+    }
+
+
+def trusted_comment(body: str) -> dict[str, Any]:
+    """Build a controller-authored pull request comment."""
+    return {"user": {"login": "github-actions[bot]"}, "author_association": "NONE", "body": body}
+
+
+def contributor_marker(pr: int, head: str, worker: str) -> str:
+    """Return the exact marker the controller writes at push time."""
+    return (
+        "<!-- comic-pile-factory-head-contributor-v1:"
+        f"pr-{pr}:head-{head}:worker-{worker}:epoch-1234567890 -->"
+    )
+
+
+def test_dispatcher_routes_a_repairers_head_to_another_reviewer(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Selection reads exact-head provenance so the repairer is never re-dispatched.
+
+    #3059 requires queue selection to choose another eligible reviewer without
+    human intervention. Refusing the verdict in the review controller is not
+    enough: the same worker would keep receiving the head and keep burning its
+    lease. The dispatcher list payload carries no comments, so the contributors
+    for review-stage candidates have to be resolved before ordering.
+    """
+    head = "a" * 40
+    pr = review_pr(3073, head)
+    monkeypatch.setattr(controller, "gh_json", lambda *args, **kwargs: [[trusted_comment(
+        contributor_marker(3073, head, "29")
+    ), trusted_comment(contributor_marker(3073, head, "59"))]])
+
+    candidates = controller.resolve_review_head_contributors(
+        controller.build_candidates([], [pr]), [pr]
+    )
+
+    assert [item.head_contributors for item in candidates] == [frozenset({"29", "59"})]
+    assert controller.order_candidates_for_worker(candidates, "59") == []
+    assert controller.order_candidates_for_worker(candidates, "29") == []
+    assert controller.order_candidates_for_worker(candidates, "17") == candidates
+
+
+def test_dispatcher_excludes_a_superseded_repairer_from_the_newer_head(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker recorded on an earlier head of the PR stays out of its review pool.
+
+    Repairs stack onto the previous head, so the third repairer's head still
+    carries the second repairer's commits. Selecting on the current head's record
+    alone would hand that head back to the worker that authored part of it.
+    """
+    pr = review_pr(3073, "c" * 40)
+    monkeypatch.setattr(
+        controller,
+        "gh_json",
+        lambda *args, **kwargs: [[
+            trusted_comment(contributor_marker(3073, "a" * 40, "29")),
+            trusted_comment(contributor_marker(3073, "b" * 40, "59")),
+            trusted_comment(contributor_marker(3073, "c" * 40, "77")),
+        ]],
+    )
+
+    candidates = controller.resolve_review_head_contributors(
+        controller.build_candidates([], [pr]), [pr]
+    )
+
+    assert [item.head_contributors for item in candidates] == [frozenset({"29", "59", "77"})]
+    for contributor in ("29", "59", "77"):
+        assert controller.order_candidates_for_worker(candidates, contributor) == []
+    assert controller.order_candidates_for_worker(candidates, "17") == candidates
+
+
+def test_dispatcher_keeps_captured_contributors_without_extra_reads(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Rotisserie capture already carries provenance; do not re-read comments."""
+    head = "a" * 40
+    pr = review_pr(3073, head)
+    pr["head_contributors"] = ["29", "59"]
+
+    def fail(*args: object, **kwargs: object) -> None:
+        raise AssertionError("captured provenance must not trigger a comment read")
+
+    monkeypatch.setattr(controller, "gh_json", fail)
+
+    candidates = controller.resolve_review_head_contributors(
+        controller.build_candidates([], [pr]), [pr]
+    )
+
+    assert [item.head_contributors for item in candidates] == [frozenset({"29", "59"})]
+
+
+def test_unreadable_provenance_narrows_nothing_at_selection(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed provenance read must not widen who the controller will accept."""
+    head = "a" * 40
+    pr = review_pr(3073, head)
+
+    def unavailable(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("gh rate limited")
+
+    monkeypatch.setattr(controller, "gh_json", unavailable)
+
+    candidates = controller.resolve_review_head_contributors(
+        controller.build_candidates([], [pr]), [pr]
+    )
+
+    assert [item.head_contributors for item in candidates] == [frozenset()]
+    # The producer is still excluded, and the apparent reviewer stays eligible,
+    # but the review controller refuses that head without two distinct reviews.
+    assert controller.order_candidates_for_worker(candidates, "29") == []
+    assert controller.order_candidates_for_worker(candidates, "59") == candidates
+
+
+def test_untrusted_authors_cannot_steer_reviewer_selection(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only trusted provenance can remove a worker from the reviewer pool."""
+    head = "a" * 40
+    pr = review_pr(3073, head)
+    forged = {
+        "user": {"login": "somebody-else"},
+        "author_association": "CONTRIBUTOR",
+        "body": contributor_marker(3073, head, "17"),
+    }
+    monkeypatch.setattr(controller, "gh_json", lambda *args, **kwargs: [[forged]])
+
+    candidates = controller.resolve_review_head_contributors(
+        controller.build_candidates([], [pr]), [pr]
+    )
+
+    assert [item.head_contributors for item in candidates] == [frozenset()]
+    assert controller.order_candidates_for_worker(candidates, "17") == candidates
+
+
 def test_assign_candidate_refuses_second_active_lease(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
