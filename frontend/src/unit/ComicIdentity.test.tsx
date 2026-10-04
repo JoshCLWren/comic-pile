@@ -79,7 +79,8 @@ describe('ComicIdentity', () => {
 
     // Cover image should be visible immediately (not in a collapsed card) and
     // served through the edge-cacheable optimizer with the canonical source.
-    const cover = await screen.findByAltText('')
+    // The alt text is the issue name for accessibility (LCP hero image).
+    const cover = await screen.findByAltText('Opening')
     expect(cover).toBeInTheDocument()
     expect(cover).toHaveAttribute(
       'src',
@@ -160,14 +161,14 @@ describe('ComicIdentity', () => {
     renderWithToast(<ComicIdentity issueId={3} />)
     await waitForLoaded()
 
-    const cover = await screen.findByAltText('')
+    const cover = await screen.findByAltText('Fail Issue')
     expect(cover).toBeInTheDocument()
 
     fireEvent.error(cover)
 
     // Should fall back to placeholder
     await waitFor(() => {
-      expect(screen.queryByAltText('')).not.toBeInTheDocument()
+      expect(screen.queryByAltText('Fail Issue')).not.toBeInTheDocument()
     })
     expect(screen.getByTestId('cover-placeholder')).toBeInTheDocument()
   })

@@ -161,7 +161,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     const { container } = render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={onRefreshThread} />)
 
     // initial stale cover should appear
-    const staleImg = await screen.findByAltText('')
+    const staleImg = await screen.findByAltText('Stale Issue')
     expect(staleImg.getAttribute('src')).toContain(encodeURIComponent('https://images.example/old-cover.jpg'))
     expect(getIntelligenceSpy).toHaveBeenCalledTimes(1)
     expect(getIntelligenceSpy).toHaveBeenCalledWith(77)
@@ -192,7 +192,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     await waitFor(() => expect(onRefreshThread).toHaveBeenCalled())
 
     // Optimistic update makes new image appear immediately, refetch confirms it
-    const updatedImg = await screen.findByAltText('')
+    const updatedImg = await screen.findByAltText('Fresh Issue')
     expect(updatedImg.getAttribute('src')).toContain(encodeURIComponent('https://images.example/new-cover.jpg'))
 
     // Ensure we did NOT globally clear unrelated caches (queue pages should stay untouched)
@@ -220,7 +220,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     })
 
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
-    await screen.findByAltText('')
+    await screen.findByAltText('Stale Issue')
 
     fireEvent.click(await openCorrectionAction('Wrong series?'))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
@@ -238,7 +238,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
 
     // Should show placeholder, not spinner, not stale image
     await waitFor(() => expect(screen.getByTestId('cover-placeholder')).toBeInTheDocument())
-    expect(screen.queryByAltText('')).not.toBeInTheDocument()
+    expect(screen.queryByAltText('Fresh Issue')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument()
   })
 
@@ -261,7 +261,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     })
 
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
-    await screen.findByAltText('')
+    await screen.findByAltText('Stale Issue')
 
     // trigger correction
     fireEvent.click(await openCorrectionAction('Wrong series?'))
