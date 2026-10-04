@@ -1098,3 +1098,118 @@ def test_normalize_is_idempotent():
         once = policy.normalize_target_state(labels, policy.owner_of(labels))
         twice = policy.normalize_target_state(_labels(*once), once[0])
         assert once == twice, labels
+
+
+# ── Issue #1620: body-declared acceptance parents leave factory intake ──
+
+
+def _body_issue(number: int, body: str, *labels: str) -> dict[str, object]:
+    """Build an unowned pending issue fixture carrying a specific body."""
+    return {
+        "number": number,
+        "state": "OPEN",
+        "title": f"Issue {number}",
+        "labels": [{"name": "factory:unowned"}, *({"name": label} for label in labels)],
+        "body": body,
+        "createdAt": "2026-08-16T00:00:00Z",
+    }
+
+
+def test_body_declared_acceptance_parent_is_not_an_intake_candidate():
+    """#1615 shape: a self-declared parent with a child graph is not ordinary work."""
+    candidates = policy.build_candidates(
+        [
+            _body_issue(
+                900,
+                "This is the acceptance parent for CBL adoption.\n"
+                "- [x] #2127 — transactional adoption\n"
+                "- [ ] #2128 — production browser UI\n",
+                "ralph-task",
+                "ralph-status:pending",
+            )
+        ],
+        [],
+    )
+
+    assert not [c for c in candidates if c.kind == "issue" and c.number == 900]
+
+
+def test_parent_criteria_heading_with_child_graph_is_not_an_intake_candidate():
+    """A parent-criteria heading plus a declared child graph is a parent contract."""
+    candidates = policy.build_candidates(
+        [
+            _body_issue(
+                901,
+                "## Parent acceptance criteria\n"
+                "- [x] #2972 — remove cached read paths\n"
+                "- [ ] #2974 — delete cache providers\n",
+                "ralph-task",
+                "ralph-status:pending",
+            )
+        ],
+        [],
+    )
+
+    assert not [c for c in candidates if c.kind == "issue" and c.number == 901]
+
+
+def test_deferred_production_acceptance_split_stays_an_intake_candidate():
+    """#3037/#2718/#2128 defer the acceptance pass and must remain deliverable.
+
+    Excluding them would drop a user-reported bug from the first delivery queue
+    and block the executable children that the acceptance parent depends on.
+    """
+    candidates = policy.build_candidates(
+        [
+            _body_issue(
+                902,
+                "## Production acceptance split\n"
+                "#3042 owns the production-wide audit and reconciliation.\n"
+                "- [ ] A Reading Plan cannot persist the same issue twice.\n"
+                "- [ ] The invariant is enforced at the database layer.\n",
+                "bug",
+                "user-reported",
+                "ralph-task",
+                "ralph-status:pending",
+            ),
+            _body_issue(
+                903,
+                "- [ ] A repeatable production-shaped comparison harness exists.\n"
+                "- [ ] Production go/no-go is owned by #3040.\n",
+                "enhancement",
+                "ralph-task",
+                "ralph-status:pending",
+            ),
+            _body_issue(
+                904,
+                "Refs #2129 so it can use this path for production acceptance.\n"
+                "- [ ] Reader adopts after one compact confirmation\n",
+                "enhancement",
+                "ralph-task",
+                "ralph-status:pending",
+            ),
+        ],
+        [],
+    )
+
+    selected = sorted(c.number for c in candidates if c.kind == "issue")
+    assert selected == [902, 903, 904]
+
+
+def test_parent_language_without_child_graph_stays_an_intake_candidate():
+    """Parent wording with no declared child graph is not a parent contract."""
+    candidates = policy.build_candidates(
+        [
+            _body_issue(
+                905,
+                "This issue is not an acceptance parent. Refs #3040.\n"
+                "- [ ] roll honors the hard boundary\n",
+                "bug",
+                "ralph-task",
+                "ralph-status:pending",
+            )
+        ],
+        [],
+    )
+
+    assert [c.number for c in candidates if c.kind == "issue"] == [905]

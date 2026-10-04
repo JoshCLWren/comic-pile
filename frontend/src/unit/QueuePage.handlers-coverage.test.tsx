@@ -267,7 +267,7 @@ describe('QueuePage callback coverage', () => {
 
   it('loads mixed blocking reasons and leaves a blank reactivation selection untouched', async () => {
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1, 3])
-    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValueOnce({ blocking_reasons: ['Finish Saga'] }).mockRejectedValueOnce(new Error('reason failed'))
+    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValueOnce({ blocking_reasons: ['Finish Saga'], is_blocked: true }).mockRejectedValueOnce(new Error('reason failed'))
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
@@ -401,7 +401,7 @@ describe('QueuePage callback coverage', () => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
-    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [] })
+    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [], is_blocked: false })
     renderPage()
     await user.click(screen.getByText('read callback'))
     expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))

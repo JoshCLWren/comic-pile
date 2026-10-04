@@ -259,6 +259,14 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: /Pick this series/ }))
     await waitFor(() => expect(spies.override).toHaveBeenCalled())
 
+    // Submitting an override enters the rating view, where the header offers the
+    // queue action instead of the die-view controls (issue #2712). The remaining
+    // picker and migration coverage still belongs to the die view, so the flow
+    // returns there through the new header action.
+    await waitFor(() => expect(screen.getByTestId('roll-back-to-queue')).toBeInTheDocument())
+    await user.click(screen.getByTestId('roll-back-to-queue'))
+    await waitFor(() => expect(screen.queryByTestId('roll-back-to-queue')).not.toBeInTheDocument())
+
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     fireEvent.submit(screen.getByRole('button', { name: /Pick this series/ }).closest('form')!)
     await user.click(screen.getByRole('button', { name: 'close modal' }))
@@ -268,6 +276,43 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'skip migration' }))
+  })
+
+  it('leaves the rating view from the header chrome by dismissing the pending read', async () => {
+    const user = userEvent.setup()
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+
+    await user.click(screen.getByTestId('roll-back-to-queue'))
+
+    // Leaving the rating view has to retire the server-side pending read, not
+    // just local state: `useRollPendingSession` rehydrates the rating view from
+    // `bootstrap.pending_thread_id`, so a local-only exit is undone on the very
+    // next render and the header action reads as a dead button.
+    await waitFor(() => expect(spies.dismissPending).toHaveBeenCalled())
+    expect(spies.refetch).toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByTestId('roll-back-to-queue')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /^Pick manually$/ })).toBeInTheDocument()
+  })
+
+  it('keeps the rating workspace out of a generic full-workspace panel', async () => {
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // The die view keeps its ordinary panel chrome.
+    expect(screen.getByTestId('roll-workspace').className).toContain('surface-panel')
+
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByTestId('roll-header-workspace')).toBeInTheDocument())
+
+    // Rating mode is page-level composition: a generic rounded/glass parent
+    // around the whole workspace would make the page read as one giant card.
+    const workspace = screen.getByTestId('roll-workspace')
+    expect(workspace.className).not.toContain('surface-panel')
+    expect(workspace.className).not.toContain('rounded-xl')
   })
 
   it('reports action, shuffle, stale-read, and rating failures without losing the page', async () => {

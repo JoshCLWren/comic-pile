@@ -227,7 +227,6 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
   await page.fill('input[name="username"]', user.username);
   await page.fill('input[name="email"]', user.email);
   await page.fill('input[name="password"]', user.password);
-  await page.fill('input[name="confirmPassword"]', user.password);
   await page.click('button[type="submit"]');
 
   try {
@@ -482,7 +481,6 @@ export const SELECTORS = {
 		usernameInput: 'input[name="username"]',
 		emailInput: 'input[name="email"]',
 		passwordInput: 'input[name="password"]',
-		confirmPasswordInput: 'input[name="confirmPassword"]',
 		submitButton: 'button[type="submit"]',
 	},
 	threadList: {

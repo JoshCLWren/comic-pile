@@ -38,6 +38,31 @@ from app.safe_logging import safe_connection_metadata
 logger = logging.getLogger(__name__)
 
 
+# SEO indexability policy (issue #3065). Only the public landing page is a
+# crawl target. Every other SPA path — auth/utility pages, redirects, and all
+# authenticated routes — is served with `X-Robots-Tag: noindex, nofollow` so it
+# cannot appear in search results even for crawlers that skip JavaScript. The
+# frontend canonical table in `frontend/src/seo/routeSeo.ts` mirrors this
+# policy for client-side head management (`Seo` component).
+_SPA_INDEXABLE_PATHS = frozenset({"/"})
+
+
+def _robots_tag_for_spa_path(request_path: str) -> str | None:
+    """Return the robots header value for an SPA path, if it must not be indexed.
+
+    Args:
+        request_path: Request path with or without a leading slash.
+
+    Returns:
+        ``"noindex, nofollow"`` for every path except the indexable landing
+        page, ``None`` when the path is an intentional crawl target.
+    """
+    normalized = "/" + request_path.strip().strip("/")
+    if normalized in _SPA_INDEXABLE_PATHS:
+        return None
+    return "noindex, nofollow"
+
+
 def _default_log_level(environment: str) -> int:
     """Resolve the default root log level for an environment.
 
@@ -170,6 +195,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import cbl_plan_adoption
     from app.api import comicvine_resolution
     from app.api import creators
+    from app.api import demo
     from app.api import dependency
     from app.api import delivery
     from app.api import health
@@ -187,6 +213,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import snooze
     from app.api import taste
     from app.api import taste_signal
+    from app.api import tags
     from app.api import thread
     from app.api import traffic_metrics
     from app.api import undo
@@ -220,6 +247,7 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
     app.include_router(creators.router, tags=["creators"])
     app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
+    app.include_router(tags.router)
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
@@ -244,6 +272,9 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(delivery.router, prefix="/api/v1", tags=["delivery"])
+    # Guest demo (#2757): versioned-only new client resource, so no bare
+    # /api/* twin. It is intentionally unauthenticated and read-only.
+    app.include_router(demo.router, prefix="/api/v1/demo", tags=["demo"])
     app.include_router(catalog.router, tags=["catalog"])
     app.include_router(identity_inbox.router, tags=["identity-inbox"])
     app.include_router(issue_identity.router, tags=["issue-identity"])
@@ -463,13 +494,21 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
         spa_index = Path("static/react/index.html")
         assets_dir = Path("static/react/assets")
+        robots_txt = Path("static/react/robots.txt")
         has_js = any(assets_dir.glob("*.js")) if assets_dir.exists() else False
         has_css = any(assets_dir.glob("*.css")) if assets_dir.exists() else False
 
-        if not spa_index.exists() or not assets_dir.exists() or not has_js or not has_css:
+        if (
+            not spa_index.exists()
+            or not assets_dir.exists()
+            or not has_js
+            or not has_css
+            or not robots_txt.exists()
+        ):
             raise RuntimeError(
                 "Missing built frontend artifacts in production. "
-                "Expected static/react/index.html and static/react/assets with JS/CSS files."
+                "Expected static/react/index.html, static/react/robots.txt, "
+                "and static/react/assets with JS/CSS files."
             )
 
     class CacheControlledStaticFiles(StarletteStaticFiles):
@@ -516,8 +555,12 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
             return FileResponse("static/vite.svg", media_type="image/svg+xml")
 
-        def _serve_spa_index_response() -> Response:
+        def _serve_spa_index_response(request_path: str = "/") -> Response:
             """Serve SPA index file when available, else return fallback HTML.
+
+            Args:
+                request_path: Request path being served, used to decide the
+                    robots header. Only the indexable landing page omits it.
 
             Returns:
                 FileResponse for the built SPA index, or fallback HTMLResponse in test environments.
@@ -526,6 +569,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
             spa_index = Path("static/react/index.html")
             cache_headers = {"Cache-Control": "no-store, no-cache, must-revalidate"}
+            robots_tag = _robots_tag_for_spa_path(request_path)
+            if robots_tag is not None:
+                cache_headers["X-Robots-Tag"] = robots_tag
             if spa_index.exists():
                 return FileResponse(str(spa_index), headers=cache_headers)
             if app_settings.environment == "production":
@@ -540,7 +586,33 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             Returns:
                 FileResponse with React index.html.
             """
-            return _serve_spa_index_response()
+            return _serve_spa_index_response("/")
+
+        @app.get("/robots.txt")
+        async def serve_robots_txt():
+            """Serve the crawler indexability policy.
+
+            Prefers the built ``static/react/robots.txt`` (copied verbatim from
+            ``frontend/public/robots.txt`` by Vite), falling back to the source
+            file in development and test checkouts.
+
+            Returns:
+                Plain-text robots.txt response with a short public cache.
+            """
+            from fastapi.responses import FileResponse
+
+            robots_headers = {"Cache-Control": "public, max-age=3600"}
+            built_robots = Path("static/react/robots.txt")
+            if built_robots.exists():
+                return FileResponse(
+                    str(built_robots), media_type="text/plain", headers=robots_headers
+                )
+            source_robots = Path("frontend/public/robots.txt")
+            if source_robots.exists():
+                return FileResponse(
+                    str(source_robots), media_type="text/plain", headers=robots_headers
+                )
+            raise StarletteHTTPException(status_code=503, detail="Crawler policy unavailable")
 
         @app.get("/react")
         async def serve_react_redirect():
@@ -601,7 +673,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                 StarletteHTTPException: If path is blocked.
             """
             blocked_prefixes = ("api", "static", "assets", "debug")
-            blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg"}
+            blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg", "robots.txt"}
 
             if (
                 full_path in blocked_exact
@@ -610,7 +682,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             ):
                 raise StarletteHTTPException(status_code=404, detail="Not Found")
 
-            return _serve_spa_index_response()
+            return _serve_spa_index_response(f"/{full_path}")
 
     async def _ensure_heavy_init() -> None:
         """Lazily initialize database once.

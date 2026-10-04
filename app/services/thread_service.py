@@ -36,7 +36,9 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
+from app.schemas.tags import TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
     QueueCursor,
     QueueSort,
@@ -613,6 +615,11 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
 
     # Collect issue ids that will disappear with the thread for plan cleanup.
     deleted_issue_ids = await issue_repository.issue_ids_for_thread(db, thread_id)
+
+    # Tag assignments point at polymorphic target ids with no foreign key, so
+    # drop the thread's own assignments and its issues' assignments here.
+    await purge_target_assignments(db, TagTargetType.THREAD.value, [thread_id])
+    await purge_target_assignments(db, TagTargetType.ISSUE.value, deleted_issue_ids)
 
     delete_event = Event(
         type="delete",

@@ -5,6 +5,7 @@ import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
 import { clearSessionCache } from './query/cacheEffects'
 import { lazyRoute } from './routes/routeModules'
+import Seo from './seo/Seo'
 import { useRoutePrefetch } from './hooks/useRoutePrefetch'
 import Navigation from './components/Navigation'
 import type { ReportType } from './components/BugReportModal'
@@ -66,6 +67,7 @@ const ForgotPasswordPage = lazyRoute('forgotPassword')
 const ResetPasswordPage = lazyRoute('resetPassword')
 const IdentityInboxPage = lazyRoute('identityInbox')
 const LandingPage = lazyRoute('landing')
+const DemoRollPage = lazyRoute('demoRoll')
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient()
@@ -513,12 +515,14 @@ function AppRoutes() {
   
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
+      <Seo />
       <RouteChunkPrefetcher enabled={isAuthenticated} />
       <Routes>
         <Route path="/login" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><LoginPage /></PublicLayout></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><RegisterPage /></PublicLayout></PublicRoute>} />
         <Route path="/forgot-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ForgotPasswordPage /></PublicLayout></PublicRoute>} />
         <Route path="/reset-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ResetPasswordPage /></PublicLayout></PublicRoute>} />
+        <Route path="/demo" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><DemoRollPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
         <Route path="/" element={<RootRoute onBugReportSubmit={submit} />} />

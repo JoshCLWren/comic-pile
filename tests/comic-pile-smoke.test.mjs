@@ -33,7 +33,7 @@ describe("Comic Pile - smoke", () => {
     await testdriver.wait(2000);
 
     const registerVisible = await testdriver.assert(
-      "the registration page is shown with a 'Create Account' form containing Username, Email, Password and Confirm Password fields",
+      "the registration page is shown with a 'Create Account' form containing Username, Email and Password fields",
     );
     expect(registerVisible).toBeTruthy();
   });

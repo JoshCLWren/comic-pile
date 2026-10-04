@@ -120,11 +120,14 @@ describe('RegisterPage auth chrome (issue #2754)', () => {
       target: { value: 'reader@example.com' },
     })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
-    fireEvent.change(screen.getByLabelText('Confirm Password'), {
-      target: { value: 'password' },
-    })
     fireEvent.submit(screen.getByRole('button', { name: 'Create Account' }).closest('form')!)
     await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
     expect(localStorage.getItem(RETURNING_VISITOR_STORAGE_KEY)).toBe('1')
+  })
+
+  it('does not render a redundant confirm-password field (issue #2756)', () => {
+    renderRoute(<RegisterPage />)
+    expect(screen.queryByLabelText('Confirm Password')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Confirm New Password')).not.toBeInTheDocument()
   })
 })

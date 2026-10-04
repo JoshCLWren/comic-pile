@@ -725,6 +725,7 @@ def test_unused_free_converts_surplus_big_pickle_instead_of_growing() -> None:
         _row("59", "opencode-free", "big-pickle", minute="35"),
         _row("74", "opencode-free", "longcat-2.5-preview-free", minute="0"),
         _row("75", "opencode-free", "ling-3.1-flash-free", minute="5"),
+        _row("76", "opencode-free", "fledge-alpha-free", minute="15"),
         *[
             _row(
                 str(101 + index),
@@ -793,6 +794,7 @@ def test_mixed_retire_and_add_rebalances_in_one_plan() -> None:
         _row("59", "opencode-free", "big-pickle", minute="15"),
         _row("74", "opencode-free", "longcat-2.5-preview-free", minute="35"),
         _row("75", "opencode-free", "ling-3.1-flash-free", minute="10"),
+        _row("76", "opencode-free", "fledge-alpha-free", minute="45"),
         _row("80", "opencode-free", "absent-free-model", minute="20"),
         _row("201", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
         _row("202", "opencode-free", "nemotron-3-ultra-free", minute="30"),
@@ -875,6 +877,7 @@ def test_apply_does_not_grow_first_big_pickle_when_absent() -> None:
         _row("59", "opencode-free", "ling-3.0-flash-fin-free", minute="35"),
         _row("74", "opencode-free", "longcat-2.5-preview-free", minute="0"),
         _row("75", "opencode-free", "ling-3.1-flash-free", minute="5"),
+        _row("76", "opencode-free", "fledge-alpha-free", minute="10"),
     ]
 
     plan = RETIRE.plan_retirement(rows, catalogs)
@@ -914,7 +917,8 @@ def _balanced_grow_roster() -> list[dict[str, str]]:
 
     All keep-present free OpenCode models except ``ling-3.0-flash-fin-free``
     are already pinned (including ``space-bunny-free``,
-    ``longcat-2.5-preview-free``, and ``ling-3.1-flash-free``), so apply
+    ``longcat-2.5-preview-free``, ``ling-3.1-flash-free``, and
+    ``fledge-alpha-free``), so apply
     must grow a new worker rather
     than convert. The rows cover every dispatcher minute so the validator
     loop applies.
@@ -930,6 +934,7 @@ def _balanced_grow_roster() -> list[dict[str, str]]:
         _row("49", "opencode-free", "space-bunny-free", minute="35"),
         _row("74", "opencode-free", "longcat-2.5-preview-free", minute="0"),
         _row("75", "opencode-free", "ling-3.1-flash-free", minute="5"),
+        _row("76", "opencode-free", "fledge-alpha-free", minute="10"),
         *[
             _row(
                 str(201 + index),
@@ -956,6 +961,7 @@ def _balanced_mimo_upgrade_roster() -> list[dict[str, str]]:
         _row("50", "opencode-free", "space-bunny-free", minute="45"),
         _row("74", "opencode-free", "longcat-2.5-preview-free", minute="0"),
         _row("75", "opencode-free", "ling-3.1-flash-free", minute="10"),
+        _row("76", "opencode-free", "fledge-alpha-free", minute="15"),
         *[
             _row(
                 str(201 + index),
@@ -1282,6 +1288,14 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "minute": "25",
         "scheduler": "dispatcher",
         "display_name": "OpenCode Ling 3.1 Flash Free",
+    }
+    assert by_worker["76"] == {
+        "worker": "76",
+        "source": "opencode-free",
+        "model": "fledge-alpha-free",
+        "minute": "30",
+        "scheduler": "dispatcher",
+        "display_name": "OpenCode Fledge Alpha Free",
     }
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in remaining}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in remaining}

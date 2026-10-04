@@ -106,12 +106,21 @@ export default function LandingPage() {
         {/* CTA Section */}
         <section className="text-center space-y-4 border-t border-[var(--theme-border)] pt-8" aria-labelledby="cta-heading">
           <h2 id="cta-heading" className="sr-only">Get started</h2>
-          <Link
-            to="/register"
-            className="w-full md:w-auto h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] rounded-xl text-sm font-bold text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] px-8 inline-block"
-          >
-            Create your queue
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link
+              to="/register"
+              className="w-full md:w-auto h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] rounded-xl text-sm font-bold text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] px-8 inline-block"
+            >
+              Create your queue
+            </Link>
+            <Link
+              to="/demo"
+              className="w-full md:w-auto h-12 bg-[var(--theme-bg-panel)] hover:bg-[var(--theme-bg-page)] border border-[var(--theme-border)] rounded-xl text-sm font-bold text-[var(--theme-text-primary)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] px-8 inline-block"
+              data-landing-try-demo
+            >
+              Try demo
+            </Link>
+          </div>
           <p className="text-sm text-[var(--theme-text-muted)]">
             {isReturning ? 'Welcome back' : 'Already have an account?'}{' '}
             <Link

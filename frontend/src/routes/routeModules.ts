@@ -40,6 +40,7 @@ export const routeModules = {
   resetPassword: () => import('../pages/ResetPasswordPage'),
   identityInbox: () => import('../pages/IdentityInboxPage'),
   landing: () => import('../pages/LandingPage'),
+  demoRoll: () => import('../pages/DemoRollPage'),
 } as const satisfies Record<string, () => Promise<RouteModule>>
 
 export function lazyRoute<K extends RouteModuleKey>(

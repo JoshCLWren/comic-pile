@@ -113,9 +113,21 @@ describe('RatingView action panel (issue #1406)', () => {
   it('Cancel uses demoted tertiary styling that does not rival the primary save', () => {
     render(ratingView())
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
+    const snooze = screen.getByRole('button', { name: /snooze/i })
+    // Issue #3009 replaces Cancel's one-off tertiary treatment with the shared
+    // secondary peer class, so the peers are now literally identical rather
+    // than merely similar. Cancel used to be the only transparent peer.
+    expect(cancel.className).toBe(snooze.className)
     expect(cancel.className).toContain('border-[var(--theme-border)]')
-    expect(cancel.className).toContain('bg-transparent')
-    expect(cancel.className).toContain('text-[var(--theme-text-muted)]')
+    expect(cancel.className).toContain('bg-[var(--theme-bg-panel)]')
+    // Demotion comes from the flat surface, not from an accent fill and not from
+    // the primary's uppercase treatment. The old contract also demanded
+    // `bg-transparent` plus muted text, which is what introduced the pale-cyan
+    // command-center accent the visual grammar forbids for a non-accent meaning.
+    expect(cancel.className).not.toMatch(/uppercase/)
+    expect(cancel.className).not.toContain('theme-primary-action')
+    expect(cancel.className).not.toContain('theme-continuity-accent')
+    expect(cancel.className).not.toContain('theme-danger')
     expect(cancel.className).not.toContain('rose')
     expect(cancel.className).not.toContain('focus:ring-rose-500')
   })
@@ -125,7 +137,13 @@ describe('RatingView action panel (issue #1406)', () => {
     const snooze = screen.getByRole('button', { name: /snooze/i })
     expect(snooze.className).toContain('border-[var(--theme-border)]')
     expect(snooze.className).toContain('bg-[var(--theme-bg-panel)]')
-    expect(snooze.className).toContain('text-stone-300')
+    // Issue #3009 replaces the raw `text-stone-300` palette utility with the
+    // semantic text token so the neutral label stays readable in every theme.
+    expect(snooze.className).toContain('text-[var(--theme-text-primary)]')
+    expect(snooze.className).not.toMatch(/\bstone-\d/)
+    expect(snooze.className).not.toContain('theme-comic-accent')
+    expect(snooze.className).not.toContain('theme-danger')
+    expect(snooze.className).not.toContain('theme-continuity-accent')
   })
 
   it('Snooze and Cancel are equal width (both flex-1)', () => {
@@ -136,17 +154,23 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(cancel.className).toContain('flex-1')
   })
 
-  it('primary save remains the dominant hierarchy over Cancel (issue #2347)', () => {
+  it('primary save remains the dominant hierarchy over Cancel (issue #2347, revised by #3009)', () => {
     render(ratingView())
     const save = screen.getByRole('button', { name: /mark read & save/i })
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
-    const primary = save.classList.contains('bg-[var(--theme-comic-accent)]/25')
+    // Issue #3009 moves the dominant affirmative fill off the comic-identity
+    // accent and onto the reserved `--theme-primary-action` role. The hierarchy
+    // this test protects is unchanged: the primary keeps the solid accent fill,
+    // the full row width, and the uppercase treatment that Cancel does not have.
+    const primary = save.classList.contains('bg-[var(--theme-primary-action)]')
     const cancelIsDemoted =
-      cancel.classList.contains('bg-transparent') &&
-      cancel.classList.contains('text-[var(--theme-text-muted)]')
+      cancel.classList.contains('bg-[var(--theme-bg-panel)]') &&
+      !cancel.classList.contains('bg-[var(--theme-primary-action)]')
     expect(primary).toBe(true)
     expect(cancelIsDemoted).toBe(true)
     expect(save.classList.contains('w-full')).toBe(true)
+    expect(save.className).toMatch(/uppercase/)
+    expect(cancel.className).not.toMatch(/uppercase/)
     expect(cancel.className).not.toContain('rose')
   })
 
@@ -324,11 +348,17 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(screen.getByRole('slider').style.getPropertyValue('--slider-fill')).toBe('50%')
   })
 
-  it('secondary actions use flex without flex-wrap for balanced row', () => {
+  it('secondary actions wrap so peers reflow instead of squeezing on one row (issue #3009)', () => {
     render(ratingView())
     const secondary = screen.getByTestId('rating-secondary-actions')
+    // Issue #3009 reverses the earlier single-row requirement: holding all three
+    // peers on one non-wrapping row is what squeezed `Cancel roll` against its
+    // button edges at supported widths. Wrapping plus a shared minimum width is
+    // the reported fix, and rendered containment is covered by the #2350 and
+    // #2942 Chromium reflow suites.
     expect(secondary.className).toContain('flex')
-    expect(secondary.className).not.toContain('flex-wrap')
+    expect(secondary.className).toContain('flex-wrap')
+    expect(secondary.className).toContain('gap-2')
   })
 
   it('secondary action buttons have equal flex weight', () => {
@@ -337,6 +367,11 @@ describe('RatingView action panel (issue #1406)', () => {
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
     expect(snooze.className).toContain('flex-1')
     expect(cancel.className).toContain('flex-1')
+    // Issue #3009 replaces the old "no min width at all" expectation with one
+    // shared standard-scale minimum width. The arbitrary `min-w-[7.5rem]` value
+    // is still rejected: the visual grammar prefers the standard spacing scale.
+    expect(snooze.className).toContain('min-w-28')
+    expect(cancel.className).toContain('min-w-28')
     expect(snooze.className).not.toContain('min-w-\\[7.5rem\\]')
     expect(cancel.className).not.toContain('min-w-\\[7.5rem\\]')
   })

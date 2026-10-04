@@ -30,6 +30,7 @@ from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.reading_session import ReadingSession
 from app.models.snapshot import Snapshot
+from app.models.tag import Tag, TagAssignment
 from app.models.taste_signal import TasteSignal
 from app.models.thread import Thread
 from app.models.user import User
@@ -67,6 +68,8 @@ __all__ = [
     "ReadingSession",
     "Snapshot",
     "TasteSignal",
+    "Tag",
+    "TagAssignment",
     "Thread",
     "ThreadExternalSeriesMapping",
     "User",
