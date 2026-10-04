@@ -8,6 +8,10 @@ import {
   findGridColsArbitraryComma,
   gridColsArbitraryCommaMessage,
 } from './eslint-rules/grid-cols-comma-guard.ts'
+import {
+  findResponsiveLayoutClassAssertion,
+  responsiveLayoutClassAssertionMessage,
+} from './eslint-rules/class-name-layout-guard.ts'
 
 /**
  * Custom rule to prevent direct React Query cache mutations outside cacheEffects.ts
@@ -113,6 +117,75 @@ const noGridColsArbitraryCommasPlugin = {
   },
 }
 
+/**
+ * Custom rule banning DOM class-name assertions as evidence of responsive layout correctness.
+ * 
+ * Issue #3061: Tests must prove rendered geometry or observable browser outcomes, not 
+ * just class-name contents. Class-name assertions are insufficient for layout regression 
+ * coverage because invalid classes can still pass string assertions and they don't prove
+ * actual geometry, overlap, visibility, etc.
+ * 
+ * Detection lives in `./eslint-rules/class-name-layout-guard` so the vitest
+ * suite can cover the same predicate.
+ */
+const noResponsiveLayoutClassAssertionsPlugin = {
+  rules: {
+    'no-responsive-layout-class-assertions': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description:
+            'Ban DOM class-name assertions as evidence of responsive layout correctness; use geometry measurements instead',
+          recommended: 'error',
+        },
+        schema: [],
+        messages: {
+          layoutClassAssertion: '{{message}}',
+        },
+      },
+      create(context) {
+        // Check for problematic assertion patterns in test files
+        const checkForProblematicAssertions = (code: string) => {
+          const assertionMethods = [
+            'toHaveClass',
+            'toContain',
+            'toMatch',
+            'not.toHaveClass', 
+            'not.toContain',
+            'not.toMatch'
+          ]
+          
+          for (const method of assertionMethods) {
+            const result = findResponsiveLayoutClassAssertion(code, method)
+            if (result) {
+              context.report({
+                node: context.getSourceNode() || { line: 1, column: 1 },
+                messageId: 'layoutClassAssertion',
+                data: { 
+                  message: responsiveLayoutClassAssertionMessage(
+                    result.problematicTokens,
+                    result.fullMatch
+                  )
+                },
+              })
+            }
+          }
+        }
+
+        return {
+          Program(node) {
+            // Only apply to test files
+            if (context.filename?.includes('/test/') || context.filename?.includes('/unit/')) {
+              const sourceCode = context.getSourceCode()
+              checkForProblematicAssertions(sourceCode.text)
+            }
+          },
+        }
+      },
+    },
+  },
+}
+
 export default [
   {
     ignores: ['dist', 'coverage'],
@@ -122,10 +195,12 @@ export default [
     plugins: {
       'no-direct-cache-mutations': noDirectCacheMutationsPlugin,
       'no-grid-cols-arbitrary-commas': noGridColsArbitraryCommasPlugin,
+      'no-responsive-layout-class-assertions': noResponsiveLayoutClassAssertionsPlugin,
     },
     rules: {
       'no-direct-cache-mutations/no-direct-cache-mutations': 'error',
       'no-grid-cols-arbitrary-commas/no-grid-cols-arbitrary-commas': 'error',
+      'no-responsive-layout-class-assertions/no-responsive-layout-class-assertions': 'error',
     },
   },
   {
