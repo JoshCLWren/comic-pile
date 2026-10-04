@@ -7,7 +7,7 @@ import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 
-type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
+type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'map-series'
 
 interface QueueModalsParams {
   threads: ThreadListItem[] | null | undefined
@@ -47,6 +47,7 @@ interface UseQueueModalsResult {
   repositioningThread: ThreadListItem | null
   dependencyThread: ThreadListItem | null
   threadToMigrate: Thread | ThreadListItem | null
+  threadToMap: ThreadListItem | null
   showMigrationDialog: boolean
   reactivateThreadId: string
   issuesToAdd: number
@@ -66,6 +67,8 @@ interface UseQueueModalsResult {
   closeDependenciesModal: () => void
   openMigrationDialog: (thread: Thread | ThreadListItem) => void
   closeMigrationDialog: () => void
+  openMapSeriesModal: (thread: ThreadListItem) => void
+  closeMapSeriesModal: () => void
   handleCreateSubmit: (event: FormEvent) => Promise<void>
   handleEditSubmit: (event: FormEvent) => Promise<void>
   handleReactivateSubmit: (event: FormEvent) => Promise<void>
@@ -110,6 +113,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [repositioningThread, setRepositioningThread] = useState<ThreadListItem | null>(null)
   const [dependencyThread, setDependencyThread] = useState<ThreadListItem | null>(null)
   const [threadToMigrate, setThreadToMigrate] = useState<Thread | ThreadListItem | null>(null)
+  const [threadToMap, setThreadToMap] = useState<ThreadListItem | null>(null)
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
@@ -208,6 +212,16 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const closeMigrationDialog = useCallback(() => {
     setShowMigrationDialog(false)
     setThreadToMigrate(null)
+  }, [])
+
+  const openMapSeriesModal = useCallback((thread: ThreadListItem) => {
+    setThreadToMap(thread)
+    setOpenModal('map-series')
+  }, [])
+
+  const closeMapSeriesModal = useCallback(() => {
+    setThreadToMap(null)
+    setOpenModal(null)
   }, [])
 
   const dismissRollNudge = useCallback(() => {
@@ -407,6 +421,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     repositioningThread,
     dependencyThread,
     threadToMigrate,
+    threadToMap,
     showMigrationDialog,
     reactivateThreadId,
     issuesToAdd,
@@ -426,6 +441,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     closeDependenciesModal,
     openMigrationDialog,
     closeMigrationDialog,
+    openMapSeriesModal,
+    closeMapSeriesModal,
     handleCreateSubmit,
     handleEditSubmit,
     handleReactivateSubmit,

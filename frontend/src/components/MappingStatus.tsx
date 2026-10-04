@@ -3,9 +3,8 @@ import {
   getMappingStatusText, 
   getMappingStatusDescription, 
   getMappingSummary,
-  type ComicVineMappingHealth,
-  type ComicVineMappingStatus
 } from '../hooks/useComicVineMapping';
+import type { ComicVineMappingHealth, ComicVineMappingStatus } from '../types/comic-vine';
 
 interface MappingStatusBadgeProps {
   mapping: ComicVineMappingHealth | null;

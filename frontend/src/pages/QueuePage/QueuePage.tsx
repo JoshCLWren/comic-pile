@@ -185,6 +185,7 @@ export default function QueuePage() {
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
           onDelete={() => actions.requestDelete(thread)}
+          onMapSeries={() => modals.openMapSeriesModal(thread)}
         />
       )
     },
@@ -292,6 +293,7 @@ export default function QueuePage() {
           repositioningThread={modals.repositioningThread}
           dependencyThread={modals.dependencyThread}
           threadToMigrate={modals.threadToMigrate}
+          threadToMap={modals.threadToMap}
           showMigrationDialog={modals.showMigrationDialog}
           reactivateThreadId={modals.reactivateThreadId}
           setReactivateThreadId={modals.setReactivateThreadId}
@@ -316,6 +318,7 @@ export default function QueuePage() {
           onMigrationSkip={modals.handleMigrationSkip}
           onCloseMigration={modals.closeMigrationDialog}
           onOpenMigrationDialog={modals.openMigrationDialog}
+          onCloseMapSeries={modals.closeMapSeriesModal}
           onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
           onIssueChanged={handleIssueChanged}
           isPendingCreate={modals.isPendingCreate}

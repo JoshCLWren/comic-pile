@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { threadsApi } from '../services/api-threads';
-import type { QueueThreadListItem, ComicVineMappingHealth } from '../generated/openapi';
-import type { ComicVineMappingStatus } from '../types/comic-vine';
+import type { ThreadListItem } from '../types';
+import type { ComicVineMappingHealth, ComicVineMappingStatus } from '../types/comic-vine';
 
 /**
  * Hook to get ComicVine mapping health for a queue thread
  */
-export function useComicVineMapping(thread: QueueThreadListItem | null) {
+export function useComicVineMapping(thread: ThreadListItem | null) {
   return useQuery({
     queryKey: ['comic-vine-mapping', thread?.id],
     queryFn: () => {
