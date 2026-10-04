@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
 import { useDebounce } from '../hooks/useDebounce'
@@ -8,6 +8,9 @@ import type { CreatorListItem } from '../services/api-creators'
 
 /** Quiet period before a typed name search becomes a new bounded query. */
 const SEARCH_DEBOUNCE_MS = 300
+
+/** Maximum number of creators that can be selected for comparison. */
+const MAX_COMPARISON_SELECTION = 4
 
 /**
  * Server-side browse orderings exposed by `GET /api/v1/creators`. Labels stay
@@ -23,14 +26,25 @@ function isCreatorListSort(value: string): value is CreatorListSort {
   return SORT_OPTIONS.some((option) => option.value === value)
 }
 
-function CreatorRow({ item }: { item: CreatorListItem }) {
+function CreatorRow({
+  item,
+  isSelected,
+  onToggle,
+  selectionCount,
+  maxSelection,
+}: {
+  item: CreatorListItem
+  isSelected: boolean
+  onToggle: () => void
+  selectionCount: number
+  maxSelection: number
+}) {
   const key = item.canonical_creator_key
-  // A creator without a stable provider identity has no detail route; it must
-  // stay plain text rather than link to a guessed identity.
   const detailPath = parseCreatorKey(key) != null ? creatorRoutePath(key) : null
   const roles = item.normalized_roles.join(', ')
   const ratingsCount = item.ratings_count
   const average = item.average_rating
+  const canSelect = !isSelected && selectionCount < maxSelection
 
   const body = (
     <>
@@ -53,18 +67,32 @@ function CreatorRow({ item }: { item: CreatorListItem }) {
     </>
   )
 
+  const checkbox = (
+    <input
+      type="checkbox"
+      checked={isSelected}
+      onChange={onToggle}
+      disabled={!canSelect}
+      aria-label={`Select ${item.display_name} for comparison`}
+      className="mt-1.5 h-4 w-4 rounded border-[var(--theme-border)] text-[var(--theme-primary-action)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+    />
+  )
+
   return (
-    <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
-      {detailPath ? (
-        <Link
-          to={detailPath}
-          className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-        >
-          {body}
-        </Link>
-      ) : (
-        <div className="min-w-0">{body}</div>
-      )}
+    <li className="min-w-0 rounded-xl border px-3 py-2 flex items-start gap-3" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <div className="flex-shrink-0 self-center">{checkbox}</div>
+      <div className="min-w-0 flex-1">
+        {detailPath ? (
+          <Link
+            to={detailPath}
+            className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+          >
+            {body}
+          </Link>
+        ) : (
+          <div className="min-w-0">{body}</div>
+        )}
+      </div>
     </li>
   )
 }
@@ -72,8 +100,10 @@ function CreatorRow({ item }: { item: CreatorListItem }) {
 export default function CreatorsPage() {
   const [search, setSearch] = useState<string>('')
   const [sort, setSort] = useState<CreatorListSort>('name')
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()
+  const navigate = useNavigate()
 
   const {
     items,
@@ -88,11 +118,34 @@ export default function CreatorsPage() {
   } = useCreatorsList({ search: activeSearch || undefined, sort })
 
   const hasItems = items.length > 0
-  // #2775 reports metadata coverage per selection; a lower bound must never be
-  // presented as an exhaustive library.
   const ratingsPartial = coverage != null && !coverage.ratings_complete
   const showFirstLoadError = isError && !hasItems
   const showMoreError = isError && hasItems
+  const selectionCount = selectedKeys.size
+  const canCompare = selectionCount >= 2
+
+  const handleToggleSelection = (key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else if (next.size < MAX_COMPARISON_SELECTION) {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
+  const handleCompare = () => {
+    if (canCompare) {
+      const keys = Array.from(selectedKeys).join(',')
+      navigate(`/creators/compare?keys=${encodeURIComponent(keys)}`)
+    }
+  }
+
+  const handleClearSelection = () => {
+    setSelectedKeys(new Set())
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
@@ -145,6 +198,36 @@ export default function CreatorsPage() {
         </div>
       </section>
 
+      {selectionCount > 0 && (
+        <div className="mt-4 rounded-2xl border p-3 md:p-4 sticky top-16 z-10" style={{ borderColor: 'var(--theme-primary-action)', backgroundColor: 'var(--theme-primary-action)/5' }}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+                {selectionCount} of {MAX_COMPARISON_SELECTION} selected for comparison
+              </span>
+              {canCompare && (
+                <button
+                  type="button"
+                  onClick={handleCompare}
+                  className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                  style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+                >
+                  Compare
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-muted)' }}
+            >
+              Clear selection
+            </button>
+          </div>
+        </div>
+      )}
+
       {showFirstLoadError ? (
         <div role="alert" className="mt-6 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-danger)' }}>
           <p className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
@@ -188,7 +271,14 @@ export default function CreatorsPage() {
               </p>
               <ul className="mt-2 space-y-2">
                 {items.map((item) => (
-                  <CreatorRow key={item.canonical_creator_key} item={item} />
+                  <CreatorRow
+                    key={item.canonical_creator_key}
+                    item={item}
+                    isSelected={selectedKeys.has(item.canonical_creator_key)}
+                    onToggle={() => handleToggleSelection(item.canonical_creator_key)}
+                    selectionCount={selectionCount}
+                    maxSelection={MAX_COMPARISON_SELECTION}
+                  />
                 ))}
               </ul>
             </>
