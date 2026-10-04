@@ -5,6 +5,7 @@ import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
 import { clearSessionCache } from './query/cacheEffects'
 import { lazyRoute } from './routes/routeModules'
+import Seo from './seo/Seo'
 import { useRoutePrefetch } from './hooks/useRoutePrefetch'
 import Navigation from './components/Navigation'
 import type { ReportType } from './components/BugReportModal'
@@ -514,6 +515,7 @@ function AppRoutes() {
   
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
+      <Seo />
       <RouteChunkPrefetcher enabled={isAuthenticated} />
       <Routes>
         <Route path="/login" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><LoginPage /></PublicLayout></PublicRoute>} />
