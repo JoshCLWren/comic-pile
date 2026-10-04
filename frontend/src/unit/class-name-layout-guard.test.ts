@@ -1,246 +1,184 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { hasResponsiveLayoutClassAssertions } from '../../eslint-rules/class-name-layout-guard'
+import { describe, expect, it } from 'vitest'
+import {
+  findLayoutClassAssertion,
+  findLayoutClassTokens,
+  isLayoutClassAssertion,
+  isLayoutGeometryUtility,
+  layoutClassAssertionMessage,
+} from '../../eslint-rules/class-name-layout-guard'
 
 /**
- * Issue #3061: Ban DOM class-name assertions as evidence of responsive layout correctness.
- * 
- * This test suite demonstrates:
- * 1. The problem: class-name assertions that pass even when layout is broken
- * 2. The solution: geometry-based assertions that prove actual rendered behavior
- * 3. The guard: automated detection of problematic patterns
- * 4. Legitimate cases: class assertions unrelated to visual geometry
+ * Issue #3061: reject class-name string assertions as evidence of responsive
+ * layout correctness, and keep rendered-geometry tests legal.
+ *
+ * The fixtures below are source strings, not rendered DOM, on purpose. jsdom has
+ * no layout engine and does not load Tailwind, so `getBoundingClientRect()`
+ * always returns zeros and `getComputedStyle().display` stays at the user-agent
+ * default; a jsdom unit test can never prove geometry. The guard therefore
+ * rejects the class-string pattern at lint time and points authors at the
+ * Chromium specs under `src/test/`, where rendered geometry is measurable.
+ *
+ * Every fixture is bound to a constant before use. The eslint rule reads the
+ * source text of each assertion call, so embedding a rejected assertion inside
+ * an `expect(...)` call here would make this file report itself.
  */
 
-// Mock components for testing
-const MockResponsiveComponent = () => (
-  <div className="lg:grid lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)] lg:max-w-4xl lg:mx-auto">
-    <div data-testid="comic-region" className="bg-red-500">Comic Content</div>
-    <div data-testid="decision-region" className="bg-blue-500">Decision Content</div>
-  </div>
-)
+/** #2949 shape: responsive layout proven only by class strings. */
+const ROLL_GRID_ASSERTION = `expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')`
+const INVALID_UTILITY_ASSERTION = `expect(container.className).toContain('lg:grid-cols-[this_is_not_valid_css]')`
+const NONEXISTENT_UTILITY_ASSERTION = `expect(container.className).toContain('lg:grid-cols-[nonexistent-class-syntax]')`
+const INVALID_SYNTAX_ASSERTION = `expect(container.className).toContain('lg:grid-cols-[invalid_syntax]')`
+const VALID_UTILITY_ASSERTION = `expect(container.className).toContain('lg:grid-cols-1')`
+const MIXED_CLASS_ASSERTION = `expect(grid.className).toContain('min-w-0 lg:max-w-4xl text-red-500')`
 
-const BrokenResponsiveComponent = () => (
-  <div className="lg:grid lg:grid-cols-[invalid_syntax] lg:max-w-4xl lg:mx-auto">
-    <div data-testid="comic-region" className="bg-red-500">Comic Content</div>
-    <div data-testid="decision-region" className="bg-blue-500">Decision Content</div>
-  </div>
-)
+const REJECTED_LAYOUT_ASSERTIONS = [
+  ROLL_GRID_ASSERTION,
+  `expect(grid!.className).toContain('lg:max-w-4xl')`,
+  `expect(grid!.className).toContain('lg:mx-auto')`,
+  `expect(grid.className).toMatch('xl:grid-cols-2')`,
+  `expect(element).toHaveClass('lg:hidden')`,
+  `expect(section).toHaveClass('md:grid-cols-2')`,
+  `expect(wrapper).toHaveClass('md:flex-row')`,
+  `expect(card).not.toHaveClass('md:flex-row')`,
+  `expect(cell.className).not.toContain('md:row-span-2')`,
+  `expect(card.className).not.toContain('xl:col-span-full')`,
+  `expect(screen.getByTestId('rating-pillars-grid').className).toContain('lg:grid')`,
+  `await expect(locator).not.toHaveClass('xl:grid-cols-[repeat(auto-fit,minmax(0,1fr))]')`,
+  INVALID_UTILITY_ASSERTION,
+  NONEXISTENT_UTILITY_ASSERTION,
+  INVALID_SYNTAX_ASSERTION,
+  VALID_UTILITY_ASSERTION,
+]
 
-describe('Problem: Class-name assertions pass even when layout is broken', () => {
-  it('demonstrates the flaw: className assertions pass with invalid Tailwind classes', () => {
-    // This represents the pattern from #2949 - asserting class names exists
-    // but not proving the actual layout works
-    render(<BrokenResponsiveComponent />)
-    
-    // These assertions would PASS even though the layout is completely broken
-    // because the class names are still present in the DOM
-    const comicRegion = screen.getByTestId('comic-region')
-    const decisionRegion = screen.getByTestId('decision-region')
-    
-    // ✅ These pass - class names are present
-    expect(comicRegion.className).toContain('lg:grid')
-    expect(comicRegion.parentElement?.className).toContain('lg:grid-cols-[invalid_syntax]')
-    expect(comicRegion.parentElement?.className).toContain('lg:max-w-4xl')
-    expect(decisionRegion.className).toContain('bg-blue-500')
-    
-    // ❌ But the actual layout is broken:
-    // - The invalid syntax `grid-cols-[invalid_syntax]` makes the grid collapse
-    // - The content doesn't actually render in two columns
-    // - The layout doesn't respect the max-width constraints
-    // - The responsive behavior doesn't work as intended
-  })
+/** #2995 shape: rendered geometry as layout evidence. */
+const GEOMETRY_ASSERTIONS = [
+  `const comicRect = comicRegion.getBoundingClientRect()`,
+  `expect(comicRect.width).toBeGreaterThan(0)`,
+  `expect(comicRect.width).toBeLessThanOrEqual(1024)`,
+  `expect(decisionRect.top).toBeGreaterThan(comicRect.bottom)`,
+  `expect(cardRect.bottom).toBeLessThanOrEqual(disclosureRect.top)`,
+  `expect(containerRect.left).toBeGreaterThanOrEqual(0)`,
+  `expect(containerRect.right).toBeLessThanOrEqual(viewportWidth)`,
+  `expect(comicRect.width).toBeGreaterThan(decisionRect.width)`,
+  `expect(gridStyle.display).toBe('grid')`,
+  `expect(gridStyle.gridTemplateColumns).toBe('minmax(0,24rem) minmax(18rem,24rem)')`,
+  `expect(gridStyle.maxWidth).toBe('1024px')`,
+  `expect(elementStyle.visibility).toBe('hidden')`,
+  `expect(grid!.className).toContain(ROLL_WORKSPACE_MAX_WIDTH)`,
+  `expect(grid!.className).toContain(ROLL_WORKSPACE_TRACKS)`,
+]
 
-  it('shows how invalid classes still pass string matching', () => {
-    const problematicTestCode = `
-      expect(element.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
-      expect(element.className).toContain('lg:max-w-4xl')
-      expect(element.className).toContain('lg:mx-auto')
-    `
-    
-    // This should be detected as problematic by our guard
-    expect(hasResponsiveLayoutClassAssertions(problematicTestCode)).toBe(true)
-  })
-})
+/** Class assertions whose class is the contract, not rendered layout. */
+const ALLOWED_CLASS_ASSERTIONS = [
+  `expect(element).toHaveClass('disabled')`,
+  `expect(button).toHaveClass('loading')`,
+  `expect(component).toHaveClass('selected')`,
+  `expect(card).toHaveClass('is-open')`,
+  `expect(row).not.toHaveClass('aria-busy')`,
+  `expect(element).toHaveClass('bg-white')`,
+  `expect(element.className).toContain('text-red-500')`,
+  `expect(badge.className).toContain('md:text-lg')`,
+  `expect(divider.className).toContain('lg:border-t')`,
+  `expect(panel.className).toContain('xl:rounded-lg')`,
+  `expect(wrapper.className).toContain('p-3')`,
+  `expect(comicRegion.className).toContain('min-w-0')`,
+  `expect(grid.className).toContain('items-start')`,
+  `expect(list.className).toContain('grid')`,
+]
 
-describe('Solution: Geometry-based assertions prove actual rendered behavior', () => {
-  it('uses bounding box measurements to prove actual layout geometry', () => {
-    render(<MockResponsiveComponent />)
-    
-    const comicRegion = screen.getByTestId('comic-region')
-    const decisionRegion = screen.getByTestId('decision-region')
-    const container = comicRegion.parentElement!
-    
-    // ✅ These assertions prove actual rendered geometry:
-    
-    // 1. Prove the container is actually a grid
-    const containerStyle = window.getComputedStyle(container)
-    expect(containerStyle.display).toBe('grid')
-    
-    // 2. Prove the grid has the correct number of columns
-    expect(containerStyle.gridTemplateColumns).toBe('minmax(0,24rem) minmax(18rem,24rem)')
-    
-    // 3. Prove the container has the correct max-width
-    expect(containerStyle.maxWidth).toBe('1024px') // 4xl = 1024px
-    
-    // 4. Prove the content is actually laid out in two columns
-    const comicRect = comicRegion.getBoundingClientRect()
-    const decisionRect = decisionRegion.getBoundingClientRect()
-    
-    // Both regions should have width > 0 (not collapsed)
-    expect(comicRect.width).toBeGreaterThan(0)
-    expect(decisionRect.width).toBeGreaterThan(0)
-    
-    // Comic region should be wider than decision region (24rem vs 18rem)
-    expect(comicRect.width).toBeGreaterThan(decisionRect.width)
-    
-    // Regions should be side by side (not stacked)
-    expect(Math.abs(comicRect.left - decisionRect.left)).toBeLessThan(
-      Math.max(comicRect.width, decisionRect.width)
-    )
-  })
+/** Source that is not a class assertion at all. */
+const NON_ASSERTION_SOURCES = [
+  `const grid = screen.getByTestId('rating-pillars-grid')`,
+  `<div className="lg:grid lg:grid-cols-2 lg:max-w-4xl" />`,
+  `expect(queries.findByRole('grid')).toBeInTheDocument()`,
+  `expect(console.warn).not.toHaveBeenCalled()`,
+  `const classList = new Set(['lg:hidden'])`,
+]
 
-  it('uses computed styles to prove responsive behavior', () => {
-    // Simulate different viewport sizes
-    Object.defineProperty(window, 'innerWidth', {
-      writable: true,
-      configurable: true,
-      value: 1024, // lg breakpoint
-    })
-    
-    // Trigger a re-render with the new viewport
-    render(<MockResponsiveComponent />)
-    
-    const container = screen.getByTestId('comic-region').parentElement!
-    const containerStyle = window.getComputedStyle(container)
-    
-    // ✅ Prove the responsive behavior actually works:
-    expect(containerStyle.display).toBe('grid')
-    expect(containerStyle.gridTemplateColumns).toBe('minmax(0,24rem) minmax(18rem,24rem)')
-    
-    // Clean up
-    Object.defineProperty(window, 'innerWidth', {
-      writable: true,
-      configurable: true,
-      value: 1920, // Reset to original
-    })
-  })
-
-  it('uses viewport containment to prove responsive layout', () => {
-    render(<MockResponsiveComponent />)
-    
-    const container = screen.getByTestId('comic-region').parentElement!
-    const containerRect = container.getBoundingClientRect()
-    const viewportWidth = window.innerWidth
-    
-    // ✅ Prove the container is properly contained within viewport
-    expect(containerRect.left).toBeGreaterThanOrEqual(0)
-    expect(containerRect.right).toBeLessThanOrEqual(viewportWidth)
-    expect(containerRect.width).toBeLessThanOrEqual(viewportWidth)
-    
-    // Prove the max-width constraint is actually respected
-    expect(containerRect.width).toBeLessThanOrEqual(1024) // 4xl = 1024px
-  })
-})
-
-describe('Guard: Automated detection of problematic patterns', () => {
-  it('detects responsive layout class assertions', () => {
-    const problematicPatterns = [
-      'expect(element.className).toContain("lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]")',
-      'expect(container.className).toContain("lg:max-w-4xl")',
-      'expect(wrapper.className).toContain("md:flex")',
-      'expect(grid.className).toMatch("xl:grid-cols-2")',
-      'expect(element).toHaveClass("lg:hidden")',
-      'expect(component).not.toHaveClass("sm:block")',
-    ]
-    
-    for (const pattern of problematicPatterns) {
-      expect(hasResponsiveLayoutClassAssertions(pattern)).toBe(true)
+describe('rejects the #2949 shape: responsive layout proven only by class strings', () => {
+  it('rejects every responsive layout class assertion', () => {
+    for (const assertion of REJECTED_LAYOUT_ASSERTIONS) {
+      expect(isLayoutClassAssertion(assertion), assertion).toBe(true)
     }
   })
 
-  it('allows legitimate class assertions unrelated to geometry', () => {
-    const legitimatePatterns = [
-      'expect(element).toHaveClass("disabled")', // Semantic state
-      'expect(button).toHaveClass("loading")', // Loading state
-      'expect(component).toHaveClass("selected")', // Selection state
-      'expect(element.className).toContain("text-red-500")', // Color (not layout)
-      'expect(wrapper.className).toContain("p-3")', // Padding (not responsive)
-      'expect(element).toHaveClass("bg-white")', // Background color
-    ]
-    
-    for (const pattern of legitimatePatterns) {
-      expect(hasResponsiveLayoutClassAssertions(pattern)).toBe(false)
-    }
+  it('reports the offending responsive utilities and the assertion source', () => {
+    const finding = findLayoutClassAssertion(ROLL_GRID_ASSERTION)
+    expect(finding?.tokens).toEqual([
+      'lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]',
+    ])
+    expect(finding?.snippet).toBe(ROLL_GRID_ASSERTION)
   })
 
-  it('ignores non-test code', () => {
-    const productionCode = `
-      <div className="lg:grid lg:grid-cols-2">
-        <Content />
-      </div>
-    `
-    
-    expect(hasResponsiveLayoutClassAssertions(productionCode)).toBe(false)
+  it('reports only the layout tokens when legitimate classes share the string', () => {
+    expect(findLayoutClassAssertion(MIXED_CLASS_ASSERTION)?.tokens).toEqual(['lg:max-w-4xl'])
   })
 })
 
-describe('Acceptance criteria validation', () => {
-  it('rejects class-only assertions as insufficient layout coverage', () => {
-    // This represents the pattern from #2949 that should be rejected
-    const insufficientTest = `
-      describe('Responsive layout', () => {
-        it('has correct responsive classes', () => {
-          const grid = screen.getByTestId('rating-grid')
-          expect(grid.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
-          expect(grid.className).toContain('lg:max-w-4xl')
-          expect(grid.className).toContain('lg:mx-auto')
-        })
-      })
-    `
-    
-    expect(hasResponsiveLayoutClassAssertions(insufficientTest)).toBe(true)
+describe('accepts the #2995 shape: rendered geometry as layout evidence', () => {
+  it('accepts bounding-box, containment, and computed-style assertions', () => {
+    for (const assertion of GEOMETRY_ASSERTIONS) {
+      expect(isLayoutClassAssertion(assertion), assertion).toBe(false)
+    }
+  })
+})
+
+describe('shows why the rule exists: invalid utilities still satisfy class assertions', () => {
+  it('rejects nonexistent and malformed responsive utilities with an actionable message', () => {
+    // These are the exact #2963 spellings. A nonexistent or malformed utility is
+    // still an attribute value on the element, so each assertion passes while
+    // the rendered grid collapses to a single column.
+    const finding = findLayoutClassAssertion(INVALID_UTILITY_ASSERTION)
+    if (finding === null) {
+      throw new Error('expected the guard to reject a nonexistent responsive utility')
+    }
+    const message = layoutClassAssertionMessage(finding)
+    expect(message).toContain('lg:grid-cols-[this_is_not_valid_css]')
+    expect(message).toContain('#3061')
+    expect(message).toContain('issue-2942-roll-layout-invariants.spec.ts')
+    expect(message).toContain('frontend/docs/CLASS_NAME_LAYOUT_GUARD.md')
   })
 
-  it('accepts geometry-based tests as proper coverage', () => {
-    // This represents the pattern from #2995 that should be accepted
-    const sufficientTest = `
-      describe('Responsive layout', () => {
-        it('renders correct geometry', () => {
-          const grid = screen.getByTestId('rating-grid')
-          const gridStyle = window.getComputedStyle(grid)
-          expect(gridStyle.display).toBe('grid')
-          expect(gridStyle.gridTemplateColumns).toBe('minmax(0,24rem) minmax(18rem,24rem)')
-          expect(gridStyle.maxWidth).toBe('1024px')
-          
-          const rect = grid.getBoundingClientRect()
-          expect(rect.width).toBeGreaterThan(0)
-          expect(rect.width).toBeLessThanOrEqual(1024)
-        })
-      })
-    `
-    
-    expect(hasResponsiveLayoutClassAssertions(sufficientTest)).toBe(false)
+  it('rejects valid responsive utilities too, because validity is not the failure mode', () => {
+    // `lg:grid-cols-1` is a real Tailwind utility and still only proves a
+    // string, so the rule targets evidence quality rather than syntax validity.
+    expect(isLayoutClassAssertion(VALID_UTILITY_ASSERTION)).toBe(true)
+  })
+})
+
+describe('does not ban legitimate class assertions unrelated to visual geometry', () => {
+  it('allows semantic state hooks, presentational utilities, and stated contracts', () => {
+    for (const assertion of ALLOWED_CLASS_ASSERTIONS) {
+      expect(isLayoutClassAssertion(assertion), assertion).toBe(false)
+    }
   })
 
-  it('demonstrates why the rule exists with invalid classes', () => {
-    // Test with a component that has invalid Tailwind classes
-    render(<BrokenResponsiveComponent />)
-    
-    // Even with invalid classes, these assertions would PASS:
-    const container = screen.getByTestId('comic-region').parentElement!
-    expect(container.className).toContain('lg:grid')
-    expect(container.className).toContain('lg:grid-cols-[invalid_syntax]')
-    expect(container.className).toContain('lg:max-w-4xl')
-    
-    // But the actual layout is broken:
-    const containerStyle = window.getComputedStyle(container)
-    expect(containerStyle.gridTemplateColumns).not.toBe('minmax(0,24rem) minmax(18rem,24rem)')
-    
-    // This proves why class-name assertions are insufficient
-    expect(hasResponsiveLayoutClassAssertions(`
-      expect(container.className).toContain('lg:grid-cols-[invalid_syntax]')
-      expect(container.className).toContain('lg:max-w-4xl')
-    `)).toBe(true)
+  it('ignores source text that merely mentions layout classes', () => {
+    for (const source of NON_ASSERTION_SOURCES) {
+      expect(isLayoutClassAssertion(source), source).toBe(false)
+    }
+  })
+})
+
+describe('token classification', () => {
+  it('reads every breakpoint in a multi-variant token', () => {
+    expect(findLayoutClassTokens('md:hover:flex lg:grid')).toEqual(['md:hover:flex', 'lg:grid'])
+    expect(findLayoutClassTokens('hover:flex')).toEqual([])
+  })
+
+  it('classifies layout utilities by exact token or family prefix', () => {
+    expect(isLayoutGeometryUtility('lg:grid')).toBe(true)
+    expect(isLayoutGeometryUtility('lg:max-w-4xl')).toBe(true)
+    expect(isLayoutGeometryUtility('md:row-span-2')).toBe(true)
+    expect(isLayoutGeometryUtility('xl:z-40')).toBe(true)
+    expect(isLayoutGeometryUtility('lg:text-red-500')).toBe(false)
+    expect(isLayoutGeometryUtility('lg:border-t')).toBe(false)
+    expect(isLayoutGeometryUtility('lg:rounded-lg')).toBe(false)
+  })
+
+  it('returns an empty token list for class text with no responsive layout utility', () => {
+    expect(findLayoutClassTokens('')).toEqual([])
+    expect(findLayoutClassTokens('flex items-center')).toEqual([])
+    expect(findLayoutClassTokens('lg:bg-white xl:text-sm')).toEqual([])
   })
 })
