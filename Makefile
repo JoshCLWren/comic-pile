@@ -36,6 +36,8 @@ help:  ## Show this help message
 tidy:  ## Sweep local generated artifacts
 	rm -rf playwright-report/ htmlcov/ .coverage coverage.xml dogfood-output/ .playwright-mcp/ frontend/test-results/ frontend/coverage/ .pytest_cache/ .ruff_cache/
 	find . -maxdepth 1 -name "*.png" -type f -delete
+	# Remove accidental shell-redirection artifact files
+	find . -maxdepth 1 -name "=*" -type f -delete
 
 init:  ## Initialize project with new name (Usage: make init NAME=your-project)
 	@if [ -z "$(NAME)" ]; then echo "Usage: make init NAME=your-project"; exit 1; fi
@@ -52,6 +54,13 @@ init:  ## Initialize project with new name (Usage: make init NAME=your-project)
 	@echo "Run 'uv sync --all-extras' to install dependencies"
 
 lint:  ## Run code linting
+	# Check for accidental shell-redirection artifact files
+	if find . -maxdepth 1 -name "=*" -type f | grep -q .; then \
+		echo "ERROR: Found accidental shell-redirection artifact files in repository root:"; \
+		find . -maxdepth 1 -name "=*" -type f -exec echo "  {}" \;; \
+		echo "These files indicate unquoted shell operators in scripts. Check for unquoted >=, <=, ==, != operators."; \
+		exit 1; \
+	fi
 	bash scripts/lint.sh
 
 python-ci-lint:  ## Exact CI ruff + ty (full repo, no path filter)
