@@ -423,7 +423,7 @@ case "$model" in
     # Covers: mistralai/mistral-small-3.1-24b-instruct*,
     #         mistral-small-3.1-24b-instruct*,
     #         mistral-small-3.1-24b-instruct:free
-    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free
+    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
       echo "nvidia/mistral/mistral-14b-instruct-2512"
       ;;
     *)
