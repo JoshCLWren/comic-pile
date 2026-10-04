@@ -15,6 +15,7 @@ import PlannerHeader from './continuity-planner/PlannerHeader'
 import PlannerAddSteps from './continuity-planner/PlannerAddSteps'
 import PlannerLanes from './continuity-planner/PlannerLanes'
 import PlannerFooter from './continuity-planner/PlannerFooter'
+import Breadcrumbs from '../components/Breadcrumbs'
 
 interface ContinuityPlannerPageProps {
   /** Injectable component used to render the "Add from CBL" material source; defaults to the production {@link ReadingPlanAddMaterial}. */
@@ -111,6 +112,12 @@ export default function ContinuityPlannerPage({
 
   return (
     <section className="space-y-6 pb-8" aria-labelledby="planner-heading">
+      <Breadcrumbs
+        items={[
+          { label: 'Reading plans', to: '/continuity-plans' },
+          { label: planId ? editor.name : 'New Reading Plan' },
+        ]}
+      />
       <PlannerHeader
         editor={editor}
         planId={planId}

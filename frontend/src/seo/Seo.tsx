@@ -1,6 +1,12 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { matchRouteSeo } from './routeSeo'
+import {
+  buildLandingStructuredData,
+  removeStructuredDataScript,
+  STRUCTURED_DATA_SCRIPT_ID,
+  upsertStructuredDataScript,
+} from './structuredData'
 
 function upsertMetaTag(name: string, content: string): void {
   const selector = `meta[name="${name}"]`
@@ -58,6 +64,14 @@ export default function Seo() {
       entry.visibility === 'public-indexable' ? 'index, follow' : 'noindex, nofollow',
     )
     syncCanonicalLink(entry.canonicalPath)
+    if (entry.visibility === 'public-indexable') {
+      upsertStructuredDataScript(
+        STRUCTURED_DATA_SCRIPT_ID,
+        buildLandingStructuredData(window.location.origin),
+      )
+    } else {
+      removeStructuredDataScript(STRUCTURED_DATA_SCRIPT_ID)
+    }
   }, [location.pathname])
 
   return null

@@ -4,6 +4,7 @@ import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
 import type { CreatorIssueRow } from '../services/api-creators'
+import Breadcrumbs from '../components/Breadcrumbs'
 
 function formatRatingDate(value: string | null): string | null {
   if (!value) return null
@@ -157,9 +158,9 @@ export default function CreatorDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
-      <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-        Creator
-      </p>
+      <Breadcrumbs
+        items={[{ label: 'Creators', to: '/creators' }, { label: summary.display_name }]}
+      />
       <h1 className="mt-1 break-words text-xl font-bold leading-tight md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
         {summary.display_name}
       </h1>

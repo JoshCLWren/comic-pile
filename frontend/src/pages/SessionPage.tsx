@@ -5,6 +5,7 @@ import { useUndo } from '../hooks/useUndo'
 import { formatDateTime } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Modal from '../components/Modal'
+import Breadcrumbs from '../components/Breadcrumbs'
 
 type DisplayEvent = {
   id: number
@@ -109,6 +110,12 @@ export default function SessionPage() {
   return (
     <div className="space-y-6 md:space-y-8 pb-20">
       <header className="px-2">
+        <Breadcrumbs
+          items={[
+            { label: 'History', to: '/history' },
+            { label: `Session #${details.session_id}` },
+          ]}
+        />
         <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Session Details</h1>
         <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Session #{details.session_id}</p>
       </header>
