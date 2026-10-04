@@ -305,9 +305,6 @@ async def replace_compiled_rules(
         ))
 
     if not edges_to_add:
-        await _sync_plan_canonical_dependencies(
-            db, user_id=user_id, plan_id=plan.id, edges=[]
-        )
         return True
 
     # Check for plan-level cycles using in-memory graph

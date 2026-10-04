@@ -16,6 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -124,6 +125,13 @@ async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
             target_type="issue",
             target_id=ultimates_18.id,
             satisfaction_type="item_read",
+        )
+    )
+    # Canonical Roll authority: the same hard prerequisite as an executable edge.
+    async_db.add(
+        Dependency(
+            source_issue_id=fcbd_issue.id,
+            target_issue_id=ultimates_18.id,
         )
     )
     await async_db.commit()
@@ -238,6 +246,19 @@ async def test_crossover_aggregate_blocked_identifies_remaining_cause_not_read_f
             target_type="issue",
             target_id=ultimates_18.id,
             satisfaction_type="item_read",
+        )
+    )
+    # Canonical Roll authority mirrors both hard prerequisites as executable edges.
+    async_db.add(
+        Dependency(
+            source_issue_id=fcbd_issue.id,
+            target_issue_id=ultimates_18.id,
+        )
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=other_issue.id,
+            target_issue_id=ultimates_18.id,
         )
     )
     await async_db.commit()

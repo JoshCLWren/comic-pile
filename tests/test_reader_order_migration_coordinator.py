@@ -1696,7 +1696,7 @@ async def test_post_step23b_recovery_keeps_roll_equivalence_gate(
         return []
 
     monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._get_blocked_thread_ids_uncached",
+        "app.services.explicit_reader_order_migration._get_canonical_blocked_thread_ids_uncached",
         _all_blocked,
     )
     monkeypatch.setattr(

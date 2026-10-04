@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 import pytest
 from httpx import AsyncClient
@@ -57,7 +56,6 @@ async def _thread_issue(
 async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Continuity-only blockers still produce human-readable getBlockingInfo copy."""
     user = await get_or_create_user_async(async_db)
@@ -89,12 +87,6 @@ async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
     assert created.status_code == 201, created.text
     await async_db.refresh(target_thread)
     assert target_thread.is_blocked is True
-
-    monkeypatch.setattr(
-        dependencies,
-        "get_app_settings",
-        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
-    )
 
     reasons = await get_blocking_explanations(target_thread.id, user.id, async_db)
     batched = await get_blocking_explanations_batch([target_thread.id], user.id, async_db)
@@ -136,7 +128,6 @@ async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
 @pytest.mark.asyncio
 async def test_legacy_off_ignores_sequence_order_even_after_unread_reactivation(
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """With legacy blocking off, sequence_order must not block Roll eligibility."""
     from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
@@ -172,12 +163,6 @@ async def test_legacy_off_ignores_sequence_order_even_after_unread_reactivation(
         ]
     )
     await async_db.commit()
-
-    monkeypatch.setattr(
-        dependencies,
-        "get_app_settings",
-        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
-    )
 
     blocked = await dependencies._get_canonical_blocked_thread_ids_uncached(user.id, async_db)
     assert later_thread.id not in blocked
