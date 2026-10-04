@@ -1207,9 +1207,11 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
     assert "xiaomi/mimo-v2.6-flash" not in {row["model"] for row in rows}
     assert "deepseek-v4-flash-free" not in {row["model"] for row in rows}
     assert "deepseek-v4-flash-free" in lock["retired_models"]
-    assert 72 in lock["expected_workers"]
-    assert by_worker["72"]["source"] == "vercel-ai-gateway"
-    assert by_worker["72"]["model"] == "stealth/pixel-canary"
+    assert 72 not in lock["expected_workers"]
+    assert 72 in lock["retired_workers"]
+    assert "72" not in by_worker
+    assert "stealth/pixel-canary" not in {row["model"] for row in rows}
+    assert "stealth/pixel-canary" in lock["retired_models"]
     assert ROSTER.mistral_model_is_pinned(by_worker["48"]["model"])
     assert not ROSTER.mistral_model_is_pinned("mistral-small")
     assert ROSTER.opencode_model_is_free(by_worker["49"]["model"])
@@ -1263,9 +1265,11 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert status == 0
     assert [row["worker"] for row in remaining] == before_workers
     assert set(lock["expected_workers"]) == set(before_lock["expected_workers"])
-    assert 72 in lock["expected_workers"]
-    assert by_worker["72"]["source"] == "vercel-ai-gateway"
-    assert by_worker["72"]["model"] == "stealth/pixel-canary"
+    assert 72 not in lock["expected_workers"]
+    assert 72 in lock["retired_workers"]
+    assert "72" not in by_worker
+    assert "stealth/pixel-canary" not in {row["model"] for row in remaining}
+    assert "stealth/pixel-canary" in lock["retired_models"]
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["48"]["source"] == "mistral"
     assert by_worker["48"]["model"] == "codestral-latest"

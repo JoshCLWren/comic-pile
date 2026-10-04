@@ -78,8 +78,9 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     for row in ollama:
         assert validate.ollama_cloud_model_is_free(row['model']), row
     vercel = [row for row in rows if row['source'] == 'vercel-ai-gateway']
-    assert len(vercel) == 1
-    assert vercel[0]['model'] == 'stealth/pixel-canary'
+    assert vercel == []
+    assert all(row['worker'] != '72' for row in rows)
+    assert 'stealth/pixel-canary' not in {row['model'] for row in rows}
     mistral = [row for row in rows if row['source'] == 'mistral']
     assert len(mistral) == 1
     assert mistral[0]['worker'] == '48'
