@@ -79,9 +79,9 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
                 f'starter model, got {model!r}'
             )
         elif source == 'vercel-ai-gateway':
-            assert model == 'stealth/pixel-canary', (
-                f'worker {worker} vercel-ai-gateway pin must be the current '
-                f'zero-price Pixel Canary promo, got {model!r}'
+            raise AssertionError(
+                f'worker {worker} vercel-ai-gateway pin is retired '
+                f'(freemium; card required), got {model!r}'
             )
         elif source == 'mistral':
             assert mistral_model_is_pinned(model), (

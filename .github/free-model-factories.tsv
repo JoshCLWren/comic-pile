@@ -26,7 +26,6 @@
 65	openrouter-free	nvidia/nemotron-3.5-lightning:free	25	dispatcher	OpenRouter Nemotron 3.5 Lightning Free
 68	openrouter-free	poolside/laguna-s-2.1:free	30	dispatcher	OpenRouter Laguna S 2.1 Free
 69	openrouter-free	poolside/laguna-xs-2.1:free	35	dispatcher	OpenRouter Laguna XS 2.1 Free
-72	vercel-ai-gateway	stealth/pixel-canary	0	dispatcher	Vercel Pixel Canary
 73	opencode-free	longcat-2.5-preview-free	5	dispatcher	OpenCode LongCat 2.5 Preview Free
 74	openrouter-free	apodex/apodex-1.1-mini:free	20	dispatcher	OpenRouter Apodex 1.1 Mini Free
 75	opencode-free	ling-3.1-flash-free	25	dispatcher	OpenCode Ling 3.1 Flash Free
