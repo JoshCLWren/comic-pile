@@ -203,6 +203,12 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
               review row(s), {preview.counts.unresolved} unresolved, {preview.counts.excluded_special} excluded,{' '}
               {preview.counts.already_confirmed} already confirmed.
             </p>
+            {preview.counts.safe_exact_match === 0 && (
+              <p className="text-sm text-[var(--theme-text-muted)]">
+                No safe exact mappings are available for this series. Every row stays
+                untouched and remains available for issue-level correction.
+              </p>
+            )}
             <ul className="max-h-64 space-y-1 overflow-y-auto">
               {(preview.rows ?? []).map((row) => (
                 <li key={row.row_id} className="flex items-center gap-2 text-sm text-[var(--theme-text-primary)]">

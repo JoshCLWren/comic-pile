@@ -1,18 +1,13 @@
 /**
- * ComicVine mapping health types for the frontend queue surface.
+ * ComicVine mapping health types for the queue surface.
+ *
+ * These alias the generated API client types so the queue card, its action
+ * group, and the shared mapping helpers cannot drift from the contract the
+ * paginated queue response actually returns.
  */
 
-export type ComicVineMappingStatus =
-  | "not_applicable"
-  | "fully_mapped"
-  | "partial"
-  | "unresolved"
-  | "needs_review";
+import type { components } from '../generated/openapi'
 
-export interface ComicVineMappingHealth {
-  status: ComicVineMappingStatus;
-  tracked_issue_count: number;
-  confirmed_issue_count: number;
-  needs_mapping_count: number;
-  needs_review_count: number;
-}
+export type ComicVineMappingStatus = components['schemas']['ComicVineMappingStatus']
+
+export type ComicVineMappingHealth = components['schemas']['ComicVineMappingHealth']

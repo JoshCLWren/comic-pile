@@ -4,6 +4,9 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { BlockingDependency, Thread } from '../types'
+import type { ComicVineMappingHealth } from '../types/comic-vine'
+
+type CardThread = Parameters<typeof QueueThreadCard>[0]['thread']
 
 vi.mock('../components/Tooltip', () => ({
   default: ({ children, content }: { children: React.ReactNode; content?: string }) => (
@@ -89,7 +92,11 @@ function createMockThread(overrides: Partial<Thread> = {}): Thread {
   }
 }
 
-function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueThreadCard>[0]> = {}) {
+function createMappedThread(mapping: ComicVineMappingHealth | null): CardThread {
+  return { ...createMockThread(), comicvine_mapping: mapping } as CardThread
+}
+
+function renderCard(thread: Thread | CardThread, overrides: Partial<Parameters<typeof QueueThreadCard>[0]> = {}) {
   const defaults = {
     thread,
     index: 0,
@@ -757,3 +764,92 @@ describe('QueueThreadCard', () => {
       expect(snoozeButton).not.toBeDisabled()
     })
   })
+describe('QueueThreadCard ComicVine mapping health', () => {
+  const fullyMapped: ComicVineMappingHealth = {
+    status: 'fully_mapped',
+    tracked_issue_count: 6,
+    confirmed_issue_count: 6,
+    needs_mapping_count: 0,
+    needs_review_count: 0,
+  }
+
+  const notApplicable: ComicVineMappingHealth = {
+    status: 'not_applicable',
+    tracked_issue_count: 0,
+    confirmed_issue_count: 0,
+    needs_mapping_count: 0,
+    needs_review_count: 0,
+  }
+
+  const partial: ComicVineMappingHealth = {
+    status: 'partial',
+    tracked_issue_count: 3,
+    confirmed_issue_count: 1,
+    needs_mapping_count: 2,
+    needs_review_count: 0,
+  }
+
+  const unresolved: ComicVineMappingHealth = {
+    status: 'unresolved',
+    tracked_issue_count: 2,
+    confirmed_issue_count: 0,
+    needs_mapping_count: 2,
+    needs_review_count: 0,
+  }
+
+  const needsReview: ComicVineMappingHealth = {
+    status: 'needs_review',
+    tracked_issue_count: 6,
+    confirmed_issue_count: 3,
+    needs_mapping_count: 2,
+    needs_review_count: 1,
+  }
+
+  it('keeps a fully mapped series free of mapping chrome', () => {
+    renderCard(createMappedThread(fullyMapped), { onMapSeries: vi.fn() })
+
+    expect(screen.queryByTestId('queue-mapping-health')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /to ComicVine/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps a series without ComicVine tracking free of mapping chrome', () => {
+    renderCard(createMappedThread(notApplicable), { onMapSeries: vi.fn() })
+
+    expect(screen.queryByTestId('queue-mapping-health')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /to ComicVine/ })).not.toBeInTheDocument()
+  })
+
+  it('renders one compact indicator for a partially mapped series', () => {
+    renderCard(createMappedThread(partial), { onMapSeries: vi.fn() })
+
+    expect(screen.getAllByTestId('queue-mapping-health')).toHaveLength(1)
+    expect(screen.getByTestId('queue-mapping-health')).toHaveTextContent('1 of 3 mapped')
+    expect(screen.getByRole('button', { name: 'Map Test Thread to ComicVine' })).toBeVisible()
+  })
+
+  it('reports ordinary missing mapping with its count', () => {
+    renderCard(createMappedThread(unresolved))
+
+    expect(screen.getByTestId('queue-mapping-health')).toHaveTextContent('2 need mapping')
+  })
+
+  it('reports review-needed identity as review work rather than missing mapping', () => {
+    renderCard(createMappedThread(needsReview))
+
+    const indicator = screen.getByTestId('queue-mapping-health')
+    expect(indicator).toHaveTextContent('1 need review')
+    expect(indicator).not.toHaveTextContent(/need mapping/)
+  })
+
+  it('opens the shared map series flow without opening thread details', async () => {
+    const user = userEvent.setup()
+    const onMapSeries = vi.fn()
+    const onCardClick = vi.fn()
+    renderCard(createMappedThread(unresolved), { onMapSeries, onCardClick })
+
+    await user.click(screen.getByRole('button', { name: 'Map Test Thread to ComicVine' }))
+
+    expect(onMapSeries).toHaveBeenCalledTimes(1)
+    expect(onCardClick).not.toHaveBeenCalled()
+  })
+})

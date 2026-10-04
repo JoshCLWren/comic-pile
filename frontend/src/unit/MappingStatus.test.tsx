@@ -1,20 +1,21 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { ComicVineMappingHealth } from '../types/comic-vine'
-import { MappingHealthSummary, MappingStatusBadge, MappingStatusIndicator } from '../components/MappingStatus'
-
-const fullyMapped: ComicVineMappingHealth = {
-  status: 'fully_mapped',
-  tracked_issue_count: 6,
-  confirmed_issue_count: 6,
-  needs_mapping_count: 0,
-  needs_review_count: 0,
-}
+import { MappingStatusIndicator } from '../components/MappingStatus'
 
 const partial: ComicVineMappingHealth = {
   status: 'partial',
   tracked_issue_count: 3,
   confirmed_issue_count: 1,
+  needs_mapping_count: 2,
+  needs_review_count: 0,
+}
+
+const unresolved: ComicVineMappingHealth = {
+  status: 'unresolved',
+  tracked_issue_count: 2,
+  confirmed_issue_count: 0,
   needs_mapping_count: 2,
   needs_review_count: 0,
 }
@@ -27,58 +28,39 @@ const needsReview: ComicVineMappingHealth = {
   needs_review_count: 1,
 }
 
-describe('MappingStatusBadge', () => {
-  it('renders nothing without mapping data', () => {
-    const { container } = render(<MappingStatusBadge mapping={null} />)
-    expect(container).toBeEmptyDOMElement()
-  })
-
-  it('shows a fully mapped series', () => {
-    render(<MappingStatusBadge mapping={fullyMapped} />)
-    expect(screen.getByText('Fully mapped')).toBeVisible()
-  })
-
-  it('shows details when requested', () => {
-    render(<MappingStatusBadge mapping={partial} showDetails />)
-    expect(screen.getByText('Partially mapped')).toBeVisible()
-    expect(screen.getByText('(1/3 mapped)')).toBeVisible()
-  })
-})
-
 describe('MappingStatusIndicator', () => {
-  it('renders nothing for null status', () => {
-    const { container } = render(<MappingStatusIndicator status={null} />)
-    expect(container).toBeEmptyDOMElement()
+  it('renders the mapped count for a partial series in text', () => {
+    render(<MappingStatusIndicator mapping={partial} />)
+
+    expect(screen.getByTestId('queue-mapping-health')).toHaveTextContent('1 of 3 mapped')
   })
 
-  it('shows the count when positive', () => {
-    render(<MappingStatusIndicator status="unresolved" count={2} />)
-    expect(screen.getByText('Needs mapping')).toBeVisible()
-    expect(screen.getByText('(2)')).toBeVisible()
+  it('states how many issues still need mapping', () => {
+    render(<MappingStatusIndicator mapping={unresolved} />)
+
+    expect(screen.getByTestId('queue-mapping-health')).toHaveTextContent('2 need mapping')
   })
 
-  it('hides a zero count', () => {
-    render(<MappingStatusIndicator status="partial" count={0} />)
-    expect(screen.queryByText('(0)')).not.toBeInTheDocument()
-  })
-})
+  it('distinguishes ambiguous or conflicting identities as review work', () => {
+    render(<MappingStatusIndicator mapping={needsReview} />)
 
-describe('MappingHealthSummary', () => {
-  it('renders nothing without mapping', () => {
-    const { container } = render(<MappingHealthSummary mapping={null} />)
-    expect(container).toBeEmptyDOMElement()
+    const indicator = screen.getByTestId('queue-mapping-health')
+    expect(indicator).toHaveTextContent('1 need review')
+    expect(indicator.className).toContain('var(--theme-danger)')
   })
 
-  it('reports needs-mapping and needs-review counts', () => {
-    render(<MappingHealthSummary mapping={needsReview} />)
-    expect(screen.getByText('2 need mapping')).toBeVisible()
-    expect(screen.getByText('1 need review')).toBeVisible()
-    expect(screen.getByText('3 mapped')).toBeVisible()
+  it('keeps the causal counts available as an explanation', async () => {
+    const user = userEvent.setup()
+    render(<MappingStatusIndicator mapping={needsReview} />)
+
+    await user.hover(screen.getByTestId('queue-mapping-health'))
+
+    expect(screen.getByText(/ambiguous or conflicting and need review/)).toBeVisible()
   })
 
-  it('stays quiet for fully mapped series', () => {
-    render(<MappingHealthSummary mapping={fullyMapped} />)
-    expect(screen.queryByText(/need mapping/)).not.toBeInTheDocument()
-    expect(screen.getByText('6 mapped')).toBeVisible()
+  it('hides the decorative glyph from assistive technology', () => {
+    render(<MappingStatusIndicator mapping={partial} />)
+
+    expect(screen.getByText('◐')).toHaveAttribute('aria-hidden', 'true')
   })
 })

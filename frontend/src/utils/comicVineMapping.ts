@@ -1,72 +1,58 @@
-import type { ComicVineMappingHealth, ComicVineMappingStatus } from '../types/comic-vine';
+import type { ComicVineMappingHealth } from '../types/comic-vine'
 
-export function getMappingStatus(mapping: ComicVineMappingHealth | null): ComicVineMappingStatus | null {
-  if (!mapping) return null;
-  return mapping.status;
-}
-
-export function getMappingStatusText(status: ComicVineMappingStatus | null): string {
-  if (!status) return '';
-
-  const statusMap: Record<ComicVineMappingStatus, string> = {
-    not_applicable: 'Not applicable',
-    fully_mapped: 'Fully mapped',
-    partial: 'Partially mapped',
-    unresolved: 'Needs mapping',
-    needs_review: 'Needs review',
-  };
-
-  return statusMap[status];
-}
-
-export function getMappingStatusDescription(mapping: ComicVineMappingHealth | null): string {
-  if (!mapping) return '';
-
+/**
+ * Compact, count-bearing label for the queue mapping-health indicator.
+ *
+ * The label states both the count and the state in text so the queue never
+ * communicates mapping health through color alone.
+ */
+export function getMappingHealthLabel(mapping: ComicVineMappingHealth): string {
   switch (mapping.status) {
     case 'not_applicable':
-      return 'This series does not use issue tracking';
+      return 'Not applicable'
     case 'fully_mapped':
-      return `${mapping.tracked_issue_count} issues mapped`;
+      return 'Fully mapped'
     case 'partial':
-      return `${mapping.confirmed_issue_count} of ${mapping.tracked_issue_count} issues mapped`;
+      return `${mapping.confirmed_issue_count} of ${mapping.tracked_issue_count} mapped`
     case 'unresolved':
-      return `${mapping.tracked_issue_count} issues need mapping`;
+      return `${mapping.needs_mapping_count} need mapping`
     case 'needs_review':
-      return `${mapping.needs_review_count} issues need review`;
-    default:
-      return '';
+      return `${mapping.needs_review_count} need review`
   }
 }
 
-export function needsMappingAttention(mapping: ComicVineMappingHealth | null): boolean {
-  if (!mapping) return false;
-
-  return mapping.status === 'partial' ||
-         mapping.status === 'unresolved' ||
-         mapping.status === 'needs_review';
-}
-
-export function hasConfirmedMappings(mapping: ComicVineMappingHealth | null): boolean {
-  if (!mapping) return false;
-
-  return mapping.confirmed_issue_count > 0;
-}
-
-export function getMappingSummary(mapping: ComicVineMappingHealth | null): string {
-  if (!mapping) return '';
-
+/**
+ * Longer explanation for the mapping-health indicator tooltip and assistive
+ * technology. Ambiguous, conflicting, and review-needed identities are
+ * described as review work rather than as ordinary missing mappings.
+ */
+export function getMappingHealthDescription(mapping: ComicVineMappingHealth): string {
   switch (mapping.status) {
     case 'not_applicable':
-      return 'No mapping needed';
+      return 'This series does not track ComicVine issue identity.'
     case 'fully_mapped':
-      return 'All issues mapped';
+      return `All ${mapping.tracked_issue_count} issues are confirmed against ComicVine.`
     case 'partial':
-      return `${mapping.confirmed_issue_count}/${mapping.tracked_issue_count} mapped`;
+      return `${mapping.confirmed_issue_count} of ${mapping.tracked_issue_count} issues are confirmed; ${mapping.needs_mapping_count} still need mapping.`
     case 'unresolved':
-      return `${mapping.needs_mapping_count} need mapping`;
+      return `${mapping.needs_mapping_count} of ${mapping.tracked_issue_count} issues have no confirmed ComicVine identity.`
     case 'needs_review':
-      return `${mapping.needs_review_count} need review`;
-    default:
-      return '';
+      return `${mapping.needs_review_count} issues are ambiguous or conflicting and need review before they can be mapped.`
   }
+}
+
+/**
+ * True when a series still needs the user to repair its ComicVine identity.
+ *
+ * Fully mapped series and series without ComicVine issue tracking stay quiet so
+ * mapped rows never carry mapping chrome.
+ */
+export function needsMappingAttention(mapping: ComicVineMappingHealth | null | undefined): boolean {
+  if (!mapping) return false
+
+  return (
+    mapping.status === 'partial' ||
+    mapping.status === 'unresolved' ||
+    mapping.status === 'needs_review'
+  )
 }

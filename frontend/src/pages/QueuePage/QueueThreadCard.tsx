@@ -3,10 +3,10 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import { CrossoverTags } from '../../components/CrossoverTags'
-import { MappingStatusIndicator, MappingHealthSummary } from '../../components/MappingStatus'
+import { MappingStatusIndicator } from '../../components/MappingStatus'
+import { needsMappingAttention } from '../../utils/comicVineMapping'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { BlockingDependency, ThreadListItem } from '../../types'
-import type { ComicVineMappingHealth } from '../../types/comic-vine'
 import QueueThreadActions from './QueueThreadActions'
 
 interface QueueThreadCardProps {
@@ -82,6 +82,10 @@ export default function QueueThreadCard({
   const blockerLabels = blockingDependencies.map((dependency) => dependency.label)
   const firstBlocker = blockingDependencies[0] ?? null
   const extraBlockerCount = Math.max(blockingDependencies.length - 1, 0)
+  // Mapping health arrives with the paginated queue row, so the card never
+  // fetches identity state and fully mapped rows carry no mapping chrome.
+  const mapping = thread.comicvine_mapping
+  const showMappingHealth = mapping != null && needsMappingAttention(mapping)
 
   const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
     const interactive = target instanceof Element
@@ -158,11 +162,6 @@ export default function QueueThreadCard({
                 <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
-            {thread.comicvine_mapping && thread.comicvine_mapping.status !== 'fully_mapped' && thread.comicvine_mapping.status !== 'not_applicable' && (
-              <Tooltip content={thread.comicvine_mapping.status === 'partial' ? 'Partially mapped' : thread.comicvine_mapping.status === 'unresolved' ? 'Needs mapping' : 'Needs review'}>
-                <MappingStatusIndicator status={thread.comicvine_mapping.status} count={thread.comicvine_mapping.tracked_issue_count} />
-              </Tooltip>
-            )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
@@ -175,8 +174,8 @@ export default function QueueThreadCard({
                   : `${thread.issues_remaining} issues remaining`}
               </span>
             )}
-            {thread.comicvine_mapping && thread.comicvine_mapping.status !== 'fully_mapped' && thread.comicvine_mapping.status !== 'not_applicable' && (
-              <MappingHealthSummary mapping={thread.comicvine_mapping} />
+            {showMappingHealth && mapping && (
+              <MappingStatusIndicator mapping={mapping} />
             )}
           </div>
           {thread.notes && <p className="mt-1.5 text-xs text-[var(--theme-text-muted)] [overflow-wrap:anywhere] break-words">{thread.notes}</p>}
@@ -239,7 +238,7 @@ export default function QueueThreadCard({
           readDisabled={readDisabled}
           readDisabledReason={readDisabledReason}
           onRead={onRead}
-          mapping={thread.comicvine_mapping ?? null}
+          mapping={mapping}
           onMapSeries={onMapSeries}
         />
         <PositionMenu

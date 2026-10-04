@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getMappingStatus,
-  getMappingStatusText,
-  getMappingStatusDescription,
+  getMappingHealthDescription,
+  getMappingHealthLabel,
   needsMappingAttention,
-  hasConfirmedMappings,
-  getMappingSummary,
 } from '../utils/comicVineMapping'
 import type { ComicVineMappingHealth } from '../types/comic-vine'
 
@@ -18,50 +15,39 @@ const base: ComicVineMappingHealth = {
 }
 
 describe('comicVineMapping helpers', () => {
-  it('getMappingStatus returns null for null input', () => {
-    expect(getMappingStatus(null)).toBeNull()
-    expect(getMappingStatus(base)).toBe('partial')
+  it('getMappingHealthLabel states the count for every status', () => {
+    expect(getMappingHealthLabel({ ...base, status: 'not_applicable' })).toBe('Not applicable')
+    expect(getMappingHealthLabel({ ...base, status: 'fully_mapped' })).toBe('Fully mapped')
+    expect(getMappingHealthLabel({ ...base, status: 'partial' })).toBe('2 of 4 mapped')
+    expect(getMappingHealthLabel({ ...base, status: 'unresolved' })).toBe('2 need mapping')
+    expect(getMappingHealthLabel({ ...base, status: 'needs_review', needs_review_count: 3 })).toBe('3 need review')
   })
 
-  it('getMappingStatusText covers null and every status', () => {
-    expect(getMappingStatusText(null)).toBe('')
-    expect(getMappingStatusText('not_applicable')).toBe('Not applicable')
-    expect(getMappingStatusText('fully_mapped')).toBe('Fully mapped')
-    expect(getMappingStatusText('partial')).toBe('Partially mapped')
-    expect(getMappingStatusText('unresolved')).toBe('Needs mapping')
-    expect(getMappingStatusText('needs_review')).toBe('Needs review')
+  it('getMappingHealthDescription separates review work from missing mapping', () => {
+    expect(getMappingHealthDescription({ ...base, status: 'not_applicable' })).toBe(
+      'This series does not track ComicVine issue identity.',
+    )
+    expect(getMappingHealthDescription({ ...base, status: 'fully_mapped' })).toBe(
+      'All 4 issues are confirmed against ComicVine.',
+    )
+    expect(getMappingHealthDescription({ ...base, status: 'partial' })).toBe(
+      '2 of 4 issues are confirmed; 2 still need mapping.',
+    )
+    expect(getMappingHealthDescription({ ...base, status: 'unresolved' })).toBe(
+      '2 of 4 issues have no confirmed ComicVine identity.',
+    )
+    expect(getMappingHealthDescription({ ...base, status: 'needs_review', needs_review_count: 3 })).toBe(
+      '3 issues are ambiguous or conflicting and need review before they can be mapped.',
+    )
   })
 
-  it('getMappingStatusDescription covers every status and null', () => {
-    expect(getMappingStatusDescription(null)).toBe('')
-    expect(getMappingStatusDescription({ ...base, status: 'not_applicable' })).toBe('This series does not use issue tracking')
-    expect(getMappingStatusDescription({ ...base, status: 'fully_mapped' })).toBe('4 issues mapped')
-    expect(getMappingStatusDescription({ ...base, status: 'partial' })).toBe('2 of 4 issues mapped')
-    expect(getMappingStatusDescription({ ...base, status: 'unresolved' })).toBe('4 issues need mapping')
-    expect(getMappingStatusDescription({ ...base, status: 'needs_review', needs_review_count: 3 })).toBe('3 issues need review')
-  })
-
-  it('needsMappingAttention flags partial, unresolved, needs_review only', () => {
+  it('needsMappingAttention flags only repairable states', () => {
     expect(needsMappingAttention(null)).toBe(false)
+    expect(needsMappingAttention(undefined)).toBe(false)
     expect(needsMappingAttention({ ...base, status: 'partial' })).toBe(true)
     expect(needsMappingAttention({ ...base, status: 'unresolved' })).toBe(true)
     expect(needsMappingAttention({ ...base, status: 'needs_review' })).toBe(true)
     expect(needsMappingAttention({ ...base, status: 'fully_mapped' })).toBe(false)
     expect(needsMappingAttention({ ...base, status: 'not_applicable' })).toBe(false)
-  })
-
-  it('hasConfirmedMappings reflects counts', () => {
-    expect(hasConfirmedMappings(null)).toBe(false)
-    expect(hasConfirmedMappings({ ...base, confirmed_issue_count: 0 })).toBe(false)
-    expect(hasConfirmedMappings(base)).toBe(true)
-  })
-
-  it('getMappingSummary covers every status and null', () => {
-    expect(getMappingSummary(null)).toBe('')
-    expect(getMappingSummary({ ...base, status: 'not_applicable' })).toBe('No mapping needed')
-    expect(getMappingSummary({ ...base, status: 'fully_mapped' })).toBe('All issues mapped')
-    expect(getMappingSummary({ ...base, status: 'partial' })).toBe('2/4 mapped')
-    expect(getMappingSummary({ ...base, status: 'unresolved' })).toBe('2 need mapping')
-    expect(getMappingSummary({ ...base, status: 'needs_review', needs_review_count: 5 })).toBe('5 need review')
   })
 })

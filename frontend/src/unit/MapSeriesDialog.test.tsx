@@ -142,4 +142,83 @@ describe('MapSeriesDialog', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('no issues to anchor'))
     expect(previewSpy).not.toHaveBeenCalled()
   })
+
+  it('falls back to no anchor issue when the issue lookup fails', async () => {
+    listIssuesSpy.mockRejectedValue(new Error('issue list unavailable'))
+    render(<MapSeriesDialog thread={threadProp} onClose={vi.fn()} onCommitted={vi.fn()} />)
+    await waitFor(() => expect(listIssuesSpy).toHaveBeenCalled())
+    fireEvent.click(screen.getByText('Search'))
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Saga'))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('no issues to anchor'))
+    expect(previewSpy).not.toHaveBeenCalled()
+  })
+
+  it('lets the user unselect a safe row before committing', async () => {
+    render(<MapSeriesDialog thread={threadProp} onClose={vi.fn()} onCommitted={vi.fn()} />)
+    fireEvent.click(screen.getByText('Search'))
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Saga'))
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByLabelText('Approve issue:11'))
+
+    expect(screen.getByText('Commit 0 safe mapping(s)')).toBeDisabled()
+    fireEvent.click(screen.getByLabelText('Approve issue:11'))
+    fireEvent.click(screen.getByText('Commit 1 safe mapping(s)'))
+    await waitFor(() => expect(commitSpy).toHaveBeenCalledTimes(1))
+  })
+
+  it('explains when a series has no safe exact mappings and commits nothing', async () => {
+    previewSpy.mockResolvedValue({
+      ...previewResponse,
+      preview_token: null,
+      counts: { ...previewResponse.counts, safe_exact_match: 0 },
+      rows: [
+        {
+          ...previewResponse.rows[1],
+          row_id: 'issue:12',
+          classification: 'needs_review_ambiguous',
+          default_selected: false,
+          reason: null,
+        },
+      ],
+    })
+    render(<MapSeriesDialog thread={threadProp} onClose={vi.fn()} onCommitted={vi.fn()} />)
+    fireEvent.click(screen.getByText('Search'))
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Saga'))
+
+    await waitFor(() => expect(screen.getByText(/No safe exact mappings are available/)).toBeVisible())
+    expect(screen.getByText('needs review ambiguous')).toBeVisible()
+    expect(screen.getByText('Commit 0 safe mapping(s)')).toBeDisabled()
+    expect(commitSpy).not.toHaveBeenCalled()
+  })
+
+  it('renders sparse provider metadata without empty separators', async () => {
+    searchSeriesSpy.mockResolvedValue({
+      query: 'Saga',
+      results: [{ ...series, publisher: null, start_year: null, issue_count: 0 }],
+      total_available: 1,
+      offset: 0,
+      limit: 10,
+      has_more: false,
+      next_offset: null,
+    })
+    render(<MapSeriesDialog thread={threadProp} onClose={vi.fn()} onCommitted={vi.fn()} />)
+    fireEvent.click(screen.getByText('Search'))
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: /^Saga/ }).textContent).toMatch(/^Saga\s*·\s*$/)
+  })
+
+  it('names an unknown preview publisher instead of leaving a gap', async () => {
+    previewSpy.mockResolvedValue({ ...previewResponse, provider_series: null })
+    render(<MapSeriesDialog thread={threadProp} onClose={vi.fn()} onCommitted={vi.fn()} />)
+    fireEvent.click(screen.getByText('Search'))
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Saga'))
+
+    await waitFor(() => expect(screen.getByText(/Unknown publisher/)).toBeVisible())
+  })
 })

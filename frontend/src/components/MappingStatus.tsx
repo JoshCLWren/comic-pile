@@ -1,121 +1,45 @@
-import React from 'react';
-import { 
-  getMappingStatusText, 
-  getMappingStatusDescription, 
-  getMappingSummary,
-} from '../utils/comicVineMapping';
-import type { ComicVineMappingHealth, ComicVineMappingStatus } from '../types/comic-vine';
-
-interface MappingStatusBadgeProps {
-  mapping: ComicVineMappingHealth | null;
-  showDetails?: boolean;
-  className?: string;
-}
+import Tooltip from './Tooltip'
+import { getMappingHealthDescription, getMappingHealthLabel } from '../utils/comicVineMapping'
+import type { ComicVineMappingHealth, ComicVineMappingStatus } from '../types/comic-vine'
 
 interface MappingStatusIndicatorProps {
-  status: ComicVineMappingStatus | null;
-  count?: number;
-  className?: string;
+  mapping: ComicVineMappingHealth
+  className?: string
 }
 
-const statusColors: Record<ComicVineMappingStatus, string> = {
-  not_applicable: 'text-[var(--theme-text-muted)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)]',
-  fully_mapped: 'text-[var(--theme-text-muted)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)]',
-  partial: 'text-[var(--theme-warning)] bg-[color-mix(in_srgb,var(--theme-warning)_8%,transparent)] border border-[color-mix(in_srgb,var(--theme-warning)_30%,transparent)]',
-  unresolved: 'text-[var(--theme-warning)] bg-[color-mix(in_srgb,var(--theme-warning)_8%,transparent)] border border-[color-mix(in_srgb,var(--theme-warning)_30%,transparent)]',
-  needs_review: 'text-[var(--theme-danger)] bg-[color-mix(in_srgb,var(--theme-danger)_8%,transparent)] border border-[color-mix(in_srgb,var(--theme-danger)_30%,transparent)]',
-};
+const STATUS_CLASSES: Record<ComicVineMappingStatus, string> = {
+  not_applicable: 'text-[var(--theme-text-muted)] border-[var(--theme-border)] bg-[var(--theme-bg-panel)]',
+  fully_mapped: 'text-[var(--theme-text-muted)] border-[var(--theme-border)] bg-[var(--theme-bg-panel)]',
+  partial: 'text-[var(--theme-warning)] border-[var(--theme-warning)]/30 bg-[var(--theme-warning)]/10',
+  unresolved: 'text-[var(--theme-warning)] border-[var(--theme-warning)]/30 bg-[var(--theme-warning)]/10',
+  needs_review: 'text-[var(--theme-danger)] border-[var(--theme-danger)]/30 bg-[var(--theme-danger)]/10',
+}
 
-const statusIcons: Record<ComicVineMappingStatus, string> = {
+const STATUS_ICONS: Record<ComicVineMappingStatus, string> = {
   not_applicable: '○',
   fully_mapped: '✓',
   partial: '◐',
   unresolved: '○',
   needs_review: '⚠',
-};
-
-export function MappingStatusBadge({ 
-  mapping, 
-  showDetails = false, 
-  className = '' 
-}: MappingStatusBadgeProps) {
-  if (!mapping) {
-    return null;
-  }
-
-  const statusText = getMappingStatusText(mapping.status);
-  const statusDescription = getMappingStatusDescription(mapping);
-  const summary = getMappingSummary(mapping);
-
-  return (
-    <div className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${statusColors[mapping.status]} ${className}`}>
-      <span className="text-[10px]">{statusIcons[mapping.status]}</span>
-      <span className="font-bold">{statusText}</span>
-      {showDetails && (
-        <span className="font-normal opacity-75">({summary})</span>
-      )}
-      <span className="sr-only">{statusDescription}</span>
-    </div>
-  );
 }
 
-export function MappingStatusIndicator({ 
-  status, 
-  count, 
-  className = '' 
-}: MappingStatusIndicatorProps) {
-  if (!status) {
-    return null;
-  }
-
+/**
+ * The single compact mapping-health chip a queue series shows.
+ *
+ * Callers render it only for series that still need repair, so a fully mapped
+ * series keeps no mapping chrome. The state and its counts are rendered as
+ * text; color and the decorative glyph only reinforce them.
+ */
+export function MappingStatusIndicator({ mapping, className = '' }: MappingStatusIndicatorProps) {
   return (
-    <div className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${statusColors[status]} ${className}`}>
-      <span className="text-[10px]">{statusIcons[status]}</span>
-      <span className="font-bold">{getMappingStatusText(status)}</span>
-      {count !== undefined && count > 0 && (
-        <span className="font-normal opacity-75">({count})</span>
-      )}
-    </div>
-  );
-}
-
-interface MappingHealthSummaryProps {
-  mapping: ComicVineMappingHealth | null;
-  className?: string;
-}
-
-export function MappingHealthSummary({ mapping, className = '' }: MappingHealthSummaryProps) {
-  if (!mapping) {
-    return null;
-  }
-
-  const needsMapping = mapping.needs_mapping_count > 0;
-  const needsReview = mapping.needs_review_count > 0;
-
-  return (
-    <div className={`flex flex-wrap items-center gap-2 text-xs ${className}`}>
-      <MappingStatusIndicator 
-        status={mapping.status} 
-        count={mapping.tracked_issue_count}
-      />
-      
-      {needsMapping && (
-        <span className="text-[var(--theme-warning)]">
-          {mapping.needs_mapping_count} need mapping
-        </span>
-      )}
-      
-      {needsReview && (
-        <span className="text-[var(--theme-danger)]">
-          {mapping.needs_review_count} need review
-        </span>
-      )}
-      
-      {mapping.confirmed_issue_count > 0 && (
-        <span className="text-[var(--theme-comic-accent)]">
-          {mapping.confirmed_issue_count} mapped
-        </span>
-      )}
-    </div>
-  );
+    <Tooltip content={getMappingHealthDescription(mapping)}>
+      <span
+        data-testid="queue-mapping-health"
+        className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-bold ${STATUS_CLASSES[mapping.status]} ${className}`}
+      >
+        <span aria-hidden="true">{STATUS_ICONS[mapping.status]}</span>
+        {getMappingHealthLabel(mapping)}
+      </span>
+    </Tooltip>
+  )
 }
