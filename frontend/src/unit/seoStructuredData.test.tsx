@@ -48,6 +48,7 @@ test('landing route injects valid JSON-LD with WebSite and SoftwareApplication',
   expect(script).not.toBeNull()
   expect(script?.type).toBe('application/ld+json')
 
+  // SAFETY: script.textContent is valid JSON from the scaffolded landing structured-data graph
   const data = JSON.parse(script?.textContent ?? '') as JsonLdGraph
   expect(data['@context']).toBe('https://schema.org')
   const types = data['@graph'].map(node => node['@type'])
@@ -63,6 +64,7 @@ test('structured data claims match the visible landing page', () => {
     </MemoryRouter>,
   )
 
+  // SAFETY: script.textContent is valid JSON from the scaffolded landing structured-data graph
   const data = JSON.parse(structuredDataScript()?.textContent ?? '') as JsonLdGraph
   const [website, application] = data['@graph']
 
@@ -107,6 +109,7 @@ test('no route emits FAQ schema', () => {
 
 test('runtime structured data matches the static prerendered graph', () => {
   renderSeoAt('/')
+  // SAFETY: script.textContent is valid JSON from the scaffolded landing structured-data graph
   const runtime = JSON.parse(structuredDataScript()?.textContent ?? '') as JsonLdGraph
   const expected = buildLandingStructuredData(window.location.origin)
   expect(runtime).toEqual(expected)

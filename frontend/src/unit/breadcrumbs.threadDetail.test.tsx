@@ -67,6 +67,7 @@ beforeEach(() => {
     total_issues: null,
     notes: null,
   } as never)
+  // SAFETY: the stubbed issue page supplies only the fields this view reads
   mockedIssuesApiList.mockResolvedValue({
     issues: [],
     next_page_token: null,
@@ -105,6 +106,7 @@ it('thread detail breadcrumbs match the visible trail', async () => {
   expect(screen.getByRole('link', { name: 'Queue' })).toHaveAttribute('href', '/queue')
   expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe('Thread')
 
+  // SAFETY: script.textContent is valid JSON from the scaffolded BreadcrumbList structure
   const schema = JSON.parse(breadcrumbScript()?.textContent ?? '') as BreadcrumbList
   expect(schema['@context']).toBe('https://schema.org')
   expect(schema['@type']).toBe('BreadcrumbList')

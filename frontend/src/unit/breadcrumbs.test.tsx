@@ -100,6 +100,7 @@ test('re-rendering with new items updates the schema in place', () => {
 
   const secondScript = breadcrumbScript()
   expect(secondScript).toBe(firstScript)
+  // SAFETY: script.textContent is valid JSON from the scaffolded BreadcrumbList structure
   const schema = JSON.parse(secondScript?.textContent ?? '') as BreadcrumbList
   expect(schema.itemListElement.map(node => node.name)).toEqual(['Queue', 'Monstress'])
 })
