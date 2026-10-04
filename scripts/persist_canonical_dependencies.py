@@ -31,12 +31,14 @@ def _load_application_symbols():
     from app.database import AsyncSessionLocal
     from app.models.continuity_rule import ContinuityRule
     from app.models.dependency import Dependency
+    from app.models.thread import Thread
     from app.models.issue import Issue
 
-    return AsyncSessionLocal, ContinuityRule, Dependency, Issue
+
+    return AsyncSessionLocal, ContinuityRule, Dependency, Issue, Thread
 
 
-AsyncSessionLocal, ContinuityRule, Dependency, Issue = _load_application_symbols()
+AsyncSessionLocal, ContinuityRule, Dependency, Issue, Thread = _load_application_symbols()
 
 
 CONFIRMATION = "PERSIST-CANONICAL-DEPENDENCIES"
@@ -68,7 +70,6 @@ async def _dry_run(db: AsyncSession) -> dict:
     result = await db.execute(select(Thread.id, Thread.user_id))
     thread_users = {row[0]: row[1] for row in result.all()}
 
-    from app.models.thread import Thread
 
     edges_to_create: list[dict] = []
     skipped_mirrored: list[dict] = []
