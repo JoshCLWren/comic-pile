@@ -1250,7 +1250,7 @@ cmd_tool_test() {
     log_info "Running tool-use test on $total models (15 parallel, 30s timeout) → $out"
     mkdir -p "$LOG_DIR"
     printf '%s\n' "${candidates[@]}" | \
-    xargs -P 15 -I\"{}\" bash -c '
+    xargs -P 15 -I{} bash -c '
         model="$1"; log="$2"; exit_code=0
         mapped_model=$(map_model "$model")
         [[ -z "$mapped_model" ]] && { echo "SKIP     $model  [broken model]"; exit 0; }
@@ -1265,7 +1265,7 @@ cmd_tool_test() {
             snippet=$(echo "$clean" | grep -v "^$" | tail -1 | cut -c1-60)
             echo "TOOL_FAIL $mapped_model  [$snippet]"
         fi
-    ' _ \"{}\" | tee "$out"
+    ' _ {} | tee "$out"
     local ok fail timeout
     ok=$(grep -c "^TOOL_OK" "$out" || echo 0)
     fail=$(grep -c "^TOOL_FAIL" "$out" || echo 0)
@@ -1305,7 +1305,7 @@ cmd_model_manager() {
 
             # Run model availability test in parallel (30s timeout per model)
             printf '%s\n' "${candidate_models[@]}" | \
-            xargs -P 15 -I\"{}\" bash -c '
+            xargs -P 15 -I{} bash -c '
                 model="$1"
                 exit_code=0
                  mapped_model=$(map_model "$model")
@@ -1320,7 +1320,7 @@ cmd_model_manager() {
                     snippet=$(echo "$clean" | grep -v "^$" | tail -1 | cut -c1-60)
                     echo "FAIL $mapped_model  [$snippet]"
                 fi
-            ' _ \"{}\" > "$results_file" 2>/dev/null
+            ' _ {} > "$results_file" 2>/dev/null
 
             local new_ok_count
             new_ok_count=$(grep -c "^OK" "$results_file" 2>/dev/null || echo 0)
