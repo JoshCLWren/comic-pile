@@ -10,7 +10,7 @@ from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from comic_pile.dependencies import (
-    _get_blocked_thread_ids_uncached,
+    _get_canonical_blocked_thread_ids_uncached,
     refresh_user_blocked_status,
 )
 from tests.conftest import get_or_create_user_async
@@ -124,10 +124,10 @@ async def test_unified_blocked_ids_preserve_legacy_issue_dependencies(
     )
     await async_db.commit()
 
-    blocked_ids = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    blocked_ids = await _get_canonical_blocked_thread_ids_uncached(user.id, async_db)
     assert legacy_target_thread.id in blocked_ids
 
     legacy_source_issue.status = "read"
     await async_db.commit()
-    blocked_ids = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    blocked_ids = await _get_canonical_blocked_thread_ids_uncached(user.id, async_db)
     assert legacy_target_thread.id not in blocked_ids

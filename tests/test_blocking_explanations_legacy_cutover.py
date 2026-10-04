@@ -179,7 +179,7 @@ async def test_legacy_off_ignores_sequence_order_even_after_unread_reactivation(
         lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
     )
 
-    blocked = await dependencies._get_blocked_thread_ids_uncached(user.id, async_db)
+    blocked = await dependencies._get_canonical_blocked_thread_ids_uncached(user.id, async_db)
     assert later_thread.id not in blocked
     assert await get_blocking_explanations(later_thread.id, user.id, async_db) == []
 
@@ -193,6 +193,6 @@ async def test_legacy_off_ignores_sequence_order_even_after_unread_reactivation(
     earlier_thread.next_unread_issue_id = earlier_issue.id
     await async_db.commit()
 
-    reactivated = await dependencies._get_blocked_thread_ids_uncached(user.id, async_db)
+    reactivated = await dependencies._get_canonical_blocked_thread_ids_uncached(user.id, async_db)
     assert later_thread.id not in reactivated
     assert await get_blocking_explanations(later_thread.id, user.id, async_db) == []

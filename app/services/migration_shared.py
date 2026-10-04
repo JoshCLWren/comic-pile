@@ -16,7 +16,7 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from comic_pile.dependencies import (
-    _get_blocked_thread_ids_uncached,
+    _get_canonical_blocked_thread_ids_uncached,
     _invalidate_continuity_snapshot,
     refresh_user_blocked_status,
 )
@@ -207,16 +207,11 @@ def coerce_optional_int(value: object) -> int | None:
     return value
 
 
-def invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
-    """Invalidate continuity snapshot for user (sync helper)."""
-    _invalidate_continuity_snapshot(user_id, db)
-
-
 async def current_roll_eligible(
     user_id: int, db: AsyncSession, affected_ids: set[int]
 ) -> tuple[set[int], list[int]]:
     """Return (blocked_ids, eligible_sorted) for affected threads."""
-    blocked = await _get_blocked_thread_ids_uncached(user_id, db)
+    blocked = await _get_canonical_blocked_thread_ids_uncached(user_id, db)
     roll_ids = {thread.id for thread in await get_roll_pool(user_id, db)}
     eligible = sorted(roll_ids & affected_ids)
     return blocked, eligible
@@ -246,4 +241,5 @@ async def assert_roll_eligibility_parity(
 
 
 # Re-export for snapshot equivalence checks that need get_blocked directly
-get_blocked_thread_ids_uncached = _get_blocked_thread_ids_uncached
+get_blocked_thread_ids_uncached = _get_canonical_blocked_thread_ids_uncached
+invalidate_continuity_snapshot = _invalidate_continuity_snapshot

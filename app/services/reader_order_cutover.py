@@ -22,8 +22,7 @@ from app.services.explicit_reader_order_migration import (
     _load_step14_index,
 )
 from comic_pile.dependencies import (
-    _get_legacy_blocked_thread_ids_uncached,
-    _invalidate_continuity_snapshot,
+    _get_canonical_blocked_thread_ids_uncached,
 )
 
 
@@ -72,7 +71,6 @@ async def build_reader_order_cutover_audit(
     gate rather than counting as canonical coverage. Point-in-time Roll equality
     is reported as an additional check, not as the definition of equivalence.
     """
-    _invalidate_continuity_snapshot(user_id, db)
     index = _load_step14_index()
     explicit, _ = _explicit_classifications(index)
     patterns = _generated_reader_order_patterns(index)
@@ -118,12 +116,12 @@ async def build_reader_order_cutover_audit(
             active[kind] += 1
             active_ids.setdefault(kind, []).append(dependency.id)
 
-    legacy_blocked = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
+    canonical_blocked = await _get_canonical_blocked_thread_ids_uncached(user_id, db)
     # Cutover must prove ContinuityRule coverage only. sequence_order is not a
     # Roll authority under the frozen architecture, so it cannot clear legacy_only.
     continuity_rule_blocked = await get_continuity_rule_blocked_thread_ids(user_id, db)
     sequence_order_blocked = await get_sequence_order_blocked_thread_ids(user_id, db)
-    legacy_only = sorted(legacy_blocked - continuity_rule_blocked)
+    canonical_only = sorted(canonical_blocked - continuity_rule_blocked)
 
     linked_rules = list(
         (
@@ -174,7 +172,7 @@ async def build_reader_order_cutover_audit(
         and not remaining_needs_review_ids
         and not remaining_unclassified_ids
         and not incomplete_standalone_mirrors
-        and not legacy_only
+        and not canonical_only
         and not sequence_order_blocked_ids
     )
     return {
@@ -199,12 +197,12 @@ async def build_reader_order_cutover_audit(
         "active_standalone_dependencies_missing_continuity_mirror": (
             incomplete_standalone_mirrors
         ),
-        "legacy_blocked_thread_ids": sorted(legacy_blocked),
+        "canonical_blocked_thread_ids": sorted(canonical_blocked),
         "continuity_rule_blocked_thread_ids": sorted(continuity_rule_blocked),
         # Compatibility alias: previously mixed rules + sequence_order.
         "continuity_blocked_thread_ids": sorted(continuity_rule_blocked),
         "sequence_order_blocked_thread_ids": sequence_order_blocked_ids,
-        "legacy_only_blocked_thread_ids": legacy_only,
+        "canonical_only_blocked_thread_ids": canonical_only,
         "release_condition_met": release_condition_met,
         "runtime_cutover_safe": runtime_cutover_safe,
     }

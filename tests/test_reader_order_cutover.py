@@ -307,7 +307,7 @@ async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
         "get_app_settings",
         lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
     )
-    blocked = await dependencies._get_blocked_thread_ids_uncached(user_id, async_db)
+    blocked = await dependencies._get_canonical_blocked_thread_ids_uncached(user_id, async_db)
     assert threads[1].id not in blocked
     assert threads[3].id in blocked
 
