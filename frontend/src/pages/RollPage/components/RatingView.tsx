@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { RatingViewData } from '../useRatingView'
 import {
   ROLL_WORKSPACE_GUTTER,
@@ -6,7 +7,9 @@ import {
 } from '../workspaceLayout'
 import { ComicPillar } from './ComicPillar'
 import { DecisionCard } from './DecisionCard'
-import { ContextDisclosure } from './ContextDisclosure'
+import { ReadingContextCard } from './ReadingContextCard'
+import { ReadingBoundariesCard } from './ReadingBoundariesCard'
+import { readingContextType } from '../readingContextTypography'
 
 interface RatingViewProps {
   data: RatingViewData
@@ -34,6 +37,13 @@ export function RatingView({ data }: RatingViewProps) {
     isReaderContextLoading,
     ratingViewTopRef,
   } = data
+
+  const [isReadingContextOpen, setIsReadingContextOpen] = useState(false)
+  const [isReadingBoundariesOpen, setIsReadingBoundariesOpen] = useState(false)
+
+  const handleReadingContextToggle = () => setIsReadingContextOpen((prev) => !prev)
+  const handleReadingBoundariesToggle = () =>
+    setIsReadingBoundariesOpen((prev) => !prev)
 
   return (
     <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">
@@ -63,9 +73,30 @@ export function RatingView({ data }: RatingViewProps) {
             onCancel={onCancel}
           />
 
-          <ContextDisclosure
-            readerContext={readerContext}
+          <ReadingContextCard
             isLoading={isReaderContextLoading}
+            error={readerContext ? null : 'Local reading context unavailable'}
+            isOpen={isReadingContextOpen}
+            onToggle={handleReadingContextToggle}
+          >
+            {readerContext && (
+              <div>
+                <span
+                  className="text-[11px] text-stone-400"
+                  style={readingContextType('bodyCopy')}
+                >
+                  See how this issue fits into your reading plans and continuity.
+                </span>
+              </div>
+            )}
+          </ReadingContextCard>
+
+          <ReadingBoundariesCard
+            isLoading={isReaderContextLoading}
+            error={readerContext ? null : 'Local reading context unavailable'}
+            readerContext={readerContext}
+            isOpen={isReadingBoundariesOpen}
+            onToggle={handleReadingBoundariesToggle}
           />
         </div>
       </div>

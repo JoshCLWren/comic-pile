@@ -1,6 +1,5 @@
 import { readingContextType } from '../readingContextTypography'
 import { ReadingContextStatusCard } from './ReadingContextStatusCard'
-import { ReadingContextPillar } from './ReadingContextPillar'
 
 interface ReadingContextCardProps {
   isLoading: boolean
