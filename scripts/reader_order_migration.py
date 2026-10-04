@@ -425,8 +425,8 @@ async def _batch_apply(
                 "skipped": skipped,
                 "cutover_audit": cutover,
                 "runtime_switch_instruction": (
-                    "Set LEGACY_DEPENDENCY_BLOCKING_ENABLED=false only when "
-                    "cutover_audit.runtime_cutover_safe is true."
+                    "Roll authority is canonical issue Dependencies; the retired "
+                    "continuity-rule authority is reported as coverage, not switched."
                 ),
             }
             pending_receipt = _stage_durable_json(receipt_path, batch_receipt)

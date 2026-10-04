@@ -134,7 +134,10 @@ async def get_dependency_by_ids(
 
 
 async def create_dependency(
-    db: AsyncSession, source_issue_id: int, target_issue_id: int
+    db: AsyncSession,
+    source_issue_id: int,
+    target_issue_id: int,
+    note: str | None = None,
 ) -> Dependency:
     """Create a new dependency.
 
@@ -142,6 +145,7 @@ async def create_dependency(
         db: Database session.
         source_issue_id: Source issue ID.
         target_issue_id: Target issue ID.
+        note: Optional reader-facing explanation. Never an ownership marker.
 
     Returns:
         The created dependency.
@@ -149,6 +153,7 @@ async def create_dependency(
     dependency = Dependency(
         source_issue_id=source_issue_id,
         target_issue_id=target_issue_id,
+        note=note,
     )
     db.add(dependency)
     return dependency

@@ -102,8 +102,9 @@ async def create_continuity_plan(
         await db.rollback()
         raise
     await db.refresh(plan)
-    if payload.ordering_mode == "strict_sequential":
-        await _refresh_blocked_state(current_user.id, db)
+    # Checkpoint and convergence nodes also compile canonical edges, so blocked
+    # state must be refreshed for every ordering mode, not just strict ones.
+    await _refresh_blocked_state(current_user.id, db)
     return _to_response(plan)
 
 

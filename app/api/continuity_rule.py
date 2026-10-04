@@ -25,9 +25,30 @@ from app.schemas.continuity_rule import (
     ContinuityRuleResponse,
     ConvergenceTarget,
 )
+from app.services.canonical_dependency_compiler import (
+    canonical_edges_for_rule,
+    canonical_edges_for_semantics,
+    ensure_canonical_dependencies,
+    retire_canonical_dependencies,
+)
 from app.services.continuity import _refresh_blocked_state, _to_response
 
 router = APIRouter(tags=["continuity"])
+
+
+def _payload_edges(payload: ContinuityRuleCreate) -> list[tuple[int, int]]:
+    """Reduce one rule request to the canonical edges its hard semantics require."""
+    return canonical_edges_for_semantics(
+        source_type=payload.source_type,
+        source_id=payload.source_id,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+        satisfaction_type=payload.satisfaction_type,
+        checkpoint_issue_id=payload.checkpoint_issue_id,
+        convergence_targets=[
+            {"type": target.type, "id": target.id} for target in payload.convergence_targets
+        ],
+    )
 
 
 async def _get_owned_rule(db: AsyncSession, user_id: int, rule_id: int) -> ContinuityRule:
@@ -214,6 +235,14 @@ async def create_continuity_rule(
             detail={"code": "continuity_rule_exists"},
         ) from exc
     await db.refresh(rule)
+    # ContinuityRule is transitional (ADR 9): the canonical edge is what Roll reads,
+    # so the rule's hard semantics are persisted before blocked state is refreshed.
+    await ensure_canonical_dependencies(
+        db,
+        user_id=current_user.id,
+        pairs=_payload_edges(payload),
+        note=payload.note,
+    )
     await _refresh_blocked_state(current_user.id, db)
     return _to_response(await _get_owned_rule(db, current_user.id, rule.id))
 
@@ -245,6 +274,7 @@ async def update_continuity_rule(
     """
     await lock_continuity_graph(db, user_id=current_user.id)
     rule = await _get_owned_rule(db, current_user.id, rule_id)
+    retired_edges = canonical_edges_for_rule(rule)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
     if await _would_create_cycle(
         db,
@@ -290,6 +320,15 @@ async def update_continuity_rule(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "continuity_rule_exists"},
         ) from exc
+    await ensure_canonical_dependencies(
+        db,
+        user_id=current_user.id,
+        pairs=_payload_edges(payload),
+        note=payload.note,
+    )
+    await retire_canonical_dependencies(
+        db, user_id=current_user.id, pairs=retired_edges
+    )
     await _refresh_blocked_state(current_user.id, db)
     return _to_response(await _get_owned_rule(db, current_user.id, rule_id))
 
@@ -320,7 +359,9 @@ async def delete_continuity_rule(
     user_id = current_user.id
     await lock_continuity_graph(db, user_id=user_id)
     rule = await _get_owned_rule(db, user_id, rule_id)
+    retired_edges = canonical_edges_for_rule(rule)
     await db.delete(rule)
     await db.commit()
+    await retire_canonical_dependencies(db, user_id=user_id, pairs=retired_edges)
     await _refresh_blocked_state(user_id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

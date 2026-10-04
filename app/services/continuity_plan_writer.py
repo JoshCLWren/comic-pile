@@ -33,6 +33,10 @@ from app.schemas.continuity_plan import (
 )
 from app.schemas.continuity_rule import ContinuityNodeType
 from app.repositories.continuity_repository import plans_for_user
+from app.services.canonical_dependency_compiler import (
+    canonical_edges_for_semantics,
+    sync_plan_canonical_dependencies,
+)
 from app.services.reading_plan_normalization import rebuild_plan_membership
 
 
@@ -301,6 +305,9 @@ async def replace_compiled_rules(
         ))
 
     if not edges_to_add:
+        await _sync_plan_canonical_dependencies(
+            db, user_id=user_id, plan_id=plan.id, edges=[]
+        )
         return True
 
     # Check for plan-level cycles using in-memory graph
@@ -407,7 +414,58 @@ async def replace_compiled_rules(
             rule_kwargs["convergence_targets"] = extra
         db.add(ContinuityRule(**rule_kwargs))
         await db.flush()
+    await _sync_plan_canonical_dependencies(
+        db,
+        user_id=user_id,
+        plan_id=plan.id,
+        edges=[
+            canonical_edges_for_semantics(
+                source_type=source_type,
+                source_id=source_id,
+                target_type=target_type,
+                target_id=target_id,
+                satisfaction_type=satisfaction_type,
+                checkpoint_issue_id=extra if satisfaction_type == "checkpoint" else None,
+                convergence_targets=extra if satisfaction_type == "converged" else None,
+            )
+            for (
+                source_type, source_id,
+                target_type, target_id,
+                satisfaction_type, extra,
+            ) in edges_to_add
+        ],
+    )
     return True
+
+
+async def _sync_plan_canonical_dependencies(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    plan_id: int,
+    edges: list[list[tuple[int, int]]],
+) -> list[int]:
+    """Persist the plan's compiled hard semantics as canonical executable edges.
+
+    A strict Reading Plan promises that later material stays out of Roll until the
+    earlier requirement is read. Roll reads canonical Dependency rows only, so the
+    compiled hard edges are materialized and linked to the plan here; edges the plan no
+    longer requires lose their plan link and are retired once nothing else justifies
+    them.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated plan owner.
+        plan_id: Plan whose compiled semantics were just persisted.
+        edges: Canonical edges implied by each compiled rule, in compile order.
+
+    Returns:
+        Dependency IDs the plan now references.
+    """
+    flattened = [pair for group in edges for pair in group]
+    return await sync_plan_canonical_dependencies(
+        db, user_id=user_id, plan_id=plan_id, pairs=flattened
+    )
 
 
 def plan_source_paths(plan: ContinuityPlan) -> list[str]:

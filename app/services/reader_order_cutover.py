@@ -1,4 +1,4 @@
-"""Read-only release gate for retiring raw Dependency Roll blocking."""
+"""Read-only release gate for canonical Dependency Roll blocking."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories import continuity_repository, dependency_repository
+from app.services.canonical_dependency_compiler import canonical_edges_for_rule
 from app.services.explicit_reader_order_migration import (
     _explicit_classifications,
     _generated_reader_order_patterns,
@@ -53,12 +55,39 @@ def _standalone_mirror_matches(dependency: Dependency, rule: ContinuityRule) -> 
     )
 
 
+async def _missing_canonical_rule_edges(
+    db: AsyncSession, user_id: int
+) -> list[list[int]]:
+    """Return hard rule edges that no canonical Dependency row still enforces.
+
+    Roll reads canonical Dependency rows only, so an uncovered edge is a promise the
+    retired ContinuityRule authority used to keep and the canonical runtime no longer
+    backs. Anything listed here silently stops blocking the reader's next issue.
+    """
+    rules = await continuity_repository.rules_for_user(db, user_id)
+    required: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for rule in rules:
+        for pair in canonical_edges_for_rule(rule):
+            if pair in seen:
+                continue
+            seen.add(pair)
+            required.append(pair)
+    missing: list[list[int]] = []
+    for source_issue_id, target_issue_id in required:
+        if await dependency_repository.get_dependency_by_ids(
+            db, source_issue_id, target_issue_id
+        ) is None:
+            missing.append([source_issue_id, target_issue_id])
+    return missing
+
+
 async def build_reader_order_cutover_audit(
     db: AsyncSession,
     *,
     user_id: int,
 ) -> dict[str, object]:
-    """Prove whether production may stop consulting raw Dependency rows.
+    """Prove whether production may stop consulting retired ContinuityRule blocking.
 
     The audit uses the canonical Step 14 classifications. Cutover is semantic:
     every remaining ``reading_plan_order`` row blocks release (including dormant
@@ -68,8 +97,11 @@ async def build_reader_order_cutover_audit(
     identical source/target/`item_read` semantics regardless of current read
     state. Continuity coverage is measured from compiled ``ContinuityRule`` rows
     only — active ``DependencyGroupMembership.sequence_order`` blockers fail the
-    gate rather than counting as canonical coverage. Point-in-time Roll equality
-    is reported as an additional check, not as the definition of equivalence.
+    gate rather than counting as canonical coverage. Because canonical Dependency
+    rows are now the sole Roll authority, the decisive check is the reverse
+    direction: every hard rule must already be backed by a canonical edge.
+    Point-in-time Roll equality is reported as an additional check, not as the
+    definition of equivalence.
     """
     index = _load_step14_index()
     explicit, _ = _explicit_classifications(index)
@@ -118,10 +150,15 @@ async def build_reader_order_cutover_audit(
 
     canonical_blocked = await _get_canonical_blocked_thread_ids_uncached(user_id, db)
     # Cutover must prove ContinuityRule coverage only. sequence_order is not a
-    # Roll authority under the frozen architecture, so it cannot clear legacy_only.
+    # Roll authority under the frozen architecture, so it cannot clear the gate.
     continuity_rule_blocked = await get_continuity_rule_blocked_thread_ids(user_id, db)
     sequence_order_blocked = await get_sequence_order_blocked_thread_ids(user_id, db)
+    # Informational only now that canonical Dependencies are the sole authority:
+    # canonical coverage that the retired rule authority never provided.
     canonical_only = sorted(canonical_blocked - continuity_rule_blocked)
+    # The release-blocking difference is the other direction: hard rule semantics
+    # with no canonical edge behind them stop blocking the reader entirely.
+    missing_rule_edges = await _missing_canonical_rule_edges(db, user_id)
 
     linked_rules = list(
         (
@@ -172,7 +209,7 @@ async def build_reader_order_cutover_audit(
         and not remaining_needs_review_ids
         and not remaining_unclassified_ids
         and not incomplete_standalone_mirrors
-        and not canonical_only
+        and not missing_rule_edges
         and not sequence_order_blocked_ids
     )
     return {
@@ -203,6 +240,7 @@ async def build_reader_order_cutover_audit(
         "continuity_blocked_thread_ids": sorted(continuity_rule_blocked),
         "sequence_order_blocked_thread_ids": sequence_order_blocked_ids,
         "canonical_only_blocked_thread_ids": canonical_only,
+        "rule_edges_missing_canonical_dependency": missing_rule_edges,
         "release_condition_met": release_condition_met,
         "runtime_cutover_safe": runtime_cutover_safe,
     }

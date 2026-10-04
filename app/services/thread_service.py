@@ -11,7 +11,6 @@ import os
 from typing import cast
 from datetime import UTC, datetime, timedelta
 
-from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -689,18 +688,9 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
                 db, user_id, deleted_issue_ids
             )
 
-        from comic_pile.dependencies import refresh_legacy_blocked_status, refresh_user_blocked_status
+        from comic_pile.dependencies import refresh_user_blocked_status
 
-        try:
-            await refresh_user_blocked_status(user_id, db)
-        except HTTPException as exc:
-            if exc.status_code == 422 and isinstance(exc.detail, dict) and exc.detail.get("code") == "continuity_graph_too_large":
-                # Continuity graph is too large (user has too many threads/issues/etc.)
-                # Skip continuity-based blocking refresh and use only dependency-based blocking
-                # since we've already cleaned up continuity data related to the deleted thread
-                await refresh_legacy_blocked_status(user_id, db)
-            else:
-                raise
+        await refresh_user_blocked_status(user_id, db)
 
         await thread_repository.delete_thread(db, thread)
         await db.commit()

@@ -1,4 +1,14 @@
-"""Dependency logic for hard-blocking queued threads."""
+"""Canonical Dependency logic for hard-blocking queued threads.
+
+Roll eligibility has exactly one authority (``docs/READING_GRAPH_ADR.md``): a Thread's
+``next_unread_issue_id`` frontier is blocked when an incoming canonical Dependency edge
+has an unread source Issue. A row is canonical when
+``note IS NULL OR note NOT LIKE 'cbl-order:%'``; historical CBL materialization rows stay
+inert. Reader-facing explanations read the same rows, so copy can never describe a blocker
+Roll does not enforce.
+"""
+
+from collections import defaultdict, deque
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +17,16 @@ from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.continuity_graph import SNAPSHOT_SESSION_KEY
+
+CANONICAL_DEPENDENCY_NOTE_PREFIX = "cbl-order:"
+"""Historical CBL materialization rows that must never become Roll authority."""
+
+
+def _canonical_dependency_predicate():
+    """Return the SQL predicate selecting canonical, executable Dependency rows."""
+    return Dependency.note.is_(None) | ~Dependency.note.like(
+        f"{CANONICAL_DEPENDENCY_NOTE_PREFIX}%"
+    )
 
 
 def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
@@ -36,7 +56,7 @@ async def _get_canonical_blocked_thread_ids_uncached(user_id: int, db: AsyncSess
         .join(
             Dependency,
             (Dependency.target_issue_id == next_unread_issue.c.id)
-            & (Dependency.note.is_(None) | ~Dependency.note.like("cbl-order:%")),
+            & _canonical_dependency_predicate(),
         )
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source, source_issue.c.thread_id == source.c.id)
@@ -88,22 +108,6 @@ def format_blocking_reason(dependency: BlockingDependency) -> str:
     return build_blocking_explanation(dependency.issue_number, dependency.thread_title)
 
 
-def _merge_blocking_explanations(
-    *groups: list[BlockingDependency],
-) -> list[BlockingDependency]:
-    """Deduplicate blocker rows while preserving first-seen order."""
-    merged: list[BlockingDependency] = []
-    seen: set[tuple[int, str]] = set()
-    for group in groups:
-        for dependency in group:
-            key = (dependency.thread_id, dependency.issue_number)
-            if key in seen:
-                continue
-            seen.add(key)
-            merged.append(dependency)
-    return merged
-
-
 async def _canonical_blocking_explanations(
     thread_id: int,
     user_id: int,
@@ -130,7 +134,7 @@ async def _canonical_blocking_explanations(
         .join(
             Dependency,
             (Dependency.target_issue_id == next_unread_issue.c.id)
-            & (Dependency.note.is_(None) | ~Dependency.note.like("cbl-order:%")),
+            & _canonical_dependency_predicate(),
         )
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
@@ -180,7 +184,7 @@ async def _canonical_blocking_explanations_batch(
         .join(
             Dependency,
             (Dependency.target_issue_id == next_unread_issue.c.id)
-            & (Dependency.note.is_(None) | ~Dependency.note.like("cbl-order:%")),
+            & _canonical_dependency_predicate(),
         )
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
@@ -283,17 +287,17 @@ async def detect_circular_dependency(
     else:
         return False
 
-    adjacency: dict[int, set[int]] = {}
+    adjacency: dict[int, set[int]] = defaultdict(set)
     for src, tgt in result.all():
         if src is None or tgt is None:
             continue
-        adjacency.setdefault(src, set()).add(tgt)
+        adjacency[src].add(tgt)
 
-    queue = [target_id]
+    queue = deque([target_id])
     visited: set[int] = set()
 
     while queue:
-        node = queue.pop(0)
+        node = queue.popleft()
         if node in visited:
             continue
         visited.add(node)
