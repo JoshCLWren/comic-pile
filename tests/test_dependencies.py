@@ -8,7 +8,7 @@ import pytest
 from app.models import Dependency, Issue, Thread, User
 from sqlalchemy import text
 from comic_pile.dependencies import (
-    _get_blocked_thread_ids_uncached,
+    _get_canonical_blocked_thread_ids_uncached,
     build_blocking_explanation,
     detect_circular_dependency,
     format_blocking_reason,
@@ -412,7 +412,7 @@ async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
     source_issue_1.read_at = datetime.now(UTC)
     await async_db.commit()
 
-    blocked_after = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    blocked_after = await _get_canonical_blocked_thread_ids_uncached(user.id, async_db)
     assert target_thread.id not in blocked_after
 
 

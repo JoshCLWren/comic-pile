@@ -55,7 +55,7 @@ from app.services.migration_shared import (
     rules_fingerprint as _rules_fingerprint,
     stable_hash as _stable_hash,
 )
-from comic_pile.dependencies import _get_blocked_thread_ids_uncached
+from comic_pile.dependencies import _get_canonical_blocked_thread_ids_uncached
 from comic_pile.queue import get_roll_pool
 
 TEMPORARY_REPAIR_NOTE = "Temporary authoritative Ultimate Universe CBL order incident repair"
@@ -625,7 +625,7 @@ async def build_ultimate_universe_dry_run(
     for dependency in raw_dependencies:
         raw_by_target.setdefault(dependency.target_issue_id, []).append(dependency)
 
-    current_blocked_ids = await _get_blocked_thread_ids_uncached(spec.user_id, db)
+    current_blocked_ids = await _get_canonical_blocked_thread_ids_uncached(spec.user_id, db)
     current_roll_ids = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
     current_affected_eligible = sorted(current_roll_ids & affected_thread_ids)
     derived_current_eligible = sorted(affected_thread_ids - current_blocked_ids)

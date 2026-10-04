@@ -48,7 +48,7 @@ from app.services.ultimate_universe_production_migration import (
     _planned_rules,
     _resolved_entries,
 )
-from comic_pile.dependencies import _get_blocked_thread_ids_uncached
+from comic_pile.dependencies import _get_canonical_blocked_thread_ids_uncached
 from comic_pile.queue import get_roll_pool
 
 # Backward-compat aliases for external imports
@@ -581,7 +581,7 @@ async def build_source_backed_reader_order_dry_run(
     for dependency in raw:
         raw_by_target.setdefault(dependency.target_issue_id, []).append(dependency)
 
-    current_blocked = await _get_blocked_thread_ids_uncached(spec.user_id, db)
+    current_blocked = await _get_canonical_blocked_thread_ids_uncached(spec.user_id, db)
     current_roll = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
     current_eligible = sorted(current_roll & affected_ids)
     if current_eligible != sorted(affected_ids - current_blocked):
