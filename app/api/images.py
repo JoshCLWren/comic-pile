@@ -46,7 +46,11 @@ async def api_optimize_remote_image(
     format: Annotated[
         Literal["webp", "avif", "auto"],
         Query(
-            description="Preferred modern output format. 'webp' is deterministic; 'avif' requires libavif; 'auto' tries AVIF and falls back to WebP.",
+            description=(
+                "Preferred modern output format. "
+                "'webp' is deterministic; 'avif' requires libavif; "
+                "'auto' tries AVIF and falls back to WebP."
+            ),
         ),
     ] = "webp",
 ) -> Response:
