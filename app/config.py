@@ -509,9 +509,9 @@ class ImageDeliverySettings(BaseSettings):
         ge=1,
         le=100,
         description=(
-                    "AVIF encoder quality used for resized variants; "
-                    "ignored when libavif is unavailable (falls back to WebP)."
-                ),
+            "AVIF encoder quality used for resized variants; "
+            "ignored when libavif is unavailable (falls back to WebP)."
+        ),
         json_schema_extra={"env": "IMAGE_OPTIMIZER_AVIF_QUALITY"},
     )
 
