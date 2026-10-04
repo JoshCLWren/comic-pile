@@ -507,18 +507,17 @@ async def build_series_mapping_plan(
     origin_has_confirmed_series = False
     if series_info is not None:
         # Check if origin issue has a confirmed thread-series mapping
-        from app.models.thread import Thread
-        thread_result = await db.execute(
-            select(ThreadExternalSeriesMapping).where(
-                ThreadExternalSeriesMapping.thread_id == origin_issue.get("thread_id"),
-                ThreadExternalSeriesMapping.external_identity_id == series_info.get("id")
-                if isinstance(series_info.get("id"), int)
-                else None,
-                ThreadExternalSeriesMapping.status == "confirmed",
+        series_identity_id = series_info.get("id")
+        if isinstance(series_identity_id, int):
+            thread_result = await db.execute(
+                select(ThreadExternalSeriesMapping).where(
+                    ThreadExternalSeriesMapping.thread_id == origin_issue.get("thread_id"),
+                    ThreadExternalSeriesMapping.external_identity_id == series_identity_id,
+                    ThreadExternalSeriesMapping.status == "confirmed",
+                )
             )
-        )
-        if thread_result.scalar_one_or_none() is not None:
-            origin_has_confirmed_series = True
+            if thread_result.scalar_one_or_none() is not None:
+                origin_has_confirmed_series = True
         # Also check issue-external identity mapping
         if not origin_has_confirmed_series:
             from app.models.issue import IssueExternalIdentityMapping

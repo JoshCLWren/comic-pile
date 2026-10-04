@@ -260,7 +260,7 @@ async def get_series_with_issues(
         issues_with_mappings.append(issue_info)
     
     series_info = {
-        "id": series_identity.external_id,
+        "id": series_identity.id,
         "name": series_identity.metadata_json.get("name") if series_identity.metadata_json else None,
         "publisher": _extract_publisher_name(series_identity.metadata_json),
         "start_year": series_identity.metadata_json.get("start_year"),
