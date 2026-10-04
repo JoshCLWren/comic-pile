@@ -3,6 +3,7 @@ import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
+import MapSeriesDialog from './MapSeriesDialog'
 import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
@@ -48,6 +49,7 @@ interface QueueModalsProps {
   onCloseMigration: () => void
   onOpenMigrationDialog: (thread: Thread | ThreadListItem) => void
   onCloseMapSeries: () => void
+  onMapSeriesCommitted: () => Promise<void> | void
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
   isPendingCreate: boolean
@@ -100,6 +102,7 @@ export function QueueModals({
   onCloseMigration,
   onOpenMigrationDialog,
   onCloseMapSeries,
+  onMapSeriesCommitted,
   onOpenDependencies,
   onIssueChanged,
   isPendingCreate,
@@ -423,32 +426,11 @@ export function QueueModals({
       )}
 
       {openModal === 'map-series' && threadToMap && (
-        <Modal
-          isOpen={true}
-          title={`Map Series: ${threadToMap.title}`}
+        <MapSeriesDialog
+          thread={threadToMap}
           onClose={onCloseMapSeries}
-          size="large"
-        >
-          <div className="space-y-4">
-            <p className="text-stone-200">
-              Series mapping preview and commit flow will be implemented here.
-              This will search ComicVine for the correct series, show a preview of
-              which issues would be mapped, and allow you to commit the safe mappings.
-            </p>
-            <p className="text-sm text-stone-400">
-              Thread ID: {threadToMap.id} · Format: {threadToMap.format}
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={onCloseMapSeries}
-                className="px-4 py-2 rounded-lg bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 font-semibold hover:bg-[var(--theme-bg-hover)] transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
+          onCommitted={onMapSeriesCommitted}
+        />
       )}
 
       {showRollNudge && (

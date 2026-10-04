@@ -158,8 +158,8 @@ export default function QueueThreadCard({
                 <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
-            {thread.comicvine_mapping && (
-              <Tooltip content={thread.comicvine_mapping.status === 'fully_mapped' ? 'Fully mapped' : thread.comicvine_mapping.status === 'partial' ? 'Partially mapped' : thread.comicvine_mapping.status === 'unresolved' ? 'Needs mapping' : thread.comicvine_mapping.status === 'needs_review' ? 'Needs review' : 'Not applicable'}>
+            {thread.comicvine_mapping && thread.comicvine_mapping.status !== 'fully_mapped' && thread.comicvine_mapping.status !== 'not_applicable' && (
+              <Tooltip content={thread.comicvine_mapping.status === 'partial' ? 'Partially mapped' : thread.comicvine_mapping.status === 'unresolved' ? 'Needs mapping' : 'Needs review'}>
                 <MappingStatusIndicator status={thread.comicvine_mapping.status} count={thread.comicvine_mapping.tracked_issue_count} />
               </Tooltip>
             )}

@@ -319,6 +319,9 @@ export default function QueuePage() {
           onCloseMigration={modals.closeMigrationDialog}
           onOpenMigrationDialog={modals.openMigrationDialog}
           onCloseMapSeries={modals.closeMapSeriesModal}
+          onMapSeriesCommitted={async () => {
+            await invalidateAfterQueueMutation(queryClient)
+          }}
           onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
           onIssueChanged={handleIssueChanged}
           isPendingCreate={modals.isPendingCreate}

@@ -3,7 +3,7 @@ import {
   getMappingStatusText, 
   getMappingStatusDescription, 
   getMappingSummary,
-} from '../hooks/useComicVineMapping';
+} from '../utils/comicVineMapping';
 import type { ComicVineMappingHealth, ComicVineMappingStatus } from '../types/comic-vine';
 
 interface MappingStatusBadgeProps {
@@ -19,11 +19,11 @@ interface MappingStatusIndicatorProps {
 }
 
 const statusColors: Record<ComicVineMappingStatus, string> = {
-  not_applicable: 'text-gray-500 bg-gray-100',
-  fully_mapped: 'text-green-600 bg-green-100',
-  partial: 'text-yellow-600 bg-yellow-100',
-  unresolved: 'text-orange-600 bg-orange-100',
-  needs_review: 'text-red-600 bg-red-100',
+  not_applicable: 'text-[var(--theme-text-muted)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)]',
+  fully_mapped: 'text-[var(--theme-text-muted)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)]',
+  partial: 'text-[var(--theme-warning)] bg-[color-mix(in_srgb,var(--theme-warning)_8%,transparent)] border border-[color-mix(in_srgb,var(--theme-warning)_30%,transparent)]',
+  unresolved: 'text-[var(--theme-warning)] bg-[color-mix(in_srgb,var(--theme-warning)_8%,transparent)] border border-[color-mix(in_srgb,var(--theme-warning)_30%,transparent)]',
+  needs_review: 'text-[var(--theme-danger)] bg-[color-mix(in_srgb,var(--theme-danger)_8%,transparent)] border border-[color-mix(in_srgb,var(--theme-danger)_30%,transparent)]',
 };
 
 const statusIcons: Record<ComicVineMappingStatus, string> = {
@@ -100,19 +100,19 @@ export function MappingHealthSummary({ mapping, className = '' }: MappingHealthS
       />
       
       {needsMapping && (
-        <span className="text-orange-600">
+        <span className="text-[var(--theme-warning)]">
           {mapping.needs_mapping_count} need mapping
         </span>
       )}
       
       {needsReview && (
-        <span className="text-red-600">
+        <span className="text-[var(--theme-danger)]">
           {mapping.needs_review_count} need review
         </span>
       )}
       
       {mapping.confirmed_issue_count > 0 && (
-        <span className="text-green-600">
+        <span className="text-[var(--theme-comic-accent)]">
           {mapping.confirmed_issue_count} mapped
         </span>
       )}

@@ -1,6 +1,6 @@
 import Tooltip from '../../components/Tooltip'
 import type { ComicVineMappingHealth } from '../../types/comic-vine'
-import { needsMappingAttention } from '../../hooks/useComicVineMapping'
+import { needsMappingAttention } from '../../utils/comicVineMapping'
 
 interface QueueThreadActionsProps {
   title: string
@@ -61,7 +61,7 @@ export default function QueueThreadActions({
             type="button"
             aria-label={`Map ${title} to ComicVine`}
             onClick={stopCardClick(onMapSeries)}
-            className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-bold text-stone-950 hover:bg-amber-400 transition-colors"
+            className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-warning)] px-4 text-sm font-bold text-stone-950 transition-colors hover:opacity-90"
           >
             Map series
           </button>
