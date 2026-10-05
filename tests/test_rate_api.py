@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy import select
 
-from app.models import Event, Thread
+from app.models import Event, Issue, Thread
 from comic_pile.queue import get_bounded_roll_pool_rows
 from httpx import AsyncClient
 from app.models import ReadingSession
@@ -497,6 +497,118 @@ async def test_rate_ignores_client_issues_read_and_reads_one(
     rate_event = result.scalars().first()
     assert rate_event is not None
     assert rate_event.issues_read == 1
+
+
+@pytest.mark.asyncio
+async def test_rate_after_reorder_seats_read_issue_above_unread_issue_3104(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Rating after a reorder counts only truly unread issues.
+
+    Regression test for issue #3104: the rate flow derived
+    ``issues_remaining`` from the next unread issue's position,
+    assuming every issue at or after that position is unread. A
+    manual reorder can seat a read issue above unread ones, so the
+    positional shortcut overcounted until something recomputed the
+    counter. The fix probes for read issues at or after the next
+    unread position and falls back to the exact unread COUNT.
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = ReadingSession(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Reordered Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issues = [
+        Issue(
+            thread_id=thread.id,
+            issue_number=str(number),
+            position=number,
+            status="unread",
+        )
+        for number in range(1, 4)
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+    thread.next_unread_issue_id = issues[0].id
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    async_db.add(
+        Event(
+            type="roll",
+            die=10,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+        )
+    )
+    await async_db.commit()
+
+    # First rating: #1 becomes read; #2 and #3 remain unread, so the
+    # positional shortcut (no read issue at or after position 2) holds.
+    first_response = await auth_client.post(
+        "/api/v1/rate/", json={"rating": 4.0, "issues_read": 1}
+    )
+    assert first_response.status_code == 200
+    assert first_response.json()["issues_remaining"] == 2
+
+    # Reorder: drag read #1 to the end. #2 and #3 stay unread and the
+    # reorder path recomputes the counters correctly.
+    reorder_response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues:reorder",
+        json={"issue_ids": [issues[1].id, issues[2].id, issues[0].id]},
+    )
+    assert reorder_response.status_code == 204
+    await async_db.refresh(thread)
+    assert thread.issues_remaining == 2
+    assert thread.next_unread_issue_id == issues[1].id
+
+    # A fresh roll selects the thread again so it can be rated.
+    async_db.add(
+        Event(
+            type="roll",
+            die=10,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+        )
+    )
+    await async_db.commit()
+
+    # Second rating: #2 becomes read. Read #1 now sits at position 3,
+    # above unread #3 at position 2, so only #3 remains unread.
+    second_response = await auth_client.post(
+        "/api/v1/rate/", json={"rating": 4.0, "issues_read": 1}
+    )
+    assert second_response.status_code == 200
+    assert second_response.json()["issues_remaining"] == 1
+    assert second_response.json()["next_unread_issue_id"] == issues[2].id
+
+    await async_db.refresh(thread)
+    assert thread.issues_remaining == 1
+    assert thread.next_unread_issue_id == issues[2].id
+    assert thread.reading_progress == "in_progress"
 
 
 @pytest.mark.asyncio
