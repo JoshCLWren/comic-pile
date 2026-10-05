@@ -992,9 +992,10 @@ def _derive_scope_key(classified_rows: list[dict[str, object]], origin_issue_id:
     return None
 
 
-def _preview_row_id(issue_id: object) -> str:
+def _preview_row_id(issue_id: object, roster_only: bool = False) -> str:
     """Return the stable preview row identifier for one issue."""
-    return f"{PREVIEW_ROW_ID_PREFIX}{issue_id}"
+    prefix = PREVIEW_ROSTER_ROW_ID_PREFIX if roster_only else PREVIEW_ROW_ID_PREFIX
+    return f"{prefix}{issue_id}"
 
 
 def _plan_scope_key(plan: dict[str, object]) -> str:
