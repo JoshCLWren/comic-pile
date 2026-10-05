@@ -330,25 +330,26 @@ export default function RollPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <RollHeader
-        bootstrap={bootstrap}
-        currentDie={state.currentDie}
-        dieSize={dieSize}
-        displayDie={displayDie}
-        snoozedThreads={snoozedThreads}
-        pool={pool}
-        isRatingView={state.isRatingView}
-        setDiePending={setDieMutation.isPending}
-        clearManualDiePending={clearManualDieMutation.isPending}
-        onSetDie={actions.handleSetDie}
-        onClearManualDie={actions.handleClearManualDie}
-        onOpenOverride={modals.openOverrideModal}
-        onOpenDieModal={() => state.setIsDieModalOpen(true)}
-        onOpenModeSelector={() => setIsModeSelectorOpen(true)}
-        onBackToQueue={() => {
-          void rating.handleCancelRating()
-        }}
-      />
+<RollHeader
+  bootstrap={bootstrap}
+  currentDie={state.currentDie}
+  dieSize={dieSize}
+  displayDie={displayDie}
+  snoozedThreads={snoozedThreads}
+  pool={pool}
+  blocked_threads={blockedThreads}
+  isRatingView={state.isRatingView}
+  setDiePending={setDieMutation.isPending}
+  clearManualDiePending={clearManualDieMutation.isPending}
+  onSetDie={actions.handleSetDie}
+  onClearManualDie={actions.handleClearManualDie}
+  onOpenOverride={modals.openOverrideModal}
+  onOpenDieModal={() => state.setIsDieModalOpen(true)}
+  onOpenModeSelector={() => setIsModeSelectorOpen(true)}
+  onBackToQueue={() => {
+    void rating.handleCancelRating()
+  }}
+/>
 
       <ReadingModeLauncher />
 
