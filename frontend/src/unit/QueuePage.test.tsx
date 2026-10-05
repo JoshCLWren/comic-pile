@@ -654,7 +654,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /move to front/i }))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('front')))
-  // Menu stays open after Move to Front (no closeMenu call), so we can directly click Reposition
+  await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   const slider = screen.getByRole('slider')
   fireEvent.change(slider, { target: { value: '99' } })

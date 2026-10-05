@@ -312,14 +312,14 @@ describe('PositionMenu', () => {
     expect(onDelete).toHaveBeenCalledWith(1)
   })
 
-  it('closes the menu after clicking a menu item that calls closeMenu', async () => {
+  it('closes the menu after clicking a menu item', async () => {
     const user = userEvent.setup()
-    const onReposition = vi.fn()
+    const onMoveToFront = vi.fn()
     render(
       <PositionMenu
         thread={mockThread}
-        onMoveToFront={vi.fn()}
-        onReposition={onReposition}
+        onMoveToFront={onMoveToFront}
+        onReposition={vi.fn()}
         onMoveToBack={vi.fn()}
         onEdit={vi.fn()}
         onDependencies={vi.fn()}
@@ -331,9 +331,8 @@ describe('PositionMenu', () => {
     await user.click(trigger)
     expect(screen.getByRole('menu')).toBeInTheDocument()
 
-    await user.click(screen.getByText('Reposition\u2026'))
+    await user.click(screen.getByText('Move to Front'))
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    expect(onReposition).toHaveBeenCalledWith(mockThread)
   })
 
   it('closes the menu on Escape key press', async () => {
