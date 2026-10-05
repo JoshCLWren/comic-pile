@@ -867,4 +867,16 @@ describe('QueueThreadCard ComicVine mapping health', () => {
     expect(mapButton).toHaveClass('h-11', '@2xl:h-9', 'rounded-lg')
     expect(readButton).toHaveClass('h-11', '@2xl:h-9', 'rounded-lg')
   })
+
+  it('keeps the repair action a supporting action beside the row primary action', () => {
+    renderCard(createMappedThread(unresolved), { onMapSeries: vi.fn() })
+
+    const actions = screen.getByRole('group', { name: 'Actions for Test Thread' })
+    const mapButton = within(actions).getByRole('button', { name: 'Map Test Thread to ComicVine' })
+    const readButton = within(actions).getByRole('button', { name: 'Read' })
+
+    expect(readButton).toHaveClass('bg-[var(--theme-primary-action)]')
+    expect(mapButton).not.toHaveClass('bg-[var(--theme-primary-action)]')
+    expect(mapButton).toHaveClass('border', 'bg-[var(--theme-bg-panel)]', 'text-[var(--theme-text-primary)]')
+  })
 })

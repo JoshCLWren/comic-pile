@@ -269,7 +269,7 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
                     type="button"
                     onClick={() => void handleSelectSeries(series)}
                     disabled={busy || anchorPending}
-                    className="w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
+                    className="w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
                   >
                     <span className="font-bold">{series.name}</span>
                     <span className="text-[var(--theme-text-muted)]">
