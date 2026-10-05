@@ -55,10 +55,13 @@ interface QueueThreadActionResult {
   requestDelete: (thread: ThreadListItem) => void
   confirmDelete: () => Promise<void> | void
   cancelDelete: () => void
+  isShuffleConfirmOpen: boolean
+  requestShuffle: () => void
+  confirmShuffle: () => Promise<void> | void
+  cancelShuffle: () => void
   handleMoveToFront: (threadId: number) => Promise<void> | void
   handleMoveToBack: (threadId: number) => Promise<void> | void
   handleReposition: (threadId: number, targetPosition: number, total: number) => Promise<void> | void
-  handleShuffle: () => Promise<void> | void
   handleThreadRead: (thread: ThreadListItem) => Promise<void> | void
   handleSnoozeToggle: (thread: ThreadListItem, isSnoozed: boolean) => Promise<void> | void
 }
@@ -100,6 +103,7 @@ export function useQueueThreadActions(
   const [reorderError, setReorderError] = useState<string | null>(null)
   const [pendingDeleteThread, setPendingDeleteThread] = useState<ThreadListItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isShuffleConfirmOpen, setIsShuffleConfirmOpen] = useState(false)
 
   const handleDragStart = useCallback(
     (threadId: number) => (event: DragEvent<HTMLElement>) => {
@@ -213,10 +217,21 @@ export function useQueueThreadActions(
     [moveToPositionMutation],
   )
 
-  const handleShuffle = useCallback(async () => {
+  const requestShuffle = useCallback(() => {
+    setIsShuffleConfirmOpen(true)
+  }, [])
+
+  const cancelShuffle = useCallback(() => {
+    setIsShuffleConfirmOpen(false)
+  }, [])
+
+  const confirmShuffle = useCallback(async () => {
     try {
       await shuffleQueueMutation.mutate()
+      setIsShuffleConfirmOpen(false)
     } catch {
+      // Keep the confirmation open so the reader can retry without
+      // re-clicking SHUFFLE; the dialog mirrors the delete confirmation.
       window.alert('Failed to shuffle queue. Please try again.')
     }
   }, [shuffleQueueMutation])
@@ -275,10 +290,13 @@ export function useQueueThreadActions(
     requestDelete,
     confirmDelete,
     cancelDelete,
+    isShuffleConfirmOpen,
+    requestShuffle,
+    confirmShuffle,
+    cancelShuffle,
     handleMoveToFront,
     handleMoveToBack,
     handleReposition,
-    handleShuffle,
     handleThreadRead,
     handleSnoozeToggle,
   }

@@ -273,7 +273,7 @@ describe('useQueueThreadActions', () => {
     expect(unsnooze.mutate).toHaveBeenCalledWith(4)
   })
 
-  it('reports shuffle failure as an alert', async () => {
+  it('reports shuffle failure as an alert and keeps the confirmation open', async () => {
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
@@ -288,8 +288,38 @@ describe('useQueueThreadActions', () => {
       { wrapper },
     )
 
-    await result.current.handleShuffle()
+    act(() => result.current.requestShuffle())
+    await act(() => result.current.confirmShuffle())
     expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('shuffle'))
+    expect(result.current.isShuffleConfirmOpen).toBe(true)
+  })
+
+  it('gates the queue shuffle behind a confirmation that cancels without mutating', async () => {
+    const shuffle = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps({ shuffleHook: () => shuffle }),
+        ),
+      { wrapper },
+    )
+
+    act(() => result.current.requestShuffle())
+    expect(result.current.isShuffleConfirmOpen).toBe(true)
+    expect(shuffle.mutate).not.toHaveBeenCalled()
+
+    act(() => result.current.cancelShuffle())
+    expect(result.current.isShuffleConfirmOpen).toBe(false)
+    expect(shuffle.mutate).not.toHaveBeenCalled()
+
+    act(() => result.current.requestShuffle())
+    await act(() => result.current.confirmShuffle())
+    expect(shuffle.mutate).toHaveBeenCalledTimes(1)
+    expect(result.current.isShuffleConfirmOpen).toBe(false)
   })
 
   it('validates reposition bounds before calling the mutation', async () => {
