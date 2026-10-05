@@ -242,6 +242,6 @@ async def test_reset_preserves_reading_sessions(auth_client: AsyncClient, async_
 @pytest.mark.asyncio
 async def test_unknown_token_fails_safely(client: AsyncClient) -> None:
     """An invalid token is rejected with a safe message."""
-    res = await client.post("/api/auth/reset-password", json={"token": "badtoken", "new_password": "x"})
+    res = await client.post("/api/auth/reset-password", json={"token": "badtoken", "new_password": "validpw"})
     assert res.status_code == 400
     assert "Invalid" in res.json()["detail"]

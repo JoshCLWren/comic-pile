@@ -422,8 +422,8 @@ class TestAccountLockout:
     async def test_lockout_is_per_username(self, db_engine: AsyncEngine) -> None:
         """Locking one username does not affect a different username."""
         async with _create_committed_client(db_engine) as client:
-            user_a = {"username": "user_a", "email": "a@example.com", "password": "pw123"}
-            user_b = {"username": "user_b", "email": "b@example.com", "password": "pw456"}
+            user_a = {"username": "user_a", "email": "a@example.com", "password": "pw1234"}
+            user_b = {"username": "user_b", "email": "b@example.com", "password": "pw4567"}
             reg_a = await client.post("/api/v1/auth/register", json=user_a)
             assert reg_a.status_code == 200, f"user_a register: {reg_a.text}"
             reg_b = await client.post("/api/v1/auth/register", json=user_b)
@@ -437,7 +437,7 @@ class TestAccountLockout:
             locked = await client.post("/api/v1/auth/login", json=wrong_a)
             assert locked.status_code == 401
 
-            correct_b = {"username": "user_b", "password": "pw456"}
+            correct_b = {"username": "user_b", "password": "pw4567"}
             ok = await client.post("/api/v1/auth/login", json=correct_b)
             assert ok.status_code == 200
 
