@@ -1,8 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
-import { DecisionCard } from './DecisionCard'
+import { DecisionCard } from '../pages/RollPage/components/DecisionCard'
 
 // Mock heavy dependencies
 vi.mock('../../../components/Modal', () => ({
@@ -43,6 +43,7 @@ function makeDecisionCardProps(overrides: Partial<DecisionCardProps> = {}) {
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onSnooze: vi.fn(),
+    onSkip: vi.fn(),
     onCancel: vi.fn(),
     ...overrides,
   }
@@ -85,9 +86,9 @@ describe('DecisionCard', () => {
     const ladderMove = screen.getByText('d6 → d8')
     expect(ladderMove).toBeInTheDocument()
     
-    // Test rating slider
+    // Test rating slider - range inputs store whole numbers without decimal
     const ratingSlider = screen.getByRole('slider')
-    expect(ratingSlider).toHaveValue('3.0')
+    expect(ratingSlider).toHaveValue('3')
     
     // Test button interactions
     await user.click(screen.getByRole('button', { name: /mark read & save/i }))
@@ -151,9 +152,8 @@ describe('DecisionCard', () => {
 
     const ratingSlider = screen.getByRole('slider')
     
-    // Test rating change in auto mode
-    await user.clear(ratingSlider)
-    await user.type(ratingSlider, '4.0')
+    // Test rating change in auto mode - fireEvent.change works better for range inputs
+    fireEvent.change(ratingSlider, { target: { value: '4.0' } })
     expect(callbacks.onUpdateRating).toHaveBeenCalledWith('4.0')
     
     // Test that ladder update would happen (but we can't test the actual update without re-render)
@@ -215,6 +215,6 @@ describe('DecisionCard', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByRole('button', { name: /skipping…/i })).toBeInTheDocument()
+    expect(screen.getByTestId('skip-roll')).toHaveTextContent('Skipping…')
   })
 })

@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test'
-import { test } from '../fixtures'
+import { test } from './fixtures'
 
 async function createThread(page: Page, title: string, issuesRemaining = 3): Promise<void> {
   await page.goto('/queue')
@@ -34,7 +34,7 @@ async function enterRatingView(page: Page, title: string): Promise<void> {
 }
 
 test.describe('DecisionCard manual die mode', () => {
-  test('shows manual die message when manual die is set', async ({ authenticatedPage }) => {
+  test('shows manual die message when manual die is set', async ({ authenticatedPage }: { authenticatedPage: Page }) => {
     const page = authenticatedPage
     const threadTitle = 'Test Comic for Manual Die'
     
@@ -68,7 +68,7 @@ test.describe('DecisionCard manual die mode', () => {
     await expect(page.locator('#main-die-3d')).toBeVisible()
   })
 
-  test('shows ladder move when in auto mode', async ({ authenticatedPage }) => {
+  test('shows ladder move when in auto mode', async ({ authenticatedPage }: { authenticatedPage: Page }) => {
     const page = authenticatedPage
     const threadTitle = 'Test Comic for Auto Mode'
     
@@ -96,7 +96,7 @@ test.describe('DecisionCard manual die mode', () => {
     await expect(ratingSlider).toHaveValue('3.0')
   })
 
-  test('switching between manual and auto mode updates display correctly', async ({ authenticatedPage }) => {
+  test('switching between manual and auto mode updates display correctly', async ({ authenticatedPage }: { authenticatedPage: Page }) => {
     const page = authenticatedPage
     const threadTitle = 'Test Comic for Mode Switch'
     
