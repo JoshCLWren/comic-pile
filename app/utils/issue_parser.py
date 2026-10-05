@@ -4,6 +4,7 @@ NOTE: The frontend has a parallel parser at frontend/src/utils/issueParser.ts
 that must be kept in sync with this logic.
 """
 
+import re
 MAX_ISSUES = 10000
 MAX_LITERAL_LENGTH = 100
 
@@ -58,29 +59,25 @@ def parse_issue_ranges(input_str: str) -> list[str]:
             if len(range_parts) == 2:
                 left = range_parts[0].strip()
                 right = range_parts[1].strip()
-                try:
-                    start = int(left)
-                    end = int(right)
-                    if start < 0 or end < 0:
-                        raise ValueError("Range endpoints must be >= 0")
-                    if start > end:
-                        raise ValueError(f"Range start ({start}) cannot exceed end ({end})")
-                    # Check range size BEFORE expansion to prevent DoS
-                    range_size = end - start + 1
-                    if range_size > MAX_ISSUES:
-                        raise ValueError(f"Range too large: {range_size} issues (max {MAX_ISSUES})")
-                    # Check cumulative total to prevent combining multiple large ranges
-                    if len(result) + range_size > MAX_ISSUES:
-                        raise ValueError(f"Total issues would exceed maximum of {MAX_ISSUES}")
-                    result.extend(str(i) for i in range(start, end + 1))
+                # Validate numeric tokens with regex before conversion
+                if not re.fullmatch(r'\\d+', left) or not re.fullmatch(r'\\d+', right):
+                    result.append(part)
                     continue
-                except ValueError as exc:
-                    # If conversion failed because it's not an integer,
-                    # fall through to store as literal
-                    if "invalid literal" in str(exc):
-                        result.append(part)
-                        continue
-                    raise
+                start = int(left)
+                end = int(right)
+                if start < 0 or end < 0:
+                    raise ValueError("Range endpoints must be >= 0")
+                if start > end:
+                    raise ValueError(f"Range start ({start}) cannot exceed end ({end})")
+                # Check range size BEFORE expansion to prevent DoS
+                range_size = end - start + 1
+                if range_size > MAX_ISSUES:
+                    raise ValueError(f"Range too large: {range_size} issues (max {MAX_ISSUES})")
+                # Check cumulative total to prevent combining multiple large ranges
+                if len(result) + range_size > MAX_ISSUES:
+                    raise ValueError(f"Total issues would exceed maximum of {MAX_ISSUES}")
+                result.extend(str(i) for i in range(start, end + 1))
+                continue
             # More than one dash and not a valid range — store as literal
             result.append(part)
         else:
