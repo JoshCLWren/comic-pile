@@ -64,51 +64,50 @@ The maintained hosting target is Vercel. Configure the production environment va
 
 After deployment, `GET /api/v1/health/dependencies` can be used to verify the application's database dependency independently from the lightweight liveness endpoint.
 
-### Password-reset outbound email (Resend, issue #2778)
+### Password-reset outbound email (Gmail SMTP)
 
-Password-reset links are delivered through Resend behind a provider-neutral
-mailer boundary. The maintained production deployment requires only the Resend
-API key as an email-specific environment secret:
+Password-reset links are delivered through Gmail SMTP behind the existing
+provider-neutral mailer boundary. The maintained production deployment needs
+two email-specific values:
 
 ```dotenv
-RESEND_API_KEY=re_...
+GMAIL_SMTP_USERNAME=owner@gmail.com
+GMAIL_SMTP_APP_PASSWORD=<google-app-password>
 ```
 
-When `ENVIRONMENT=production`, ComicPile supplies its maintained defaults:
+`GMAIL_SMTP_APP_PASSWORD` must be a Google App Password, not the Google
+account's ordinary password. The Google account must have 2-Step Verification
+enabled before an App Password can be created. Store the App Password only in
+the deployment secret store and never copy it into GitHub, logs, source, or
+issue comments.
+
+When `ENVIRONMENT=production`, ComicPile defaults to:
 
 ```text
-sender: Comic Pile <onboarding@resend.dev>
+sender: Comic Pile <GMAIL_SMTP_USERNAME>
 origin: https://comic-pile.vercel.app
 path: /reset-password
 ```
 
-Outside production, the mailer uses harmless example/local defaults. Self-hosters
-and tests may still override `PASSWORD_RESET_SENDER`, `PASSWORD_RESET_ORIGIN`,
-and `PASSWORD_RESET_PATH`, but those values are not required for the maintained
-ComicPile deployment.
+`PASSWORD_RESET_SENDER` remains an optional override for a sender or alias the
+authenticated Gmail account is already permitted to send as.
+`PASSWORD_RESET_ORIGIN` and `PASSWORD_RESET_PATH` remain optional overrides
+for self-hosting and tests.
 
 Notes:
 
-- `RESEND_API_KEY` is already configured in the Vercel production
-  environment. Never copy the secret value into GitHub, logs, source, or
-  issue comments.
-- The `onboarding@resend.dev` sender uses Resend's hosted test domain. If
-  ComicPile later needs to send password-reset messages broadly to arbitrary
-  users, move the maintained sender to a domain controlled and verified by
-  ComicPile rather than adding more required deployment knobs.
-- Delivery runs as a request background task after the acknowledgement is
-  returned, so provider latency (including the 10-second adapter timeout
-  during an outage) never changes how quickly a known address is
-  acknowledged compared with an unknown one.
-- The reset token is appended as an encoded `?token=` query parameter on the
-  reset path at the delivery boundary only.
-- When `RESEND_API_KEY` is missing or unusable, the app uses a deterministic
-  fake mailer and records messages in-memory instead of sending, logging a
-  `password_reset_email_unconfigured` warning.
-  Automated coverage in `tests/test_password_reset_mailer.py` and
-  `tests/test_password_reset_defaults.py` asserts link construction, expiry
-  copy, digest-only storage, environment defaults, enumeration safety under
-  provider failure, deferred delivery, and that the raw token is never logged.
+- Gmail delivery uses `smtp.gmail.com` over implicit TLS on port 465.
+- Delivery remains a request background task after the enumeration-safe
+  acknowledgement is returned, so SMTP latency or an outage cannot reveal
+  whether an email address belongs to an account.
+- Authentication and SMTP failures are translated to a provider-neutral
+  `PasswordResetDeliveryError`; passwords, recipients, and raw reset tokens
+  are never written to application logs.
+- The reset token is appended as an encoded `?token=` query parameter only at
+  the delivery boundary.
+- If either Gmail credential is missing or a placeholder, ComicPile uses the
+  deterministic fake mailer and logs `password_reset_email_unconfigured`
+  rather than attempting a partially configured send.
 
 ### How ComicPile uses Neon
 
