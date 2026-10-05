@@ -354,12 +354,14 @@ async function reconcile({ github, context }) {
     const review = context.payload.review;
     if (!trusted(review.author_association)) return;
     const state = (review.state || '').toUpperCase();
-    let stage = 'factory:review';
-    if (state === 'CHANGES_REQUESTED') stage = 'factory:changes-requested';
-    // APPROVED reviews do not promote to factory:ci - controller truth required
+    // Native APPROVED must never rewrite labels. A wired pull_request_review
+    // path must not reset controller-set factory:ci / factory:ready back to
+    // factory:review. Only CHANGES_REQUESTED (and dismissed above) mutate.
+    if (state === 'APPROVED') return;
+    if (state !== 'CHANGES_REQUESTED') return;
     await reconcileLabels(github, context, pullRequest.number, {
       owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
-      stage,
+      stage: 'factory:changes-requested',
     });
   }
 }

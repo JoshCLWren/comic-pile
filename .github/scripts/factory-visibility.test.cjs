@@ -349,10 +349,10 @@ test('PR refresh preserves one external owner after the linked issue is released
   assert.ok(calls[0].labels.includes('factory:review'));
 });
 
-test('native APPROVED review from trusted user does not promote to factory:ci', async () => {
+test('native APPROVED review from OWNER makes no label API calls', async () => {
   const calls = [];
   const github = githubFor({
-    labels: ['factory', 'factory:review', 'factory:43'],
+    labels: ['factory', 'factory:ci', 'factory:43'],
     setLabels: async input => calls.push(input),
   });
   await reconcile({
@@ -365,7 +365,7 @@ test('native APPROVED review from trusted user does not promote to factory:ci', 
           ref: 'factory/43-1386-opencode-free',
           repo: { full_name: 'JoshCLWren/comic-pile' },
         },
-        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:review' }],
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:ci' }],
         number: 1390,
       },
       review: {
@@ -375,15 +375,13 @@ test('native APPROVED review from trusted user does not promote to factory:ci', 
       },
     }),
   });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:review'));
-  assert.ok(!calls[0].labels.includes('factory:ci'));
+  assert.equal(calls.length, 0);
 });
 
-test('native APPROVED review from MEMBER does not promote to factory:ci', async () => {
+test('native APPROVED review from MEMBER makes no label API calls', async () => {
   const calls = [];
   const github = githubFor({
-    labels: ['factory', 'factory:review', 'factory:43'],
+    labels: ['factory', 'factory:ready', 'factory:43'],
     setLabels: async input => calls.push(input),
   });
   await reconcile({
@@ -396,7 +394,7 @@ test('native APPROVED review from MEMBER does not promote to factory:ci', async 
           ref: 'factory/43-1386-opencode-free',
           repo: { full_name: 'JoshCLWren/comic-pile' },
         },
-        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:review' }],
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:ready' }],
         number: 1390,
       },
       review: {
@@ -406,12 +404,10 @@ test('native APPROVED review from MEMBER does not promote to factory:ci', async 
       },
     }),
   });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:review'));
-  assert.ok(!calls[0].labels.includes('factory:ci'));
+  assert.equal(calls.length, 0);
 });
 
-test('native APPROVED review from COLLABORATOR does not promote to factory:ci', async () => {
+test('native APPROVED review from COLLABORATOR makes no label API calls', async () => {
   const calls = [];
   const github = githubFor({
     labels: ['factory', 'factory:review', 'factory:43'],
@@ -437,15 +433,13 @@ test('native APPROVED review from COLLABORATOR does not promote to factory:ci', 
       },
     }),
   });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:review'));
-  assert.ok(!calls[0].labels.includes('factory:ci'));
+  assert.equal(calls.length, 0);
 });
 
-test('native APPROVED review from github-actions worker does not promote to factory:ci', async () => {
+test('native APPROVED review from github-actions[bot] makes no label API calls', async () => {
   const calls = [];
   const github = githubFor({
-    labels: ['factory', 'factory:review', 'factory:43'],
+    labels: ['factory', 'factory:ci', 'factory:43'],
     setLabels: async input => calls.push(input),
   });
   await reconcile({
@@ -458,7 +452,7 @@ test('native APPROVED review from github-actions worker does not promote to fact
           ref: 'factory/43-1386-opencode-free',
           repo: { full_name: 'JoshCLWren/comic-pile' },
         },
-        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:review' }],
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:ci' }],
         number: 1390,
       },
       review: {
@@ -468,16 +462,13 @@ test('native APPROVED review from github-actions worker does not promote to fact
       },
     }),
   });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:review'));
-  assert.ok(!calls[0].labels.includes('factory:ci'));
+  assert.equal(calls.length, 0);
 });
 
-
-test('native APPROVED review from worker App with OWNER association does not promote to factory:ci', async () => {
+test('native APPROVED review from worker App with OWNER association makes no label API calls', async () => {
   const calls = [];
   const github = githubFor({
-    labels: ['factory', 'factory:review', 'factory:48'],
+    labels: ['factory', 'factory:ready', 'factory:48'],
     setLabels: async input => calls.push(input),
   });
   await reconcile({
@@ -490,7 +481,7 @@ test('native APPROVED review from worker App with OWNER association does not pro
           ref: 'factory/48-3136-opencode-free',
           repo: { full_name: 'JoshCLWren/comic-pile' },
         },
-        labels: [{ name: 'factory' }, { name: 'factory:48' }, { name: 'factory:review' }],
+        labels: [{ name: 'factory' }, { name: 'factory:48' }, { name: 'factory:ready' }],
         number: 3136,
       },
       review: {
@@ -501,9 +492,7 @@ test('native APPROVED review from worker App with OWNER association does not pro
       },
     }),
   });
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:review'));
-  assert.ok(!calls[0].labels.includes('factory:ci'));
+  assert.equal(calls.length, 0);
 });
 
 test('CHANGES_REQUESTED review still sets factory:changes-requested', async () => {
