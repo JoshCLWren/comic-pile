@@ -66,7 +66,7 @@ export function YourContextPillar({
           </div>
           <div className="text-right">
             <p className="text-sm font-black text-stone-200">
-              <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+              <GlossaryLink id="die-size">d{currentDie} → d{predictedDie}</GlossaryLink>
             </p>
           </div>
         </div>

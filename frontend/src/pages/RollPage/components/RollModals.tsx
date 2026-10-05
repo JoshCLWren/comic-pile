@@ -229,7 +229,7 @@ export function RollModals({
           {manualDie
             ? `Manual mode is active at d${manualDie}. Choose another die or return to automatic mode.`
             : `Automatic mode is active at d${currentDie}. Choosing a die switches to manual mode.`}
-          {' '}<GlossaryLink id="autoladder">What is Auto?</GlossaryLink>
+          {' '}<GlossaryLink id="auto">What is Auto?</GlossaryLink>
         </p>
         <div className="grid grid-cols-3 gap-2">
           {DICE_LADDER.map((die) => (
