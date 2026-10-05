@@ -48,6 +48,17 @@ describe('HelpPage', () => {
     }
   })
 
+  it('keeps "ready to read" a series property instead of the die-bounded count (#3127)', () => {
+    renderRoute(<HelpPage />)
+    const readyToRead = screen
+      .getAllByTestId('glossary-definition')
+      .find((el) => (el.textContent ?? '').includes('nothing earlier in their reading order'))
+    expect(readyToRead).toBeDefined()
+    expect(readyToRead?.textContent).toMatch(/N in play/)
+    expect(readyToRead?.textContent).toMatch(/die size/i)
+    expect(readyToRead?.textContent).not.toMatch(/counts these as/i)
+  })
+
   it('gives every definition a stable anchor id for cross-linking', () => {
     renderRoute(<HelpPage />)
     for (const id of [

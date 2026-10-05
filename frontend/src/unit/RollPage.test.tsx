@@ -160,6 +160,25 @@ it('renders the bounded bootstrap pool without Collections state', () => {
   expect(screen.queryByText(/collection/i)).not.toBeInTheDocument()
 })
 
+it('labels the die-bounded pool as in play instead of counting series readiness (#3127)', () => {
+  const fiveSeries = ['Saga', 'X-Men', 'Hellboy', 'Sandman', 'Y: The Last Man'].map(
+    (title, index) => ({ id: index + 1, title, format: 'Comic' }),
+  )
+  mockedUseRollBootstrap.mockReturnValue({
+    data: { ...bootstrap, current_die: 4, roll_pool: fiveSeries },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+
+  renderRollPage()
+
+  expect(screen.getByLabelText(/4 in play, 4 mapped results/i)).toBeInTheDocument()
+  expect(screen.queryByText('Y: The Last Man')).not.toBeInTheDocument()
+  expect(screen.queryByText(/ready to read/i)).not.toBeInTheDocument()
+})
+
 it('opens the retained thread action sheet from a bootstrap pool item', async () => {
   const user = userEvent.setup()
   renderRollPage()

@@ -20,7 +20,7 @@ const DEFINITIONS: Term[] = [
   {
     id: 'ready-to-read',
     term: 'Ready to read',
-    def: 'Series that can be picked for your next roll right now, because nothing earlier in their reading order is waiting. The Roll page counts these as "N in play".',
+    def: 'Series that can be picked for your next roll right now, because nothing earlier in their reading order is waiting. The Roll page labels how many of them the current die can pick from as "N in play", so that number follows your die size.',
   },
   {
     id: 'roll-pool',
