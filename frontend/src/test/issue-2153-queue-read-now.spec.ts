@@ -41,7 +41,7 @@ test.describe('Issue #2153: Queue Read Now handoff', () => {
       (response) =>
         response.url().includes('/set-pending') && response.request().method() === 'POST',
     )
-    await threadItem.getByRole('button', { name: 'Read', exact: true }).click()
+    await threadItem.getByRole('button', { name: 'Read & Rate', exact: true }).click()
     expect((await setPendingResponse).ok()).toBeTruthy()
 
     // The handoff must land on Roll in rating view for the chosen thread.
@@ -92,7 +92,7 @@ test.describe('Issue #2153: Queue Read Now handoff', () => {
     const threadItem = page
       .locator(SELECTORS.threadList.threadItem)
       .filter({ hasText: title })
-    await threadItem.getByRole('button', { name: 'Read', exact: true }).click()
+    await threadItem.getByRole('button', { name: 'Read & Rate', exact: true }).click()
 
     expect(await dialogMessage).toContain('Thread has no issues remaining')
     await expect(page).toHaveURL(/\/queue$/)

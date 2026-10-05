@@ -272,7 +272,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const readButtons = screen.getAllByLabelText('Read')
+    const readButtons = screen.getAllByLabelText('Read & Rate')
     expect(readButtons.length).toBeGreaterThan(0)
     const overflowButtons = screen.getAllByRole('button', { name: /series actions/i })
     expect(overflowButtons.length).toBeGreaterThan(0)
@@ -539,7 +539,7 @@ describe('Keyboard Accessibility', () => {
   const showToast = vi.fn()
   vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  const readButton = screen.getByLabelText('Read')
+  const readButton = screen.getByLabelText('Read & Rate')
   expect(readButton).toBeDisabled()
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()

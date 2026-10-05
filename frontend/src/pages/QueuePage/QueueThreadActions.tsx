@@ -28,23 +28,23 @@ export default function QueueThreadActions({
         <Tooltip content={readDisabledReason ?? 'Blocked by dependency'}>
           <button
             type="button"
-            aria-label="Read"
+            aria-label="Read & Rate"
             disabled
             title={readDisabledReason ?? 'Blocked by dependency'}
             onClick={(event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()}
             className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)]/25 px-4 text-sm font-bold text-white/60 hover:bg-[var(--theme-primary-action)]/25 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Read
+            Read & Rate
           </button>
         </Tooltip>
       ) : (
         <button
           type="button"
-          aria-label="Read"
+          aria-label="Read & Rate"
           onClick={stopCardClick(onRead)}
           className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-white hover:bg-[var(--theme-primary-action-hover)] transition-colors"
         >
-          Read
+          Read & Rate
         </button>
       )}
     </div>
