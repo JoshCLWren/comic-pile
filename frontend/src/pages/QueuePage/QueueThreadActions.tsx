@@ -61,7 +61,7 @@ export default function QueueThreadActions({
             type="button"
             aria-label={`Map ${title} to ComicVine`}
             onClick={stopCardClick(onMapSeries)}
-            className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)] transition-colors hover:bg-white/5"
+            className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)] transition-colors hover:bg-[var(--theme-primary-action-hover)]"
           >
             Map series
           </button>

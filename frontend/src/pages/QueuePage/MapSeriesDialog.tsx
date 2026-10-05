@@ -265,12 +265,12 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
             <ul className="space-y-2">
               {results.map((series) => (
                 <li key={series.comicvine_volume_id}>
-                  <button
-                    type="button"
-                    onClick={() => void handleSelectSeries(series)}
-                    disabled={busy || anchorPending}
-                    className="w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
-                  >
+                 <button
+                   type="button"
+                   onClick={() => void handleSelectSeries(series)}
+                   disabled={busy || anchorPending}
+                   className="w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50"
+                 >
                     <span className="font-bold">{series.name}</span>
                     <span className="text-[var(--theme-text-muted)]">
                       {' · '}
