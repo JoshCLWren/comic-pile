@@ -1,34 +1,27 @@
-import { test, expect } from '@playwright/test'
-import {
-  login,
-  setupSession,
-} from './fixtures'
+import { expect } from '@playwright/test'
+import { test } from './fixtures'
 
 test.describe('Issue #3147: Focus management after Roll and Queue actions', () => {
-  test('focus moves to result after ROLL AGAIN', async ({ page }) => {
-    await login(page)
-    await setupSession(page)
-    await page.goto('/')
+  test('focus moves to result after ROLL AGAIN', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/')
 
-    const rollBtn = page.getByTestId('roll-primary-action')
+    const rollBtn = authenticatedPage.getByTestId('roll-primary-action')
     await rollBtn.click()
 
     // Verify focus is on the rating view top
-    await expect(page.locator('[data-testid="rating-view-top"]')).toBeFocused()
+    await expect(authenticatedPage.locator('[data-testid="rating-view-top"]')).toBeFocused()
   })
 
-  test('focus returns to trigger after Queue menu action', async ({ page }) => {
-    await login(page)
-    await setupSession(page)
-    await page.goto('/queue')
+  test('focus returns to trigger after Queue menu action', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/queue')
 
-    const menuBtn = page.getByLabel('Series actions').first()
+    const menuBtn = authenticatedPage.getByLabel('Series actions').first()
     await menuBtn.focus()
-    await page.keyboard.press('Enter')
+    await authenticatedPage.keyboard.press('Enter')
 
-    const menuItem = page.getByRole('menuitem').first()
+    const menuItem = authenticatedPage.getByRole('menuitem').first()
     await menuItem.focus()
-    await page.keyboard.press('Enter')
+    await authenticatedPage.keyboard.press('Enter')
 
     // Verify focus returns to the menu button
     await expect(menuBtn).toBeFocused()
