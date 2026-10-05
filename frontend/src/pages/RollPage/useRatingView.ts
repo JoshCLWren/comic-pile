@@ -6,6 +6,7 @@ import type { ReaderContextResponse } from '../../types'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
+  bootstrap?: import('../../types/rollBootstrap').RollBootstrapResponse | null
   readerContextRequested: boolean
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
@@ -40,6 +41,7 @@ export interface RatingViewData {
   snoozeIsPending: boolean
   dismissIsPending: boolean
   skipIsPending: boolean
+  manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
@@ -76,6 +78,7 @@ export interface RatingViewData {
  */
 export function useRatingView({
   state,
+  bootstrap,
   readerContextRequested,
   readingContextRequested,
   readingBoundariesRequested,
@@ -124,6 +127,7 @@ export function useRatingView({
     snoozeIsPending: snoozeMutation.isPending,
     dismissIsPending: dismissPendingMutation.isPending,
     skipIsPending: skipMutation.isPending,
+    manualDie: bootstrap?.manual_die ?? null,
     onUpdateRating: rating.updateRatingUI,
     onSubmitRating: rating.handleSubmitRating,
     onSnooze: snooze.handleSnooze,

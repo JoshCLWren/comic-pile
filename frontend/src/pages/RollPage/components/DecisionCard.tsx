@@ -22,6 +22,7 @@ interface DecisionCardProps {
   snoozeIsPending: boolean
   dismissIsPending: boolean
   skipIsPending?: boolean
+  manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
@@ -29,22 +30,22 @@ interface DecisionCardProps {
   onCancel: () => void
 }
 
-export function DecisionCard({
-  activeRatingThread,
-  currentDie,
-  rating,
-  predictedDie,
-  errorMessage,
-  rateIsPending,
-  snoozeIsPending,
-  dismissIsPending,
-  skipIsPending = false,
-  onUpdateRating,
-  onSubmitRating,
-  onSnooze,
-  onSkip,
-  onCancel,
-}: DecisionCardProps) {
+/**
+ * DecisionCard component displays the rating interface after a user rolls a comic.
+ * 
+ * Key features:
+ * - Rating slider with visual feedback based on rating value
+ * - Die ladder display that changes based on manual/auto mode
+ * - Action buttons for saving, snoozing, skipping, and canceling
+ * - Support for manual die mode where the die stays pinned
+ * 
+ * Manual Die Mode:
+ * - When manualDie is not null, the die is in manual mode and stays pinned
+ * - Shows "Manual die pinned at d{currentDie}" instead of ladder move
+ * - In auto mode (manualDie is null), shows normal ladder move "d{currentDie} → d{predictedDie}"
+ * 
+ * @param props - DecisionCard component props
+ */
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const isLastIssue = issuesRemaining === 1
   const threadTitle = activeRatingThread?.title ?? null
@@ -130,9 +131,15 @@ export function DecisionCard({
           <p id="rating-value" className={`text-5xl font-black ${getRatingColorClass(rating)}`}>
             {rating.toFixed(1)}
           </p>
-          <p className="text-[11px] font-bold text-stone-400">
-            <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
-          </p>
+          {manualDie !== null ? (
+            <p className="text-[11px] font-bold text-stone-400">
+              Manual die pinned at d{currentDie}
+            </p>
+          ) : (
+            <p className="text-[11px] font-bold text-stone-400">
+              <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+            </p>
+          )}
         </div>
       </div>
 

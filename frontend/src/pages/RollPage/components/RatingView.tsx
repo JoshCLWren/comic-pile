@@ -56,6 +56,7 @@ export function RatingView({ data }: RatingViewProps) {
             snoozeIsPending={snoozeIsPending}
             dismissIsPending={dismissIsPending}
             skipIsPending={skipIsPending}
+            manualDie={data.manualDie}
             onUpdateRating={onUpdateRating}
             onSubmitRating={onSubmitRating}
             onSnooze={onSnooze}
