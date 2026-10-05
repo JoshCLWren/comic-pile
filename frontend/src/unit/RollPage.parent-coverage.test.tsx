@@ -278,7 +278,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'skip migration' }))
   })
 
-  it('leaves the rating view from the header chrome by dismissing the pending read', async () => {
+  it('leaves the rating view from the header chrome by dismissing the pending read and navigating to the queue', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
@@ -290,11 +290,34 @@ describe('RollPage parent handlers', () => {
     // Leaving the rating view has to retire the server-side pending read, not
     // just local state: `useRollPendingSession` rehydrates the rating view from
     // `bootstrap.pending_thread_id`, so a local-only exit is undone on the very
-    // next render and the header action reads as a dead button.
+    // next render and the header action reads as a dead button. The header
+    // action is the queue exit, so it must also land the reader on /queue
+    // (issue #3107) instead of stranding them on the Roll page.
     await waitFor(() => expect(spies.dismissPending).toHaveBeenCalled())
     expect(spies.refetch).toHaveBeenCalled()
+    await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
     await waitFor(() => expect(screen.queryByTestId('roll-back-to-queue')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: /^Pick manually$/ })).toBeInTheDocument()
+  })
+
+  it('navigates to the queue from the header chrome even when the pending dismiss fails', async () => {
+    const user = userEvent.setup()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+
+    spies.dismissPending.mockRejectedValueOnce(new Error('dismiss failed'))
+    await user.click(screen.getByTestId('roll-back-to-queue'))
+
+    // The button's promise is navigation (issue #3107): a failed pending
+    // dismiss must not strand the reader on the Roll page. The pending read
+    // stays server-side and rehydrates on the next Roll visit, which is the
+    // existing recovery path.
+    await waitFor(() => expect(spies.dismissPending).toHaveBeenCalled())
+    await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
+    errorSpy.mockRestore()
   })
 
   it('keeps the rating workspace out of a generic full-workspace panel', async () => {
