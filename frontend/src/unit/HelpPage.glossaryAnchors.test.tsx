@@ -73,6 +73,7 @@ function productionSourceFiles(dir: string): string[] {
 
 function requireAnchor(id: string): HTMLElement {
   const target = document.getElementById(id)
+  // SAFETY: expect asserts non-null above, so the cast is safe.
   expect(target, `expected a glossary anchor for #${id}`).not.toBeNull()
   return target as HTMLElement
 }
@@ -91,6 +92,7 @@ function cardForElement(anchor: HTMLElement): HTMLElement {
   while (node && !node.querySelector('[data-testid="glossary-definition"]')) {
     node = node.parentElement
   }
+  // SAFETY: querySelector ensures the parent card exists before casting.
   expect(node, `expected #${anchor.id} to sit on a definition card`).not.toBeNull()
   return node as HTMLElement
 }
@@ -105,6 +107,7 @@ describe('glossary anchors (issue #3146)', () => {
     const cards = screen.getAllByTestId('glossary-term')
     expect(cards).toHaveLength(GLOSSARY_TERMS.length)
     for (const termEl of cards) {
+      // SAFETY: closest on a rendered term returns its card container.
       const card = termEl.closest('[id]') as HTMLElement
       const slug = slugifyGlossaryTerm(termEl.textContent ?? '')
       expect(slug).not.toBe('')
@@ -238,6 +241,7 @@ describe('glossary deep-link scrolling (issue #3146)', () => {
   async function scrolledTermFor(path: string): Promise<string> {
     renderGlossary(path)
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+    // SAFETY: scrollIntoView mock was called with the card element.
     const target = scrollIntoView.mock.contexts[0] as HTMLElement
     return cardForElement(target).querySelector('[data-testid="glossary-term"]')?.textContent ?? ''
   }
