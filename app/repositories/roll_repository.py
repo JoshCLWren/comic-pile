@@ -230,6 +230,8 @@ async def count_roll_pool_overflow(
         .where(Thread.queue_position >= 1)
         .where(Thread.is_blocked.is_(False))
     )
+    # Apply the same filtering as the actual roll pool:
+    # get_roll_pool_rows always excludes snoozed and skipped threads
     if snoozed_ids:
         query = query.where(Thread.id.not_in(snoozed_ids))
     if skipped_ids:
