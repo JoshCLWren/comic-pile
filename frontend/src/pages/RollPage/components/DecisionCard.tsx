@@ -46,6 +46,23 @@ interface DecisionCardProps {
  * 
  * @param props - DecisionCard component props
  */
+export function DecisionCard({
+  activeRatingThread,
+  currentDie,
+  rating,
+  predictedDie,
+  errorMessage,
+  rateIsPending,
+  snoozeIsPending,
+  dismissIsPending,
+  skipIsPending = false,
+  manualDie,
+  onUpdateRating,
+  onSubmitRating,
+  onSnooze,
+  onSkip,
+  onCancel,
+}: DecisionCardProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const isLastIssue = issuesRemaining === 1
   const threadTitle = activeRatingThread?.title ?? null

@@ -6,12 +6,12 @@ import { DecisionCard } from './DecisionCard'
 
 // Mock heavy dependencies
 vi.mock('../../../components/Modal', () => ({
-  default: ({ children, isOpen, title, onClose }: any) => 
+  default: ({ children, isOpen, title, _onClose }: any) => 
     isOpen ? <div data-testid="modal">{title}{children}</div> : null,
 }))
 
 vi.mock('../../../components/GlossaryLink', () => ({
-  default: ({ id, children }: { id: string; children: React.ReactNode }) => 
+  default: ({ children }: { id: string; children: React.ReactNode }) => 
     <span data-testid="glossary-link">{children}</span>,
 }))
 
