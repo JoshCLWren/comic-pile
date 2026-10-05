@@ -269,6 +269,37 @@ async def first_unread(db: AsyncSession, thread_id: int) -> Issue | None:
     return result.scalar_one_or_none()
 
 
+async def exists_read_at_or_after(
+    db: AsyncSession, thread_id: int, position: int
+) -> bool:
+    """Check whether a read issue sits at or after a position.
+
+    The rate flow derives ``issues_remaining`` from the next unread
+    issue's position only while every issue at or after that position
+    is unread. A manual reorder can seat a read issue above unread
+    ones (issue #3104), so callers use this probe to decide whether
+    the positional shortcut stays sound.
+
+    Args:
+        db: Database session.
+        thread_id: Thread whose issues are checked.
+        position: Inclusive lower position bound.
+
+    Returns:
+        True when at least one read issue has ``position >= position``.
+    """
+    result = await db.execute(
+        select(Issue.id)
+        .where(
+            Issue.thread_id == thread_id,
+            Issue.status == "read",
+            Issue.position >= position,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def list_page(
     db: AsyncSession,
     thread_id: int,
