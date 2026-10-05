@@ -19,7 +19,7 @@ dependencies = [
     # included route reports its unprefixed sub-path), so the ceiling stays
     # until the route-introspection layer is migrated off the internals that
     # 0.137.0 documented as no longer public API.
-    "fastapi>=0.100.0,<0.137.0",
+    "fastapi>=0.100.0,<0.143.0",
     # Async application imports also run while Alembic loads model metadata.
     # SQLAlchemy 2.1 requires the asyncio extra to install greenlet.
     "sqlalchemy[asyncio]>=2.0.53",
