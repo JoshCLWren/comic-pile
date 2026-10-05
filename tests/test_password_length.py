@@ -1,155 +1,169 @@
-"""Test password length enforcement for auth endpoints."""
+"""Server-side password policy tests for issue #3103.
+
+The Register, Login, and Reset Password pages all advertise a six-character
+minimum, but before #3103 only the browser enforced it: the register and
+reset-password schemas accepted a one-character password from any direct API
+client. These tests pin the backend to the same advertised policy through the
+public HTTP surface so the rule cannot silently drift back to UI-only.
+"""
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from httpx import AsyncClient
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.main import app
-from tests.conftest import TRUNCATE_TEST_DATA_SQL
+from app.auth import hash_password, verify_password
+from app.constants import MIN_PASSWORD_LENGTH
+from app.repositories.user_repository import create_user, get_user_by_username
+from app.schemas.auth import ResetPasswordRequest, UserLoginRequest, UserRegisterRequest
+from app.services.password_reset_service import request_forgot_password
 
+# bcrypt refuses to hash anything longer than 72 bytes, so 72 characters is the
+# real upper bound a caller can send today. Keep the boundary test honest about
+# that instead of asserting success for a password the hasher will reject.
+MAX_BCRYPT_PASSWORD_BYTES = 72
 
-MIN_PASSWORD_LENGTH = 6
-
-
-@pytest.mark.asyncio
-async def test_register_password_too_short(db_engine: AsyncEngine):
-    """Registration should fail if password is < 6 characters."""
-    session_maker = async_sessionmaker(bind=db_engine, expire_on_commit=False, class_=AsyncSession)
-
-    async with session_maker() as setup_session:
-        await setup_session.execute(TRUNCATE_TEST_DATA_SQL)
-        await setup_session.commit()
-
-    async def override():
-        async with session_maker() as request_session:
-            yield request_session
-
-    app.dependency_overrides[get_db] = override
-    transport = ASGITransport(app=app)
-
-    try:
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            user_data = {
-                "username": "shortpwuser",
-                "email": "short@example.com",
-                "password": "12345",  # 5 chars
-            }
-            response = await client.post("/api/v1/auth/register", json=user_data)
-            assert response.status_code == 422, f"Expected 422 for short password, got {response.status_code}: {response.text}"
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+OLD_PASSWORD = "old-password-long-enough"
+RESET_EMAIL = "pwpolicy@example.com"
 
 
-@pytest.mark.asyncio
-async def test_register_password_exactly_six_chars_succeeds(db_engine: AsyncEngine):
-    """Registration should succeed with exactly 6-char password."""
-    session_maker = async_sessionmaker(bind=db_engine, expire_on_commit=False, class_=AsyncSession)
+def _register_payload(password: str, username: str = "pwpolicy") -> dict[str, str]:
+    """Build a register request body with the supplied password."""
+    return {"username": username, "email": RESET_EMAIL, "password": password}
 
-    async with session_maker() as setup_session:
-        await setup_session.execute(TRUNCATE_TEST_DATA_SQL)
-        await setup_session.commit()
 
-    async def override():
-        async with session_maker() as request_session:
-            yield request_session
+async def _seed_user_with_reset_token(
+    db: AsyncSession, username: str = "pwpolicy-reset"
+) -> str:
+    """Create a user and mint a live password-reset token for them.
 
-    app.dependency_overrides[get_db] = override
-    transport = ASGITransport(app=app)
-
-    try:
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            user_data = {
-                "username": "sixcharuser",
-                "email": "sixchar@example.com",
-                "password": "123456",  # exactly 6 chars
-            }
-            response = await client.post("/api/v1/auth/register", json=user_data)
-            assert response.status_code == 200, f"Expected 200 for 6-char password, got {response.status_code}: {response.text}"
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    Returns:
+        The raw reset token that ``POST /api/auth/reset-password`` accepts.
+    """
+    existing = await get_user_by_username(db, username)
+    if existing is None:
+        await create_user(
+            db,
+            username=username,
+            email=RESET_EMAIL,
+            password_hash=hash_password(OLD_PASSWORD),
+        )
+        await db.commit()
+    handoff = await request_forgot_password(db, RESET_EMAIL)
+    assert handoff is not None, "reset token handoff should be produced for a known account"
+    return handoff.reset_token
 
 
 @pytest.mark.asyncio
-async def test_register_password_too_long(db_engine: AsyncEngine):
-    """Registration should succeed with password >= 6 characters."""
-    session_maker = async_sessionmaker(bind=db_engine, expire_on_commit=False, class_=AsyncSession)
-
-    async with session_maker() as setup_session:
-        await setup_session.execute(TRUNCATE_TEST_DATA_SQL)
-        await setup_session.commit()
-
-    async def override():
-        async with session_maker() as request_session:
-            yield request_session
-
-    app.dependency_overrides[get_db] = override
-    transport = ASGITransport(app=app)
-
-    try:
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            user_data = {
-                "username": "longpwuser",
-                "email": "longpw@example.com",
-                "password": "a" * 100,  # 100 chars
-            }
-            response = await client.post("/api/v1/auth/register", json=user_data)
-            assert response.status_code == 200, f"Expected 200 for long password, got {response.status_code}: {response.text}"
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+async def test_policy_constant_matches_advertised_ui_minimum() -> None:
+    """The shared constant stays at the six characters the UI advertises."""
+    assert MIN_PASSWORD_LENGTH == 6
 
 
 @pytest.mark.asyncio
-async def test_reset_password_too_short(db_engine: AsyncEngine):
-    """Reset password should fail if password is < 6 characters."""
-    session_maker = async_sessionmaker(bind=db_engine, expire_on_commit=False, class_=AsyncSession)
+async def test_register_schema_enforces_minimum() -> None:
+    """``UserRegisterRequest`` rejects any password shorter than the minimum."""
+    with pytest.raises(ValidationError):
+        UserRegisterRequest(
+            username="schema",
+            email="schema@example.com",
+            password="x" * (MIN_PASSWORD_LENGTH - 1),
+        )
 
-    async with session_maker() as setup_session:
-        await setup_session.execute(TRUNCATE_TEST_DATA_SQL)
-        await setup_session.commit()
-
-    async def override():
-        async with session_maker() as request_session:
-            yield request_session
-
-    app.dependency_overrides[get_db] = override
-    transport = ASGITransport(app=app)
-
-    try:
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            reset_data = {
-                "token": "valid_token",
-                "new_password": "12345",  # 5 chars
-            }
-            response = await client.post("/api/v1/auth/reset-password", json=reset_data)
-            assert response.status_code == 422, f"Expected 422 for short password, got {response.status_code}: {response.text}"
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    request = UserRegisterRequest(
+        username="schema",
+        email="schema@example.com",
+        password="x" * MIN_PASSWORD_LENGTH,
+    )
+    assert request.password == "x" * MIN_PASSWORD_LENGTH
 
 
 @pytest.mark.asyncio
-async def test_reset_password_exactly_six_chars_succeeds(db_engine: AsyncEngine):
-    """Reset password should succeed with exactly 6-char password."""
-    session_maker = async_sessionmaker(bind=db_engine, expire_on_commit=False, class_=AsyncSession)
+async def test_reset_schema_enforces_minimum() -> None:
+    """``ResetPasswordRequest`` rejects any new password shorter than the minimum."""
+    with pytest.raises(ValidationError):
+        ResetPasswordRequest(token="tok", new_password="x" * (MIN_PASSWORD_LENGTH - 1))
 
-    async with session_maker() as setup_session:
-        await setup_session.execute(TRUNCATE_TEST_DATA_SQL)
-        await setup_session.commit()
+    request = ResetPasswordRequest(token="tok", new_password="x" * MIN_PASSWORD_LENGTH)
+    assert request.new_password == "x" * MIN_PASSWORD_LENGTH
 
-    async def override():
-        async with session_maker() as request_session:
-            yield request_session
 
-    app.dependency_overrides[get_db] = override
-    transport = ASGITransport(app=app)
+@pytest.mark.asyncio
+async def test_login_schema_has_no_minimum() -> None:
+    """Sign-in is not minimum-gated so pre-existing short passwords still work."""
+    login = UserLoginRequest(username="legacy", password="x")
+    assert login.password == "x"
 
-    try:
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            reset_data = {
-                "token": "valid_token",
-                "new_password": "123456",  # exactly 6 chars
-            }
-            response = await client.post("/api/v1/auth/reset-password", json=reset_data)
-            assert response.status_code == 422, f"Expected 422 for invalid token, got {response.status_code}: {response.text}"
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+
+@pytest.mark.asyncio
+async def test_register_rejects_password_below_minimum(client: AsyncClient) -> None:
+    """A below-minimum registration is refused by the API, not just the browser."""
+    response = await client.post(
+        "/api/v1/auth/register", json=_register_payload("1" * (MIN_PASSWORD_LENGTH - 1))
+    )
+
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+async def test_register_accepts_password_at_minimum(
+    client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A password exactly at the minimum registers and is stored hashed."""
+    password = "123456"
+
+    response = await client.post("/api/v1/auth/register", json=_register_payload(password))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["token_type"] == "bearer"
+    user = await get_user_by_username(async_db, "pwpolicy")
+    assert user is not None
+    assert user.password_hash != password
+    assert verify_password(password, user.password_hash)
+
+
+@pytest.mark.asyncio
+async def test_register_accepts_maximum_supported_password(client: AsyncClient) -> None:
+    """Passwords up to bcrypt's 72-byte ceiling still register successfully."""
+    password = "a" * MAX_BCRYPT_PASSWORD_BYTES
+
+    response = await client.post("/api/v1/auth/register", json=_register_payload(password))
+
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.asyncio
+async def test_reset_rejects_password_below_minimum(
+    client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A below-minimum reset is refused and leaves the old password in place."""
+    token = await _seed_user_with_reset_token(async_db)
+
+    response = await client.post(
+        "/api/auth/reset-password",
+        json={"token": token, "new_password": "1" * (MIN_PASSWORD_LENGTH - 1)},
+    )
+
+    assert response.status_code == 422, response.text
+    user = await get_user_by_username(async_db, "pwpolicy-reset")
+    assert user is not None
+    assert verify_password(OLD_PASSWORD, user.password_hash)
+
+
+@pytest.mark.asyncio
+async def test_reset_accepts_password_at_minimum(
+    client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A reset with a password exactly at the minimum succeeds and rehashes it."""
+    token = await _seed_user_with_reset_token(async_db)
+    password = "123456"
+
+    response = await client.post(
+        "/api/auth/reset-password", json={"token": token, "new_password": password}
+    )
+
+    assert response.status_code == 200, response.text
+    assert "success" in response.json()["message"].lower()
+    user = await get_user_by_username(async_db, "pwpolicy-reset")
+    assert user is not None
+    assert verify_password(password, user.password_hash)
