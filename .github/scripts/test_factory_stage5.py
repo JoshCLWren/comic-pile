@@ -16,6 +16,7 @@ if str(SCRIPTS) not in sys.path:
 from factory_work_policy import (  # noqa: E402
     FACTORY_NO_DIFF_RETRY_LIMIT,
     FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
+    TRUSTED_FACTORY_APP_SLUGS,
     build_candidates,
     comment_is_trusted,
     lease_is_stale,
@@ -121,6 +122,16 @@ def test_github_actions_app_comment_is_trusted_without_trusting_all_contributors
     }
     assert comment_is_trusted(actions_comment) is True
     assert comment_is_trusted(arbitrary_contributor) is False
+
+
+def test_worker_github_app_is_not_a_trusted_marker_author() -> None:
+    worker_app = {
+        "body": "marker",
+        "author_association": "OWNER",
+        "performed_via_github_app": {"slug": "mark-cordova"},
+    }
+    assert TRUSTED_FACTORY_APP_SLUGS == {"github-actions"}
+    assert comment_is_trusted(worker_app) is False
 
 
 def test_github_actions_no_diff_marker_counts_toward_budget() -> None:

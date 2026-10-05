@@ -32,6 +32,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'Faker==40.40.0'
+      - run: python3 .github/scripts/test_factory_worker_github_app.py
       - run: node --test .github/scripts/factory-pr-auth.test.cjs .github/scripts/factory-visibility*.test.cjs
 
   build:

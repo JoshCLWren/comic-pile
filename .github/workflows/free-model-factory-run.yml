@@ -26,6 +26,14 @@ on:
         required: false
       PR_REBASE_TOKEN:
         required: true
+      # Worker 48 only. Missing secrets keep that worker on PR_REBASE_TOKEN.
+      # These values do not create the GitHub App.
+      FACTORY_WORKER_48_APP_ID:
+        required: false
+      FACTORY_WORKER_48_INSTALLATION_ID:
+        required: false
+      FACTORY_WORKER_48_APP_PRIVATE_KEY:
+        required: false
 
 permissions:
   contents: write
@@ -55,6 +63,10 @@ jobs:
       # PAT so pull_request workflows and initial review use a trusted actor.
       GH_TOKEN: ${{ github.token }}
       PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+      # Worker 48 installation token inputs. Empty unless Josh has created the App.
+      FACTORY_WORKER_48_APP_ID: ${{ secrets.FACTORY_WORKER_48_APP_ID }}
+      FACTORY_WORKER_48_INSTALLATION_ID: ${{ secrets.FACTORY_WORKER_48_INSTALLATION_ID }}
+      FACTORY_WORKER_48_APP_PRIVATE_KEY: ${{ secrets.FACTORY_WORKER_48_APP_PRIVATE_KEY }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
@@ -88,6 +100,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          # Shared producer for every worker. Worker 48 replaces this remote
+          # in free-model-factory-worker-primitives.sh only when its
+          # installation token is configured. Other workers never do.
           git remote set-url origin "https://x-access-token:${PR_REBASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
       - name: Resolve executor slot policy
