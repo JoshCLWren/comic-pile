@@ -437,8 +437,7 @@ describe('QueueThreadCard', () => {
       next_unread_issue_number: '5',
     })
     renderCard(thread)
-    expect(screen.getByText(/Up next: #5/)).toBeInTheDocument()
-    expect(screen.getByText(/3 remaining/)).toBeInTheDocument()
+    expect(screen.getByText('Up next: #5 · 3 issues remaining')).toBeInTheDocument()
   })
 
   it('renders notes when present', () => {
