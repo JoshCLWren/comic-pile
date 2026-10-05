@@ -1,22 +1,26 @@
-"""Server-side password policy tests for issue #3103.
+"""Server-side password policy tests for issues #3103 and #3112.
 
 The Register, Login, and Reset Password pages all advertise a six-character
 minimum, but before #3103 only the browser enforced it: the register and
 reset-password schemas accepted a one-character password from any direct API
-client. These tests pin the backend to the same advertised policy through the
-public HTTP surface so the rule cannot silently drift back to UI-only.
+client. #3112 closed the remaining gap in the reset-completion service, which
+hashed and stored whatever password it was handed even when the request schema
+was bypassed. These tests pin the backend to the same advertised policy through
+both the public HTTP surface and the service boundary so the rule cannot
+silently drift back to UI-only or to a single-path check.
 """
 
 import pytest
+from fastapi import HTTPException, status
 from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import hash_password, verify_password
+from app.auth import hash_password, validate_password_length, verify_password
 from app.constants import MIN_PASSWORD_LENGTH
 from app.repositories.user_repository import create_user, get_user_by_username
 from app.schemas.auth import ResetPasswordRequest, UserLoginRequest, UserRegisterRequest
-from app.services.password_reset_service import request_forgot_password
+from app.services.password_reset_service import complete_reset, request_forgot_password
 
 # bcrypt refuses to hash anything longer than 72 bytes, so 72 characters is the
 # real upper bound a caller can send today. Keep the boundary test honest about
@@ -96,6 +100,17 @@ async def test_login_schema_has_no_minimum() -> None:
 
 
 @pytest.mark.asyncio
+async def test_shared_validator_enforces_minimum() -> None:
+    """The shared policy helper refuses below-minimum passwords with a 422."""
+    with pytest.raises(HTTPException) as excinfo:
+        validate_password_length("x" * (MIN_PASSWORD_LENGTH - 1))
+
+    assert excinfo.value.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert str(MIN_PASSWORD_LENGTH) in str(excinfo.value.detail)
+    validate_password_length("x" * MIN_PASSWORD_LENGTH)
+
+
+@pytest.mark.asyncio
 async def test_register_rejects_password_below_minimum(client: AsyncClient) -> None:
     """A below-minimum registration is refused by the API, not just the browser."""
     response = await client.post(
@@ -167,3 +182,70 @@ async def test_reset_accepts_password_at_minimum(
     user = await get_user_by_username(async_db, "pwpolicy-reset")
     assert user is not None
     assert verify_password(password, user.password_hash)
+
+
+@pytest.mark.asyncio
+async def test_reset_service_rejects_password_below_minimum(async_db: AsyncSession) -> None:
+    """``complete_reset`` refuses a below-minimum password even without the schema.
+
+    The request schema is not the only caller: an internal caller can invoke the
+    service directly, so the minimum must hold at the service boundary too.
+    """
+    token = await _seed_user_with_reset_token(async_db)
+    user = await get_user_by_username(async_db, "pwpolicy-reset")
+    assert user is not None
+    original_hash = user.password_hash
+
+    with pytest.raises(HTTPException) as excinfo:
+        await complete_reset(async_db, token, "x" * (MIN_PASSWORD_LENGTH - 1))
+
+    assert excinfo.value.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    await async_db.refresh(user)
+    assert user.password_hash == original_hash
+    assert verify_password(OLD_PASSWORD, user.password_hash)
+    assert user.password_changed_at is None
+
+
+@pytest.mark.asyncio
+async def test_reset_service_rejection_leaves_token_usable(async_db: AsyncSession) -> None:
+    """A refused below-minimum reset never consumes the single-use token."""
+    token = await _seed_user_with_reset_token(async_db)
+
+    with pytest.raises(HTTPException):
+        await complete_reset(async_db, token, "x" * (MIN_PASSWORD_LENGTH - 1))
+
+    compliant = "correct-horse-battery"
+    assert await complete_reset(async_db, token, compliant) is True
+    user = await get_user_by_username(async_db, "pwpolicy-reset")
+    assert user is not None
+    assert verify_password(compliant, user.password_hash)
+
+
+@pytest.mark.asyncio
+async def test_reset_service_accepts_password_at_minimum(async_db: AsyncSession) -> None:
+    """The service accepts a password exactly at the advertised minimum."""
+    token = await _seed_user_with_reset_token(async_db)
+    password = "x" * MIN_PASSWORD_LENGTH
+
+    assert await complete_reset(async_db, token, password) is True
+
+    user = await get_user_by_username(async_db, "pwpolicy-reset")
+    assert user is not None
+    assert verify_password(password, user.password_hash)
+
+
+@pytest.mark.asyncio
+async def test_reset_service_rejects_short_password_regardless_of_token(
+    async_db: AsyncSession,
+) -> None:
+    """A below-minimum password is refused as invalid input, not as a bad token.
+
+    The policy check reads only the caller's own input, so the same 422 comes back
+    whether or not the reset token exists and it can never act as a signal about
+    a live reset link.
+    """
+    with pytest.raises(HTTPException) as excinfo:
+        await complete_reset(async_db, "no-such-token", "x")
+
+    assert excinfo.value.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "Invalid" not in str(excinfo.value.detail)

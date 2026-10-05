@@ -16,6 +16,7 @@ from app.auth import (
     hash_password,
     refresh_cookie_max_age_seconds,
     revoke_token,
+    validate_password_length,
     verify_password,
     verify_token,
     JWTError,
@@ -114,8 +115,9 @@ async def register_user(
         TokenResponse with access and refresh tokens.
 
     Raises:
-        HTTPException: If username or email already exists, or the username is
-            email-shaped (login is username-only).
+        HTTPException: 422 if the password is shorter than the advertised
+            minimum, 400 if username or email already exists, or 400 if the
+            username is email-shaped (login is username-only).
     """
     if "@" in user_data.username:
         raise HTTPException(
@@ -136,6 +138,9 @@ async def register_user(
                 detail="Email already registered",
             )
 
+    # The schema already gates the HTTP boundary; the shared policy check keeps
+    # the register path and the reset-password service consistent (#3103, #3112).
+    validate_password_length(user_data.password)
     hashed_password = hash_password(user_data.password)
     await create_user(
         db,

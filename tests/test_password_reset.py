@@ -65,7 +65,7 @@ async def test_reset_atomic_and_revokes_auth_sessions(auth_client: AsyncClient, 
     from app.services.password_reset_service import request_forgot_password, complete_reset
     handoff = await request_forgot_password(async_db, "ra@e.com")
     assert handoff is not None
-    await complete_reset(async_db, handoff.reset_token, "newpw")
+    await complete_reset(async_db, handoff.reset_token, "newpw-longer")
     # After reset, password_changed_at set, user updated
     await async_db.refresh(user)
     assert user.password_changed_at is not None
