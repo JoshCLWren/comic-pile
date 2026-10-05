@@ -22,6 +22,7 @@ interface DecisionCardProps {
   snoozeIsPending: boolean
   dismissIsPending: boolean
   skipIsPending?: boolean
+  manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
@@ -29,6 +30,21 @@ interface DecisionCardProps {
   onCancel: () => void
 }
 
+/**
+ * DecisionCard component displays the rating interface after a user rolls a comic.
+ *
+ * Key features:
+ * - Rating slider with visual feedback based on rating value
+ * - Die readout that reports the truthful die outcome for the active mode
+ * - Action buttons for saving, snoozing, skipping, and canceling
+ *
+ * Manual die mode:
+ * - When `manualDie` is not null the die is pinned, so the ladder move never
+ *   happens and the card says so instead of promising one (#3144). The wording
+ *   matches the die-mode copy the die selector already uses.
+ * - In automatic mode (`manualDie` is null) the card keeps the ladder move
+ *   `d{currentDie} -> d{predictedDie}` and its die-ladder glossary link.
+ */
 export function DecisionCard({
   activeRatingThread,
   currentDie,
@@ -39,6 +55,7 @@ export function DecisionCard({
   snoozeIsPending,
   dismissIsPending,
   skipIsPending = false,
+  manualDie,
   onUpdateRating,
   onSubmitRating,
   onSnooze,
@@ -130,9 +147,15 @@ export function DecisionCard({
           <p id="rating-value" className={`text-5xl font-black ${getRatingColorClass(rating)}`}>
             {rating.toFixed(1)}
           </p>
-          <p className="text-[11px] font-bold text-stone-400">
-            <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
-          </p>
+          {manualDie !== null ? (
+            <p className="text-[11px] font-bold text-stone-400">
+              Manual mode is active at d{currentDie}
+            </p>
+          ) : (
+            <p className="text-[11px] font-bold text-stone-400">
+              <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+            </p>
+          )}
         </div>
       </div>
 

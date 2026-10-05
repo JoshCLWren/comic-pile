@@ -2,6 +2,8 @@ import { useMutation } from '@tanstack/react-query'
 import { rollApi } from '../services/api-roll'
 import type { RollApi } from '../services/apiTypes'
 import type { OverrideRollPayload } from '../types'
+import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 
 function getRollApi(api?: RollApi): RollApi {
   return api ?? rollApi
@@ -50,6 +52,9 @@ export function useSetDie(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
     mutationFn: (die: number) => rollApiInstance.setDie(die),
+    onSuccess: async () => {
+      await invalidateAfterRollDieModeUpdate(queryClient)
+    },
   })
 
   return {
@@ -63,6 +68,9 @@ export function useClearManualDie(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
     mutationFn: () => rollApiInstance.clearManualDie(),
+    onSuccess: async () => {
+      await invalidateAfterRollDieModeUpdate(queryClient)
+    },
   })
 
   return {

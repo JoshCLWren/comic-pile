@@ -262,6 +262,7 @@ export default function RollPage() {
 
   const ratingViewData = useRatingView({
     state,
+    bootstrap,
     readerContextRequested: rating.readerContextRequested,
     readingContextRequested: rating.readingContextRequested,
     readingBoundariesRequested: rating.readingBoundariesRequested,

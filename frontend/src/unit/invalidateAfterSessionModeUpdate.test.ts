@@ -1,6 +1,9 @@
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
-import { invalidateAfterSessionModeUpdate } from '../query/cacheEffects'
+import {
+  invalidateAfterRollDieModeUpdate,
+  invalidateAfterSessionModeUpdate,
+} from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 
 function createSpiedClient() {
@@ -16,6 +19,28 @@ describe('invalidateAfterSessionModeUpdate', () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateAfterSessionModeUpdate(client)
+
+    expect(invalidateQueries).toHaveBeenCalledTimes(2)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(resetQueries).not.toHaveBeenCalled()
+  })
+})
+
+describe('invalidateAfterRollDieModeUpdate', () => {
+  // #3144: `manual_die` is only refreshed by re-reading these resources, so a
+  // pinned die must invalidate both or the rating card keeps promising a ladder
+  // move for the rest of the session.
+  it('invalidates roll bootstrap and current session after a die-mode change', async () => {
+    const { client, invalidateQueries, resetQueries } = createSpiedClient()
+
+    await invalidateAfterRollDieModeUpdate(client)
 
     expect(invalidateQueries).toHaveBeenCalledTimes(2)
     expect(invalidateQueries).toHaveBeenCalledWith({
