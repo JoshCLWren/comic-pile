@@ -21,6 +21,13 @@ import { getApiErrorDetail } from '../../utils/apiError'
 interface UseQueueThreadActionsParams {
   navigateToRoll: (thread: ThreadListItem, response: unknown) => void
   refetchSession: () => Promise<void>
+  /**
+   * Returns focus to a row's "Series actions" trigger once the queue cache has
+   * settled. The reset that follows a queue mutation remounts every row, so
+   * the trigger that opened the menu is gone by the time the mutation
+   * resolves (issue #3147).
+   */
+  restoreSeriesActionsFocus: (threadId: number) => void
 }
 
 /**
@@ -76,7 +83,7 @@ export function useQueueThreadActions(
   params: UseQueueThreadActionsParams,
   deps: UseQueueThreadActionsDeps = {},
 ): QueueThreadActionResult {
-  const { navigateToRoll, refetchSession } = params
+  const { navigateToRoll, refetchSession, restoreSeriesActionsFocus } = params
   const {
     deleteHook = useDeleteThread,
     moveToFrontHook = useMoveToFront,
@@ -185,21 +192,27 @@ export function useQueueThreadActions(
   const handleMoveToFront = useCallback(
     (threadId: number) => {
       moveToFrontMutation.mutate(threadId)
+        .then(() => {
+          restoreSeriesActionsFocus(threadId)
+        })
         .catch(() => {
           window.alert('Failed to move series to front. Please try again.')
         })
     },
-    [moveToFrontMutation],
+    [moveToFrontMutation, restoreSeriesActionsFocus],
   )
 
   const handleMoveToBack = useCallback(
     (threadId: number) => {
       moveToBackMutation.mutate(threadId)
+        .then(() => {
+          restoreSeriesActionsFocus(threadId)
+        })
         .catch(() => {
           window.alert('Failed to move series to back. Please try again.')
         })
     },
-    [moveToBackMutation],
+    [moveToBackMutation, restoreSeriesActionsFocus],
   )
 
   const handleReposition = useCallback(

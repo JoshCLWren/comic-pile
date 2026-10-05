@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ThreadListItem } from '../types'
 import { usePositionMenu } from '../contexts/usePositionMenu'
 import OverlayPortal from './OverlayPortal'
+import { SERIES_ACTIONS_TRIGGER_ATTRIBUTE } from './seriesActionsTrigger'
 
 interface PositionMenuProps {
   thread: ThreadListItem
@@ -75,9 +76,7 @@ export default function PositionMenu({
 
   const closeMenu = useCallback(() => {
     closeContextMenu()
-    setTimeout(() => {
-      triggerRef.current?.focus()
-    }, 0)
+    triggerRef.current?.focus()
   }, [closeContextMenu])
 
   useEffect(() => {
@@ -266,6 +265,7 @@ export default function PositionMenu({
         aria-label="Series actions"
         aria-haspopup="menu"
         aria-expanded={isOpen}
+        {...{ [SERIES_ACTIONS_TRIGGER_ATTRIBUTE]: thread.id }}
       >
         &#x22EE;
       </button>

@@ -11,6 +11,7 @@ import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
+import { focusSeriesActionsTrigger } from '../../components/seriesActionsTrigger'
 import type { ThreadListItem } from '../../types'
 import QueueThreadCard from './QueueThreadCard'
 import CompletedThreadsSection from './CompletedThreadsSection'
@@ -69,11 +70,22 @@ export default function QueuePage() {
     [navigate],
   )
 
+  // Queue mutations reset the paginated queue cache, so the list unmounts and
+  // remounts while the request settles. Focus therefore has to be restored
+  // after the refetched rows paint, and it is restored on the next frame so
+  // the refetched trigger is the element that receives it (#3147).
+  const restoreSeriesActionsFocus = useCallback((threadId: number) => {
+    requestAnimationFrame(() => {
+      focusSeriesActionsTrigger(threadId)
+    })
+  }, [])
+
   const actions = useQueueThreadActions({
     navigateToRoll,
     refetchSession: async () => {
       await refetchSession()
     },
+    restoreSeriesActionsFocus,
   })
 
   const submitCreate = useCallback(
