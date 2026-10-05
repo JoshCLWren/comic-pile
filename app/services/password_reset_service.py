@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 
-from app.auth import hash_password
+from app.auth import hash_password, validate_password_length
 from app.repositories.password_reset_token_repository import (
     create_token,
     delete_all_for_user,
@@ -155,8 +155,14 @@ async def complete_reset(
 ) -> bool:
     """Validate token, atomically update password, consume token, revoke sessions.
 
+    The advertised minimum password length is enforced before the token is
+    looked up or consumed, so a below-minimum attempt is refused without
+    mutating credential state and the caller can retry the same live token with
+    a compliant password (#3112).
+
     Returns True on success. Raises HTTPException on failure with safe messages.
     """
+    validate_password_length(new_password)
     digest = hashlib.sha256(token_string.encode()).hexdigest()
     token_obj = await get_token_by_digest(db, digest)
     if token_obj is None:

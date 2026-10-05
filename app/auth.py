@@ -10,6 +10,7 @@ from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_auth_settings
+from app.constants import MIN_PASSWORD_LENGTH
 from app.database import get_db
 from app.models.user import User
 from app.repositories.revoked_token_repository import (
@@ -39,6 +40,31 @@ def refresh_cookie_max_age_seconds() -> int:
 
 
 security = HTTPBearer()
+
+
+def validate_password_length(password: str) -> None:
+    """Enforce the advertised minimum password length.
+
+    Every path that sets a password calls this before hashing so the server
+    enforces the same minimum the browser advertises. Schema ``min_length``
+    covers the HTTP boundary; this covers every other caller, including
+    internal service callers that never pass through a Pydantic request model.
+
+    Sign-in is deliberately not gated: accounts created before the policy can
+    still authenticate with their existing shorter password.
+
+    Args:
+        password: Plain text password about to be stored.
+
+    Raises:
+        HTTPException: 422 when the password is shorter than
+            :data:`app.constants.MIN_PASSWORD_LENGTH`.
+    """
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
+        )
 
 
 def hash_password(password: str) -> str:
