@@ -76,7 +76,7 @@
     "globals": "^17.13.0",
     "jiti": "^2.6.1",
     "jsdom": "^30.1.1",
-    "msw": "^2.12.10",
+    "msw": "^3.0.1",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
