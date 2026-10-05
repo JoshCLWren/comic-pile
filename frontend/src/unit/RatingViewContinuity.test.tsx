@@ -72,6 +72,7 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     snoozeIsPending: false,
     dismissIsPending: false,
     skipIsPending: false,
+    manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onSnooze: vi.fn(),
@@ -85,6 +86,10 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     issuesRemaining: 4,
     readingContextRequested: false,
     readingBoundariesRequested: false,
+    readingOrders: [],
+    connectedThreads: [],
+    onShowContext: vi.fn(),
+    onShowBoundaries: vi.fn(),
     readingOrdersIsLoading: false,
     readingOrdersError: null,
     connectedThreadsIsLoading: false,
@@ -105,12 +110,13 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('RatingView continuity correction retired (#2711)', () => {
-  it('renders no Reading Context lazy control and no Correct continuity button', () => {
+describe('RatingView continuity correction retired (#2711); optional cards restored (#2764)', () => {
+  it('renders collapsed optional cards and no Correct continuity button', () => {
     renderRatingView()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /correct continuity/i })).not.toBeInTheDocument()
-    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
   })
 
   it('does not render the Correct continuity button without an active thread', () => {

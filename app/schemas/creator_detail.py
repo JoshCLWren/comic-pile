@@ -50,6 +50,55 @@ class CreatorIssueRow(BaseModel):
     )
 
 
+class CreatorRatingBucket(BaseModel):
+    """One half-star bucket in a creator's rating distribution."""
+
+    model_config = {"frozen": True}
+
+    rating: float = Field(
+        ...,
+        description="Bucket center on the product's real half-star scale (0.5–5.0).",
+    )
+    count: int = Field(
+        ...,
+        ge=0,
+        description="Number of issues whose effective rating falls in this bucket.",
+    )
+
+
+class CreatorRatingDistribution(BaseModel):
+    """Distribution, median, range, mean, and sample strength for one creator."""
+
+    model_config = {"frozen": True}
+
+    buckets: list[CreatorRatingBucket] = Field(
+        ...,
+        description="Half-star buckets from 0.5 to 5.0, always a complete fixed "
+        "shape with explicit zero counts.",
+    )
+    sample_count: int = Field(
+        ...,
+        ge=0,
+        description="Number of distinct rated issues contributing (at most one per issue).",
+    )
+    mean_rating: float = Field(
+        ...,
+        description="Mean of the latest effective ratings across contributing issues.",
+    )
+    median_rating: float = Field(
+        ...,
+        description="Median of the latest effective ratings across contributing issues.",
+    )
+    min_rating: float = Field(
+        ...,
+        description="Minimum effective rating observed for this creator.",
+    )
+    max_rating: float = Field(
+        ...,
+        description="Maximum effective rating observed for this creator.",
+    )
+
+
 class CreatorSeriesGroup(BaseModel):
     """Series/run-level aggregate of one creator's attributed rated work.
 
@@ -207,4 +256,9 @@ class CreatorDetailResponse(BaseModel):
     next_cursor: str | None = Field(
         default=None,
         description="Cursor for paginating long collections.",
+    )
+    rating_distribution: CreatorRatingDistribution | None = Field(
+        default=None,
+        description="Headline-eligible rating distribution (half-star buckets, median, "
+        "range, mean, sample count). ``null`` when the creator has no eligible ratings.",
     )

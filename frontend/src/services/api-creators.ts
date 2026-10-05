@@ -42,6 +42,22 @@ export interface CreatorIssueRow {
   sort_key: string
 }
 
+/** One half-star bucket in a creator's rating distribution (issue #3087). */
+export interface CreatorRatingBucket {
+  rating: number
+  count: number
+}
+
+/** Rating distribution, median, range, mean, and sample strength (issue #3087). */
+export interface CreatorRatingDistribution {
+  buckets: CreatorRatingBucket[]
+  sample_count: number
+  mean_rating: number
+  median_rating: number
+  min_rating: number
+  max_rating: number
+}
+
 /** Full personal creator detail payload (issue #2037). */
 export interface CreatorDetailResponse {
   summary: CreatorSummaryItem
@@ -51,6 +67,7 @@ export interface CreatorDetailResponse {
   read_unrated_issues: CreatorIssueRow[]
   upcoming_issues: CreatorIssueRow[]
   next_cursor: string | null
+  rating_distribution: CreatorRatingDistribution | null
 }
 
 export interface CreatorDetailPageParams {
@@ -81,6 +98,7 @@ export interface CreatorListParams {
   sort?: 'name' | 'ratings_count' | 'average_rating'
   limit?: number
   offset?: number
+  min_ratings?: number
 }
 
 /**
@@ -119,6 +137,9 @@ export function createCreatorsApi(client: HttpClient) {
       }
       if (params.offset !== undefined && params.offset > 0) {
         queryParams.offset = params.offset
+      }
+      if (params.min_ratings !== undefined && params.min_ratings > 0) {
+        queryParams.min_ratings = params.min_ratings
       }
       return client.get<CreatorListResponse>('/v1/creators', { params: queryParams })
     },

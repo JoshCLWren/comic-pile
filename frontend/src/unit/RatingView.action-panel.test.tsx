@@ -78,6 +78,7 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     snoozeIsPending: false,
     dismissIsPending: false,
     skipIsPending: false,
+    manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onSnooze: vi.fn(),
@@ -91,6 +92,10 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     issuesRemaining: thread.issues_remaining,
     readingContextRequested: false,
     readingBoundariesRequested: false,
+    readingOrders: [],
+    connectedThreads: [],
+    onShowContext: vi.fn(),
+    onShowBoundaries: vi.fn(),
     readingOrdersIsLoading: false,
     readingOrdersError: null,
     connectedThreadsIsLoading: false,
@@ -387,8 +392,9 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.className).toContain('lg:max-w-4xl')
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
+    // #2764: collapsed optional cards live inside the decision region.
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
   })
 
   it('keeps region cards content-sized instead of stretching to equal-height rows', () => {
@@ -412,22 +418,23 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     }
   })
 
-  it('stacks the decision card and context disclosure in the decision region', () => {
+  it('stacks the decision card and optional cards in the decision region', () => {
     const { container } = render(ratingView({ readerContext: populatedReaderContext }))
     const decisionRegion = container.querySelector<HTMLElement>('[data-testid="rating-region-decision"]')
     const decisionCard = container.querySelector<HTMLElement>('[data-testid="decision-card"]')
-    const contextDisclosure = container.querySelector<HTMLElement>('[data-testid="context-disclosure"]')
+    const optionalCards = container.querySelector<HTMLElement>('[data-testid="rating-region-reading-optional"]')
     expect(decisionRegion).not.toBeNull()
     expect(decisionCard).not.toBeNull()
-    expect(contextDisclosure).not.toBeNull()
+    expect(optionalCards).not.toBeNull()
     expect(decisionRegion!.contains(decisionCard)).toBe(true)
-    expect(decisionRegion!.contains(contextDisclosure)).toBe(true)
+    expect(decisionRegion!.contains(optionalCards)).toBe(true)
     expect(decisionCard!.className).not.toContain('xl:col-span-full')
   })
 
-  it('does not render Reading Context pillar when empty - rating form follows comic region directly without removed surfaces', () => {
+  it('renders collapsed optional cards without expanded pillar content - rating form follows comic region directly', () => {
     const { container } = render(ratingView())
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
     expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
@@ -437,17 +444,18 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     expect(text.indexOf('Your rating')).toBeGreaterThan(-1)
     expect(text.indexOf('Saga')).toBeLessThan(text.indexOf('Your rating'))
     expect(text).not.toMatch(/\b0[123]\b/)
-    expect(text).not.toContain('Reading Context')
-    expect(text).not.toContain('Reading Boundaries')
+    expect(text).toContain('Reading Context')
+    expect(text).toContain('Reading Boundaries')
     expect(text).not.toContain('Why this?')
   })
 
-  it('contains no Why this?, Reading Context or Reading Boundaries affordance even with populated props', () => {
+  it('contains collapsed optional cards but no Why this? even with populated props', () => {
     // SAFETY: the reader-context fixture supplies only the fields the rating panel reads
     const { container } = render(ratingView({ readerContext: { issue_id: 100, series: { identity_source: 'comicvine', canonical_series_id: 's1', series_name: 'Saga', average_rating: 4, ratings_count: 1, previous_issue: null, recent_ratings: [], highest_rating: 5, lowest_rating: 1 }, crossovers: [], local_chain: { issues: [], edges: [] } } as any }))
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
     expect(container.querySelector('[data-testid="rating-pillars-grid"]')!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
   })
 })

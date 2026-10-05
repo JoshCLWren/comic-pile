@@ -262,9 +262,14 @@ export default function RollPage() {
 
   const ratingViewData = useRatingView({
     state,
+    bootstrap,
     readerContextRequested: rating.readerContextRequested,
     readingContextRequested: rating.readingContextRequested,
     readingBoundariesRequested: rating.readingBoundariesRequested,
+    readingOrders: rating.readingOrders,
+    connectedThreads: rating.connectedThreads,
+    onShowContext: () => rating.fetchReadingContext(state.activeRatingThread?.id ?? null),
+    onShowBoundaries: () => rating.fetchReadingBoundaries(),
     readingOrdersIsLoading: rating.readingOrdersIsLoading,
     readingOrdersError: rating.readingOrdersError,
     connectedThreadsIsLoading: rating.connectedThreadsIsLoading,
@@ -345,8 +350,9 @@ export default function RollPage() {
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
         onOpenModeSelector={() => setIsModeSelectorOpen(true)}
-        onBackToQueue={() => {
-          void rating.handleCancelRating()
+        onBackToQueue={async () => {
+          await rating.handleCancelRating()
+          navigate('/queue')
         }}
       />
 

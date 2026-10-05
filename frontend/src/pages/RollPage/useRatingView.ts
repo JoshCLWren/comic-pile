@@ -2,13 +2,20 @@ import { useReaderContext } from '../../hooks/useReaderContext'
 import { computePredictedDie } from './utils'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
-import type { ReaderContextResponse } from '../../types'
+import type { ConnectedThreadInfo, ReaderContextResponse } from '../../types'
+import type { ReadingOrder } from '../../services/api-reading-orders'
+import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
+  bootstrap?: RollBootstrapResponse | null
   readerContextRequested: boolean
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
+  readingOrders: ReadingOrder[]
+  connectedThreads: ConnectedThreadInfo[]
+  onShowContext: () => void
+  onShowBoundaries: () => void
   readingOrdersIsLoading: boolean
   readingOrdersError: Error | null
   connectedThreadsIsLoading: boolean
@@ -40,6 +47,7 @@ export interface RatingViewData {
   snoozeIsPending: boolean
   dismissIsPending: boolean
   skipIsPending: boolean
+  manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
@@ -53,6 +61,10 @@ export interface RatingViewData {
   issuesRemaining: number
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
+  readingOrders: ReadingOrder[]
+  connectedThreads: ConnectedThreadInfo[]
+  onShowContext: () => void
+  onShowBoundaries: () => void
   readingOrdersIsLoading: boolean
   readingOrdersError: Error | null
   connectedThreadsIsLoading: boolean
@@ -76,9 +88,14 @@ export interface RatingViewData {
  */
 export function useRatingView({
   state,
+  bootstrap,
   readerContextRequested,
   readingContextRequested,
   readingBoundariesRequested,
+  readingOrders,
+  connectedThreads,
+  onShowContext,
+  onShowBoundaries,
   readingOrdersIsLoading,
   readingOrdersError,
   connectedThreadsIsLoading,
@@ -124,6 +141,7 @@ export function useRatingView({
     snoozeIsPending: snoozeMutation.isPending,
     dismissIsPending: dismissPendingMutation.isPending,
     skipIsPending: skipMutation.isPending,
+    manualDie: bootstrap?.manual_die ?? null,
     onUpdateRating: rating.updateRatingUI,
     onSubmitRating: rating.handleSubmitRating,
     onSnooze: snooze.handleSnooze,
@@ -137,6 +155,10 @@ export function useRatingView({
     issuesRemaining,
     readingContextRequested,
     readingBoundariesRequested,
+    readingOrders,
+    connectedThreads,
+    onShowContext,
+    onShowBoundaries,
     readingOrdersIsLoading,
     readingOrdersError,
     connectedThreadsIsLoading,

@@ -162,8 +162,8 @@ export default function QueueThreadCard({
             {thread.issues_remaining !== null && (
               <span className="text-sm font-medium text-[var(--theme-text-muted)]">
                 {isMigrated && !isBlocked && thread.next_unread_issue_number
-                  ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
-                  : `${thread.issues_remaining} issues remaining`}
+                  ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`
+                  : `${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`}
               </span>
             )}
           </div>
@@ -212,7 +212,7 @@ export default function QueueThreadCard({
                 </button>
               )}
               <p className="mt-1.5 text-[var(--theme-text-dim)]">
-                Secondary actions are in the menu. Read unlocks once the
+                Secondary actions are in the menu. Read & Rate unlocks once the
                 blocker{extraBlockerCount > 0 ? 's' : ''} above{' '}
                 {extraBlockerCount > 0 ? 'are' : 'is'} cleared.
               </p>

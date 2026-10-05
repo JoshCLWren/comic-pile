@@ -70,6 +70,7 @@ async def get_creator_list(
     sort: str = "name",
     limit: int = 20,
     offset: int = 0,
+    min_ratings: int = 0,
 ) -> CreatorListResponse:
     """Compute bounded personal creator list for the authenticated user.
 
@@ -80,6 +81,8 @@ async def get_creator_list(
         sort: Sort mode — ``name``, ``ratings_count``, or ``average_rating``.
         limit: Page size (bounded).
         offset: Page offset.
+        min_ratings: Deterministic server-side minimum rated-sample filter
+            (creators need at least this many headline-rated issues).
 
     Returns:
         Bounded, deterministically ordered creator list with coverage.
@@ -135,6 +138,9 @@ async def get_creator_list(
         ratings_count = len(headline_rated)
         # Default collection: creators with at least one headline-rated issue.
         if ratings_count == 0:
+            continue
+        # Server-side deterministic minimum-sample filter.
+        if ratings_count < min_ratings:
             continue
         average_rating: float | None = (
             round(sum(headline_rated) / ratings_count, 2) if ratings_count else None

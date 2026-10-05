@@ -39,3 +39,11 @@ Borat does not create the App in this PR.
 Until those three values exist, the factory runner's checkout still uses `PR_REBASE_TOKEN`, and worker 48 push plus `gh pr create` stay on `PR_REBASE_TOKEN` too. When they exist, only worker 48 switches push and PR creation onto a short-lived installation token. No other worker consults this mapping.
 
 Worker Apps stay off every trusted-marker author path. `TRUSTED_FACTORY_APP_SLUGS` remains `github-actions` only. A worker App comment is not trusted even if GitHub reports a trusted association.
+
+## Readable handoffs (#3135)
+
+When worker 48's App secrets are all present, human-readable implementation,
+repair, and review handoff comments are posted with the App installation token
+(Mark Cordova[bot]). Machine/trusted marker comments stay on github-actions[bot]
+and never use the worker App token. Missing any secret keeps every identity on
+the current path. This does not create the App.

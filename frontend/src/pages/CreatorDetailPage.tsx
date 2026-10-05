@@ -17,6 +17,10 @@ function formatRatingDate(value: string | null): string | null {
   }).format(parsed)
 }
 
+function formatBucketRating(value: number): string {
+  return Number.isInteger(value * 2) ? value.toFixed(1) : value.toFixed(2)
+}
+
 function RatingValue({ value, label }: { value: number; label: string }) {
   return (
     <span
@@ -68,6 +72,7 @@ export default function CreatorDetailPage() {
     summary,
     coverage,
     roleStats,
+    ratingDistribution,
     ratedIssues,
     readUnratedIssues,
     upcomingIssues,
@@ -210,6 +215,53 @@ export default function CreatorDetailPage() {
           </p>
         )}
       </section>
+
+      {ratingDistribution != null ? (
+        <section aria-labelledby="creator-distribution-heading" className="mt-6">
+          <SectionHeading id="creator-distribution-heading">Rating distribution</SectionHeading>
+          <div className="mt-2 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+            <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <div>
+                <dt className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Median</dt>
+                <dd className="font-bold" style={{ color: 'var(--theme-text-primary)' }}>{formatBucketRating(ratingDistribution.median_rating)}★</dd>
+              </div>
+              <div>
+                <dt className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Range</dt>
+                <dd className="font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+                  {formatBucketRating(ratingDistribution.min_rating)}★–{formatBucketRating(ratingDistribution.max_rating)}★
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Average</dt>
+                <dd className="font-bold" style={{ color: 'var(--theme-text-primary)' }}>{ratingDistribution.mean_rating.toFixed(2)}★</dd>
+              </div>
+              <div>
+                <dt className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Sample</dt>
+                <dd className="font-bold" style={{ color: 'var(--theme-text-primary)' }}>{ratingDistribution.sample_count} issue{ratingDistribution.sample_count === 1 ? '' : 's'}</dd>
+              </div>
+            </dl>
+            <ul className="mt-3 space-y-1" aria-label="Ratings per half-star bucket">
+              {ratingDistribution.buckets.map((bucket) => {
+                const maxCount = Math.max(...ratingDistribution.buckets.map((b) => b.count), 1)
+                return (
+                  <li key={bucket.rating} className="flex items-center gap-2 text-xs" aria-label={`${bucket.count} rating${bucket.count === 1 ? '' : 's'} at ${formatBucketRating(bucket.rating)} stars`}>
+                    <span className="w-10 shrink-0 text-right font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+                      {formatBucketRating(bucket.rating)}★
+                    </span>
+                    <span className="block h-3 rounded" style={{ width: `${Math.max((bucket.count / maxCount) * 60, bucket.count > 0 ? 4 : 0)}%`, backgroundColor: 'var(--theme-personal-accent)' }} aria-hidden="true" />
+                    <span style={{ color: 'var(--theme-text-muted)' }}>{bucket.count}</span>
+                  </li>
+                )
+              })}
+            </ul>
+            {ratingsPartial && (
+              <p className="mt-3 text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
+                Distribution reflects only rated issues with confirmed creator metadata. Counts shown are lower bounds, not exhaustive totals.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {roleStats.length > 0 && (
         <section aria-labelledby="creator-roles-heading" className="mt-6">

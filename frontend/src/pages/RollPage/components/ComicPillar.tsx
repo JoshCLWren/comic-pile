@@ -17,6 +17,8 @@ import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueI
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
+  /** Die size the current roll used, so the winning face can be named on the card (issue #3126). */
+  currentDie?: number
   onRefreshThread: () => void
 }
 
@@ -26,6 +28,7 @@ const METADATA_SEPARATOR = '\u00a0· '
 
 export function ComicPillar({
   activeRatingThread,
+  currentDie,
   onRefreshThread,
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
@@ -50,6 +53,20 @@ export function ComicPillar({
     `${progress}% complete`,
     `${issuesRemaining} left`,
   ]
+
+  // Issue #3126: the result card must name the face the roll actually produced,
+  // otherwise the face-mapping list is the only cross-reference a reader has for
+  // why this series was picked. Both facts are thread-scoped: the die face is the
+  // roll that selected this thread, and queue position is 1-based, with 0 meaning
+  // the payload carried no position rather than "first".
+  const rolledFace = activeRatingThread?.last_rolled_result ?? null
+  const queuePosition = activeRatingThread?.queue_position ?? 0
+  const rollResultLine =
+    rolledFace != null && currentDie != null
+      ? `Rolled ${rolledFace} of d${currentDie}${
+          queuePosition > 0 ? ` · #${queuePosition} in queue` : ''
+        }`
+      : null
 
   const fetchIdentity = useCallback(async () => {
     if (!issueId) {
@@ -159,6 +176,14 @@ export function ComicPillar({
               </div>
             )}
             <div className="flex flex-col gap-2">
+              {rollResultLine ? (
+                <p
+                  data-testid="comic-roll-result"
+                  className="text-[11px] font-bold text-[var(--theme-comic-accent)]"
+                >
+                  {rollResultLine}
+                </p>
+              ) : null}
               <h2 data-testid="comic-header-title" className="text-xl font-black text-stone-100 leading-tight break-words">
                 {threadTitle}
                 {issueNumber != null ? <span className="ml-1 text-[var(--theme-comic-accent)]"> #{issueNumber}</span> : null}

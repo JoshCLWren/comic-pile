@@ -573,3 +573,119 @@ async def test_detail_uses_bounded_constant_query_count(
     assert wide.status_code == 200
     assert len(small_selects) == len(wide_selects)
     assert len(small_selects) <= 12, small_selects
+
+
+@pytest.mark.asyncio
+async def test_rating_distribution_uses_half_star_buckets_and_headlines(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Distribution, median, min, max, mean, and sample use effective ratings once."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Distro", issue_count=5, queue_position=1, read_through=5
+    )
+    for issue in issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 9, "name": "Distro Dan", "role": "writer"}]
+        )
+    await _rate(async_db, issues[0], rating=4.5, timestamp=D1)
+    await _rate(async_db, issues[1], rating=4.5, timestamp=D2)
+    await _rate(async_db, issues[2], rating=3.0, timestamp=D3)
+    await _rate(async_db, issues[3], rating=2.5, timestamp=D1)
+    await _rate(async_db, issues[4], rating=5.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/creator:9")
+    assert response.status_code == 200
+    body = response.json()
+    dist = body["rating_distribution"]
+    assert dist is not None
+    assert dist["sample_count"] == 5
+    assert dist["min_rating"] == pytest.approx(2.5)
+    assert dist["max_rating"] == pytest.approx(5.0)
+    assert dist["median_rating"] == pytest.approx(4.5)
+    assert dist["mean_rating"] == pytest.approx(3.9)
+    # Full deterministic half-star bucket shape, zero counts explicit.
+    buckets = {b["rating"]: b["count"] for b in dist["buckets"]}
+    assert set(buckets) == {0.5 * step for step in range(1, 11)}
+    assert buckets[4.5] == 2
+    assert buckets[3.0] == 1
+    assert buckets[2.5] == 1
+    assert buckets[5.0] == 1
+    assert buckets[1.0] == 0
+
+
+@pytest.mark.asyncio
+async def test_rating_distribution_null_when_no_eligible_ratings(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A cover-only creator has role-stat presence but null distribution."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="CoverOnly", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 10, "name": "Cover Carl", "role": "cover"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/creator:10")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rating_distribution"] is None
+    assert body["summary"]["ratings_count"] == 0
+    assert body["summary"]["average_rating"] is None
+
+
+@pytest.mark.asyncio
+async def test_rating_distribution_latest_effective_rating_only(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Only the latest effective rating per issue feeds the distribution."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="LatestOnly", issue_count=2, queue_position=1, read_through=2
+    )
+    for issue in issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 11, "name": "Late Larry", "role": "artist"}]
+        )
+    await _rate(async_db, issues[0], rating=2.0, timestamp=D1)
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D2)
+    await _rate(async_db, issues[1], rating=4.0, timestamp=D3)
+
+    response = await auth_client.get("/api/v1/creators/creator:11")
+    assert response.status_code == 200
+    dist = response.json()["rating_distribution"]
+    assert dist["sample_count"] == 2
+    buckets = {b["rating"]: b["count"] for b in dist["buckets"]}
+    assert buckets[4.0] == 2
+    assert buckets[2.0] == 0
+
+
+@pytest.mark.asyncio
+async def test_rating_distribution_headline_roles_exclude_cover(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Cover/editorial-only rated issues never feed the distribution."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Roles", issue_count=2, queue_position=1, read_through=2
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 12, "name": "Mixed Moe", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 12, "name": "Mixed Moe", "role": "cover"}]
+    )
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=1.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/creator:12")
+    assert response.status_code == 200
+    dist = response.json()["rating_distribution"]
+    assert dist["sample_count"] == 1
+    assert dist["min_rating"] == pytest.approx(5.0)

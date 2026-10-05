@@ -574,11 +574,16 @@ export function applyUpdatedPreferencesCache(
 }
 
 /**
- * Invalidate the roll bootstrap and current session after a session-mode
- * update. Replaces the imperative `sessionApi.updateMode` + `refetchBootstrap()`
- * pattern in RollPage (#2649).
+ * Refresh the resources that carry `manual_die` after a die-mode change
+ * (`POST /roll/set-die` or `POST /roll/clear-manual-die`).
+ *
+ * Pinned-versus-automatic mode is server truth, and both the roll bootstrap and
+ * the current session report `manual_die`. Without this invalidation the cached
+ * bootstrap keeps the pre-change value for the rest of the Roll session, so the
+ * rating card can keep promising a ladder move that manual mode suppresses
+ * (#3144) and the header's `Auto` segment keeps reading as selected.
  */
-export async function invalidateAfterSessionModeUpdate(
+export async function invalidateAfterRollDieModeUpdate(
   client: QueryClient,
 ): Promise<void> {
   await Promise.all([
@@ -591,4 +596,18 @@ export async function invalidateAfterSessionModeUpdate(
       exact: true,
     }),
   ])
+}
+
+/**
+ * Invalidate the roll bootstrap and current session after a session-mode
+ * update. Replaces the imperative `sessionApi.updateMode` + `refetchBootstrap()`
+ * pattern in RollPage (#2649).
+ *
+ * A session-mode change and a die-mode change project the same retained
+ * resources, so both share one invalidation implementation.
+ */
+export async function invalidateAfterSessionModeUpdate(
+  client: QueryClient,
+): Promise<void> {
+  await invalidateAfterRollDieModeUpdate(client)
 }

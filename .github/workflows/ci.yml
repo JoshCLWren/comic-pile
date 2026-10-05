@@ -38,7 +38,7 @@ jobs:
       - run: python3 -m pip install 'Faker==40.40.0'
       - run: python3 .github/scripts/test_factory_worker_github_app.py
       - run: python3 .github/scripts/test_factory_app_identity_contract.py
-      - run: node --test .github/scripts/factory-pr-auth.test.cjs .github/scripts/factory-visibility*.test.cjs
+      - run: node --test .github/scripts/factory-pr-auth.test.cjs .github/scripts/factory-readable-handoff.test.cjs .github/scripts/factory-visibility*.test.cjs
 
   build:
     name: Build Docker Image

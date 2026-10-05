@@ -519,3 +519,57 @@ async def test_no_live_provider_call(
     response = await auth_client.get("/api/v1/creators")
     assert response.status_code == 200
     assert any(r["canonical_creator_key"] == "creator:55" for r in response.json()["items"])
+
+
+@pytest.mark.asyncio
+async def test_min_ratings_filters_server_side(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """The minimum rated-sample filter is deterministic and server-side."""
+    _t1, i1 = await _make_thread(
+        async_db, default_user, title="Big", issue_count=5, queue_position=1, read_through=5
+    )
+    for issue in i1:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 21, "name": "Big Ben", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+    _t2, i2 = await _make_thread(
+        async_db, default_user, title="Small", issue_count=2, queue_position=2, read_through=2
+    )
+    for issue in i2:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 22, "name": "Small Sue", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=5.0, timestamp=D1)
+
+    any_response = await auth_client.get("/api/v1/creators?min_ratings=0")
+    assert any_response.status_code == 200
+    assert any_response.json()["total"] == 2
+
+    three_plus = await auth_client.get("/api/v1/creators?min_ratings=3")
+    assert three_plus.status_code == 200
+    body = three_plus.json()
+    assert body["total"] == 1
+    assert body["items"][0]["canonical_creator_key"] == "creator:21"
+
+    five_plus = await auth_client.get("/api/v1/creators?min_ratings=5")
+    assert five_plus.status_code == 200
+    assert five_plus.json()["total"] == 1
+
+    twenty_five = await auth_client.get("/api/v1/creators?min_ratings=25")
+    assert twenty_five.status_code == 200
+    assert twenty_five.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_min_ratings_rejects_negative(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Negative minimum samples are invalid."""
+    response = await auth_client.get("/api/v1/creators?min_ratings=-1")
+    assert response.status_code == 422

@@ -294,6 +294,7 @@ ensure_owner_label
 stage_trusted_guard
 stage_trusted_kilo_helper
 stage_trusted_review_controller
+stage_trusted_worker_app_helper
 trap 'release_owned_targets session-end-handoff || true' EXIT
 
 MODE=''
@@ -409,6 +410,9 @@ if [[ "$MODE" == 'issue' ]]; then
     log "opened/updated PR #${pr} for issue #${NUMBER}"
     release_target "$NUMBER" 'factory:review' 'pr-opened-handoff' 'issue'
     release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
+    # Trusted markers above stay on github-actions[bot]. Worker 48 may add a
+    # separate plain-prose handoff as its App (#3135); others post nothing.
+    post_readable_handoff implementation "$pr" "$(git rev-parse HEAD)" "Opened from issue #${NUMBER}."
     record_terminal_outcome success "issue #${NUMBER} produced PR #${pr} and handed it to review"
   elif (( transient_failure == 1 )); then
     log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
@@ -432,6 +436,7 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
   record_head_contribution "$NUMBER" 'repairs-pushed-handoff' || true
   log "pushed repairs to PR #${NUMBER}; handing it to the merge controller for exact-head review"
   release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'repairs-pushed-handoff'
+  post_readable_handoff repair "$NUMBER" "$(git rev-parse HEAD)" "Repairs were pushed and the lease was released for independent review."
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
@@ -593,6 +598,10 @@ if (( controller_status != 0 )); then
   record_terminal_outcome control_plane_failure "trusted review controller failed for PR #${NUMBER} with exit status ${controller_status}"
   exit "$controller_status"
 fi
+# Trusted review marker/comment stayed on github-actions[bot] above. Worker 48
+# may additionally post a plain-prose review handoff as its App. Never widen
+# TRUSTED_FACTORY_APP_SLUGS and never pass the App token into the controller.
+post_readable_handoff review "$NUMBER" "$EXPECTED_HEAD" "Semantic verdict: ${verdict}."
 record_terminal_outcome success "PR #${NUMBER} semantic verdict completed through the trusted review controller"
 
 log "assignment complete; remaining budget $(remaining)s"

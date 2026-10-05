@@ -13,7 +13,8 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: read
+  # write: enroll step labels PRs via GITHUB_TOKEN (PUT .../issues/{n}/labels)
+  pull-requests: write
 
 # Issue state is shared by every PR linked to that issue. Serialize all
 # reconciliations so duplicate PR events cannot race label replacement.

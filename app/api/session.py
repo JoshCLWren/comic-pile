@@ -33,6 +33,7 @@ from app.schemas.session import (
 )
 from app.services.ownership import get_owned_session_or_404
 from app.services.session_response import build_ladder_path
+from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
@@ -223,59 +224,6 @@ async def get_session_with_thread_safe(
     #         )
 
     return session, None
-
-
-async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str, list[str]]:
-    """Build narrative summary categorizing session events.
-
-    Args:
-        session_id: The session ID to build summary for.
-        db: Database session.
-
-    Returns:
-        Dictionary with keys "read", "skipped", and "completed", each containing
-        a list of formatted strings.
-    """
-    events_result = await db.execute(
-        select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
-    )
-    events = events_result.scalars().all()
-
-    summary = {
-        "read": [],
-        "skipped": [],
-        "completed": [],
-    }
-
-    read_entries = []
-    skipped_titles = set()
-    completed_titles = set()
-
-    thread_ids = {event.thread_id for event in events if event.thread_id}
-    threads_result = await db.execute(
-        select(Thread).where(Thread.id.in_(thread_ids))
-        if thread_ids
-        else select(Thread).where(Thread.id == -1)
-    )
-    threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
-
-    for event in events:
-        thread = threads_dict.get(event.thread_id) if event.thread_id else None
-        title = thread.title if thread else f"Thread #{event.thread_id}"
-        issue_suffix = f" #{event.issue_number}" if event.issue_number else ""
-
-        if event.type == "rate":
-            read_entries.append(f"{title}{issue_suffix} ({event.rating}/5.0)")
-            if thread and thread.status == "completed":
-                completed_titles.add(f"{title}{issue_suffix}")
-        elif event.type == "rolled_but_skipped":
-            skipped_titles.add(f"{title}{issue_suffix}")
-
-    summary["read"] = read_entries
-    summary["skipped"] = sorted(skipped_titles)
-    summary["completed"] = sorted(completed_titles)
-
-    return summary
 
 
 async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadInfo | None:
