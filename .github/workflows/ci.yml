@@ -378,12 +378,13 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health, test-unit]
+    needs: [build, factory-pr-auth, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health, test-unit]
     if: always()
     steps:
       - name: Check job results
         run: |
           echo "Build: ${{ needs.build.result }}"
+          echo "Factory PR authentication: ${{ needs.factory-pr-auth.result }}"
           echo "Frontend Lint + Typecheck: ${{ needs.frontend-typecheck.result }}"
           echo "Python Lint (ruff): ${{ needs.python-lint.result }}"
           echo "Python Type Check (ty): ${{ needs.python-typecheck.result }}"
@@ -393,6 +394,7 @@ jobs:
           echo "Migration Health: ${{ needs.migration-health.result }}"
           echo "Backend Tests: ${{ needs.test-unit.result }}"
           if [ "${{ needs.build.result }}" != "success" ] || \
+             [ "${{ needs.factory-pr-auth.result }}" != "success" ] || \
              [ "${{ needs.frontend-typecheck.result }}" != "success" ] || \
              [ "${{ needs.python-lint.result }}" != "success" ] || \
              [ "${{ needs.python-typecheck.result }}" != "success" ] || \

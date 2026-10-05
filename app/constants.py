@@ -102,6 +102,9 @@ DEFAULT_THEME = THEME_CLASSIC
 DEADLOCK_MAX_RETRIES = 3
 DEADLOCK_INITIAL_DELAY = 0.1
 
+# Password requirements
+MIN_PASSWORD_LENGTH = 6
+
 
 # ---------------------------------------------------------------------------
 # Tag vocabulary and color palette (issue #3030)
