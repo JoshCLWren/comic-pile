@@ -233,6 +233,9 @@ export function useRollActions({
       latest?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null,
       pendingMetadata,
     )
+    setTimeout(() => {
+      document.getElementById('rating-view-top')?.focus()
+    }, 0)
     return true
   }
 
@@ -246,9 +249,6 @@ export function useRollActions({
           ? bootstrap.active_thread
           : rollPool.find((thread) => thread.id === pendingId)
       enterRatingView(pendingId, bootstrap?.last_rolled_result ?? null, pendingMetadata)
-      setTimeout(() => {
-        document.getElementById('rating-view-top')?.focus()
-      }, 0)
       return
     }
 

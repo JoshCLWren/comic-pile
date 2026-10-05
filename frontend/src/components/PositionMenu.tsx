@@ -75,8 +75,6 @@ export default function PositionMenu({
 
   const closeMenu = useCallback(() => {
     closeContextMenu()
-    // We use a timeout to ensure the menu has fully unmounted before attempting
-    // to restore focus, which prevents the focus from being lost to the body.
     setTimeout(() => {
       triggerRef.current?.focus()
     }, 0)
@@ -190,7 +188,7 @@ export default function PositionMenu({
   }> = [
     {
       label: 'Move to Front',
-      icon: '⬆',
+      icon: '\u2B06',
       ariaLabel: 'Move to front',
       action: () => {
         onMoveToFront(thread.id)
@@ -198,8 +196,8 @@ export default function PositionMenu({
       },
     },
     {
-      label: 'Reposition…',
-      icon: '≡',
+      label: 'Reposition\u2026',
+      icon: '\u2261',
       ariaLabel: 'Reposition series',
       action: () => {
         onReposition(thread)
@@ -208,7 +206,7 @@ export default function PositionMenu({
     },
     {
       label: 'Move to Back',
-      icon: '↓',
+      icon: '\u2193',
       ariaLabel: 'Move to back',
       action: () => {
         onMoveToBack(thread.id)
@@ -217,7 +215,7 @@ export default function PositionMenu({
     },
     {
       label: 'Edit Series',
-      icon: '✏️',
+      icon: '\u270F\uFE0F',
       ariaLabel: 'Edit series',
       action: () => {
         onEdit(thread)
@@ -238,7 +236,7 @@ export default function PositionMenu({
     }] : []),
     {
       label: 'Dependencies',
-      icon: '⛓️',
+      icon: '\u26D3\uFE0E',
       ariaLabel: 'Manage dependencies',
       action: () => {
         onDependencies(thread)
@@ -247,7 +245,7 @@ export default function PositionMenu({
     },
     {
       label: 'Delete Series',
-      icon: '🗑',
+      icon: '\u{1F5D1}',
       ariaLabel: 'Delete series',
       destructive: true,
       action: () => {

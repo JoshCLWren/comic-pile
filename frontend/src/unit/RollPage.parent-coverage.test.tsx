@@ -751,16 +751,16 @@ describe('RollPage parent handlers', () => {
     expect(spies.navigate).toHaveBeenCalledWith('/login')
   })
 
-  it('keeps rating view usable without reading context controls (#2711)', async () => {
+  it('issues no optional detail fetches on rating entry while rating stays usable (#2764)', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
-    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    // Rating workflow remains usable even though reading context requests are not made
+    // This page mock stands in for the rating view, so the collapsed optional
+    // cards themselves are asserted at the RatingView level. The page-level
+    // contract is that rating entry initiates no optional reading-detail
+    // requests: the cards stay collapsed until the user opens one.
     expect(relatedApi.readingOrders).not.toHaveBeenCalled()
     expect(relatedApi.connectedThreads).not.toHaveBeenCalled()
   })
@@ -1136,16 +1136,16 @@ describe('RollPage parent handlers', () => {
     vi.useRealTimers()
   })
 
-  it('keeps rating view usable without reading context controls (#2711)', async () => {
+  it('issues no optional detail fetches on rating entry while rating stays usable (#2764)', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
-    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    // Rating workflow remains usable even though reading context requests are not made
+    // This page mock stands in for the rating view, so the collapsed optional
+    // cards themselves are asserted at the RatingView level. The page-level
+    // contract is that rating entry initiates no optional reading-detail
+    // requests: the cards stay collapsed until the user opens one.
     expect(relatedApi.readingOrders).not.toHaveBeenCalled()
     expect(relatedApi.connectedThreads).not.toHaveBeenCalled()
   })

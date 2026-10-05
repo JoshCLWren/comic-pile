@@ -64,7 +64,7 @@ interface RatingGeometry {
   actions: Rect | null
   secondaryActions: Rect | null
   primaryAction: Rect | null
-  contextDisclosure: Rect | null
+  optionalCards: Rect | null
   ratingViewTop: Rect | null
 }
 
@@ -179,7 +179,7 @@ async function readRatingGeometry(page: Page): Promise<RatingGeometry> {
       primaryAction: rectOf(
         document.querySelector('[data-testid="save-and-continue"]'),
       ),
-      contextDisclosure: rectOf(document.querySelector('[data-testid="context-disclosure"]')),
+      optionalCards: rectOf(document.querySelector('[data-testid="rating-region-reading-optional"]')),
       ratingViewTop: rectOf(document.querySelector('[data-testid="rating-view-top"]')),
     }
   })
@@ -296,13 +296,17 @@ test.describe('Roll Layout Invariants - Issue #2942', () => {
       'Comic region must come first in the visual flow',
     ).toBeLessThan(g.decision!.top)
 
-    // The context disclosure (subordinate content) must come after the decision card.
-    if (g.contextDisclosure) {
-      expect(
-        g.contextDisclosure!.top,
-        'subordinate content must follow the decision region',
-      ).toBeGreaterThanOrEqual(g.decision!.bottom - GEOMETRY_TOLERANCE_PX)
-    }
+    // The optional cards (#2764) live inside the decision region below the
+    // decision card, so they must be contained within the decision region.
+    expect(g.optionalCards, 'the optional cards must be present').not.toBeNull()
+    expect(
+      g.optionalCards!.top,
+      'optional cards must follow the decision card inside the decision region',
+    ).toBeGreaterThanOrEqual(g.decision!.top - GEOMETRY_TOLERANCE_PX)
+    expect(
+      g.optionalCards!.bottom,
+      'optional cards must stay inside the decision region',
+    ).toBeLessThanOrEqual(g.decision!.bottom + GEOMETRY_TOLERANCE_PX)
   })
 
   test('desktop region width ratios remain consistent with the approved two-region layout', async ({

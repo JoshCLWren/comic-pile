@@ -2,7 +2,8 @@ import { useReaderContext } from '../../hooks/useReaderContext'
 import { computePredictedDie } from './utils'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
-import type { ReaderContextResponse } from '../../types'
+import type { ConnectedThreadInfo, ReaderContextResponse } from '../../types'
+import type { ReadingOrder } from '../../services/api-reading-orders'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 
 interface UseRatingViewParams {
@@ -11,6 +12,10 @@ interface UseRatingViewParams {
   readerContextRequested: boolean
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
+  readingOrders: ReadingOrder[]
+  connectedThreads: ConnectedThreadInfo[]
+  onShowContext: () => void
+  onShowBoundaries: () => void
   readingOrdersIsLoading: boolean
   readingOrdersError: Error | null
   connectedThreadsIsLoading: boolean
@@ -56,6 +61,10 @@ export interface RatingViewData {
   issuesRemaining: number
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
+  readingOrders: ReadingOrder[]
+  connectedThreads: ConnectedThreadInfo[]
+  onShowContext: () => void
+  onShowBoundaries: () => void
   readingOrdersIsLoading: boolean
   readingOrdersError: Error | null
   connectedThreadsIsLoading: boolean
@@ -83,6 +92,10 @@ export function useRatingView({
   readerContextRequested,
   readingContextRequested,
   readingBoundariesRequested,
+  readingOrders,
+  connectedThreads,
+  onShowContext,
+  onShowBoundaries,
   readingOrdersIsLoading,
   readingOrdersError,
   connectedThreadsIsLoading,
@@ -142,6 +155,10 @@ export function useRatingView({
     issuesRemaining,
     readingContextRequested,
     readingBoundariesRequested,
+    readingOrders,
+    connectedThreads,
+    onShowContext,
+    onShowBoundaries,
     readingOrdersIsLoading,
     readingOrdersError,
     connectedThreadsIsLoading,
