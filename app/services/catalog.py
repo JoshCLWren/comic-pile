@@ -852,11 +852,20 @@ def _classify_series_mapping_rows(
                 classification = "safe_exact_match"
             else:
                 classification = "needs_review_ambiguous"
+        elif issue_info.get("_sibling_roster") == SIBLING_ROSTER_UNIQUE:
+            # A sibling of the confirmed origin whose exact number the selected volume holds
+            # exactly once is safe to bulk-confirm (#2769). Special and ambiguous numbers
+            # never reach this branch: they are classified above.
+            classification = "safe_exact_match"
+        elif issue_info.get("_sibling_roster") == SIBLING_ROSTER_DUPLICATE:
+            classification = "needs_review_ambiguous"
         else:
             classification = "unresolved"
 
         counts[classification] += 1
-        issue_info["row_id"] = _preview_row_id(issue_info.get("issue_id"))
+        issue_info["row_id"] = _preview_row_id(
+            issue_info.get("issue_id"), roster_only=bool(issue_info.get("_roster_only"))
+        )
         issue_info["classification"] = classification
         issue_info["proposed_mapping"] = classification in ("safe_exact_match", "already_confirmed")
         issue_info["default_selected"] = classification == "safe_exact_match"
@@ -873,24 +882,43 @@ def _build_sibling_mapping_rows(
 ) -> list[dict[str, object]]:
     """Build preview rows for siblings in the anchor thread.
 
-    Sibling issues are mapped by matching their issue number against the provider roster.
-    The resulting rows carry the ComicPile thread context, licensing bulk-confirmation.
+    Sibling issues are mapped by matching their exact normalized issue number against the
+    selected provider volume roster. The result is a trichotomy recorded on each row:
+
+    - ``SIBLING_ROSTER_UNIQUE``: the volume holds exactly one issue with this number, so the
+      sibling is licensed for safe bulk-confirmation through the #2722 commit contract;
+    - ``SIBLING_ROSTER_DUPLICATE``: the volume holds several issues with this number, so the
+      sibling stays a visible needs-review leftover and is never bulk-confirmed;
+    - ``SIBLING_ROSTER_NONE``: the volume holds no issue with this number (or the provider
+      roster is unavailable), so the sibling stays unresolved.
+
+    A sibling that already carries a confirmed mapping is settled evidence: its own provider
+    identity is preserved so the classifier reports idempotency (same provider) or a conflict
+    (other provider) truthfully, and no rewrite is ever proposed for it. The resulting rows
+    carry the ComicPile thread context, licensing bulk-confirmation.
     """
-    roster_by_number: dict[str, dict[str, object]] = {}
+    roster_by_number: dict[str, list[dict[str, object]]] = {}
     for roster in roster_rows:
-        num = _issue_number_text(roster.get("issue_number"))
+        num = _normalize_issue_number(_issue_number_text(roster.get("issue_number")))
         if num:
-            roster_by_number[num] = roster
+            roster_by_number.setdefault(num, []).append(roster)
 
     rows: list[dict[str, object]] = []
     for sib in sibling_issues:
-        num = _issue_number_text(sib.get("issue_number"))
-        if not num:
+        raw_number = _issue_number_text(sib.get("issue_number"))
+        if not raw_number:
             continue
 
-        roster_match = roster_by_number.get(num)
-        if roster_match:
-            # Merge sibling metadata with provider identity
+        if sib.get("current_mapping_status") == "confirmed":
+            # Confirmed evidence is settled: keep the sibling's own mapping state untouched.
+            rows.append(sib)
+            continue
+
+        normalized = _normalize_issue_number(raw_number)
+        matches = roster_by_number.get(normalized, []) if normalized else []
+        if len(matches) == 1:
+            # Merge sibling metadata with the unique provider identity
+            roster_match = matches[0]
             row = dict(sib)
             row.update({
                 "provider": provider,
@@ -898,10 +926,16 @@ def _build_sibling_mapping_rows(
                 "title": roster_match.get("title") or sib.get("title"),
                 "confidence": roster_match.get("confidence"),
             })
+            row["_sibling_roster"] = SIBLING_ROSTER_UNIQUE
+            rows.append(row)
+        elif len(matches) > 1:
+            row = dict(sib)
+            row["_sibling_roster"] = SIBLING_ROSTER_DUPLICATE
             rows.append(row)
         else:
-            # Sibling exists locally but not in the provider's volume roster
-            rows.append(sib)
+            row = dict(sib)
+            row["_sibling_roster"] = SIBLING_ROSTER_NONE
+            rows.append(row)
 
     return rows
 
@@ -935,10 +969,15 @@ def _dedupe_rows_by_issue(rows: list[dict[str, object]]) -> list[dict[str, objec
     return ordered
 
 
-def _row_precedence_key(row: dict[str, object]) -> tuple[int, int, str, str]:
-    """Return the deterministic tie-break key used when collapsing rows for one issue."""
+def _row_precedence_key(row: dict[str, object]) -> tuple[int, int, int, str, str]:
+    """Return the deterministic tie-break key used when collapsing rows for one issue.
+
+    A roster-unique sibling proposal outranks any stale unconfirmed candidate row for the
+    same issue, so the user's confirmed volume always supplies the proposed identity.
+    """
     return (
         0 if row.get("thread_id") is not None else 1,
+        0 if row.get("_sibling_roster") == SIBLING_ROSTER_UNIQUE else 1,
         MAPPING_STATUS_PRECEDENCE.get(_issue_number_text(row.get("current_mapping_status")), 4),
         str(row.get("external_id") or ""),
         str(row.get("issue_number") or ""),
