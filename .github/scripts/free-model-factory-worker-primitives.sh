@@ -508,6 +508,59 @@ factory_push_credential() {
   printf '%s' "$token"
 }
 
+stage_trusted_worker_app_helper() {
+  # Copy the worker App helper and mapping from the trusted checkout before any
+  # checkout_target switch, so a PR branch cannot supply the code that picks
+  # the readable-handoff author. Missing files simply disable readable handoffs.
+  [[ -z "${TRUSTED_WORKER_APP_HELPER:-}" ]] || return 0
+  [[ -f .github/scripts/factory_worker_github_app.py ]] || return 0
+  local trusted_dir
+  trusted_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/comic-pile-worker-app.XXXXXX")"
+  cp .github/scripts/factory_worker_github_app.py "$trusted_dir/factory_worker_github_app.py"
+  if [[ -f .github/factory-worker-github-apps.json ]]; then
+    cp .github/factory-worker-github-apps.json "$trusted_dir/factory-worker-github-apps.json"
+    TRUSTED_WORKER_APP_MAPPING="$trusted_dir/factory-worker-github-apps.json"
+    export TRUSTED_WORKER_APP_MAPPING
+  fi
+  TRUSTED_WORKER_APP_HELPER="$trusted_dir/factory_worker_github_app.py"
+  export TRUSTED_WORKER_APP_HELPER
+}
+
+post_readable_handoff() {
+  # Human-readable implementation/repair/review handoff (#3135). Only worker 48
+  # with its App id, installation id, and private key posts one, through its
+  # installation token. Everyone else, and worker 48 until those secrets exist,
+  # posts nothing new and keeps every existing comment on its current identity.
+  # Trusted marker comments never come through here: they keep using the
+  # ambient workflow GH_TOKEN (github-actions[bot]). GH_TOKEN is only overridden
+  # for this one gh call and the git remote is never touched.
+  local kind="$1" number="$2" head="${3:-}" detail="${4:-}"
+  local helper="${TRUSTED_WORKER_APP_HELPER:-.github/scripts/factory_worker_github_app.py}"
+  local mapping="${TRUSTED_WORKER_APP_MAPPING:-${FACTORY_WORKER_APP_MAPPING:-}}"
+  local resolved source token body_file
+  [[ -f "$helper" ]] || return 0
+  if [[ -n "$mapping" ]]; then
+    resolved="$(FACTORY_WORKER_APP_MAPPING="$mapping" python3 "$helper" resolve-handoff 2>/dev/null)" || return 0
+  else
+    resolved="$(python3 "$helper" resolve-handoff 2>/dev/null)" || return 0
+  fi
+  source="${resolved%%$'\t'*}"
+  token="${resolved#*$'\t'}"
+  [[ "$source" == installation && -n "$token" ]] || return 0
+  body_file="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-readable-handoff.XXXXXX.md")"
+  if ! python3 "$helper" render-handoff \
+    --kind "$kind" --worker "$WORKER" --display "$DISPLAY" --model "$MODEL" \
+    --head "$head" --detail "$detail" > "$body_file"; then
+    rm -f "$body_file"
+    return 0
+  fi
+  if ! GH_TOKEN="$token" gh issue comment "$number" --body-file "$body_file" >/dev/null 2>&1; then
+    log "readable ${kind} handoff for #${number} could not be posted by the worker App; trusted state is unaffected" >&2
+  fi
+  rm -f "$body_file"
+  return 0
+}
+
 persist_issue_pr() {
   local number="$1" branch="$2" pr title body base_ref
   [[ -n "$(git status --porcelain)" ]] || return 1
