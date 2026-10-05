@@ -269,12 +269,12 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Secondary actions are in the menu. Read unlocks once the blocker above is cleared.',
+      'Secondary actions are in the menu. Read & Rate unlocks once the blocker above is cleared.',
     )
-    expect(detail).toHaveTextContent(/Read unlocks once the blocker above is cleared/i)
+    expect(detail).toHaveTextContent(/Read & Rate unlocks once the blocker above is cleared/i)
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
-    const readButton = within(actionsGroup).getByRole('button', { name: 'Read' })
+    const readButton = within(actionsGroup).getByRole('button', { name: 'Read & Rate' })
     expect(readButton).toBeDisabled()
 
     expect(screen.getByRole('link', { name: 'Open Prequel Thread' })).toHaveAttribute(
@@ -298,7 +298,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Secondary actions are in the menu. Read unlocks once the blocker above is cleared.',
+      'Secondary actions are in the menu. Read & Rate unlocks once the blocker above is cleared.',
     )
   })
 
@@ -312,10 +312,10 @@ describe('QueueThreadCard', () => {
     })
 
     expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Read unlocks once the blocker/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Read & Rate unlocks once the blocker/i)).not.toBeInTheDocument()
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
-    expect(within(actionsGroup).getByRole('button', { name: 'Read' })).not.toBeDisabled()
+    expect(within(actionsGroup).getByRole('button', { name: 'Read & Rate' })).not.toBeDisabled()
   })
 
   it('keeps crossover load errors out of dependency continuity styling', () => {
@@ -327,14 +327,14 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('Crossovers unavailable')).toHaveClass('text-red-300/80')
   })
 
-  it('still disables Read when the thread is blocked', () => {
+  it('still disables Read & Rate when the thread is blocked', () => {
     renderCard(createMockThread(), {
       isBlocked: true,
       readDisabled: true,
       readDisabledReason: 'Blocked by dependency',
     })
 
-    expect(screen.getByRole('button', { name: 'Read' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Read & Rate' })).toBeDisabled()
   })
 
   it('composes hover with the drag-over tint instead of overriding it on the shared row', () => {
@@ -603,7 +603,7 @@ describe('QueueThreadCard', () => {
 
       const actionsContainer = screen.getByRole('group', { name: /Actions for Test Thread/i })
 
-      const readButton = actionsContainer.querySelector('button[aria-label="Read"]')
+      const readButton = actionsContainer.querySelector('button[aria-label="Read & Rate"]')
 
       // SAFETY: the queried node is the element the component rendered under test
       await user.click(readButton as HTMLElement)

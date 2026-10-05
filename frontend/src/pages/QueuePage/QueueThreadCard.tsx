@@ -212,7 +212,7 @@ export default function QueueThreadCard({
                 </button>
               )}
               <p className="mt-1.5 text-[var(--theme-text-dim)]">
-                Secondary actions are in the menu. Read unlocks once the
+                Secondary actions are in the menu. Read & Rate unlocks once the
                 blocker{extraBlockerCount > 0 ? 's' : ''} above{' '}
                 {extraBlockerCount > 0 ? 'are' : 'is'} cleared.
               </p>
