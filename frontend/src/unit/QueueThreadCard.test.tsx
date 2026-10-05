@@ -397,6 +397,12 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('Trade Paperback')).toBeInTheDocument()
   })
 
+  it('renders singular "1 issue remaining" for a single remaining issue', () => {
+    const thread = createMockThread({ issues_remaining: 1 })
+    renderCard(thread)
+    expect(screen.getByText('1 issue remaining')).toBeInTheDocument()
+  })
+
   it('renders issues remaining count', () => {
     const thread = createMockThread({ issues_remaining: 7 })
     renderCard(thread)
@@ -415,14 +421,23 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('3 issues remaining')).toBeInTheDocument()
   })
 
+  it('renders singular "1 issue remaining" in the "Up next" line when only one issue remains', () => {
+    const thread = createMockThread({
+      total_issues: 10,
+      issues_remaining: 1,
+      next_unread_issue_number: '5',
+    })
+    renderCard(thread)
+    expect(screen.getByText('Up next: #5 · 1 issue remaining')).toBeInTheDocument()
+  })
+
   it('renders next unread issue number when migrated and available', () => {
     const thread = createMockThread({
       issues_remaining: 3,
       next_unread_issue_number: '5',
     })
     renderCard(thread)
-    expect(screen.getByText(/Up next: #5/)).toBeInTheDocument()
-    expect(screen.getByText(/3 remaining/)).toBeInTheDocument()
+    expect(screen.getByText('Up next: #5 · 3 issues remaining')).toBeInTheDocument()
   })
 
   it('renders notes when present', () => {

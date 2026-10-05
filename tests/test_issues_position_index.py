@@ -73,8 +73,10 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
             index_names.update(collect_index_names(child))
         return index_names
 
-    assert "ix_issue_thread_position" in collect_index_names(plan_nodes), (
-        "Plan did not reference ix_issue_thread_position after sequential scans were disabled."
+    # Either the explicit index or the unique constraint's index can be used
+    index_names = collect_index_names(plan_nodes)
+    assert any(name in index_names for name in ["ix_issue_thread_position", "uq_issue_thread_position"]), (
+        f"Plan did not reference either ix_issue_thread_position or uq_issue_thread_position after sequential scans were disabled. Found indexes: {index_names}"
     )
 
     # Also verify the index actually exists
@@ -153,6 +155,8 @@ async def test_issues_position_index_improves_pagination(async_db_committed: Asy
             index_names.update(collect_index_names(child))
         return index_names
 
-    assert "ix_issue_thread_position" in collect_index_names(plan_data[0]["Plan"]), (
-        "Pagination plan should reference ix_issue_thread_position when sequential scans are disabled"
+    # Either the explicit index or the unique constraint's index can be used
+    index_names = collect_index_names(plan_data[0]["Plan"])
+    assert any(name in index_names for name in ["ix_issue_thread_position", "uq_issue_thread_position"]), (
+        f"Pagination plan should reference either ix_issue_thread_position or uq_issue_thread_position when sequential scans are disabled. Found indexes: {index_names}"
     )

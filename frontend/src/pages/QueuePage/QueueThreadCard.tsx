@@ -162,8 +162,8 @@ export default function QueueThreadCard({
             {thread.issues_remaining !== null && (
               <span className="text-sm font-medium text-[var(--theme-text-muted)]">
                 {isMigrated && !isBlocked && thread.next_unread_issue_number
-                  ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
-                  : `${thread.issues_remaining} issues remaining`}
+                  ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`
+                  : `${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`}
               </span>
             )}
           </div>
