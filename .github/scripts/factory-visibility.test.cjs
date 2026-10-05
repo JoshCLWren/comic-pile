@@ -423,3 +423,27 @@ test('enroll sweep skips factory:local PRs but still repairs other PRs', async (
   );
   assert.ok(!calls.some(call => call.labels.includes('factory:local')));
 });
+
+test('enroll leaves manual-only PRs untouched even without factory:local', async () => {
+  const calls = [];
+  const manual = enrollPr(3157, {
+    body: 'Infra change.\n\n<!-- factory-execution:manual-only -->\n',
+  });
+  const github = enrollGithubFor({
+    pulls: [manual, enrollPr(3201, { body: 'ordinary PR' })],
+    labelsByPr: {
+      3157: ['factory', 'factory:unowned'],
+      3201: ['factory', 'factory:unowned'],
+    },
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile.reconcileMissingPrLabels({
+    github,
+    context: contextFor('pull_request_target', { pull_request: manual }),
+  });
+  assert.equal(calls.length, 0);
+  await reconcile.reconcileMissingPrLabels({ github, context: contextFor('schedule', {}) });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].issue_number, 3201);
+  assert.ok(calls[0].labels.includes('factory:review'));
+});
