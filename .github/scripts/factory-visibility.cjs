@@ -61,9 +61,24 @@ const STAGE_LABELS = [
 ];
 const ADVANCED_PR_STAGES = new Set(['factory:review', 'factory:ci', 'factory:ready']);
 const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+const TRUSTED_APP_SLUGS = new Set(['github-actions']);
 
-function trusted(association) {
-  return TRUSTED_ASSOCIATIONS.has(association);
+function performedViaUntrustedApp(comment) {
+  const app = comment?.performed_via_github_app;
+  if (!app || typeof app !== 'object') return false;
+  const slug = app.slug;
+  if (typeof slug !== 'string' || !slug) return false;
+  return !TRUSTED_APP_SLUGS.has(slug);
+}
+
+function trusted(comment) {
+  // Mirror Python trusted_comment_bodies: reject non-github-actions Apps even with a
+  // trusted association; accept human OWNER/MEMBER/COLLABORATOR with no App; accept
+  // exact github-actions[bot] regardless of association. Never trust any other App.
+  if (performedViaUntrustedApp(comment)) return false;
+  const association = comment?.author_association;
+  if (TRUSTED_ASSOCIATIONS.has(association)) return true;
+  return comment?.user?.login === 'github-actions[bot]';
 }
 
 function workerFrom(body) {
@@ -232,7 +247,7 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
   }));
   comments.sort((left, right) => new Date(right.created_at) - new Date(left.created_at));
   for (const comment of comments) {
-    if (!trusted(comment.author_association)) continue;
+    if (!trusted(comment)) continue;
     const body = comment.body || '';
     if (/comic-pile-factory-claim-released-v\d+:/.test(body)) return 'factory:unowned';
     const worker = workerFrom(body);
@@ -266,7 +281,7 @@ async function reconcileMissingPrLabels({ github, context }) {
       for (const comment of [...comments].sort(
         (left, right) => new Date(right.created_at) - new Date(left.created_at),
       )) {
-        if (!TRUSTED_ASSOCIATIONS.has(comment.author_association)) continue;
+        if (!trusted(comment)) continue;
         const match = (comment.body || '').match(
           /comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required)/,
         );
@@ -288,7 +303,7 @@ async function reconcile({ github, context }) {
     const comment = context.payload.comment;
     const body = comment?.body || '';
     if (!body.includes('comic-pile-factory-')) return;
-    if (!trusted(comment?.author_association)) return;
+    if (!trusted(comment)) return;
 
     const number = context.payload.issue.number;
     const current = await currentLabels(github, context, number);
@@ -352,7 +367,7 @@ async function reconcile({ github, context }) {
     }
 
     const review = context.payload.review;
-    if (!trusted(review.author_association)) return;
+    if (!trusted(review)) return;
     const state = (review.state || '').toUpperCase();
     // Native APPROVED must never rewrite labels. A wired pull_request_review
     // path must not reset controller-set factory:ci / factory:ready back to
@@ -375,6 +390,10 @@ module.exports._test = {
   reconcileLabels,
   withRetry,
   workerFrom,
+  trusted,
+  performedViaUntrustedApp,
+  TRUSTED_APP_SLUGS,
+  TRUSTED_ASSOCIATIONS,
   EXPECTED_WORKER_IDS,
   FIXED_MODEL_OWNER_LABELS,
   WORKER_OWNER_LABELS,

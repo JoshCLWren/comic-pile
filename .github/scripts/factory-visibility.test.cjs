@@ -2,7 +2,14 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const reconcile = require('./factory-visibility.cjs');
-const { ownerFor, reconcileLabels, withRetry } = reconcile._test;
+const {
+  ownerFor,
+  reconcileLabels,
+  withRetry,
+  trusted,
+  performedViaUntrustedApp,
+  TRUSTED_APP_SLUGS,
+} = reconcile._test;
 
 function contextFor(eventName, payload) {
   return {
@@ -557,4 +564,137 @@ test('dismissed review resets to factory:review', async () => {
   assert.ok(calls[0].labels.includes('factory:review'));
   assert.ok(!calls[0].labels.includes('factory:changes-requested'));
   assert.ok(!calls[0].labels.includes('factory:ci'));
+});
+
+test('worker GitHub App with OWNER association is NOT trusted for marker reconcile', () => {
+  const workerAppComment = {
+    author_association: 'OWNER',
+    user: { login: 'mark-cordova[bot]' },
+    body: '<!-- comic-pile-factory-implement-claim-v3:issue-123:mark-cordova:456 -->',
+    performed_via_github_app: { slug: 'mark-cordova' },
+  };
+  assert.equal(trusted(workerAppComment), false);
+  assert.equal(performedViaUntrustedApp(workerAppComment), true);
+});
+
+test('github-actions[bot] with NONE association IS trusted for marker reconcile', () => {
+  const actionsComment = {
+    author_association: 'NONE',
+    user: { login: 'github-actions[bot]' },
+    body: '<!-- comic-pile-factory-implement-claim-v3:issue-123:local:456 -->',
+    performed_via_github_app: { slug: 'github-actions' },
+  };
+  assert.equal(trusted(actionsComment), true);
+  assert.equal(performedViaUntrustedApp(actionsComment), false);
+});
+
+test('github-actions App slug with a non-actions login and NONE association is NOT trusted', () => {
+  // Mirrors Python trusted_comment_bodies: require exact github-actions[bot] login
+  // when association is not OWNER/MEMBER/COLLABORATOR. Slug alone is not enough.
+  const spoof = {
+    author_association: 'NONE',
+    user: { login: 'not-actions[bot]' },
+    body: '<!-- comic-pile-factory-implement-claim-v3:issue-123:local:456 -->',
+    performed_via_github_app: { slug: 'github-actions' },
+  };
+  assert.equal(trusted(spoof), false);
+  assert.equal(performedViaUntrustedApp(spoof), false);
+});
+
+test('github-actions[bot] with NONE and no performed_via_github_app IS trusted', () => {
+  const actionsComment = {
+    author_association: 'NONE',
+    user: { login: 'github-actions[bot]' },
+    body: '<!-- comic-pile-factory-implement-claim-v3:issue-123:local:456 -->',
+  };
+  assert.equal(trusted(actionsComment), true);
+});
+
+test('human OWNER comment with no App IS trusted', () => {
+  const humanComment = {
+    author_association: 'OWNER',
+    user: { login: 'JoshCLWren' },
+    body: '<!-- comic-pile-factory-implement-claim-v3:issue-123:local:456 -->',
+  };
+  assert.equal(trusted(humanComment), true);
+  assert.equal(performedViaUntrustedApp(humanComment), false);
+});
+
+test('TRUSTED_APP_SLUGS is exactly github-actions', () => {
+  assert.deepEqual([...TRUSTED_APP_SLUGS].sort(), ['github-actions']);
+});
+
+test('issue_comment reconcile rejects worker App comment even with OWNER association', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:building', 'factory:unowned'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'mark-cordova[bot]' },
+        body: '<!-- comic-pile-factory-implement-progress-v3:issue-44:mark-cordova:123 -->',
+        performed_via_github_app: { slug: 'mark-cordova' },
+      },
+    }),
+  });
+  // Worker App comment should be rejected, no label changes
+  assert.equal(calls.length, 0);
+});
+
+test('pull_request_review reconcile rejects worker App review even with OWNER association', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:review', 'factory:local'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_review', {
+      action: 'submitted',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        number: 100,
+        head: {
+          ref: 'factory/999-local',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:review' }, { name: 'factory:local' }],
+      },
+      review: {
+        author_association: 'OWNER',
+        user: { login: 'mark-cordova[bot]' },
+        state: 'APPROVED',
+        performed_via_github_app: { slug: 'mark-cordova' },
+      },
+    }),
+  });
+  // Worker App review should be rejected, no label changes
+  assert.equal(calls.length, 0);
+});
+
+test('pull_request_review trust: github-actions[bot] is trusted, worker App is not', () => {
+  // Order-independent with #3157: native APPROVED must not assert stage/label
+  // promotion here. #3157 makes APPROVED a label no-op; this contract only
+  // checks who may author a trusted review signal.
+  const actionsReview = {
+    author_association: 'NONE',
+    user: { login: 'github-actions[bot]' },
+    state: 'APPROVED',
+    performed_via_github_app: { slug: 'github-actions' },
+  };
+  const workerReview = {
+    author_association: 'OWNER',
+    user: { login: 'mark-cordova[bot]' },
+    state: 'APPROVED',
+    performed_via_github_app: { slug: 'mark-cordova' },
+  };
+  assert.equal(trusted(actionsReview), true);
+  assert.equal(performedViaUntrustedApp(actionsReview), false);
+  assert.equal(trusted(workerReview), false);
+  assert.equal(performedViaUntrustedApp(workerReview), true);
 });

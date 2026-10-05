@@ -81,3 +81,56 @@ The independent `.github/workflows/factory-heartbeat-watchdog.yml` workflow chec
 
 Heartbeat writes are mandatory telemetry but never substantive factory progress. They do not satisfy a heartbeat outcome, outrank delivery work, extend a lease, justify ending a run, or excuse a missing implementation. If the update fails, retry once through another available GitHub path, preserve the telemetry failure in the user-visible update when material, and continue delivery.
 
+## Durable GitHub App identity contract
+
+This section states the durable App identity contract that every active factory worker App must satisfy. PR #3142 (worker 48, Mark Cordova) is the first instance; the rules below apply roster-wide.
+
+### One App per active durable worker
+
+The canonical roster of active durable workers is `.github/factory-expected-workers.json` (`expected_workers` array). Each active worker gets exactly one GitHub App identity. Retired workers (`retired_workers`) keep their persisted mapping but never receive new credentials.
+
+The provenance key is the **worker number** (e.g., `48`). All mapping, bootstrap, and credential logic keys off this number.
+
+### Faker bootstrap is explicit and one-time
+
+- **Version**: Faker `40.40.0` exactly (enforced at runtime).
+- **Locale**: `en_US`.
+- **Constructor**: a brand-new `Faker()` / `Faker(en_US)` instance per worker (not a shared instance).
+- **Seed**: `seed_instance(worker_number + 100)`.
+- **First call**: `name()` → persisted as `display_name`.
+- **Collision fallback**: if the first `name()` is taken as a GitHub App name at creation time, call `name()` exactly once more on the **same seeded instance**, persist that second name as `display_name`, and stop. Do not keep calling Faker.
+- **Never re-roll**: The `display_name` is written once to `.github/factory-worker-github-apps.json`. Subsequent reads load the persisted name; Faker is never invoked again for that worker.
+
+### Persisted mapping never re-rolls
+
+`.github/factory-worker-github-apps.json` stores:
+- `worker` (provenance key)
+- `display_name` (bootstrapped once)
+- `app_id`, `app_login`, `installation_id` (null until Josh creates the App)
+- `profile`: must contain "Autonomous ComicPile Factory worker"
+- Model and worker number appear **only in human-readable PR text**, never in the App profile or metadata
+
+### Trusted marker authors: `github-actions[bot]` only
+
+`TRUSTED_FACTORY_APP_SLUGS == {"github-actions"}` and `TRUSTED_MARKER_APP_SLUGS == frozenset({"github-actions"})`.
+
+**Worker Apps are excluded from every trusted-marker author path**, including:
+- `factory_review_policy.performed_via_untrusted_app`
+- `factory_work_policy.comment_is_trusted`
+- `stale_pr_decay.comment_is_trusted`
+- `factory-revocation-fence.comment_is_trusted`
+- `factory-visibility.cjs` `trusted()` / `performedViaUntrustedApp()`
+
+A worker App slug (e.g., `mark-cordova`) with `OWNER`/`MEMBER`/`COLLABORATOR` association is **not trusted** for marker-driven label reconcile, review authorization, or any provenance-critical path. Only `github-actions[bot]` (the `GITHUB_TOKEN` actor) and human owner/member/collaborator comments (with no App) are trusted marker authors.
+
+### Controller provenance remains authoritative
+
+The review controller writes `comic-pile-factory-semantic-review-v1` and `comic-pile-factory-head-contributor-v1` markers as **entire comment bodies**. These markers carry `provenance_complete` for the exact head.
+
+A native-style GitHub `APPROVE` review **does not** satisfy `head_has_authorized_approval` / `approval_can_promote` without controller marker provenance:
+- When `provenance_complete == False` (no controller marker for the exact head), the head is fail-closed: **two distinct eligible reviewers** are required, and the producer cannot self-approve.
+- When `provenance_complete == True`, **one eligible reviewer** authorizes the head.
+- The producer (worker that opened the PR) is **always excluded** from the eligible reviewer set, regardless of provenance.
+
+This contract ensures that worker GitHub Apps can push and create PRs, but they cannot forge review authorization or trusted marker provenance.
+
