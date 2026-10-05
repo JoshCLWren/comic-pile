@@ -6,6 +6,8 @@ import smtplib
 import urllib.parse
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from email.message import EmailMessage
+from typing import cast
 
 import pytest
 from httpx import AsyncClient
@@ -16,8 +18,8 @@ from app.config import clear_settings_cache, get_email_settings
 from app.repositories.user_repository import create_user, get_user_by_username
 from app.services.password_reset_mailer import (
     FakePasswordResetMailer,
-    PasswordResetDeliveryError,
     GmailPasswordResetMailer,
+    PasswordResetDeliveryError,
     build_password_reset_text_body,
     build_password_reset_url,
     get_fake_mailer,
@@ -153,7 +155,7 @@ async def test_gmail_adapter_sends_message_without_logging_token(
             expires_at=expires_at,
         )
 
-    message = captured["message"]
+    message = cast(EmailMessage, captured["message"])
     assert message["From"] == "Comic Pile <owner@gmail.com>"
     assert message["To"] == "user@example.com"
     assert message["Subject"]
@@ -205,6 +207,7 @@ async def test_gmail_provider_failure_raises_without_token_in_message(
         )
     assert "token-that-must-not-leak" not in str(exc_info.value)
 
+
 def test_mailer_resolution_prefers_gmail_when_configured_else_fake(
     _clean_mailer_state: None,
     monkeypatch: pytest.MonkeyPatch,
@@ -222,6 +225,7 @@ def test_mailer_resolution_prefers_gmail_when_configured_else_fake(
     assert mailer.origin == "https://app.example.com"
     assert mailer.username == "owner@gmail.com"
     assert mailer.app_password == "app-password"
+
 
 def test_placeholder_gmail_secret_counts_as_unconfigured(
     _clean_mailer_state: None,
