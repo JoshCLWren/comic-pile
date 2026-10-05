@@ -4,17 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { DecisionCard } from '../pages/RollPage/components/DecisionCard'
 
-// Mock heavy dependencies
-vi.mock('../../../components/Modal', () => ({
-  default: ({ children, isOpen, title, _onClose }: any) => 
-    isOpen ? <div data-testid="modal">{title}{children}</div> : null,
-}))
-
-vi.mock('../../../components/GlossaryLink', () => ({
-  default: ({ children }: { id: string; children: React.ReactNode }) => 
-    <span data-testid="glossary-link">{children}</span>,
-}))
-
 function makeDecisionCardProps(overrides: Partial<DecisionCardProps> = {}) {
   return {
     activeRatingThread: {
@@ -67,97 +56,81 @@ interface DecisionCardProps {
   onCancel: () => void
 }
 
+function renderDecisionCard(props: DecisionCardProps): void {
+  render(
+    <MemoryRouter>
+      <DecisionCard {...props} />
+    </MemoryRouter>,
+  )
+}
+
+function ratingReadout(): HTMLElement {
+  return screen.getByTestId('decision-card')
+}
+
 describe('DecisionCard', () => {
-  it('renders rating states and invokes controls in auto mode', async () => {
+  it('renders rating states and invokes controls in automatic mode', async () => {
     const callbacks = makeDecisionCardProps()
     const user = userEvent.setup()
 
-    render(
-      <MemoryRouter>
-        <DecisionCard {...callbacks} />
-      </MemoryRouter>
-    )
+    renderDecisionCard(callbacks)
 
-    // Test basic rendering
     expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByText('3.0')).toBeInTheDocument()
-    
-    // Test ladder move display in auto mode
-    const ladderMove = screen.getByText('d6 → d8')
-    expect(ladderMove).toBeInTheDocument()
-    
-    // Test rating slider - range inputs store whole numbers without decimal
+
+    // Automatic mode keeps the ladder move readout and its glossary link.
+    expect(ratingReadout().textContent).toContain('d6 → d8')
+
     const ratingSlider = screen.getByRole('slider')
     expect(ratingSlider).toHaveValue('3')
-    
-    // Test button interactions
+
     await user.click(screen.getByRole('button', { name: /mark read & save/i }))
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
-    
+
     await user.click(screen.getByRole('button', { name: /snooze/i }))
     expect(callbacks.onSnooze).toHaveBeenCalled()
-    
+
     await user.click(screen.getByRole('button', { name: /cancel roll/i }))
     expect(callbacks.onCancel).toHaveBeenCalled()
   })
 
-  it('shows manual die message when manual die is set', () => {
+  // Issue #3144: manual mode pins the die, so the ladder move the card used to
+  // promise never happens and the readout must stop advertising one.
+  it('reports the pinned die instead of a ladder move in manual die mode', () => {
     const callbacks = makeDecisionCardProps({
       manualDie: 20,
       currentDie: 20,
       predictedDie: 12,
     })
 
-    render(
-      <MemoryRouter>
-        <DecisionCard {...callbacks} />
-      </MemoryRouter>
-    )
+    renderDecisionCard(callbacks)
 
-    // Test that manual die message is shown instead of ladder move
-    expect(screen.getByText('Manual die pinned at d20')).toBeInTheDocument()
-    expect(screen.queryByText('d20 → d12')).not.toBeInTheDocument()
-    
-    // Test that rating still works
+    expect(ratingReadout().textContent).toContain('Manual mode is active at d20')
+    expect(ratingReadout().textContent).not.toContain('→')
+    expect(ratingReadout().textContent).not.toContain('d12')
     expect(screen.getByText('3.0')).toBeInTheDocument()
   })
 
-  it('shows ladder move when manual die is not set (auto mode)', () => {
+  it('keeps the ladder move when no die is pinned', () => {
     const callbacks = makeDecisionCardProps({
       manualDie: null,
       currentDie: 6,
       predictedDie: 8,
     })
 
-    render(
-      <MemoryRouter>
-        <DecisionCard {...callbacks} />
-      </MemoryRouter>
-    )
+    renderDecisionCard(callbacks)
 
-    // Test that ladder move is shown in auto mode
-    expect(screen.getByText('d6 → d8')).toBeInTheDocument()
-    expect(screen.queryByText('Manual die pinned at d6')).not.toBeInTheDocument()
+    expect(ratingReadout().textContent).toContain('d6 → d8')
+    expect(ratingReadout().textContent).not.toContain('Manual mode is active')
   })
 
-  it('handles rating changes correctly in both modes', async () => {
+  it('forwards rating changes', () => {
     const callbacks = makeDecisionCardProps()
-    const user = userEvent.setup()
 
-    render(
-      <MemoryRouter>
-        <DecisionCard {...callbacks} />
-      </MemoryRouter>
-    )
+    renderDecisionCard(callbacks)
 
-    const ratingSlider = screen.getByRole('slider')
-    
-    // Test rating change in auto mode - fireEvent.change works better for range inputs
-    fireEvent.change(ratingSlider, { target: { value: '4.0' } })
+    fireEvent.change(screen.getByRole('slider'), { target: { value: '4.0' } })
     expect(callbacks.onUpdateRating).toHaveBeenCalledWith('4.0')
-    
-    // Test that ladder update would happen (but we can't test the actual update without re-render)
-    // The key point is that the callback is called correctly
   })
 
   it('shows error message when present', () => {
@@ -165,11 +138,7 @@ describe('DecisionCard', () => {
       errorMessage: 'Failed to save rating',
     })
 
-    render(
-      <MemoryRouter>
-        <DecisionCard {...callbacks} />
-      </MemoryRouter>
-    )
+    renderDecisionCard(callbacks)
 
     expect(screen.getByText('Failed to save rating')).toBeInTheDocument()
   })
@@ -180,11 +149,7 @@ describe('DecisionCard', () => {
       snoozeIsPending: true,
     })
 
-    render(
-      <MemoryRouter>
-        <DecisionCard {...callbacks} />
-      </MemoryRouter>
-    )
+    renderDecisionCard(callbacks)
 
     expect(screen.getByRole('button', { name: /saving…/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /snoozing…/i })).toBeInTheDocument()
@@ -195,11 +160,7 @@ describe('DecisionCard', () => {
       skipIsPending: false,
     })
 
-    render(
-      <MemoryRouter>
-        <DecisionCard {...callbacks} />
-      </MemoryRouter>
-    )
+    renderDecisionCard(callbacks)
 
     expect(screen.getByRole('button', { name: /skip/i })).toBeInTheDocument()
   })
@@ -209,11 +170,7 @@ describe('DecisionCard', () => {
       skipIsPending: true,
     })
 
-    render(
-      <MemoryRouter>
-        <DecisionCard {...callbacks} />
-      </MemoryRouter>
-    )
+    renderDecisionCard(callbacks)
 
     expect(screen.getByTestId('skip-roll')).toHaveTextContent('Skipping…')
   })

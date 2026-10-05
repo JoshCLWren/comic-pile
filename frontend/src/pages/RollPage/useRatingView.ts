@@ -3,10 +3,11 @@ import { computePredictedDie } from './utils'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import type { ReaderContextResponse } from '../../types'
+import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: import('../../types/rollBootstrap').RollBootstrapResponse | null
+  bootstrap?: RollBootstrapResponse | null
   readerContextRequested: boolean
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
