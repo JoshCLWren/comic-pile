@@ -266,9 +266,6 @@ export default function RollPage() {
       state.suppressPendingAutoOpenRef.current = true
       await rating.enterRatingView(response.thread_id, response.result ?? null, threadMetadata)
       state.setRolledResult(response.result ?? null)
-      setTimeout(() => {
-        document.getElementById('rating-view-top')?.focus()
-      }, 0)
     } catch (error) {
       state.setErrorMessage(getApiErrorDetail(error))
     }
@@ -280,10 +277,6 @@ export default function RollPage() {
     readerContextRequested: rating.readerContextRequested,
     readingContextRequested: rating.readingContextRequested,
     readingBoundariesRequested: rating.readingBoundariesRequested,
-    readingOrders: rating.readingOrders,
-    connectedThreads: rating.connectedThreads,
-    onShowContext: () => rating.fetchReadingContext(state.activeRatingThread?.id ?? null),
-    onShowBoundaries: () => rating.fetchReadingBoundaries(),
     readingOrdersIsLoading: rating.readingOrdersIsLoading,
     readingOrdersError: rating.readingOrdersError,
     connectedThreadsIsLoading: rating.connectedThreadsIsLoading,

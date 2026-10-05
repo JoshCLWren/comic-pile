@@ -83,10 +83,6 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     issuesRemaining: 5,
     readingContextRequested: false,
     readingBoundariesRequested: false,
-    readingOrders: [],
-    connectedThreads: [],
-    onShowContext: vi.fn(),
-    onShowBoundaries: vi.fn(),
     readingOrdersIsLoading: false,
     readingOrdersError: null,
     connectedThreadsIsLoading: false,
@@ -187,11 +183,10 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
 
     expect(cells[0].dataset.testid).toBe('rating-region-comic')
     expect(cells[1].dataset.testid).toBe('rating-region-decision')
-    // #2764: the optional cards live inside the decision region, not as grid peers.
-    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
-    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
 
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
@@ -203,21 +198,19 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     const { container } = render(ratingView({ readerContext: richReaderContext() }))
     expect(container.querySelector('[data-testid="rating-region-comic"]')!.className).toContain('min-w-0')
     expect(container.querySelector('[data-testid="rating-region-decision"]')!.className).toContain('min-w-0')
-    expect(container.querySelector('[data-testid="rating-region-reading-optional"]')!.className).toContain('min-w-0')
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 
-  it('stacks the decision card and optional cards in the decision region', () => {
+  it('stacks the decision card and context disclosure in the decision region', () => {
     const { container } = render(ratingView({ readerContext: richReaderContext() }))
     const decisionRegion = container.querySelector<HTMLElement>('[data-testid="rating-region-decision"]')
     const decisionCard = container.querySelector<HTMLElement>('[data-testid="decision-card"]')
-    const optionalCards = container.querySelector<HTMLElement>('[data-testid="rating-region-reading-optional"]')
+    const contextDisclosure = container.querySelector<HTMLElement>('[data-testid="context-disclosure"]')
     expect(decisionRegion).not.toBeNull()
     expect(decisionCard).not.toBeNull()
-    expect(optionalCards).not.toBeNull()
+    expect(contextDisclosure).not.toBeNull()
     expect(decisionRegion!.contains(decisionCard)).toBe(true)
-    expect(decisionRegion!.contains(optionalCards)).toBe(true)
-    expect(optionalCards!.contains(container.querySelector('[data-testid="reading-context-card"]'))).toBe(true)
-    expect(optionalCards!.contains(container.querySelector('[data-testid="reading-boundaries-card"]'))).toBe(true)
+    expect(decisionRegion!.contains(contextDisclosure)).toBe(true)
     expect(decisionCard!.className).not.toContain('xl:col-span-full')
     expect(container.querySelector('[data-testid="rating-actions"]')).not.toBeNull()
   })
@@ -264,16 +257,15 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
   })
 })
 
-describe('RatingView optional reading cards restored (#2764)', () => {
-  it('contains collapsed Reading Context and Reading Boundaries cards but no Why this?', () => {
+describe('RatingView reading-context affordances retired (#2711)', () => {
+  it('contains no Why this?, Reading Context or Reading Boundaries affordance', () => {
     render(ratingView())
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('context-disclosure')).not.toBeInTheDocument()
-    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
-    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
-    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-content')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 })
 

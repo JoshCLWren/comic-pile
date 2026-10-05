@@ -6,7 +6,7 @@ import {
 } from '../workspaceLayout'
 import { ComicPillar } from './ComicPillar'
 import { DecisionCard } from './DecisionCard'
-import { OptionalReadingCards } from './OptionalReadingCards'
+import { ContextDisclosure } from './ContextDisclosure'
 
 interface RatingViewProps {
   data: RatingViewData
@@ -33,18 +33,14 @@ export function RatingView({ data }: RatingViewProps) {
     isReaderContextLoading,
     ratingViewTopRef,
   } = data
-  // Local card open state resets with each rated issue so an opened surface
-  // can never leak into the next rating session.
-  const optionalCardsKey = data.activeRatingThread?.id ?? 'none'
 
-  return (
-    <div
-      ref={ratingViewTopRef}
-      id="rating-view-top"
-      data-testid="rating-view-top"
-      tabIndex={-1}
-      className="relative z-10 space-y-4 p-3 md:p-4 focus:outline-none"
-    >
+    return (
+      <div
+        ref={ratingViewTopRef}
+        data-testid="rating-view-top"
+        tabIndex={-1}
+        className="relative z-10 space-y-4 p-3 md:p-4 focus:outline-none"
+      >
       <div
         className={`grid items-start ${ROLL_WORKSPACE_GUTTER} ${ROLL_WORKSPACE_MAX_WIDTH} lg:justify-center ${ROLL_WORKSPACE_TRACKS}`}
         data-testid="rating-pillars-grid"
@@ -76,22 +72,9 @@ export function RatingView({ data }: RatingViewProps) {
             onCancel={onCancel}
           />
 
-          <OptionalReadingCards
-            key={optionalCardsKey}
-            activeRatingThread={data.activeRatingThread}
+          <ContextDisclosure
             readerContext={readerContext}
-            isReaderContextLoading={isReaderContextLoading}
-            readerContextError={data.readerContextError}
-            readingContextRequested={data.readingContextRequested}
-            readingBoundariesRequested={data.readingBoundariesRequested}
-            readingOrders={data.readingOrders}
-            readingOrdersIsLoading={data.readingOrdersIsLoading}
-            readingOrdersError={data.readingOrdersError}
-            connectedThreads={data.connectedThreads}
-            connectedThreadsIsLoading={data.connectedThreadsIsLoading}
-            connectedThreadsError={data.connectedThreadsError}
-            onShowContext={data.onShowContext}
-            onShowBoundaries={data.onShowBoundaries}
+            isLoading={isReaderContextLoading}
           />
         </div>
       </div>

@@ -82,11 +82,12 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
         format: pendingMetadata.format ?? '',
         issues_remaining: pendingMetadata.issues_remaining ?? 0,
         queue_position: pendingMetadata.queue_position ?? 0,
+        total_issues: pendingMetadata.total_issues ?? null,
+        reading_progress: pendingMetadata.reading_progress ?? null,
         issue_id: pendingMetadata.issue_id ?? null,
         issue_number: pendingMetadata.issue_number ?? null,
         next_issue_id: pendingMetadata.next_issue_id ?? null,
         next_issue_number: pendingMetadata.next_issue_number ?? null,
-        total_issues: pendingMetadata.total_issues ?? null,
         reading_progress: pendingMetadata.reading_progress ?? null,
         last_rolled_result: pendingMetadata.last_rolled_result ?? pendingResult,
       })
@@ -95,11 +96,6 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
       setRating(3.0)
       setErrorMessage('')
       setIsRatingView(true)
-      // Hydrating an existing pending read unmounts the Roll CTA that held
-      // keyboard focus, so move focus to the rating view top (#3147).
-      setTimeout(() => {
-        document.getElementById('rating-view-top')?.focus()
-      }, 0)
     }
     setIsActionSheetOpen(false)
     setIsOverrideOpen(false)

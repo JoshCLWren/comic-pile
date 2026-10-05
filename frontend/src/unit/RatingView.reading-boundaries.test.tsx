@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
@@ -58,10 +57,6 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     issuesRemaining: 5,
     readingContextRequested: false,
     readingBoundariesRequested: false,
-    readingOrders: [],
-    connectedThreads: [],
-    onShowContext: vi.fn(),
-    onShowBoundaries: vi.fn(),
     readingOrdersIsLoading: false,
     readingOrdersError: null,
     connectedThreadsIsLoading: false,
@@ -103,36 +98,16 @@ function makeContext(edges: ReaderContextResponse['local_chain']['edges'], serie
   }
 }
 
-describe('RatingView Reading Boundaries optional card (#2764 restores #2519 behavior)', () => {
-  it('renders collapsed Reading Context and Reading Boundaries cards with an active rating thread', () => {
-    renderWithToast(ratingView())
-    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
-    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
-    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-content')).not.toBeInTheDocument()
-  })
-
-  it('renders no optional cards without an active rating thread', () => {
+describe('RatingView Reading Boundaries retired control (#2711 supersedes #2519)', () => {
+  it('renders no Reading Context or Reading Boundaries lazy controls without an active rating thread', () => {
     renderWithToast(ratingView({ activeRatingThread: null }))
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 
-  it('requests only boundaries when Show boundaries is pressed', async () => {
-    const user = userEvent.setup()
-    const onShowContext = vi.fn()
-    const onShowBoundaries = vi.fn()
-    renderWithToast(ratingView({ onShowContext, onShowBoundaries }))
-    await user.click(screen.getByRole('button', { name: /show boundaries/i }))
-    expect(onShowBoundaries).toHaveBeenCalledTimes(1)
-    expect(onShowContext).not.toHaveBeenCalled()
-  })
-
-  it('renders prerequisite edges from exact reader-context data when boundaries are open', () => {
+  it('renders no lazy controls even with populated reader context', () => {
     renderWithToast(ratingView({
-      readingBoundariesRequested: true,
       readerContext: makeContext([
         {
           id: 1,
@@ -150,39 +125,27 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
         },
       ]),
     }))
-    expect(screen.getByTestId('reading-boundaries-content')).toBeInTheDocument()
-    expect(screen.getByText('Before this issue')).toBeInTheDocument()
-    expect(screen.getByText('Finish the previous issue first.')).toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
+    expect(screen.queryByText('Your Reading Boundaries')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
+    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
   })
 
-  it('renders a truthful empty note when no boundary edges exist', () => {
-    renderWithToast(ratingView({
-      readingBoundariesRequested: true,
-      readerContext: makeContext([], 'Saga'),
-    }))
-    expect(
-      screen.getByText('No prerequisites or continuity boundaries are recorded for this issue.'),
-    ).toBeInTheDocument()
-  })
-
-  it('reserves no middle-column region for the optional cards', () => {
+  it('reserves no middle-column region after removal', () => {
     const { container } = renderWithToast(ratingView({
-      readingBoundariesRequested: true,
       readerContext: makeContext([], 'Saga'),
     }))
-    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
-    const cells = Array.from(grid!.querySelectorAll<HTMLElement>(':scope > div'))
-    expect(cells.length).toBe(2)
   })
 
-  it('keeps Why this? absent while the boundaries card is available', () => {
+  it('does not render boundaries section even when edges exist', () => {
     renderWithToast(ratingView({
-      readingBoundariesRequested: true,
       readerContext: makeContext([
         {
           id: 1,
@@ -200,15 +163,12 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
         },
       ]),
     }))
-    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.getByText('Crossover order')).toBeInTheDocument()
+    expect(screen.queryByText('Your Reading Boundaries')).not.toBeInTheDocument()
+    expect(screen.queryByText('Continuity:')).not.toBeInTheDocument()
   })
 
   it('still renders comic and decision regions and rating actions', () => {
-    renderWithToast(ratingView({
-      readingBoundariesRequested: true,
-      readerContext: makeContext([], 'Saga'),
-    }))
+    renderWithToast(ratingView({ readerContext: makeContext([], 'Saga') }))
     expect(screen.getByTestId('rating-region-comic')).toBeInTheDocument()
     expect(screen.getByTestId('rating-region-decision')).toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeInTheDocument()
