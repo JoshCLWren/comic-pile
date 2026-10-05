@@ -101,7 +101,7 @@ describe('ThreadPool eligible mappings', () => {
     )
 
     expect(screen.getByText('3 in play')).toBeVisible()
-    expect(screen.getByText(/Only 3 of d6 faces are mapped to a ready-to-read series/i)).toBeVisible()
+    expect(screen.getByText(/Only 3 of d6 faces are in the roll pool/i)).toBeVisible()
 
     const faces = screen.getAllByRole('button', { name: /Die face \d+:/i })
     expect(faces).toHaveLength(3)
