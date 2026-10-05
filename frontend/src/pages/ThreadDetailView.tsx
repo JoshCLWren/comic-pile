@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
@@ -13,6 +13,7 @@ import {
   applyEditedThreadToQueuePages,
   applyIssueReadSnapshotToCache,
   invalidateAfterDependencyChange,
+  invalidateAfterIssueEdit,
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
@@ -97,6 +98,16 @@ export default function ThreadDetailView() {
   function handleIssueSnapshotChange(snapshot: IssueMutationSnapshot) {
     applyIssueReadSnapshotToCache(client, snapshot)
   }
+
+  // IssueToggleList only reconciles its own local issue array. Without this
+  // callback the thread query is never refreshed after an inline pill toggle,
+  // so STATUS (and every other thread-level field the backend recalculates)
+  // kept rendering the pre-toggle value until a full reload (#3113).
+  const handleIssueToggleChanged = useCallback(() => {
+    if (threadId !== null) {
+      void invalidateAfterIssueEdit(client, threadId)
+    }
+  }, [client, threadId])
 
   const handleEditSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -509,6 +520,7 @@ export default function ThreadDetailView() {
             <IssueToggleList
               threadId={thread.id}
               onOpenDependencies={() => setIsDependencyOpen(true)}
+              onIssueChanged={handleIssueToggleChanged}
             />
           )}
 

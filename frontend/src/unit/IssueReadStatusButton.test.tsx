@@ -83,6 +83,7 @@ const thread: Thread = {
   next_unread_issue_number: '2',
   queue_position: 1,
   status: 'active',
+  reading_progress: 'in_progress',
   is_blocked: false,
   blocking_reasons: [],
   last_activity_at: null,
@@ -130,7 +131,95 @@ describe('IssueReadStatusButton', () => {
         issues_remaining: 1,
         next_unread_issue_id: 99,
         next_unread_issue_number: '25',
+        status: 'active',
+        reading_progress: 'in_progress',
       },
+    })
+  })
+
+  // Regression coverage for #3113: the thread read that already happens after a
+  // successful toggle must project `status`/`reading_progress` into the
+  // snapshot, otherwise the thread detail STATUS panel keeps the old value.
+  it('projects the server thread status when a toggle completes the thread', async () => {
+    vi.mocked(issuesApi.markRead).mockResolvedValue()
+    vi.mocked(issuesApi.get).mockResolvedValue({
+      ...issue,
+      status: 'read',
+      read_at: '2026-08-03T18:30:00Z',
+    })
+    vi.mocked(threadsApi.get).mockResolvedValue({
+      ...thread,
+      issues_remaining: 0,
+      next_unread_issue_id: null,
+      next_unread_issue_number: null,
+      status: 'completed',
+      reading_progress: 'completed',
+    })
+    const onSnapshotChange = vi.fn()
+
+    render(
+      <IssueReadStatusButton
+        issue={issue}
+        snapshot={{ issues: [issue], thread }}
+        onSnapshotChange={onSnapshotChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark read' }))
+
+    await waitFor(() => expect(onSnapshotChange).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(onSnapshotChange).mock.calls[0]?.[0].thread).toMatchObject({
+      status: 'completed',
+      reading_progress: 'completed',
+      issues_remaining: 0,
+    })
+  })
+
+  it('projects the server thread status when a toggle reactivates a completed thread', async () => {
+    const readIssue: Issue = {
+      ...issue,
+      status: 'read',
+      read_at: '2026-08-01T00:00:00Z',
+    }
+    const completedThread: Thread = {
+      ...thread,
+      issues_remaining: 0,
+      next_unread_issue_id: null,
+      next_unread_issue_number: null,
+      status: 'completed',
+      reading_progress: 'completed',
+    }
+    vi.mocked(issuesApi.markUnread).mockResolvedValue()
+    vi.mocked(issuesApi.get).mockResolvedValue({
+      ...readIssue,
+      status: 'unread',
+      read_at: null,
+    })
+    vi.mocked(threadsApi.get).mockResolvedValue({
+      ...completedThread,
+      issues_remaining: 1,
+      next_unread_issue_id: readIssue.id,
+      next_unread_issue_number: readIssue.issue_number,
+      status: 'active',
+      reading_progress: 'in_progress',
+    })
+    const onSnapshotChange = vi.fn()
+
+    render(
+      <IssueReadStatusButton
+        issue={readIssue}
+        snapshot={{ issues: [readIssue], thread: completedThread }}
+        onSnapshotChange={onSnapshotChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
+
+    await waitFor(() => expect(onSnapshotChange).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(onSnapshotChange).mock.calls[0]?.[0].thread).toMatchObject({
+      status: 'active',
+      reading_progress: 'in_progress',
+      issues_remaining: 1,
     })
   })
 

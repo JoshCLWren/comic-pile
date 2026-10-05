@@ -48,6 +48,8 @@ export function IssueReadStatusButton({
         issues_remaining: updatedThread.issues_remaining,
         next_unread_issue_id: updatedThread.next_unread_issue_id ?? null,
         next_unread_issue_number: updatedThread.next_unread_issue_number ?? null,
+        thread_status: updatedThread.status,
+        thread_reading_progress: updatedThread.reading_progress ?? null,
       }
       const currentSnapshot = latestSnapshots.get(issue.thread_id) ?? snapshot
       const nextSnapshot = applyIssueReadStatus(currentSnapshot, issue.id, result)
