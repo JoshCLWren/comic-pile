@@ -113,8 +113,25 @@ def test_shared_factory_wrapper_rejects_omniroute_while_incident_dark() -> None:
 
 def test_factory_persistence_pushes_and_verifies_current_head() -> None:
     """A local worktree branch mismatch must not discard a worker's commit."""
+    primitives = (SCRIPTS / "free-model-factory-worker-primitives.sh").read_text(encoding="utf-8")
+    # Worker 48 installation-token pushes go through factory_git_push so the
+    # token is masked and the origin URL is restored after the push.
+    assert "factory_git_push" in primitives
+    assert "factory_git_push \"$push_source\" \"$push_token\" --set-upstream origin \"HEAD:$branch\"" in primitives
+    assert "factory_git_push \"${push_credential%%$'\\t'*}\" \"${push_credential#*$'\\t'}\" origin \"HEAD:$branch\"" in primitives
+    assert 'git ls-remote origin "refs/heads/${branch}"' in primitives
+    # Minted installation tokens are not repository secrets; Actions will not
+    # mask them on its own.
+    assert "printf '::add-mask::%s\\n' \"$token\"" in primitives
+    # PR_REBASE_TOKEN / non-installation path still uses plain git push inside
+    # factory_git_push (no URL swap). Fallback stays on PR_REBASE_TOKEN.
+    assert 'if [[ "$source" != installation ]]; then' in primitives
+    assert 'git push "$@"' in primitives
+    assert 'PR_REBASE_TOKEN' in primitives
     for path in (
-        SCRIPTS / "free-model-factory-worker-primitives.sh",
+        SCRIPTS / "omniroute-factory-worker.sh",
+        SCRIPTS / "nvidia-factory-worker.sh",
+    ):
         SCRIPTS / "omniroute-factory-worker.sh",
         SCRIPTS / "nvidia-factory-worker.sh",
     ):
