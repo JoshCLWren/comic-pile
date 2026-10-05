@@ -21,6 +21,8 @@ import time
 from datetime import datetime
 from typing import Any, cast
 
+from factory_review_policy import performed_via_untrusted_app
+
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 STALE_PR_GUARD_MARKER_RE = re.compile(
     r"comic-pile-factory-stale-expiration-v1:pr-(?P<pr>\d+):issue-(?P<issue>\d+):"
@@ -288,7 +290,13 @@ def has_stale_expiration_marker(
 
 
 def comment_is_trusted(comment: dict[str, Any]) -> bool:
-    """Return whether GitHub metadata proves a factory marker is trusted."""
+    """Return whether GitHub metadata proves a factory marker is trusted.
+
+    Worker GitHub Apps are not trusted marker authors, even with a trusted
+    association. Only the github-actions App slug joins owner/member/collaborator.
+    """
+    if performed_via_untrusted_app(comment):
+        return False
     trusted = {"OWNER", "MEMBER", "COLLABORATOR"}
     if comment.get("author_association") in trusted:
         return True

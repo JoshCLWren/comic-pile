@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from factory_review_policy import performed_via_untrusted_app
+
 BRANCH_RE = re.compile(r"^factory/(?P<worker>[0-9]+)-(?P<issue>[0-9]+)-")
 PROVENANCE_RE = re.compile(
     r"<!--\s*comic-pile-factory-pr-provenance-v1:"
@@ -50,7 +52,13 @@ def flatten_comments(payload: Any) -> list[dict[str, Any]]:
 
 
 def comment_is_trusted(comment: dict[str, Any]) -> bool:
-    """Accept workflow-bot comments or comments authored by trusted collaborators."""
+    """Accept workflow-bot comments or comments authored by trusted collaborators.
+
+    Worker GitHub Apps are excluded even when the association is trusted.
+    Trusted marker comments stay on github-actions[bot].
+    """
+    if performed_via_untrusted_app(comment):
+        return False
     user = comment.get("user")
     login = user.get("login") if isinstance(user, dict) else None
     association = str(comment.get("author_association") or "").upper()

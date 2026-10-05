@@ -349,6 +349,216 @@ test('PR refresh preserves one external owner after the linked issue is released
   assert.ok(calls[0].labels.includes('factory:review'));
 });
 
+test('native APPROVED review from OWNER makes no label API calls', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:ci', 'factory:43'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_review', {
+      action: 'submitted',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        head: {
+          ref: 'factory/43-1386-opencode-free',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:ci' }],
+        number: 1390,
+      },
+      review: {
+        state: 'APPROVED',
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+      },
+    }),
+  });
+  assert.equal(calls.length, 0);
+});
+
+test('native APPROVED review from MEMBER makes no label API calls', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:ready', 'factory:43'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_review', {
+      action: 'submitted',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        head: {
+          ref: 'factory/43-1386-opencode-free',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:ready' }],
+        number: 1390,
+      },
+      review: {
+        state: 'APPROVED',
+        author_association: 'MEMBER',
+        user: { login: 'some-member' },
+      },
+    }),
+  });
+  assert.equal(calls.length, 0);
+});
+
+test('native APPROVED review from COLLABORATOR makes no label API calls', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:review', 'factory:43'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_review', {
+      action: 'submitted',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        head: {
+          ref: 'factory/43-1386-opencode-free',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:review' }],
+        number: 1390,
+      },
+      review: {
+        state: 'APPROVED',
+        author_association: 'COLLABORATOR',
+        user: { login: 'some-collaborator' },
+      },
+    }),
+  });
+  assert.equal(calls.length, 0);
+});
+
+test('native APPROVED review from github-actions[bot] makes no label API calls', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:ci', 'factory:43'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_review', {
+      action: 'submitted',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        head: {
+          ref: 'factory/43-1386-opencode-free',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:ci' }],
+        number: 1390,
+      },
+      review: {
+        state: 'APPROVED',
+        author_association: 'OWNER',
+        user: { login: 'github-actions[bot]' },
+      },
+    }),
+  });
+  assert.equal(calls.length, 0);
+});
+
+test('native APPROVED review from worker App with OWNER association makes no label API calls', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:ready', 'factory:48'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_review', {
+      action: 'submitted',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        head: {
+          ref: 'factory/48-3136-opencode-free',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:48' }, { name: 'factory:ready' }],
+        number: 3136,
+      },
+      review: {
+        state: 'APPROVED',
+        author_association: 'OWNER',
+        user: { login: 'MarkCordova[bot]' },
+        performed_via_github_app: { slug: 'mark-cordova-comic-pile', owner: { login: 'JoshCLWren' } },
+      },
+    }),
+  });
+  assert.equal(calls.length, 0);
+});
+
+test('CHANGES_REQUESTED review still sets factory:changes-requested', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:review', 'factory:43'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_review', {
+      action: 'submitted',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        head: {
+          ref: 'factory/43-1386-opencode-free',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:review' }],
+        number: 1390,
+      },
+      review: {
+        state: 'CHANGES_REQUESTED',
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:changes-requested'));
+  assert.ok(!calls[0].labels.includes('factory:review'));
+  assert.ok(!calls[0].labels.includes('factory:ci'));
+});
+
+test('dismissed review resets to factory:review', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:changes-requested', 'factory:43'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_review', {
+      action: 'dismissed',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        head: {
+          ref: 'factory/43-1386-opencode-free',
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:43' }, { name: 'factory:changes-requested' }],
+        number: 1390,
+      },
+      review: {
+        state: 'CHANGES_REQUESTED',
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:review'));
+  assert.ok(!calls[0].labels.includes('factory:changes-requested'));
+  assert.ok(!calls[0].labels.includes('factory:ci'));
+});
+
 function enrollGithubFor({ pulls, labelsByPr, comments = [], setLabels }) {
   const api = {
     listLabelsOnIssue() {},

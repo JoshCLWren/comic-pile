@@ -7,6 +7,9 @@ from typing import Any
 
 TRUSTED_COMMENT_LOGIN = "github-actions[bot]"
 TRUSTED_COMMENT_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+# Worker GitHub Apps must never be added here. factory_work_policy
+# re-exports this as TRUSTED_FACTORY_APP_SLUGS.
+TRUSTED_MARKER_APP_SLUGS = frozenset({"github-actions"})
 
 REVIEW_MARKER_RE = re.compile(
     r"^<!-- comic-pile-factory-semantic-review-v1:"
@@ -97,19 +100,40 @@ def parse_head_contributor_marker(line: str) -> dict[str, str] | None:
     return match.groupdict() if match else None
 
 
+def performed_via_untrusted_app(comment: Mapping[str, Any]) -> bool:
+    """Return whether a worker GitHub App must not author a trusted marker.
+
+    A present App slug other than ``github-actions`` loses even when
+    ``author_association`` is OWNER, MEMBER, or COLLABORATOR. Comments with
+    no App stay on the login and association paths. Human owner comments are
+    unchanged.
+    """
+    app = comment.get("performed_via_github_app")
+    if not isinstance(app, Mapping):
+        return False
+    slug = app.get("slug")
+    if not isinstance(slug, str) or not slug:
+        return False
+    return slug not in TRUSTED_MARKER_APP_SLUGS
+
+
 def trusted_comment_bodies(comments: Iterable[Mapping[str, Any]]) -> list[str]:
     """Return comment bodies written by the actors trusted to forge no marker.
 
     Factory workers post through ``GITHUB_TOKEN`` as ``github-actions[bot]``, and
     the repository owner may run the review controller during incidents, so an
-    owner/member/collaborator body is honored alongside it. Every consumer of
-    review provenance must apply this identical filter; if the controller, the
-    Rotisserie capture, and the dispatcher disagree about who authored a marker
-    they can disagree about who authored a head.
+    owner/member/collaborator body is honored alongside it. Worker GitHub Apps
+    are not those actors: a non-github-actions App slug is ignored even if the
+    association looks trusted. Every consumer of review provenance must apply
+    this identical filter; if the controller, the Rotisserie capture, and the
+    dispatcher disagree about who authored a marker they can disagree about
+    who authored a head.
     """
     bodies: list[str] = []
     for comment in comments:
         if not isinstance(comment, Mapping):
+            continue
+        if performed_via_untrusted_app(comment):
             continue
         user = comment.get("user")
         if not isinstance(user, Mapping):
