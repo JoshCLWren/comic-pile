@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -37,8 +38,10 @@ from app.services.continuity_plan_writer import (
     validate_node_ownership,
 )
 from app.services.reading_plan_normalization import (
+    audit_duplicate_plan_memberships,
     get_plan_membership,
     link_dependency_to_plan,
+    reconcile_plan_duplicate_membership,
     unlink_dependency_from_plan,
 )
 from app.services.tag_service import purge_target_assignments
@@ -292,3 +295,94 @@ async def delete_continuity_plan(
     await db.commit()
     await _refresh_blocked_state(current_user.id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/continuity-plans/{plan_id}/audit-duplicates",
+    response_model=list[tuple[int, int, int]],
+)
+async def audit_plan_duplicate_memberships(
+    plan_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[tuple[int, int, int]]:
+    """Audit one owned plan for duplicate canonical Issue memberships.
+
+    Returns a list of (plan_id, issue_id, occurrence_count) where
+    occurrence_count > 1, indicating the issue appears multiple times in
+    the same plan. An empty list means no duplicates were found.
+
+    Args:
+        plan_id: Plan to audit.
+        current_user: Authenticated plan owner.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when the plan is not owned.
+
+    Returns:
+        List of duplicate membership tuples.
+    """
+    plan = await _get_owned_plan(db, current_user.id, plan_id)
+    duplicates = await audit_duplicate_plan_memberships(db, plan_id=plan.id)
+    return duplicates
+
+
+class ReconcileDuplicateRequest(BaseModel):
+    """Request to reconcile a duplicate Issue membership in a plan."""
+
+    issue_id: int
+    keep_occurrence_id: str | None = None
+
+
+class ReconcileDuplicateResponse(BaseModel):
+    """Response from reconciling a duplicate Issue membership."""
+
+    kept_occurrence_id: str
+    removed_occurrence_ids: list[str]
+
+
+@router.post(
+    "/continuity-plans/{plan_id}/reconcile-duplicate",
+    response_model=ReconcileDuplicateResponse,
+)
+async def reconcile_plan_duplicate(
+    plan_id: int,
+    payload: ReconcileDuplicateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ReconcileDuplicateResponse:
+    """Reconcile a duplicate Issue membership in one owned plan.
+
+    Keeps the occurrence with the earliest (lane_id, display_position) by
+    default, or the specified occurrence_id. Remaining duplicates are deleted.
+
+    Args:
+        plan_id: Plan containing the duplicates.
+        payload: Issue ID and optional occurrence ID to keep.
+        current_user: Authenticated plan owner.
+        db: Database session.
+
+    Raises:
+        HTTPException: 404 when the plan is not owned or issue not found.
+
+    Returns:
+        Reconciliation result with kept and removed occurrence IDs.
+    """
+    plan = await _get_owned_plan(db, current_user.id, plan_id)
+    try:
+        kept, removed = await reconcile_plan_duplicate_membership(
+            db,
+            plan_id=plan.id,
+            issue_id=payload.issue_id,
+            keep_occurrence_id=payload.keep_occurrence_id,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception:
+        await db.rollback()
+        raise
+    return ReconcileDuplicateResponse(
+        kept_occurrence_id=kept, removed_occurrence_ids=removed
+    )

@@ -496,10 +496,10 @@ async def test_link_rejects_unknown_dependency_and_foreign_edge(
 
 
 @pytest.mark.asyncio
-async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
+async def test_membership_rebuild_deduplicates_by_issue_id(
     async_db: AsyncSession,
 ) -> None:
-    """Progress counts distinct Issues, not duplicate occurrences."""
+    """rebuild_plan_membership collapses duplicate issue_ids to one row."""
     user = await get_or_create_user_async(async_db)
     issue = await _make_issue(async_db, user_id=user.id, suffix="duplicate")
     plan = ContinuityPlan(
@@ -533,12 +533,66 @@ async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
     await reading_plan_normalization.rebuild_plan_membership(
         async_db, plan_id=plan.id, nodes=nodes
     )
+    # Only one membership row should be created (the earliest by position)
     rows = await reading_plan_repository.list_plan_issues(async_db, plan_id=plan.id)
-    assert len(rows) == 2
-    assert isinstance(rows[0], ReadingPlanIssue)
+    assert len(rows) == 1
+    assert rows[0].occurrence_id == "first"
+    assert rows[0].issue_id == issue.id
     total, read = await reading_plan_normalization.get_plan_progress(
         async_db, plan_id=plan.id
     )
     assert (total, read) == (1, 0)
-    links = await reading_plan_repository.list_plan_dependencies(async_db, plan_id=plan.id)
-    assert all(isinstance(link, ReadingPlanDependency) for link in links)
+
+
+@pytest.mark.asyncio
+async def test_membership_rebuild_preserves_earliest_occurrence(
+    async_db: AsyncSession,
+) -> None:
+    """When deduplicating, the earliest (lane, position) occurrence is kept."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="duplicate")
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Duplicates",
+        ordering_mode="informational",
+        nodes_json=[],
+        lanes_json=[],
+    )
+    async_db.add(plan)
+    await async_db.flush()
+
+    nodes = [
+        ContinuityPlanNode(
+            id="second",
+            node_type="issue",
+            ref_id=issue.id,
+            lane_id="main",
+            position=5,
+            convergence_gate=[],
+        ),
+        ContinuityPlanNode(
+            id="first",
+            node_type="issue",
+            ref_id=issue.id,
+            lane_id="main",
+            position=0,
+            convergence_gate=[],
+        ),
+        ContinuityPlanNode(
+            id="third",
+            node_type="issue",
+            ref_id=issue.id,
+            lane_id="other",
+            position=0,
+            convergence_gate=[],
+        ),
+    ]
+    await reading_plan_normalization.rebuild_plan_membership(
+        async_db, plan_id=plan.id, nodes=nodes
+    )
+    rows = await reading_plan_repository.list_plan_issues(async_db, plan_id=plan.id)
+    assert len(rows) == 1
+    # Should keep the one with position=0 in lane "main"
+    assert rows[0].occurrence_id == "first"
+    assert rows[0].lane_id == "main"
+    assert rows[0].display_position == 0

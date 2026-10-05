@@ -65,6 +65,11 @@ class ReadingPlanIssue(Base):
             "display_position",
             name="uq_reading_plan_issue_lane_position",
         ),
+        UniqueConstraint(
+            "plan_id",
+            "issue_id",
+            name="uq_reading_plan_issue_plan_issue",
+        ),
         Index("ix_reading_plan_issues_plan_issue", "plan_id", "issue_id"),
         Index("ix_reading_plan_issues_issue_id", "issue_id"),
     )

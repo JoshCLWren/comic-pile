@@ -266,10 +266,22 @@ def _merge_custom_cbl_into_lane(
     Existing source issues in the target lane are reused as anchors. Existing
     source issues in another lane are left untouched and reported as skipped,
     so applying a CBL never moves or duplicates an issue across lanes.
+
+    Duplicate issue_ids in the CBL entries are collapsed to a single membership
+    per plan, preserving the earliest entry position.
     """
     source_path = f"custom-cbl:{list_row.id}"
     source_issue_ids = [entry.issue_id for entry in entries]
     source_issue_set = set(source_issue_ids)
+
+    # Deduplicate CBL entries by issue_id, keeping the earliest position.
+    deduped_entries: dict[int, CustomCBLEntryView] = {}
+    for entry in entries:
+        existing = deduped_entries.get(entry.issue_id)
+        if existing is None or entry.position < existing.position:
+            deduped_entries[entry.issue_id] = entry
+    deduped_entries_list = list(deduped_entries.values())
+    deduped_entries_list.sort(key=lambda e: e.position)
 
     cleaned_nodes: list[ContinuityPlanNode] = []
     for node in all_nodes:
@@ -288,15 +300,10 @@ def _merge_custom_cbl_into_lane(
     for node in cleaned_nodes:
         if node.node_type != "issue" or node.ref_id not in source_issue_set:
             continue
-        if node.ref_id in existing_by_issue:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "code": "custom_cbl_duplicate_plan_issue",
-                    "issue_id": node.ref_id,
-                },
-            )
-        existing_by_issue[node.ref_id] = node
+        # If we already have this issue in the plan, keep the first occurrence
+        # (by lane/position) and skip adding another membership.
+        if node.ref_id not in existing_by_issue:
+            existing_by_issue[node.ref_id] = node
 
     target_nodes = sorted(
         (node for node in cleaned_nodes if node.lane_id == target_lane_id),
@@ -317,9 +324,10 @@ def _merge_custom_cbl_into_lane(
     ordered_source_nodes: list[ContinuityPlanNode] = []
     added: list[int] = []
     reused: list[int] = []
-    for entry in entries:
+    for entry in deduped_entries_list:
         existing = existing_by_issue.get(entry.issue_id)
         if existing is not None and existing.lane_id != target_lane_id:
+            # Issue exists in another lane - skip to avoid cross-lane duplication.
             reused.append(entry.issue_id)
             continue
         if existing is None:

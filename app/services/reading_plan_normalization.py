@@ -93,19 +93,34 @@ async def rebuild_plan_membership(
     exists. Source paths and CBL placements are preserved raw with their
     original positions. The caller owns the surrounding transaction.
 
+    Duplicate canonical issue_ids in the input nodes are collapsed to a single
+    membership row per plan, preserving the earliest display_position occurrence
+    and merging source metadata and provenance.
+
     Args:
         db: Database session.
         plan_id: Plan whose normalized rows are replaced.
         nodes: Canonical node set just persisted to the plan.
     """
+    # Deduplicate issue-type nodes by issue_id, keeping the earliest by
+    # (lane_id, display_position) to preserve intended ordering semantics.
+    issue_nodes: dict[int, ContinuityPlanNode] = {}
+    for node in nodes:
+        if node.node_type != "issue":
+            continue
+        existing = issue_nodes.get(node.ref_id)
+        if existing is None or (node.lane_id, node.position) < (
+            existing.lane_id,
+            existing.position,
+        ):
+            issue_nodes[node.ref_id] = node
+
     issue_rows: list[ReadingPlanIssue] = []
     snapshots: dict[str, ReadingPlanSource] = {}
     # (occurrence_id, raw_path, source_position) triples, deduplicated.
     placement_keys: set[tuple[str, str, int | None]] = set()
 
-    for node in nodes:
-        if node.node_type != "issue":
-            continue
+    for node in issue_nodes.values():
         positioned: dict[str, list[int]] = {}
         if node.source_cbl_placements:
             for placement in node.source_cbl_placements:
@@ -374,3 +389,54 @@ async def get_plan_progress(
         db, plan_id=plan_id
     )
     return len(issue_ids), read_count
+
+
+async def audit_duplicate_plan_memberships(
+    db: AsyncSession,
+    *,
+    plan_id: int | None = None,
+) -> list[tuple[int, int, int]]:
+    """Audit all plans (or one specific plan) for duplicate canonical Issue memberships.
+
+    Returns a list of (plan_id, issue_id, occurrence_count) where
+    occurrence_count > 1, indicating the issue appears multiple times in
+    the same plan.
+
+    Args:
+        db: Database session.
+        plan_id: Optional specific plan to audit. If None, audits all plans.
+
+    Returns:
+        List of duplicate membership tuples.
+    """
+    return await reading_plan_repository.find_duplicate_plan_issues(
+        db, plan_id=plan_id
+    )
+
+
+async def reconcile_plan_duplicate_membership(
+    db: AsyncSession,
+    *,
+    plan_id: int,
+    issue_id: int,
+    keep_occurrence_id: str | None = None,
+) -> tuple[str, list[str]]:
+    """Reconcile duplicate Issue memberships in one plan by removing extras.
+
+    Keeps the occurrence with the earliest (lane_id, display_position) by
+    default, or the specified occurrence_id. Remaining duplicates are deleted.
+    The caller owns the surrounding transaction.
+
+    Args:
+        db: Database session.
+        plan_id: Plan containing the duplicates.
+        issue_id: Canonical Issue with duplicate memberships.
+        keep_occurrence_id: Specific occurrence to keep. If None, keeps the
+            earliest by (lane_id, display_position).
+
+    Returns:
+        Tuple of (kept_occurrence_id, removed_occurrence_ids).
+    """
+    return await reading_plan_repository.reconcile_duplicate_plan_issues(
+        db, plan_id=plan_id, issue_id=issue_id, keep_occurrence_id=keep_occurrence_id
+    )

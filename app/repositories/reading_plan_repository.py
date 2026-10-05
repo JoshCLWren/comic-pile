@@ -342,3 +342,91 @@ async def count_distinct_read_issues(
         .where(ReadingPlanIssue.plan_id == plan_id, Issue.status == "read")
     )
     return int(result.scalar_one())
+
+
+async def find_duplicate_plan_issues(
+    db: AsyncSession, *, plan_id: int | None = None
+) -> list[tuple[int, int, int]]:
+    """Find duplicate canonical Issue memberships in Reading Plans.
+
+    Returns tuples of (plan_id, issue_id, count) where count > 1,
+    indicating the issue appears multiple times in the same plan.
+
+    Args:
+        db: Database session.
+        plan_id: Optional specific plan to audit. If None, audits all plans.
+
+    Returns:
+        List of (plan_id, issue_id, occurrence_count) for duplicates.
+    """
+    stmt = (
+        select(
+            ReadingPlanIssue.plan_id,
+            ReadingPlanIssue.issue_id,
+            func.count(ReadingPlanIssue.occurrence_id).label("occurrence_count"),
+        )
+        .group_by(ReadingPlanIssue.plan_id, ReadingPlanIssue.issue_id)
+        .having(func.count(ReadingPlanIssue.occurrence_id) > 1)
+        .order_by(ReadingPlanIssue.plan_id, ReadingPlanIssue.issue_id)
+    )
+    if plan_id is not None:
+        stmt = stmt.where(ReadingPlanIssue.plan_id == plan_id)
+    result = await db.execute(stmt)
+    return [(row.plan_id, row.issue_id, row.occurrence_count) for row in result.all()]
+
+
+async def reconcile_duplicate_plan_issues(
+    db: AsyncSession,
+    *,
+    plan_id: int,
+    issue_id: int,
+    keep_occurrence_id: str | None = None,
+) -> tuple[str, list[str]]:
+    """Reconcile duplicate Issue memberships in one plan by removing extras.
+
+    Keeps the occurrence with the earliest (lane_id, display_position) by
+    default, or the specified occurrence_id. Remaining duplicates are deleted.
+
+    Args:
+        db: Database session.
+        plan_id: Plan containing the duplicates.
+        issue_id: Canonical Issue with duplicate memberships.
+        keep_occurrence_id: Specific occurrence to keep. If None, keeps the
+            earliest by (lane_id, display_position).
+
+    Returns:
+        Tuple of (kept_occurrence_id, removed_occurrence_ids).
+    """
+    stmt = (
+        select(ReadingPlanIssue)
+        .where(
+            ReadingPlanIssue.plan_id == plan_id,
+            ReadingPlanIssue.issue_id == issue_id,
+        )
+        .order_by(ReadingPlanIssue.lane_id, ReadingPlanIssue.display_position)
+    )
+    result = await db.execute(stmt)
+    occurrences = list(result.scalars().all())
+
+    if len(occurrences) <= 1:
+        return (occurrences[0].occurrence_id if occurrences else "", [])
+
+    if keep_occurrence_id is not None:
+        kept = next(
+            (o for o in occurrences if o.occurrence_id == keep_occurrence_id),
+            None,
+        )
+        if kept is None:
+            raise ValueError(
+                f"Occurrence {keep_occurrence_id} not found for plan {plan_id}, issue {issue_id}"
+            )
+    else:
+        kept = occurrences[0]
+
+    removed = [o.occurrence_id for o in occurrences if o.occurrence_id != kept.occurrence_id]
+    for occurrence in occurrences:
+        if occurrence.occurrence_id != kept.occurrence_id:
+            await db.delete(occurrence)
+    await db.flush()
+
+    return kept.occurrence_id, removed
