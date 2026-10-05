@@ -356,7 +356,7 @@ async function reconcile({ github, context }) {
     const state = (review.state || '').toUpperCase();
     let stage = 'factory:review';
     if (state === 'CHANGES_REQUESTED') stage = 'factory:changes-requested';
-    else if (state === 'APPROVED') stage = 'factory:ci';
+    // APPROVED reviews do not promote to factory:ci - controller truth required
     await reconcileLabels(github, context, pullRequest.number, {
       owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
       stage,
