@@ -5,6 +5,7 @@ that must be kept in sync with this logic.
 """
 
 import re
+
 MAX_ISSUES = 10000
 MAX_LITERAL_LENGTH = 100
 
@@ -60,7 +61,7 @@ def parse_issue_ranges(input_str: str) -> list[str]:
                 left = range_parts[0].strip()
                 right = range_parts[1].strip()
                 # Validate numeric tokens with regex before conversion
-                if not re.fullmatch(r'\\d+', left) or not re.fullmatch(r'\\d+', right):
+                if not re.fullmatch(r"[0-9]+", left) or not re.fullmatch(r"[0-9]+", right):
                     result.append(part)
                     continue
                 start = int(left)
