@@ -18,9 +18,6 @@ interface ThreadPoolProps {
   blockedExpanded: boolean
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedExpanded: boolean
-  rolledResult?: number | null
-  queuePosition?: number | null
-  dieSize?: number
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
   onUnskip: (threadId: number) => void
@@ -48,9 +45,6 @@ export function ThreadPool({
   blockedExpanded,
   skippedThreads,
   skippedExpanded,
-  rolledResult,
-  queuePosition,
-  dieSize,
   onThreadClick,
   onUnsnooze,
   onUnskip,
@@ -145,8 +139,6 @@ export function ThreadPool({
           pool.map((thread, index) => {
             const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
             const routeLabels = (thread.route_labels ?? []).filter(Boolean)
-            const isRolledThread = isSelected && rolledResult !== null
-            
             return (
               <div
                 key={thread.id}
@@ -159,7 +151,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}${isRolledThread ? ` - Rolled ${rolledResult} of d${dieSize}, selected position #${queuePosition}` : ''}. Open series actions.`}
+                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}. Open series actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
@@ -172,16 +164,6 @@ export function ThreadPool({
                     {thread.issue_number ? `#${thread.issue_number}` : 'Next unread issue'}
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
-                  {isRolledThread && rolledResult !== null && queuePosition !== null && (
-                    <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                      <p className="text-xs font-bold text-amber-400 uppercase tracking-widest">
-                        Rolled {rolledResult} of d{dieSize}
-                      </p>
-                      <p className="text-[10px] text-amber-300 mt-0.5">
-                        Selected position #{queuePosition}
-                      </p>
-                    </div>
-                  )}
                   {routeLabels.length ? (
                     <p className="mt-1 truncate text-[10px] text-sky-300">
                       Connected to: {routeLabels.join(' · ')}

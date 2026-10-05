@@ -16,7 +16,6 @@ export function RatingView({ data }: RatingViewProps) {
   const {
     activeRatingThread,
     currentDie,
-    rolledResult: _rolledResult,
     rating,
     predictedDie,
     errorMessage,
@@ -42,7 +41,11 @@ export function RatingView({ data }: RatingViewProps) {
         data-testid="rating-pillars-grid"
       >
         <div className="min-w-0" data-testid="rating-region-comic">
-          <ComicPillar activeRatingThread={activeRatingThread} onRefreshThread={onRefreshThread} />
+          <ComicPillar
+            activeRatingThread={activeRatingThread}
+            currentDie={currentDie}
+            onRefreshThread={onRefreshThread}
+          />
         </div>
 
         <div className="min-w-0 space-y-4 w-full lg:w-auto lg:sticky lg:top-4" data-testid="rating-region-decision">
