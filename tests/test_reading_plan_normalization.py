@@ -22,10 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.continuity_plan import ContinuityPlan
 from app.models.dependency import Dependency
 from app.models.issue import Issue
-from app.models.reading_plan_membership import (
-    ReadingPlanDependency,
-    ReadingPlanIssue,
-)
 from app.models.thread import Thread
 from app.repositories import reading_plan_repository
 from app.schemas.continuity_plan import ContinuityPlanNode
@@ -392,10 +388,11 @@ async def test_provenance_round_trips_through_normalized_representation(
     assert membership.status_code == 200, membership.text
     body = membership.json()
 
-    # Repeated occurrences keep display context; distinct membership is one Issue.
+    # Duplicate occurrences collapse to a single membership row per the
+    # one-membership-per-canonical-issue invariant (#3037); display context
+    # for repeats lives on the plan nodes, while membership is set semantics.
     assert [(row["occurrence_id"], row["issue_id"]) for row in body["issues"]] == [
         ("first", issue.id),
-        ("recap", issue.id),
     ]
     assert body["progress"] == {"total_issues": 1, "read_issues": 0}
     first = next(row for row in body["issues"] if row["occurrence_id"] == "first")

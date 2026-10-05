@@ -1,7 +1,7 @@
 """Add unique constraint on plan_id and issue_id for reading_plan_issues.
 
 Revision ID: c86500000001
-Revises: c86400000001
+Revises: k4c100000001
 
 Enforces the canonical Reading Plan membership invariant: a canonical
 Issue may belong to a Reading Plan at most once. This constraint operates
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c86500000001"
-down_revision: str | None = "c86400000001"
+down_revision: str | None = "k4c100000001"
 branch_labels: str | None = None
 depends_on: str | None = None
 
