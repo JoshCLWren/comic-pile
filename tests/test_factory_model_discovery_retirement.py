@@ -1301,6 +1301,22 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "scheduler": "dispatcher",
         "display_name": "OpenCode Fledge Alpha Free",
     }
+    assert by_worker["77"] == {
+        "worker": "77",
+        "source": "nvidia",
+        "model": "moonshotai/kimi-k3",
+        "minute": "35",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA Kimi K3",
+    }
+    assert by_worker["78"] == {
+        "worker": "78",
+        "source": "nvidia",
+        "model": "z-ai/glm-5.3",
+        "minute": "45",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA GLM 5.3",
+    }
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in remaining}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in remaining}
     assert by_worker["49"]["display_name"] == ROSTER.opencode_free_display_name(
