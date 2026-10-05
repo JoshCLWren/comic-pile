@@ -6,7 +6,7 @@ import {
 } from '../workspaceLayout'
 import { ComicPillar } from './ComicPillar'
 import { DecisionCard } from './DecisionCard'
-import { ContextDisclosure } from './ContextDisclosure'
+import { OptionalReadingCards } from './OptionalReadingCards'
 
 interface RatingViewProps {
   data: RatingViewData
@@ -33,6 +33,9 @@ export function RatingView({ data }: RatingViewProps) {
     isReaderContextLoading,
     ratingViewTopRef,
   } = data
+  // Local card open state resets with each rated issue so an opened surface
+  // can never leak into the next rating session.
+  const optionalCardsKey = data.activeRatingThread?.id ?? 'none'
 
   return (
     <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">
@@ -67,9 +70,22 @@ export function RatingView({ data }: RatingViewProps) {
             onCancel={onCancel}
           />
 
-          <ContextDisclosure
+          <OptionalReadingCards
+            key={optionalCardsKey}
+            activeRatingThread={data.activeRatingThread}
             readerContext={readerContext}
-            isLoading={isReaderContextLoading}
+            isReaderContextLoading={isReaderContextLoading}
+            readerContextError={data.readerContextError}
+            readingContextRequested={data.readingContextRequested}
+            readingBoundariesRequested={data.readingBoundariesRequested}
+            readingOrders={data.readingOrders}
+            readingOrdersIsLoading={data.readingOrdersIsLoading}
+            readingOrdersError={data.readingOrdersError}
+            connectedThreads={data.connectedThreads}
+            connectedThreadsIsLoading={data.connectedThreadsIsLoading}
+            connectedThreadsError={data.connectedThreadsError}
+            onShowContext={data.onShowContext}
+            onShowBoundaries={data.onShowBoundaries}
           />
         </div>
       </div>

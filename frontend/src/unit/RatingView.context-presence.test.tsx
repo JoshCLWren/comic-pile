@@ -77,6 +77,10 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     issuesRemaining: 4,
     readingContextRequested: false,
     readingBoundariesRequested: false,
+    readingOrders: [],
+    connectedThreads: [],
+    onShowContext: vi.fn(),
+    onShowBoundaries: vi.fn(),
     readingOrdersIsLoading: false,
     readingOrdersError: null,
     connectedThreadsIsLoading: false,
@@ -177,18 +181,16 @@ const minimalContext: ReaderContextResponse = {
   },
 }
 
-describe('RatingView post-#2711: removed Reading Context/Boundaries/WhyThis surfaces', () => {
-  it('contains no Why this?, Reading Context or Reading Boundaries affordance and no middle column', () => {
+describe('RatingView #2764: restored Reading Context/Boundaries optional cards', () => {
+  it('renders both collapsed cards in the decision region with no middle column', () => {
     const { container } = renderRatingView()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('context-disclosure')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-boundaries')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
-    expect(screen.queryByText('Your Reading Boundaries')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('lg:grid-cols-[minmax(0,24rem)_minmax(18rem,24rem)]')
@@ -197,23 +199,25 @@ describe('RatingView post-#2711: removed Reading Context/Boundaries/WhyThis surf
     expect(grid!.contains(screen.getByTestId('rating-region-decision'))).toBe(true)
   })
 
-  it('still renders rating workflow without removed surfaces even when readerContext is populated', () => {
+  it('still renders rating workflow with collapsed cards even when readerContext is populated', () => {
     renderRatingView({ readerContext: populatedContext })
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeInTheDocument()
     expect(screen.getByTestId('rating-region-comic')).toBeInTheDocument()
   })
 
-  it('does not render Reading Context pillar content for loaded but empty context', () => {
+  it('keeps optional content collapsed for loaded but empty context', () => {
     renderRatingView({ readerContext: minimalContext })
     expect(screen.queryByText('No reading context available.')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
   })
 })
 
-describe('Connection history disclosure (#2714)', () => {
+describe('Optional cards replace the generic disclosure (#2764 supersedes #2714)', () => {
   it('renders no narrative heading when only the rating form is meaningful', () => {
     renderRatingView()
     expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
@@ -222,27 +226,30 @@ describe('Connection history disclosure (#2714)', () => {
     expect(screen.getByRole('slider')).toBeInTheDocument()
   })
 
-  it('keeps series history hidden behind the disclosure until it is opened', async () => {
+  it('keeps series history hidden behind Show context until it is opened', async () => {
     const user = userEvent.setup()
-    renderRatingView({ readerContext: populatedContext })
-    expect(screen.queryByText('Ultimate Black Panther history')).not.toBeInTheDocument()
+    const onShowContext = vi.fn()
+    renderRatingView({ readerContext: populatedContext, onShowContext })
+    expect(screen.queryByTestId('reading-context-content')).not.toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
-    expect(screen.queryByTestId('context-disclosure-content')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /series history & crossovers/i }))
-    expect(screen.getByTestId('context-disclosure-content')).toBeVisible()
-    expect(screen.getByText('Ultimate Black Panther history')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /show context/i }))
+    expect(onShowContext).toHaveBeenCalledTimes(1)
     expect(screen.getByText('Your rating')).toBeInTheDocument()
   })
 
-  it('shows a loading skeleton while reader context loads', () => {
-    const { container } = renderRatingView({ isReaderContextLoading: true })
-    expect(container.querySelector('.animate-pulse')).not.toBeNull()
+  it('shows a local loading skeleton only inside the opened card', () => {
+    const { container } = renderRatingView({
+      readingContextRequested: true,
+      isReaderContextLoading: true,
+    })
+    expect(screen.getByTestId('reading-context-loading')).toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-loading')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-testid="rating-region-reading-optional"] .animate-pulse')).not.toBeNull()
     expect(screen.getByRole('slider')).toBeInTheDocument()
   })
 
-  it('reveals crossover analytics inside the disclosure when crossovers exist', async () => {
-    const user = userEvent.setup()
+  it('reveals crossover analytics inside the context card when crossovers exist', () => {
     const crossoverContext: ReaderContextResponse = {
       ...populatedContext,
       series: {
@@ -269,12 +276,10 @@ describe('Connection history disclosure (#2714)', () => {
         },
       ],
     }
-    renderRatingView({ readerContext: crossoverContext })
-    expect(screen.queryByText('Crossovers')).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /series history & crossovers/i }))
+    renderRatingView({ readerContext: crossoverContext, readingContextRequested: true })
     expect(screen.getByText('Crossovers')).toBeInTheDocument()
     expect(screen.getByText('Secret Wars')).toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-content')).not.toBeInTheDocument()
   })
 })
 
