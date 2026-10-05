@@ -487,6 +487,27 @@ reject_out_of_scope_diff() {
   return 1
 }
 
+factory_push_credential() {
+  # Worker 48 uses its installation token when the mapping and secrets exist.
+  # Every other worker keeps PR_REBASE_TOKEN. The shared producer is not removed.
+  local resolved source token
+  resolved="$(bash .github/scripts/factory-worker-push-token.sh resolve)" || return 1
+  source="${resolved%%$'\t'*}"
+  token="${resolved#*$'\t'}"
+  if [[ -z "$token" ]]; then
+    echo 'factory push credential was empty' >&2
+    return 1
+  fi
+  if [[ "$source" == installation ]]; then
+    if [[ -z "${GITHUB_REPOSITORY:-}" ]]; then
+      echo 'GITHUB_REPOSITORY is required to push with a worker installation token' >&2
+      return 1
+    fi
+    git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git"
+  fi
+  printf '%s' "$token"
+}
+
 persist_issue_pr() {
   local number="$1" branch="$2" pr title body base_ref
   [[ -n "$(git status --porcelain)" ]] || return 1
@@ -499,8 +520,9 @@ persist_issue_pr() {
   # The agent may be running on a local worktree branch whose name differs from
   # the target branch. Push the exact commit we just created, then verify that
   # GitHub's branch ref is actually at that commit before reporting success.
-  local pushed_head remote_head
+  local pushed_head remote_head push_token
   pushed_head="$(git rev-parse HEAD)"
+  push_token="$(factory_push_credential)" || return 1
   git push --set-upstream origin "HEAD:$branch" >&2
   remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
   if [[ "$remote_head" != "$pushed_head" ]]; then
@@ -512,10 +534,11 @@ persist_issue_pr() {
     title="$(gh issue view "$number" --json title --jq .title)"
     body="$(printf 'Closes #%s.\n\nModel: %s\nSource: %s\nWorker: %s\n\nProduced by fixed-model Factory %s (%s). Normal ComicPile exact-head factory merge gates apply.\n' \
       "$number" "$MODEL" "$SOURCE" "$WORKER_ID" "$WORKER" "$DISPLAY")"
-    # PR creation must use the same trusted actor as pushes. The workflow
-    # token makes the author github-actions[bot], which can require approval
-    # for Actions and causes CodeRabbit to skip the initial review.
-    GH_TOKEN="${PR_REBASE_TOKEN:?PR_REBASE_TOKEN is required for trusted PR creation}" \
+    # PR creation must use the same actor as the push. Worker 48 uses its
+    # installation token when configured; every other worker uses
+    # PR_REBASE_TOKEN. The workflow token stays github-actions[bot] for
+    # controller calls and is not a worker App.
+    GH_TOKEN="$push_token" \
       gh pr create --base main --head "$branch" --title "$title" --body "$body" >/tmp/factory-pr-url
     pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number')"
   fi
@@ -533,6 +556,7 @@ persist_pr_changes() {
   git commit -m "factory: advance PR #${pr} with ${DISPLAY}"
   local pushed_head remote_head
   pushed_head="$(git rev-parse HEAD)"
+  factory_push_credential >/dev/null || return 1
   git push origin "HEAD:$branch"
   remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
   if [[ "$remote_head" != "$pushed_head" ]]; then
