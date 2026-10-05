@@ -110,6 +110,9 @@ export function useRollActions({
         setShowMigrationDialog(true)
       } else {
         enterRatingView(response.thread_id, response.result, threadMetadata)
+        setTimeout(() => {
+          document.getElementById('rating-view-top')?.focus()
+        }, 0)
       }
     } catch (error) {
       console.error('Failed to set pending thread:', error)
@@ -249,6 +252,12 @@ export function useRollActions({
           ? bootstrap.active_thread
           : rollPool.find((thread) => thread.id === pendingId)
       enterRatingView(pendingId, bootstrap?.last_rolled_result ?? null, pendingMetadata)
+      // Re-entering the rating view for an existing pending read unmounts the
+      // Roll CTA that held keyboard focus, so move focus to the rating view
+      // top. Without this, focus drops to document.body (#3147).
+      setTimeout(() => {
+        document.getElementById('rating-view-top')?.focus()
+      }, 0)
       return
     }
 

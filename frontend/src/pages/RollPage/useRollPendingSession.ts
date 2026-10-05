@@ -95,6 +95,11 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
       setRating(3.0)
       setErrorMessage('')
       setIsRatingView(true)
+      // Hydrating an existing pending read unmounts the Roll CTA that held
+      // keyboard focus, so move focus to the rating view top (#3147).
+      setTimeout(() => {
+        document.getElementById('rating-view-top')?.focus()
+      }, 0)
     }
     setIsActionSheetOpen(false)
     setIsOverrideOpen(false)
