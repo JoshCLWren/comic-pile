@@ -60,6 +60,7 @@ const STAGE_LABELS = [
   'factory:blocked',
 ];
 const ADVANCED_PR_STAGES = new Set(['factory:review', 'factory:ci', 'factory:ready']);
+const MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->';
 const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
 function trusted(association) {
@@ -251,7 +252,14 @@ async function reconcileMissingPrLabels({ github, context }) {
     if (pr.state !== 'open' || pr.draft
       || pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`
       || /^(dependabot|renovate)(\[bot\])?$/.test(pr.user?.login || '')) continue;
+    // Manual-only PRs are operator-managed and must never be enrolled into the
+    // factory queue (enroll would otherwise default them to factory:review).
+    if ((pr.body || '').includes(MANUAL_ONLY_MARKER)) continue;
     const current = await currentLabels(github, context, pr.number);
+    // Local/infrastructure PRs are operator-managed. Enroll must never touch
+    // them: defaulting a stage here would stamp factory:review onto PRs that
+    // must not enter the factory review queue.
+    if (current.has('factory:local')) continue;
     const owners = [...current].filter(isOwnerLabel);
     const stages = STAGE_LABELS.filter(label => current.has(label));
     if (current.has('factory') && owners.length === 1 && stages.length === 1) continue;
