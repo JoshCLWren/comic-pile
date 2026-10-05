@@ -117,6 +117,7 @@ function CreatorRow({
 export default function CreatorsPage() {
   const [search, setSearch] = useState<string>('')
   const [sort, setSort] = useState<CreatorListSort>('name')
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [minRatings, setMinRatings] = useState<number>(0)
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()

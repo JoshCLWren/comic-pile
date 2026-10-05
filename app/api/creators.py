@@ -42,7 +42,7 @@ router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
 #: One request never grows past a small fixed number of queries and bounded rows.
 MAX_CREATOR_KEYS = 50
 
-#: Minimum and maximum number of creators allowed in a single comparison request (issue #3091).
+#: Bounded comparison limits (issue #3091).
 MIN_COMPARISON_CREATORS = 2
 MAX_COMPARISON_CREATORS = 4
 
@@ -127,22 +127,28 @@ def _validate_comparison_keys(raw: str | None) -> list[str]:
     if not raw or not raw.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="keys must be a non-empty comma-separated list of creator keys",
+            detail=(
+                f"keys must be a comma-separated list of {MIN_COMPARISON_CREATORS}-"
+                f"{MAX_COMPARISON_CREATORS} canonical creator keys"
+            ),
         )
 
     keys = _split_creator_keys(raw)
-    if len(keys) < MIN_COMPARISON_CREATORS:
+    if not keys:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"Comparison requires {MIN_COMPARISON_CREATORS} to {MAX_COMPARISON_CREATORS} creator keys, got {len(keys)}"
+                f"keys must be a comma-separated list of {MIN_COMPARISON_CREATORS}-"
+                f"{MAX_COMPARISON_CREATORS} canonical creator keys"
             ),
         )
-    if len(keys) > MAX_COMPARISON_CREATORS:
+
+    if len(keys) < MIN_COMPARISON_CREATORS or len(keys) > MAX_COMPARISON_CREATORS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"Comparison requires {MIN_COMPARISON_CREATORS} to {MAX_COMPARISON_CREATORS} creator keys, got {len(keys)}"
+                f"keys must contain {MIN_COMPARISON_CREATORS} to {MAX_COMPARISON_CREATORS} "
+                f"creator keys, got {len(keys)}"
             ),
         )
 

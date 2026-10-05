@@ -574,6 +574,7 @@ async def test_detail_uses_bounded_constant_query_count(
     assert len(small_selects) == len(wide_selects)
     assert len(small_selects) <= 12, small_selects
 
+
 @pytest.mark.asyncio
 async def test_rating_distribution_uses_half_star_buckets_and_headlines(
     auth_client: AsyncClient,
