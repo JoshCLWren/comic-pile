@@ -122,10 +122,19 @@ export interface RollBootstrapResponse {
   roll_pool: RollBootstrapThread[]
   snoozed_threads: RollBootstrapThread[]
   snoozed_count: number
+  /**
+   * Series held out of the roll by durable cross-session snooze backoff.
+   * Additive: older payloads omit it, and the Roll page degrades to the
+   * session-scoped snooze list only.
+   */
+  snoozed_backoff_count?: number
+  snoozed_backoff_threads?: RollBootstrapThread[]
   skipped_thread_ids: number[]
   skipped_threads: RollBootstrapThread[]
   blocked_count: number
   blocked_threads: RollBootstrapThread[]
+  /** Eligible active series kept out of the pool by the die boundary alone. */
+  pool_overflow_count?: number
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
   timezone?: string | null

@@ -127,6 +127,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(scalar_value=0),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
@@ -137,6 +138,8 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
     assert "threads.id" in compiled
 
     assert response.snoozed_count == 1
+    assert response.snoozed_backoff_count == 0
+    assert response.pool_overflow_count == 0
     assert [thread.model_dump() for thread in response.snoozed_threads] == [
         {
             "id": 101,
@@ -239,17 +242,23 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         roll_pool=summaries,
         snoozed_threads=summaries,
         snoozed_count=len(summaries),
+        snoozed_backoff_count=len(summaries),
+        snoozed_backoff_threads=summaries,
         blocked_count=len(summaries),
         blocked_threads=summaries,
+        pool_overflow_count=7,
         stale_thread_count=0,
         stale_thread=None,
     )
 
     assert len(response.roll_pool) == 25
     assert len(response.snoozed_threads) == response.summary_limit
+    assert len(response.snoozed_backoff_threads) == response.summary_limit
     assert len(response.blocked_threads) == response.summary_limit
     assert response.snoozed_count == 25
+    assert response.snoozed_backoff_count == 25
     assert response.blocked_count == 25
+    assert response.pool_overflow_count == 7
 
 
 @pytest.mark.asyncio
@@ -742,7 +751,7 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
         _Result(rows=[]),
         _Result(scalar_value=0),
         _Result(rows=[]),
-        _Result(scalar_value=3),
+        _Result(scalar_value=0),
         _Result(rows=[(10,), (20,), (30,)]),
         _Result(
             rows=[

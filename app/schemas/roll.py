@@ -182,10 +182,18 @@ class RollBootstrapResponse(BaseModel):
     roll_pool: list[RollBootstrapThread]
     snoozed_threads: list[RollBootstrapThread]
     snoozed_count: int
+    #: Series excluded from the roll by durable cross-session snooze backoff
+    #: (issue #2740). Derived rather than stored, so the Roll page needs its own
+    #: payload to explain why these series never appear in a roll (issue #3125).
+    snoozed_backoff_count: int = 0
+    snoozed_backoff_threads: list[RollBootstrapThread] = []
     skipped_thread_ids: list[int] = []
     skipped_threads: list[RollBootstrapThread] = []
     blocked_count: int
     blocked_threads: list[RollBootstrapThread]
+    #: Eligible active series that the die boundary alone keeps out of the pool
+    #: (issue #3125).
+    pool_overflow_count: int = 0
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
     timezone: str | None = None
@@ -197,7 +205,12 @@ class RollBootstrapResponse(BaseModel):
         if not isinstance(data, dict):
             return data
 
-        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads"):
+        for field_name in (
+            "snoozed_threads",
+            "snoozed_backoff_threads",
+            "skipped_threads",
+            "blocked_threads",
+        ):
             values = data.get(field_name)
             if isinstance(values, list):
                 data[field_name] = values[: cls.summary_limit]

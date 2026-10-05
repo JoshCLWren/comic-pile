@@ -7,6 +7,8 @@ import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
+  /** Authoritative blocked total; `blockedThreads` is a bounded summary list. */
+  blockedCount?: number
   blockingDependencyMap: Record<number, BlockingDependency[]>
   dieSize?: number
   isRatingView: boolean
@@ -14,10 +16,18 @@ interface ThreadPoolProps {
   staleThread: (RollBootstrapThread & { days: number }) | null
   staleThreadCount: number
   snoozedThreads: Array<{ id: number; title: string; format: string }>
+  /** Authoritative session-snoozed total; `snoozedThreads` is bounded. */
+  snoozedCount?: number
+  /** Series held out by durable cross-session snooze backoff (issue #3125). */
+  snoozedBackoffThreads?: RollBootstrapThread[]
+  /** Authoritative backoff total; `snoozedBackoffThreads` is bounded. */
+  snoozedBackoffCount?: number
   snoozedExpanded: boolean
   blockedExpanded: boolean
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedExpanded: boolean
+  /** Eligible series the die boundary alone keeps out of the pool. */
+  poolOverflowCount?: number
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
   onUnskip: (threadId: number) => void
@@ -34,6 +44,7 @@ interface ThreadPoolProps {
 export function ThreadPool({
   pool,
   blockedThreads,
+  blockedCount,
   blockingDependencyMap,
   dieSize,
   isRatingView,
@@ -41,10 +52,14 @@ export function ThreadPool({
   staleThread,
   staleThreadCount,
   snoozedThreads,
+  snoozedCount,
+  snoozedBackoffThreads,
+  snoozedBackoffCount,
   snoozedExpanded,
   blockedExpanded,
   skippedThreads,
   skippedExpanded,
+  poolOverflowCount,
   onThreadClick,
   onUnsnooze,
   onUnskip,
@@ -72,6 +87,34 @@ export function ThreadPool({
     }
   }, [isRatingView])
 
+  // Issue #3125: the backend deliberately keeps non-active, snoozed, blocked,
+  // and skipped series out of the roll. Every one of those exclusions now gets a
+  // named reason on this page instead of silently reducing the roll pool. The
+  // backend counts stay authoritative because the per-reason lists are bounded
+  // summaries, so the label must not silently under-report.
+  const backoffSnoozed = snoozedBackoffThreads ?? []
+  const blockedTotal = Math.max(blockedCount ?? 0, blockedThreads.length)
+  const blockedUnlisted = Math.max(0, blockedTotal - blockedThreads.length)
+  const sessionSnoozedTotal = Math.max(snoozedCount ?? 0, snoozedThreads.length)
+  const backoffTotal = Math.max(snoozedBackoffCount ?? 0, backoffSnoozed.length)
+  const backoffUnlisted = Math.max(0, backoffTotal - backoffSnoozed.length)
+  const snoozedTotal = sessionSnoozedTotal + backoffTotal
+  const snoozedUnlisted =
+    Math.max(0, sessionSnoozedTotal - snoozedThreads.length) + backoffUnlisted
+  const skippedTotal = skippedThreads.length
+  const overflowTotal = Math.max(0, poolOverflowCount ?? 0)
+
+  const exclusionReasons = [
+    blockedTotal > 0 ? `${blockedTotal} waiting on an earlier issue` : null,
+    snoozedTotal > 0 ? `${snoozedTotal} snoozed` : null,
+    skippedTotal > 0 ? `${skippedTotal} skipped this session` : null,
+    overflowTotal > 0 ? `${overflowTotal} behind the die` : null,
+  ].filter((reason): reason is string => reason !== null)
+
+  const excludedTotal =
+    blockedTotal + snoozedTotal + skippedTotal + overflowTotal
+  const hasExclusions = excludedTotal > 0
+
   return (
     <div
       className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-[var(--theme-border)] pt-4 md:pt-8'}`}
@@ -83,6 +126,11 @@ export function ThreadPool({
           {dieSize && pool.length > 0 && pool.length < dieSize && (
             <p className="text-[10px] text-stone-500 mt-1" data-smaller-than-die>
               Only {pool.length} of d{dieSize} faces are mapped to a ready-to-read series — the roll picks among these visible faces.
+            </p>
+          )}
+          {hasExclusions && (
+            <p className="text-[10px] text-stone-500 mt-1" data-testid="roll-excluded-summary">
+              {excludedTotal} excluded from this roll · {exclusionReasons.join(' · ')}
             </p>
           )}
         </div>
@@ -99,7 +147,7 @@ export function ThreadPool({
       </div>}
 
       {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`${pool.length} ready to read, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
-        {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
+        {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 && backoffSnoozed.length === 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
@@ -121,7 +169,7 @@ export function ThreadPool({
               </ul>
             </div>
           </div>
-        ) : pool.length === 0 && (blockedThreads.length > 0 || snoozedThreads.length > 0) ? (
+        ) : pool.length === 0 && (blockedThreads.length > 0 || snoozedThreads.length > 0 || backoffSnoozed.length > 0) ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
@@ -189,7 +237,10 @@ export function ThreadPool({
               ▶
             </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {blockedThreads.length} series waiting for earlier issues
+              {blockedTotal} series waiting for earlier issues
+              {blockedUnlisted > 0 && (
+                <span className="text-stone-500"> +{blockedUnlisted} more</span>
+              )}
             </span>
           </button>
           {blockedExpanded && (
@@ -253,7 +304,7 @@ export function ThreadPool({
         </div>
       )}
 
-      {snoozedThreads && snoozedThreads.length > 0 && !isRatingView && (
+      {snoozedThreads && (snoozedTotal > 0) && !isRatingView && (
         <div className="mt-4 md:mt-8">
           <button
             type="button"
@@ -266,7 +317,7 @@ export function ThreadPool({
               ▶
             </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
-              Snoozed ({snoozedThreads.length})
+              Snoozed ({snoozedTotal})
             </span>
           </button>
           {snoozedExpanded && (
@@ -289,6 +340,26 @@ export function ThreadPool({
                   </button>
                 </div>
               ))}
+              {/* Issue #3125: durable cross-session snooze backoff removes a series
+                  from every roll without recording it in this session, so it used
+                  to disappear with no stated reason. It gets its own reason
+                  label rather than pretending a session-scoped unsnooze works. */}
+              {backoffSnoozed.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
+                >
+                  <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
+                  <span className="text-[9px] font-black uppercase tracking-wider text-stone-500 shrink-0">
+                    Snoozed in an earlier session
+                  </span>
+                </div>
+              ))}
+              {snoozedUnlisted > 0 && (
+                <p className="px-4 py-1 text-[9px] font-black uppercase tracking-wider text-stone-500">
+                  +{snoozedUnlisted} more not listed
+                </p>
+              )}
             </div>
           )}
         </div>

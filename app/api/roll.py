@@ -22,6 +22,11 @@ from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue,
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
+from app.repositories.roll_repository import (
+    count_backoff_snoozed_threads,
+    count_roll_pool_overflow,
+    fetch_backoff_snoozed_threads,
+)
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
@@ -1218,6 +1223,25 @@ async def roll_bootstrap(
         )
         for row in blocked_result.all()
     ]
+    # Derived cross-session snooze backoff removes a thread from the pool
+    # without recording it in the session, so it used to disappear from every
+    # roll with no stated reason (issue #3125). Resolve the still-active ones so
+    # the Roll page can name them.
+    backoff_snoozed_ids = sorted(set(derived_snoozed_ids) - set(snoozed_ids))
+    snoozed_backoff_count = await count_backoff_snoozed_threads(
+        db, user_id, backoff_snoozed_ids
+    )
+    snoozed_backoff_threads = [
+        RollBootstrapThread(id=thread_id, title=title, format=normalize_format_value(fmt))
+        for thread_id, title, fmt in await fetch_backoff_snoozed_threads(
+            db, user_id, backoff_snoozed_ids, RollBootstrapResponse.summary_limit
+        )
+    ]
+    # The pool is truncated to the die, so a queue larger than the die silently
+    # hid the remainder (issue #3125). Count it so the page can say why.
+    pool_overflow_count = await count_roll_pool_overflow(
+        db, user_id, die_size, effective_snoozed_ids, skipped_ids
+    )
     snoozed_count = len(snoozed_threads)
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
@@ -1283,10 +1307,13 @@ async def roll_bootstrap(
         roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
         snoozed_count=snoozed_count,
+        snoozed_backoff_count=snoozed_backoff_count,
+        snoozed_backoff_threads=snoozed_backoff_threads,
         skipped_thread_ids=skipped_ids,
         skipped_threads=skipped_threads,
         blocked_count=blocked_count,
         blocked_threads=blocked_threads,
+        pool_overflow_count=pool_overflow_count,
         stale_thread_count=stale_thread_count,
         stale_thread=stale_thread,
         session_id=current_session_id,

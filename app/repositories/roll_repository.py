@@ -132,6 +132,114 @@ async def fetch_bounded_roll_pool_rows(
     )
 
 
+async def count_backoff_snoozed_threads(
+    db: AsyncSession,
+    user_id: int,
+    backoff_ids: list[int],
+) -> int:
+    """Count active queued series held out of the roll by durable snooze backoff.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        backoff_ids: Derived backoff thread IDs minus the current session's snoozed IDs.
+
+    Returns:
+        Number of active queued series currently held out by snooze backoff.
+    """
+    if not backoff_ids:
+        return 0
+
+    result = await db.execute(
+        select(func.count())
+        .select_from(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.id.in_(backoff_ids))
+    )
+    return int(result.scalar() or 0)
+
+
+async def fetch_backoff_snoozed_threads(
+    db: AsyncSession,
+    user_id: int,
+    backoff_ids: list[int],
+    limit: int,
+) -> list[tuple[int, str, str]]:
+    """Return active queued series held out of the roll by durable snooze backoff.
+
+    Durable cross-session snooze backoff (issue #2740) removes a thread from the
+    roll pool until enough later reading sessions have elapsed. Those exclusions
+    are derived, not stored in ``Session.snoozed_thread_ids``, so the Roll page
+    had no payload able to name them and the series vanished from every roll
+    without a stated reason (issue #3125). This resolves them for display.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        backoff_ids: Derived backoff thread IDs minus the current session's snoozed IDs.
+        limit: Maximum number of series to return.
+
+    Returns:
+        ``(id, title, format)`` tuples in queue order.
+    """
+    if not backoff_ids:
+        return []
+
+    result = await db.execute(
+        select(Thread.id, Thread.title, Thread.format)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.id.in_(backoff_ids))
+        .order_by(Thread.queue_position)
+        .limit(limit)
+    )
+    return [(row.id, row.title, row.format) for row in result.all()]
+
+
+async def count_roll_pool_overflow(
+    db: AsyncSession,
+    user_id: int,
+    die_size: int,
+    snoozed_ids: list[int] | None = None,
+    skipped_ids: list[int] | None = None,
+) -> int:
+    """Count eligible active series excluded only by the die boundary.
+
+    The roll pool is truncated to ``die_size`` rows, so a queue that is larger
+    than the die silently hides the remainder (issue #3125). This counts those
+    otherwise-eligible rows so the Roll page can name the reason.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        die_size: Current die size that bounds the pool.
+        snoozed_ids: Thread IDs excluded as snoozed.
+        skipped_ids: Thread IDs excluded as skipped.
+
+    Returns:
+        Number of eligible series beyond the die boundary; never negative.
+    """
+    query = (
+        select(func.count())
+        .select_from(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.is_blocked.is_(False))
+    )
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+    if skipped_ids:
+        query = query.where(Thread.id.not_in(skipped_ids))
+
+    result = await db.execute(query)
+    eligible_count = int(result.scalar() or 0)
+    return max(0, eligible_count - die_size)
+
+
 async def insert_event(db: AsyncSession, event: Event) -> None:
     """Persist an Event row.
 

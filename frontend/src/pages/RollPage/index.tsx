@@ -282,6 +282,7 @@ export default function RollPage() {
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const skippedThreads = bootstrap?.skipped_threads ?? []
   const blockedThreads = bootstrap?.blocked_threads ?? []
+  const snoozedBackoffThreads = bootstrap?.snoozed_backoff_threads ?? []
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -289,7 +290,7 @@ export default function RollPage() {
   )
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(state.currentDie) ? state.currentDie : 6
-  const hasRollableContent = pool.length > 0 || blockedThreads.length > 0 || snoozedThreads.length > 0
+  const hasRollableContent = pool.length > 0 || blockedThreads.length > 0 || snoozedThreads.length > 0 || snoozedBackoffThreads.length > 0
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     return (
@@ -330,26 +331,25 @@ export default function RollPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-<RollHeader
-  bootstrap={bootstrap}
-  currentDie={state.currentDie}
-  dieSize={dieSize}
-  displayDie={displayDie}
-  snoozedThreads={snoozedThreads}
-  pool={pool}
-  blocked_threads={blockedThreads}
-  isRatingView={state.isRatingView}
-  setDiePending={setDieMutation.isPending}
-  clearManualDiePending={clearManualDieMutation.isPending}
-  onSetDie={actions.handleSetDie}
-  onClearManualDie={actions.handleClearManualDie}
-  onOpenOverride={modals.openOverrideModal}
-  onOpenDieModal={() => state.setIsDieModalOpen(true)}
-  onOpenModeSelector={() => setIsModeSelectorOpen(true)}
-  onBackToQueue={() => {
-    void rating.handleCancelRating()
-  }}
-/>
+      <RollHeader
+        bootstrap={bootstrap}
+        currentDie={state.currentDie}
+        dieSize={dieSize}
+        displayDie={displayDie}
+        snoozedThreads={snoozedThreads}
+        pool={pool}
+        isRatingView={state.isRatingView}
+        setDiePending={setDieMutation.isPending}
+        clearManualDiePending={clearManualDieMutation.isPending}
+        onSetDie={actions.handleSetDie}
+        onClearManualDie={actions.handleClearManualDie}
+        onOpenOverride={modals.openOverrideModal}
+        onOpenDieModal={() => state.setIsDieModalOpen(true)}
+        onOpenModeSelector={() => setIsModeSelectorOpen(true)}
+        onBackToQueue={() => {
+          void rating.handleCancelRating()
+        }}
+      />
 
       <ReadingModeLauncher />
 
@@ -418,6 +418,7 @@ export default function RollPage() {
             <ThreadPool
               pool={pool}
               blockedThreads={blockedThreads}
+              blockedCount={bootstrap.blocked_count}
               blockingDependencyMap={state.blockingDependencyMap}
               dieSize={dieSize}
               isRatingView={state.isRatingView}
@@ -425,10 +426,14 @@ export default function RollPage() {
               staleThread={state.staleThread}
               staleThreadCount={state.staleThreadCount}
               snoozedThreads={snoozedThreads}
+              snoozedCount={bootstrap.snoozed_count}
+              snoozedBackoffThreads={snoozedBackoffThreads}
+              snoozedBackoffCount={bootstrap.snoozed_backoff_count}
               snoozedExpanded={state.snoozedExpanded}
               blockedExpanded={state.blockedExpanded}
               skippedThreads={skippedThreads}
               skippedExpanded={state.skippedExpanded}
+              poolOverflowCount={bootstrap.pool_overflow_count}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
               onUnskip={skip.handleUnskip}
