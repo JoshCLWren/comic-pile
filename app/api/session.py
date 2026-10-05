@@ -226,10 +226,6 @@ async def get_session_with_thread_safe(
     return session, None
 
 
-# Remove the duplicate build_narrative_summary implementation.
-# (Actually, I need to remove the entire function definition starting at line 228)
-
-
 async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadInfo | None:
     """Get the most recently rolled thread for the session.
 

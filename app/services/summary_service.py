@@ -3,30 +3,38 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Snapshot, Thread
+from app.models import Event, Thread
 
 
 async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str, list[str]]:
-    """Build narrative summary categorizing session events."""
+    """Build narrative summary categorizing session events.
+
+    Args:
+        session_id: The session ID to build summary for.
+        db: Database session.
+
+    Returns:
+        Dictionary with keys "read", "skipped", and "completed", each containing
+        a list of formatted strings.
+    """
     events_result = await db.execute(
-        select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
+        select(Event)
+        .where(Event.session_id == session_id)
+        .order_by(Event.timestamp, Event.id)
     )
     events = events_result.scalars().all()
 
-    # Identify rate events that have been undone via snapshots.
-    # Snapshots store event_id referencing the event they were based on;
-    # if that event was a rate event, the rate was undone.
-    snapshots_result = await db.execute(
-        select(Snapshot).where(Snapshot.session_id == session_id)
-    )
-    snapshots = snapshots_result.scalars().all()
-
-    rate_event_ids = {event.id for event in events if event.type == "rate"}
-    undone_rate_ids = {
-        snapshot.event_id
-        for snapshot in snapshots
-        if snapshot.event_id is not None and snapshot.event_id in rate_event_ids
-    }
+    # Net undo events against rate events. Each undo reverts the most recent
+    # not-yet-undone rate before it. Live snapshots cannot identify undone
+    # rates: delta undo snapshots are deleted when applied, so the undo event
+    # stream is the durable record of what was reverted.
+    undone_rate_ids: set[int] = set()
+    open_rate_ids: list[int] = []
+    for event in events:
+        if event.type == "rate":
+            open_rate_ids.append(event.id)
+        elif event.type == "undo" and open_rate_ids:
+            undone_rate_ids.add(open_rate_ids.pop())
 
     summary = {
         "read": [],
@@ -39,6 +47,7 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     completed_titles = set()
 
     thread_ids = {event.thread_id for event in events if event.thread_id}
+    threads_dict: dict[int, Thread] = {}
     if thread_ids:
         threads_result = await db.execute(
             select(Thread).where(Thread.id.in_(thread_ids))
@@ -54,7 +63,7 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
             read_entries.append(f"{title}{issue_suffix} ({event.rating}/5.0)")
             if thread and thread.status == "completed":
                 completed_titles.add(f"{title}{issue_suffix}")
-        elif event.type == "rolled_but_skipped":
+        elif event.type in ("rolled_but_skipped", "snooze"):
             skipped_titles.add(f"{title}{issue_suffix}")
 
     summary["read"] = read_entries
