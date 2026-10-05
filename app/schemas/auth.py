@@ -2,13 +2,15 @@
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.constants import MIN_PASSWORD_LENGTH
+
 
 class UserRegisterRequest(BaseModel):
     """Request schema for user registration."""
 
     username: str
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
 
 
 class UserLoginRequest(BaseModel):
@@ -51,7 +53,7 @@ class ResetPasswordRequest(BaseModel):
     """Request schema for password reset completion."""
 
     token: str
-    new_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
 
 
 class PasswordResetResponse(BaseModel):

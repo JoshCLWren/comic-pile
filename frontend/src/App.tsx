@@ -52,6 +52,7 @@ const RollPage = lazyRoute('roll')
 const QueuePage = lazyRoute('queue')
 const ThreadDetailView = lazyRoute('threadDetail')
 const CreatorDetailPage = lazyRoute('creatorDetail')
+const CreatorComparisonPage = lazyRoute('creatorComparison')
 const CreatorsPage = lazyRoute('creators')
 const HistoryPage = lazyRoute('history')
 const SessionPage = lazyRoute('session')
@@ -540,6 +541,15 @@ function AppRoutes() {
             <ServiceUnavailableWrapper>
               <AuthenticatedLayout onBugReportSubmit={submit}>
                 <ThreadDetailView />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/creators/compare" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <CreatorComparisonPage />
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>

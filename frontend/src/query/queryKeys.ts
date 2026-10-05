@@ -266,6 +266,12 @@ export const queryKeys = {
       ['creators', 'list', params] as const,
     summaries: (keys: string[]) =>
       ['creators', 'summaries', [...keys].sort()] as const,
+    /**
+     * Canonical bounded personal creator comparison key (issue #3091).
+     * Comparison is limited to 2-4 creators. Keys are sorted for stability.
+     */
+    compare: (keys: string[]) =>
+      ['creators', 'compare', [...keys].sort()] as const,
   },
   continuityCorrection: {
     groups: () => ['continuityCorrection', 'groups'] as const,

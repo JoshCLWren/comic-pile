@@ -53,7 +53,7 @@ class CreatorComparisonItem(BaseModel):
     )
     average_rating: float | None = Field(
         default=None,
-        description="Average rating of the user's latest effective ratings across issues "
+        description="Average of the user's latest effective ratings across issues "
         "attributed to this creator with a headline-eligible role. ``null`` when no ratings.",
     )
     median_rating: float | None = Field(

@@ -296,8 +296,12 @@ jobs:
             local worker="$1"
             local owner="factory:${worker}"
             local number current_labels other_owner latest_labels target_labels
+            local expected_lock='.github/factory-expected-workers.json'
 
-            [[ "$worker" =~ ^[0-9]+$ ]] && (( worker >= 6 && worker <= 71 )) || {
+            # Roster-derived allowlist: never revive a hard-coded max worker id.
+            [[ "$worker" =~ ^[0-9]+$ ]] \
+              && jq -e --argjson w "$worker" '.expected_workers | index($w) != null' \
+                "$expected_lock" >/dev/null || {
               echo "Refusing lease recovery for unknown historical fixed-model worker ${worker}" >&2
               return 1
             }

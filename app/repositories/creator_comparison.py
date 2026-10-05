@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
@@ -161,6 +161,7 @@ async def load_creator_comparison_inputs(
             sorted(by_key.values(), key=lambda credit: (credit.external_id, credit.roles))
         )
         for issue_id, by_key in per_issue_credits.items()
+        if by_key
     }
 
     # 3. Latest effective rating per owned issue (latest event wins).
@@ -188,46 +189,6 @@ async def load_creator_comparison_inputs(
     )
 
 
-async def load_series_aggregates(
-    db: AsyncSession,
-    user_id: int,
-    creator_issue_ids: frozenset[int],
-    limit: int = MAX_SERIES_AGGREGATES,
-) -> list[tuple[int, str, int, float | None]]:
-    """Load strongest series/thread aggregates for a creator's issues.
-
-    Returns list of (thread_id, thread_title, issue_count, average_rating)
-    ordered by issue_count desc, average_rating desc.
-    """
-    if not creator_issue_ids:
-        return []
-
-    result = await db.execute(
-        select(
-            Thread.id,
-            Thread.title,
-            func.count(Issue.id).label("issue_count"),
-            func.avg(Event.rating).label("avg_rating"),
-        )
-        .join(Issue, Issue.thread_id == Thread.id)
-        .outerjoin(
-            Event,
-            (Event.issue_id == Issue.id)
-            & (Event.type == "rate")
-            & (Event.rating.is_not(None)),
-        )
-        .where(Thread.user_id == user_id)
-        .where(Issue.id.in_(creator_issue_ids))
-        .group_by(Thread.id, Thread.title)
-        .order_by(func.count(Issue.id).desc(), func.avg(Event.rating).desc().nulls_last())
-        .limit(limit)
-    )
-    return [
-        (int(thread_id), str(thread_title), int(issue_count), float(avg_rating) if avg_rating is not None else None)
-        for thread_id, thread_title, issue_count, avg_rating in result.all()
-    ]
-
-
 __all__ = [
     "COMICVINE_PROVIDER",
     "CreatorComparisonInputs",
@@ -238,5 +199,4 @@ __all__ = [
     "MAX_SERIES_AGGREGATES",
     "extract_creator_credits",
     "load_creator_comparison_inputs",
-    "load_series_aggregates",
 ]

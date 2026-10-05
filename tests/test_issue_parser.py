@@ -53,6 +53,11 @@ def test_parse_issue_ranges_accepts_literals():
     result = parse_issue_ranges("½")
     assert result == ["½"]
 
+    # Sub-issue style identifiers like "5_0" must be treated as literals,
+    # not parsed via Python int() underscore separators (int("5_0") == 50).
+    result = parse_issue_ranges("5_0-5_2")
+    assert result == ["5_0-5_2"]
+
 
 def test_parse_issue_ranges_invalid_format():
     """Test invalid range formats."""

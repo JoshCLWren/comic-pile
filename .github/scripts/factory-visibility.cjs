@@ -1,11 +1,30 @@
-const WORKER_OWNER_LABELS = Array.from({ length: 71 }, (_, index) => `factory:${index + 1}`);
+const {
+  SCHEDULED_WORKER_IDS,
+  loadExpectedWorkerIds,
+} = require('./factory-expected-workers.cjs');
+
+const {
+  expectedWorkers: EXPECTED_WORKER_IDS,
+  retiredWorkers: RETIRED_WORKER_IDS,
+} = loadExpectedWorkerIds();
+
+const SCHEDULED_OWNER_LABELS = SCHEDULED_WORKER_IDS.map((id) => `factory:${id}`);
+const FIXED_MODEL_OWNER_LABELS = [...EXPECTED_WORKER_IDS]
+  .sort((left, right) => left - right)
+  .map((id) => `factory:${id}`);
+// Label definitions and known owner names stay roster-derived. Retired ids are
+// kept in OWNER_LABELS so historical leases can still be stripped cleanly.
+const RETIRED_OWNER_LABELS = [...RETIRED_WORKER_IDS]
+  .sort((left, right) => left - right)
+  .map((id) => `factory:${id}`);
+const WORKER_OWNER_LABELS = [...SCHEDULED_OWNER_LABELS, ...FIXED_MODEL_OWNER_LABELS];
 
 const DEFINITIONS = {
   factory: ['5319E7', 'Work owned or produced by an autonomous ComicPile factory'],
-  ...Object.fromEntries(WORKER_OWNER_LABELS.map((name, index) => [
-    name,
-    ['0366D6', `Current next-action owner is ComicPile Factory ${index + 1}`],
-  ])),
+  ...Object.fromEntries(WORKER_OWNER_LABELS.map((name) => {
+    const number = name.slice('factory:'.length);
+    return [name, ['0366D6', `Current next-action owner is ComicPile Factory ${number}`]];
+  })),
   'factory:local': ['0366D6', 'Current next-action owner is the local OpenCode factory'],
   'factory:unowned': ['BFDADC', 'Factory work has no current next-action owner'],
   'factory:building': ['FBCA04', 'A factory is actively implementing or repairing this work'],
@@ -17,10 +36,21 @@ const DEFINITIONS = {
 };
 
 const OWNER_LABELS = [
-  ...WORKER_OWNER_LABELS,
-  'factory:local',
-  'factory:unowned',
+  ...new Set([
+    ...SCHEDULED_OWNER_LABELS,
+    ...FIXED_MODEL_OWNER_LABELS,
+    ...RETIRED_OWNER_LABELS,
+    'factory:local',
+    'factory:unowned',
+  ]),
 ];
+
+function isOwnerLabel(label) {
+  return label === 'factory:local'
+    || label === 'factory:unowned'
+    || /^factory:\d+$/.test(label);
+}
+
 const STAGE_LABELS = [
   'factory:building',
   'factory:review',
@@ -42,6 +72,7 @@ function workerFrom(body) {
     /comic-pile-factory-review-claim-v\d+:[^:\s>]+:([^:\s>]+):/,
     /comic-pile-factory-fix-(?:claim|progress)-v\d+:[^:\s>]+:([^:\s>]+):/,
     /comic-pile-factory-claim-released-v\d+:[^:\s>]+:([^:\s>]+):/,
+    /comic-pile-factory-head-contributor-v\d+:[^:\s>]+:[^:\s>]+:worker-(\d+):/,
   ]) {
     const match = body.match(pattern);
     if (match) return match[1];
@@ -50,24 +81,43 @@ function workerFrom(body) {
 }
 
 function ownerFor(worker) {
-  const scheduled = worker?.match(/^chatgpt-factory-([1-5])$/);
+  if (worker == null || worker === '') return 'factory:unowned';
+  const token = String(worker);
+
+  const scheduled = token.match(/^chatgpt-factory-([1-5])$/);
   if (scheduled) return `factory:${scheduled[1]}`;
 
-  const fixedModel = worker?.match(/^opencode-(?:free-model|nvidia)-factory-(\d+)$/);
+  let number = null;
+  const fixedModel = token.match(/^opencode-(?:free-model|nvidia|omniroute)-factory-(\d+)$/);
   if (fixedModel) {
-    const number = Number(fixedModel[1]);
-    if (number >= 6 && number <= 71) return `factory:${number}`;
+    number = Number(fixedModel[1]);
+  } else {
+    const bare = token.match(/^(?:worker-)?(\d+)$/);
+    if (bare) number = Number(bare[1]);
+  }
+  if (number != null && EXPECTED_WORKER_IDS.has(number)) {
+    return `factory:${number}`;
   }
 
-  if (worker === 'local' || worker === 'local-opencode' || worker?.startsWith('local-opencode-')) {
+  if (token === 'local' || token === 'local-opencode' || token.startsWith('local-opencode-')) {
     return 'factory:local';
   }
   return 'factory:unowned';
 }
 
 function durablePrOwner(current) {
-  return ['factory:local', ...WORKER_OWNER_LABELS.slice(5)]
-    .find(label => current.has(label)) || null;
+  if (current.has('factory:local')) return 'factory:local';
+  // Preserve any non-scheduled numeric owner lease already on the PR. Validity
+  // for *new* ownership is roster-gated in ownerFor; durability must not depend
+  // on a contiguous 1..N label array.
+  for (const label of current) {
+    const match = /^factory:(\d+)$/.exec(label);
+    if (!match) continue;
+    const number = Number(match[1]);
+    if (SCHEDULED_WORKER_IDS.includes(number)) continue;
+    return label;
+  }
+  return null;
 }
 
 function stageFrom(body) {
@@ -116,7 +166,7 @@ async function currentLabels(github, context, number) {
 async function reconcileLabels(github, context, number, { owner, stage }) {
   const current = await currentLabels(github, context, number);
   const next = [...current].filter(
-    label => !OWNER_LABELS.includes(label) && !STAGE_LABELS.includes(label),
+    label => !isOwnerLabel(label) && !STAGE_LABELS.includes(label),
   );
   if (!next.includes('factory')) next.push('factory');
   if (owner) next.push(owner);
@@ -202,7 +252,7 @@ async function reconcileMissingPrLabels({ github, context }) {
       || pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`
       || /^(dependabot|renovate)(\[bot\])?$/.test(pr.user?.login || '')) continue;
     const current = await currentLabels(github, context, pr.number);
-    const owners = OWNER_LABELS.filter(label => current.has(label));
+    const owners = [...current].filter(isOwnerLabel);
     const stages = STAGE_LABELS.filter(label => current.has(label));
     if (current.has('factory') && owners.length === 1 && stages.length === 1) continue;
 
@@ -244,7 +294,7 @@ async function reconcile({ github, context }) {
     const current = await currentLabels(github, context, number);
     const released = /comic-pile-factory-claim-released-v\d+:/.test(body);
     const worker = workerFrom(body);
-    const currentOwner = OWNER_LABELS.find(label => current.has(label));
+    const currentOwner = [...current].find(isOwnerLabel) || null;
     const currentStage = STAGE_LABELS.find(label => current.has(label));
     const requestedStage = stageFrom(body);
     const preserveAdvancedPrStage = Boolean(context.payload.issue.pull_request)
@@ -292,7 +342,7 @@ async function reconcile({ github, context }) {
       return;
     }
 
-    const currentOwner = OWNER_LABELS.find(label => current.has(label));
+    const currentOwner = [...current].find(isOwnerLabel) || null;
     if (context.payload.action === 'dismissed') {
       await reconcileLabels(github, context, pullRequest.number, {
         owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
@@ -304,12 +354,14 @@ async function reconcile({ github, context }) {
     const review = context.payload.review;
     if (!trusted(review.author_association)) return;
     const state = (review.state || '').toUpperCase();
-    let stage = 'factory:review';
-    if (state === 'CHANGES_REQUESTED') stage = 'factory:changes-requested';
-    else if (state === 'APPROVED') stage = 'factory:ci';
+    // Native APPROVED must never rewrite labels. A wired pull_request_review
+    // path must not reset controller-set factory:ci / factory:ready back to
+    // factory:review. Only CHANGES_REQUESTED (and dismissed above) mutate.
+    if (state === 'APPROVED') return;
+    if (state !== 'CHANGES_REQUESTED') return;
     await reconcileLabels(github, context, pullRequest.number, {
       owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
-      stage,
+      stage: 'factory:changes-requested',
     });
   }
 }
@@ -319,6 +371,11 @@ module.exports.reconcileMissingPrLabels = reconcileMissingPrLabels;
 module.exports._test = {
   durablePrOwner,
   ownerFor,
+  isOwnerLabel,
   reconcileLabels,
   withRetry,
+  workerFrom,
+  EXPECTED_WORKER_IDS,
+  FIXED_MODEL_OWNER_LABELS,
+  WORKER_OWNER_LABELS,
 };

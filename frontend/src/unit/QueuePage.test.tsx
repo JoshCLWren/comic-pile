@@ -243,7 +243,12 @@ beforeEach(() => {
 
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
 
-  expect(mockShuffle.mutate).toHaveBeenCalled()
+  expect(screen.getByRole('heading', { name: /shuffle queue/i })).toBeInTheDocument()
+  expect(mockShuffle.mutate).not.toHaveBeenCalled()
+
+  await user.click(screen.getByTestId('confirm-shuffle-queue'))
+
+  await waitFor(() => expect(mockShuffle.mutate).toHaveBeenCalled())
 })
 
 describe('Visible action Snooze/Unsnooze', () => {
@@ -644,6 +649,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   ], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
+  await user.click(screen.getByTestId('confirm-shuffle-queue'))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('shuffle')))
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /move to front/i }))

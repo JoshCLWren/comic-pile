@@ -373,7 +373,7 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(mocks.mutate).toHaveBeenCalled())
   })
 
-  it('covers delete confirmation, shuffle and move failures, and no-op drops', async () => {
+  it('covers delete confirmation, move failures, and no-op drops', async () => {
     const user = userEvent.setup()
     const error = new Error('mutation failed')
     mocks.mutate.mockRejectedValue(error)
@@ -388,9 +388,31 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(mocks.mutate).toHaveBeenCalledWith(1))
     await user.click(screen.getByText('front callback'))
     await user.click(screen.getByText('back callback'))
-    await user.click(screen.getByRole('button', { name: 'Shuffle' }))
     await user.click(screen.getByText('drop'))
     await waitFor(() => expect(alert).toHaveBeenCalled())
+  })
+
+  it('confirms before shuffling and reports a failed shuffle (#3109)', async () => {
+    const user = userEvent.setup()
+    // SAFETY: two active series keep the SHUFFLE control enabled; as never satisfies the hook return type
+    vi.mocked(useQueueThreads).mockReturnValue({
+      data: [thread, { ...thread, id: 3, title: 'Spawn' }] as never,
+      activeCount: 2,
+      isPending: false,
+      isError: false,
+      refetch: mocks.refetch,
+      nextPageToken: null,
+      loadMore: vi.fn(),
+    } as never)
+    mocks.mutate.mockRejectedValue(new Error('shuffle failed'))
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Shuffle' }))
+    expect(screen.getByRole('heading', { name: /shuffle queue/i })).toBeInTheDocument()
+    expect(mocks.mutate).not.toHaveBeenCalled()
+
+    await user.click(screen.getByTestId('confirm-shuffle-queue'))
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('shuffle')))
   })
 
   it('uses snoozed and blocked card branches and reports blocked reads', async () => {

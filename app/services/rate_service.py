@@ -15,6 +15,7 @@ from app.models import Event, Issue, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.repositories.issue_repository import (
+    exists_read_at_or_after,
     first_unread,
     find_in_thread_by_number,
     get_issue,
@@ -451,11 +452,18 @@ async def rate_thread(
                 if next_issue:
                     thread.next_unread_issue_id = next_issue.id
                     thread.reading_progress = "in_progress"
-                    # Avoid COUNT query: count remaining from the next unread's
-                    # position. All issues at positions >= next_issue.position are
-                    # unread (the current one was just marked read, and earlier
-                    # positions are already read).
-                    if thread.total_issues is not None:
+                    # Positional shortcut: count remaining from the next
+                    # unread's position. It is sound only while every issue
+                    # at positions >= next_issue.position is unread. A manual
+                    # reorder can seat a read issue above unread ones
+                    # (issue #3104), so probe the invariant and fall back
+                    # to the exact unread COUNT when it does not hold.
+                    if (
+                        thread.total_issues is not None
+                        and not await exists_read_at_or_after(
+                            db, thread.id, next_issue.position
+                        )
+                    ):
                         thread.issues_remaining = (
                             thread.total_issues - next_issue.position + 1
                         )

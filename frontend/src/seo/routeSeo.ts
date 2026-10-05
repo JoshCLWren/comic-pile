@@ -58,6 +58,7 @@ export const ROUTE_SEO_TABLE: readonly RouteSeoEntry[] = [
   { pattern: '/queue', visibility: 'private', canonicalPath: null, title: `Queue — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/thread/:id', visibility: 'private', canonicalPath: null, title: `Thread — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/creators', visibility: 'private', canonicalPath: null, title: `Creators — ${APP_TITLE}`, description: APP_DESCRIPTION },
+  { pattern: '/creators/compare', visibility: 'private', canonicalPath: null, title: `Compare creators — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/creators/:creatorKey', visibility: 'private', canonicalPath: null, title: `Creator — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/history', visibility: 'private', canonicalPath: null, title: `History — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/sessions/:id', visibility: 'private', canonicalPath: null, title: `Session — ${APP_TITLE}`, description: APP_DESCRIPTION },

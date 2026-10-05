@@ -1,4 +1,4 @@
-"""Bounded personal creator summary and discovery APIs.
+"""Bounded personal creator summary, discovery, and comparison APIs (issues #2028, #2775, #3091).
 
 Endpoints:
 

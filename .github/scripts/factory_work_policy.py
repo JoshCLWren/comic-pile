@@ -10,7 +10,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from factory_review_policy import producer_worker_from_pr as producer_worker_from_values
+from factory_review_policy import (
+    TRUSTED_MARKER_APP_SLUGS,
+    performed_via_untrusted_app,
+    producer_worker_from_pr as producer_worker_from_values,
+)
 
 # factory_eligibility lives in scripts/ (the shared home for both selectors).
 # Resolve it relative to this file and load it explicitly so the module
@@ -34,7 +38,7 @@ INFRA_LABELS = {'infrastructure', 'e2e-infrastructure', 'policy-change', 'docs',
 # failures use a separate bounded retry counter supplied by the controller.
 BLOCKED_LABELS = {'factory:blocked', 'ralph-status:blocked', 'wontfix', 'invalid', 'duplicate'}
 TRUSTED_ASSOCIATIONS = {'OWNER', 'MEMBER', 'COLLABORATOR'}
-TRUSTED_FACTORY_APP_SLUGS = {'github-actions'}
+TRUSTED_FACTORY_APP_SLUGS = set(TRUSTED_MARKER_APP_SLUGS)
 REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STALE', 'STARTUP_FAILURE', 'TIMED_OUT'})
 NO_DIFF_ATTEMPT_RE = re.compile(
     r'<!--\s*comic-pile-factory-claim-released-v3:'
@@ -51,7 +55,14 @@ DEPENDENCY_SEPARATORS = frozenset({'and', '&', '+', ','})
 
 
 def comment_is_trusted(comment: Mapping[str, Any]) -> bool:
-    """Return whether GitHub metadata proves a factory marker is trusted."""
+    """Return whether GitHub metadata proves a factory marker is trusted.
+
+    Worker GitHub Apps are never trusted marker authors. A non-github-actions
+    App slug loses even when author_association is OWNER, MEMBER, or
+    COLLABORATOR. Human comments with no App stay on the association path.
+    """
+    if performed_via_untrusted_app(comment):
+        return False
     if comment.get('author_association') in TRUSTED_ASSOCIATIONS:
         return True
     app = comment.get('performed_via_github_app')

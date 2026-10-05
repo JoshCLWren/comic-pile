@@ -31,6 +31,9 @@ PREVIEW_TOKEN_TTL_SECONDS = 600
 PREVIEW_ROW_ID_PREFIX = "issue:"
 """Prefix for stable preview row identifiers such as ``issue:789``."""
 
+PREVIEW_ROSTER_ROW_ID_PREFIX = "roster:"
+"""Prefix for provider-inventory preview rows, which are never ComicPile issues."""
+
 PREVIEW_CLASSIFICATIONS = (
     "already_confirmed",
     "safe_exact_match",
@@ -48,6 +51,15 @@ MAPPING_STATUS_PRECEDENCE = {
     "rejected": 3,
 }
 """Deterministic tie-break order used when one issue yields several candidate rows."""
+
+SIBLING_ROSTER_UNIQUE = "unique"
+"""The selected volume holds exactly one issue with this exact normalized issue number."""
+
+SIBLING_ROSTER_DUPLICATE = "duplicate"
+"""The selected volume holds several issues with this normalized issue number."""
+
+SIBLING_ROSTER_NONE = "none"
+"""The selected volume holds no issue with this normalized issue number."""
 
 
 async def upsert_catalog_series(
@@ -488,7 +500,12 @@ async def build_series_mapping_plan(
         Plan dict with ``scope``, ``provider_series``, ``counts``, ``rows``, ``scope_key``,
         ``issue_numbers``, and ``state_digest``.
     """
-    from app.repositories.catalog_repository import get_series_with_issues, get_issue_by_id
+    from app.repositories.catalog_repository import (
+        get_issue_by_id,
+        get_series_with_issues,
+        get_thread_issues_for_sibling_scope,
+        has_confirmed_series_mapping_for_origin,
+    )
 
     # Get the origin issue to establish context
     origin_issue = await get_issue_by_id(db, origin_issue_id, user_id)
@@ -500,11 +517,53 @@ async def build_series_mapping_plan(
         db, provider=provider, series_external_id=provider_series_external_id, user_id=user_id
     )
 
-    # If not found locally, try ComicVine API (local-first)
+    origin_issue_thread_id = origin_issue.get("thread_id")
+    if not isinstance(origin_issue_thread_id, int):
+        origin_issue_thread_id = None
+
+    # A confirmed origin is the only evidence that licenses sibling scope: thread membership
+    # alone is not proof that every issue in the thread belongs to the selected volume.
+    origin_has_confirmed_series = await has_confirmed_series_mapping_for_origin(
+        db,
+        provider=provider,
+        series_external_id=provider_series_external_id,
+        origin_issue_id=origin_issue_id,
+        origin_issue_thread_id=origin_issue_thread_id,
+    )
+
+    roster_rows: list[dict[str, object]] = []
     if series_info is None:
-        series_info, issues_with_mappings = await _load_provider_volume_roster(
+        # The volume is unknown locally, so live provider data is required. Provider
+        # unavailability is an explicit 503 here rather than a silent empty scope.
+        series_info, roster_rows = await _load_provider_volume_roster(
             provider_series_external_id,
             issues_with_mappings,
+        )
+        issues_with_mappings = roster_rows
+    elif origin_has_confirmed_series:
+        # The local catalog answers the preview, so a sibling roster lookup is best-effort:
+        # a provider outage degrades to local rows instead of failing the whole preview.
+        try:
+            _, roster_rows = await _load_provider_volume_roster(
+                provider_series_external_id,
+                [],
+            )
+        except HTTPException as exc:
+            if exc.status_code != status.HTTP_503_SERVICE_UNAVAILABLE:
+                raise
+            roster_rows = []
+
+    # Issue #2769: once the user has confirmed the origin issue's provider volume, offer the
+    # thread's other issues as siblings so one correction can enrich the whole series.
+    if origin_has_confirmed_series and roster_rows and origin_issue_thread_id is not None:
+        sibling_issues = await get_thread_issues_for_sibling_scope(
+            db,
+            thread_id=origin_issue_thread_id,
+            user_id=user_id,
+            exclude_issue_id=origin_issue_id,
+        )
+        issues_with_mappings.extend(
+            _build_sibling_mapping_rows(sibling_issues, roster_rows, provider=provider)
         )
 
     # Ensure origin issue is included in the mapping check for conflict detection
@@ -699,8 +758,9 @@ async def _load_provider_volume_roster(
                     pid = int(provider_issue_id) if provider_issue_id is not None else 0
                 except (TypeError, ValueError):
                     pid = 0
-                # Roster rows carry no ComicPile thread. ``thread_id`` stays ``None`` so commit
-                # refuses to bulk-confirm a provider roster id as if it were a local issue.
+                # Roster rows carry no ComicPile thread. ``thread_id`` stays ``None`` and the row
+                # is flagged ``_roster_only`` so it is reported as provider inventory and can
+                # never be bulk-confirmed as if it were a local issue.
                 roster.append({
                     "issue_id": pid if pid != 0 else 0,
                     "issue_number": str(issue_number),
@@ -711,6 +771,7 @@ async def _load_provider_volume_roster(
                     "provider": "comicvine",
                     "external_id": str(provider_issue_id),
                     "classification": "unresolved",
+                    "_roster_only": True,
                 })
         return series_info, roster
     except HTTPException:
@@ -791,11 +852,20 @@ def _classify_series_mapping_rows(
                 classification = "safe_exact_match"
             else:
                 classification = "needs_review_ambiguous"
+        elif issue_info.get("_sibling_roster") == SIBLING_ROSTER_UNIQUE:
+            # A sibling of the confirmed origin whose exact number the selected volume holds
+            # exactly once is safe to bulk-confirm (#2769). Special and ambiguous numbers
+            # never reach this branch: they are classified above.
+            classification = "safe_exact_match"
+        elif issue_info.get("_sibling_roster") == SIBLING_ROSTER_DUPLICATE:
+            classification = "needs_review_ambiguous"
         else:
             classification = "unresolved"
 
         counts[classification] += 1
-        issue_info["row_id"] = _preview_row_id(issue_info.get("issue_id"))
+        issue_info["row_id"] = _preview_row_id(
+            issue_info.get("issue_id"), roster_only=bool(issue_info.get("_roster_only"))
+        )
         issue_info["classification"] = classification
         issue_info["proposed_mapping"] = classification in ("safe_exact_match", "already_confirmed")
         issue_info["default_selected"] = classification == "safe_exact_match"
@@ -803,6 +873,71 @@ def _classify_series_mapping_rows(
         classified_rows.append(issue_info)
 
     return classified_rows
+
+
+def _build_sibling_mapping_rows(
+    sibling_issues: list[dict[str, object]],
+    roster_rows: list[dict[str, object]],
+    provider: str,
+) -> list[dict[str, object]]:
+    """Build preview rows for siblings in the anchor thread.
+
+    Sibling issues are mapped by matching their exact normalized issue number against the
+    selected provider volume roster. The result is a trichotomy recorded on each row:
+
+    - ``SIBLING_ROSTER_UNIQUE``: the volume holds exactly one issue with this number, so the
+      sibling is licensed for safe bulk-confirmation through the #2722 commit contract;
+    - ``SIBLING_ROSTER_DUPLICATE``: the volume holds several issues with this number, so the
+      sibling stays a visible needs-review leftover and is never bulk-confirmed;
+    - ``SIBLING_ROSTER_NONE``: the volume holds no issue with this number (or the provider
+      roster is unavailable), so the sibling stays unresolved.
+
+    A sibling that already carries a confirmed mapping is settled evidence: its own provider
+    identity is preserved so the classifier reports idempotency (same provider) or a conflict
+    (other provider) truthfully, and no rewrite is ever proposed for it. The resulting rows
+    carry the ComicPile thread context, licensing bulk-confirmation.
+    """
+    roster_by_number: dict[str, list[dict[str, object]]] = {}
+    for roster in roster_rows:
+        num = _normalize_issue_number(_issue_number_text(roster.get("issue_number")))
+        if num:
+            roster_by_number.setdefault(num, []).append(roster)
+
+    rows: list[dict[str, object]] = []
+    for sib in sibling_issues:
+        raw_number = _issue_number_text(sib.get("issue_number"))
+        if not raw_number:
+            continue
+
+        if sib.get("current_mapping_status") == "confirmed":
+            # Confirmed evidence is settled: keep the sibling's own mapping state untouched.
+            rows.append(sib)
+            continue
+
+        normalized = _normalize_issue_number(raw_number)
+        matches = roster_by_number.get(normalized, []) if normalized else []
+        if len(matches) == 1:
+            # Merge sibling metadata with the unique provider identity
+            roster_match = matches[0]
+            row = dict(sib)
+            row.update({
+                "provider": provider,
+                "external_id": roster_match.get("external_id"),
+                "title": roster_match.get("title") or sib.get("title"),
+                "confidence": roster_match.get("confidence"),
+            })
+            row["_sibling_roster"] = SIBLING_ROSTER_UNIQUE
+            rows.append(row)
+        elif len(matches) > 1:
+            row = dict(sib)
+            row["_sibling_roster"] = SIBLING_ROSTER_DUPLICATE
+            rows.append(row)
+        else:
+            row = dict(sib)
+            row["_sibling_roster"] = SIBLING_ROSTER_NONE
+            rows.append(row)
+
+    return rows
 
 
 def _dedupe_rows_by_issue(rows: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -834,10 +969,15 @@ def _dedupe_rows_by_issue(rows: list[dict[str, object]]) -> list[dict[str, objec
     return ordered
 
 
-def _row_precedence_key(row: dict[str, object]) -> tuple[int, int, str, str]:
-    """Return the deterministic tie-break key used when collapsing rows for one issue."""
+def _row_precedence_key(row: dict[str, object]) -> tuple[int, int, int, str, str]:
+    """Return the deterministic tie-break key used when collapsing rows for one issue.
+
+    A roster-unique sibling proposal outranks any stale unconfirmed candidate row for the
+    same issue, so the user's confirmed volume always supplies the proposed identity.
+    """
     return (
         0 if row.get("thread_id") is not None else 1,
+        0 if row.get("_sibling_roster") == SIBLING_ROSTER_UNIQUE else 1,
         MAPPING_STATUS_PRECEDENCE.get(_issue_number_text(row.get("current_mapping_status")), 4),
         str(row.get("external_id") or ""),
         str(row.get("issue_number") or ""),
@@ -852,9 +992,10 @@ def _derive_scope_key(classified_rows: list[dict[str, object]], origin_issue_id:
     return None
 
 
-def _preview_row_id(issue_id: object) -> str:
+def _preview_row_id(issue_id: object, roster_only: bool = False) -> str:
     """Return the stable preview row identifier for one issue."""
-    return f"{PREVIEW_ROW_ID_PREFIX}{issue_id}"
+    prefix = PREVIEW_ROSTER_ROW_ID_PREFIX if roster_only else PREVIEW_ROW_ID_PREFIX
+    return f"{prefix}{issue_id}"
 
 
 def _plan_scope_key(plan: dict[str, object]) -> str:
