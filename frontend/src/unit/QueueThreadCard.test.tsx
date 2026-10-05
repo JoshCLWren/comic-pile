@@ -93,7 +93,7 @@ function createMockThread(overrides: Partial<Thread> = {}): Thread {
 }
 
 function createMappedThread(mapping: ComicVineMappingHealth | null): CardThread {
-  return { ...createMockThread(), comicvine_mapping: mapping } as CardThread
+  return { ...createMockThread(), comicvine_mapping: mapping }
 }
 
 function renderCard(thread: Thread | CardThread, overrides: Partial<Parameters<typeof QueueThreadCard>[0]> = {}) {
@@ -851,5 +851,20 @@ describe('QueueThreadCard ComicVine mapping health', () => {
 
     expect(onMapSeries).toHaveBeenCalledTimes(1)
     expect(onCardClick).not.toHaveBeenCalled()
+  })
+
+  it('keeps the indicator and the repair action usable on a narrow row', () => {
+    renderCard(createMappedThread(unresolved), { onMapSeries: vi.fn() })
+
+    const indicator = screen.getByTestId('queue-mapping-health')
+    expect(indicator).toHaveClass('inline-flex', 'shrink-0', 'whitespace-nowrap')
+
+    const actions = screen.getByRole('group', { name: 'Actions for Test Thread' })
+    expect(actions).toHaveClass('flex-wrap')
+
+    const mapButton = within(actions).getByRole('button', { name: 'Map Test Thread to ComicVine' })
+    const readButton = within(actions).getByRole('button', { name: 'Read' })
+    expect(mapButton).toHaveClass('h-11', '@2xl:h-9', 'rounded-lg')
+    expect(readButton).toHaveClass('h-11', '@2xl:h-9', 'rounded-lg')
   })
 })

@@ -14,18 +14,91 @@ interface MapSeriesDialogProps {
 
 type DialogStep = 'search' | 'preview' | 'done'
 
+/** Readable phrasing for a backend classification code. */
+function classificationLabel(classification: string): string {
+  return classification.replaceAll('_', ' ')
+}
+
+/** Count plus its correctly pluralized noun, so copy never reads "1 items". */
+function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+/**
+ * Sentences for the conflict codes the series-mapping commit endpoint returns
+ * instead of an unwrapped snake_case code.
+ */
+const COMMIT_CONFLICT_MESSAGES = new Map<string, string>([
+  [
+    'preview_stale',
+    'This preview no longer matches the current issue data. Search for the series again to refresh it.',
+  ],
+  ['preview_expired', 'This preview expired. Search for the series again to get a fresh preview.'],
+  [
+    'confirmed_mapping_conflict',
+    'One of these issues already carries a different confirmed ComicVine identity, so nothing was changed. Correct that issue individually.',
+  ],
+  [
+    'idempotency_conflict',
+    'This repair was already submitted with different rows. Search for the series again to start a new repair.',
+  ],
+  ['invalid_approved_row', 'One of the selected rows is no longer safe to map, so nothing was changed.'],
+  ['provider_unavailable', 'ComicVine is unavailable right now, so the series could not be loaded. Try again later.'],
+])
+
+/**
+ * Why no safe scope could be built, stated in product terms.
+ *
+ * The backend returns an empty, zero-count plan rather than an error when it
+ * cannot scope the series safely, so the dialog has to say so itself instead of
+ * implying the user simply selected a series with no matches.
+ */
+function scopeUnavailableMessage(basis: string | null | undefined): string {
+  if (basis === 'insufficient_non_thread_evidence') {
+    return 'ComicPile could not scope this series safely from the issue identity it already has. Nothing was changed, and every issue stays available for individual correction.'
+  }
+  return 'ComicPile could not scope this series safely right now. Nothing was changed, and every issue stays available for individual correction.'
+}
+
+/** Turn a documented conflict code into a sentence, keeping the raw detail otherwise. */
+function commitErrorMessage(error: unknown): string {
+  const detail = getApiErrorDetail(error)
+  return COMMIT_CONFLICT_MESSAGES.get(detail) ?? detail
+}
+
+/**
+ * Short stable digest of a commit request's material facts.
+ *
+ * The commit endpoint replays its receipt for an identical idempotency key and
+ * rejects a reused key whose approved rows changed, so the key must be derived
+ * from the preview token plus the approved rows. That keeps a retry of the same
+ * request on one key while every different repair — including a later dialog
+ * session for the same thread, which gets a different preview token — gets its
+ * own.
+ */
+function shortDigest(value: string): string {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16)
+}
+
 export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSeriesDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
   const [query, setQuery] = useState(thread.title)
   const [results, setResults] = useState<ComicVineSeriesResult[]>([])
   const [searching, setSearching] = useState(false)
   const [originIssueId, setOriginIssueId] = useState<number | null>(null)
+  const [anchorPending, setAnchorPending] = useState(true)
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
   const [preview, setPreview] = useState<SeriesMappingPreviewResponse | null>(null)
   const [approvedRowIds, setApprovedRowIds] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
+  const [refreshFailed, setRefreshFailed] = useState(false)
   const asyncRef = useRef(0)
 
   useEffect(() => {
@@ -38,6 +111,8 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
         }
       } catch {
         if (!cancelled) setOriginIssueId(null)
+      } finally {
+        if (!cancelled) setAnchorPending(false)
       }
     })()
     return () => {
@@ -74,6 +149,10 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
   const handleSelectSeries = async (series: ComicVineSeriesResult) => {
     setSelectedSeries(series)
     setError(null)
+    if (anchorPending) {
+      setError('Still loading this series. Try again in a moment.')
+      return
+    }
     if (originIssueId == null) {
       setError('This thread has no issues to anchor a mapping preview.')
       return
@@ -89,7 +168,7 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
       setApprovedRowIds(new Set((response.rows ?? []).filter((row) => row.default_selected).map((row) => row.row_id)))
       setStep('preview')
     } catch (err) {
-      setError(getApiErrorDetail(err))
+      setError(commitErrorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -109,28 +188,42 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
 
   const handleCommit = async () => {
     if (!preview || !preview.preview_token) {
-      setError('Preview is not available for this series.')
+      setError(scopeUnavailableMessage(preview?.scope.basis))
       return
     }
+    const approved = Array.from(approvedRowIds).sort()
+    const idempotencyKey = `map-series-${thread.id}-${shortDigest(`${preview.preview_token}|${approved.join(',')}`)}`
     setBusy(true)
     setError(null)
+    setRefreshFailed(false)
+    let committed = false
     try {
       const result = await seriesMappingsApi.commit({
         preview_token: preview.preview_token,
-        idempotency_key: `map-series-${thread.id}-${Date.now()}`,
-        approved_row_ids: Array.from(approvedRowIds),
+        idempotency_key: idempotencyKey,
+        approved_row_ids: approved,
       })
+      committed = true
       setSummary(
-        `Mapped ${result.confirmed_issue_ids?.length ?? 0} issue(s). ` +
-          `${result.already_confirmed_issue_ids?.length ?? 0} already confirmed. ` +
-          `${result.needs_review_issue_ids?.length ?? 0} need review.`,
+        `${countLabel(result.confirmed_issue_ids?.length ?? 0, 'issue mapped', 'issues mapped')}. ` +
+          `${countLabel(result.already_confirmed_issue_ids?.length ?? 0, 'issue already', 'issues already')} confirmed. ` +
+          `${countLabel(result.needs_review_issue_ids?.length ?? 0, 'issue still', 'issues still')} need review.`,
       )
       setStep('done')
-      await onCommitted()
     } catch (err) {
-      setError(getApiErrorDetail(err))
+      setError(commitErrorMessage(err))
     } finally {
       setBusy(false)
+    }
+    // A queue refresh failure must not be reported as a failed repair: the
+    // mappings are already committed, so the summary stays authoritative and
+    // the rejection is contained instead of escaping as an unhandled promise.
+    if (committed) {
+      try {
+        await onCommitted()
+      } catch {
+        setRefreshFailed(true)
+      }
     }
   }
 
@@ -175,7 +268,7 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
                   <button
                     type="button"
                     onClick={() => void handleSelectSeries(series)}
-                    disabled={busy}
+                    disabled={busy || anchorPending}
                     className="w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
                   >
                     <span className="font-bold">{series.name}</span>
@@ -188,6 +281,9 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
                   </button>
                 </li>
               ))}
+              {results.length > 0 && anchorPending && (
+                <li className="text-sm text-[var(--theme-text-muted)]">Preparing this series…</li>
+              )}
               {results.length === 0 && !searching && (
                 <li className="text-sm text-[var(--theme-text-muted)]">No series results yet.</li>
               )}
@@ -198,15 +294,30 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
         {step === 'preview' && preview && (
           <>
             <p className="text-sm text-[var(--theme-text-muted)]">
-              {selectedSeries?.name} · {preview.provider_series?.publisher ?? 'Unknown publisher'} ·{' '}
-              {preview.counts.safe_exact_match} safe match(es), {preview.counts.needs_review_ambiguous + preview.counts.needs_review_conflict}{' '}
-              review row(s), {preview.counts.unresolved} unresolved, {preview.counts.excluded_special} excluded,{' '}
-              {preview.counts.already_confirmed} already confirmed.
+              {selectedSeries?.name} · {preview.provider_series?.publisher ?? 'Unknown publisher'}
             </p>
-            {preview.counts.safe_exact_match === 0 && (
+            <p className="text-sm text-[var(--theme-text-muted)]">
+              {[
+                countLabel(preview.counts.safe_exact_match, 'safe match', 'safe matches'),
+                countLabel(
+                  preview.counts.needs_review_ambiguous + preview.counts.needs_review_conflict,
+                  'issue needs review',
+                  'issues need review',
+                ),
+                countLabel(preview.counts.unresolved, 'unresolved issue', 'unresolved issues'),
+                countLabel(preview.counts.excluded_special, 'excluded special', 'excluded specials'),
+                countLabel(preview.counts.already_confirmed, 'already confirmed', 'already confirmed'),
+              ].join(' · ')}
+            </p>
+            {preview.scope.status === 'available' && preview.counts.safe_exact_match === 0 && (
               <p className="text-sm text-[var(--theme-text-muted)]">
                 No safe exact mappings are available for this series. Every row stays
                 untouched and remains available for issue-level correction.
+              </p>
+            )}
+            {preview.scope.status !== 'available' && (
+              <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+                {scopeUnavailableMessage(preview.scope.basis)}
               </p>
             )}
             <ul className="max-h-64 space-y-1 overflow-y-auto">
@@ -215,7 +326,7 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
                   {row.classification === 'safe_exact_match' ? (
                     <input
                       type="checkbox"
-                      aria-label={`Approve ${row.row_id}`}
+                      aria-label={`Approve #${row.issue_number} ${classificationLabel(row.classification)}`}
                       checked={approvedRowIds.has(row.row_id)}
                       onChange={() => toggleRow(row.row_id)}
                     />
@@ -223,7 +334,7 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
                     <span aria-hidden="true" className="inline-block w-4" />
                   )}
                   <span className="font-medium">#{row.issue_number}</span>
-                  <span className="text-[var(--theme-text-muted)]">{row.classification.replaceAll('_', ' ')}</span>
+                  <span className="text-[var(--theme-text-muted)]">{classificationLabel(row.classification)}</span>
                   {row.reason && <span className="text-[var(--theme-text-dim)]">— {row.reason}</span>}
                 </li>
               ))}
@@ -242,7 +353,9 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
                 onClick={() => void handleCommit()}
                 className="rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50"
               >
-                {busy ? 'Committing…' : `Commit ${approvedRowIds.size} safe mapping(s)`}
+                {busy
+                  ? 'Committing…'
+                  : `Commit ${countLabel(approvedRowIds.size, 'safe mapping', 'safe mappings')}`}
               </button>
             </div>
           </>
@@ -254,6 +367,12 @@ export default function MapSeriesDialog({ thread, onClose, onCommitted }: MapSer
             <p className="text-sm text-[var(--theme-text-muted)]">
               Remaining rows were left untouched for issue-level correction.
             </p>
+            {refreshFailed && (
+              <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+                The repair was saved, but the queue could not refresh it yet. Reload the
+                queue to see the updated mapping status.
+              </p>
+            )}
             <div className="flex justify-end">
               <button
                 type="button"
