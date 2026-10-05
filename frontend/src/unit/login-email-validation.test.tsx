@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, fireEvent, screen, waitFor } from '@testing-library/react'
 import LoginPage from '../pages/LoginPage'
-import axios from 'axios'
+import { useAuth } from '../App'
+import api from '../../services/api'
 
-// Mock the api module
-vi.mock('../../services/api')
-const mockedApi = vi.mocked(require('../../services/api').default)
+vi.mock('../App', () => ({ useAuth: vi.fn() }))
+vi.mock('../../services/api', () => ({ default: { post: vi.fn() } }))
 
-// Mock the auth context
-vi.mock('../App')
-const mockedUseAuth = vi.mocked(require('../App').useAuth)
+const mockedUseAuth = vi.mocked(useAuth)
+const mockedApi = vi.mocked(api)
 
 describe('LoginPage Email Validation', () => {
   beforeEach(() => {
@@ -227,9 +226,10 @@ describe('LoginPage Email Validation', () => {
     
     // Mock API error
     mockedApi.post.mockRejectedValue({
+      isAxiosError: true,
       response: {
         status: 401,
-        data: { detail: 'Invalid credentials' }
+        data: {}
       }
     })
     
