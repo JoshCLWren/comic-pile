@@ -348,3 +348,78 @@ test('PR refresh preserves one external owner after the linked issue is released
   assert.deepEqual(owners, ['factory:13']);
   assert.ok(calls[0].labels.includes('factory:review'));
 });
+
+function enrollGithubFor({ pulls, labelsByPr, comments = [], setLabels }) {
+  const api = {
+    listLabelsOnIssue() {},
+    listComments() {},
+    setLabels,
+  };
+  const list = () => {};
+  return {
+    paginate: async (operation, params = {}) => {
+      if (operation === list) return pulls;
+      if (operation === api.listComments) return comments;
+      if (operation === api.listLabelsOnIssue) {
+        return (labelsByPr[params.issue_number] || []).map(name => ({ name }));
+      }
+      throw new Error('unexpected paginate operation');
+    },
+    rest: { issues: api, pulls: { list } },
+  };
+}
+
+function enrollPr(number, extra = {}) {
+  return {
+    number,
+    state: 'open',
+    draft: false,
+    user: { login: 'JoshCLWren' },
+    head: { sha: 'a'.repeat(40), repo: { full_name: 'JoshCLWren/comic-pile' } },
+    ...extra,
+  };
+}
+
+test('enroll leaves factory:local PRs untouched (no factory:review stamped)', async () => {
+  for (const labels of [
+    ['factory', 'factory:local'],
+    ['infrastructure', 'factory', 'factory:local'],
+    ['factory:local'],
+  ]) {
+    const calls = [];
+    const pr = enrollPr(3142);
+    const github = enrollGithubFor({
+      pulls: [pr],
+      labelsByPr: { 3142: labels },
+      setLabels: async input => calls.push(input),
+    });
+    for (const context of [
+      contextFor('pull_request_target', { pull_request: pr }),
+      contextFor('schedule', {}),
+    ]) {
+      await reconcile.reconcileMissingPrLabels({ github, context });
+    }
+    assert.equal(calls.length, 0, `labels ${labels.join(',')} must not be mutated`);
+  }
+});
+
+test('enroll sweep skips factory:local PRs but still repairs other PRs', async () => {
+  const calls = [];
+  const github = enrollGithubFor({
+    pulls: [enrollPr(3153), enrollPr(3154), enrollPr(3200)],
+    labelsByPr: {
+      3153: ['infrastructure', 'factory', 'factory:local'],
+      3154: ['factory', 'factory:local', 'factory:unowned'],
+      3200: ['bug'],
+    },
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile.reconcileMissingPrLabels({ github, context: contextFor('schedule', {}) });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].issue_number, 3200);
+  assert.deepEqual(
+    new Set(calls[0].labels),
+    new Set(['bug', 'factory', 'factory:unowned', 'factory:review']),
+  );
+  assert.ok(!calls.some(call => call.labels.includes('factory:local')));
+});
