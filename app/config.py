@@ -401,25 +401,29 @@ class GitHubSettings(BaseSettings):
 
 
 class EmailSettings(BaseSettings):
-    """Outbound email configuration settings (issue #2778).
+    """Outbound email configuration settings.
 
-    Resend is the selected outbound email provider for password-reset
-    delivery. All three core values are deployment configuration, never
-    source literals. Placeholder values are treated as missing.
+    Password-reset delivery uses Gmail SMTP with a Google App Password. Secrets
+    are deployment configuration and placeholder values are treated as missing.
     """
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
-    resend_api_key: str = Field(
+    gmail_smtp_username: str = Field(
         default="",
-        description="Resend API key for outbound email (RESEND_API_KEY)",
-        json_schema_extra={"env": "RESEND_API_KEY"},
+        description="Gmail address used for SMTP delivery (GMAIL_SMTP_USERNAME)",
+        json_schema_extra={"env": "GMAIL_SMTP_USERNAME"},
+    )
+    gmail_smtp_app_password: str = Field(
+        default="",
+        description="Google App Password used for Gmail SMTP (GMAIL_SMTP_APP_PASSWORD)",
+        json_schema_extra={"env": "GMAIL_SMTP_APP_PASSWORD"},
     )
     password_reset_sender: str = Field(
         default="",
         description=(
-            "Verified sender identity for password-reset mail, e.g. "
-            "'Comic Pile <no-reply@example.com>' (PASSWORD_RESET_SENDER)"
+            "Optional Gmail sender/alias for password-reset mail "
+            "(PASSWORD_RESET_SENDER)"
         ),
         json_schema_extra={"env": "PASSWORD_RESET_SENDER"},
     )
@@ -438,9 +442,14 @@ class EmailSettings(BaseSettings):
     )
 
     @property
-    def usable_resend_api_key(self) -> str | None:
-        """Return the Resend API key, or None when missing/placeholder."""
-        return _usable_secret(self.resend_api_key or None)
+    def usable_gmail_smtp_username(self) -> str | None:
+        """Return the Gmail SMTP username, or None when missing/placeholder."""
+        return _usable_secret(self.gmail_smtp_username or None)
+
+    @property
+    def usable_gmail_smtp_app_password(self) -> str | None:
+        """Return the Gmail App Password, or None when missing/placeholder."""
+        return _usable_secret(self.gmail_smtp_app_password or None)
 
     @property
     def normalized_origin(self) -> str | None:
@@ -458,10 +467,10 @@ class EmailSettings(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        """Return True when all required outbound-email settings are present."""
-        sender = (self.password_reset_sender or "").strip()
+        """Return True when Gmail SMTP credentials are present."""
         return bool(
-            self.usable_resend_api_key and sender and self.normalized_origin,
+            self.usable_gmail_smtp_username
+            and self.usable_gmail_smtp_app_password
         )
 
 

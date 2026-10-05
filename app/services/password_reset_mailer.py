@@ -1,6 +1,6 @@
 """Password-reset outbound email delivery behind a provider-neutral boundary.
 
-Issue #2778 delivers password-reset links through Resend without coupling the
+Issue #2778 delivers password-reset links through Gmail SMTP without coupling the
 reset domain/security model (owned by #2777) to a vendor. The reset domain
 depends only on :class:`PasswordResetDeliveryHandoff
 <app.services.password_reset_service.PasswordResetDeliveryHandoff>`; this
@@ -18,27 +18,26 @@ never persisted and never logged by this module.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
-import urllib.error
+import smtplib
+import ssl
 import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
+from email.message import EmailMessage
 from typing import Protocol
 
 from app.config import get_email_settings
 
 logger = logging.getLogger(__name__)
 
-RESEND_API_URL = "https://api.resend.com/emails"
-RESEND_REQUEST_TIMEOUT_SECONDS = 10.0
+GMAIL_SMTP_HOST = "smtp.gmail.com"
+GMAIL_SMTP_PORT = 465
+GMAIL_SMTP_TIMEOUT_SECONDS = 10.0
 
 RESET_SUBJECT = "Reset your Comic Pile password"
-PRODUCTION_RESET_SENDER = "Comic Pile <onboarding@resend.dev>"
 PRODUCTION_RESET_ORIGIN = "https://comic-pile.vercel.app"
-NON_PRODUCTION_RESET_SENDER = "Comic Pile <no-reply@example.com>"
 NON_PRODUCTION_RESET_ORIGIN = "http://localhost:3000"
 
 
@@ -193,88 +192,58 @@ class FakePasswordResetMailer:
 
 
 @dataclass
-class ResendPasswordResetMailer:
-    """Production Resend adapter behind the provider-neutral boundary."""
+class GmailPasswordResetMailer:
+    """Production Gmail SMTP adapter behind the provider-neutral boundary."""
 
-    api_key: str
+    username: str
+    app_password: str
     sender: str
     origin: str
     path: str = "/reset-password"
     expiry_minutes: int = 30
-    timeout_seconds: float = RESEND_REQUEST_TIMEOUT_SECONDS
+    timeout_seconds: float = GMAIL_SMTP_TIMEOUT_SECONDS
+    smtp_host: str = GMAIL_SMTP_HOST
+    smtp_port: int = GMAIL_SMTP_PORT
 
-    def _payload(
+    def _build_message(
         self,
         *,
         recipient_email: str,
         username: str,
         reset_token: str,
         expires_at: datetime,
-    ) -> dict[str, object]:
-        """Build the Resend send-email payload.
-
-        The raw token is used only here to construct the link and is never
-        stored on the adapter.
-
-        Args:
-            recipient_email: Destination mailbox.
-            username: Recipient username for message personalization.
-            reset_token: One-time raw token used only to build the link.
-            expires_at: Token expiry timestamp for message copy.
-
-        Returns:
-            JSON-serializable Resend ``/emails`` request body.
-        """
+    ) -> EmailMessage:
+        """Build one password-reset email without retaining the raw token."""
         reset_url = build_password_reset_url(self.origin, self.path, reset_token)
-        return {
-            "from": self.sender,
-            "to": [recipient_email],
-            "subject": build_password_reset_subject(),
-            "text": build_password_reset_text_body(
+        message = EmailMessage()
+        message["From"] = self.sender
+        message["To"] = recipient_email
+        message["Subject"] = build_password_reset_subject()
+        message.set_content(
+            build_password_reset_text_body(
                 username,
                 reset_url,
                 expires_at,
                 self.expiry_minutes,
-            ),
-        }
-
-    def _post_payload(self, payload: dict[str, object]) -> int:
-        """POST one payload to Resend synchronously (run in a worker thread).
-
-        Args:
-            payload: JSON-serializable Resend request body.
-
-        Returns:
-            HTTP status code from the provider.
-
-        Raises:
-            PasswordResetDeliveryError: On transport failure or non-2xx status.
-        """
-        data = json.dumps(payload).encode("utf-8")
-        request = urllib.request.Request(
-            RESEND_API_URL,
-            data=data,
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
+            )
         )
+        return message
+
+    def _send_message(self, message: EmailMessage) -> None:
+        """Send one message through Gmail SMTP synchronously."""
+        context = ssl.create_default_context()
         try:
-            with urllib.request.urlopen(
-                request,
+            with smtplib.SMTP_SSL(
+                self.smtp_host,
+                self.smtp_port,
                 timeout=self.timeout_seconds,
-            ) as response:
-                return int(response.status)
-        except urllib.error.HTTPError as exc:
-            # Status only: the provider error body is never surfaced because it
-            # could echo request content.
+                context=context,
+            ) as smtp:
+                smtp.login(self.username, self.app_password)
+                smtp.send_message(message)
+        except (smtplib.SMTPException, OSError) as exc:
             raise PasswordResetDeliveryError(
-                f"Resend rejected the reset message (status {exc.code}).",
-            ) from exc
-        except OSError as exc:
-            raise PasswordResetDeliveryError(
-                "Resend request failed.",
+                "Gmail SMTP rejected or failed to deliver the reset message.",
             ) from exc
 
     async def send_password_reset(
@@ -285,26 +254,14 @@ class ResendPasswordResetMailer:
         reset_token: str,
         expires_at: datetime,
     ) -> None:
-        """Deliver one password-reset message through Resend.
-
-        Args:
-            recipient_email: Destination mailbox.
-            username: Recipient username for message personalization.
-            reset_token: One-time raw token used only to build the link.
-            expires_at: Token expiry timestamp for message copy.
-
-        Raises:
-            PasswordResetDeliveryError: When the provider fails.
-        """
-        payload = self._payload(
+        """Deliver one password-reset message through Gmail SMTP."""
+        message = self._build_message(
             recipient_email=recipient_email,
             username=username,
             reset_token=reset_token,
             expires_at=expires_at,
         )
-        # The payload locals (including the token-derived URL) stay on the
-        # stack frame; only the status outcome is logged below.
-        await asyncio.to_thread(self._post_payload, payload)
+        await asyncio.to_thread(self._send_message, message)
         logger.info(
             "Password reset email accepted by provider.",
             extra={"event": "password_reset_email_sent"},
@@ -338,33 +295,36 @@ def override_password_reset_mailer(mailer: PasswordResetMailer | None) -> None:
     _mailer_override = mailer
 
 
-def _default_sender_and_origin() -> tuple[str, str]:
-    """Return production defaults or harmless local placeholders."""
+def _default_sender_and_origin(username: str) -> tuple[str, str]:
+    """Return a Gmail sender identity and environment-appropriate public origin."""
+    sender = f"Comic Pile <{username}>"
     if os.environ.get("ENVIRONMENT", "development") == "production":
-        return PRODUCTION_RESET_SENDER, PRODUCTION_RESET_ORIGIN
-    return NON_PRODUCTION_RESET_SENDER, NON_PRODUCTION_RESET_ORIGIN
+        return sender, PRODUCTION_RESET_ORIGIN
+    return sender, NON_PRODUCTION_RESET_ORIGIN
 
 
 def get_password_reset_mailer() -> PasswordResetMailer:
     """Resolve the active password-reset mailer.
 
-    The Resend API key is the only required deployment secret. Sender and
-    origin use stable application defaults based on ENVIRONMENT, while the
-    existing settings remain optional overrides for self-hosting and tests.
+    Gmail SMTP requires the Gmail address plus a Google App Password. The sender
+    defaults to that same Gmail identity, while PASSWORD_RESET_SENDER remains an
+    optional override for an alias already configured on the Gmail account.
     """
     if _mailer_override is not None:
         return _mailer_override
 
     settings = get_email_settings()
-    api_key = settings.usable_resend_api_key
-    if not api_key:
+    gmail_username = settings.usable_gmail_smtp_username
+    gmail_app_password = settings.usable_gmail_smtp_app_password
+    if not gmail_username or not gmail_app_password:
         return get_fake_mailer()
 
-    default_sender, default_origin = _default_sender_and_origin()
+    default_sender, default_origin = _default_sender_and_origin(gmail_username)
     sender = settings.password_reset_sender.strip() or default_sender
     origin = settings.normalized_origin or default_origin
-    return ResendPasswordResetMailer(
-        api_key=api_key,
+    return GmailPasswordResetMailer(
+        username=gmail_username,
+        app_password=gmail_app_password,
         sender=sender,
         origin=origin,
         path=settings.normalized_path,
