@@ -581,27 +581,36 @@ post_readable_handoff() {
   local kind="$1" number="$2" head="${3:-}" detail="${4:-}"
   local helper="${TRUSTED_WORKER_APP_HELPER:-.github/scripts/factory_worker_github_app.py}"
   local mapping="${TRUSTED_WORKER_APP_MAPPING:-${FACTORY_WORKER_APP_MAPPING:-}}"
-  local resolved source token body_file
-  [[ -f "$helper" ]] || return 0
+  local resolved source token body_file had_xtrace=0
+  # The minted installation token is not a repository secret, so Actions will
+  # not mask it on its own. Suspend xtrace for the whole handoff so `set -x`
+  # can never echo it, and register ::add-mask:: before any other use.
+  [[ $- == *x* ]] && had_xtrace=1
+  { set +x; } 2>/dev/null
+  [[ -f "$helper" ]] || { (( had_xtrace )) && set -x; return 0; }
   if [[ -n "$mapping" ]]; then
-    resolved="$(FACTORY_WORKER_APP_MAPPING="$mapping" python3 "$helper" resolve-handoff 2>/dev/null)" || return 0
+    resolved="$(FACTORY_WORKER_APP_MAPPING="$mapping" python3 "$helper" resolve-handoff 2>/dev/null)" || { (( had_xtrace )) && set -x; return 0; }
   else
-    resolved="$(python3 "$helper" resolve-handoff 2>/dev/null)" || return 0
+    resolved="$(python3 "$helper" resolve-handoff 2>/dev/null)" || { (( had_xtrace )) && set -x; return 0; }
   fi
   source="${resolved%%$'\t'*}"
   token="${resolved#*$'\t'}"
-  [[ "$source" == installation && -n "$token" ]] || return 0
+  [[ "$source" == installation && -n "$token" ]] || { (( had_xtrace )) && set -x; return 0; }
+  # Workflow commands are read from stderr as well as stdout.
+  printf '::add-mask::%s\n' "$token" >&2
   body_file="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-readable-handoff.XXXXXX.md")"
   if ! python3 "$helper" render-handoff \
     --kind "$kind" --worker "$WORKER" --display "$DISPLAY" --model "$MODEL" \
     --head "$head" --detail "$detail" > "$body_file"; then
     rm -f "$body_file"
+    (( had_xtrace )) && set -x
     return 0
   fi
   if ! GH_TOKEN="$token" gh issue comment "$number" --body-file "$body_file" >/dev/null 2>&1; then
     log "readable ${kind} handoff for #${number} could not be posted by the worker App; trusted state is unaffected" >&2
   fi
   rm -f "$body_file"
+  (( had_xtrace )) && set -x
   return 0
 }
 

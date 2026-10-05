@@ -32,7 +32,7 @@ const SECRET_KEYS = [
   'GH_TOKEN',
 ];
 
-function run(extraEnv = {}) {
+function run(extraEnv = {}, { xtrace = false } = {}) {
   const env = { ...process.env, ...extraEnv };
   for (const key of SECRET_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(extraEnv, key)) delete env[key];
@@ -59,6 +59,7 @@ function run(extraEnv = {}) {
       exit 9
     }
     ${helper}
+    ${xtrace ? 'set -x' : ''}
     post_readable_handoff implementation 3142 abcdef1234567890 'Opened from issue #3135.'
     # Ambient token for markers must still be the workflow token.
     printf 'ambient:%s\\n' "\$GH_TOKEN" >&2
@@ -67,7 +68,7 @@ function run(extraEnv = {}) {
   `], { encoding: 'utf8', env });
   let trace = '';
   try { trace = readFileSync(env.TRACE, 'utf8'); } catch { trace = ''; }
-  return { status: result.status, stderr: `${result.stderr}${trace}` };
+  return { status: result.status, stderr: `${result.stderr}${trace}`, log: result.stderr };
 }
 
 test('worker 48 with all secrets posts readable handoff with App token', () => {
@@ -80,6 +81,7 @@ test('worker 48 with all secrets posts readable handoff with App token', () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stderr, /comment-token:install-token/);
+  assert.match(result.log, /^::add-mask::install-token$/m);
   assert.match(result.stderr, /comment-number:3142/);
   assert.match(result.stderr, /Factory handoff · implementation/);
   assert.doesNotMatch(result.stderr, /comment-body:.*<!--/);
@@ -91,6 +93,7 @@ test('worker 48 with all secrets posts readable handoff with App token', () => {
 test('worker 48 missing any secret posts no readable handoff', () => {
   const result = run({ FACTORY_WORKER: '48' });
   assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, /::add-mask::/);
   assert.doesNotMatch(result.stderr, /comment-token:install-token/);
   assert.doesNotMatch(result.stderr, /Factory handoff/);
   assert.match(result.stderr, /comment-token:workflow-token/);
@@ -106,10 +109,26 @@ test('other workers never post readable App handoffs', () => {
       FACTORY_WORKER_APP_MINT_STUB_TOKEN: 'install-token',
     });
     assert.equal(result.status, 0, `${worker} ${result.stderr}`);
+    assert.doesNotMatch(result.stderr, /::add-mask::/);
     assert.doesNotMatch(result.stderr, /comment-token:install-token/);
     assert.doesNotMatch(result.stderr, /Factory handoff/);
     assert.match(result.stderr, /comment-token:workflow-token/);
   }
+});
+
+test('worker 48 handoff masks the installation token and never echoes it under set -x', () => {
+  const result = run({
+    FACTORY_WORKER: '48',
+    FACTORY_WORKER_48_APP_ID: '123',
+    FACTORY_WORKER_48_INSTALLATION_ID: '456',
+    FACTORY_WORKER_48_APP_PRIVATE_KEY: 'TEST-ONLY-NOT-A-KEY',
+    FACTORY_WORKER_APP_MINT_STUB_TOKEN: 'install-token',
+  }, { xtrace: true });
+  assert.equal(result.status, 0, result.stderr);
+  const lines = result.log.split('\n').filter((line) => line.includes('install-token'));
+  assert.deepEqual(lines, ['::add-mask::install-token'], result.log);
+  // The caller's xtrace is restored after the handoff returns.
+  assert.match(result.log, /^\+ printf 'ambient:%s\\n' workflow-token$/m);
 });
 
 const markerFunctions = ['release_target', 'record_pr_provenance', 'claim_issue']
