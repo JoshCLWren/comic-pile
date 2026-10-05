@@ -345,9 +345,11 @@ export default function RollPage() {
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
         onOpenModeSelector={() => setIsModeSelectorOpen(true)}
-        onBackToQueue={() => {
-          void rating.handleCancelRating()
-        }}
+  onBackToQueue={async () => {
+    await rating.handleCancelRating();
+    navigate('/queue');
+  }}
+
       />
 
       <ReadingModeLauncher />
