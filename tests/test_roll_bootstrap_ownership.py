@@ -751,7 +751,7 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
         _Result(rows=[]),
         _Result(scalar_value=0),
         _Result(rows=[]),
-        _Result(scalar_value=0),
+        _Result(scalar_value=3),  # Stale thread count should be > 0
         _Result(rows=[(10,), (20,), (30,)]),
         _Result(
             rows=[
