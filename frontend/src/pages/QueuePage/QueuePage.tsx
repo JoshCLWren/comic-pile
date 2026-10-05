@@ -18,6 +18,7 @@ import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
+import ShuffleQueueDialog from './ShuffleQueueDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueCrossovers } from './useQueueCrossovers'
 import { useQueueThreadActions } from './useQueueThreadActions'
@@ -114,9 +115,7 @@ export default function QueuePage() {
   })
 
   const handleIssueChanged = useCallback(() => {
-    if (modals.editingThread) {
-      void invalidateAfterIssueEdit(queryClient, modals.editingThread.id)
-    }
+    if (modals.editingThread) void invalidateAfterIssueEdit(queryClient, modals.editingThread.id)
   }, [modals.editingThread])
 
   const handleRepositionConfirm = useCallback(
@@ -223,7 +222,7 @@ export default function QueuePage() {
           activeCount={authoritativeActiveCount}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
-          onShuffle={actions.handleShuffle}
+          onShuffle={actions.requestShuffle}
           onCreateThread={modals.showCreateModal}
           sortBy={sortBy}
           onSortChange={setSortBy}
@@ -332,6 +331,14 @@ export default function QueuePage() {
           error={actions.deleteError}
           onConfirm={() => void actions.confirmDelete()}
           onCancel={actions.cancelDelete}
+        />
+
+        <ShuffleQueueDialog
+          isOpen={actions.isShuffleConfirmOpen}
+          seriesCount={authoritativeActiveCount}
+          isPending={shuffleQueueMutation.isPending}
+          onConfirm={() => void actions.confirmShuffle()}
+          onCancel={actions.cancelShuffle}
         />
       </div>
     </PositionMenuProvider>

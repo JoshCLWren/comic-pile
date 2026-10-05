@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -159,5 +159,69 @@ describe('Queue shuffle availability', () => {
     renderQueue()
 
     expect(screen.getByRole('button', { name: 'Shuffle' })).toBeEnabled()
+  })
+})
+
+/**
+ * Issue #3109: SHUFFLE reorders the entire queue in one click, so it must be
+ * confirmed before the mutation runs and cancelling must leave the queue
+ * untouched.
+ */
+describe('Queue shuffle confirmation', () => {
+  function renderShuffleableQueue(mutate: ReturnType<typeof vi.fn>) {
+    mockedUseQueueThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+        { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 5 },
+      ],
+      activeCount: 2,
+      isLoading: false,
+      refetch: vi.fn(),
+    })
+    mockedUseShuffleQueue.mockReturnValue({ mutate, isPending: false })
+
+    renderQueue()
+  }
+
+  it('warns about the affected series count instead of shuffling on the first click', async () => {
+    const user = userEvent.setup()
+    const mutate = vi.fn().mockResolvedValue(undefined)
+    renderShuffleableQueue(mutate)
+
+    expect(screen.queryByRole('heading', { name: 'Shuffle Queue' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Shuffle' }))
+
+    expect(screen.getByRole('heading', { name: 'Shuffle Queue' })).toBeInTheDocument()
+    expect(screen.getByTestId('shuffle-queue-dialog')).toHaveTextContent(/reorders all 2 series/i)
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('leaves the queue untouched when the confirmation is cancelled', async () => {
+    const user = userEvent.setup()
+    const mutate = vi.fn().mockResolvedValue(undefined)
+    renderShuffleableQueue(mutate)
+
+    await user.click(screen.getByRole('button', { name: 'Shuffle' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Shuffle Queue' })).not.toBeInTheDocument(),
+    )
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('shuffles and closes the confirmation once the reader confirms', async () => {
+    const user = userEvent.setup()
+    const mutate = vi.fn().mockResolvedValue(undefined)
+    renderShuffleableQueue(mutate)
+
+    await user.click(screen.getByRole('button', { name: 'Shuffle' }))
+    await user.click(screen.getByTestId('confirm-shuffle-queue'))
+
+    expect(mutate).toHaveBeenCalledTimes(1)
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Shuffle Queue' })).not.toBeInTheDocument(),
+    )
   })
 })
