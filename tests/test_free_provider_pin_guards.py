@@ -166,6 +166,6 @@ def test_worker_76_pins_native_fledge_alpha_free(validate) -> None:
     assert by_worker["75"]["model"] != "inclusionai/ling-3.1-flash"
     assert by_worker["76"]["source"] == "opencode-free"
     assert by_worker["76"]["model"] == "fledge-alpha-free"
-    assert by_worker["76"]["minute"] == "30"
+    assert by_worker["76"]["minute"] == "0"
     assert validate.opencode_model_is_free(by_worker["76"]["model"])
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in rows}

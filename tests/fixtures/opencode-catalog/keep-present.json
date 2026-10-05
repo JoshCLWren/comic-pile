@@ -48,7 +48,7 @@
       {"id": "thinkingmachines/inkling-small:free"},
       {"id": "dots-studio/dots-3-note-preview:free"},
       {"id": "stealth/union-alpha"},
-      {"id": "qwen/qwen3.8-27b:free"},
+      {"id": "qwen/qwen3.8-27b"},
       {"id": "apodex/apodex-1.1-mini:free"}
     ]
   }
