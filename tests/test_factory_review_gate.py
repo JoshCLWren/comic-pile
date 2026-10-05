@@ -1523,3 +1523,180 @@ def test_worker_stages_the_controller_once_from_the_pre_checkout_tree() -> None:
         checkout = re.search(r"^\s*checkout_target \S", source, re.MULTILINE)
         assert checkout is not None, script
         assert first_call < checkout.start(), script
+
+def test_native_approve_body_is_not_a_semantic_approver() -> None:
+    """A native GitHub APPROVE body never becomes a controller approver."""
+    head = REVIEWED_HEAD
+    semantic = review_marker(
+        pr=123,
+        head=head,
+        reviewer="17",
+        producer="43",
+        verdict="approve",
+    )
+    assert current_head_approvers([semantic], pr=123, head=head) == {"17"}
+
+    raw_approve = "LGTM\n\nAPPROVED by github-actions[bot] as OWNER"
+    assert current_head_approvers([raw_approve], pr=123, head=head) == set()
+    assert current_head_approvers(
+        [raw_approve, "<!-- not-a-factory-marker APPROVED -->"],
+        pr=123,
+        head=head,
+    ) == set()
+
+
+def test_empty_semantic_approvers_never_authorize_even_with_native_approve_story() -> None:
+    """Controller authorization ignores native APPROVE from any login or App association."""
+    # Native APPROVE is outside this API; without semantic approvers the head fails closed.
+    assert not head_has_authorized_approval(approvers=set(), contributors={"43"})
+    assert not head_has_authorized_approval(
+        approvers=set(),
+        contributors={"48"},
+        provenance_complete=True,
+    )
+    assert not approval_can_promote(
+        reviewer="17",
+        reviewed_head=REVIEWED_HEAD,
+        current_head=MOVED_HEAD,
+        verdict="approve",
+        mechanical_gates_passed=True,
+        contributors={"43"},
+        provenance_complete=True,
+    )
+    # Wrong verdict (as if someone confused native APPROVED with semantic approve).
+    assert not approval_can_promote(
+        reviewer="17",
+        reviewed_head=REVIEWED_HEAD,
+        current_head=REVIEWED_HEAD,
+        verdict="APPROVED",
+        mechanical_gates_passed=True,
+        contributors={"43"},
+        provenance_complete=True,
+    )
+
+
+def test_authorize_ready_rejects_ready_pr_without_semantic_approve_markers(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """authorize_ready stays false when only a native APPROVE could exist outside comments."""
+    module = load_review_controller()
+    writes: list[tuple[object, ...]] = []
+
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": REVIEWED_HEAD,
+            "headRefName": "factory/43-1386-opencode-free",
+            "body": "Closes #1386.\nWorker: opencode-free-model-factory-43",
+            "labels": [
+                {"name": "factory"},
+                {"name": "factory:43"},
+                {"name": "factory:ready"},
+            ],
+        },
+    )
+    monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(module, "linked_issue_from_branch", lambda _branch: None)
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda *args: writes.append(args),
+    )
+
+    result = module.authorize_ready(1390)
+
+    assert result["authorized"] is False
+    assert result["approvers"] == []
+    assert result["contributors"] == ["43"]
+    assert result["provenance_complete"] is False
+    assert writes == [(1390, "factory:unowned", "factory:review")]
+
+
+def test_current_head_review_gate_never_authorizes_from_approved(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Native APPROVED submissions never make the mechanical review gate a pass-for-approval."""
+    module = load_review_controller()
+    head = REVIEWED_HEAD
+    calls: list[list[str]] = []
+
+    def fake_gh_json(args: list[str], **_kwargs: object) -> object:
+        calls.append(list(args))
+        joined = " ".join(args)
+        if "reviews?per_page=100" in joined:
+            return [[
+                {
+                    "state": "APPROVED",
+                    "commit_id": head,
+                    "user": {"login": "MarkCordova[bot]"},
+                    "author_association": "OWNER",
+                },
+                {
+                    "state": "APPROVED",
+                    "commit_id": head,
+                    "user": {"login": "github-actions[bot]"},
+                    "author_association": "OWNER",
+                },
+            ]]
+        if "comments?per_page=100" in joined:
+            return [[]]
+        raise AssertionError(f"unexpected gh call: {args}")
+
+    monkeypatch.setattr(module, "gh_json", fake_gh_json)
+
+    result = module.current_head_review_gate(1390, head)
+    # APPROVED alone is not a deny; it is also not merge authorization.
+    assert result == {
+        "decision": "pass",
+        "reason": "no current-head review thread blockers",
+    }
+    assert any("reviews?per_page=100" in " ".join(call) for call in calls)
+
+    source = (SCRIPTS / "factory-review-controller.py").read_text(encoding="utf-8")
+    gate_src = source[
+        source.index("def current_head_review_gate") : source.index("def poll_mergeable_gate")
+    ]
+    assert '== "APPROVED"' not in gate_src
+    assert '== "CHANGES_REQUESTED"' in gate_src
+
+
+def test_authorization_paths_do_not_read_pull_reviews() -> None:
+    """authorize_ready / review_comment_bodies never consult pulls/.../reviews."""
+    module = load_review_controller()
+    import inspect
+
+    bodies_src = inspect.getsource(module.review_comment_bodies)
+    auth_src = inspect.getsource(module.authorize_ready)
+    assert "issues/" in bodies_src and "/comments" in bodies_src
+    assert "/reviews" not in bodies_src
+    assert "review_comment_bodies" in auth_src
+    assert "/reviews" not in auth_src
+
+
+def test_no_workflow_wires_factory_visibility_reconcile_on_pull_request_review() -> None:
+    """pull_request_review must not invoke factory-visibility reconcile."""
+    for wf_path in sorted(WORKFLOWS.glob("*.yml")):
+        content = wf_path.read_text(encoding="utf-8")
+        if "pull_request_review" not in content:
+            continue
+        uses_visibility = (
+            "factory-visibility.cjs" in content
+            or "factory-visibility" in content and "reconcile" in content
+        )
+        assert not uses_visibility, (
+            f"{wf_path.name} triggers on pull_request_review and runs factory-visibility reconcile"
+        )
+
+
+def test_merge_drain_never_reads_native_review_state_for_merge() -> None:
+    """factory-ready-merge-drain merges only via controller authorized + gates."""
+    content = (WORKFLOWS / "factory-ready-merge-drain.yml").read_text(encoding="utf-8")
+    assert 'authorized --pr' in content
+    assert 'gates --pr' in content
+    assert "factory-visibility" not in content
+    assert "review.state" not in content
+    assert "author_association" not in content
+    # Drain must not treat a native APPROVED event as merge authority.
+    assert "pull_request_review" not in content
