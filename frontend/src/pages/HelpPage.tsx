@@ -20,7 +20,7 @@ const DEFINITIONS: Term[] = [
   {
     id: 'ready-to-read',
     term: 'Ready to read',
-    def: 'Series that can be picked for your next roll right now, because nothing earlier in their reading order is waiting. The Roll page counts these as "N ready to read".',
+    def: 'Series that can be picked for your next roll right now, because nothing earlier in their reading order is waiting. The Roll page counts these as "N in play".',
   },
   {
     id: 'roll-pool',
@@ -30,7 +30,7 @@ const DEFINITIONS: Term[] = [
   {
     id: 'ladder-mode',
     term: 'Auto-adjust',
-    def: 'Lets the die pick its own size to match how many series are ready to read. The "Auto" control on Roll turns it back on after you choose a die size by hand.',
+    def: 'Lets the die pick its own size to match how many series are in the roll pool. The "Auto" control on Roll turns it back on after you choose a die size by hand.',
   },
   {
     id: 'die-ladder',
