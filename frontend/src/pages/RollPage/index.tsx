@@ -429,6 +429,9 @@ export default function RollPage() {
               blockedExpanded={state.blockedExpanded}
               skippedThreads={skippedThreads}
               skippedExpanded={state.skippedExpanded}
+              rolledResult={state.rolledResult}
+              queuePosition={bootstrap?.active_thread?.queue_position || null}
+              dieSize={dieSize}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
               onUnskip={skip.handleUnskip}
