@@ -47,6 +47,7 @@ from app.schemas.creator_summary import (
     CreatorSummaryCoverage,
     CreatorSummaryItem,
 )
+from app.services.creator_rating_stats import compute_rating_distribution
 from app.services.creator_series import (
     aggregate_creator_series_groups,
     build_series_group,
@@ -201,6 +202,10 @@ async def get_creator_detail(
     average_rating = (
         round(sum(headline_rated) / ratings_count, 2) if ratings_count else None
     )
+
+    # 1b. Headline rating distribution over the same issue set: one issue at
+    # most once, latest effective rating, headline-eligible roles only.
+    rating_distribution = compute_rating_distribution(headline_rated)
 
     summary = CreatorSummaryItem(
         canonical_creator_key=creator_key,
@@ -387,6 +392,7 @@ async def get_creator_detail(
         read_unrated_issues=read_unrated_issues,
         upcoming_issues=upcoming_issues,
         next_cursor=next_cursor,
+        rating_distribution=rating_distribution,
     )
 
 

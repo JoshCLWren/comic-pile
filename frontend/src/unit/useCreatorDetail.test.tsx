@@ -57,6 +57,7 @@ function makePage(overrides: Partial<CreatorDetailResponse> = {}): CreatorDetail
     read_unrated_issues: [],
     upcoming_issues: [],
     next_cursor: null,
+    rating_distribution: null,
     ...overrides,
   }
 }
@@ -104,6 +105,7 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
         },
       ],
       next_cursor: null,
+    rating_distribution: null,
     })
     getDetail
       .mockResolvedValueOnce(makePage({ next_cursor: '50' }))
