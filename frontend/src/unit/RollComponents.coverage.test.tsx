@@ -159,7 +159,7 @@ describe('RatingView', () => {
   function makeData(overrides: Partial<RatingViewData> = {}): RatingViewData {
     return {
       activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, issue_number: '3', next_issue_number: '4', reading_progress: 'in_progress', queue_position: 0, issue_id: 100, next_issue_id: 101 },
-      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, snoozeIsPending: false, dismissIsPending: false, skipIsPending: false, manualDie: null, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, readingContextRequested: false, readingBoundariesRequested: false, readingOrdersIsLoading: false, readingOrdersError: null, connectedThreadsIsLoading: false, connectedThreadsError: null, ...overrides,
+      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, snoozeIsPending: false, dismissIsPending: false, skipIsPending: false, manualDie: null, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, readingContextRequested: false, readingBoundariesRequested: false, readingOrders: [], connectedThreads: [], onShowContext: vi.fn(), onShowBoundaries: vi.fn(), readingOrdersIsLoading: false, readingOrdersError: null, connectedThreadsIsLoading: false, connectedThreadsError: null, ...overrides,
     }
   }
 
@@ -169,9 +169,9 @@ describe('RatingView', () => {
     render(<MemoryRouter><RatingView data={makeData({ rating: 5, onUpdateRating, onSubmitRating, onSnooze, onCancel, onRefreshThread })} /></MemoryRouter>)
     expect(screen.getAllByText(/Saga/).length).toBeGreaterThan(0)
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
     // #3008: the correction action lives in the overflow menu.
     await user.click(screen.getByRole('button', { name: 'Comic corrections' }))
     await user.click(screen.getByRole('menuitem', { name: /fix issue number/i }))
@@ -191,8 +191,8 @@ describe('RatingView', () => {
     expect(screen.getByText(/This is the last issue/)).toBeInTheDocument()
     expect(screen.getByText('Oops')).toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
     // #3008: the correction action lives in the overflow menu.
     await userEvent.setup().click(screen.getByRole('button', { name: 'Comic corrections' }))
     await userEvent.setup().click(screen.getByRole('menuitem', { name: /fix issue number/i }))
@@ -207,9 +207,9 @@ describe('RatingView', () => {
     render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() })} /></MemoryRouter>)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
   })
 
   it('renders alternate rating, progress, and order boundaries', async () => {
@@ -217,20 +217,20 @@ describe('RatingView', () => {
     render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, total_issues: 0, issue_number: null, next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, rating: 5, predictedDie: 6, rolledResult: 2, onUpdateRating: callbacks.onUpdateRating, onSubmitRating: callbacks.onSubmitRating, onSnooze: callbacks.onSnooze, onCancel: callbacks.onCancel, onRefreshThread: callbacks.onRefreshThread })} /></MemoryRouter>)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.queryByText('Die stays the same')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Mark read & save' }))
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
   })
 
-  it('asserts removed Why this, Reading Context and Reading Boundaries affordances are absent', async () => {
+  it('asserts Why this? stays absent while collapsed Reading Context and Reading Boundaries cards are present', async () => {
     render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() })} /></MemoryRouter>)
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
+    expect(screen.getByText('Reading Context (optional)')).toBeInTheDocument()
+    expect(screen.getByText('Reading Boundaries (optional)')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-reading-optional')).toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-boundaries')).not.toBeInTheDocument()
     expect(screen.getByTestId('rating-pillars-grid').className).not.toContain('xl:grid-cols-[repeat(auto-fit')
