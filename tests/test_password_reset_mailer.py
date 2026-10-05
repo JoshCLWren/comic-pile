@@ -125,7 +125,7 @@ async def test_gmail_adapter_sends_message_without_logging_token(
             captured["port"] = port
             captured["timeout"] = timeout
 
-        def __enter__(self) -> "_FakeSMTP":
+        def __enter__(self) -> _FakeSMTP:
             return self
 
         def __exit__(self, *args: object) -> None:
@@ -179,7 +179,7 @@ async def test_gmail_provider_failure_raises_without_token_in_message(
         def __init__(self, *args: object, **kwargs: object) -> None:
             pass
 
-        def __enter__(self) -> "_FailingSMTP":
+        def __enter__(self) -> _FailingSMTP:
             return self
 
         def __exit__(self, *args: object) -> None:
