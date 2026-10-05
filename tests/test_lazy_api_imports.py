@@ -88,15 +88,56 @@ def _deferred_leaks(loaded: set[str]) -> set[str]:
 
 
 def _route_paths(app) -> list[str]:
-    """Return the application's route paths in match order.
+    """Return the application's effective route paths in match order.
+
+    FastAPI 0.137+ keeps included routers as inclusion-tree nodes instead of
+    flat ``APIRoute`` entries, so descend through each node's original router
+    while accumulating its mount prefix (same recursion as the other
+    route-surface guards).
 
     Args:
         app: FastAPI application instance.
 
     Returns:
-        Ordered route paths.
+        Ordered effective route paths.
     """
-    return [route.path for route in app.routes]
+    return [path for path, _endpoint, _methods in _iter_effective_routes(app.routes)]
+
+
+def _iter_effective_routes(routes, prefix: str = ""):
+    """Yield ``(path, endpoint, methods)`` triples in match order.
+
+    Args:
+        routes: Route list from an application or an included router.
+        prefix: Accumulated mount prefix from outer inclusion nodes.
+
+    Returns:
+        Iterator of effective route triples.
+    """
+    for route in routes:
+        route_path = getattr(route, "path", None)
+        if isinstance(route_path, str) and not hasattr(route, "original_router"):
+            triple = (
+                f"{prefix}{route_path}",
+                getattr(route, "endpoint", None),
+                getattr(route, "methods", None),
+            )
+            yield triple
+            continue
+        original_router = getattr(route, "original_router", None)
+        include_context = getattr(route, "include_context", None)
+        nested_routes = getattr(original_router, "routes", None)
+        if nested_routes is None or include_context is None:
+            if isinstance(route_path, str):
+                triple = (
+                    f"{prefix}{route_path}",
+                    getattr(route, "endpoint", None),
+                    getattr(route, "methods", None),
+                )
+                yield triple
+            continue
+        nested_prefix = f"{prefix}{getattr(include_context, 'prefix', '')}"
+        yield from _iter_effective_routes(nested_routes, prefix=nested_prefix)
 
 
 def test_api_package_declares_no_eager_imports() -> None:

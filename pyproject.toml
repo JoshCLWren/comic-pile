@@ -11,14 +11,15 @@ requires-python = ">=3.14"
 # which every other runtime discovers through `tool.uv.default-groups`.
 dependencies = [
     # FastAPI 0.137.0 turned `router.routes` into a tree of router-inclusion
-    # nodes and stopped `scope["route"].path` reporting the effective mounted
-    # path. This app routes through `include_router` for its whole API surface
-    # and reads both in production: `app/traffic_metrics.py` resolves per-route
-    # request counters from `scope["route"].path`, and the route-surface guards
-    # in `tests/` flatten `app.routes`. Both silently degrade on 0.137+ (every
-    # included route reports its unprefixed sub-path), so the ceiling stays
-    # until the route-introspection layer is migrated off the internals that
-    # 0.137.0 documented as no longer public API.
+    # nodes and made `scope["route"].path` report the original unprefixed
+    # sub-path. This app routes through `include_router` for its whole API
+    # surface, so route introspection goes through the migrated layer:
+    # `app/traffic_metrics.py` resolves per-route request counters from the
+    # effective route context with a `scope["route"]` fallback, and the
+    # route-surface guards in `tests/` flatten `app.routes` by recursing
+    # through each inclusion node's `original_router.routes` with its
+    # `include_context.prefix`. Keep those helpers version-tolerant: they
+    # must not assume a flat `app.routes` list again.
     "fastapi>=0.100.0,<0.143.0",
     # Async application imports also run while Alembic loads model metadata.
     # SQLAlchemy 2.1 requires the asyncio extra to install greenlet.
