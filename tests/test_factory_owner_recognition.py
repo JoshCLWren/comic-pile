@@ -132,9 +132,6 @@ def test_factory_persistence_pushes_and_verifies_current_head() -> None:
         SCRIPTS / "omniroute-factory-worker.sh",
         SCRIPTS / "nvidia-factory-worker.sh",
     ):
-        SCRIPTS / "omniroute-factory-worker.sh",
-        SCRIPTS / "nvidia-factory-worker.sh",
-    ):
         text = path.read_text(encoding="utf-8")
         assert 'git push origin "HEAD:$branch"' in text or 'git push --set-upstream origin "HEAD:$branch"' in text
         assert 'git ls-remote origin "refs/heads/${branch}"' in text
