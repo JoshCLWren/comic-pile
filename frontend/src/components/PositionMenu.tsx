@@ -75,7 +75,11 @@ export default function PositionMenu({
 
   const closeMenu = useCallback(() => {
     closeContextMenu()
-    triggerRef.current?.focus()
+    // We use a timeout to ensure the menu has fully unmounted before attempting
+    // to restore focus, which prevents the focus from being lost to the body.
+    setTimeout(() => {
+      triggerRef.current?.focus()
+    }, 0)
   }, [closeContextMenu])
 
   useEffect(() => {
@@ -184,73 +188,79 @@ export default function PositionMenu({
     disabled?: boolean
     action: () => void
   }> = [
-    {
-      label: 'Move to Front',
-      icon: '\u2B06',
-      ariaLabel: 'Move to front',
-      action: () => {
-        onMoveToFront(thread.id)
-        closeMenu()
-      },
-    },
-    {
-      label: 'Reposition\u2026',
-      icon: '\u2261',
-      ariaLabel: 'Reposition series',
-      action: () => {
-        onReposition(thread)
-        closeMenu()
-      },
-    },
-    {
-      label: 'Move to Back',
-      icon: '\u2193',
-      ariaLabel: 'Move to back',
-      action: () => {
-        onMoveToBack(thread.id)
-        closeMenu()
-      },
-    },
-    {
-      label: 'Edit Series',
-      icon: '\u270F\uFE0F',
-      ariaLabel: 'Edit series',
-      action: () => {
-        onEdit(thread)
-        closeMenu()
-      },
-    },
-    ...(onSnooze && snoozeLabel ? [{
-      label: snoozeLabel,
-      icon: snoozeIcon || '',
-      ariaLabel: snoozeLabel,
-      disabled: snoozeDisabled,
-      action: () => {
-        if (!snoozeDisabled && onSnooze) {
-          onSnooze(thread)
-          closeMenu()
-        }
-      },
-    }] : []),
-    {
-      label: 'Dependencies',
-      icon: '\u26D3\uFE0E',
-      ariaLabel: 'Manage dependencies',
-      action: () => {
-        onDependencies(thread)
-        closeMenu()
-      },
-    },
-    {
-      label: 'Delete Series',
-      icon: '\u{1F5D1}',
-      ariaLabel: 'Delete series',
-      destructive: true,
-      action: () => {
-        onDelete(thread.id)
-        closeMenu()
-      },
-    },
+     {
+       label: 'Move to Front',
+       icon: '\u2B06',
+       ariaLabel: 'Move to front',
+       action: () => {
+         onMoveToFront(thread.id)
+         // We don't call closeMenu() here because onMoveToFront may trigger
+         // a re-render of the entire list, and we want to rely on the
+         // action handler to manage the menu state.
+       },
+     },
+     {
+       label: 'Reposition\u2026',
+       icon: '\u2261',
+       ariaLabel: 'Reposition series',
+       action: () => {
+         onReposition(thread)
+         // The reposition modal should manage focus restoration.
+         closeMenu()
+       },
+     },
+     {
+       label: 'Move to Back',
+       icon: '\u2193',
+       ariaLabel: 'Move to back',
+       action: () => {
+         onMoveToBack(thread.id)
+         // Same as Move to Front.
+       },
+     },
+     {
+       label: 'Edit Series',
+       icon: '\u270F\uFE0F',
+       ariaLabel: 'Edit series',
+       action: () => {
+         onEdit(thread)
+         // The edit modal should manage focus restoration.
+         closeMenu()
+       },
+     },
+     ...(onSnooze && snoozeLabel ? [{
+       label: snoozeLabel,
+       icon: snoozeIcon || '',
+       ariaLabel: snoozeLabel,
+       disabled: snoozeDisabled,
+       action: () => {
+         if (!snoozeDisabled && onSnooze) {
+           onSnooze(thread)
+           // Same as Move to Front.
+         }
+       },
+     }] : []),
+     {
+       label: 'Dependencies',
+       icon: '\u26D3\uFE0E',
+       ariaLabel: 'Manage dependencies',
+       action: () => {
+         onDependencies(thread)
+         // The dependencies modal should manage focus restoration.
+         closeMenu()
+       },
+     },
+     {
+       label: 'Delete Series',
+       icon: '\u{1F5D1}',
+       ariaLabel: 'Delete series',
+       destructive: true,
+       action: () => {
+         onDelete(thread.id)
+         // The delete dialog should manage focus restoration.
+         closeMenu()
+       },
+     },
   ]
 
   return (
