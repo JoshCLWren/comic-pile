@@ -488,27 +488,83 @@ reject_out_of_scope_diff() {
 }
 
 factory_push_credential() {
-  # Worker 48 uses its installation token when the mapping and secrets exist.
-  # Every other worker keeps PR_REBASE_TOKEN. The shared producer is not removed.
-  local resolved source token
-  resolved="$(bash .github/scripts/factory-worker-push-token.sh resolve)" || return 1
+  # Print "<source>\t<token>" for push and PR creation. Worker 48 gets its
+  # installation token when the mapping and secrets exist; every other worker
+  # keeps PR_REBASE_TOKEN. The shared producer is not removed.
+  # The minted installation token is not a repository secret, so Actions will
+  # not mask it on its own: register ::add-mask:: before any other use. Xtrace
+  # is suspended so `set -x` can never echo it, and nothing here writes it to
+  # git config or logs.
+  local had_xtrace=0 resolved source token
+  [[ $- == *x* ]] && had_xtrace=1
+  { set +x; } 2>/dev/null
+  if ! resolved="$(bash .github/scripts/factory-worker-push-token.sh resolve)"; then
+    echo 'factory push credential could not be resolved' >&2
+    (( had_xtrace )) && set -x
+    return 1
+  fi
   source="${resolved%%$'\t'*}"
   token="${resolved#*$'\t'}"
-  if [[ -z "$token" ]]; then
+  if [[ -z "$token" || "$token" == "$resolved" ]]; then
     echo 'factory push credential was empty' >&2
+    (( had_xtrace )) && set -x
     return 1
   fi
   if [[ "$source" == installation ]]; then
+    # Workflow commands are read from stderr as well as stdout; stdout here is
+    # captured by the caller.
+    printf '::add-mask::%s\n' "$token" >&2
     if [[ -z "${GITHUB_REPOSITORY:-}" ]]; then
       echo 'GITHUB_REPOSITORY is required to push with a worker installation token' >&2
+      (( had_xtrace )) && set -x
       return 1
     fi
-    git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git"
   fi
-  printf '%s' "$token"
+  printf '%s\t%s' "$source" "$token"
+  (( had_xtrace )) && set -x
+  return 0
+}
+
+factory_git_push() {
+  # Usage: factory_git_push SOURCE TOKEN <git push args...>
+  # PR_REBASE_TOKEN pushes use the remote the workflow already configured.
+  # An installation-token push swaps the origin URL only for this one push and
+  # always restores the previous URL, so the token is never left in git config.
+  local source="$1" token="$2" had_xtrace=0 previous_url status=0
+  shift 2
+  if [[ "$source" != installation ]]; then
+    git push "$@"
+    return $?
+  fi
+  [[ $- == *x* ]] && had_xtrace=1
+  { set +x; } 2>/dev/null
+  previous_url="$(git remote get-url origin 2>/dev/null || true)"
+  git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git" || status=$?
+  if (( status == 0 )); then
+    git push "$@" || status=$?
+  fi
+  if [[ -n "$previous_url" ]]; then
+    git remote set-url origin "$previous_url" || true
+  else
+    git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git" || true
+  fi
+  (( had_xtrace )) && set -x
+  return "$status"
 }
 
 persist_issue_pr() {
+  # The push credential (possibly a minted installation token) lives in locals
+  # below. Suspend xtrace for the whole persistence step so `set -x` cannot
+  # echo it, then restore the caller's tracing state.
+  local had_xtrace=0 status=0
+  [[ $- == *x* ]] && had_xtrace=1
+  { set +x; } 2>/dev/null
+  _persist_issue_pr_untraced "$@" || status=$?
+  (( had_xtrace )) && set -x
+  return "$status"
+}
+
+_persist_issue_pr_untraced() {
   local number="$1" branch="$2" pr title body base_ref
   [[ -n "$(git status --porcelain)" ]] || return 1
   base_ref="$EXPECTED_HEAD"
@@ -520,10 +576,12 @@ persist_issue_pr() {
   # The agent may be running on a local worktree branch whose name differs from
   # the target branch. Push the exact commit we just created, then verify that
   # GitHub's branch ref is actually at that commit before reporting success.
-  local pushed_head remote_head push_token
+  local pushed_head remote_head push_credential push_source push_token
   pushed_head="$(git rev-parse HEAD)"
-  push_token="$(factory_push_credential)" || return 1
-  git push --set-upstream origin "HEAD:$branch" >&2
+  push_credential="$(factory_push_credential)" || return 1
+  push_source="${push_credential%%$'\t'*}"
+  push_token="${push_credential#*$'\t'}"
+  factory_git_push "$push_source" "$push_token" --set-upstream origin "HEAD:$branch" >&2
   remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
   if [[ "$remote_head" != "$pushed_head" ]]; then
     log "push verification failed for ${branch}: expected ${pushed_head}, found ${remote_head:-missing}" >&2
@@ -546,6 +604,18 @@ persist_issue_pr() {
 }
 
 persist_pr_changes() {
+  # The push credential (possibly a minted installation token) lives in locals
+  # below. Suspend xtrace for the whole persistence step so `set -x` cannot
+  # echo it, then restore the caller's tracing state.
+  local had_xtrace=0 status=0
+  [[ $- == *x* ]] && had_xtrace=1
+  { set +x; } 2>/dev/null
+  _persist_pr_changes_untraced "$@" || status=$?
+  (( had_xtrace )) && set -x
+  return "$status"
+}
+
+_persist_pr_changes_untraced() {
   local pr="$1" branch="$2" base_ref
   [[ -n "$(git status --porcelain)" ]] || return 1
   base_ref="$EXPECTED_HEAD"
@@ -554,10 +624,10 @@ persist_pr_changes() {
   fi
   git add -A
   git commit -m "factory: advance PR #${pr} with ${DISPLAY}"
-  local pushed_head remote_head
+  local pushed_head remote_head push_credential
   pushed_head="$(git rev-parse HEAD)"
-  factory_push_credential >/dev/null || return 1
-  git push origin "HEAD:$branch"
+  push_credential="$(factory_push_credential)" || return 1
+  factory_git_push "${push_credential%%$'\t'*}" "${push_credential#*$'\t'}" origin "HEAD:$branch"
   remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
   if [[ "$remote_head" != "$pushed_head" ]]; then
     log "push verification failed for ${branch}: expected ${pushed_head}, found ${remote_head:-missing}" >&2
