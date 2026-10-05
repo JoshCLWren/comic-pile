@@ -866,39 +866,44 @@ def _classify_series_mapping_rows(
     return classified_rows
 
 
-def _merge_roster_into_mappings(
-    local_mappings: list[dict[str, object]],
+def _build_sibling_mapping_rows(
+    sibling_issues: list[dict[str, object]],
     roster_rows: list[dict[str, object]],
-    series_info: dict[str, object],
-) -> None:
-    """Merge provider volume roster rows into local issue mappings.
+    provider: str,
+) -> list[dict[str, object]]:
+    """Build preview rows for siblings in the anchor thread.
 
-    Local-mapped issues (with thread_id set) take precedence; roster rows fill in any
-    issues from the series that are not yet locally mapped. Roster rows carry no ComicPile
-    thread, so they are only added when no local mapping exists for that issue number.
-
-    Args:
-        local_mappings: Existing issue mappings from the local catalog (modified in place).
-        roster_rows: Provider volume roster rows from ``_load_provider_volume_roster``.
-        series_info: Series info dict, used only for identity verification.
+    Sibling issues are mapped by matching their issue number against the provider roster.
+    The resulting rows carry the ComicPile thread context, licensing bulk-confirmation.
     """
-    local_by_number: dict[str, dict[str, object]] = {}
-    for mapping in local_mappings:
-        num = _issue_number_text(mapping.get("issue_number"))
-        if num:
-            local_by_number.setdefault(num, mapping)
-
+    roster_by_number: dict[str, dict[str, object]] = {}
     for roster in roster_rows:
-        rnum = _issue_number_text(roster.get("issue_number"))
-        if not rnum:
+        num = _issue_number_text(roster.get("issue_number"))
+        if num:
+            roster_by_number[num] = roster
+
+    rows: list[dict[str, object]] = []
+    for sib in sibling_issues:
+        num = _issue_number_text(sib.get("issue_number"))
+        if not num:
             continue
-        if rnum not in local_by_number:
-            # Copy roster row as a local mapping placeholder; thread_id stays None so commit
-            # refuses to bulk-confirm a provider roster id as if it were a local issue, and the
-            # ownership check similarly excludes it.
-            merged = dict(roster)
-            merged.setdefault("classification", "unresolved")
-            local_mappings.append(merged)
+
+        roster_match = roster_by_number.get(num)
+        if roster_match:
+            # Merge sibling metadata with provider identity
+            row = dict(sib)
+            row.update({
+                "provider": provider,
+                "external_id": roster_match.get("external_id"),
+                "title": roster_match.get("title") or sib.get("title"),
+                "confidence": roster_match.get("confidence"),
+            })
+            rows.append(row)
+        else:
+            # Sibling exists locally but not in the provider's volume roster
+            rows.append(sib)
+
+    return rows
 
 
 def _dedupe_rows_by_issue(rows: list[dict[str, object]]) -> list[dict[str, object]]:
