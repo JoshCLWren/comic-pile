@@ -252,10 +252,119 @@ def resolve_push_credential(env: Mapping[str, str] | None = None) -> tuple[str, 
     return "installation", token
 
 
+HANDOFF_KINDS = ("implementation", "repair", "review")
+_MARKER_FRAGMENTS = ("<!--", "-->", "comic-pile-factory-", "free-model-factory-owner")
+
+
+def handoff_decision(
+    worker: str,
+    env: Mapping[str, str],
+    mapping: Mapping[str, Any] | None = None,
+) -> dict[str, str]:
+    """Choose the author of a human-readable handoff comment.
+
+    Same gate as push and PR creation: only worker 48 with the persisted entry
+    plus App id, installation id, and private key gets ``installation``.
+    Everyone else gets ``default``, which means the caller keeps its current
+    identity and posts nothing new. A handoff never falls back to
+    PR_REBASE_TOKEN, and machine markers never route through this decision.
+    """
+    decision = credential_decision(worker, env, mapping)
+    if decision["source"] != "installation":
+        return {"source": "default", "worker": str(worker)}
+    return decision
+
+
+def resolve_handoff_credential(env: Mapping[str, str] | None = None) -> tuple[str, str]:
+    """Return (source, token) for a readable handoff. Token is empty for default."""
+    current = env if env is not None else os.environ
+    decision = handoff_decision(str(current.get("FACTORY_WORKER", "")), current)
+    if decision["source"] != "installation":
+        return "default", ""
+    token = mint_installation_token(
+        app_id=decision["app_id"],
+        installation_id=decision["installation_id"],
+        private_key_pem=decision["private_key"],
+    )
+    return "installation", token
+
+
+def sanitize_handoff_text(text: str) -> str:
+    """Strip anything that could look like a trusted factory marker.
+
+    The App-authored comment is plain prose for humans. Trust logic ignores
+    worker App authors anyway; this keeps the comment from even resembling
+    a marker so nobody mistakes it for controller state.
+    """
+    cleaned = str(text)
+    while "<!--" in cleaned:
+        start = cleaned.index("<!--")
+        end = cleaned.find("-->", start)
+        cleaned = cleaned[:start] + (cleaned[end + 3 :] if end != -1 else "")
+    cleaned = cleaned.replace("-->", "")
+    lines = [
+        line
+        for line in cleaned.splitlines()
+        if not any(fragment in line for fragment in _MARKER_FRAGMENTS)
+    ]
+    return "\n".join(lines).strip()
+
+
+def render_handoff(
+    *,
+    kind: str,
+    worker: str,
+    display: str = "",
+    model: str = "",
+    head: str = "",
+    detail: str = "",
+) -> str:
+    """Render a short human-readable handoff with no machine marker."""
+    if kind not in HANDOFF_KINDS:
+        raise ValueError(f"unknown handoff kind: {kind}")
+    head_text = f" at `{head[:12]}`" if head else ""
+    if kind == "implementation":
+        headline = f"Factory worker {worker} opened this pull request{head_text} and handed it to review."
+    elif kind == "repair":
+        headline = f"Factory worker {worker} pushed repairs{head_text} and handed this pull request back to review."
+    else:
+        headline = f"Factory worker {worker} finished a semantic review{head_text}."
+    lines = [f"### Factory handoff · {kind}", "", headline]
+    if detail:
+        lines.extend(["", sanitize_handoff_text(detail)])
+    meta = []
+    if display:
+        meta.append(f"Worker: {display}")
+    if model:
+        meta.append(f"Model: {model}")
+    if meta:
+        lines.extend(["", " · ".join(meta)])
+    lines.extend(
+        [
+            "",
+            "This note is for people reading the thread. It is not controller state, "
+            "and it is not a review or merge decision. Trusted factory records stay on "
+            "github-actions[bot].",
+        ]
+    )
+    body = sanitize_handoff_text("\n".join(lines))
+    if any(fragment in body for fragment in ("<!--", "-->")):
+        raise RuntimeError("readable handoff must not contain a machine marker")
+    return body + "\n"
+
+
+def _flag(argv: list[str], name: str) -> str:
+    if name in argv:
+        index = argv.index(name)
+        if index + 1 < len(argv):
+            return argv[index + 1]
+    return ""
+
+
 def main(argv: list[str]) -> int:
     """CLI used by the factory worker shell. Tokens go to stdout only."""
     if len(argv) < 2:
-        print("usage: factory_worker_github_app.py resolve|select-source|bootstrap-name|bootstrap-collision", file=sys.stderr)
+        print("usage: factory_worker_github_app.py resolve|select-source|resolve-handoff|render-handoff|bootstrap-name|bootstrap-collision", file=sys.stderr)
         return 2
     command = argv[1]
     if command == "select-source":
@@ -269,6 +378,30 @@ def main(argv: list[str]) -> int:
             print(str(exc), file=sys.stderr)
             return 1
         sys.stdout.write(f"{source}\t{token}\n")
+        return 0
+    if command == "resolve-handoff":
+        # Best effort. A mint failure keeps the current identity and posts nothing.
+        try:
+            source, token = resolve_handoff_credential(os.environ)
+        except RuntimeError as exc:
+            print(f"worker App handoff token unavailable: {exc}", file=sys.stderr)
+            source, token = "default", ""
+        sys.stdout.write(f"{source}\t{token}\n")
+        return 0
+    if command == "render-handoff":
+        try:
+            body = render_handoff(
+                kind=_flag(argv, "--kind"),
+                worker=_flag(argv, "--worker") or os.environ.get("FACTORY_WORKER", ""),
+                display=_flag(argv, "--display"),
+                model=_flag(argv, "--model"),
+                head=_flag(argv, "--head"),
+                detail=_flag(argv, "--detail"),
+            )
+        except (ValueError, RuntimeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        sys.stdout.write(body)
         return 0
     if command in {"bootstrap-name", "bootstrap-collision"}:
         if len(argv) != 3 or not argv[2].isdigit():
