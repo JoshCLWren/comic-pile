@@ -269,9 +269,9 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Secondary actions are in the menu. Read unlocks once the blocker above is cleared.',
+      'Secondary actions are in the menu. Read & Rate unlocks once the blocker above is cleared.',
     )
-    expect(detail).toHaveTextContent(/Read unlocks once the blocker above is cleared/i)
+    expect(detail).toHaveTextContent(/Read & Rate unlocks once the blocker above is cleared/i)
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
     const readButton = within(actionsGroup).getByRole('button', { name: 'Read & Rate' })
@@ -298,7 +298,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Secondary actions are in the menu. Read unlocks once the blocker above is cleared.',
+      'Secondary actions are in the menu. Read & Rate unlocks once the blocker above is cleared.',
     )
   })
 
@@ -312,7 +312,7 @@ describe('QueueThreadCard', () => {
     })
 
     expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Read unlocks once the blocker/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Read & Rate unlocks once the blocker/i)).not.toBeInTheDocument()
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
     expect(within(actionsGroup).getByRole('button', { name: 'Read & Rate' })).not.toBeDisabled()
