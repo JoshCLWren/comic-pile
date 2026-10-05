@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, fireEvent, screen, waitFor } from '@testing-library/react'
 import LoginPage from '../pages/LoginPage'
 import { useAuth } from '../App'
-import api from '../../services/api'
+import api from '../services/api'
 
 vi.mock('../App', () => ({ useAuth: vi.fn() }))
-vi.mock('../../services/api', () => ({ default: { post: vi.fn() } }))
+vi.mock('../services/api', () => ({ default: { post: vi.fn() } }))
 
 const mockedUseAuth = vi.mocked(useAuth)
 const mockedApi = vi.mocked(api)
