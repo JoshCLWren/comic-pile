@@ -214,6 +214,9 @@ export function useQueueThreadActions(
   )
 
   const handleShuffle = useCallback(async () => {
+    if (!window.confirm('Shuffle the entire queue? This will reorder all series.')) {
+      return
+    }
     try {
       await shuffleQueueMutation.mutate()
     } catch {
