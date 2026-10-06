@@ -152,13 +152,13 @@ export default function DemoRollPage({ api = demoApi }: DemoRollPageProps) {
               : 'In a real library this rating slides the series past the next roll and steps your die up.'}
           </p>
 
-<p aria-live="polite" className="text-sm text-[var(--theme-text-muted)]">
+          <p aria-live="polite" className="text-sm text-[var(--theme-text-muted)]">
             {rated ? (
               <span className="text-[var(--theme-comic-accent)] font-bold" data-testid="demo-rated">
-                Rated&nbsp;{rating.toFixed(1)}&nbsp;— held in this demo session only, never saved.
+                {`Rated ${rating.toFixed(1)} — held in this demo session only, never saved.`}
               </span>
             ) : (
-              'Move the slider to see how a rating changes tomorrow\'s roll.'
+              'Move the slider to see how a rating changes tomorrow’s roll.'
             )}
           </p>
         </section>
