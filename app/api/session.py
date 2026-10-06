@@ -51,11 +51,14 @@ v1_router = APIRouter(tags=["sessions"])
 
 EVENT_TYPE_DESCRIPTIONS: dict[str, str] = {
     "skip": "Skipped",
+    "rolled_but_skipped": "Skipped",
     "complete": "Completed",
     "completion": "Completed",
     "reorder": "Reordered",
     "undo": "Restored",
     "restore": "Restored",
+    "move": "Moved",
+    "shuffle": "Shuffled",
 }
 
 
@@ -454,7 +457,8 @@ async def list_sessions(
             or_(
                 (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
                 Event.type == "rate",
-                (Event.type.in_(("snooze", "undo"))) & (Event.die_after.is_not(None)),
+                Event.type == "rolled_but_skipped",
+                (Event.type.in_(("snooze", "unsnooze", "undo", "restore"))) & (Event.die_after.is_not(None)),
             )
         )
         .order_by(Event.session_id, Event.timestamp, Event.id)
@@ -462,23 +466,38 @@ async def list_sessions(
     history_events = history_events_result.scalars().all()
 
     rate_agg: dict[int, dict] = {}
+    undone_rate_ids: set[int] = set()
     # Historical issue captured at rating time — immutable per session.
-    # Used for History display so advancing the thread does not rewrite past rows.
     rate_issue_by_session: dict[int, tuple[int | None, str | None]] = {}
+    open_rate_ids_by_session: dict[int, list[int]] = {}
     for ev in history_events:
-        if ev.type != "rate":
-            continue
-        if ev.session_id not in rate_agg:
-            rate_agg[ev.session_id] = {"issues_read": 0, "last_rating": None}
-        if ev.issues_read is not None:
-            rate_agg[ev.session_id]["issues_read"] += ev.issues_read
-        if ev.rating is not None:
-            rate_agg[ev.session_id]["last_rating"] = ev.rating
-        # Capture the historically rated issue (denormalized on Event).
-        # history_events is ordered by (session_id, timestamp, id) so the
-        # last rate event for a session overwrites — matches the most recent rate.
-        if ev.issue_id is not None or ev.issue_number is not None:
-            rate_issue_by_session[ev.session_id] = (ev.issue_id, ev.issue_number)
+        if ev.type == "rate":
+            open_rate_ids_by_session.setdefault(ev.session_id, []).append(ev.id)
+            if ev.session_id not in rate_agg:
+                rate_agg[ev.session_id] = {"issues_read": 0, "last_rating": None}
+            if ev.issues_read is not None:
+                rate_agg[ev.session_id]["issues_read"] += ev.issues_read
+            if ev.rating is not None:
+                rate_agg[ev.session_id]["last_rating"] = ev.rating
+            if ev.issue_id is not None or ev.issue_number is not None:
+                rate_issue_by_session[ev.session_id] = (ev.issue_id, ev.issue_number)
+        elif ev.type == "undo" and ev.session_id in open_rate_ids_by_session and open_rate_ids_by_session[ev.session_id]:
+            undone_id = open_rate_ids_by_session[ev.session_id].pop()
+            undone_rate_ids.add(undone_id)
+    # Subtract undone rates from aggregates
+    for ev in history_events:
+        if ev.type == "rate" and ev.id in undone_rate_ids:
+            sid = ev.session_id
+            if sid in rate_agg and ev.issues_read is not None:
+                rate_agg[sid]["issues_read"] = max(0, rate_agg[sid]["issues_read"] - ev.issues_read)
+            if sid in rate_agg and ev.rating is not None:
+                # Recompute last_rating from remaining open rates
+                remaining = [
+                    e for e in history_events
+                    if e.type == "rate" and e.session_id == sid and e.id not in undone_rate_ids
+                ]
+                last = remaining[-1] if remaining else None
+                rate_agg[sid]["last_rating"] = last.rating if last else None
 
     projection = project_session_history_events(session_ids, history_events)
 
@@ -741,7 +760,7 @@ async def get_session_details(
     session_obj = await get_owned_session_or_404(db, current_user.id, session_id)
 
     events_result = await db.execute(
-        select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
+        select(Event).where(Event.session_id == session_id).order_by(Event.timestamp.desc(), Event.id.desc())
     )
     events = events_result.scalars().all()
 
@@ -807,10 +826,10 @@ async def get_session_details(
             event_data.die = event.die
             event_data.die_after = event.die_after
             event_data.description = f"Unsnoozed {thread_title or 'thread'}"
-        elif event.type in ("skip", "complete", "completion"):
+        elif event.type == "skip" or event.type == "rolled_but_skipped":
             event_data.die = event.die
             event_data.die_after = event.die_after
-            word = _event_word(event.type)
+            word = _event_word(event.type if event.type == "skip" else "rolled_but_skipped")
             event_data.description = f"{word} {thread_title or 'thread'}"
         elif event.type == "move":
             event_data.die = event.die
@@ -822,7 +841,15 @@ async def get_session_details(
             event_data.description = f"Shuffled {thread_title or 'thread'}"
         elif event.type in ("reorder", "undo", "restore"):
             word = _event_word(event.type)
-            event_data.description = f"{word} {thread_title or 'thread'}"
+            desc_parts = [f"{word} {thread_title or 'thread'}"]
+            if event.rating is not None:
+                desc_parts.append(f"rating {event.rating:.1f}")
+            if event.issue_number:
+                desc_parts.append(f"#{event.issue_number}")
+            elif event.issue_id and thread_title:
+                # Try to include issue info when available
+                pass
+            event_data.description = " · ".join(desc_parts)
 
         formatted_events.append(event_data)
 
