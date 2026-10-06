@@ -37,8 +37,13 @@ export function RatingView({ data }: RatingViewProps) {
   // can never leak into the next rating session.
   const optionalCardsKey = data.activeRatingThread?.id ?? 'none'
 
-  return (
-    <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">
+    return (
+      <div
+        ref={ratingViewTopRef}
+        data-testid="rating-view-top"
+        tabIndex={-1}
+        className="relative z-10 space-y-4 p-3 md:p-4 focus:outline-none"
+      >
       <div
         className={`grid items-start ${ROLL_WORKSPACE_GUTTER} ${ROLL_WORKSPACE_MAX_WIDTH} lg:justify-center ${ROLL_WORKSPACE_TRACKS}`}
         data-testid="rating-pillars-grid"

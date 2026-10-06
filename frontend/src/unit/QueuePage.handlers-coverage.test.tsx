@@ -252,13 +252,33 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(screen.getByText(/issue identifier too long/i)).toBeInTheDocument())
   })
 
+  it('disables create submit while the issue range is invalid', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
+    await user.type(screen.getByLabelText('Title'), 'Broken Range')
+    await user.type(screen.getByLabelText('Issues'), '8-2')
+    const createButton = screen.getByRole('button', { name: /create series/i })
+    await waitFor(() => expect(createButton).toBeDisabled())
+    await user.click(createButton)
+    expect(mocks.mutate).not.toHaveBeenCalled()
+    expect(alert).not.toHaveBeenCalled()
+    await user.clear(screen.getByLabelText('Issues'))
+    await user.type(screen.getByLabelText('Issues'), '2-8')
+    await waitFor(() => expect(createButton).not.toBeDisabled())
+  })
+
   it('alerts the user when create submit is attempted with an invalid issue range', async () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Broken Range')
     await user.type(screen.getByLabelText('Issues'), '8-2')
-    await user.click(screen.getByRole('button', { name: /create series/i }))
+    const createButton = screen.getByRole('button', { name: /create series/i })
+    await waitFor(() => expect(createButton).toBeDisabled())
+    // The disabled submit button blocks pointer submission (#3108), so the
+    // handler's parse-error guard is reached through a direct form submit.
+    fireEvent.submit(createButton.closest('form')!)
     await waitFor(() =>
       expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create series')),
     )

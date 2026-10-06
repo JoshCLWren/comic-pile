@@ -25,7 +25,9 @@
       {"id": "nvidia/llama-3.3-nemotron-super-49b-v1.5"},
       {"id": "nvidia/nemotron-3-nano-30b-a3b"},
       {"id": "openai/gpt-oss-20b"},
-      {"id": "google/gemma-4-31b-it"}
+      {"id": "google/gemma-4-31b-it"},
+      {"id": "moonshotai/kimi-k3"},
+      {"id": "z-ai/glm-5.3"}
     ],
     "openrouter": [
       {"id": "cohere/north-mini-code:free"},
@@ -48,7 +50,7 @@
       {"id": "thinkingmachines/inkling-small:free"},
       {"id": "dots-studio/dots-3-note-preview:free"},
       {"id": "stealth/union-alpha"},
-      {"id": "qwen/qwen3.8-27b:free"},
+      {"id": "qwen/qwen3.8-27b"},
       {"id": "apodex/apodex-1.1-mini:free"}
     ]
   }

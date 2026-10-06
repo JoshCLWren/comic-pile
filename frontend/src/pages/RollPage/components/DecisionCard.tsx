@@ -43,7 +43,7 @@ interface DecisionCardProps {
  *   happens and the card says so instead of promising one (#3144). The wording
  *   matches the die-mode copy the die selector already uses.
  * - In automatic mode (`manualDie` is null) the card keeps the ladder move
- *   `d{currentDie} -> d{predictedDie}` and its die-ladder glossary link.
+ *   `d{currentDie} -> d{predictedDie}` and its die-size glossary link.
  */
 export function DecisionCard({
   activeRatingThread,
@@ -153,7 +153,7 @@ export function DecisionCard({
             </p>
           ) : (
             <p className="text-[11px] font-bold text-stone-400">
-              <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+              <GlossaryLink id="die-size">d{currentDie} → d{predictedDie}</GlossaryLink>
             </p>
           )}
         </div>

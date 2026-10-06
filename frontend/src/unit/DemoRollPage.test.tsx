@@ -59,6 +59,7 @@ describe('DemoRollPage', () => {
 
     expect(screen.getByTestId('demo-rating-value')).toHaveTextContent('4.5')
     expect(screen.getByTestId('demo-rated')).toHaveTextContent('Rated 4.5')
+    expect(screen.getByTestId('demo-rated').textContent).toContain('Rated 4.5 — held')
     // The page owns exactly one read seam, so a demo rating cannot persist.
     expect(Object.keys(api)).toEqual(['roll'])
     expect(api.roll).toHaveBeenCalledTimes(1)

@@ -88,10 +88,10 @@ def test_retired_fixed_models_are_replaced_by_catalog_free_slots() -> None:
         worker for worker, row in rows_by_worker.items() if row[1] in CATALOG_SOURCES
     ]
     assert catalog_free_workers, "at least one catalog-free replacement lane must remain"
-    # Worker 29 is the durable catalog-free replacement slot. Worker 23 was
-    # converted to stealth/union-alpha and may be catalog-retired later.
-    assert "29" in rows_by_worker
-    assert rows_by_worker["29"][1] in CATALOG_SOURCES
+    # Worker 29 was retired by Factory Model Discovery once its
+    # qwen/qwen3.8-27b:free pin left OpenRouter; the slot stays unused.
+    assert "29" in REMOVED_WORKERS
+    assert "29" not in rows_by_worker
 
 
 def test_catalog_selection_fails_closed_when_every_candidate_is_cooling() -> None:

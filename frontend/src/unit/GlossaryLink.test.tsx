@@ -20,9 +20,9 @@ describe('GlossaryLink', () => {
       ['lane', 'Lane'],
       ['reading-order', 'Reading Order'],
       ['projection', 'Projection'],
-      ['die-ladder', 'Die'],
-      ['autoladder', 'Auto'],
-      ['dependency', 'Dependency rule'],
+      ['die-size', 'Die'],
+      ['auto', 'Auto'],
+      ['dependency-rule', 'Dependency rule'],
     ]
     render(
       <MemoryRouter>

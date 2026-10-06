@@ -1,5 +1,7 @@
 """Regression coverage for canonical Roll and rating v1 routes."""
 
+from collections.abc import Iterator
+
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
@@ -16,6 +18,34 @@ _ROLL_PATHS = (
 )
 
 
+def _iter_effective_api_routes(app: FastAPI) -> Iterator[tuple[str, APIRoute]]:
+    """Yield every effective ``APIRoute`` with its mounted path.
+
+    FastAPI 0.137+ keeps included routers as inclusion-tree nodes instead of
+    flat ``APIRoute`` entries, so descend through each node's original router
+    while accumulating its mount prefix.
+
+    Args:
+        app: FastAPI application under test.
+
+    Returns:
+        Iterator of ``(path, route)`` pairs for every effective API route.
+    """
+    stack: list[tuple[object, str]] = [(route, "") for route in app.routes]
+    while stack:
+        route, prefix = stack.pop(0)
+        if isinstance(route, APIRoute):
+            yield (f"{prefix}{route.path}", route)
+            continue
+        original_router = getattr(route, "original_router", None)
+        include_context = getattr(route, "include_context", None)
+        nested_routes = getattr(original_router, "routes", None)
+        if nested_routes is None or include_context is None:
+            continue
+        nested_prefix = f"{prefix}{getattr(include_context, 'prefix', '')}"
+        stack[0:0] = [(nested, nested_prefix) for nested in nested_routes]
+
+
 def _route_by_path(app: FastAPI, path: str) -> APIRoute:
     """Return the API route registered for a path.
 
@@ -28,8 +58,8 @@ def _route_by_path(app: FastAPI, path: str) -> APIRoute:
     """
     return next(
         route
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.path == path
+        for candidate_path, route in _iter_effective_api_routes(app)
+        if candidate_path == path
     )
 
 

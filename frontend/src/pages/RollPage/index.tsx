@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
@@ -153,6 +153,17 @@ export default function RollPage() {
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
   })
+
+  // Entering the rating view unmounts the Roll CTA that held keyboard focus,
+  // which drops focus to document.body and forces a keyboard user to re-tab
+  // through the whole shell to reach the result. The rating region owns the
+  // restore, so every entry path (roll, skip, read, stale read, recovery, and
+  // pending-session hydration) is covered by one effect instead of a
+  // per-caller timer (#3147).
+  useEffect(() => {
+    if (!state.isRatingView) return
+    ratingViewTopRef.current?.focus()
+  }, [state.isRatingView, ratingViewTopRef])
 
   const snooze = useRollSnooze({
     state,

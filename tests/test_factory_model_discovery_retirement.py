@@ -1297,9 +1297,25 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "worker": "76",
         "source": "opencode-free",
         "model": "fledge-alpha-free",
-        "minute": "30",
+        "minute": "0",
         "scheduler": "dispatcher",
         "display_name": "OpenCode Fledge Alpha Free",
+    }
+    assert by_worker["77"] == {
+        "worker": "77",
+        "source": "nvidia",
+        "model": "moonshotai/kimi-k3",
+        "minute": "35",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA Kimi K3",
+    }
+    assert by_worker["78"] == {
+        "worker": "78",
+        "source": "nvidia",
+        "model": "z-ai/glm-5.3",
+        "minute": "45",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA GLM 5.3",
     }
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in remaining}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in remaining}
@@ -1450,39 +1466,30 @@ def test_stealth_union_alpha_lock_stays_consistent_with_roster() -> None:
     assert ROSTER.schedule_is_balanced(rows)
 
 
-def test_committed_tsv_converts_surplus_pickle_to_openrouter_qwen38_27b() -> None:
-    """Worker 29 stays expected and pins Harvy-listed OpenRouter Qwen3.8 27B Free."""
+def test_committed_tsv_retires_worker_29_ghost_openrouter_qwen38_27b_free() -> None:
+    """Discovery retired worker 29 after ``qwen/qwen3.8-27b:free`` left OpenRouter.
+
+    Only the paid ``qwen/qwen3.8-27b`` id remains in the catalog. Discovery
+    must not fall back to the paid id, must not re-pin the free id, and must
+    leave the freed slot unused until a unique free model shows up.
+    """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
+    models = {row["model"] for row in rows}
 
-    assert 29 in lock["expected_workers"]
-    assert 29 not in lock["retired_workers"]
-    assert by_worker["21"]["source"] == "nvidia"
-    assert by_worker["21"]["model"] == "google/gemma-4-31b-it"
+    assert 29 not in lock["expected_workers"]
+    assert 29 in lock["retired_workers"]
+    assert "29" not in by_worker
+    assert "qwen/qwen3.8-27b:free" in lock["retired_models"]
+    assert "qwen/qwen3.8-27b:free" not in models
+    assert "qwen/qwen3.8-27b" not in models
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["54"]["source"] == "z-ai"
-    assert by_worker["54"]["model"] == "glm-4.5-flash"
-    assert by_worker["55"]["source"] == "ollama-cloud"
-    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
-    assert by_worker["56"]["source"] == "openrouter-free"
-    assert by_worker["56"]["model"] == "dots-studio/dots-3-note-preview:free"
-    assert "23" not in by_worker
-    assert by_worker["29"] == {
-        "worker": "29",
-        "source": "openrouter-free",
-        "model": "qwen/qwen3.8-27b:free",
-        "minute": "0",
-        "scheduler": "dispatcher",
-        "display_name": "OpenRouter Qwen3.8 27B Free",
-    }
-    assert by_worker["29"]["model"] not in lock["retired_models"]
-    assert "qwen/qwen3.8-27b:free" not in lock["retired_models"]
-    assert by_worker["29"]["model"].endswith(":free")
-    assert ROSTER.openrouter_model_is_free(by_worker["29"]["model"])
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
-    assert "qwen/qwen3.8-27b:free" in catalogs["openrouter"].model_ids()
+    assert "qwen/qwen3.8-27b:free" not in catalogs["openrouter"].model_ids()
+    assert "qwen/qwen3.8-27b" in catalogs["openrouter"].model_ids()
+    assert not ROSTER.openrouter_model_is_free("qwen/qwen3.8-27b")
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 

@@ -1,27 +1,27 @@
 """Guard the FastAPI route-introspection contract this codebase relies on.
 
-FastAPI 0.137.0 refactored ``include_router`` so that ``router.routes`` becomes
+FastAPI 0.137.0 refactored ``include_router`` so that ``router.routes`` holds
 a tree of router-inclusion nodes instead of a flat list of ``APIRoute``
-objects, and it stopped reporting the effective mounted path through
-``scope["route"].path``. Both are load-bearing here: every API surface in
-``app/main.py`` is mounted with ``include_router``, ``app/traffic_metrics.py``
-derives per-route request counters from ``scope["route"].path``, and the
-route-surface guards under ``tests/`` flatten ``app.routes``.
+objects. Included routes are reached by recursing through each node's
+``original_router.routes`` while accumulating its ``include_context.prefix``,
+and the effective mounted template for a request lives on the per-request
+effective route context (``scope["fastapi"]["effective_route_context"]``)
+because ``scope["route"]`` is now the original, unprefixed route.
 
-On 0.137+ both surfaces silently degrade instead of raising: included routes
-vanish from ``app.routes``, and ``scope["route"].path`` reverts to the
-unprefixed sub-router path, so distinct endpoints collapse onto the same
-traffic-metrics bucket. ``pyproject.toml`` therefore caps FastAPI below 0.137
-until the route-introspection layer is migrated off internals that upstream
-documented as no longer public API. These tests fail loudly if that cap is
-lifted before the migration happens.
+Every API surface in ``app/main.py`` is mounted with ``include_router``,
+``app/traffic_metrics.py`` resolves per-route request counters through
+:func:`app.traffic_metrics.resolve_route_template`, and the route-surface
+guards under ``tests/`` flatten ``app.routes`` with the same recursion. These
+tests fail loudly if a future FastAPI release changes either surface again.
 """
 
-import fastapi
+from collections.abc import Sequence
+
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.routing import APIRoute
 from httpx import ASGITransport, AsyncClient
 
+from app.traffic_metrics import resolve_route_template
 
 _MOUNT_PREFIX = "/api/v1/probes"
 
@@ -47,28 +47,41 @@ def _build_included_router_app(captured: dict[str, object]) -> FastAPI:
     return app
 
 
-def _flat_route_paths(app: FastAPI) -> set[str]:
-    """Collect the paths of every ``APIRoute`` reachable from ``app.routes``.
+def _flat_route_paths(routes: Sequence[object], prefix: str = "") -> set[str]:
+    """Collect effective paths, descending into router-inclusion nodes.
 
     Args:
-        app: FastAPI application to inspect.
+        routes: Route list from an application or an included router.
+        prefix: Accumulated mount prefix from outer inclusion nodes.
 
     Returns:
-        Paths of the routes that a flat ``app.routes`` scan can observe.
+        Effective paths of every reachable route.
     """
-    return {route.path for route in app.routes if isinstance(route, APIRoute)}
+    paths: set[str] = set()
+    for route in routes:
+        if isinstance(route, APIRoute):
+            paths.add(f"{prefix}{route.path}")
+            continue
+        original_router = getattr(route, "original_router", None)
+        include_context = getattr(route, "include_context", None)
+        nested_routes = getattr(original_router, "routes", None)
+        if nested_routes is None or include_context is None:
+            continue
+        nested_prefix = f"{prefix}{getattr(include_context, 'prefix', '')}"
+        paths.update(_flat_route_paths(nested_routes, prefix=nested_prefix))
+    return paths
 
 
 def test_included_router_routes_remain_flat_and_prefixed() -> None:
-    """``app.routes`` must expose included routes as flat, prefixed paths."""
+    """Included routes must flatten to their effective prefixed paths."""
     captured: dict[str, object] = {}
     app = _build_included_router_app(captured)
 
-    assert f"{_MOUNT_PREFIX}/widgets/{{widget_id}}" in _flat_route_paths(app)
+    assert f"{_MOUNT_PREFIX}/widgets/{{widget_id}}" in _flat_route_paths(app.routes)
 
 
-async def test_matched_scope_route_reports_the_effective_mounted_path() -> None:
-    """``scope["route"].path`` must stay the effective mounted path template."""
+async def test_effective_route_template_reports_the_mounted_path() -> None:
+    """The resolved template must stay the effective mounted path template."""
     captured: dict[str, object] = {}
     app = _build_included_router_app(captured)
 
@@ -78,16 +91,27 @@ async def test_matched_scope_route_reports_the_effective_mounted_path() -> None:
 
     assert response.status_code == 200
     scope = captured["scope"]
-    route = scope.get("route") if isinstance(scope, dict) else None
-    assert getattr(route, "path", None) == f"{_MOUNT_PREFIX}/widgets/{{widget_id}}"
-
-
-def test_pinned_fastapi_still_provides_the_flat_route_contract() -> None:
-    """The installed FastAPI must predate the router-tree refactor in 0.137.0."""
-    version = tuple(int(part) for part in fastapi.__version__.split(".")[:2])
-    assert version < (0, 137), (
-        f"FastAPI {fastapi.__version__} replaced app.routes with a router "
-        "inclusion tree and stopped reporting effective mounted paths. Migrate "
-        "app/traffic_metrics.py and the tests/* route-surface guards off "
-        "router.routes before lifting the <0.137.0 ceiling in pyproject.toml."
+    assert isinstance(scope, dict)
+    assert (
+        resolve_route_template(scope) == f"{_MOUNT_PREFIX}/widgets/{{widget_id}}"
     )
+
+
+async def test_direct_routes_still_resolve_without_inclusion_nodes() -> None:
+    """Directly registered routes resolve through the matched route fallback."""
+    captured: dict[str, object] = {}
+    app = FastAPI()
+
+    @app.get("/direct/{name}")
+    async def read_direct(name: str, request: Request) -> dict[str, str]:
+        captured["scope"] = request.scope
+        return {"name": name}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://probe") as client:
+        response = await client.get("/direct/bob")
+
+    assert response.status_code == 200
+    scope = captured["scope"]
+    assert isinstance(scope, dict)
+    assert resolve_route_template(scope) == "/direct/{name}"

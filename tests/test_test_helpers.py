@@ -179,6 +179,41 @@ async def test_create_test_issue_identity_requires_scope_target() -> None:
     db.execute.assert_not_awaited()
 
 
+def _effective_route_paths(app: object) -> set[str]:
+    """Collect effective route paths, descending into router-inclusion nodes.
+
+    FastAPI 0.137+ keeps included routers as inclusion-tree nodes instead of
+    flat route entries, so recurse through each node's original router while
+    accumulating its mount prefix.
+
+    Args:
+        app: FastAPI application instance.
+
+    Returns:
+        Effective paths of every reachable route.
+    """
+    paths: set[str] = set()
+    stack: list[tuple[object, str]] = [
+        (route, "") for route in getattr(app, "routes", [])
+    ]
+    while stack:
+        route, prefix = stack.pop(0)
+        route_path = getattr(route, "path", None)
+        if isinstance(route_path, str) and not hasattr(route, "original_router"):
+            paths.add(f"{prefix}{route_path}")
+            continue
+        original_router = getattr(route, "original_router", None)
+        include_context = getattr(route, "include_context", None)
+        nested_routes = getattr(original_router, "routes", None)
+        if nested_routes is None or include_context is None:
+            if isinstance(route_path, str):
+                paths.add(f"{prefix}{route_path}")
+            continue
+        nested_prefix = f"{prefix}{getattr(include_context, 'prefix', '')}"
+        stack[0:0] = [(nested, nested_prefix) for nested in nested_routes]
+    return paths
+
+
 def test_test_helper_routes_are_mounted_only_in_test_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -187,11 +222,7 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
 
     monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     production_app = create_app(serve_frontend=False)
-    production_paths: set[str] = set()
-    for route in production_app.routes:
-        route_path = getattr(route, "path", None)
-        if isinstance(route_path, str):
-            production_paths.add(route_path)
+    production_paths = _effective_route_paths(production_app)
     assert not any(path.startswith("/api/test/") for path in production_paths)
     assert not {
         "/api/test/reading-orders",
@@ -202,11 +233,7 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
 
     monkeypatch.setenv("TEST_ENVIRONMENT", "true")
     test_app = create_app(serve_frontend=False)
-    test_paths: set[str] = set()
-    for route in test_app.routes:
-        route_path = getattr(route, "path", None)
-        if isinstance(route_path, str):
-            test_paths.add(route_path)
+    test_paths = _effective_route_paths(test_app)
     assert {
         "/api/test/reading-orders",
         "/api/test/issue-identity",

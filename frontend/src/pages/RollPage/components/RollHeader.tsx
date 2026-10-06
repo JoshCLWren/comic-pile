@@ -238,8 +238,8 @@ export function RollHeader({
                   </div>
                 </div>
                 <div className="text-right">
-                  <Tooltip content="The die picks randomly from the series that are ready to read. Sizes run d4→d6→d8→d10→d12→d20→d30→d50→d100 — a larger die means more series in the roll.">
-                    <GlossaryLink id="die-ladder">
+                  <Tooltip content="The die picks randomly from the series in play. Sizes run d4→d6→d8→d10→d12→d20→d30→d50→d100 — a larger die means more series in the roll.">
+                    <GlossaryLink id="die-size">
                       <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-black uppercase tracking-wider text-stone-500">
                         Die
                       </span>
