@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.comicvine_hydration import extract_thumbnail_url
 from app.external_identities import (
     ExternalIdentityMappingError,
     link_issue_external_identity,
@@ -145,7 +144,7 @@ async def search_comicvine_series(
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
-            image_url = extract_thumbnail_url(image_raw)
+            image_url = image_raw.get("medium_url") or image_raw.get("small_url")
         series_results.append(
             ComicVineSeriesResult(
                 comicvine_volume_id=volume_id,
@@ -220,7 +219,7 @@ async def get_comicvine_series_issues(
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
-            image_url = extract_thumbnail_url(image_raw)
+            image_url = image_raw.get("small_url") or image_raw.get("thumb_url")
         candidates.append(
             ComicVineIssueCandidate(
                 comicvine_issue_id=issue_id,
@@ -252,13 +251,14 @@ async def get_comicvine_series_issues(
 
 
 def _provider_image_url(image_raw: object) -> str | None:
-    """Extract the bounded-size image URL used by resolve/search confirmation cards.
-
-    Resolve and search confirmation cards render covers at thumbnail sizes, so
-    they take the same bounded-size preference as the provider search lists
-    instead of the full-page cover rendition.
-    """
-    return extract_thumbnail_url(image_raw)
+    """Extract the best available image URL from a ComicVine image object."""
+    if not isinstance(image_raw, dict):
+        return None
+    for key in ("medium_url", "small_url", "super_url", "thumb_url"):
+        candidate = image_raw.get(key)
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return None
 
 
 def _provider_string(value: object) -> str | None:

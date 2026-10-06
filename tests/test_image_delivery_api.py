@@ -20,6 +20,7 @@ from app.services import image_delivery
 from app.services.image_delivery import (
     InvalidImageSourceError,
     UpstreamImageUnavailableError,
+    canonicalize_source_url,
     fetch_upstream,
     optimize_remote_image,
     resolve_variant_width,
@@ -28,6 +29,22 @@ from app.services.image_delivery import (
 
 ALLOWED_HOST = "comicvine.gamespot.com"
 ALLOWED_SOURCE = f"https://{ALLOWED_HOST}/a/uploads/scale_large/0/1/100-1.jpg"
+# ComicVine publishes every cover rendition under a ``*_url`` key whose value is a
+# ``static*.comicvine.com`` alias. The CDN redirects each one to the same path on
+# the canonical origin, and the optimizer never follows redirects, so these are
+# the URLs that used to render as the COMIC COVER placeholder (#3158).
+COMICVINE_IMAGE_CDN_HOSTS = (
+    "static.comicvine.com",
+    "static1.comicvine.com",
+    "static2.comicvine.com",
+    "static3.comicvine.com",
+    "static4.comicvine.com",
+    "static5.comicvine.com",
+)
+COMICVINE_COVER_SOURCE = "https://static.comicvine.com/uploads/super/50/453414_hulk.jpg"
+COMICVINE_CANONICAL_COVER_SOURCE = (
+    "https://comicvine.gamespot.com/a/uploads/super/50/453414_hulk.jpg"
+)
 
 
 def _png_bytes(width: int = 800, height: int = 1200) -> bytes:
@@ -114,6 +131,37 @@ class TestSourceUrlValidation:
         """The legacy www.comicvine.com image host is also accepted."""
         url = "https://www.comicvine.com/api/image/scale_large/1-2.jpg"
         assert validate_source_url(url) == url
+
+    @pytest.mark.parametrize("host", COMICVINE_IMAGE_CDN_HOSTS)
+    def test_comicvine_image_cdn_hosts_resolve_to_the_canonical_origin(self, host: str) -> None:
+        """Every published ComicVine cover alias maps onto the serving origin."""
+        url = f"https://{host}/uploads/super/50/453414_hulk.jpg"
+
+        assert canonicalize_source_url(url) == COMICVINE_CANONICAL_COVER_SOURCE
+
+    def test_canonicalization_is_idempotent_and_query_preserving(self) -> None:
+        """An already-canonical URL is untouched and the rendition query survives."""
+        assert (
+            canonicalize_source_url(COMICVINE_CANONICAL_COVER_SOURCE)
+            == COMICVINE_CANONICAL_COVER_SOURCE
+        )
+        assert (
+            canonicalize_source_url(f"{COMICVINE_COVER_SOURCE}?v=2")
+            == f"{COMICVINE_CANONICAL_COVER_SOURCE}?v=2"
+        )
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            ALLOWED_SOURCE,
+            "https://www.comicvine.com/api/image/scale_large/1-2.jpg",
+            "https://evil.example.com/a/uploads/x.jpg",
+            "not-a-url",
+        ],
+    )
+    def test_non_comicvine_cdn_urls_are_left_alone(self, url: str) -> None:
+        """Only the known alias set is rewritten, so no other host is remapped."""
+        assert canonicalize_source_url(url) == url
 
     def test_rejects_disallowed_host(self) -> None:
         """Hosts outside the allowlist are rejected."""
@@ -368,6 +416,44 @@ class TestOptimizeEndpoint:
         assert "immutable" in cache_control
         assert response.headers["x-comicpile-image-width"] == "240"
         assert _image_dimensions(response.content)[0] <= 240
+
+    async def test_comicvine_cover_cdn_source_is_served_not_rejected(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        client: httpx.AsyncClient,
+        endpoint_url: str,
+    ) -> None:
+        """A real ComicVine cover URL is delivered instead of rejected (#3158).
+
+        The Roll card renders every remote cover through this endpoint. The cover
+        URL ComicVine publishes could not be delivered: its CDN host is not on the
+        allowlist, and the CDN alias redirects to an origin the optimizer refuses
+        to follow. Either way the browser saw a failed image load and rendered
+        the COMIC COVER placeholder even though the API had returned a perfectly
+        good ``image_url``.
+        """
+        _allow_all_resolver(monkeypatch)
+        requested: list[str] = []
+
+        async def _fetch(
+            url: str,
+            *,
+            transport: httpx.AsyncBaseTransport | None = None,
+        ) -> tuple[bytes, str]:
+            requested.append(url)
+            return _png_bytes(width=900, height=1350), "image/jpeg"
+
+        monkeypatch.setattr(image_delivery, "fetch_upstream", _fetch)
+
+        response = await client.get(
+            endpoint_url,
+            params={"url": COMICVINE_COVER_SOURCE, "width": 720},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("image/webp")
+        assert response.headers["cache-control"] != "no-store"
+        assert requested == [COMICVINE_CANONICAL_COVER_SOURCE]
 
     async def test_disallowed_host_is_a_bad_request_without_caching(
         self,

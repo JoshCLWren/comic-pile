@@ -27,7 +27,6 @@ from app.schemas.identity_inbox import (
     IdentityInboxSearchResult,
 )
 from comic_pile.comicvine_provider import ComicVineClient
-from app.comicvine_hydration import extract_image_url
 
 logger = logging.getLogger(__name__)
 
@@ -451,7 +450,7 @@ async def search_comicvine_issues(
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
-            image_url = extract_image_url(image_raw)
+            image_url = image_raw.get("medium_url") or image_raw.get("small_url")
 
         cover_date = row.get("cover_date")
         start_year = None

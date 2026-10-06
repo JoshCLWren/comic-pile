@@ -23,7 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.thread import normalize_format_value
 from app.repositories import roll_v2_projection as projection_repo
-from app.comicvine_hydration import extract_image_url
 from app.schemas.roll_v2 import (
     IdentityState,
     ProgressScope,
@@ -110,7 +109,13 @@ def extract_cover_source(metadata: dict[str, object] | None) -> str | None:
     direct = _string(metadata.get("image_url")) or _string(metadata.get("primary_image"))
     if direct:
         return direct
-    return extract_image_url(metadata.get("image"))
+    image = metadata.get("image")
+    if isinstance(image, dict):
+        for key in ("original_url", "super_url", "medium_url", "small_url"):
+            candidate = _string(image.get(key))
+            if candidate:
+                return candidate
+    return None
 
 
 def build_cover_url(source: str | None) -> str | None:

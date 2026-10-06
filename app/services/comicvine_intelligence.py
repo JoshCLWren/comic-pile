@@ -18,7 +18,6 @@ from app.schemas.comicvine import (
     ComicVineRelatedIssue,
     ComicVineStoryArc,
 )
-from app.comicvine_hydration import extract_image_url
 from app.services.comicvine_fallback import (
     metadata_needs_hydration,
     refresh_issue_metadata,
@@ -84,7 +83,13 @@ def _image(metadata: dict[str, object]) -> str | None:
     direct = _string(metadata.get("image_url")) or _string(metadata.get("primary_image"))
     if direct:
         return direct
-    return extract_image_url(metadata.get("image"))
+    image = metadata.get("image")
+    if isinstance(image, dict):
+        for key in ("original_url", "super_url", "medium_url", "small_url"):
+            candidate = _string(image.get(key))
+            if candidate:
+                return candidate
+    return None
 
 
 def _creators(metadata: dict[str, object]) -> list[ComicVineCreator]:

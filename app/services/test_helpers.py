@@ -152,7 +152,7 @@ async def create_test_issue_identity(
             "issue_number": issue_number,
             "cover_date": "2025-06-01",
             "store_date": "2025-06-01",
-            "image": dict.fromkeys(("super", "medium", "small"), image_url) if image_url else {},
+            "image": {"original_url": image_url, "medium_url": image_url} if image_url else {},
             "volume": {"id": series_id, "name": series_name},
             "person_credits": [
                 {"name": "Fixture Writer", "role": "writer"},

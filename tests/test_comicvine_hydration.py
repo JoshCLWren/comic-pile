@@ -8,6 +8,7 @@ from typing import cast
 import pytest
 
 import app.comicvine_hydration as hydration
+from app.services.image_delivery import canonicalize_source_url, validate_source_url
 from comic_pile.comicvine_provider import ComicVineError, ComicVineResponse
 
 
@@ -99,57 +100,43 @@ def test_provider_timestamp_is_tolerant(value: object, expected: str | None) -> 
     assert (parsed.isoformat() if parsed else None) == expected
 
 
-def test_normalize_issue_uses_real_comicvine_image_keys() -> None:
-    """Issue normalization must pick the best image from provider-native keys.
+def test_stored_cover_from_a_real_provider_row_is_deliverable() -> None:
+    """The cover ComicVine returns must survive ComicPile's image delivery gate.
 
-    The singular ComicVine resource exposes its image object using native keys
-    (super, screen_large, large, medium, small, icon), not _url-suffixed keys.
-    Repro for #3158.
+    ``comicvine.gamespot.com/api`` exposes each rendition under a ``_url`` key and
+    publishes the value as a ``static*.comicvine.com`` alias, so that is what gets
+    stored in ``ExternalIdentity.metadata_json`` and what the Roll card asks the
+    image optimizer to fetch. If the delivery layer cannot resolve that alias the
+    request fails, the card reports a failed image load, and a mapped issue renders
+    the generic COMIC COVER placeholder while its creators and story title still
+    render. Regression for #3158.
     """
     raw: dict[str, object] = {
         "id": 453414,
         "name": "Who Shot the Hulk Part 3",
         "issue_number": "3",
-        "volume_id": 23834,
-        "volume_name": "Hulk (2014)",
-        "cover_date": "1992-01-01",
-        "store_date": "1991-12-11",
+        "volume": {"id": 23834, "name": "Hulk (2014)"},
         "image": {
-            "super": "https://www.comicvine.com/uploads/super/0/453414.jpg",
-            "screen_large": "https://www.comicvine.com/uploads/screen_large/0/453414.jpg",
-            "large": "https://www.comicvine.com/uploads/large/0/453414.jpg",
-            "medium": "https://www.comicvine.com/uploads/medium/0/453414.jpg",
-            "small": "https://www.comicvine.com/uploads/small/0/453414.jpg",
-            "icon": "https://www.comicvine.com/uploads/icon/0/453414.jpg",
+            "original_url": "https://static.comicvine.com/uploads/original/50/453414_hulk.jpg",
+            "super_url": "https://static.comicvine.com/uploads/super/50/453414_hulk.jpg",
+            "screen_large_url": (
+                "https://static.comicvine.com/uploads/screen_large/50/453414_hulk.jpg"
+            ),
+            "medium_url": "https://static.comicvine.com/uploads/medium/50/453414_hulk.jpg",
+            "small_url": "https://static.comicvine.com/uploads/small/50/453414_hulk.jpg",
+            "thumb_url": "https://static.comicvine.com/uploads/thumb/50/453414_hulk.jpg",
+            "tiny_url": "https://static.comicvine.com/uploads/tiny/50/453414_hulk.jpg",
+            "icon_url": "https://static.comicvine.com/uploads/icon/50/453414_hulk.jpg",
         },
         "person_credits": [{"id": 1001, "name": "Peter David", "role": "writer"}],
     }
 
-    normalized = hydration.normalize_issue(raw)
+    primary_image = hydration.normalize_issue(raw)["primary_image"]
 
-    assert normalized["primary_image"] == "https://www.comicvine.com/uploads/super/0/453414.jpg"
-    assert normalized["name"] == "Who Shot the Hulk Part 3"
-    assert normalized["raw_provider_payload"] is raw
-
-
-def test_normalize_volume_uses_real_comicvine_image_keys() -> None:
-    """Volume normalization must pick the best image from provider-native keys."""
-    raw: dict[str, object] = {
-        "id": 23834,
-        "name": "Hulk (2014)",
-        "publisher": {"id": 7, "name": "Marvel"},
-        "start_year": "2008",
-        "count_of_issues": 31,
-        "image": {
-            "super": "https://www.comicvine.com/uploads/super/0/23834.jpg",
-            "medium": "https://www.comicvine.com/uploads/medium/0/23834.jpg",
-        },
-    }
-
-    normalized = hydration.normalize_volume(raw)
-
-    assert normalized["primary_image"] == "https://www.comicvine.com/uploads/super/0/23834.jpg"
-    assert normalized["raw_provider_payload"] is raw
+    assert isinstance(primary_image, str)
+    assert validate_source_url(canonicalize_source_url(primary_image)) == (
+        "https://comicvine.gamespot.com/a/uploads/original/50/453414_hulk.jpg"
+    )
 
 
 @pytest.mark.asyncio

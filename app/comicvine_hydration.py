@@ -55,113 +55,6 @@ def _compact_references(value: object) -> list[dict[str, object]]:
     return result
 
 
-# Key names for the ``image`` object of a ComicVine resource, ordered from the
-# highest-quality rendition to the lowest.
-#
-# The classic provider endpoint used by this repository
-# (``https://comicvine.gamespot.com/api``) emits ``_url``-suffixed keys. Some
-# normalized or third-party payloads instead drop the suffix and expose bare
-# names. Both shapes are accepted so a provider payload never loses its cover
-# merely because of which naming convention it used.
-_PROVIDER_IMAGE_KEYS_BY_QUALITY = (
-    "super",
-    "screen_large",
-    "large",
-    "original_url",
-    "super_url",
-    "screen_large_url",
-    "large_url",
-    "medium",
-    "medium_url",
-    "small",
-    "small_url",
-    "screen_url",
-    "thumb_url",
-    "tiny_url",
-    "icon",
-    "icon_url",
-)
-
-# Bounded-size renditions first, then the large ones as a last resort. List and
-# search surfaces render these at thumbnail sizes, so they must not be forced
-# to download full-page cover art from the provider.
-_PROVIDER_IMAGE_THUMB_KEYS_BY_QUALITY = (
-    "medium",
-    "small",
-    "icon",
-    "medium_url",
-    "small_url",
-    "screen_url",
-    "thumb_url",
-    "tiny_url",
-    "icon_url",
-    "screen_large",
-    "large",
-    "super",
-    "screen_large_url",
-    "large_url",
-    "super_url",
-    "original_url",
-)
-
-
-def _first_image_url(image_raw: object, keys: tuple[str, ...]) -> str | None:
-    """Return the first non-empty string image URL among ``keys`` in ``image_raw``.
-
-    Args:
-        image_raw: Raw ``image`` field of a ComicVine resource, or any other value.
-        keys: Image object keys to probe, in preference order.
-
-    Returns:
-        The best available image URL as a non-empty string, or ``None``.
-    """
-    if not isinstance(image_raw, dict):
-        return None
-    for key in keys:
-        candidate = image_raw.get(key)
-        if isinstance(candidate, str) and candidate:
-            return candidate
-    return None
-
-
-def extract_image_url(image_raw: object) -> str | None:
-    """Extract the best available cover image URL from a ComicVine image object.
-
-    Cover surfaces (Roll cards, issue intelligence) want the highest-quality
-    rendition the provider offers. The classic ``_url``-suffixed keys emitted by
-    ``comicvine.gamespot.com/api`` and the bare names used by normalized
-    payloads are both recognized.
-
-    Args:
-        image_raw: The raw ``image`` field of a ComicVine resource, or another
-            value when no image object is available.
-
-    Returns:
-        The best available image URL as a non-empty string, or ``None`` when the
-        field is absent or empty.
-    """
-    return _first_image_url(image_raw, _PROVIDER_IMAGE_KEYS_BY_QUALITY)
-
-
-def extract_thumbnail_url(image_raw: object) -> str | None:
-    """Extract the best bounded-size image URL for list and search surfaces.
-
-    Search dialogs, identity-inbox candidate lists, and resolve confirmation
-    cards render covers at thumbnail sizes. They must prefer medium/small
-    renditions so fetching a candidate row never downloads full-page cover art.
-    Large renditions are only used when no bounded-size rendition exists.
-
-    Args:
-        image_raw: The raw ``image`` field of a ComicVine resource, or another
-            value when no image object is available.
-
-    Returns:
-        The best available thumbnail URL as a non-empty string, or ``None`` when
-        the field is absent or empty.
-    """
-    return _first_image_url(image_raw, _PROVIDER_IMAGE_THUMB_KEYS_BY_QUALITY)
-
-
 def normalize_issue(result: dict[str, object]) -> dict[str, object]:
     """Normalize useful singular issue metadata while retaining the complete raw provider row.
 
@@ -172,7 +65,14 @@ def normalize_issue(result: dict[str, object]) -> dict[str, object]:
         Stable metadata suitable for ``ExternalIdentity.metadata_json``.
     """
     volume = _compact_reference(result.get("volume"))
-    primary_image = extract_image_url(result.get("image"))
+    image = result.get("image") if isinstance(result.get("image"), dict) else None
+    primary_image = None
+    if isinstance(image, dict):
+        for key in ("original_url", "super_url", "medium_url", "small_url"):
+            candidate = image.get(key)
+            if isinstance(candidate, str) and candidate:
+                primary_image = candidate
+                break
     return {
         "name": result.get("name"),
         "issue_number": result.get("issue_number"),
@@ -198,7 +98,14 @@ def normalize_volume(result: dict[str, object]) -> dict[str, object]:
         Stable metadata suitable for ``ExternalIdentity.metadata_json``.
     """
     publisher = _compact_reference(result.get("publisher"))
-    primary_image = extract_image_url(result.get("image"))
+    image = result.get("image") if isinstance(result.get("image"), dict) else None
+    primary_image = None
+    if isinstance(image, dict):
+        for key in ("original_url", "super_url", "medium_url", "small_url"):
+            candidate = image.get(key)
+            if isinstance(candidate, str) and candidate:
+                primary_image = candidate
+                break
     return {
         "name": result.get("name"),
         "publisher": publisher,
