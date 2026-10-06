@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     func,
@@ -76,6 +77,9 @@ class Thread(Base):
         DateTime(timezone=True), nullable=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    manual_creator_credits: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
     is_test: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

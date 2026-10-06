@@ -145,6 +145,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         notes: thread.notes || '',
         issues: '',
         lastIssueRead: 0,
+        manualCreatorCredits: (thread as any).manual_creator_credits || [],
       })
       setOpenModal('edit')
       setRestoreAction(() => {
@@ -156,6 +157,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           notes: thread.notes || '',
           issues: '',
           lastIssueRead: 0,
+          manualCreatorCredits: (thread as any).manual_creator_credits || [],
         })
         setOpenModal('edit')
       })
@@ -285,6 +287,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           format: createForm.format,
           issues_remaining: issuesRemaining,
           notes: createForm.notes || null,
+          manual_creator_credits: createForm.manualCreatorCredits,
         })) as { id?: number } | null
 
         if (hasIssueRange && result?.id) {
@@ -336,6 +339,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           title: editForm.title,
           format: editForm.format,
           notes: editForm.notes || null,
+          manual_creator_credits: editForm.manualCreatorCredits,
         }
         if (editingThread.total_issues == null) {
           data.issues_remaining = Number(editForm.issuesRemaining)

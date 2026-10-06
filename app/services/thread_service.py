@@ -230,6 +230,7 @@ def to_queue_list_item(
         notes=tr.notes,
         created_at=tr.created_at,
         comicvine_mapping=comicvine_mapping,
+        manual_creator_credits=tr.manual_creator_credits,
     )
 
 
@@ -507,6 +508,7 @@ async def create_thread_with_retry(
                 queue_position=max_position + 1,
                 user_id=user_id,
                 notes=thread_data.notes,
+                manual_creator_credits=thread_data.manual_creator_credits,
                 is_test=thread_data.is_test,
             )
             await thread_repository.insert_thread(db, new_thread)
@@ -584,6 +586,8 @@ async def update_thread(
                 thread.status = "active"
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
+    if thread_data.manual_creator_credits is not None:
+        thread.manual_creator_credits = thread_data.manual_creator_credits
     if thread_data.is_test is not None:
         thread.is_test = thread_data.is_test
     await db.commit()

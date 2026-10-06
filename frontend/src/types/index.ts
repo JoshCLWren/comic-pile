@@ -33,18 +33,25 @@ export interface ThreadQueryParams {
   page_token?: string;
 }
 
+export interface ManualCreatorCredit {
+  name: string;
+  roles: string[];
+}
+
 export interface ThreadCreatePayload {
   title: string;
   format: string;
   issues_remaining: number;
   total_issues?: number;
   notes?: string | null;
+  manual_creator_credits?: ManualCreatorCredit[];
 }
 
 export interface ThreadUpdatePayload {
   title?: string;
   format?: string;
   notes?: string | null;
+  manual_creator_credits?: ManualCreatorCredit[];
 }
 
 export interface MoveToPositionPayload {

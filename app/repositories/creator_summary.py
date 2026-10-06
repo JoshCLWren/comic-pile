@@ -138,19 +138,66 @@ def extract_creator_credits(metadata: dict[str, Any]) -> list[CreatorCredit]:
     return credits
 
 
+def extract_manual_creator_credits(manual_credits: list[dict[str, object]]) -> list[CreatorCredit]:
+    """Extract deduplicated creator credits from manual thread metadata.
+
+    Manual credits use a synthetic external_id (negative, derived from hash of name)
+    so they can be aggregated alongside provider credits without collisions.
+
+    Args:
+        manual_credits: List of manual creator credit dicts with 'name' and 'roles'.
+
+    Returns:
+        One :class:`CreatorCredit` per distinct (synthetic id, role set).
+    """
+    credits: list[CreatorCredit] = []
+    seen: set[tuple[int, tuple[str, ...]]] = set()
+    for item in manual_credits:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        role_value = item.get("roles")
+        roles: tuple[str, ...] = ()
+        if role_value is not None:
+            if isinstance(role_value, list):
+                parsed = {str(part).strip() for part in role_value if str(part).strip()}
+            elif isinstance(role_value, str):
+                parsed = {part.strip() for part in role_value.split(",") if part.strip()}
+            else:
+                parsed = set()
+            roles = tuple(sorted(parsed))
+        # Synthetic external_id: negative hash of name to avoid collisions with provider IDs
+        synthetic_id = -abs(hash(name.strip().lower())) % 1_000_000_000 - 1
+        dedupe = (synthetic_id, roles)
+        if dedupe in seen:
+            continue
+        seen.add(dedupe)
+        credits.append(
+            CreatorCredit(
+                external_id=synthetic_id,
+                roles=roles,
+                display_name=name.strip(),
+            )
+        )
+    return credits
+
+
 async def load_creator_summary_inputs(
     db: AsyncSession,
     user_id: int,
 ) -> CreatorSummaryInputs:
     """Load every user-scoped input needed for one bounded batch aggregation.
 
-    The batch is served by exactly three queries no matter how many creator
+    The batch is served by exactly four queries no matter how many creator
     keys are requested:
 
     1. the authenticated user's owned issues, their read/unread status, and
        their stable local thread/series identity;
     2. confirmed ComicVine issue metadata for those issues (creator credits);
-    3. the latest effective ``rate`` event rating per owned issue.
+    3. manual thread-level creator credits for threads without issue metadata;
+    4. the latest effective ``rate`` event rating per owned issue.
 
     Args:
         db: Async database session.
@@ -161,21 +208,25 @@ async def load_creator_summary_inputs(
     """
     # 1. Owned issues, statuses, and stable local series identity.
     issue_result = await db.execute(
-        select(Issue.id, Issue.status, Issue.thread_id, Thread.title)
+        select(Issue.id, Issue.status, Issue.thread_id, Thread.title, Thread.manual_creator_credits)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
     owned_issues: dict[int, str] = {}
     owned_issue_series: dict[int, OwnedIssueSeries] = {}
-    for issue_id, status, thread_id, thread_title in issue_result.all():
+    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
+    for issue_id, status, thread_id, thread_title, manual_credits in issue_result.all():
         owned_issue_id = int(issue_id)
         owned_issues[owned_issue_id] = str(status)
         owned_issue_series[owned_issue_id] = OwnedIssueSeries(
             thread_id=int(thread_id),
             thread_title=str(thread_title),
         )
+        thread_id_int = int(thread_id)
+        if manual_credits and thread_id_int not in thread_manual_credits:
+            thread_manual_credits[thread_id_int] = manual_credits
 
-    # 2. Confirmed creator credits per owned issue.
+    # 2. Confirmed creator credits per owned issue (ComicVine).
     metadata_result = await db.execute(
         select(Issue.id, ExternalIdentity.metadata_json)
         .join(Thread, Thread.id == Issue.thread_id)
@@ -203,6 +254,20 @@ async def load_creator_summary_inputs(
         by_key = per_issue_credits.setdefault(owned_issue_id, {})
         for credit in credits:
             by_key.setdefault((credit.external_id, credit.roles), credit)
+
+    # 3. Manual thread-level creator credits for issues without ComicVine metadata.
+    for issue_id, series in owned_issue_series.items():
+        if issue_id in issues_with_creator_metadata:
+            continue
+        manual_credits = thread_manual_credits.get(series.thread_id, [])
+        if manual_credits:
+            credits = extract_manual_creator_credits(manual_credits)
+            if credits:
+                issues_with_creator_metadata.add(issue_id)
+                by_key = per_issue_credits.setdefault(issue_id, {})
+                for credit in credits:
+                    by_key.setdefault((credit.external_id, credit.roles), credit)
+
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = {
         issue_id: tuple(
             sorted(by_key.values(), key=lambda credit: (credit.external_id, credit.roles))
@@ -210,7 +275,7 @@ async def load_creator_summary_inputs(
         for issue_id, by_key in per_issue_credits.items()
     }
 
-    # 3. Latest effective rating per owned issue (latest event wins).
+    # 4. Latest effective rating per owned issue (latest event wins).
     rate_result = await db.execute(
         select(Event.issue_id, Event.rating)
         .join(Issue, Issue.id == Event.issue_id)
@@ -241,5 +306,6 @@ __all__ = [
     "CreatorSummaryInputs",
     "OwnedIssueSeries",
     "extract_creator_credits",
+    "extract_manual_creator_credits",
     "load_creator_summary_inputs",
 ]
