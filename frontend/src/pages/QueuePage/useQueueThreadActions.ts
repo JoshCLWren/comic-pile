@@ -21,7 +21,12 @@ import { getApiErrorDetail } from '../../utils/apiError'
 
 interface UseQueueThreadActionsParams {
   navigateToRoll: (thread: ThreadListItem, response: unknown) => void
-  refetchSession: () => Promise<void>
+  /**
+   * Refreshes the current session after a row action. The caller only needs to
+   * settle, so any promise-producing refetch fits — `useSession`'s `refetch`
+   * resolves with a query result rather than `void` (issue #3147).
+   */
+  refetchSession: () => Promise<unknown>
   /**
    * Returns focus to a row's "Series actions" trigger once the queue cache has
    * settled. The reset that follows a queue mutation remounts every row, so
