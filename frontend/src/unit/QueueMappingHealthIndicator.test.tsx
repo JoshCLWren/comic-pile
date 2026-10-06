@@ -126,6 +126,54 @@ describe('QueueMappingHealthIndicator', () => {
     expect(screen.queryByTestId('queue-mapping-health')).not.toBeInTheDocument()
   })
 
+  it('stays quiet when the projection is not an object', () => {
+    const thread = cast<ThreadListItem>({
+      ...createThread(undefined),
+      comicvine_mapping: 42,
+    })
+    render(<QueueMappingHealthIndicator thread={thread} onMapSeries={vi.fn()} />)
+
+    expect(screen.queryByTestId('queue-mapping-health')).not.toBeInTheDocument()
+  })
+
+  it('labels a review-required row honestly even when every count reads zero', () => {
+    render(
+      <QueueMappingHealthIndicator
+        thread={createThread(
+          health({
+            status: 'needs_review',
+            tracked_issue_count: 3,
+            confirmed_issue_count: 3,
+            needs_mapping_count: 0,
+            needs_review_count: 0,
+          }),
+        )}
+        onMapSeries={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('queue-mapping-health')).toHaveTextContent('Needs review: needs review')
+  })
+
+  it('falls back to a needs-mapping label for zero-count non-review rows', () => {
+    render(
+      <QueueMappingHealthIndicator
+        thread={createThread(
+          health({
+            status: 'partial',
+            tracked_issue_count: 5,
+            confirmed_issue_count: 5,
+            needs_mapping_count: 0,
+            needs_review_count: 0,
+          }),
+        )}
+        onMapSeries={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('queue-mapping-health')).toHaveTextContent('needs mapping')
+  })
+
   it('shows a concise count for ordinary unmapped issues', () => {
     render(
       <QueueMappingHealthIndicator

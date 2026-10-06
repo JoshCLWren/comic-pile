@@ -358,6 +358,38 @@ describe('QueueMapSeriesDialog', () => {
     expect(commitMutateMock).not.toHaveBeenCalled()
   })
 
+  it('renders series and rows without optional metadata', async () => {
+    searchSeriesSpy.mockResolvedValue({
+      query: 'Saga',
+      results: [
+        {
+          comicvine_volume_id: 20764,
+          name: 'Saga',
+          publisher: null,
+          start_year: null,
+          issue_count: null,
+          site_detail_url: null,
+          image_url: null,
+        },
+      ],
+      total_available: 1,
+      offset: 0,
+      limit: 10,
+      has_more: false,
+      next_offset: null,
+    })
+    const preview = availablePreview()
+    preview.data.rows = preview.data.rows.map((row) => ({ ...row, issue_number: '' }))
+    previewMock.mockReturnValue({ ...preview, isSuccess: true })
+    renderDialog()
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Saga' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Saga' }))
+
+    await waitFor(() => expect(screen.getByTestId('queue-map-series-preview')).toBeInTheDocument())
+    expect(screen.getAllByText('Unnumbered').length).toBeGreaterThan(0)
+  })
+
   it('cancels from the series step without mutating anything', async () => {
     const onClose = vi.fn()
     renderDialog(onClose)
