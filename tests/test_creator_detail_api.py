@@ -293,7 +293,12 @@ async def test_cover_only_credit_is_preserved_in_role_stats_but_not_headline(
     assert summary["average_rating"] is None
 
     assert body["role_stats"] == [
-        {"role": "cover", "issue_count": 1, "average_rating": pytest.approx(4.0)}
+        {
+            "role": "cover",
+            "issue_count": 1,
+            "rated_issue_count": 1,
+            "average_rating": pytest.approx(4.0),
+        }
     ]
     assert len(body["rated_issues"]) == 1
     assert body["rated_issues"][0]["effective_rating"] == pytest.approx(4.0)
@@ -324,7 +329,12 @@ async def test_unknown_role_stays_unclassified(
     assert summary["ratings_count"] == 0
     assert summary["average_rating"] is None
     assert body["role_stats"] == [
-        {"role": "layout", "issue_count": 1, "average_rating": pytest.approx(4.0)}
+        {
+            "role": "layout",
+            "issue_count": 1,
+            "rated_issue_count": 1,
+            "average_rating": pytest.approx(4.0),
+        }
     ]
 
 
