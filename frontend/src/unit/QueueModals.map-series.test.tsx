@@ -42,7 +42,7 @@ function createThread(): ThreadListItem {
 function modalsProps(overrides = {}) {
   const noop = () => Promise.resolve()
   return {
-    openModal: null as null,
+    openModal: null,
     createForm: DEFAULT_CREATE_STATE,
     editForm: DEFAULT_CREATE_STATE,
     setCreateForm: vi.fn(),

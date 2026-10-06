@@ -6,6 +6,7 @@ import QueueMappingHealthIndicator from '../components/QueueMappingHealthIndicat
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { ThreadListItem } from '../types'
 import type { QueueComicVineMappingHealth } from '../types/queue-mapping'
+import { cast } from '../utils/cast'
 
 const { listSpy, searchSeriesSpy } = vi.hoisted(() => ({
   listSpy: vi.fn(),
@@ -114,12 +115,12 @@ describe('QueueMappingHealthIndicator', () => {
   })
 
   it('stays quiet for unknown projection shapes instead of inventing status', () => {
-    const thread = createThread(undefined)
-    // SAFETY: Test malformed data validation without breaking type system
-    ;(thread as unknown as Record<string, unknown>)['comicvine_mapping'] = {
-      status: 'mystery',
-      tracked_issue_count: 3,
-    }
+    // SAFETY: The raw Queue response may carry an unvalidated projection
+    // shape; getQueueMappingHealth parses it at the boundary before render.
+    const thread = cast<ThreadListItem>({
+      ...createThread(undefined),
+      comicvine_mapping: { status: 'mystery', tracked_issue_count: 3 },
+    })
     render(<QueueMappingHealthIndicator thread={thread} onMapSeries={vi.fn()} />)
 
     expect(screen.queryByTestId('queue-mapping-health')).not.toBeInTheDocument()
@@ -179,6 +180,22 @@ describe('QueueMappingHealthIndicator', () => {
     expect(screen.getByTestId('queue-mapping-health')).toHaveTextContent(
       'Needs review: 2 issues need mapping · 1 issue needs review',
     )
+  })
+
+  it('still labels an ordinary mapping row whose counts both read zero', () => {
+    render(
+      <QueueMappingHealthIndicator
+        thread={createThread(
+          health({ status: 'partial', needs_mapping_count: 0, needs_review_count: 0 }),
+        )}
+        onMapSeries={vi.fn()}
+      />,
+    )
+
+    // The stored state says the row is not fully mapped, so the
+    // indicator stays truthful instead of rendering silence.
+    expect(screen.getByTestId('queue-mapping-health')).toHaveTextContent('needs mapping')
+    expect(screen.getByTestId('queue-mapping-health')).not.toHaveTextContent('Needs review')
   })
 
   it('carries status in text with an accessible name, not color alone', () => {

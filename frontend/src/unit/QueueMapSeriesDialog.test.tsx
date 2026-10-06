@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueMapSeriesDialog from '../components/QueueMapSeriesDialog'
+import type { SeriesMappingPreviewScope } from '../services/api-series-mapping'
 import type { ThreadListItem } from '../types'
 
 const { searchSeriesSpy, listIssuesSpy, invalidateQueueSpy, previewMock, commitMutateMock, commitMock } =
@@ -65,7 +66,7 @@ const mockSeries = {
 }
 
 function createThread(): ThreadListItem {
-  return {
+  const thread: ThreadListItem = {
     id: 10,
     title: 'Saga',
     format: 'Comic',
@@ -79,7 +80,8 @@ function createThread(): ThreadListItem {
     next_unread_issue_number: '11',
     notes: null,
     created_at: '2024-01-01T00:00:00.000Z',
-  } as ThreadListItem
+  }
+  return thread
 }
 
 function ownedIssues() {
@@ -284,7 +286,9 @@ describe('QueueMapSeriesDialog', () => {
     expect(commitMutateMock).toHaveBeenCalledTimes(1)
     const [request, handlers] = commitMutateMock.mock.calls[0]
     expect(request.preview_token).toBe('preview-tok')
-    expect(typeof request.idempotency_key).toBe('string')
+    // The commit surface only ever receives a non-empty key namespaced
+    // to this repair flow; retries reuse it until another volume is picked.
+    expect(request.idempotency_key).toMatch(/^queue-map-series-/)
     expect(request.idempotency_key.length).toBeGreaterThan(0)
     // Only the safe exact row is approved; the ambiguous and provider
     // inventory rows never reach the commit surface.
@@ -409,17 +413,18 @@ describe('QueueMapSeriesDialog', () => {
 
   it('offers no commit when the scope cannot be safely established', async () => {
     const base = availablePreview()
+    const unavailableScope: SeriesMappingPreviewScope = {
+      status: 'unavailable',
+      scope_key: null,
+      origin_issue_id: 102,
+      series_label: null,
+      basis: 'insufficient_non_thread_evidence',
+    }
     const unavailable = {
       ...base,
       data: {
         ...base.data,
-        scope: {
-          status: 'unavailable' as const,
-          scope_key: null as string | null,
-          origin_issue_id: 102,
-          series_label: null as string | null,
-          basis: 'insufficient_non_thread_evidence',
-        },
+        scope: unavailableScope,
       },
     }
     previewMock.mockReturnValue({ ...unavailable, isSuccess: true })

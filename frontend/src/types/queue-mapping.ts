@@ -80,23 +80,3 @@ export function getQueueMappingHealth(thread: ThreadListItem): QueueComicVineMap
   if (candidate == null) return null
   return isMappingHealth(candidate) ? candidate : null
 }
-
-/**
- * Whether a Queue row should surface a mapping-health indicator and repair action.
- *
- * Fully mapped, non-applicable, and absent projections stay quiet. Ordinary
- * missing mappings (`partial`, `unresolved`) and review-needed identities
- * (`needs_review`) are actionable.
- *
- * @param thread - Queue row from the existing paginated Queue response.
- * @returns True when the row needs a visible mapping indicator.
- */
-export function needsQueueMappingAction(thread: ThreadListItem): boolean {
-  const health = getQueueMappingHealth(thread)
-  if (health === null) return false
-  return (
-    health.status === 'partial'
-    || health.status === 'unresolved'
-    || health.status === 'needs_review'
-  )
-}
