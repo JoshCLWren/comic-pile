@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
+import Modal from '../../../components/Modal'
 import OverflowMenu, { type OverflowMenuItem } from '../../../components/OverflowMenu'
 import { comicVineApi } from '../../../services/api-comicvine'
 import type { ComicVineIssueCandidate } from '../../../services/api-comicvine'
@@ -115,6 +116,15 @@ export function ComicPillar({
     setIsUnlinkDialogOpen(true)
   }, [])
 
+  const handleUnlinkCancel = useCallback(() => {
+    setIsUnlinkDialogOpen(false)
+  }, [])
+
+  const handleUnlinkDialogConfirm = useCallback(() => {
+    setIsUnlinkDialogOpen(false)
+    void handleIdentityUnlinked()
+  }, [handleIdentityUnlinked])
+
   // Issue #3159: a confirmed volume correction can also confirm the series' other
   // numbered siblings in one step, so each confirmed sibling needs its own cover
   // refetched before the card can show the enriched series.
@@ -183,7 +193,6 @@ export function ComicPillar({
         ariaLabel: 'Unlink from ComicVine',
         description: 'Remove the ComicVine mapping from this issue',
         onSelect: () => {
-          // This will open a confirmation dialog - we'll implement this next
           handleUnlinkConfirm()
         },
       })
@@ -325,33 +334,39 @@ export function ComicPillar({
       )}
 
       {/* Unlink confirmation dialog */}
-      {isUnlinkDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="surface-glass rounded-xl p-6 max-w-md w-full mx-4 border border-white/10">
-            <h3 className="text-lg font-bold text-stone-100 mb-2">Unlink from ComicVine?</h3>
-            <p className="text-sm text-stone-300 mb-4">
-              Are you sure you want to remove the ComicVine mapping from "{threadTitle}" {issueNumber ? `#${issueNumber}` : ''}? This action cannot be undone.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setIsUnlinkDialogOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-stone-300 hover:text-stone-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setIsUnlinkDialogOpen(false)
-                  handleIdentityUnlinked()
-                }}
-                className="px-4 py-2 text-sm font-medium text-rose-500 hover:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors"
-              >
-                Unlink
-              </button>
-            </div>
+      <Modal
+        isOpen={isUnlinkDialogOpen}
+        title="Unlink from ComicVine?"
+        onClose={handleUnlinkCancel}
+        data-testid="unlink-comicvine-dialog"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Are you sure you want to remove the ComicVine mapping from{' '}
+            <span className="font-bold text-[var(--theme-text-primary)]">
+              &ldquo;{threadTitle}&rdquo;{issueNumber ? ` #${issueNumber}` : ''}
+            </span>
+            ? This action cannot be undone.
+          </p>
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={handleUnlinkCancel}
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleUnlinkDialogConfirm}
+              data-testid="confirm-unlink-comicvine"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
+            >
+              Unlink
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

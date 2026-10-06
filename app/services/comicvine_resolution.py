@@ -36,7 +36,6 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionRequest,
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
-    UnlinkIdentityRequest,
 )
 from app.services.comicvine_url import looks_like_url, parse_comicvine_url
 from app.services.reading_order_placement import apply_insert, resolve_anchored_position

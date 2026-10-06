@@ -207,6 +207,53 @@ async def test_replace_identity_demotes_old(
 
 
 @pytest.mark.asyncio
+async def test_unlink_identity_returns_issue_to_unmapped(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Unlinking a confirmed mapping returns the issue to an unmapped state."""
+    thread = Thread(
+        user_id=default_user.id,
+        title="Unlink Test",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+    old_identity = _issue_identity(
+        "4444",
+        {"name": "Linked Issue", "issue_number": "1"},
+    )
+    async_db.add(old_identity)
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=old_identity.id,
+            status="confirmed",
+            confidence=1.0,
+        )
+    )
+    await async_db.flush()
+
+    response = await auth_client.post(
+        f"/api/v1/comicvine/issues/{issue.id}/identity:unlink",
+        json={"reason": "Wrong volume"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_confirmed_identity"] is False
+    assert body["confirmed_mappings"] == []
+
+
+@pytest.mark.asyncio
 async def test_refresh_metadata_returns_comicvine_id(
     auth_client,
     async_db: AsyncSession,
