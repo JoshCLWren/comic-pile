@@ -34,8 +34,8 @@ function baseState(overrides: Partial<CreatorDetailState> = {}): CreatorDetailSt
       upcoming_complete: true,
     },
     roleStats: [
-      { role: 'writer', issue_count: 5, average_rating: 4.5 },
-      { role: 'cover', issue_count: 1, average_rating: null },
+      { role: 'writer', issue_count: 5, rated_issue_count: 3, average_rating: 4.5 },
+      { role: 'cover', issue_count: 1, rated_issue_count: 0, average_rating: null },
     ],
     ratingDistribution: null,
     ratedIssues: [

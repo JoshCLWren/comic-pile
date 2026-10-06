@@ -266,14 +266,19 @@ export default function CreatorDetailPage() {
       {roleStats.length > 0 && (
         <section aria-labelledby="creator-roles-heading" className="mt-6">
           <SectionHeading id="creator-roles-heading">Roles</SectionHeading>
+          <p className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Issues may appear under multiple roles. The average rating uses only the rated subset.
+          </p>
           <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {roleStats.map((stat) => (
               <li key={stat.role} className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
                 <p className="break-words text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
                 <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-                  {stat.issue_count} {stat.issue_count === 1 ? 'issue' : 'issues'}
-                  {stat.average_rating != null ? (
-                    <> · <RatingValue value={stat.average_rating} label={`Average ${stat.average_rating} out of 5 as ${stat.role}`} /></>
+                  {stat.issue_count} credited {stat.issue_count === 1 ? 'issue' : 'issues'}
+                  {stat.average_rating != null && stat.rated_issue_count > 0 ? (
+                    <> · {stat.average_rating.toFixed(1)}★ across {stat.rated_issue_count} rating{stat.rated_issue_count === 1 ? '' : 's'}</>
+                  ) : stat.rated_issue_count === 0 && stat.issue_count > 0 ? (
+                    ' · unrated'
                   ) : (
                     ' · unrated'
                   )}

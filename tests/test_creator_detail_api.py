@@ -293,7 +293,12 @@ async def test_cover_only_credit_is_preserved_in_role_stats_but_not_headline(
     assert summary["average_rating"] is None
 
     assert body["role_stats"] == [
-        {"role": "cover", "issue_count": 1, "average_rating": pytest.approx(4.0)}
+        {
+            "role": "cover",
+            "issue_count": 1,
+            "rated_issue_count": 1,
+            "average_rating": pytest.approx(4.0),
+        }
     ]
     assert len(body["rated_issues"]) == 1
     assert body["rated_issues"][0]["effective_rating"] == pytest.approx(4.0)
@@ -324,7 +329,12 @@ async def test_unknown_role_stays_unclassified(
     assert summary["ratings_count"] == 0
     assert summary["average_rating"] is None
     assert body["role_stats"] == [
-        {"role": "layout", "issue_count": 1, "average_rating": pytest.approx(4.0)}
+        {
+            "role": "layout",
+            "issue_count": 1,
+            "rated_issue_count": 1,
+            "average_rating": pytest.approx(4.0),
+        }
     ]
 
 
@@ -689,3 +699,64 @@ async def test_rating_distribution_headline_roles_exclude_cover(
     dist = response.json()["rating_distribution"]
     assert dist["sample_count"] == 1
     assert dist["min_rating"] == pytest.approx(5.0)
+
+
+@pytest.mark.asyncio
+async def test_role_stats_includes_rated_issue_count(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Role stats expose rated_issue_count distinct from total issue_count."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="MultiRole", issue_count=4, queue_position=1, read_through=4
+    )
+    # Issue 1: writer + artist, rated
+    await _confirm_identity(
+        async_db,
+        issues[0],
+        creators=[
+            {"id": 100, "name": "Multi Role", "role": "writer"},
+            {"id": 100, "name": "Multi Role", "role": "artist"},
+        ],
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    # Issue 2: writer only, rated
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 100, "name": "Multi Role", "role": "writer"}]
+    )
+    await _rate(async_db, issues[1], rating=5.0, timestamp=D2)
+    # Issue 3: artist only, unrated
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 100, "name": "Multi Role", "role": "artist"}]
+    )
+    # Issue 4: cover only, rated (not headline-eligible)
+    await _confirm_identity(
+        async_db, issues[3], creators=[{"id": 100, "name": "Multi Role", "role": "cover"}]
+    )
+    await _rate(async_db, issues[3], rating=3.0, timestamp=D3)
+
+    response = await auth_client.get("/api/v1/creators/creator:100")
+
+    assert response.status_code == 200
+    body = response.json()
+    by_role = {stat["role"]: stat for stat in body["role_stats"]}
+
+    # writer: 2 issues total, both rated
+    assert by_role["writer"]["issue_count"] == 2
+    assert by_role["writer"]["rated_issue_count"] == 2
+    assert by_role["writer"]["average_rating"] == pytest.approx(4.5)
+
+    # artist: 2 issues total (issue 1 + issue 3), only 1 rated
+    assert by_role["artist"]["issue_count"] == 2
+    assert by_role["artist"]["rated_issue_count"] == 1
+    assert by_role["artist"]["average_rating"] == pytest.approx(4.0)
+
+    # cover: 1 issue total, 1 rated (but not headline-eligible)
+    assert by_role["cover"]["issue_count"] == 1
+    assert by_role["cover"]["rated_issue_count"] == 1
+    assert by_role["cover"]["average_rating"] == pytest.approx(3.0)
+
+    # Headline summary uses headline-eligible roles only (writer)
+    assert body["summary"]["ratings_count"] == 2
+    assert body["summary"]["average_rating"] == pytest.approx(4.5)
