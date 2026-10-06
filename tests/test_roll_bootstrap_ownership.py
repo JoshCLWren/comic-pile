@@ -156,8 +156,8 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         predicted_bandwidth=None,
         active_bandwidth=None,
         confidence=None,
-        bandwidth_source=None,
-        bandwidth_version=None,
+        source=None,
+        mode_version=None,
     )
 
 
@@ -784,8 +784,22 @@ async def test_bootstrap_returns_inactive_threads(monkeypatch):
     """Inactive (non-active) threads are returned with count so the Roll page can explain exclusions."""
     current_session = _mode_session(id=55, timezone=None)
     current_user = SimpleNamespace(id=7)
-    inactive_thread = SimpleNamespace(id=201, title="Completed Saga", format="Comic")
-    active_thread = SimpleNamespace(id=301, title="Active Series", format="Comic")
+    inactive_thread = SimpleNamespace(
+        id=201,
+        title="Completed Saga",
+        format="Comic",
+        issue_id=None,
+        issue_number=None,
+        route_labels=[],
+    )
+    active_thread = SimpleNamespace(
+        id=301,
+        title="Active Series",
+        format="Comic",
+        issue_id=None,
+        issue_number=None,
+        route_labels=[],
+    )
 
     monkeypatch.setattr(
         roll_api,
@@ -816,6 +830,9 @@ async def test_bootstrap_returns_inactive_threads(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=1),
+        _Result(rows=[inactive_thread]),
+        _Result(scalar_value=0),
+        _Result(rows=[(201,)]),
         _Result(rows=[inactive_thread]),
         _Result(scalar_value=0),
     ]
