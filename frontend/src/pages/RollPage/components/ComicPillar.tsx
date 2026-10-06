@@ -91,11 +91,32 @@ export function ComicPillar({
       if (selected && selected.image_url !== undefined) {
         applyComicVineCorrectionOptimistically(queryClient, issueId, selected.image_url)
       }
+      // Optimistically update the identity state to show "Linked" immediately
+      const optimisticIdentity: IssueIdentityResponse = {
+        issue_id: issueId,
+        thread_id: activeRatingThread?.id ?? 0,
+        thread_title: threadTitle,
+        has_confirmed_identity: true,
+        comicvine_issue_id: selected?.comicvine_issue_id?.toString() || null,
+        confirmed_mappings: selected ? [{
+          external_identity_id: selected.comicvine_issue_id,
+          provider: 'comicvine',
+          comicvine_id: selected.comicvine_issue_id.toString(),
+          status: 'confirmed',
+          confidence: 1.0,
+          evidence_source: 'user_confirmation',
+          created_at: new Date().toISOString(),
+        }] : [],
+        candidate_mappings: [],
+        has_unresolved: false,
+      }
+      setIdentityState(optimisticIdentity)
+      
       await invalidateComicVineIssueIntelligence(queryClient, issueId)
     }
     await fetchIdentity()
     onRefreshThread()
-  }, [fetchIdentity, onRefreshThread, issueId])
+  }, [fetchIdentity, onRefreshThread, issueId, threadTitle, activeRatingThread])
 
   // Issue #3159: a confirmed volume correction can also confirm the series' other
   // numbered siblings in one step, so each confirmed sibling needs its own cover

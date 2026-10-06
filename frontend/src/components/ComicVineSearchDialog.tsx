@@ -137,7 +137,9 @@ export default function ComicVineSearchDialog({
 
   useEffect(() => {
     if (isOpen && threadTitle) {
-      setQuery(threadTitle)
+      // Strip parenthesized years from search pre-fill (fixes issue #3201)
+      const cleanedTitle = threadTitle.replace(/\s*\(\d{4}\)$/, '')
+      setQuery(cleanedTitle)
     }
     if (isOpen) {
       setStep('search')

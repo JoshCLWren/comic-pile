@@ -9,6 +9,7 @@ interface QueueControlsProps {
   shufflePending: boolean
   onShuffle: () => void
   onCreateThread: () => void
+  onBulkMapComicVine: () => void
   sortBy: QueueSortBy
   onSortChange: (next: QueueSortBy) => void
   searchQuery: string
@@ -31,6 +32,7 @@ function QueueControlsInner({
   shufflePending,
   onShuffle,
   onCreateThread,
+  onBulkMapComicVine,
   sortBy,
   onSortChange,
   searchQuery,
@@ -60,6 +62,13 @@ function QueueControlsInner({
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1.5 md:gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onBulkMapComicVine}
+            className="h-9 md:h-12 px-3 md:px-5 rounded-lg border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-comic-accent)]/10 text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap text-[var(--theme-comic-accent)] hover:bg-[var(--theme-comic-accent)]/20 disabled:opacity-50"
+          >
+            🔗 Map All
+          </button>
           <button
             type="button"
             onClick={onShuffle}
