@@ -662,4 +662,81 @@ test.describe('Issue #2774: creators browse page', () => {
     )
     expect(combinedRequest).toBeDefined()
   })
+
+  test('boundary rating values are sent correctly', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    const requests = await installCreatorsList(page, (params) => {
+      const minRating = params.get('min_rating')
+      const maxRating = params.get('max_rating')
+      const items = [
+        creatorRow('creator:7', 'Brian K. Vaughan', { average_rating: 4.5 }),
+        creatorRow('creator:12', 'Steve McNiven', { average_rating: 3.0 }),
+      ]
+      
+      if (minRating) {
+        const min = parseFloat(minRating)
+        return {
+          items: items.filter(item => !item.average_rating || item.average_rating >= min),
+          total: items.filter(item => !item.average_rating || item.average_rating >= min).length,
+          limit: Number(params.get('limit') ?? 20),
+          offset: 0,
+          coverage: COMPLETE_COVERAGE,
+        }
+      }
+      
+      if (maxRating) {
+        const max = parseFloat(maxRating)
+        return {
+          items: items.filter(item => !item.average_rating || item.average_rating <= max),
+          total: items.filter(item => !item.average_rating || item.average_rating <= max).length,
+          limit: Number(params.get('limit') ?? 20),
+          offset: 0,
+          coverage: COMPLETE_COVERAGE,
+        }
+      }
+      
+      return {
+        items,
+        total: items.length,
+        limit: Number(params.get('limit') ?? 20),
+        offset: 0,
+        coverage: COMPLETE_COVERAGE,
+      }
+    })
+
+    await page.goto('/creators', { waitUntil: 'domcontentloaded' })
+
+    // Test minimum rating of 0 (should include all creators)
+    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('0')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    
+    const minZeroRequest = requests.find(r => r.get('min_rating') === '0')
+    expect(minZeroRequest).toBeDefined()
+    expect(minZeroRequest!.get('min_rating')).toBe('0')
+
+    // Test maximum rating of 5 (should include all creators)
+    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('')
+    await page.getByLabel('Rating range').getByPlaceholder('Max').fill('5')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    
+    const maxFiveRequest = requests.find(r => r.get('max_rating') === '5')
+    expect(maxFiveRequest).toBeDefined()
+    expect(maxFiveRequest!.get('max_rating')).toBe('5')
+
+    // Test range of 0 to 5 (should include all creators)
+    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('0')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    
+    const rangeZeroFiveRequest = requests.find(r => 
+      r.get('min_rating') === '0' && 
+      r.get('max_rating') === '5'
+    )
+    expect(rangeZeroFiveRequest).toBeDefined()
+  })
 })

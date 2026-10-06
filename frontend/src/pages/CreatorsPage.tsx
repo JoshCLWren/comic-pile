@@ -142,8 +142,8 @@ export default function CreatorsPage() {
     sort, 
     minRatings: minRatings || undefined,
     role: role || undefined,
-    minRating: minRating > 0 ? minRating : undefined,
-    maxRating: maxRating < 5 ? maxRating : undefined,
+    minRating: minRating !== undefined && minRating >= 0 ? minRating : undefined,
+    maxRating: maxRating !== undefined && maxRating >= 0 ? maxRating : undefined,
     hasUnreadWork: hasUnreadWork || undefined
   })
 

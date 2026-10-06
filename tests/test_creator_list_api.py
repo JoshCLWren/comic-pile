@@ -802,3 +802,52 @@ async def test_combined_filters(
     response = await auth_client.get("/api/v1/creators?role=writer&max_rating=1.5")
     assert response.status_code == 200
     assert response.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_rating_boundary_values(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Rating boundary values (0 and 5) work correctly."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Boundary", issue_count=2, queue_position=1, read_through=2
+    )
+    # High rated (5.0)
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "High Rated", "role": "writer"}]
+    )
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+    # Low rated (1.0)
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Low Rated", "role": "artist"}]
+    )
+    await _rate(async_db, issues[1], rating=1.0, timestamp=D1)
+
+    # Test minimum rating of 0 (should return all)
+    response = await auth_client.get("/api/v1/creators?min_rating=0")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    rated_keys = [r["canonical_creator_key"] for r in body["items"]]
+    assert "creator:1" in rated_keys
+    assert "creator:2" in rated_keys
+
+    # Test maximum rating of 5 (should return all)
+    response = await auth_client.get("/api/v1/creators?max_rating=5")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    rated_keys = [r["canonical_creator_key"] for r in body["items"]]
+    assert "creator:1" in rated_keys
+    assert "creator:2" in rated_keys
+
+    # Test range of 0 to 5 (should return all)
+    response = await auth_client.get("/api/v1/creators?min_rating=0&max_rating=5")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    rated_keys = [r["canonical_creator_key"] for r in body["items"]]
+    assert "creator:1" in rated_keys
+    assert "creator:2" in rated_keys
