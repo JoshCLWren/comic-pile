@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.comicvine_hydration import extract_thumbnail_url
 from app.external_identities import (
     ExternalIdentityMappingError,
     link_issue_external_identity,
@@ -39,7 +40,6 @@ from app.schemas.comicvine_resolution import (
 )
 from app.services.comicvine_url import looks_like_url, parse_comicvine_url
 from app.services.reading_order_placement import apply_insert, resolve_anchored_position
-from app.comicvine_hydration import extract_image_url
 from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,7 @@ async def search_comicvine_series(
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
-            image_url = extract_image_url(image_raw)
+            image_url = extract_thumbnail_url(image_raw)
         series_results.append(
             ComicVineSeriesResult(
                 comicvine_volume_id=volume_id,
@@ -220,7 +220,7 @@ async def get_comicvine_series_issues(
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
-            image_url = extract_image_url(image_raw)
+            image_url = extract_thumbnail_url(image_raw)
         candidates.append(
             ComicVineIssueCandidate(
                 comicvine_issue_id=issue_id,
@@ -252,14 +252,13 @@ async def get_comicvine_series_issues(
 
 
 def _provider_image_url(image_raw: object) -> str | None:
-    """Extract the best available image URL from a ComicVine image object.
+    """Extract the bounded-size image URL used by resolve/search confirmation cards.
 
-    The singular ComicVine issue resource exposes its image object using the
-    provider's native key names (super, screen_large, large, medium, small,
-    icon); normalized or third-party payloads may use legacy ``_url``-suffixed
-    key names instead. Provider native keys are preferred for quality.
+    Resolve and search confirmation cards render covers at thumbnail sizes, so
+    they take the same bounded-size preference as the provider search lists
+    instead of the full-page cover rendition.
     """
-    return extract_image_url(image_raw)
+    return extract_thumbnail_url(image_raw)
 
 
 def _provider_string(value: object) -> str | None:
