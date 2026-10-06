@@ -73,8 +73,8 @@ function productionSourceFiles(dir: string): string[] {
 
 function requireAnchor(id: string): HTMLElement {
   const target = document.getElementById(id)
-  // SAFETY: expect asserts non-null above, so the cast is safe.
   expect(target, `expected a glossary anchor for #${id}`).not.toBeNull()
+  // SAFETY: expect above asserted non-null, so the cast is safe.
   return target as HTMLElement
 }
 
@@ -92,8 +92,8 @@ function cardForElement(anchor: HTMLElement): HTMLElement {
   while (node && !node.querySelector('[data-testid="glossary-definition"]')) {
     node = node.parentElement
   }
-  // SAFETY: querySelector ensures the parent card exists before casting.
   expect(node, `expected #${anchor.id} to sit on a definition card`).not.toBeNull()
+  // SAFETY: expect above asserted non-null, so the cast is safe.
   return node as HTMLElement
 }
 
