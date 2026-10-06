@@ -24,15 +24,30 @@ def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
 
 
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
-    """Read unified blocked thread IDs directly from the current transaction."""
+    \"\"\"Read unified blocked thread IDs directly from the current transaction.\"\"\"
     _invalidate_continuity_snapshot(user_id, db)
-    if not get_app_settings().legacy_dependency_blocking_enabled:
-        # After cutover, compiled ContinuityRule rows are the only Roll authority.
-        # sequence_order must not contribute to eligibility.
-        return await get_continuity_rule_blocked_thread_ids(user_id, db)
-    continuity_blocked_ids = await get_continuity_blocked_thread_ids(user_id, db)
-    legacy_blocked_ids = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
-    return legacy_blocked_ids | continuity_blocked_ids
+    source_issue = Issue.__table__.alias(\"source_issue\")
+    next_unread_issue = Issue.__table__.alias(\"next_unread_issue\")
+    target_thread = Thread.__table__.alias(\"target_thread\")
+    source = Thread.__table__.alias(\"source\")
+
+    issue_result = await db.execute(
+        select(target_thread.c.id)
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source, source_issue.c.thread_id == source.c.id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source.c.user_id == user_id)
+        .where(source_issue.c.status != \"read\")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .distinct()
+    )
+    return {row[0] for row in issue_result.all()}
+
 
 
 async def _get_legacy_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
@@ -301,18 +316,12 @@ async def _continuity_blocking_explanations_batch(
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
-    """Human-readable reasons a thread is blocked.
+    \"\"\"Human-readable reasons a thread is blocked.
 
-    Continuity-rule blockers are always included so reader-facing copy stays
-    accurate after the raw-Dependency Roll switch is disabled. Legacy
-    Dependency rows are included only while
-    ``LEGACY_DEPENDENCY_BLOCKING_ENABLED`` remains true.
-    """
-    continuity = await _continuity_blocking_explanations(thread_id, user_id, db)
-    if not get_app_settings().legacy_dependency_blocking_enabled:
-        return continuity
-    legacy = await _legacy_blocking_explanations(thread_id, user_id, db)
-    return _merge_blocking_explanations(continuity, legacy)
+    Roll authority is exclusively the canonical issue-level Dependency graph.
+    \"\"\"
+    return await _legacy_blocking_explanations(thread_id, user_id, db)
+
 
 
 async def get_blocking_explanations_batch(
@@ -320,22 +329,16 @@ async def get_blocking_explanations_batch(
     user_id: int,
     db: AsyncSession,
 ) -> dict[int, list[BlockingDependency]]:
-    """Human-readable blocking reasons for multiple threads in one query."""
+    \"\"\"Human-readable blocking reasons for multiple threads in one query.\"\"\"
     if not thread_ids:
         return {}
-
-    continuity_map = await _continuity_blocking_explanations_batch(thread_ids, user_id, db)
-    if not get_app_settings().legacy_dependency_blocking_enabled:
-        return {thread_id: continuity_map.get(thread_id, []) for thread_id in thread_ids}
-
+    
     legacy_map = await _legacy_blocking_explanations_batch(thread_ids, user_id, db)
     return {
-        thread_id: _merge_blocking_explanations(
-            continuity_map.get(thread_id, []),
-            legacy_map.get(thread_id, []),
-        )
+        thread_id: legacy_map.get(thread_id, [])
         for thread_id in thread_ids
     }
+
 
 
 async def validate_position_dependency_consistency(
