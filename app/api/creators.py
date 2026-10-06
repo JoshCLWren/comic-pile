@@ -237,6 +237,10 @@ async def list_creators_endpoint(
         limit: Bounded page size.
         offset: Page offset.
         min_ratings: Minimum rated-sample filter for browse.
+        role: Optional normalized role filter (e.g. ``writer``, ``artist``).
+        min_rating: Optional minimum personal average rating threshold (0-5).
+        max_rating: Optional maximum personal average rating threshold (0-5).
+        has_unread_work: Optional filter for creators with unread attributed work.
         db: Async database session.
 
     Returns:

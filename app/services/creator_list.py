@@ -87,6 +87,12 @@ async def get_creator_list(
         offset: Page offset.
         min_ratings: Deterministic server-side minimum rated-sample filter
             (creators need at least this many headline-rated issues).
+        role: Optional normalized role filter matched against the creator's
+            normalized roles.
+        min_rating: Optional minimum personal average rating threshold (0-5).
+        max_rating: Optional maximum personal average rating threshold (0-5).
+        has_unread_work: Optional filter restricting results to creators with
+            (or without) unread attributed work in the user's pile.
 
     Returns:
         Bounded, deterministically ordered creator list with coverage.
