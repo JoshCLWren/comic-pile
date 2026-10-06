@@ -51,26 +51,26 @@ describe('HelpPage', () => {
   it('gives every definition a stable anchor id for cross-linking', () => {
     renderRoute(<HelpPage />)
     for (const id of [
-      'thread',
+      'series',
+      'ready-to-read',
       'roll-pool',
-      'ladder-mode',
-      'die-ladder',
-      'autoladder',
+      'auto-adjust',
+      'die-size',
+      'auto',
       'offset',
       'snoozed',
-      'dependency',
-      'readiness',
+      'pos',
+      'reading-mode',
+      'finished-series',
+      'dependency-rule',
+      'blocked',
       'crossover',
       'continuity-plan',
+      'ordering-mode',
       'lane',
       'reading-order',
       'projection',
       'dependency-builder',
-      'ordering-mode',
-      'ready-to-read',
-      'position',
-      'reading-mode',
-      'finished-series',
     ]) {
       expect(document.getElementById(id)).not.toBeNull()
     }

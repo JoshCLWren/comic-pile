@@ -261,6 +261,19 @@ export async function invalidateComicVineIssueIntelligence(
 }
 
 /**
+ * Invalidate the `comicVine.issueIntelligence(issueId)` cache bucket for every
+ * issue a series-mapping commit confirmed. The sibling mapping offer confirms
+ * several issues in one request, so each confirmed issue needs its own bucket
+ * invalidated without clearing unrelated caches.
+ */
+export async function invalidateComicVineIssueIntelligenceMany(
+  client: QueryClient,
+  issueIds: readonly number[],
+): Promise<void> {
+  await Promise.all(issueIds.map((issueId) => invalidateComicVineIssueIntelligence(client, issueId)))
+}
+
+/**
  * Update the cached `image_url` for an issue's ComicVine intelligence in-place
  * so the newly selected cover renders immediately after a correction. The
  * subsequent invalidation/refetch confirms the optimistic value from the server.

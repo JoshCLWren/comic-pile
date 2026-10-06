@@ -39,11 +39,13 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     summary = {
         "read": [],
         "skipped": [],
+        "snoozed": [],
         "completed": [],
     }
 
     read_entries = []
     skipped_titles = set()
+    snoozed_titles = set()
     completed_titles = set()
 
     thread_ids = {event.thread_id for event in events if event.thread_id}
@@ -63,11 +65,14 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
             read_entries.append(f"{title}{issue_suffix} ({event.rating}/5.0)")
             if thread and thread.status == "completed":
                 completed_titles.add(f"{title}{issue_suffix}")
-        elif event.type in ("rolled_but_skipped", "snooze"):
+        elif event.type == "rolled_but_skipped":
             skipped_titles.add(f"{title}{issue_suffix}")
+        elif event.type == "snooze":
+            snoozed_titles.add(f"{title}{issue_suffix}")
 
     summary["read"] = read_entries
     summary["skipped"] = sorted(skipped_titles)
+    summary["snoozed"] = sorted(snoozed_titles)
     summary["completed"] = sorted(completed_titles)
 
     return summary

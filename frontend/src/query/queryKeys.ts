@@ -189,6 +189,16 @@ export const queryKeys = {
     all: ['comicVine'] as const,
     issueIntelligence: (issueId: number) =>
       ['comicVine', 'issueIntelligence', issueId] as const,
+    seriesMappingPreview: (
+      originIssueId: number,
+      provider: string,
+      providerSeriesExternalId: string,
+    ) =>
+      [
+        'comicVine',
+        'seriesMappingPreview',
+        { originIssueId, provider, providerSeriesExternalId },
+      ] as const,
   },
   readerContext: {
     all: ['readerContext'] as const,

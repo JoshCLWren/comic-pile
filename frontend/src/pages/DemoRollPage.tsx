@@ -155,7 +155,7 @@ export default function DemoRollPage({ api = demoApi }: DemoRollPageProps) {
           <p aria-live="polite" className="text-sm text-[var(--theme-text-muted)]">
             {rated ? (
               <span className="text-[var(--theme-comic-accent)] font-bold" data-testid="demo-rated">
-                Rated {rating.toFixed(1)} — held in this demo session only, never saved.
+                {`Rated ${rating.toFixed(1)} — held in this demo session only, never saved.`}
               </span>
             ) : (
               'Move the slider to see how a rating changes tomorrow’s roll.'

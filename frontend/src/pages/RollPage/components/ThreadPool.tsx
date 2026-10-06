@@ -79,10 +79,10 @@ export function ThreadPool({
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-[var(--theme-comic-accent)] shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{pool.length} ready to read</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{pool.length} in play</p>
           {dieSize && pool.length > 0 && pool.length < dieSize && (
             <p className="text-[10px] text-stone-500 mt-1" data-smaller-than-die>
-              Only {pool.length} of d{dieSize} faces are mapped to a ready-to-read series — the roll picks among these visible faces.
+              Only {pool.length} of d{dieSize} faces are mapped to an in-play series — the roll picks among these visible faces.
             </p>
           )}
         </div>
@@ -98,7 +98,7 @@ export function ThreadPool({
         <span id="shuffle-queue-description" className="sr-only">Randomizes the complete active queue, then refreshes these die mappings.</span>
       </div>}
 
-      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`${pool.length} ready to read, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
+      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`${pool.length} in play, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
         {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>

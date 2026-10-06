@@ -13,6 +13,9 @@ import { useToast } from "../contexts/useToast";
 import { trackSessionGreeting } from "../utils/sessionGreeting";
 import { queryKeys, type SessionListParams } from "../query/queryKeys";
 
+/** Signature of the current-session `refetch` exposed by `useSession`. */
+export type SessionRefetch = ReturnType<typeof useSession>["refetch"];
+
 const EMPTY_PARAMS: SessionListParams = Object.freeze({});
 
 function normalizeQueryError(error: unknown, fallbackMessage: string): Error | null {
