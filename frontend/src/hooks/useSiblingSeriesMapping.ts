@@ -36,6 +36,8 @@ export function useSiblingSeriesMappingPreview(
         : [],
     queryFn: () =>
       seriesMappingApi.preview({
+        // SAFETY: the enabled guard below only allows this fn to run when every
+        // parameter is non-null, so the casts preserve the runtime invariant.
         origin_issue_id: originIssueId as number,
         provider: provider as string,
         provider_series_external_id: providerSeriesExternalId as string,

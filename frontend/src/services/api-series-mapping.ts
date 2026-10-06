@@ -41,7 +41,7 @@ export interface SeriesMappingPreviewProviderSeries {
   start_year: number | null
   count_of_issues: number | null
   site_detail_url: string | null
-  image: Record<string, unknown> | null
+  image: Record<string, string> | null
 }
 
 export interface SeriesMappingPreviewRow {
