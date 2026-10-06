@@ -7232,6 +7232,11 @@ export interface components {
             is_blocked: boolean;
             /** Issues Remaining */
             issues_remaining: number;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
+            }[];
             /** Last Activity At */
             last_activity_at: string | null;
             /** Next Unread Issue Number */
@@ -8843,6 +8848,11 @@ export interface components {
             is_test: boolean;
             /** Issues Remaining */
             issues_remaining: number;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
+            }[];
             /** Last Activity At */
             last_activity_at: string | null;
             /** Last Rating */
@@ -8932,6 +8942,11 @@ export interface components {
             is_test: boolean;
             /** Issues Remaining */
             issues_remaining: number;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
+            }[];
             /** Last Activity At */
             last_activity_at: string | null;
             /** Last Rating */

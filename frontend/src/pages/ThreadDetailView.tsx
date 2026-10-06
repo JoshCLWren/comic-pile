@@ -16,7 +16,7 @@ import {
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
-import { getManualCreatorCreditList } from '../../types'
+import { getManualCreatorCreditList } from '../types'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
 import Breadcrumbs from '../components/Breadcrumbs'

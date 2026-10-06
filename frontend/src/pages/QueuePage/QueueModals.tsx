@@ -68,8 +68,7 @@ function CreatorInput({
     )
   }
 
-  const handleCustomRole = () => {
-    const input = document.activeElement as HTMLInputElement
+  const handleCustomRole = (input: HTMLInputElement) => {
     const value = input.value.trim()
     if (value && !editRoles.includes(value)) {
       setEditRoles((prev) => [...prev, value])
@@ -90,6 +89,12 @@ function CreatorInput({
                 type="text"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSaveEdit(index)
+                  }
+                }}
                 placeholder="Creator name"
                 className="flex-1 min-w-0 rounded-xl px-3 py-2 text-sm form-control"
                 autoFocus
@@ -112,7 +117,12 @@ function CreatorInput({
                 <input
                   type="text"
                   placeholder="Custom role..."
-                  onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomRole()}
+                  onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleCustomRole(e.currentTarget)
+                    }
+                  }}
                   className="text-xs rounded-xl px-2 py-1 form-control min-w-[80px]"
                 />
               </div>

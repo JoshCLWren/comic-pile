@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import type { Thread, ThreadListItem, ThreadCreatePayload } from '../../types'
 import { getManualCreatorCreditList } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
-import { getManualCreatorCreditList } from '../../types'
 
 type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
 
@@ -141,7 +141,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         notes: thread.notes || '',
         issues: '',
         lastIssueRead: 0,
-        manualCreatorCredits: (thread as any).manual_creator_credits || [],
+        manualCreatorCredits: getManualCreatorCreditList(thread),
       })
       setOpenModal('edit')
       setRestoreAction(() => {
@@ -153,7 +153,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           notes: thread.notes || '',
           issues: '',
           lastIssueRead: 0,
-          manualCreatorCredits: (thread as any).manual_creator_credits || [],
+          manualCreatorCredits: getManualCreatorCreditList(thread),
         })
         setOpenModal('edit')
       })
