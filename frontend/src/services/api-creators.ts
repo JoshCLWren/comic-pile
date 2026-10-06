@@ -120,7 +120,7 @@ export function createCreatorsApi(client: HttpClient) {
       }
       return client.get<CreatorDetailResponse>(
         `/v1/creators/${encodeURIComponent(creatorKey)}`,
-        { params: queryParams },
+        { params: queryParams, skipAuthRedirect: true },
       )
     },
 
@@ -142,7 +142,7 @@ export function createCreatorsApi(client: HttpClient) {
       if (params.min_ratings !== undefined && params.min_ratings > 0) {
         queryParams.min_ratings = params.min_ratings
       }
-      return client.get<CreatorListResponse>('/v1/creators', { params: queryParams })
+      return client.get<CreatorListResponse>('/v1/creators', { params: queryParams, skipAuthRedirect: true })
     },
   }
 }
