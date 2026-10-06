@@ -91,7 +91,7 @@ async def thread_to_response(
 
     Args:
         thread: Thread model instance.
-        db: Database session for computing issues_remaining (fallback only).
+        db: Async database session for computing issues_remaining (fallback only).
         issue_number_map: Pre-fetched mapping of issue ID → issue_number.
             When provided, avoids per-thread DB lookups for next_unread_issue_number.
         issues_remaining_map: Pre-fetched mapping of thread ID → unread count.

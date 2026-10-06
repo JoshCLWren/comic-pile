@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import type { Thread, ThreadListItem } from '../../types'
+import { getManualCreatorCreditList } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
-import type { ThreadCreatePayload } from '../../types'
+import { getManualCreatorCreditList } from '../../types'
 
 type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
 

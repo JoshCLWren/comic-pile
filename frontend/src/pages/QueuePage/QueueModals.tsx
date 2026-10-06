@@ -1,4 +1,4 @@
-import type { ChangeEvent, FormEvent } from 'react'
+import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import { useState } from 'react'
 import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
@@ -112,7 +112,7 @@ function CreatorInput({
                 <input
                   type="text"
                   placeholder="Custom role..."
-                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomRole()}
+                  onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomRole()}
                   className="text-xs rounded-xl px-2 py-1 form-control min-w-[80px]"
                 />
               </div>
