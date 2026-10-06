@@ -194,10 +194,11 @@ export default function PositionMenu({
        icon: '\u2B06',
        ariaLabel: 'Move to front',
        action: () => {
-         onMoveToFront(thread.id)
-         // We don't call closeMenu() here because onMoveToFront may trigger
-         // a re-render of the entire list, and we want to rely on the
-         // action handler to manage the menu state.
+onMoveToFront(thread.id)
+          closeMenu()
+          // We don't call closeMenu() here because onMoveToFront may trigger
+          // a re-render of the entire list, and we want to rely on the
+          // action handler to manage the menu state.
        },
      },
      {
@@ -215,8 +216,9 @@ export default function PositionMenu({
        icon: '\u2193',
        ariaLabel: 'Move to back',
        action: () => {
-         onMoveToBack(thread.id)
-         // Same as Move to Front.
+onMoveToBack(thread.id)
+          closeMenu()
+          // Same as Move to Front.
        },
      },
      {
