@@ -1,12 +1,14 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorsPage from '../pages/CreatorsPage'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSelection, CreatorsListState } from '../hooks/useCreatorsList'
 import type { CreatorListItem } from '../services/api-creators'
+import { cast } from '../utils/cast'
 
-vi.mock('../hooks/useCreatorsList', () => ({
+vi.mock('../hooks/useCreatorsList', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../hooks/useCreatorsList')>()),
   useCreatorsList: vi.fn(),
 }))
 
@@ -15,6 +17,23 @@ vi.mock('../hooks/useDebounce', () => ({
 }))
 
 const mockedHook = vi.mocked(useCreatorsList)
+
+const originalMatchMedia = window.matchMedia
+
+/** Pretend the viewport is in the band where `min-width: 768px` matches. */
+function useWideViewport(): void {
+  window.matchMedia = vi.fn((query: string) =>
+    cast<MediaQueryList>({
+      matches: query.includes('min-width: 768px'),
+      media: query,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }),
+  )
+}
 
 const COMPLETE_COVERAGE = {
   rated_issues_total: 2,
@@ -59,11 +78,27 @@ function CompareProbe() {
   return <div>Compare page: {params.get('keys')}</div>
 }
 
-function renderPage(extraRoutes?: { path: string; element: React.ReactNode }[]) {
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-search">{location.search}</div>
+}
+
+function renderPage(
+  extraRoutes?: { path: string; element: React.ReactNode }[],
+  initialEntry = '/creators',
+) {
   return render(
-    <MemoryRouter initialEntries={['/creators']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
-        <Route path="/creators" element={<CreatorsPage />} />
+        <Route
+          path="/creators"
+          element={
+            <>
+              <CreatorsPage />
+              <LocationProbe />
+            </>
+          }
+        />
         {extraRoutes?.map((route) => (
           <Route key={route.path} path={route.path} element={route.element} />
         ))}
@@ -75,6 +110,10 @@ function renderPage(extraRoutes?: { path: string; element: React.ReactNode }[]) 
 beforeEach(() => {
   vi.clearAllMocks()
   mockedHook.mockReturnValue(baseState())
+})
+
+afterEach(() => {
+  window.matchMedia = originalMatchMedia
 })
 
 describe('CreatorsPage', () => {
@@ -468,5 +507,185 @@ describe('CreatorsPage minimum-rated-sample control', () => {
     renderPage()
 
     expect(screen.getByText('small sample')).toBeTruthy()
+  })
+})
+
+describe('CreatorsPage bounded browse filters', () => {
+  it('keeps the secondary filter row collapsed until it is asked for', () => {
+    renderPage()
+
+    const toggle = screen.getByRole('button', { name: 'More filters' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByLabelText('Role')).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+
+    expect(screen.getByRole('button', { name: 'Hide filters' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByLabelText('Role')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide filters' }))
+    expect(screen.queryByLabelText('Role')).not.toBeInTheDocument()
+  })
+
+  it('shows the secondary filter row by default once the viewport is wide enough', () => {
+    useWideViewport()
+
+    renderPage()
+
+    expect(screen.getByRole('button', { name: 'Hide filters' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByLabelText('Role')).toBeInTheDocument()
+  })
+
+  it('restores every bounded filter from the URL', () => {
+    const seen: CreatorListSelection[] = []
+    mockedHook.mockImplementation((selection) => {
+      seen.push(selection)
+      return baseState()
+    })
+    useWideViewport()
+
+    renderPage(undefined, '/creators?role=penciler&min_rating=4&max_rating=4.5&unread=true')
+
+    expect(seen.at(-1)).toMatchObject({
+      role: 'penciler',
+      minRating: 4,
+      maxRating: 4.5,
+      hasUnreadWork: true,
+    })
+    expect(screen.getByLabelText('Role')).toHaveValue('penciler')
+    expect(screen.getByLabelText('Minimum average rating')).toHaveValue(4)
+    expect(screen.getByLabelText('Maximum average rating')).toHaveValue(4.5)
+    expect(screen.getByLabelText('Unread work')).toHaveValue('true')
+  })
+
+  it('records every bounded filter in the URL so the selection survives navigation', () => {
+    const seen: CreatorListSelection[] = []
+    mockedHook.mockImplementation((selection) => {
+      seen.push(selection)
+      return baseState()
+    })
+    useWideViewport()
+
+    renderPage()
+
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'writer' } })
+    fireEvent.change(screen.getByLabelText('Minimum average rating'), { target: { value: '4' } })
+    fireEvent.change(screen.getByLabelText('Maximum average rating'), { target: { value: '4.5' } })
+    fireEvent.change(screen.getByLabelText('Unread work'), { target: { value: 'true' } })
+
+    const search = screen.getByTestId('location-search').textContent ?? ''
+    expect(search).toContain('role=writer')
+    expect(search).toContain('min_rating=4')
+    expect(search).toContain('max_rating=4.5')
+    expect(search).toContain('unread=true')
+    expect(seen.at(-1)).toMatchObject({
+      role: 'writer',
+      minRating: 4,
+      maxRating: 4.5,
+      hasUnreadWork: true,
+    })
+  })
+
+  it('drops a filter again when the control is returned to its neutral value', () => {
+    const seen: CreatorListSelection[] = []
+    mockedHook.mockImplementation((selection) => {
+      seen.push(selection)
+      return baseState()
+    })
+    useWideViewport()
+
+    renderPage()
+
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'artist' } })
+    fireEvent.change(screen.getByLabelText('Minimum average rating'), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('Unread work'), { target: { value: 'true' } })
+
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Minimum average rating'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Unread work'), { target: { value: '' } })
+
+    expect(screen.getByTestId('location-search').textContent).toBe('')
+    expect(seen.at(-1)).toMatchObject({
+      role: undefined,
+      minRating: undefined,
+      maxRating: undefined,
+      hasUnreadWork: undefined,
+    })
+  })
+
+  it('ignores a hand-edited rating filter outside the personal 0-5 scale', () => {
+    const seen: CreatorListSelection[] = []
+    mockedHook.mockImplementation((selection) => {
+      seen.push(selection)
+      return baseState()
+    })
+    useWideViewport()
+
+    renderPage(undefined, '/creators?min_rating=9&max_rating=-3')
+
+    expect(seen.at(-1)).toMatchObject({ minRating: undefined, maxRating: undefined })
+    expect(screen.getByLabelText('Minimum average rating')).toHaveValue(null)
+    expect(screen.getByLabelText('Maximum average rating')).toHaveValue(null)
+  })
+
+  it('clears every bounded filter at once', () => {
+    const seen: CreatorListSelection[] = []
+    mockedHook.mockImplementation((selection) => {
+      seen.push(selection)
+      return baseState({
+        items: [makeItem({ canonical_creator_key: 'creator:1' })],
+        total: 1,
+      })
+    })
+    useWideViewport()
+
+    renderPage(undefined, '/creators?role=writer&min_rating=4&max_rating=4.5&unread=false')
+
+    expect(screen.getByRole('note')).toHaveTextContent('4 active')
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+
+    expect(screen.getByTestId('location-search').textContent).toBe('')
+    expect(seen.at(-1)).toMatchObject({
+      role: undefined,
+      minRating: undefined,
+      maxRating: undefined,
+      hasUnreadWork: undefined,
+    })
+  })
+
+  it('explains an empty filtered result and offers a way out', () => {
+    useWideViewport()
+
+    renderPage(undefined, '/creators?role=colorist')
+
+    expect(screen.getByText('No creators match the current filters.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByTestId('location-search').textContent).toBe('')
+  })
+
+  it('offers only the bounded role vocabulary the server exposes', () => {
+    useWideViewport()
+
+    renderPage()
+
+    // SAFETY: getByLabelText('Role') returns the role select rendered by CreatorsPage, so the element is an HTMLSelectElement.
+    const select = screen.getByLabelText('Role') as HTMLSelectElement
+    expect([...select.options].map((option) => option.value)).toEqual([
+      '',
+      'writer',
+      'artist',
+      'penciler',
+      'inker',
+      'colorist',
+      'letterer',
+      'cover artist',
+      'editor',
+    ])
   })
 })

@@ -7,6 +7,12 @@ import { queryKeys } from '../query/queryKeys'
 /** Bounded page size for the personal creator browse list (backend max is 50). */
 export const CREATOR_LIST_PAGE_SIZE = 20
 
+/** Lower bound of the personal 0-5 average-rating filter. */
+export const CREATOR_RATING_MIN = 0
+
+/** Upper bound of the personal 0-5 average-rating filter. */
+export const CREATOR_RATING_MAX = 5
+
 /** Server-side browse orderings exposed by `GET /api/v1/creators`. */
 export type CreatorListSort = 'name' | 'ratings_count' | 'average_rating'
 
@@ -25,9 +31,24 @@ export interface CreatorListSelection {
 type CreatorsListApi = Pick<typeof creatorsApi, 'getList'>
 
 /**
+ * Keep an average-rating filter only when it is a real number on the personal
+ * 0-5 scale, so query keys stay canonical and the wire request never carries a
+ * value the backend would reject.
+ */
+function normalizeRatingFilter(value: number | undefined): number | undefined {
+  if (value === undefined || Number.isNaN(value)) return undefined
+  if (value < CREATOR_RATING_MIN || value > CREATOR_RATING_MAX) return undefined
+  return value
+}
+
+/**
  * Canonical bounded creator discovery query options: the documented
  * `creators.list` key plus the exact first-page fetch contract consumed by
  * `useCreatorsList`.
+ *
+ * Every bounded filter is part of the key, so changing a filter starts a fresh
+ * collection at offset 0 instead of appending to pages produced under the
+ * previous selection.
  *
  * The backend serves a `limit`/`offset` page, so the opaque cursor is the next
  * row offset and it lives in `pageParam`, never in the key. A page that returns
@@ -46,32 +67,32 @@ export function creatorListQueryOptions(
       ? selection.minRatings
       : undefined
   const role = selection.role?.trim() || undefined
-  const minRating = selection.minRating !== undefined && selection.minRating >= 0 ? selection.minRating : undefined
-  const maxRating = selection.maxRating !== undefined && selection.maxRating >= 0 ? selection.maxRating : undefined
-  const hasUnreadWork = selection.hasUnreadWork !== undefined ? selection.hasUnreadWork : undefined
+  const minRating = normalizeRatingFilter(selection.minRating)
+  const maxRating = normalizeRatingFilter(selection.maxRating)
+  const hasUnreadWork = selection.hasUnreadWork ?? undefined
 
   return {
-    queryKey: queryKeys.creators.list({ 
-      search, 
-      sort, 
-      limit, 
-      minRatings, 
-      role, 
-      minRating, 
-      maxRating, 
-      hasUnreadWork 
+    queryKey: queryKeys.creators.list({
+      search,
+      sort,
+      limit,
+      minRatings,
+      role,
+      minRating,
+      maxRating,
+      hasUnreadWork,
     }),
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      listApi.getList({ 
-        search, 
-        sort, 
-        limit, 
-        offset: pageParam, 
+      listApi.getList({
+        search,
+        sort,
+        limit,
+        offset: pageParam,
         min_ratings: minRatings,
         role,
         min_rating: minRating,
         max_rating: maxRating,
-        has_unread_work: hasUnreadWork
+        has_unread_work: hasUnreadWork,
       }),
     initialPageParam: 0,
     getNextPageParam: (lastPage: CreatorListResponse) => {

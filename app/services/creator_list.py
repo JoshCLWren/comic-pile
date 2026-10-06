@@ -1,4 +1,4 @@
-"""Bounded personal creator discovery list (issue #2775).
+"""Bounded personal creator discovery list (issues #2775, #3089).
 
 This service reuses the rating, role, and coverage semantics from ``#2028``
 and ``#2037`` rather than introducing a competing formula. Every aggregate is
@@ -22,10 +22,21 @@ Sorting:
 Null handling is explicit even though the default collection is rated-only so
 the contract remains deterministic if filtering expands later.
 
+Filters (issue #3089) compose with search and sort before ordering, so
+``total`` and every page reflect the filtered set:
+
+- ``min_ratings`` — minimum headline rated-sample size.
+- ``role`` — normalized role membership, matched case-insensitively against the
+  same normalized roles the rows expose. No free-form client-only matching.
+- ``min_rating`` / ``max_rating`` — personal average rating range on the 0-5
+  personal scale.
+- ``has_unread_work`` — restrict to creators with (or without) unread attributed
+  work in the reader's own pile.
+
 Boundedness: the whole request is served by the fixed small number of queries
 in ``load_creator_summary_inputs`` regardless of library size. No per-creator
-or per-issue N+1 fan-out. Search and pagination happen server-side over the
-user's creator result set.
+or per-issue N+1 fan-out. Filtering, search, and pagination happen server-side
+over the user's creator result set.
 """
 
 from __future__ import annotations
@@ -62,6 +73,21 @@ def _build_coverage(
     )
 
 
+def _normalize_role_filter(role: str | None) -> str | None:
+    """Normalize an incoming role filter to the row role vocabulary.
+
+    Args:
+        role: Raw role filter from the request; may be ``None`` or padded.
+
+    Returns:
+        Trimmed, casefolded role to match, or ``None`` when no role filter applies.
+    """
+    if role is None:
+        return None
+    normalized = role.strip().casefold()
+    return normalized or None
+
+
 async def get_creator_list(
     db: AsyncSession,
     user_id: int,
@@ -87,8 +113,9 @@ async def get_creator_list(
         offset: Page offset.
         min_ratings: Deterministic server-side minimum rated-sample filter
             (creators need at least this many headline-rated issues).
-        role: Optional normalized role filter matched against the creator's
-            normalized roles.
+        role: Optional normalized role filter matched case-insensitively against
+            the creator's normalized roles. Padded or differently cased values
+            are normalized; an empty value applies no role filter.
         min_rating: Optional minimum personal average rating threshold (0-5).
         max_rating: Optional maximum personal average rating threshold (0-5).
         has_unread_work: Optional filter restricting results to creators with
@@ -132,11 +159,12 @@ async def get_creator_list(
         for credit in credits:
             creator_issues[credit.external_id].add(issue_id)
             creator_names.setdefault(credit.external_id, credit.display_name)
-            for role in credit.roles:
-                creator_roles[credit.external_id].add(role)
-            if any(role in HEADLINE_ROLES for role in credit.roles):
+            for credit_role in credit.roles:
+                creator_roles[credit.external_id].add(credit_role)
+            if any(credit_role in HEADLINE_ROLES for credit_role in credit.roles):
                 creator_headline_issues[credit.external_id].add(issue_id)
 
+    normalized_role_filter = _normalize_role_filter(role)
     items: list[CreatorListItem] = []
     for creator_id, issue_ids in creator_issues.items():
         headline_rated = [
@@ -164,26 +192,29 @@ async def get_creator_list(
             if search.lower() not in display_name.lower():
                 continue
 
-        # Role filtering
-        if role:
-            if role not in normalized_roles:
-                continue
+        # Role filtering reuses the normalized role vocabulary the rows expose,
+        # matched case-insensitively so no client-only free-form role matching
+        # is introduced.
+        if normalized_role_filter is not None and not any(
+            candidate.casefold() == normalized_role_filter for candidate in normalized_roles
+        ):
+            continue
 
-        # Rating range filtering
-        if min_rating is not None and average_rating is not None:
-            if average_rating < min_rating:
-                continue
-        if max_rating is not None and average_rating is not None:
-            if average_rating > max_rating:
-                continue
+        # Personal-average range filtering. The default collection is rated-only so
+        # a null average cannot appear; it is still treated as not matching so the
+        # contract stays deterministic if the collection ever widens.
+        if min_rating is not None and (
+            average_rating is None or average_rating < min_rating
+        ):
+            continue
+        if max_rating is not None and (
+            average_rating is None or average_rating > max_rating
+        ):
+            continue
 
-        # Unread work filtering
+        # Unread attributed work in the user's own pile.
         if has_unread_work is not None:
-            # Check if creator has unread attributed work
-            has_unread = any(
-                issue_id in unread_issue_ids 
-                for issue_id in creator_issues[creator_id]
-            )
+            has_unread = any(issue_id in unread_issue_ids for issue_id in issue_ids)
             if has_unread_work != has_unread:
                 continue
 

@@ -267,20 +267,23 @@ export const queryKeys = {
   creators: {
     all: ['creators'] as const,
     /**
-     * Canonical bounded personal creator discovery key (issue #2774). The
+     * Canonical bounded personal creator discovery key (issue #2774, #3089). The
      * pagination cursor lives in `pageParam`, not the key, so every page of
-     * one browse selection shares the stable prefix. `search` is normalized to
-     * a trimmed value (or `undefined` when empty) so the key stays canonical.
+     * one browse selection shares the stable prefix. `search` and `role` are
+     * normalized to trimmed values (or `undefined` when empty), rating filters to
+     * `undefined` outside the personal 0-5 scale, and `hasUnreadWork` to
+     * `undefined` when unset, so the key stays canonical. Every bounded filter
+     * is part of the key, so changing one starts a fresh collection at offset 0.
      */
-    list: (params: { 
-      search?: string; 
-      sort?: 'name' | 'ratings_count' | 'average_rating'; 
-      limit?: number; 
-      minRatings?: number;
-      role?: string;
-      minRating?: number;
-      maxRating?: number;
-      hasUnreadWork?: boolean;
+    list: (params: {
+      search?: string
+      sort?: 'name' | 'ratings_count' | 'average_rating'
+      limit?: number
+      minRatings?: number
+      role?: string
+      minRating?: number
+      maxRating?: number
+      hasUnreadWork?: boolean
     }) =>
       ['creators', 'list', params] as const,
     summaries: (keys: string[]) =>

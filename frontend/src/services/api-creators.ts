@@ -148,10 +148,10 @@ export function createCreatorsApi(client: HttpClient) {
       if (params.role !== undefined && params.role.trim()) {
         queryParams.role = params.role.trim()
       }
-      if (params.min_rating !== undefined && params.min_rating >= 0) {
+      if (params.min_rating !== undefined) {
         queryParams.min_rating = params.min_rating
       }
-      if (params.max_rating !== undefined && params.max_rating >= 0) {
+      if (params.max_rating !== undefined) {
         queryParams.max_rating = params.max_rating
       }
       if (params.has_unread_work !== undefined) {

@@ -1,9 +1,11 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
+import { CREATOR_RATING_MAX, CREATOR_RATING_MIN } from '../hooks/useCreatorsList'
 import { useDebounce } from '../hooks/useDebounce'
 import { creatorRoutePath, parseCreatorKey } from '../utils/creatorKey'
+import { MD_AND_UP_QUERY, useMatchMedia } from '../utils/responsive'
 import type { CreatorListItem } from '../services/api-creators'
 
 /** Quiet period before a typed name search becomes a new bounded query. */
@@ -31,11 +33,53 @@ const MIN_RATINGS_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
   { value: 25, label: '25+' },
 ]
 
+/**
+ * Normalized creator roles offered by the server-side role filter. Values are the
+ * same normalized role strings the rows expose through `normalized_roles`, so the
+ * server matches its own vocabulary instead of a client-only spelling.
+ */
+const ROLE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'writer', label: 'Writer' },
+  { value: 'artist', label: 'Artist' },
+  { value: 'penciler', label: 'Penciler' },
+  { value: 'inker', label: 'Inker' },
+  { value: 'colorist', label: 'Colorist' },
+  { value: 'letterer', label: 'Letterer' },
+  { value: 'cover artist', label: 'Cover artist' },
+  { value: 'editor', label: 'Editor' },
+]
+
+/** Unread attributed-work choices; values map to the server-side tri-state filter. */
+const UNREAD_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '', label: 'Any' },
+  { value: 'true', label: 'Has unread work' },
+  { value: 'false', label: 'No unread work' },
+]
+
+/** URL parameter names for the bounded browse filters added by #3089. */
+const ROLE_PARAM = 'role'
+const MIN_RATING_PARAM = 'min_rating'
+const MAX_RATING_PARAM = 'max_rating'
+const UNREAD_PARAM = 'unread'
+
 /** Sample sizes below this are visibly called out in the average column. */
 const SMALL_SAMPLE_THRESHOLD = 5
 
 function isCreatorListSort(value: string): value is CreatorListSort {
   return SORT_OPTIONS.some((option) => option.value === value)
+}
+
+/**
+ * Read an average-rating filter from the URL, keeping only a real number on the
+ * personal 0-5 scale so a hand-edited link cannot request a range the server
+ * rejects.
+ */
+function readRatingParam(raw: string | null): number | undefined {
+  if (raw === null || raw.trim() === '') return undefined
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return undefined
+  if (parsed < CREATOR_RATING_MIN || parsed > CREATOR_RATING_MAX) return undefined
+  return parsed
 }
 
 function CreatorRow({
@@ -119,13 +163,49 @@ export default function CreatorsPage() {
   const [sort, setSort] = useState<CreatorListSort>('name')
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [minRatings, setMinRatings] = useState<number>(0)
-  const [role, setRole] = useState<string>('')
-  const [minRating, setMinRating] = useState<number>(0)
-  const [maxRating, setMaxRating] = useState<number>(5)
-  const [hasUnreadWork, setHasUnreadWork] = useState<boolean>(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()
   const navigate = useNavigate()
+
+  // Bounded browse filters live in the URL so a refresh, a shared link, and
+  // navigation back from a creator detail all restore the same selection.
+  const roleFilter = (searchParams.get(ROLE_PARAM) ?? '').trim()
+  const minRatingFilter = readRatingParam(searchParams.get(MIN_RATING_PARAM))
+  const maxRatingFilter = readRatingParam(searchParams.get(MAX_RATING_PARAM))
+  const unreadFilter = searchParams.get(UNREAD_PARAM)
+  const hasUnreadWork = unreadFilter === 'true' ? true : unreadFilter === 'false' ? false : undefined
+  const activeFilterCount = [
+    roleFilter,
+    minRatingFilter !== undefined,
+    maxRatingFilter !== undefined,
+    hasUnreadWork !== undefined,
+  ].filter(Boolean).length
+  const hasActiveFilters = activeSearch !== '' || activeFilterCount > 0
+
+  // Refining filters replaces the current history entry instead of stacking one
+  // entry per keystroke, so Back still returns to the page the reader left.
+  const setFilterParam = useCallback(
+    (key: string, value: string) => {
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous)
+          if (value === '') {
+            next.delete(key)
+          } else {
+            next.set(key, value)
+          }
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  const isWideViewport = useMatchMedia(MD_AND_UP_QUERY)
+  const [filtersExpanded, setFiltersExpanded] = useState<boolean | null>(null)
+  const showFilters = filtersExpanded ?? isWideViewport
 
   const {
     items,
@@ -137,14 +217,14 @@ export default function CreatorsPage() {
     hasMore,
     loadMore,
     refetch,
-  } = useCreatorsList({ 
-    search: activeSearch || undefined, 
-    sort, 
+  } = useCreatorsList({
+    search: activeSearch || undefined,
+    sort,
     minRatings: minRatings || undefined,
-    role: role || undefined,
-    minRating: minRating !== undefined && minRating >= 0 ? minRating : undefined,
-    maxRating: maxRating !== undefined && maxRating >= 0 ? maxRating : undefined,
-    hasUnreadWork: hasUnreadWork || undefined
+    role: roleFilter || undefined,
+    minRating: minRatingFilter,
+    maxRating: maxRatingFilter,
+    hasUnreadWork,
   })
 
   const hasItems = items.length > 0
@@ -153,6 +233,26 @@ export default function CreatorsPage() {
   const showMoreError = isError && hasItems
   const selectionCount = selectedKeys.size
   const canCompare = selectionCount >= 2
+
+  const handleClearFilters = () => {
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        next.delete(ROLE_PARAM)
+        next.delete(MIN_RATING_PARAM)
+        next.delete(MAX_RATING_PARAM)
+        next.delete(UNREAD_PARAM)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  const filteredEmptyMessage = (() => {
+    if (activeSearch && activeFilterCount === 0) return `No creators match “${activeSearch}”.`
+    if (activeSearch) return `No creators match “${activeSearch}” with the current filters.`
+    return 'No creators match the current filters.'
+  })()
 
   const handleToggleSelection = (key: string) => {
     setSelectedKeys((prev) => {
@@ -244,73 +344,130 @@ export default function CreatorsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div>
-            <label htmlFor="creators-role" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
-              Role
-            </label>
-            <select
-              id="creators-role"
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFiltersExpanded(!showFilters)}
+            aria-expanded={showFilters}
+            aria-controls="creators-filters"
+            className="min-h-11 rounded-lg border px-3 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            style={{ borderColor: 'var(--theme-border)', color: 'var(--theme-text-primary)' }}
+          >
+            {showFilters ? 'Hide filters' : 'More filters'}
+          </button>
+          {activeFilterCount > 0 && (
+            <span className="text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
+              {activeFilterCount} active
+            </span>
+          )}
+          {activeFilterCount > 0 && hasItems && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="min-h-11 rounded-lg px-3 py-2 text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-muted)' }}
             >
-              <option value="">Any role</option>
-              <option value="writer">Writer</option>
-              <option value="artist">Artist</option>
-              <option value="penciller">Penciller</option>
-              <option value="inker">Inker</option>
-              <option value="colorist">Colorist</option>
-              <option value="letterer">Letterer</option>
-              <option value="cover artist">Cover artist</option>
-              <option value="editor">Editor</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="creators-rating-range" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
-              Rating range
-            </label>
-            <div className="mt-1 flex items-center gap-2">
-              <input
-                id="creators-min-rating"
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
-                value={minRating}
-                onChange={(event) => setMinRating(Number(event.target.value))}
-                className="form-control w-20 rounded-xl px-3 py-2.5 text-base md:text-sm"
-                placeholder="Min"
-              />
-              <span className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>to</span>
-              <input
-                id="creators-max-rating"
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
-                value={maxRating}
-                onChange={(event) => setMaxRating(Number(event.target.value))}
-                className="form-control w-20 rounded-xl px-3 py-2.5 text-base md:text-sm"
-                placeholder="Max"
-              />
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        {showFilters && (
+          <div
+            id="creators-filters"
+            className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3"
+          >
+            <div className="min-w-0">
+              <label
+                htmlFor="creators-role"
+                className="text-xs font-semibold"
+                style={{ color: 'var(--theme-text-muted)' }}
+              >
+                Role
+              </label>
+              <select
+                id="creators-role"
+                value={roleFilter}
+                onChange={(event) => setFilterParam(ROLE_PARAM, event.target.value)}
+                className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+              >
+                <option value="">Any role</option>
+                {ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <fieldset className="min-w-0">
+              <legend className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+                Average rating
+              </legend>
+              <div className="mt-1 flex items-center gap-2">
+                <label htmlFor="creators-min-rating" className="sr-only">
+                  Minimum average rating
+                </label>
+                <input
+                  id="creators-min-rating"
+                  type="number"
+                  inputMode="decimal"
+                  min={CREATOR_RATING_MIN}
+                  max={CREATOR_RATING_MAX}
+                  step="0.1"
+                  placeholder="Min"
+                  value={minRatingFilter ?? ''}
+                  onChange={(event) =>
+                    setFilterParam(MIN_RATING_PARAM, event.target.value.trim())
+                  }
+                  className="form-control min-w-0 flex-1 rounded-xl px-3 py-2.5 text-base md:text-sm"
+                />
+                <span className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+                  to
+                </span>
+                <label htmlFor="creators-max-rating" className="sr-only">
+                  Maximum average rating
+                </label>
+                <input
+                  id="creators-max-rating"
+                  type="number"
+                  inputMode="decimal"
+                  min={CREATOR_RATING_MIN}
+                  max={CREATOR_RATING_MAX}
+                  step="0.1"
+                  placeholder="Max"
+                  value={maxRatingFilter ?? ''}
+                  onChange={(event) =>
+                    setFilterParam(MAX_RATING_PARAM, event.target.value.trim())
+                  }
+                  className="form-control min-w-0 flex-1 rounded-xl px-3 py-2.5 text-base md:text-sm"
+                />
+              </div>
+            </fieldset>
+
+            <div className="min-w-0">
+              <label
+                htmlFor="creators-unread-work"
+                className="text-xs font-semibold"
+                style={{ color: 'var(--theme-text-muted)' }}
+              >
+                Unread work
+              </label>
+              <select
+                id="creators-unread-work"
+                value={hasUnreadWork === undefined ? '' : String(hasUnreadWork)}
+                onChange={(event) => setFilterParam(UNREAD_PARAM, event.target.value)}
+                className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+              >
+                {UNREAD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-          <div>
-            <label htmlFor="creators-unread-work" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
-              Unread work
-            </label>
-            <select
-              id="creators-unread-work"
-              value={hasUnreadWork ? 'true' : 'false'}
-              onChange={(event) => setHasUnreadWork(event.target.value === 'true')}
-              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
-            >
-              <option value="false">Any</option>
-              <option value="true">Has unread work</option>
-            </select>
-          </div>
-        </div>
+        )}
       </section>
 
       {selectionCount > 0 && (
@@ -397,10 +554,22 @@ export default function CreatorsPage() {
                 ))}
               </ul>
             </>
-          ) : activeSearch ? (
-            <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-              No creators match “{activeSearch}”.
-            </p>
+          ) : hasActiveFilters ? (
+            <div className="mt-2">
+              <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+                {filteredEmptyMessage}
+              </p>
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="mt-2 min-h-11 rounded-lg border px-3 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                  style={{ borderColor: 'var(--theme-border)', color: 'var(--theme-text-primary)' }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
           ) : (
             <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
               No rated creators yet. Rating an issue adds its creators here.

@@ -31,6 +31,12 @@ export const TABLET_MAX_WIDTH = BREAKPOINTS.lg - 1 // 1023
 const TABLET_QUERY = `(min-width: ${BREAKPOINTS.md}px) and (max-width: ${TABLET_MAX_WIDTH}px)`
 
 /**
+ * Media query matching the md breakpoint and wider, the band where side-by-side
+ * control rows have room. Below it, stacked controls are the compact layout.
+ */
+export const MD_AND_UP_QUERY = `(min-width: ${BREAKPOINTS.md}px)`
+
+/**
  * Returns whether `matchMedia` is available in the current environment.
  */
 function hasMatchMedia(): boolean {

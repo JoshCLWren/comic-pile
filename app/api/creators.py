@@ -199,7 +199,11 @@ async def list_creators_endpoint(
     ),
     role: str | None = Query(
         default=None,
-        description="Filter by specific normalized role (e.g., 'writer', 'artist')",
+        description=(
+            "Filter by normalized creator role (e.g. 'writer', 'artist'); "
+            "matched case-insensitively against the roles shown on each row"
+        ),
+        max_length=64,
     ),
     min_rating: float | None = Query(
         default=None,

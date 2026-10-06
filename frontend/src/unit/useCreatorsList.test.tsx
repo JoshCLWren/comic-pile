@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCreatorsList, CREATOR_LIST_PAGE_SIZE } from '../hooks/useCreatorsList'
+import type { CreatorListSelection } from '../hooks/useCreatorsList'
 import { creatorsApi } from '../services/api-creators'
 import type { CreatorListItem, CreatorListResponse } from '../services/api-creators'
 
@@ -235,5 +236,86 @@ describe('useCreatorsList', () => {
     })
 
     expect(mockedGetList).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends every bounded filter on the wire', async () => {
+    mockedGetList.mockResolvedValue(makePage())
+
+    const { result } = renderHook(
+      () =>
+        useCreatorsList({
+          role: '  writer  ',
+          minRatings: 3,
+          minRating: 4,
+          maxRating: 4.5,
+          hasUnreadWork: true,
+        }),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(mockedGetList).toHaveBeenCalledWith({
+      search: undefined,
+      sort: 'name',
+      limit: CREATOR_LIST_PAGE_SIZE,
+      offset: 0,
+      min_ratings: 3,
+      role: 'writer',
+      min_rating: 4,
+      max_rating: 4.5,
+      has_unread_work: true,
+    })
+  })
+
+  it('omits rating filters that fall outside the personal 0-5 scale', async () => {
+    mockedGetList.mockResolvedValue(makePage())
+
+    const { result } = renderHook(
+      () => useCreatorsList({ minRating: -1, maxRating: 7, hasUnreadWork: false }),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(mockedGetList).toHaveBeenCalledWith(
+      expect.objectContaining({ min_rating: undefined, max_rating: undefined }),
+    )
+    // `false` is a real restriction and must still reach the server.
+    expect(mockedGetList).toHaveBeenCalledWith(
+      expect.objectContaining({ has_unread_work: false }),
+    )
+  })
+
+  it('resets pagination and keeps the active filters when a filter changes', async () => {
+    mockedGetList.mockImplementation(async (params) => {
+      const offset = params?.offset ?? 0
+      return makePage({
+        items: [makeItem({ canonical_creator_key: `creator:${offset + 1}` })],
+        total: 40,
+        offset,
+      })
+    })
+
+    const { result, rerender } = renderHook(
+      (selection: CreatorListSelection) => useCreatorsList(selection),
+      { wrapper: createWrapper(), initialProps: { sort: 'name' } as CreatorListSelection },
+    )
+
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+    await act(async () => {
+      await result.current.loadMore()
+    })
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    expect(mockedGetList).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 1 }))
+
+    rerender({ sort: 'name', role: 'writer' })
+
+    await waitFor(() =>
+      expect(mockedGetList).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 0, role: 'writer' }),
+      ),
+    )
+    // A new key starts a fresh collection rather than appending filtered pages.
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+    expect(result.current.total).toBe(40)
   })
 })

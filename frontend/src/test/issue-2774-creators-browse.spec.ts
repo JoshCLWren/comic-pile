@@ -417,18 +417,20 @@ test.describe('Issue #2774: creators browse page', () => {
     await expectNoHorizontalOverflow(page)
   })
 
-  test('role filtering sends correct API request and filters results', async ({
-    authenticatedPage,
-  }) => {
+  test('role filtering is one bounded server-side request', async ({ authenticatedPage }) => {
     const page = authenticatedPage
     await page.setViewportSize(DESKTOP_VIEWPORT)
     const requests = await installCreatorsList(page, (params) => {
       const role = params.get('role')
-      const items = role === 'writer' 
-        ? [creatorRow('creator:7', 'Brian K. Vaughan', { normalized_roles: ['writer'] })]
-        : role === 'artist'
-        ? [creatorRow('creator:12', 'Steve McNiven', { normalized_roles: ['artist'] })]
-        : [creatorRow('creator:7', 'Brian K. Vaughan'), creatorRow('creator:12', 'Steve McNiven')]
+      const items =
+        role === 'writer'
+          ? [creatorRow('creator:7', 'Brian K. Vaughan', { normalized_roles: ['writer'] })]
+          : role === 'artist'
+            ? [creatorRow('creator:12', 'Steve McNiven', { normalized_roles: ['artist'] })]
+            : [
+                creatorRow('creator:7', 'Brian K. Vaughan', { normalized_roles: ['writer'] }),
+                creatorRow('creator:12', 'Steve McNiven', { normalized_roles: ['artist'] }),
+              ]
       return {
         items,
         total: items.length,
@@ -439,67 +441,43 @@ test.describe('Issue #2774: creators browse page', () => {
     })
 
     await page.goto('/creators', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible({ timeout: 20000 })
     await expect(page.getByText('Steve McNiven')).toBeVisible()
 
-    // Test role filter dropdown
     await page.getByLabel('Role').selectOption('writer')
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
-    
-    const writerRequest = requests.find(r => r.get('role') === 'writer')
-    expect(writerRequest).toBeDefined()
-    expect(writerRequest!.get('role')).toBe('writer')
+    await expect(page.getByText('Steve McNiven')).toHaveCount(0)
+    await expect(page).toHaveURL(/role=writer/)
+    expect(requests.filter((params) => params.get('role') === 'writer')).toHaveLength(1)
 
-    // Test different role
     await page.getByLabel('Role').selectOption('artist')
     await expect(page.getByText('Steve McNiven')).toBeVisible()
-    await expect(page.getByText('Brian K. Vaughan')).not.toBeVisible()
-    
-    const artistRequest = requests.find(r => r.get('role') === 'artist')
-    expect(artistRequest).toBeDefined()
-    expect(artistRequest!.get('role')).toBe('artist')
+    await expect(page.getByText('Brian K. Vaughan')).toHaveCount(0)
 
-    // Test "Any role" option
+    // "Any role" drops the filter instead of asking the server for an empty role.
     await page.getByLabel('Role').selectOption('')
-    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).toBeVisible()
-    
-    const noRoleRequest = requests.find(r => r.get('role') === null)
-    expect(noRoleRequest).toBeDefined()
+    await expect(page).not.toHaveURL(/role=/)
+    expect(requests.at(-1)?.get('role')).toBeNull()
   })
 
-  test('rating range filtering sends correct API request and filters results', async ({
+  test('personal average filtering is bounded to the 0-5 scale', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
     await page.setViewportSize(DESKTOP_VIEWPORT)
     const requests = await installCreatorsList(page, (params) => {
-      const minRating = params.get('min_rating')
-      const maxRating = params.get('max_rating')
-      const items = []
-      
-      if (!minRating || parseFloat(minRating) <= 4.5) {
-        items.push(creatorRow('creator:7', 'Brian K. Vaughan', { average_rating: 4.5 }))
-      }
-      if (!minRating || parseFloat(minRating) <= 3.0) {
-        items.push(creatorRow('creator:12', 'Steve McNiven', { average_rating: 3.0 }))
-      }
-      if (!minRating || parseFloat(minRating) <= 2.0) {
-        items.push(creatorRow('creator:21', 'Jill Thompson', { average_rating: 2.0 }))
-      }
-      
-      if (maxRating) {
-        const max = parseFloat(maxRating)
-        return {
-          items: items.filter(item => !item.average_rating || item.average_rating <= max),
-          total: items.filter(item => !item.average_rating || item.average_rating <= max).length,
-          limit: Number(params.get('limit') ?? 20),
-          offset: 0,
-          coverage: COMPLETE_COVERAGE,
-        }
-      }
-      
+      const min = params.get('min_rating')
+      const max = params.get('max_rating')
+      const all = [
+        creatorRow('creator:7', 'Brian K. Vaughan', { average_rating: 4.5 }),
+        creatorRow('creator:12', 'Steve McNiven', { average_rating: 3 }),
+        creatorRow('creator:21', 'Jill Thompson', { average_rating: 2 }),
+      ]
+      const items = all.filter((item) => {
+        if (min !== null && (item.average_rating ?? 0) < Number(min)) return false
+        if (max !== null && (item.average_rating ?? 0) > Number(max)) return false
+        return true
+      })
       return {
         items,
         total: items.length,
@@ -510,56 +488,40 @@ test.describe('Issue #2774: creators browse page', () => {
     })
 
     await page.goto('/creators', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('Jill Thompson')).toBeVisible({ timeout: 20000 })
+
+    await page.getByLabel('Minimum average rating').fill('4')
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toHaveCount(0)
+    await expect(page.getByText('Jill Thompson')).toHaveCount(0)
+    expect(requests.at(-1)?.get('min_rating')).toBe('4')
+
+    await page.getByLabel('Minimum average rating').fill('')
+    await page.getByLabel('Maximum average rating').fill('3')
     await expect(page.getByText('Steve McNiven')).toBeVisible()
-    await expect(page.getByText('Jill Thompson')).toBeVisible()
+    await expect(page.getByText('Brian K. Vaughan')).toHaveCount(0)
+    expect(requests.at(-1)?.get('max_rating')).toBe('3')
+    expect(requests.at(-1)?.get('min_rating')).toBeNull()
 
-    // Test minimum rating filter
-    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('4.0')
-    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
-    await expect(page.getByText('Jill Thompson')).not.toBeVisible()
-    
-    const minRequest = requests.find(r => r.get('min_rating') === '4.0')
-    expect(minRequest).toBeDefined()
-    expect(minRequest!.get('min_rating')).toBe('4.0')
-
-    // Test maximum rating filter
-    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('')
-    await page.getByLabel('Rating range').getByPlaceholder('Max').fill('3.5')
-    await expect(page.getByText('Brian K. Vaughan')).not.toBeVisible()
-    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    // The full 0-5 window is not a filter, so it is not requested.
+    await page.getByLabel('Maximum average rating').fill('5')
+    await page.getByLabel('Maximum average rating').fill('')
     await expect(page.getByText('Jill Thompson')).toBeVisible()
-    
-    const maxRequest = requests.find(r => r.get('max_rating') === '3.5')
-    expect(maxRequest).toBeDefined()
-    expect(maxRequest!.get('max_rating')).toBe('3.5')
-
-    // Test range filter
-    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('2.5')
-    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
-    await expect(page.getByText('Jill Thompson')).toBeVisible()
-    
-    const rangeRequest = requests.find(r => r.get('min_rating') === '2.5' && r.get('max_rating') === '3.5')
-    expect(rangeRequest).toBeDefined()
+    expect(requests.at(-1)?.get('max_rating')).toBeNull()
   })
 
-  test('unread work filtering sends correct API request and filters results', async ({
+  test('unread attributed work is a tri-state server-side restriction', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
     await page.setViewportSize(DESKTOP_VIEWPORT)
     const requests = await installCreatorsList(page, (params) => {
-      const hasUnreadWork = params.get('has_unread_work')
-      const items = []
-      
-      if (!hasUnreadWork || hasUnreadWork === 'false') {
-        items.push(creatorRow('creator:7', 'Brian K. Vaughan'))
-      }
-      if (!hasUnreadWork || hasUnreadWork === 'true') {
-        items.push(creatorRow('creator:12', 'Steve McNiven'))
-      }
-      
+      const unread = params.get('has_unread_work')
+      const all = [
+        creatorRow('creator:7', 'Brian K. Vaughan'),
+        creatorRow('creator:12', 'Steve McNiven'),
+      ]
+      const items = unread === null ? all : unread === 'true' ? all.slice(1) : all.slice(0, 1)
       return {
         items,
         total: items.length,
@@ -570,70 +532,48 @@ test.describe('Issue #2774: creators browse page', () => {
     })
 
     await page.goto('/creators', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible({ timeout: 20000 })
 
-    // Test filter for creators with unread work
     await page.getByLabel('Unread work').selectOption('true')
     await expect(page.getByText('Steve McNiven')).toBeVisible()
-    await expect(page.getByText('Brian K. Vaughan')).not.toBeVisible()
-    
-    const trueRequest = requests.find(r => r.get('has_unread_work') === 'true')
-    expect(trueRequest).toBeDefined()
-    expect(trueRequest!.get('has_unread_work')).toBe('true')
+    await expect(page.getByText('Brian K. Vaughan')).toHaveCount(0)
+    expect(requests.at(-1)?.get('has_unread_work')).toBe('true')
 
-    // Test filter for creators without unread work
     await page.getByLabel('Unread work').selectOption('false')
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
-    
-    const falseRequest = requests.find(r => r.get('has_unread_work') === 'false')
-    expect(falseRequest).toBeDefined()
-    expect(falseRequest!.get('has_unread_work')).toBe('false')
+    await expect(page.getByText('Steve McNiven')).toHaveCount(0)
+    expect(requests.at(-1)?.get('has_unread_work')).toBe('false')
 
-    // Test "Any" option
-    await page.getByLabel('Unread work').selectOption('false')
+    await page.getByLabel('Unread work').selectOption('')
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await page.getByLabel('Unread work').selectOption('true')
     await expect(page.getByText('Steve McNiven')).toBeVisible()
-    await page.getByLabel('Unread work').selectOption('false')
-    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    expect(requests.at(-1)?.get('has_unread_work')).toBeNull()
   })
 
-  test('multiple filters work together correctly', async ({
-    authenticatedPage,
-  }) => {
+  test('composed filters travel together in one request', async ({ authenticatedPage }) => {
     const page = authenticatedPage
     await page.setViewportSize(DESKTOP_VIEWPORT)
     const requests = await installCreatorsList(page, (params) => {
       const role = params.get('role')
-      const minRating = params.get('min_rating')
-      const maxRating = params.get('max_rating')
-      const hasUnreadWork = params.get('has_unread_work')
-      const items = []
-      
-      // Brian K. Vaughan: writer, 4.5 rating, no unread work
-      if ((!role || role === 'writer') && 
-          (!minRating || 4.5 >= parseFloat(minRating)) &&
-          (!maxRating || 4.5 <= parseFloat(maxRating)) &&
-          (!hasUnreadWork || hasUnreadWork === 'false')) {
-        items.push(creatorRow('creator:7', 'Brian K. Vaughan', { 
+      const min = params.get('min_rating')
+      const unread = params.get('has_unread_work')
+      const all = [
+        creatorRow('creator:7', 'Brian K. Vaughan', {
           normalized_roles: ['writer'],
-          average_rating: 4.5 
-        }))
-      }
-      
-      // Steve McNiven: artist, 3.0 rating, has unread work
-      if ((!role || role === 'artist') && 
-          (!minRating || 3.0 >= parseFloat(minRating)) &&
-          (!maxRating || 3.0 <= parseFloat(maxRating)) &&
-          (!hasUnreadWork || hasUnreadWork === 'true')) {
-        items.push(creatorRow('creator:12', 'Steve McNiven', { 
+          average_rating: 4.5,
+        }),
+        creatorRow('creator:12', 'Steve McNiven', {
           normalized_roles: ['artist'],
-          average_rating: 3.0 
-        }))
-      }
-      
+          average_rating: 3,
+        }),
+      ]
+      const items = all.filter((item) => {
+        if (role !== null && !item.normalized_roles.includes(role)) return false
+        if (min !== null && (item.average_rating ?? 0) < Number(min)) return false
+        if (unread === 'true' && item.canonical_creator_key !== 'creator:12') return false
+        if (unread === 'false' && item.canonical_creator_key !== 'creator:7') return false
+        return true
+      })
       return {
         items,
         total: items.length,
@@ -644,99 +584,114 @@ test.describe('Issue #2774: creators browse page', () => {
     })
 
     await page.goto('/creators', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible({ timeout: 20000 })
 
-    // Apply multiple filters: writers with rating >= 4.0 and no unread work
     await page.getByLabel('Role').selectOption('writer')
-    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('4.0')
+    await page.getByLabel('Minimum average rating').fill('4')
     await page.getByLabel('Unread work').selectOption('false')
-    
+
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
-    
-    const combinedRequest = requests.find(r => 
-      r.get('role') === 'writer' && 
-      r.get('min_rating') === '4.0' && 
-      r.get('has_unread_work') === 'false'
-    )
-    expect(combinedRequest).toBeDefined()
+    await expect(page.getByText('Steve McNiven')).toHaveCount(0)
+
+    const combined = requests.at(-1)
+    expect(combined?.get('role')).toBe('writer')
+    expect(combined?.get('min_rating')).toBe('4')
+    expect(combined?.get('has_unread_work')).toBe('false')
+    // Changing a filter restarts pagination at offset 0 instead of appending.
+    expect(combined?.get('offset')).toBe('0')
   })
 
-  test('boundary rating values are sent correctly', async ({
+  test('an active selection survives a reload and a detail round trip', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
     await page.setViewportSize(DESKTOP_VIEWPORT)
-    const requests = await installCreatorsList(page, (params) => {
-      const minRating = params.get('min_rating')
-      const maxRating = params.get('max_rating')
-      const items = [
-        creatorRow('creator:7', 'Brian K. Vaughan', { average_rating: 4.5 }),
-        creatorRow('creator:12', 'Steve McNiven', { average_rating: 3.0 }),
-      ]
-      
-      if (minRating) {
-        const min = parseFloat(minRating)
-        return {
-          items: items.filter(item => !item.average_rating || item.average_rating >= min),
-          total: items.filter(item => !item.average_rating || item.average_rating >= min).length,
-          limit: Number(params.get('limit') ?? 20),
-          offset: 0,
-          coverage: COMPLETE_COVERAGE,
-        }
-      }
-      
-      if (maxRating) {
-        const max = parseFloat(maxRating)
-        return {
-          items: items.filter(item => !item.average_rating || item.average_rating <= max),
-          total: items.filter(item => !item.average_rating || item.average_rating <= max).length,
-          limit: Number(params.get('limit') ?? 20),
-          offset: 0,
-          coverage: COMPLETE_COVERAGE,
-        }
-      }
-      
-      return {
-        items,
-        total: items.length,
-        limit: Number(params.get('limit') ?? 20),
-        offset: 0,
-        coverage: COMPLETE_COVERAGE,
-      }
+    const requests = await installCreatorsList(page, (params) => ({
+      items: [creatorRow('creator:7', 'Brian K. Vaughan', { normalized_roles: ['writer'] })],
+      total: 1,
+      limit: Number(params.get('limit') ?? 20),
+      offset: 0,
+      coverage: COMPLETE_COVERAGE,
+    }))
+    await installCreatorsDetail(page)
+
+    await page.goto('/creators?role=writer&min_rating=4&unread=true', {
+      waitUntil: 'domcontentloaded',
     })
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible({ timeout: 20000 })
+    await expect(page.getByLabel('Role')).toHaveValue('writer')
+    await expect(page.getByLabel('Minimum average rating')).toHaveValue('4')
+    await expect(page.getByLabel('Unread work')).toHaveValue('true')
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByLabel('Role')).toHaveValue('writer')
+    await expect(page.getByLabel('Minimum average rating')).toHaveValue('4')
+    await expect(page.getByLabel('Unread work')).toHaveValue('true')
+
+    await page.getByRole('link', { name: /Brian K. Vaughan/ }).click()
+    await expect(page).toHaveURL(/\/creators\/creator%3A7$/)
+    await page.goBack()
+    await expect(page.getByLabel('Role')).toHaveValue('writer')
+    await expect(page.getByLabel('Minimum average rating')).toHaveValue('4')
+    await expect(page.getByLabel('Unread work')).toHaveValue('true')
+    expect(requests.at(-1)?.get('role')).toBe('writer')
+    expect(requests.at(-1)?.get('min_rating')).toBe('4')
+    expect(requests.at(-1)?.get('has_unread_work')).toBe('true')
+  })
+
+  test('an empty filtered result explains itself and can be cleared', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    const requests = await installCreatorsList(page, (params) => ({
+      items: params.get('role') === null ? [creatorRow('creator:7', 'Brian K. Vaughan')] : [],
+      total: params.get('role') === null ? 1 : 0,
+      limit: Number(params.get('limit') ?? 20),
+      offset: 0,
+      coverage: COMPLETE_COVERAGE,
+    }))
 
     await page.goto('/creators', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible({ timeout: 20000 })
 
-    // Test minimum rating of 0 (should include all creators)
-    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('0')
-    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).toBeVisible()
-    
-    const minZeroRequest = requests.find(r => r.get('min_rating') === '0')
-    expect(minZeroRequest).toBeDefined()
-    expect(minZeroRequest!.get('min_rating')).toBe('0')
+    await page.getByLabel('Role').selectOption('colorist')
+    await expect(page.getByText('No creators match the current filters.')).toBeVisible()
 
-    // Test maximum rating of 5 (should include all creators)
-    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('')
-    await page.getByLabel('Rating range').getByPlaceholder('Max').fill('5')
+    await page.getByRole('button', { name: 'Clear filters' }).click()
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).toBeVisible()
-    
-    const maxFiveRequest = requests.find(r => r.get('max_rating') === '5')
-    expect(maxFiveRequest).toBeDefined()
-    expect(maxFiveRequest!.get('max_rating')).toBe('5')
+    expect(requests.at(-1)?.get('role')).toBeNull()
+  })
 
-    // Test range of 0 to 5 (should include all creators)
-    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('0')
-    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
-    await expect(page.getByText('Steve McNiven')).toBeVisible()
-    
-    const rangeZeroFiveRequest = requests.find(r => 
-      r.get('min_rating') === '0' && 
-      r.get('max_rating') === '5'
-    )
-    expect(rangeZeroFiveRequest).toBeDefined()
+  test('phone width keeps the secondary filters collapsed and reachable', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(MOBILE_VIEWPORT)
+    const requests = await installCreatorsList(page, (params) => ({
+      items: [creatorRow('creator:7', 'Brian K. Vaughan')],
+      total: 1,
+      limit: Number(params.get('limit') ?? 20),
+      offset: 0,
+      coverage: COMPLETE_COVERAGE,
+    }))
+
+    await page.goto('/creators', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible({ timeout: 20000 })
+
+    // Narrow layouts stack, so the extra controls are not permanently expanded.
+    const toggle = page.getByRole('button', { name: 'More filters' })
+    await expect(toggle).toBeVisible()
+    await expect(page.getByLabel('Role')).toHaveCount(0)
+
+    await toggle.click()
+    await expect(page.getByLabel('Role')).toBeVisible()
+    await expect(page.getByLabel('Minimum average rating')).toBeVisible()
+    await expect(page.getByLabel('Unread work')).toBeVisible()
+
+    await page.getByLabel('Role').selectOption('writer')
+    expect(requests.at(-1)?.get('role')).toBe('writer')
+
+    await expectNoHorizontalOverflow(page)
   })
 })

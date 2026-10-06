@@ -704,21 +704,23 @@ async def test_has_unread_work_filtering(
 ) -> None:
     """Unread work filtering returns creators with or without unread attributed work."""
     _thread, issues = await _make_thread(
-        async_db, default_user, title="Unread", issue_count=3, queue_position=1, read_through=1
+        async_db, default_user, title="Unread", issue_count=3, queue_position=1, read_through=2
     )
-    # Issue 1: read, has creator
+    # Issue 1: read, rated, creator has nothing unread.
     await _confirm_identity(
         async_db, issues[0], creators=[{"id": 1, "name": "Read Only", "role": "writer"}]
     )
     await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
-    
-    # Issue 2: unread, has creator
+    # Issue 2: read, rated. This is what puts creator:2 in the rated-only collection.
     await _confirm_identity(
         async_db, issues[1], creators=[{"id": 2, "name": "Has Unread", "role": "artist"}]
     )
-    # Don't rate this one to keep it unread
-    
-    # Issue 3: read, has creator (different creator from issue 2)
+    await _rate(async_db, issues[1], rating=3.0, timestamp=D1)
+    # Issue 3: unread and attributed to the same creator, so creator:2 has unread work.
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 2, "name": "Has Unread", "role": "artist"}]
+    )
+    # Separate fully-read series so one more distinct creator exists.
     _thread2, issues2 = await _make_thread(
         async_db, default_user, title="Unread2", issue_count=1, queue_position=2, read_through=1
     )
@@ -751,6 +753,39 @@ async def test_has_unread_work_filtering(
 
 
 @pytest.mark.asyncio
+async def test_unrated_creator_is_not_collected_even_when_unread(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """The rated-only collection stays the baseline the unread filter narrows."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Unrated", issue_count=3, queue_position=1, read_through=2
+    )
+    # Read, attributed, but never rated: outside the default collection.
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Unrated Upcoming", "role": "writer"}]
+    )
+    # Unread and attributed to the same unrated creator.
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 1, "name": "Unrated Upcoming", "role": "writer"}]
+    )
+    # Read and rated so exactly one creator exists.
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Rated Reader", "role": "artist"}]
+    )
+    await _rate(async_db, issues[1], rating=4.0, timestamp=D1)
+
+    unfiltered = await auth_client.get("/api/v1/creators")
+    assert unfiltered.status_code == 200
+    assert unfiltered.json()["total"] == 1
+
+    unread = await auth_client.get("/api/v1/creators?has_unread_work=true")
+    assert unread.status_code == 200
+    assert unread.json()["total"] == 0
+
+
+@pytest.mark.asyncio
 async def test_combined_filters(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -758,50 +793,200 @@ async def test_combined_filters(
 ) -> None:
     """Multiple filters work together correctly."""
     _thread, issues = await _make_thread(
-        async_db, default_user, title="Combined", issue_count=4, queue_position=1, read_through=2
+        async_db, default_user, title="Combined", issue_count=4, queue_position=1, read_through=1
     )
     # Writer with high rating, no unread work
     await _confirm_identity(
         async_db, issues[0], creators=[{"id": 1, "name": "Good Writer", "role": "writer"}]
     )
     await _rate(async_db, issues[0], rating=4.5, timestamp=D1)
-    
     # Artist with medium rating, has unread work
     await _confirm_identity(
         async_db, issues[1], creators=[{"id": 2, "name": "Ok Artist", "role": "artist"}]
     )
     await _rate(async_db, issues[1], rating=3.0, timestamp=D1)
-    
     # Writer with low rating, has unread work
     await _confirm_identity(
         async_db, issues[2], creators=[{"id": 3, "name": "Bad Writer", "role": "writer"}]
     )
     await _rate(async_db, issues[2], rating=2.0, timestamp=D1)
-    
-    # Penciller with high rating, no unread work
+    # Penciller with high rating, has unread work
     await _confirm_identity(
-        async_db, issues[3], creators=[{"id": 4, "name": "Great Penciller", "role": "penciller"}]
+        async_db, issues[3], creators=[{"id": 4, "name": "Great Penciller", "role": "penciler"}]
     )
     await _rate(async_db, issues[3], rating=5.0, timestamp=D1)
 
     # Combined: writers with rating >= 3.0 and no unread work
-    response = await auth_client.get("/api/v1/creators?role=writer&min_rating=3.0&has_unread_work=false")
+    response = await auth_client.get(
+        "/api/v1/creators?role=writer&min_rating=3.0&has_unread_work=false"
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 1  # Only "Good Writer"
     assert body["items"][0]["canonical_creator_key"] == "creator:1"
 
     # Combined: artists with rating between 2.5 and 3.5 and has unread work
-    response = await auth_client.get("/api/v1/creators?role=artist&min_rating=2.5&max_rating=3.5&has_unread_work=true")
+    response = await auth_client.get(
+        "/api/v1/creators?role=artist&min_rating=2.5&max_rating=3.5&has_unread_work=true"
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 1  # Only "Ok Artist"
     assert body["items"][0]["canonical_creator_key"] == "creator:2"
 
+    # Combined with the sample-size filter on top of every other filter
+    response = await auth_client.get(
+        "/api/v1/creators?role=penciler&min_ratings=1&min_rating=5.0&has_unread_work=true"
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["canonical_creator_key"] == "creator:4"
+
     # No results for impossible combination
     response = await auth_client.get("/api/v1/creators?role=writer&max_rating=1.5")
     assert response.status_code == 200
     assert response.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_unfiltered_list_keeps_every_role(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Regression: an absent role filter must not behave like a role filter.
+
+    Building the per-creator aggregates must not overwrite the requested role
+    filter, otherwise every unfiltered browse silently dropped the creators
+    whose normalized roles differed from the last processed credit.
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Roles", issue_count=3, queue_position=1, read_through=3
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Alpha Writer", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Beta Artist", "role": "artist"}]
+    )
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 3, "name": "Gamma Inker", "role": "inker"}]
+    )
+    for issue in issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    for sort in ("name", "ratings_count", "average_rating"):
+        response = await auth_client.get(f"/api/v1/creators?sort={sort}")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 3, sort
+        assert {r["canonical_creator_key"] for r in body["items"]} == {
+            "creator:1",
+            "creator:2",
+            "creator:3",
+        }, sort
+
+
+@pytest.mark.asyncio
+async def test_role_filter_is_trimmed_and_case_insensitive(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Padded or differently cased role filters reuse the normalized row vocabulary."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Cases", issue_count=2, queue_position=1, read_through=2
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Case Writer", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Case Artist", "role": "artist"}]
+    )
+    for issue in issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    padded = await auth_client.get("/api/v1/creators?role=%20%20Writer%20%20")
+    assert padded.status_code == 200
+    assert [r["canonical_creator_key"] for r in padded.json()["items"]] == ["creator:1"]
+
+    cased = await auth_client.get("/api/v1/creators?role=ARTIST")
+    assert cased.status_code == 200
+    assert [r["canonical_creator_key"] for r in cased.json()["items"]] == ["creator:2"]
+
+    blank = await auth_client.get("/api/v1/creators?role=")
+    assert blank.status_code == 200
+    assert blank.json()["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_rating_filters_reject_out_of_range(
+    auth_client: AsyncClient,
+) -> None:
+    """Personal average filters are bounded to the 0-5 personal scale."""
+    assert (await auth_client.get("/api/v1/creators?min_rating=-1")).status_code == 422
+    assert (await auth_client.get("/api/v1/creators?min_rating=5.1")).status_code == 422
+    assert (await auth_client.get("/api/v1/creators?max_rating=-0.5")).status_code == 422
+    assert (await auth_client.get("/api/v1/creators?max_rating=6")).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_filters_compose_with_search_sort_and_pagination(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Filtered sets paginate deterministically and compose with search and sort."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Pages", issue_count=6, queue_position=1, read_through=6
+    )
+    ratings = [5.0, 4.0, 3.0, 2.0, 1.0, 4.5]
+    roles = ["writer", "artist", "writer", "artist", "writer", "writer"]
+    for idx, issue in enumerate(issues):
+        await _confirm_identity(
+            async_db,
+            issue,
+            creators=[
+                {
+                    "id": 300 + idx,
+                    "name": f"Writer {idx:02d}",
+                    "role": roles[idx],
+                }
+            ],
+        )
+        await _rate(async_db, issue, rating=ratings[idx], timestamp=D1)
+
+    filtered = await auth_client.get(
+        "/api/v1/creators?role=writer&min_rating=4.0&sort=ratings_count&limit=1&offset=0"
+    )
+    assert filtered.status_code == 200
+    body = filtered.json()
+    assert body["total"] == 2
+    assert body["limit"] == 1
+    assert body["offset"] == 0
+    assert body["items"][0]["canonical_creator_key"] == "creator:300"
+
+    second = await auth_client.get(
+        "/api/v1/creators?role=writer&min_rating=4.0&sort=ratings_count&limit=1&offset=1"
+    )
+    assert second.status_code == 200
+    assert second.json()["items"][0]["canonical_creator_key"] == "creator:305"
+
+    beyond = await auth_client.get(
+        "/api/v1/creators?role=writer&min_rating=4.0&sort=ratings_count&limit=1&offset=2"
+    )
+    assert beyond.status_code == 200
+    assert beyond.json()["items"] == []
+    assert beyond.json()["total"] == 2
+
+    searched = await auth_client.get("/api/v1/creators?role=artist&search=writer%2003")
+    assert searched.status_code == 200
+    assert [r["canonical_creator_key"] for r in searched.json()["items"]] == ["creator:303"]
+
+    no_overlap = await auth_client.get("/api/v1/creators?role=artist&search=writer%2000")
+    assert no_overlap.status_code == 200
+    assert no_overlap.json()["total"] == 0
 
 
 @pytest.mark.asyncio
