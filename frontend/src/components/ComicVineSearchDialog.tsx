@@ -8,6 +8,7 @@ import type {
   ComicVineResolvedIssue,
 } from '../services/api-comicvine'
 import ImageWithLoading from './ImageWithLoading'
+import SiblingSeriesMappingOffer from './SiblingSeriesMappingOffer'
 import { optimizedImageSrcSet, optimizedImageUrl } from '../services/imageDelivery'
 
 interface ComicVineSearchDialogProps {
@@ -18,9 +19,17 @@ interface ComicVineSearchDialogProps {
   mode?: 'confirm' | 'replace'
   onClose: () => void
   onConfirmed: (selected?: ComicVineIssueCandidate | null) => void
+  onSiblingsMapped?: (confirmedIssueIds: number[]) => void
 }
 
-type DialogStep = 'search' | 'select-issue' | 'confirm'
+type DialogStep = 'search' | 'select-issue' | 'confirm' | 'siblings'
+
+/** The provider volume a confirmed correction can license sibling scope for (#3159). */
+interface SiblingScope {
+  provider: string
+  providerSeriesExternalId: string
+  seriesLabel: string
+}
 
 interface SeriesPagination {
   offset: number
@@ -97,6 +106,7 @@ export default function ComicVineSearchDialog({
   mode = 'confirm',
   onClose,
   onConfirmed,
+  onSiblingsMapped,
 }: ComicVineSearchDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
   const [query, setQuery] = useState(threadTitle)
@@ -110,6 +120,7 @@ export default function ComicVineSearchDialog({
   const [isConfirming, setIsConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [siblingScope, setSiblingScope] = useState<SiblingScope | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const asyncRef = useRef(0)
@@ -129,8 +140,7 @@ export default function ComicVineSearchDialog({
       setQuery(threadTitle)
     }
     if (isOpen) {
-      setStep('search')
-      setSeriesResults([])
+      setStep('search'); setSeriesResults([])
       setSelectedSeries(null)
       setIssueCandidates([])
       setSelectedIssue(null)
@@ -138,6 +148,7 @@ export default function ComicVineSearchDialog({
       setPagination(EMPTY_PAGINATION)
       setError(null)
       setHasSearched(false)
+      setSiblingScope(null)
     }
   }, [isOpen, threadTitle])
 
@@ -349,13 +360,31 @@ export default function ComicVineSearchDialog({
         await comicVineApi.confirmIdentity(issueId, targetIssue.comicvine_issue_id)
       }
       onConfirmed(targetIssue)
-      onClose()
+      // Issue #3159: confirming one issue's volume licenses sibling scope, so the
+      // remaining numbered siblings become offerable. Keep the dialog open for that
+      // offer instead of closing the moment the single-issue correction lands.
+      const volumeId = directIssue?.volume_id ?? selectedSeries?.comicvine_volume_id ?? null
+      if (volumeId != null) {
+        setSiblingScope({
+          provider: 'comicvine',
+          providerSeriesExternalId: String(volumeId),
+          seriesLabel: directIssue?.series_name ?? selectedSeries?.name ?? threadTitle,
+        })
+        setStep('siblings')
+      } else {
+        onClose()
+      }
     } catch {
       setError('Failed to confirm identity. Please try again.')
     } finally {
       setIsConfirming(false)
     }
-  }, [issueId, directIssue, selectedIssue, mode, onConfirmed, onClose])
+  }, [issueId, directIssue, selectedIssue, mode, onConfirmed, onClose, selectedSeries, threadTitle])
+
+  const handleDismissSiblings = useCallback(() => {
+    setSiblingScope(null)
+    onClose()
+  }, [onClose])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -370,10 +399,19 @@ export default function ComicVineSearchDialog({
   const confirmSeriesName = directIssue?.series_name ?? selectedSeries?.name ?? threadTitle
   const confirmIssue = directIssue ?? selectedIssue
 
+  const dialogTitle =
+    step === 'search'
+      ? 'Find ComicVine Match'
+      : step === 'select-issue'
+        ? 'Select Issue'
+        : step === 'siblings'
+          ? 'Map Sibling Issues'
+          : 'Confirm Match'
+
   return (
     <Modal
       isOpen={isOpen}
-      title={step === 'search' ? 'Find ComicVine Match' : step === 'select-issue' ? 'Select Issue' : 'Confirm Match'}
+      title={dialogTitle}
       onClose={onClose}
       size="large"
     >
@@ -604,6 +642,17 @@ export default function ComicVineSearchDialog({
               {isConfirming ? 'Confirming...' : 'Confirm Identity'}
             </button>
           </>
+        )}
+
+        {step === 'siblings' && issueId && siblingScope && (
+          <SiblingSeriesMappingOffer
+            originIssueId={issueId}
+            provider={siblingScope.provider}
+            providerSeriesExternalId={siblingScope.providerSeriesExternalId}
+            seriesLabel={siblingScope.seriesLabel}
+            onMapped={(confirmedIssueIds) => onSiblingsMapped?.(confirmedIssueIds)}
+            onDismiss={handleDismissSiblings}
+          />
         )}
       </div>
     </Modal>

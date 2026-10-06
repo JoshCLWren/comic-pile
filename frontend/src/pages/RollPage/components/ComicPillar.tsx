@@ -12,6 +12,7 @@ import { queryClient } from '../../../query/queryClient'
 import {
   applyComicVineCorrectionOptimistically,
   invalidateComicVineIssueIntelligence,
+  invalidateComicVineIssueIntelligenceMany,
 } from '../../../query/cacheEffects'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 
@@ -95,6 +96,19 @@ export function ComicPillar({
     await fetchIdentity()
     onRefreshThread()
   }, [fetchIdentity, onRefreshThread, issueId])
+
+  // Issue #3159: a confirmed volume correction can also confirm the series' other
+  // numbered siblings in one step, so each confirmed sibling needs its own cover
+  // refetched before the card can show the enriched series.
+  const handleSiblingsMapped = useCallback(
+    async (confirmedIssueIds: number[]) => {
+      if (confirmedIssueIds.length > 0) {
+        await invalidateComicVineIssueIntelligenceMany(queryClient, confirmedIssueIds)
+      }
+      onRefreshThread()
+    },
+    [onRefreshThread],
+  )
 
   const needsIdentity = identityState && !identityState.has_confirmed_identity
   const isLinked = Boolean(identityState?.has_confirmed_identity)
@@ -274,6 +288,7 @@ export function ComicPillar({
           mode={searchMode}
           onClose={() => setIsSearchDialogOpen(false)}
           onConfirmed={handleIdentityConfirmed}
+          onSiblingsMapped={handleSiblingsMapped}
         />
       )}
     </div>
