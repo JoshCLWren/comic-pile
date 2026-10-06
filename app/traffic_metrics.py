@@ -49,12 +49,27 @@ def resolve_route_template(scope: Mapping[str, object]) -> str:
     runs, so calling this after routing resolves yields a cardinality-safe
     template such as ``/api/v1/threads/{thread_id}``.
 
+    Since FastAPI 0.137.0 ``include_router`` keeps included routers as a tree
+    of inclusion nodes instead of cloning every ``APIRoute`` into the
+    application. On those versions ``scope["route"]`` is the original,
+    unprefixed route, and the effective mounted template lives on the
+    per-request effective route context. Directly registered routes still
+    resolve through ``scope["route"]`` on every version, so this checks the
+    effective context first and falls back to the matched route.
+
     Args:
         scope: The ASGI request scope dictionary.
 
     Returns:
         The route path template, or ``__unmatched__`` when no route matched.
     """
+    fastapi_scope = scope.get("fastapi")
+    if isinstance(fastapi_scope, Mapping):
+        context = fastapi_scope.get("effective_route_context")
+        for attribute in ("path", "path_format"):
+            template = getattr(context, attribute, None)
+            if isinstance(template, str) and template:
+                return template
     route = scope.get("route")
     path_template = getattr(route, "path", None)
     if isinstance(path_template, str) and path_template:
