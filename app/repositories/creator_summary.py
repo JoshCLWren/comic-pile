@@ -9,6 +9,7 @@ queries regardless of how many creator keys are requested.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -138,11 +139,80 @@ def extract_creator_credits(metadata: dict[str, Any]) -> list[CreatorCredit]:
     return credits
 
 
+#: Reserved identifier band for manually entered creators. Provider person ids
+#: live far below this floor, so a manual credit can share the aggregation key
+#: space with ComicVine credits without ever colliding with a provider id.
+MANUAL_CREATOR_ID_BASE = 1_000_000_000
+
+#: Friendly manual-entry role labels mapped onto the canonical lowercase
+#: provider role vocabulary so headline classification sees one dialect.
+_MANUAL_ROLE_ALIASES: dict[str, str] = {
+    "cover artist": "cover",
+    "penciller": "penciler",
+}
+
+
+def manual_creator_id(name: str) -> int:
+    """Derive the stable synthetic person id for a manually entered creator.
+
+    ``hash()`` is randomized per interpreter, so it must never key creator
+    identity: the same name would otherwise resolve to a different canonical
+    creator key after a process restart and every saved creator link would
+    break. A SHA-256 digest keeps the id stable across processes and maps it
+    into the reserved manual band.
+
+    Args:
+        name: Normalized (whitespace-collapsed) creator display name.
+
+    Returns:
+        A deterministic id in
+        ``[MANUAL_CREATOR_ID_BASE, 2 * MANUAL_CREATOR_ID_BASE)``.
+    """
+    digest = hashlib.sha256(name.encode("utf-8")).hexdigest()
+    return MANUAL_CREATOR_ID_BASE + int(digest, 16) % MANUAL_CREATOR_ID_BASE
+
+
+def _split_roles(item: dict[str, object]) -> list[str]:
+    """Return the raw role strings stored on one manual credit.
+
+    Args:
+        item: One stored manual creator credit dictionary.
+
+    Returns:
+        Candidate role strings before normalization.
+    """
+    role_value = item.get("roles")
+    if isinstance(role_value, list):
+        return [part for part in role_value if isinstance(part, str)]
+    if isinstance(role_value, str):
+        return role_value.split(",")
+    return []
+
+
+def _normalize_manual_role(role: str) -> str | None:
+    """Normalize one manual role token to the canonical provider vocabulary.
+
+    Args:
+        role: Raw role token supplied by the client.
+
+    Returns:
+        The trimmed, lowercased, alias-resolved role, or ``None`` when the
+        token carries no role text.
+    """
+    normalized = " ".join(role.split()).lower()
+    if not normalized:
+        return None
+    return _MANUAL_ROLE_ALIASES.get(normalized, normalized)
+
+
 def extract_manual_creator_credits(manual_credits: list[dict[str, object]]) -> list[CreatorCredit]:
     """Extract deduplicated creator credits from manual thread metadata.
 
-    Manual credits use a synthetic external_id (negative, derived from hash of name)
-    so they can be aggregated alongside provider credits without collisions.
+    Manual credits carry no provider id, so each distinct normalized name is
+    mapped into :data:`MANUAL_CREATOR_ID_BASE`, a reserved band no provider
+    person id reaches. Role tokens are normalized to the same lowercase
+    vocabulary ComicVine credits use so headline classification
+    (``HEADLINE_ROLES``) treats manual and provider credits identically.
 
     Args:
         manual_credits: List of manual creator credit dicts with 'name' and 'roles'.
@@ -158,18 +228,17 @@ def extract_manual_creator_credits(manual_credits: list[dict[str, object]]) -> l
         name = item.get("name")
         if not isinstance(name, str) or not name.strip():
             continue
-        role_value = item.get("roles")
-        roles: tuple[str, ...] = ()
-        if role_value is not None:
-            if isinstance(role_value, list):
-                parsed = {str(part).strip() for part in role_value if str(part).strip()}
-            elif isinstance(role_value, str):
-                parsed = {part.strip() for part in role_value.split(",") if part.strip()}
-            else:
-                parsed = set()
-            roles = tuple(sorted(parsed))
-        # Synthetic external_id: negative hash of name to avoid collisions with provider IDs
-        synthetic_id = -abs(hash(name.strip().lower())) % 1_000_000_000 - 1
+        normalized_name = " ".join(name.split())
+        roles = tuple(
+            sorted(
+                {
+                    role
+                    for role in (_normalize_manual_role(part) for part in _split_roles(item))
+                    if role is not None
+                }
+            )
+        )
+        synthetic_id = manual_creator_id(normalized_name)
         dedupe = (synthetic_id, roles)
         if dedupe in seen:
             continue
@@ -178,7 +247,7 @@ def extract_manual_creator_credits(manual_credits: list[dict[str, object]]) -> l
             CreatorCredit(
                 external_id=synthetic_id,
                 roles=roles,
-                display_name=name.strip(),
+                display_name=normalized_name,
             )
         )
     return credits
@@ -302,10 +371,12 @@ async def load_creator_summary_inputs(
 
 __all__ = [
     "COMICVINE_PROVIDER",
+    "MANUAL_CREATOR_ID_BASE",
     "CreatorCredit",
     "CreatorSummaryInputs",
     "OwnedIssueSeries",
     "extract_creator_credits",
     "extract_manual_creator_credits",
     "load_creator_summary_inputs",
+    "manual_creator_id",
 ]

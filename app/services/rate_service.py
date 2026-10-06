@@ -561,6 +561,7 @@ async def rate_thread(
     resp_total_issues = thread.total_issues
     resp_reading_progress = thread.reading_progress
     resp_next_unread_issue_id = thread.next_unread_issue_id
+    resp_manual_creator_credits = thread.manual_creator_credits
 
     # Reuse already-computed issues_remaining instead of re-querying.
     resp_issues_remaining = thread_issues_remaining
@@ -609,6 +610,7 @@ async def rate_thread(
         "reading_progress": resp_reading_progress,
         "next_unread_issue_id": resp_next_unread_issue_id,
         "next_unread_issue_number": resp_next_unread_issue_number,
+        "manual_creator_credits": resp_manual_creator_credits,
         "blocking_reasons": [],
     }
     

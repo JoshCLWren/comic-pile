@@ -138,6 +138,7 @@ async def thread_to_response(
         reading_progress=reading_progress,
         next_unread_issue_id=next_unread_issue_id,
         next_unread_issue_number=next_unread_issue_number,
+        manual_creator_credits=thread.manual_creator_credits,
     )
 
 
