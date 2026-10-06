@@ -2,6 +2,9 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter } from 'react-router-dom'
+
+const navigateSpy = vi.fn()
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import type { UseQueueThreadActionsDeps } from '../pages/QueuePage/useQueueThreadActions'
 import { queryClient as sharedQueryClient } from '../query/queryClient'
@@ -60,12 +63,24 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
   }
 }
 
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+  }
+})
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 })
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  return (
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </BrowserRouter>
+  )
 }
 
 beforeEach(() => {
@@ -82,6 +97,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: vi.fn(),
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
         ),
@@ -109,6 +125,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: vi.fn(),
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
         ),
@@ -133,6 +150,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: vi.fn(),
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
         ),
@@ -176,6 +194,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: navigate,
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
         ),
@@ -210,6 +229,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: navigate,
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
         ),
@@ -235,6 +255,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: navigate,
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
         ),
@@ -255,10 +276,11 @@ describe('useQueueThreadActions', () => {
     const refetchSession = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(
       () =>
-        useQueueThreadActions(
+useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
+            refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ snoozeHook: () => snooze, unsnoozeHook: () => unsnooze }),
         ),
@@ -280,6 +302,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: vi.fn(),
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({
             shuffleHook: () => ({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false, isError: false }),
@@ -296,14 +319,16 @@ describe('useQueueThreadActions', () => {
 
   it('gates the queue shuffle behind a confirmation that cancels without mutating', async () => {
     const shuffle = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    const navigate = vi.fn()
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
+            navigateToRoll: navigate,
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
-          buildDeps({ shuffleHook: () => shuffle }),
+          buildDeps(),
         ),
       { wrapper },
     )
@@ -330,6 +355,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: vi.fn(),
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
         ),
@@ -350,6 +376,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: vi.fn(),
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
         ),
@@ -373,6 +400,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: vi.fn(),
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
         ),
@@ -400,6 +428,7 @@ describe('useQueueThreadActions', () => {
           {
             navigateToRoll: vi.fn(),
             refetchSession: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
         ),
