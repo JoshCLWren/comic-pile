@@ -409,7 +409,7 @@ def _normalize_issue_metadata(result: dict[str, object]) -> dict[str, object]:
     image = result.get("image") if isinstance(result.get("image"), dict) else None
     primary_image: str | None = None
     if isinstance(image, dict):
-        for key in ("original_url", "super_url", "medium_url", "small_url"):
+        for key in ("super", "screen_large", "large", "medium", "small", "icon"):
             candidate = image.get(key)
             if isinstance(candidate, str) and candidate:
                 primary_image = candidate

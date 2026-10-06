@@ -99,6 +99,59 @@ def test_provider_timestamp_is_tolerant(value: object, expected: str | None) -> 
     assert (parsed.isoformat() if parsed else None) == expected
 
 
+def test_normalize_issue_uses_real_comicvine_image_keys() -> None:
+    """Issue normalization must pick the best image from provider-native keys.
+
+    The singular ComicVine resource exposes its image object using native keys
+    (super, screen_large, large, medium, small, icon), not _url-suffixed keys.
+    Repro for #3158.
+    """
+    raw: dict[str, object] = {
+        "id": 453414,
+        "name": "Who Shot the Hulk Part 3",
+        "issue_number": "3",
+        "volume_id": 23834,
+        "volume_name": "Hulk (2014)",
+        "cover_date": "1992-01-01",
+        "store_date": "1991-12-11",
+        "image": {
+            "super": "https://www.comicvine.com/uploads/super/0/453414.jpg",
+            "screen_large": "https://www.comicvine.com/uploads/screen_large/0/453414.jpg",
+            "large": "https://www.comicvine.com/uploads/large/0/453414.jpg",
+            "medium": "https://www.comicvine.com/uploads/medium/0/453414.jpg",
+            "small": "https://www.comicvine.com/uploads/small/0/453414.jpg",
+            "icon": "https://www.comicvine.com/uploads/icon/0/453414.jpg",
+        },
+        "person_credits": [{"id": 1001, "name": "Peter David", "role": "writer"}],
+    }
+
+    normalized = hydration.normalize_issue(raw)
+
+    assert normalized["primary_image"] == "https://www.comicvine.com/uploads/super/0/453414.jpg"
+    assert normalized["name"] == "Who Shot the Hulk Part 3"
+    assert normalized["raw_provider_payload"] is raw
+
+
+def test_normalize_volume_uses_real_comicvine_image_keys() -> None:
+    """Volume normalization must pick the best image from provider-native keys."""
+    raw: dict[str, object] = {
+        "id": 23834,
+        "name": "Hulk (2014)",
+        "publisher": {"id": 7, "name": "Marvel"},
+        "start_year": "2008",
+        "count_of_issues": 31,
+        "image": {
+            "super": "https://www.comicvine.com/uploads/super/0/23834.jpg",
+            "medium": "https://www.comicvine.com/uploads/medium/0/23834.jpg",
+        },
+    }
+
+    normalized = hydration.normalize_volume(raw)
+
+    assert normalized["primary_image"] == "https://www.comicvine.com/uploads/super/0/23834.jpg"
+    assert normalized["raw_provider_payload"] is raw
+
+
 @pytest.mark.asyncio
 async def test_persist_issue_result_uses_provider_independent_identity(
     monkeypatch: pytest.MonkeyPatch,

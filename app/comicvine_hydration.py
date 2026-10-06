@@ -55,6 +55,44 @@ def _compact_references(value: object) -> list[dict[str, object]]:
     return result
 
 
+def extract_image_url(image_raw: object) -> str | None:
+    """Extract the best available image URL from a ComicVine image object.
+
+    The singular ComicVine issue/volume resource exposes its image object using
+    the provider's native key names: ``super``, ``screen_large``, ``large``,
+    ``medium``, ``small``, and ``icon``. Normalized or third-party payloads may
+    instead use legacy ``_url``-suffixed key names. The provider's native keys
+    are checked first (highest quality first), then the legacy forms.
+
+    Args:
+        image_raw: The raw ``image`` field of a ComicVine resource, or another
+            value when no image object is available.
+
+    Returns:
+        The best available image URL as a non-empty string, or ``None`` when the
+        field is absent or empty.
+    """
+    if not isinstance(image_raw, dict):
+        return None
+    for key in (
+        "super",
+        "screen_large",
+        "large",
+        "medium",
+        "small",
+        "icon",
+        "original_url",
+        "super_url",
+        "medium_url",
+        "small_url",
+        "thumb_url",
+    ):
+        candidate = image_raw.get(key)
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return None
+
+
 def normalize_issue(result: dict[str, object]) -> dict[str, object]:
     """Normalize useful singular issue metadata while retaining the complete raw provider row.
 
@@ -65,14 +103,7 @@ def normalize_issue(result: dict[str, object]) -> dict[str, object]:
         Stable metadata suitable for ``ExternalIdentity.metadata_json``.
     """
     volume = _compact_reference(result.get("volume"))
-    image = result.get("image") if isinstance(result.get("image"), dict) else None
-    primary_image = None
-    if isinstance(image, dict):
-        for key in ("original_url", "super_url", "medium_url", "small_url"):
-            candidate = image.get(key)
-            if isinstance(candidate, str) and candidate:
-                primary_image = candidate
-                break
+    primary_image = extract_image_url(result.get("image"))
     return {
         "name": result.get("name"),
         "issue_number": result.get("issue_number"),
@@ -98,14 +129,7 @@ def normalize_volume(result: dict[str, object]) -> dict[str, object]:
         Stable metadata suitable for ``ExternalIdentity.metadata_json``.
     """
     publisher = _compact_reference(result.get("publisher"))
-    image = result.get("image") if isinstance(result.get("image"), dict) else None
-    primary_image = None
-    if isinstance(image, dict):
-        for key in ("original_url", "super_url", "medium_url", "small_url"):
-            candidate = image.get(key)
-            if isinstance(candidate, str) and candidate:
-                primary_image = candidate
-                break
+    primary_image = extract_image_url(result.get("image"))
     return {
         "name": result.get("name"),
         "publisher": publisher,
