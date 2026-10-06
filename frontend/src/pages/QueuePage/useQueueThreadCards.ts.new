@@ -21,13 +21,6 @@ interface UseQueueThreadCardsParams {
   onMapComicVine: (thread: ThreadListItem) => void
 }
 
-/**
- * Build the `QueueList` item renderer for issue #3201 mapping badges.
- *
- * The Queue page stays a thin route composition (see
- * `QueuePage.composition.test.ts`), so per-card derived state (blocking,
- * snooze, read gating, ComicVine mapping) lives here instead of in the page.
- */
 export function useQueueThreadCards({
   actions,
   activeThreads,
