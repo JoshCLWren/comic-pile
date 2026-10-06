@@ -3,11 +3,10 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import { CrossoverTags } from '../../components/CrossoverTags'
-import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
-import type { BlockingDependency, ThreadListItem } from '../../types'
-import QueueThreadActions from './QueueThreadActions'
-import { ComicVineMappingStatus } from '../../components/ComicVineMappingStatus'
-import { ComicVineSearchDialog } from '../../components/ComicVineSearchDialog'
+ import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
+ import type { BlockingDependency, ThreadListItem } from '../../types'
+ import QueueThreadActions from './QueueThreadActions'
+ import { ComicVineMappingStatus } from '../../components/ComicVineMappingStatus'
 
 interface QueueThreadCardProps {
   thread: ThreadListItem

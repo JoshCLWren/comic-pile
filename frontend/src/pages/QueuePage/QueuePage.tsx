@@ -36,9 +36,9 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
   const [bulkMapDialogOpen, setBulkMapDialogOpen] = useState(false)
   const [selectedThreadsForMapping, setSelectedThreadsForMapping] = useState<ThreadListItem[]>([])
+  const isSearching = searchQuery.trim() !== ''
 
   const {
     data: threads,
