@@ -197,6 +197,26 @@ async def list_creators_endpoint(
         ge=0,
         description="Minimum rated-sample filter (0 = any sample size)",
     ),
+    role: str | None = Query(
+        default=None,
+        description="Filter by specific normalized role (e.g., 'writer', 'artist')",
+    ),
+    min_rating: float | None = Query(
+        default=None,
+        ge=0,
+        le=5,
+        description="Minimum personal average rating threshold (0-5)",
+    ),
+    max_rating: float | None = Query(
+        default=None,
+        ge=0,
+        le=5,
+        description="Maximum personal average rating threshold (0-5)",
+    ),
+    has_unread_work: bool | None = Query(
+        default=None,
+        description="Filter creators who have unread attributed work in your pile",
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> CreatorListResponse:
     """Return bounded personal creator discovery list for the authenticated user.
@@ -233,6 +253,10 @@ async def list_creators_endpoint(
         limit=limit,
         offset=offset,
         min_ratings=min_ratings,
+        role=role,
+        min_rating=min_rating,
+        max_rating=max_rating,
+        has_unread_work=has_unread_work,
     )
 
 

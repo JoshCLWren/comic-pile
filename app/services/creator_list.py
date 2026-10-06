@@ -71,6 +71,10 @@ async def get_creator_list(
     limit: int = 20,
     offset: int = 0,
     min_ratings: int = 0,
+    role: str | None = None,
+    min_rating: float | None = None,
+    max_rating: float | None = None,
+    has_unread_work: bool | None = None,
 ) -> CreatorListResponse:
     """Compute bounded personal creator list for the authenticated user.
 
@@ -152,6 +156,29 @@ async def get_creator_list(
         # Bounded name search (user-scoped).
         if search:
             if search.lower() not in display_name.lower():
+                continue
+
+        # Role filtering
+        if role:
+            if role not in normalized_roles:
+                continue
+
+        # Rating range filtering
+        if min_rating is not None and average_rating is not None:
+            if average_rating < min_rating:
+                continue
+        if max_rating is not None and average_rating is not None:
+            if average_rating > max_rating:
+                continue
+
+        # Unread work filtering
+        if has_unread_work is not None:
+            # Check if creator has unread attributed work
+            has_unread = any(
+                issue_id in unread_issue_ids 
+                for issue_id in creator_issues[creator_id]
+            )
+            if has_unread_work != has_unread:
                 continue
 
         items.append(

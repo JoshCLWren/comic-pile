@@ -272,7 +272,16 @@ export const queryKeys = {
      * one browse selection shares the stable prefix. `search` is normalized to
      * a trimmed value (or `undefined` when empty) so the key stays canonical.
      */
-    list: (params: { search?: string; sort?: 'name' | 'ratings_count' | 'average_rating'; limit?: number; minRatings?: number }) =>
+    list: (params: { 
+      search?: string; 
+      sort?: 'name' | 'ratings_count' | 'average_rating'; 
+      limit?: number; 
+      minRatings?: number;
+      role?: string;
+      minRating?: number;
+      maxRating?: number;
+      hasUnreadWork?: boolean;
+    }) =>
       ['creators', 'list', params] as const,
     summaries: (keys: string[]) =>
       ['creators', 'summaries', [...keys].sort()] as const,

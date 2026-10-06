@@ -573,3 +573,232 @@ async def test_min_ratings_rejects_negative(
     """Negative minimum samples are invalid."""
     response = await auth_client.get("/api/v1/creators?min_ratings=-1")
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_role_filtering(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Role filtering returns only creators with specified roles."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Roles", issue_count=3, queue_position=1, read_through=3
+    )
+    # Writer
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Alice Writer", "role": "writer"}]
+    )
+    # Artist
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Bob Artist", "role": "artist"}]
+    )
+    # Writer and penciller
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 3, "name": "Carol Creator", "role": "writer"}, {"id": 3, "name": "Carol Creator", "role": "penciller"}]
+    )
+    for issue in issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    # No filter - should return all
+    response = await auth_client.get("/api/v1/creators")
+    assert response.status_code == 200
+    assert response.json()["total"] == 3
+
+    # Filter for writers only
+    response = await auth_client.get("/api/v1/creators?role=writer")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2  # Alice and Carol
+    writer_keys = [r["canonical_creator_key"] for r in body["items"]]
+    assert "creator:1" in writer_keys
+    assert "creator:3" in writer_keys
+
+    # Filter for artists only
+    response = await auth_client.get("/api/v1/creators?role=artist")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1  # Bob only
+    assert body["items"][0]["canonical_creator_key"] == "creator:2"
+
+    # Filter for pencillers only
+    response = await auth_client.get("/api/v1/creators?role=penciller")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1  # Carol only
+    assert body["items"][0]["canonical_creator_key"] == "creator:3"
+
+    # Non-existent role
+    response = await auth_client.get("/api/v1/creators?role=colorist")
+    assert response.status_code == 200
+    assert response.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_rating_range_filtering(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Rating range filtering returns creators within specified rating bounds."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Ratings", issue_count=3, queue_position=1, read_through=3
+    )
+    # High rated (5.0)
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "High Rated", "role": "writer"}]
+    )
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+    # Medium rated (3.0)
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Medium Rated", "role": "artist"}]
+    )
+    await _rate(async_db, issues[1], rating=3.0, timestamp=D1)
+    # Low rated (1.0)
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 3, "name": "Low Rated", "role": "writer"}]
+    )
+    await _rate(async_db, issues[2], rating=1.0, timestamp=D1)
+
+    # No filter - should return all
+    response = await auth_client.get("/api/v1/creators")
+    assert response.status_code == 200
+    assert response.json()["total"] == 3
+
+    # Minimum rating filter (3.0 and above)
+    response = await auth_client.get("/api/v1/creators?min_rating=3.0")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2  # High and Medium
+    rated_keys = [r["canonical_creator_key"] for r in body["items"]]
+    assert "creator:1" in rated_keys
+    assert "creator:2" in rated_keys
+
+    # Maximum rating filter (3.0 and below)
+    response = await auth_client.get("/api/v1/creators?max_rating=3.0")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2  # Medium and Low
+    rated_keys = [r["canonical_creator_key"] for r in body["items"]]
+    assert "creator:2" in rated_keys
+    assert "creator:3" in rated_keys
+
+    # Range filter (2.0 to 4.0)
+    response = await auth_client.get("/api/v1/creators?min_rating=2.0&max_rating=4.0")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1  # Medium only
+    assert body["items"][0]["canonical_creator_key"] == "creator:2"
+
+    # No results in range
+    response = await auth_client.get("/api/v1/creators?min_rating=4.5&max_rating=4.8")
+    assert response.status_code == 200
+    assert response.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_has_unread_work_filtering(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Unread work filtering returns creators with or without unread attributed work."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Unread", issue_count=3, queue_position=1, read_through=1
+    )
+    # Issue 1: read, has creator
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Read Only", "role": "writer"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    
+    # Issue 2: unread, has creator
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Has Unread", "role": "artist"}]
+    )
+    # Don't rate this one to keep it unread
+    
+    # Issue 3: read, has creator (different creator from issue 2)
+    _thread2, issues2 = await _make_thread(
+        async_db, default_user, title="Unread2", issue_count=1, queue_position=2, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues2[0], creators=[{"id": 3, "name": "No Unread", "role": "writer"}]
+    )
+    await _rate(async_db, issues2[0], rating=3.0, timestamp=D1)
+
+    # No filter - should return all
+    response = await auth_client.get("/api/v1/creators")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+
+    # Filter for creators with unread work
+    response = await auth_client.get("/api/v1/creators?has_unread_work=true")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1  # Only "Has Unread"
+    assert body["items"][0]["canonical_creator_key"] == "creator:2"
+
+    # Filter for creators without unread work
+    response = await auth_client.get("/api/v1/creators?has_unread_work=false")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2  # "Read Only" and "No Unread"
+    rated_keys = [r["canonical_creator_key"] for r in body["items"]]
+    assert "creator:1" in rated_keys
+    assert "creator:3" in rated_keys
+
+
+@pytest.mark.asyncio
+async def test_combined_filters(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Multiple filters work together correctly."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Combined", issue_count=4, queue_position=1, read_through=2
+    )
+    # Writer with high rating, no unread work
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Good Writer", "role": "writer"}]
+    )
+    await _rate(async_db, issues[0], rating=4.5, timestamp=D1)
+    
+    # Artist with medium rating, has unread work
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Ok Artist", "role": "artist"}]
+    )
+    await _rate(async_db, issues[1], rating=3.0, timestamp=D1)
+    
+    # Writer with low rating, has unread work
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 3, "name": "Bad Writer", "role": "writer"}]
+    )
+    await _rate(async_db, issues[2], rating=2.0, timestamp=D1)
+    
+    # Penciller with high rating, no unread work
+    await _confirm_identity(
+        async_db, issues[3], creators=[{"id": 4, "name": "Great Penciller", "role": "penciller"}]
+    )
+    await _rate(async_db, issues[3], rating=5.0, timestamp=D1)
+
+    # Combined: writers with rating >= 3.0 and no unread work
+    response = await auth_client.get("/api/v1/creators?role=writer&min_rating=3.0&has_unread_work=false")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1  # Only "Good Writer"
+    assert body["items"][0]["canonical_creator_key"] == "creator:1"
+
+    # Combined: artists with rating between 2.5 and 3.5 and has unread work
+    response = await auth_client.get("/api/v1/creators?role=artist&min_rating=2.5&max_rating=3.5&has_unread_work=true")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1  # Only "Ok Artist"
+    assert body["items"][0]["canonical_creator_key"] == "creator:2"
+
+    # No results for impossible combination
+    response = await auth_client.get("/api/v1/creators?role=writer&max_rating=1.5")
+    assert response.status_code == 200
+    assert response.json()["total"] == 0

@@ -119,6 +119,10 @@ export default function CreatorsPage() {
   const [sort, setSort] = useState<CreatorListSort>('name')
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [minRatings, setMinRatings] = useState<number>(0)
+  const [role, setRole] = useState<string>('')
+  const [minRating, setMinRating] = useState<number>(0)
+  const [maxRating, setMaxRating] = useState<number>(5)
+  const [hasUnreadWork, setHasUnreadWork] = useState<boolean>(false)
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()
   const navigate = useNavigate()
@@ -133,7 +137,15 @@ export default function CreatorsPage() {
     hasMore,
     loadMore,
     refetch,
-  } = useCreatorsList({ search: activeSearch || undefined, sort, minRatings: minRatings || undefined })
+  } = useCreatorsList({ 
+    search: activeSearch || undefined, 
+    sort, 
+    minRatings: minRatings || undefined,
+    role: role || undefined,
+    minRating: minRating > 0 ? minRating : undefined,
+    maxRating: maxRating < 5 ? maxRating : undefined,
+    hasUnreadWork: hasUnreadWork || undefined
+  })
 
   const hasItems = items.length > 0
   const ratingsPartial = coverage != null && !coverage.ratings_complete
@@ -228,6 +240,74 @@ export default function CreatorsPage() {
                   {option.label}
                 </option>
               ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <label htmlFor="creators-role" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+              Role
+            </label>
+            <select
+              id="creators-role"
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+            >
+              <option value="">Any role</option>
+              <option value="writer">Writer</option>
+              <option value="artist">Artist</option>
+              <option value="penciller">Penciller</option>
+              <option value="inker">Inker</option>
+              <option value="colorist">Colorist</option>
+              <option value="letterer">Letterer</option>
+              <option value="cover artist">Cover artist</option>
+              <option value="editor">Editor</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="creators-rating-range" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+              Rating range
+            </label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                id="creators-min-rating"
+                type="number"
+                min="0"
+                max="5"
+                step="0.1"
+                value={minRating}
+                onChange={(event) => setMinRating(Number(event.target.value))}
+                className="form-control w-20 rounded-xl px-3 py-2.5 text-base md:text-sm"
+                placeholder="Min"
+              />
+              <span className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>to</span>
+              <input
+                id="creators-max-rating"
+                type="number"
+                min="0"
+                max="5"
+                step="0.1"
+                value={maxRating}
+                onChange={(event) => setMaxRating(Number(event.target.value))}
+                className="form-control w-20 rounded-xl px-3 py-2.5 text-base md:text-sm"
+                placeholder="Max"
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="creators-unread-work" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+              Unread work
+            </label>
+            <select
+              id="creators-unread-work"
+              value={hasUnreadWork ? 'true' : 'false'}
+              onChange={(event) => setHasUnreadWork(event.target.value === 'true')}
+              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+            >
+              <option value="false">Any</option>
+              <option value="true">Has unread work</option>
             </select>
           </div>
         </div>

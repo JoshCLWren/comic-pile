@@ -16,6 +16,10 @@ export interface CreatorListSelection {
   sort?: CreatorListSort
   limit?: number
   minRatings?: number
+  role?: string
+  minRating?: number
+  maxRating?: number
+  hasUnreadWork?: boolean
 }
 
 type CreatorsListApi = Pick<typeof creatorsApi, 'getList'>
@@ -41,11 +45,34 @@ export function creatorListQueryOptions(
     selection.minRatings !== undefined && selection.minRatings > 0
       ? selection.minRatings
       : undefined
+  const role = selection.role?.trim() || undefined
+  const minRating = selection.minRating !== undefined && selection.minRating >= 0 ? selection.minRating : undefined
+  const maxRating = selection.maxRating !== undefined && selection.maxRating >= 0 ? selection.maxRating : undefined
+  const hasUnreadWork = selection.hasUnreadWork !== undefined ? selection.hasUnreadWork : undefined
 
   return {
-    queryKey: queryKeys.creators.list({ search, sort, limit, minRatings }),
+    queryKey: queryKeys.creators.list({ 
+      search, 
+      sort, 
+      limit, 
+      minRatings, 
+      role, 
+      minRating, 
+      maxRating, 
+      hasUnreadWork 
+    }),
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      listApi.getList({ search, sort, limit, offset: pageParam, min_ratings: minRatings }),
+      listApi.getList({ 
+        search, 
+        sort, 
+        limit, 
+        offset: pageParam, 
+        min_ratings: minRatings,
+        role,
+        min_rating: minRating,
+        max_rating: maxRating,
+        has_unread_work: hasUnreadWork
+      }),
     initialPageParam: 0,
     getNextPageParam: (lastPage: CreatorListResponse) => {
       if (lastPage.items.length === 0) return undefined

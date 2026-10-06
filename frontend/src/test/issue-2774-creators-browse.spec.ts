@@ -416,4 +416,250 @@ test.describe('Issue #2774: creators browse page', () => {
 
     await expectNoHorizontalOverflow(page)
   })
+
+  test('role filtering sends correct API request and filters results', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    const requests = await installCreatorsList(page, (params) => {
+      const role = params.get('role')
+      const items = role === 'writer' 
+        ? [creatorRow('creator:7', 'Brian K. Vaughan', { normalized_roles: ['writer'] })]
+        : role === 'artist'
+        ? [creatorRow('creator:12', 'Steve McNiven', { normalized_roles: ['artist'] })]
+        : [creatorRow('creator:7', 'Brian K. Vaughan'), creatorRow('creator:12', 'Steve McNiven')]
+      return {
+        items,
+        total: items.length,
+        limit: Number(params.get('limit') ?? 20),
+        offset: 0,
+        coverage: COMPLETE_COVERAGE,
+      }
+    })
+
+    await page.goto('/creators', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+
+    // Test role filter dropdown
+    await page.getByLabel('Role').selectOption('writer')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
+    
+    const writerRequest = requests.find(r => r.get('role') === 'writer')
+    expect(writerRequest).toBeDefined()
+    expect(writerRequest!.get('role')).toBe('writer')
+
+    // Test different role
+    await page.getByLabel('Role').selectOption('artist')
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    await expect(page.getByText('Brian K. Vaughan')).not.toBeVisible()
+    
+    const artistRequest = requests.find(r => r.get('role') === 'artist')
+    expect(artistRequest).toBeDefined()
+    expect(artistRequest!.get('role')).toBe('artist')
+
+    // Test "Any role" option
+    await page.getByLabel('Role').selectOption('')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    
+    const noRoleRequest = requests.find(r => r.get('role') === null)
+    expect(noRoleRequest).toBeDefined()
+  })
+
+  test('rating range filtering sends correct API request and filters results', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    const requests = await installCreatorsList(page, (params) => {
+      const minRating = params.get('min_rating')
+      const maxRating = params.get('max_rating')
+      const items = []
+      
+      if (!minRating || parseFloat(minRating) <= 4.5) {
+        items.push(creatorRow('creator:7', 'Brian K. Vaughan', { average_rating: 4.5 }))
+      }
+      if (!minRating || parseFloat(minRating) <= 3.0) {
+        items.push(creatorRow('creator:12', 'Steve McNiven', { average_rating: 3.0 }))
+      }
+      if (!minRating || parseFloat(minRating) <= 2.0) {
+        items.push(creatorRow('creator:21', 'Jill Thompson', { average_rating: 2.0 }))
+      }
+      
+      if (maxRating) {
+        const max = parseFloat(maxRating)
+        return {
+          items: items.filter(item => !item.average_rating || item.average_rating <= max),
+          total: items.filter(item => !item.average_rating || item.average_rating <= max).length,
+          limit: Number(params.get('limit') ?? 20),
+          offset: 0,
+          coverage: COMPLETE_COVERAGE,
+        }
+      }
+      
+      return {
+        items,
+        total: items.length,
+        limit: Number(params.get('limit') ?? 20),
+        offset: 0,
+        coverage: COMPLETE_COVERAGE,
+      }
+    })
+
+    await page.goto('/creators', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    await expect(page.getByText('Jill Thompson')).toBeVisible()
+
+    // Test minimum rating filter
+    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('4.0')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
+    await expect(page.getByText('Jill Thompson')).not.toBeVisible()
+    
+    const minRequest = requests.find(r => r.get('min_rating') === '4.0')
+    expect(minRequest).toBeDefined()
+    expect(minRequest!.get('min_rating')).toBe('4.0')
+
+    // Test maximum rating filter
+    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('')
+    await page.getByLabel('Rating range').getByPlaceholder('Max').fill('3.5')
+    await expect(page.getByText('Brian K. Vaughan')).not.toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    await expect(page.getByText('Jill Thompson')).toBeVisible()
+    
+    const maxRequest = requests.find(r => r.get('max_rating') === '3.5')
+    expect(maxRequest).toBeDefined()
+    expect(maxRequest!.get('max_rating')).toBe('3.5')
+
+    // Test range filter
+    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('2.5')
+    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
+    await expect(page.getByText('Jill Thompson')).toBeVisible()
+    
+    const rangeRequest = requests.find(r => r.get('min_rating') === '2.5' && r.get('max_rating') === '3.5')
+    expect(rangeRequest).toBeDefined()
+  })
+
+  test('unread work filtering sends correct API request and filters results', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    const requests = await installCreatorsList(page, (params) => {
+      const hasUnreadWork = params.get('has_unread_work')
+      const items = []
+      
+      if (!hasUnreadWork || hasUnreadWork === 'false') {
+        items.push(creatorRow('creator:7', 'Brian K. Vaughan'))
+      }
+      if (!hasUnreadWork || hasUnreadWork === 'true') {
+        items.push(creatorRow('creator:12', 'Steve McNiven'))
+      }
+      
+      return {
+        items,
+        total: items.length,
+        limit: Number(params.get('limit') ?? 20),
+        offset: 0,
+        coverage: COMPLETE_COVERAGE,
+      }
+    })
+
+    await page.goto('/creators', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+
+    // Test filter for creators with unread work
+    await page.getByLabel('Unread work').selectOption('true')
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    await expect(page.getByText('Brian K. Vaughan')).not.toBeVisible()
+    
+    const trueRequest = requests.find(r => r.get('has_unread_work') === 'true')
+    expect(trueRequest).toBeDefined()
+    expect(trueRequest!.get('has_unread_work')).toBe('true')
+
+    // Test filter for creators without unread work
+    await page.getByLabel('Unread work').selectOption('false')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
+    
+    const falseRequest = requests.find(r => r.get('has_unread_work') === 'false')
+    expect(falseRequest).toBeDefined()
+    expect(falseRequest!.get('has_unread_work')).toBe('false')
+
+    // Test "Any" option
+    await page.getByLabel('Unread work').selectOption('false')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await page.getByLabel('Unread work').selectOption('true')
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+    await page.getByLabel('Unread work').selectOption('false')
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+  })
+
+  test('multiple filters work together correctly', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    const requests = await installCreatorsList(page, (params) => {
+      const role = params.get('role')
+      const minRating = params.get('min_rating')
+      const maxRating = params.get('max_rating')
+      const hasUnreadWork = params.get('has_unread_work')
+      const items = []
+      
+      // Brian K. Vaughan: writer, 4.5 rating, no unread work
+      if ((!role || role === 'writer') && 
+          (!minRating || 4.5 >= parseFloat(minRating)) &&
+          (!maxRating || 4.5 <= parseFloat(maxRating)) &&
+          (!hasUnreadWork || hasUnreadWork === 'false')) {
+        items.push(creatorRow('creator:7', 'Brian K. Vaughan', { 
+          normalized_roles: ['writer'],
+          average_rating: 4.5 
+        }))
+      }
+      
+      // Steve McNiven: artist, 3.0 rating, has unread work
+      if ((!role || role === 'artist') && 
+          (!minRating || 3.0 >= parseFloat(minRating)) &&
+          (!maxRating || 3.0 <= parseFloat(maxRating)) &&
+          (!hasUnreadWork || hasUnreadWork === 'true')) {
+        items.push(creatorRow('creator:12', 'Steve McNiven', { 
+          normalized_roles: ['artist'],
+          average_rating: 3.0 
+        }))
+      }
+      
+      return {
+        items,
+        total: items.length,
+        limit: Number(params.get('limit') ?? 20),
+        offset: 0,
+        coverage: COMPLETE_COVERAGE,
+      }
+    })
+
+    await page.goto('/creators', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).toBeVisible()
+
+    // Apply multiple filters: writers with rating >= 4.0 and no unread work
+    await page.getByLabel('Role').selectOption('writer')
+    await page.getByLabel('Rating range').getByPlaceholder('Min').fill('4.0')
+    await page.getByLabel('Unread work').selectOption('false')
+    
+    await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+    await expect(page.getByText('Steve McNiven')).not.toBeVisible()
+    
+    const combinedRequest = requests.find(r => 
+      r.get('role') === 'writer' && 
+      r.get('min_rating') === '4.0' && 
+      r.get('has_unread_work') === 'false'
+    )
+    expect(combinedRequest).toBeDefined()
+  })
 })
