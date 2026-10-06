@@ -14,7 +14,9 @@ import type { RollResponse, Thread } from '../types'
 import { cast } from '../utils/cast'
 
 const toastSpy = vi.fn()
+  // SAFETY: We do not use the return value of the mocked refetchSession in this test.
 const setPending = vi.fn()
+// SAFETY: We do not use the return value of the mocked refetchSession in this test.
 const refetchSession: SessionRefetch = vi.fn().mockResolvedValue({} as never)
 
 function mutationStubs() {
@@ -276,8 +278,9 @@ describe('useQueueThreadActions', () => {
 
   it('delegates snooze vs unsnooze based on the current snoozed state', async () => {
     const snooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false, retryRefresh: vi.fn().mockResolvedValue(true), refreshError: null, hasRefreshError: false }
-    const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    // SAFETY: We do not use the return value of the mocked refetchSession in this test.
     const refetchSession = vi.fn().mockResolvedValue({} as never)
+    const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
     const navigateToRoll = vi.fn()
     const { result } = renderHook(
       () =>
