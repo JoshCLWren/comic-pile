@@ -59,6 +59,9 @@ EVENT_TYPE_DESCRIPTIONS: dict[str, str] = {
     "restore": "Restored",
     "move": "Moved",
     "shuffle": "Shuffled",
+    "roll": "Rolled",
+    "rate": "Rated",
+    "unsnooze": "Unsnoozed",
 }
 
 
@@ -461,7 +464,7 @@ async def list_sessions(
                 (Event.type.in_(("snooze", "unsnooze", "undo", "restore"))) & (Event.die_after.is_not(None)),
             )
         )
-        .order_by(Event.session_id, Event.timestamp, Event.id)
+        .order_by(Event.session_id, Event.timestamp.desc(), Event.id.desc())
     )
     history_events = history_events_result.scalars().all()
 
