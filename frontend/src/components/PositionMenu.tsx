@@ -189,81 +189,83 @@ export default function PositionMenu({
     disabled?: boolean
     action: () => void
   }> = [
-     {
-       label: 'Move to Front',
-       icon: '\u2B06',
-       ariaLabel: 'Move to front',
-       action: () => {
-onMoveToFront(thread.id)
+    {
+      label: 'Move to Front',
+      icon: '\u2B06',
+      ariaLabel: 'Move to front',
+      action: () => {
+        onMoveToFront(thread.id)
+        // The action handler restores focus to this row's trigger once the
+        // refetched list settles; the remount detaches the element closeMenu
+        // would focus (#3147).
+        closeMenu()
+      },
+    },
+    {
+      label: 'Reposition\u2026',
+      icon: '\u2261',
+      ariaLabel: 'Reposition series',
+      action: () => {
+        onReposition(thread)
+        // The reposition modal should manage focus restoration.
+        closeMenu()
+      },
+    },
+    {
+      label: 'Move to Back',
+      icon: '\u2193',
+      ariaLabel: 'Move to back',
+      action: () => {
+        onMoveToBack(thread.id)
+        // Same as Move to Front.
+        closeMenu()
+      },
+    },
+    {
+      label: 'Edit Series',
+      icon: '\u270F\uFE0F',
+      ariaLabel: 'Edit series',
+      action: () => {
+        onEdit(thread)
+        // The edit modal should manage focus restoration.
+        closeMenu()
+      },
+    },
+    ...(onSnooze && snoozeLabel ? [{
+      label: snoozeLabel,
+      icon: snoozeIcon || '',
+      ariaLabel: snoozeLabel,
+      disabled: snoozeDisabled,
+      action: () => {
+        if (!snoozeDisabled && onSnooze) {
+          onSnooze(thread)
+          // Snooze resets the queue cache, so the action handler restores
+          // focus to the refetched trigger (#3147).
           closeMenu()
-          // We don't call closeMenu() here because onMoveToFront may trigger
-          // a re-render of the entire list, and we want to rely on the
-          // action handler to manage the menu state.
-       },
-     },
-     {
-       label: 'Reposition\u2026',
-       icon: '\u2261',
-       ariaLabel: 'Reposition series',
-       action: () => {
-         onReposition(thread)
-         // The reposition modal should manage focus restoration.
-         closeMenu()
-       },
-     },
-     {
-       label: 'Move to Back',
-       icon: '\u2193',
-       ariaLabel: 'Move to back',
-       action: () => {
-onMoveToBack(thread.id)
-          closeMenu()
-          // Same as Move to Front.
-       },
-     },
-     {
-       label: 'Edit Series',
-       icon: '\u270F\uFE0F',
-       ariaLabel: 'Edit series',
-       action: () => {
-         onEdit(thread)
-         // The edit modal should manage focus restoration.
-         closeMenu()
-       },
-     },
-     ...(onSnooze && snoozeLabel ? [{
-       label: snoozeLabel,
-       icon: snoozeIcon || '',
-       ariaLabel: snoozeLabel,
-       disabled: snoozeDisabled,
-       action: () => {
-         if (!snoozeDisabled && onSnooze) {
-           onSnooze(thread)
-           // Same as Move to Front.
-         }
-       },
-     }] : []),
-     {
-       label: 'Dependencies',
-       icon: '\u26D3\uFE0E',
-       ariaLabel: 'Manage dependencies',
-       action: () => {
-         onDependencies(thread)
-         // The dependencies modal should manage focus restoration.
-         closeMenu()
-       },
-     },
-     {
-       label: 'Delete Series',
-       icon: '\u{1F5D1}',
-       ariaLabel: 'Delete series',
-       destructive: true,
-       action: () => {
-         onDelete(thread.id)
-         // The delete dialog should manage focus restoration.
-         closeMenu()
-       },
-     },
+        }
+      },
+    }] : []),
+    {
+      label: 'Dependencies',
+      icon: '\u26D3\uFE0E',
+      ariaLabel: 'Manage dependencies',
+      action: () => {
+        onDependencies(thread)
+        // The dependencies modal should manage focus restoration.
+        closeMenu()
+      },
+    },
+    {
+      label: 'Delete Series',
+      icon: '\u{1F5D1}',
+      ariaLabel: 'Delete series',
+      destructive: true,
+      action: () => {
+        onDelete(thread.id)
+        // The delete dialog should manage focus restoration.
+        closeMenu()
+      },
+    },
   ]
 
   return (

@@ -63,20 +63,6 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
   }
 }
 
-// Mock the navigate function globally to prevent navigation errors in tests
-global.window.document.createRange = () => ({
-  setStart: () => {},
-  setEnd: () => {},
-  commonAncestorContainer: {
-    nodeName: 'BODY',
-    ownerDocument: { documentElement: { tagName: 'HTML' } }
-  }
-})
-
-// Mock navigation to prevent errors
-global.window.history.pushState = vi.fn()
-global.window.history.replaceState = vi.fn()
-
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
@@ -84,18 +70,6 @@ vi.mock('react-router-dom', async () => {
     useNavigate: () => navigateSpy,
     useLocation: () => ({ state: null, pathname: '/', search: '', hash: '', key: 'test' }),
     Navigate: () => null,
-    // Mock navigation to prevent errors
-    ...actual,
-    // Override navigation functions to prevent errors
-    useHref: () => '/',
-    useLinkClickHandler: () => vi.fn(),
-    useMatch: () => null,
-    useNavigate: () => () => {},
-    useOutlet: () => null,
-    useOutletContext: () => null,
-    useParams: () => ({}),
-    useResolvedPath: () => ({ pathname: '/' }),
-    useRoutes: () => [],
   }
 })
 
@@ -305,7 +279,7 @@ describe('useQueueThreadActions', () => {
     const navigateToRoll = vi.fn()
     const { result } = renderHook(
       () =>
-useQueueThreadActions(
+        useQueueThreadActions(
           {
             navigateToRoll,
             refetchSession,
@@ -357,7 +331,7 @@ useQueueThreadActions(
             refetchSession: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
-          buildDeps(),
+          buildDeps({ shuffleHook: () => shuffle }),
         ),
       { wrapper },
     )

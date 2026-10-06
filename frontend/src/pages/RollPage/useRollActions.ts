@@ -149,15 +149,15 @@ export function useRollActions({
             next_issue_number: response.next_issue_number,
             last_rolled_result: response.result ?? response.last_rolled_result,
           }
-           if (response.total_issues === null) {
-             // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
-             setThreadToMigrate(threadMetadata as RatingThread)
-             setShowMigrationDialog(true)
-           } else {
-             suppressPendingAutoOpenRef.current = true
-             enterRatingView(response.thread_id, response.result, threadMetadata)
-           }
-           break
+          if (response.total_issues === null) {
+            // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
+            setThreadToMigrate(threadMetadata as RatingThread)
+            setShowMigrationDialog(true)
+          } else {
+            suppressPendingAutoOpenRef.current = true
+            enterRatingView(response.thread_id, response.result, threadMetadata)
+          }
+          break
         }
         case 'set-current-issue': {
           setIsSetCurrentIssueOpen(true)
@@ -242,8 +242,8 @@ export function useRollActions({
         bootstrap?.active_thread && bootstrap.active_thread.id === pendingId
           ? bootstrap.active_thread
           : rollPool.find((thread) => thread.id === pendingId)
-       enterRatingView(pendingId, bootstrap?.last_rolled_result ?? null, pendingMetadata)
-       return
+      enterRatingView(pendingId, bootstrap?.last_rolled_result ?? null, pendingMetadata)
+      return
     }
 
     if (suppressPendingAutoOpenRef.current && bootstrap?.pending_thread_id) {
@@ -264,11 +264,11 @@ export function useRollActions({
         rollIntervalRef.current = null
         rollTimeoutRef.current = setTimeout(async () => {
           rollTimeoutRef.current = null
-           try {
-             const response = await rollMutation.mutate()
-             enterRatingView(response.thread_id, response.result, response)
-             setIsRolling(false)
-           } catch (error: unknown) {
+          try {
+            const response = await rollMutation.mutate()
+            enterRatingView(response.thread_id, response.result, response)
+            setIsRolling(false)
+          } catch (error: unknown) {
             const status = getApiErrorStatus(error)
             const detail = getApiErrorDetail(error)
             if (status === 409) {

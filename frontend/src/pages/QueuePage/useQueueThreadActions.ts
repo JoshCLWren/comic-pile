@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { ThreadListItem } from '../../types'
 import { threadsApi } from '../../services/api-threads'
+import { focusSeriesActionsTrigger } from '../../components/seriesActionsTrigger'
 import {
   useMoveToBack,
   useMoveToFront,
@@ -25,9 +26,23 @@ interface UseQueueThreadActionsParams {
    * Returns focus to a row's "Series actions" trigger once the queue cache has
    * settled. The reset that follows a queue mutation remounts every row, so
    * the trigger that opened the menu is gone by the time the mutation
-   * resolves (issue #3147).
+   * resolves (issue #3147). Omit to use the default restore below.
    */
-  restoreSeriesActionsFocus: (threadId: number) => void
+  restoreSeriesActionsFocus?: (threadId: number) => void
+}
+
+/**
+ * Default focus restore for queue row actions. Queue mutations reset the
+ * paginated queue cache, so the list unmounts and remounts while the request
+ * settles; resolving the trigger by its thread id after the refetched rows
+ * paint targets the same control by identity instead of by element instance,
+ * so the restore survives the remount and lands on the invoking control's new
+ * row position (issue #3147).
+ */
+function restoreSeriesActionsFocusByThreadId(threadId: number): void {
+  requestAnimationFrame(() => {
+    focusSeriesActionsTrigger(threadId)
+  })
 }
 
 /**
@@ -83,7 +98,11 @@ export function useQueueThreadActions(
   params: UseQueueThreadActionsParams,
   deps: UseQueueThreadActionsDeps = {},
 ): QueueThreadActionResult {
-  const { navigateToRoll, refetchSession, restoreSeriesActionsFocus } = params
+  const {
+    navigateToRoll,
+    refetchSession,
+    restoreSeriesActionsFocus = restoreSeriesActionsFocusByThreadId,
+  } = params
   const {
     deleteHook = useDeleteThread,
     moveToFrontHook = useMoveToFront,
@@ -278,6 +297,9 @@ export function useQueueThreadActions(
         }
         await refetchSession()
         await invalidateAfterQueueMutation(queryClient)
+        // Snooze resets the paginated queue cache, so the row remounts; the
+        // id-based restore lands on the refetched trigger (#3147).
+        restoreSeriesActionsFocus(thread.id)
       } catch (error: unknown) {
         console.error('Snooze action failed:', error)
         window.alert(
@@ -285,7 +307,7 @@ export function useQueueThreadActions(
         )
       }
     },
-    [snoozeMutation, unsnoozeMutation, refetchSession],
+    [snoozeMutation, unsnoozeMutation, refetchSession, restoreSeriesActionsFocus],
   )
 
   return {
