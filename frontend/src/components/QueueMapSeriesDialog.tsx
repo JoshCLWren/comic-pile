@@ -51,13 +51,12 @@ const STATUS_ACCENT_CLASS: Record<SeriesMappingClassification, string> = {
 }
 
 function seriesMetaText(series: ComicVineSeriesResult): string {
-  return [
-    series.publisher,
-    series.start_year ? `${series.start_year}` : null,
-    series.issue_count ? `${series.issue_count} issues` : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(' · ')
+  // SAFETY: All ComicVine series results have optional string fields
+  const parts: string[] = []
+  if (series.publisher) parts.push(series.publisher)
+  if (series.start_year) parts.push(`${series.start_year}`)
+  if (series.issue_count) parts.push(`${series.issue_count} issues`)
+  return parts.join(' · ')
 }
 
 function rowIssueLabel(row: SeriesMappingPreviewRow): string {
@@ -65,10 +64,12 @@ function rowIssueLabel(row: SeriesMappingPreviewRow): string {
 }
 
 function newIdempotencyKey(): string {
-  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)}`
-  return `queue-map-series-${random}`
+  // SAFETY: Check for crypto API availability at runtime
+  const hasModernCrypto = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+  if (hasModernCrypto) {
+    return `queue-map-series-${crypto.randomUUID()}`
+  }
+  return `queue-map-series-${Date.now()}-${Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)}`
 }
 
 /**

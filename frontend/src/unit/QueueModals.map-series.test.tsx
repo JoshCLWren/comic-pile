@@ -21,6 +21,7 @@ vi.mock('../components/QueueMapSeriesDialog', () => ({
 }))
 
 function createThread(): ThreadListItem {
+  // SAFETY: Test data matches ThreadListItem shape exactly
   return {
     id: 10,
     title: 'Saga',

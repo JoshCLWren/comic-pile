@@ -39,7 +39,7 @@ function createThread(
   comicvine_mapping: QueueComicVineMappingHealth | null | undefined,
   overrides: Partial<ThreadListItem> = {},
 ): ThreadListItem {
-  return {
+  const base: ThreadListItem = {
     id: 7,
     title: 'Saga',
     format: 'Comic',
@@ -53,11 +53,15 @@ function createThread(
     next_unread_issue_number: '10',
     notes: null,
     created_at: '2024-01-01T00:00:00.000Z',
-    // SAFETY: the generated transport type predates the #2776 projection;
-    // the runtime Queue response carries this field pending regeneration.
-    ...(comicvine_mapping === undefined ? {} : { comicvine_mapping }),
-    ...overrides,
-  } as ThreadListItem
+  }
+  
+  // SAFETY: the generated transport type predates the #2776 projection;
+  // the runtime Queue response carries this field pending regeneration.
+  if (comicvine_mapping !== undefined) {
+    base.comicvine_mapping = comicvine_mapping
+  }
+  
+  return { ...base, ...overrides }
 }
 
 function health(
@@ -111,6 +115,7 @@ describe('QueueMappingHealthIndicator', () => {
 
   it('stays quiet for unknown projection shapes instead of inventing status', () => {
     const thread = createThread(undefined)
+    // SAFETY: Test malformed data validation without breaking type system
     ;(thread as unknown as Record<string, unknown>)['comicvine_mapping'] = {
       status: 'mystery',
       tracked_issue_count: 3,

@@ -75,6 +75,7 @@ function isMappingHealth(value: unknown): value is QueueComicVineMappingHealth {
  * @returns The stored mapping health, or `null` when there is nothing to show.
  */
 export function getQueueMappingHealth(thread: ThreadListItem): QueueComicVineMappingHealth | null {
+  // SAFETY: The runtime Queue response carries the `comicvine_mapping` field
   const candidate = (thread as QueueThreadWithMappingHealth).comicvine_mapping
   if (candidate == null) return null
   return isMappingHealth(candidate) ? candidate : null
