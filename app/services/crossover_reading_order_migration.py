@@ -579,12 +579,13 @@ async def _find_migrated_plan(
         ]
         if refs != issue_ids:
             continue
-        paths = {
-            path
-            for node in nodes
-            for path in (node.get("source_paths") or [])
-        }
-        if marker in paths and plan.ordering_mode == "strict_sequential":
+        found = False
+        for node in nodes:
+            raw_paths = node.get("source_paths")
+            if isinstance(raw_paths, list) and marker in raw_paths:
+                found = True
+                break
+        if found and plan.ordering_mode == "strict_sequential":
             return plan
     return None
 

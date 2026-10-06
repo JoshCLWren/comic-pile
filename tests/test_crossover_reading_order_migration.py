@@ -342,7 +342,7 @@ async def test_apply_creates_plan_rules_and_receipt(
     assert plan is not None
     assert plan.name == "Migrated Plan"
     assert plan.ordering_mode == "strict_sequential"
-    refs = [int(node["ref_id"]) for node in sorted(plan.nodes_json, key=lambda n: n["position"])]
+    refs = [int(node["ref_id"]) for node in sorted(plan.nodes_json, key=lambda n: int(n["position"]))]
     assert refs == [issue_a.id, issue_b.id, issue_c.id]
     assert receipt["plan_rule_count"] == 2
     # Reader state untouched: group and its order authority survive.
