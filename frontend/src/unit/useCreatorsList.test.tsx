@@ -295,9 +295,11 @@ describe('useCreatorsList', () => {
       })
     })
 
+    const initialSelection: CreatorListSelection = { sort: 'name' }
+
     const { result, rerender } = renderHook(
       (selection: CreatorListSelection) => useCreatorsList(selection),
-      { wrapper: createWrapper(), initialProps: { sort: 'name' } as CreatorListSelection },
+      { wrapper: createWrapper(), initialProps: initialSelection },
     )
 
     await waitFor(() => expect(result.current.items).toHaveLength(1))
