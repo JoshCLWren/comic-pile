@@ -127,6 +127,8 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
@@ -137,6 +139,8 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
     assert "threads.id" in compiled
 
     assert response.snoozed_count == 1
+    assert response.inactive_count == 0
+    assert response.inactive_threads == []
     assert [thread.model_dump() for thread in response.snoozed_threads] == [
         {
             "id": 101,
@@ -152,8 +156,8 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         predicted_bandwidth=None,
         active_bandwidth=None,
         confidence=None,
-        source=None,
-        mode_version=None,
+        bandwidth_source=None,
+        bandwidth_version=None,
     )
 
 
@@ -202,6 +206,8 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
@@ -507,6 +513,8 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
@@ -575,6 +583,8 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
@@ -645,6 +655,8 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
@@ -742,6 +754,8 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
         _Result(rows=[]),
         _Result(scalar_value=0),
         _Result(rows=[]),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
         _Result(scalar_value=3),
         _Result(rows=[(10,), (20,), (30,)]),
         _Result(
@@ -763,3 +777,62 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
     assert response.stale_thread is not None
     assert response.stale_thread.id == 20
     assert response.stale_thread.title == "Chosen Stale"
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_returns_inactive_threads(monkeypatch):
+    """Inactive (non-active) threads are returned with count so the Roll page can explain exclusions."""
+    current_session = _mode_session(id=55, timezone=None)
+    current_user = SimpleNamespace(id=7)
+    inactive_thread = SimpleNamespace(id=201, title="Completed Saga", format="Comic")
+    active_thread = SimpleNamespace(id=301, title="Active Series", format="Comic")
+
+    monkeypatch.setattr(
+        roll_api,
+        "get_or_create",
+        AsyncMock(return_value=current_session),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_current_die_for_session",
+        AsyncMock(return_value=4),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
+    )
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=[active_thread]),
+        _Result(rows=[]),
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(scalar_value=1),
+        _Result(rows=[inactive_thread]),
+        _Result(scalar_value=0),
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+
+    assert response.inactive_count == 1
+    assert [thread.model_dump() for thread in response.inactive_threads] == [
+        {
+            "id": 201,
+            "title": "Completed Saga",
+            "format": "Comic",
+            "issue_id": None,
+            "issue_number": None,
+            "route_labels": [],
+            "last_activity_at": None,
+        }
+    ]
+    assert response.blocked_count == 0
+    assert response.snoozed_count == 0

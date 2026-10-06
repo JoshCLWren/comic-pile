@@ -16,6 +16,8 @@ interface ThreadPoolProps {
   snoozedThreads: Array<{ id: number; title: string; format: string }>
   snoozedExpanded: boolean
   blockedExpanded: boolean
+  inactiveThreads: RollBootstrapThread[]
+  inactiveExpanded: boolean
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedExpanded: boolean
   onThreadClick: (thread: RollBootstrapThread) => void
@@ -25,6 +27,7 @@ interface ThreadPoolProps {
   onToggleSnoozed: () => void
   onToggleSkipped: () => void
   onToggleBlocked: () => void
+  onToggleInactive: () => void
   onShuffle: () => void
   unsnoozeIsPending: boolean
   unskipIsPending: boolean
@@ -43,6 +46,8 @@ export function ThreadPool({
   snoozedThreads,
   snoozedExpanded,
   blockedExpanded,
+  inactiveThreads,
+  inactiveExpanded,
   skippedThreads,
   skippedExpanded,
   onThreadClick,
@@ -52,6 +57,7 @@ export function ThreadPool({
   onToggleSnoozed,
   onToggleSkipped,
   onToggleBlocked,
+  onToggleInactive,
   onShuffle,
   unsnoozeIsPending,
   unskipIsPending,
@@ -80,6 +86,11 @@ export function ThreadPool({
         <div className="w-2 h-2 rounded-full bg-[var(--theme-comic-accent)] shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
           <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{pool.length} in play</p>
+          {pool.length > 0 && (blockedThreads.length > 0 || snoozedThreads.length > 0 || skippedThreads.length > 0 || inactiveThreads.length > 0) && (
+            <p className="text-[10px] text-stone-500 mt-1" data-excluded-count>
+              {blockedThreads.length + snoozedThreads.length + skippedThreads.length + inactiveThreads.length} excluded
+            </p>
+          )}
           {dieSize && pool.length > 0 && pool.length < dieSize && (
             <p className="text-[10px] text-stone-500 mt-1" data-smaller-than-die>
               Only {pool.length} of d{dieSize} faces are mapped to an in-play series — the roll picks among these visible faces.
@@ -216,6 +227,38 @@ export function ThreadPool({
                         </p>
                     )}
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {inactiveThreads.length > 0 && !isRatingView && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={onToggleInactive}
+            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+          >
+            <span
+              className={`text-stone-400 text-xs transition-transform ${inactiveExpanded ? 'rotate-90' : ''}`}
+            >
+              ▶
+            </span>
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+              {inactiveThreads.length} completed
+            </span>
+          </button>
+          {inactiveExpanded && (
+            <div className="mt-2 space-y-1">
+              {inactiveThreads.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
+                >
+                  <span className="text-sm">✅</span>
+                  <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                 </div>
               ))}
             </div>

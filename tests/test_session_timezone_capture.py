@@ -84,6 +84,8 @@ def _patch_bootstrap(monkeypatch, current_session):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
     ]
     return db
 

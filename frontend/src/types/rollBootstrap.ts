@@ -126,6 +126,8 @@ export interface RollBootstrapResponse {
   skipped_threads: RollBootstrapThread[]
   blocked_count: number
   blocked_threads: RollBootstrapThread[]
+  inactive_count: number
+  inactive_threads: RollBootstrapThread[]
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
   timezone?: string | null

@@ -1218,9 +1218,35 @@ async def roll_bootstrap(
         )
         for row in blocked_result.all()
     ]
+
+    inactive_count_result = await db.execute(
+        select(func.count())
+        .select_from(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status != "active")
+        .where(Thread.queue_position >= 1)
+    )
+    inactive_count = inactive_count_result.scalar() or 0
+
+    inactive_result = await db.execute(
+        select(Thread.id, Thread.title, Thread.format)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status != "active")
+        .where(Thread.queue_position >= 1)
+        .order_by(Thread.queue_position)
+        .limit(20)
+    )
+    inactive_threads = [
+        RollBootstrapThread(
+            id=row.id, title=row.title, format=normalize_format_value(row.format)
+        )
+        for row in inactive_result.all()
+    ]
+
     snoozed_count = len(snoozed_threads)
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
+    inactive_threads = inactive_threads[:RollBootstrapResponse.summary_limit]
     skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
@@ -1287,6 +1313,8 @@ async def roll_bootstrap(
         skipped_threads=skipped_threads,
         blocked_count=blocked_count,
         blocked_threads=blocked_threads,
+        inactive_count=inactive_count,
+        inactive_threads=inactive_threads,
         stale_thread_count=stale_thread_count,
         stale_thread=stale_thread,
         session_id=current_session_id,

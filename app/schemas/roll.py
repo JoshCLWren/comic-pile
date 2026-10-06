@@ -186,6 +186,8 @@ class RollBootstrapResponse(BaseModel):
     skipped_threads: list[RollBootstrapThread] = []
     blocked_count: int
     blocked_threads: list[RollBootstrapThread]
+    inactive_count: int = 0
+    inactive_threads: list[RollBootstrapThread] = Field(default_factory=list)
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
     timezone: str | None = None
@@ -197,7 +199,7 @@ class RollBootstrapResponse(BaseModel):
         if not isinstance(data, dict):
             return data
 
-        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads"):
+        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads", "inactive_threads"):
             values = data.get(field_name)
             if isinstance(values, list):
                 data[field_name] = values[: cls.summary_limit]

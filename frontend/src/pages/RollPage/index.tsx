@@ -298,6 +298,7 @@ export default function RollPage() {
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const skippedThreads = bootstrap?.skipped_threads ?? []
   const blockedThreads = bootstrap?.blocked_threads ?? []
+  const inactiveThreads = bootstrap?.inactive_threads ?? []
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -443,6 +444,8 @@ export default function RollPage() {
               snoozedThreads={snoozedThreads}
               snoozedExpanded={state.snoozedExpanded}
               blockedExpanded={state.blockedExpanded}
+              inactiveThreads={inactiveThreads}
+              inactiveExpanded={state.inactiveExpanded}
               skippedThreads={skippedThreads}
               skippedExpanded={state.skippedExpanded}
               onThreadClick={actions.handleThreadClick}
@@ -452,6 +455,7 @@ export default function RollPage() {
               onToggleSnoozed={() => state.setSnoozedExpanded(!state.snoozedExpanded)}
               onToggleSkipped={() => state.setSkippedExpanded(!state.skippedExpanded)}
               onToggleBlocked={dependencies.handleToggleBlocked}
+              onToggleInactive={() => state.setInactiveExpanded(!state.inactiveExpanded)}
               onShuffle={actions.handleShufflePool}
               unsnoozeIsPending={unsnoozeMutation.isPending}
               unskipIsPending={unskipMutation.isPending}

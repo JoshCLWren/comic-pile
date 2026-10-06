@@ -26,18 +26,23 @@ const mockBlockedThreads: RollBootstrapThread[] = []
 const mockBlockingDependencyMap: Record<number, BlockingDependency[]> = {}
 const mockSnoozedThreads: Array<{ id: number; title: string; format: string }> = []
 const mockSkippedThreads: Array<{ id: number; title: string; format: string }> = []
+const mockInactiveThreads: RollBootstrapThread[] = []
 
 function renderPool(overrides: Partial<{
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
   blockingDependencyMap: Record<number, BlockingDependency[]>
   blockedExpanded: boolean
+  inactiveThreads: RollBootstrapThread[]
+  inactiveExpanded: boolean
 }> = {}) {
   const {
     pool = mockPool,
     blockedThreads = mockBlockedThreads,
     blockingDependencyMap = mockBlockingDependencyMap,
     blockedExpanded = false,
+    inactiveThreads = mockInactiveThreads,
+    inactiveExpanded = false,
   } = overrides
 
   return render(
@@ -56,6 +61,8 @@ function renderPool(overrides: Partial<{
         skippedThreads={mockSkippedThreads}
         skippedExpanded={false}
         blockedExpanded={blockedExpanded}
+        inactiveThreads={inactiveThreads}
+        inactiveExpanded={inactiveExpanded}
         onThreadClick={() => {}}
         onUnsnooze={() => {}}
         onUnskip={() => {}}
@@ -63,6 +70,7 @@ function renderPool(overrides: Partial<{
         onToggleSnoozed={() => {}}
         onToggleSkipped={() => {}}
         onToggleBlocked={() => {}}
+        onToggleInactive={() => {}}
         onShuffle={() => {}}
         unsnoozeIsPending={false}
         unskipIsPending={false}
