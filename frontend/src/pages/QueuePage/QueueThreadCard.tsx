@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
+import QueueMappingHealthIndicator from '../../components/QueueMappingHealthIndicator'
 import { CrossoverTags } from '../../components/CrossoverTags'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { BlockingDependency, ThreadListItem } from '../../types'
@@ -42,6 +43,12 @@ interface QueueThreadCardProps {
   onEdit: () => void
   onDependencies: () => void
   onDelete: () => void
+  /**
+   * Opens the Map series repair flow for this thread. The card stays
+   * presentational: the indicator reads the persisted mapping-health
+   * projection already on the Queue response and never fetches.
+   */
+  onMapSeries: () => void
 }
 
 export default function QueueThreadCard({
@@ -71,6 +78,7 @@ export default function QueueThreadCard({
   onEdit,
   onDependencies,
   onDelete,
+  onMapSeries,
 }: QueueThreadCardProps) {
   // `total_issues` is optional in the generated list item; absent and null
   // both mean the thread has no known issue total.
@@ -167,6 +175,7 @@ export default function QueueThreadCard({
               </span>
             )}
           </div>
+          <QueueMappingHealthIndicator thread={thread} onMapSeries={onMapSeries} />
           {thread.notes && <p className="mt-1.5 text-xs text-[var(--theme-text-muted)] [overflow-wrap:anywhere] break-words">{thread.notes}</p>}
           <div className="mt-1.5">
             {crossoverGroupsLoading ? (

@@ -182,6 +182,7 @@ export default function QueuePage() {
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
           onDelete={() => actions.requestDelete(thread)}
+          onMapSeries={() => modals.openMapSeries(thread)}
         />
       )
     },
@@ -321,6 +322,7 @@ export default function QueuePage() {
           showRollNudge={modals.showRollNudge}
           onDismissRollNudge={modals.dismissRollNudge}
           onRollNudgeNavigate={modals.rollNudgeNavigate}
+          mapSeries={{ thread: modals.mapSeriesThread, onClose: modals.closeMapSeries }}
         />
 
         <DeleteThreadDialog

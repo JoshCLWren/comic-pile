@@ -3,6 +3,7 @@ import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
+import QueueMapSeriesDialog from '../../components/QueueMapSeriesDialog'
 import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
@@ -54,6 +55,12 @@ interface QueueModalsProps {
   showRollNudge: boolean
   onDismissRollNudge: () => void
   onRollNudgeNavigate: () => void
+  /**
+   * Map series repair selection. The dialog mounts only while `thread` is
+   * non-null, so provider traffic starts on explicit open and mounting fresh
+   * each time resets the search/preview state.
+   */
+  mapSeries?: { thread: ThreadListItem | null; onClose: () => void }
 }
 
 /**
@@ -104,6 +111,7 @@ export function QueueModals({
   showRollNudge,
   onDismissRollNudge,
   onRollNudgeNavigate,
+  mapSeries,
 }: QueueModalsProps) {
   return (
     <>
@@ -416,6 +424,10 @@ export function QueueModals({
           onSkip={onMigrationSkip}
           onClose={onCloseMigration}
         />
+      )}
+
+      {mapSeries?.thread && (
+        <QueueMapSeriesDialog thread={mapSeries.thread} onClose={mapSeries.onClose} />
       )}
 
       {showRollNudge && (

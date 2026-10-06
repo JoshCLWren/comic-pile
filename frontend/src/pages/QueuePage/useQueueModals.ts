@@ -48,6 +48,7 @@ interface UseQueueModalsResult {
   dependencyThread: ThreadListItem | null
   threadToMigrate: Thread | ThreadListItem | null
   showMigrationDialog: boolean
+  mapSeriesThread: ThreadListItem | null
   reactivateThreadId: string
   issuesToAdd: number
   setCreateForm: (next: QueueFormState) => void
@@ -66,6 +67,8 @@ interface UseQueueModalsResult {
   closeDependenciesModal: () => void
   openMigrationDialog: (thread: Thread | ThreadListItem) => void
   closeMigrationDialog: () => void
+  openMapSeries: (thread: ThreadListItem) => void
+  closeMapSeries: () => void
   handleCreateSubmit: (event: FormEvent) => Promise<void>
   handleEditSubmit: (event: FormEvent) => Promise<void>
   handleReactivateSubmit: (event: FormEvent) => Promise<void>
@@ -111,6 +114,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [dependencyThread, setDependencyThread] = useState<ThreadListItem | null>(null)
   const [threadToMigrate, setThreadToMigrate] = useState<Thread | ThreadListItem | null>(null)
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
+  const [mapSeriesThread, setMapSeriesThread] = useState<ThreadListItem | null>(null)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
 
@@ -208,6 +212,14 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const closeMigrationDialog = useCallback(() => {
     setShowMigrationDialog(false)
     setThreadToMigrate(null)
+  }, [])
+
+  const openMapSeries = useCallback((thread: ThreadListItem) => {
+    setMapSeriesThread(thread)
+  }, [])
+
+  const closeMapSeries = useCallback(() => {
+    setMapSeriesThread(null)
   }, [])
 
   const dismissRollNudge = useCallback(() => {
@@ -392,8 +404,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   }, [])
 
   const isAnyModalOpen = useMemo(
-    () => openModal !== null || showMigrationDialog || showRollNudge,
-    [openModal, showMigrationDialog, showRollNudge],
+    () => openModal !== null || showMigrationDialog || showRollNudge || mapSeriesThread !== null,
+    [openModal, showMigrationDialog, showRollNudge, mapSeriesThread],
   )
 
   return {
@@ -408,6 +420,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     dependencyThread,
     threadToMigrate,
     showMigrationDialog,
+    mapSeriesThread,
     reactivateThreadId,
     issuesToAdd,
     setCreateForm,
@@ -426,6 +439,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     closeDependenciesModal,
     openMigrationDialog,
     closeMigrationDialog,
+    openMapSeries,
+    closeMapSeries,
     handleCreateSubmit,
     handleEditSubmit,
     handleReactivateSubmit,
