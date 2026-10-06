@@ -29,3 +29,5 @@
 74	openrouter-free	apodex/apodex-1.1-mini:free	20	dispatcher	OpenRouter Apodex 1.1 Mini Free
 75	opencode-free	ling-3.1-flash-free	25	dispatcher	OpenCode Ling 3.1 Flash Free
 76	opencode-free	fledge-alpha-free	0	dispatcher	OpenCode Fledge Alpha Free
+77	nvidia	moonshotai/kimi-k3	35	dispatcher	NVIDIA Kimi K3
+78	nvidia	z-ai/glm-5.3	45	dispatcher	NVIDIA GLM 5.3
