@@ -472,7 +472,9 @@ async def list_sessions(
     open_rate_ids_by_session: dict[int, list[int]] = {}
     for ev in history_events:
         if ev.type == "rate":
-            open_rate_ids_by_session.setdefault(ev.session_id, []).append(ev.id)
+            if ev.session_id not in open_rate_ids_by_session:
+                open_rate_ids_by_session[ev.session_id] = []
+            open_rate_ids_by_session[ev.session_id].append(ev.id)
             if ev.session_id not in rate_agg:
                 rate_agg[ev.session_id] = {"issues_read": 0, "last_rating": None}
             if ev.issues_read is not None:
@@ -829,7 +831,7 @@ async def get_session_details(
         elif event.type == "skip" or event.type == "rolled_but_skipped":
             event_data.die = event.die
             event_data.die_after = event.die_after
-            word = _event_word(event.type if event.type == "skip" else "rolled_but_skipped")
+            word = _event_word(event.type)
             event_data.description = f"{word} {thread_title or 'thread'}"
         elif event.type == "move":
             event_data.die = event.die
@@ -846,9 +848,6 @@ async def get_session_details(
                 desc_parts.append(f"rating {event.rating:.1f}")
             if event.issue_number:
                 desc_parts.append(f"#{event.issue_number}")
-            elif event.issue_id and thread_title:
-                # Try to include issue info when available
-                pass
             event_data.description = " · ".join(desc_parts)
 
         formatted_events.append(event_data)
