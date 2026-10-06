@@ -212,6 +212,47 @@ export async function invalidateAfterQueueMutation(
   return invalidateAfterQueueMovement(client)
 }
 
+/**
+ * Refresh every retained resource an undo or session-start restore can
+ * change. An undone rating rewrites thread read state, queue order, the die,
+ * and history counts, so the roll bootstrap, current session, queue pages,
+ * session index, and snapshot lists must all refetch. Without this the Roll
+ * page keeps showing the pre-undo die size, ready-to-read count, and rated
+ * issue until a manual browser reload (#3194).
+ */
+export async function invalidateAfterUndo(
+  client: QueryClient,
+  sessionId?: number | string | null,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.session.all }),
+    client.invalidateQueries({ queryKey: queryKeys.undo.all }),
+    // Legacy snapshot key used by `useSessionSnapshots`; kept until that
+    // hook migrates fully onto `queryKeys.undo.snapshots`.
+    client.invalidateQueries({ queryKey: ['session', 'snapshots'] }),
+  ])
+  if (sessionId !== undefined && sessionId !== null) {
+    await Promise.all([
+      client.invalidateQueries({
+        queryKey: queryKeys.session.detail(Number(sessionId)),
+        exact: true,
+      }),
+      client.invalidateQueries({
+        queryKey: queryKeys.undo.snapshots(sessionId),
+      }),
+    ])
+  }
+}
+
 export async function invalidateReadingPlans(client: QueryClient): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
   // Plan create/update/delete recompiles eligibility rules that Roll/Queue/session consume.

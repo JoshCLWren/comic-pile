@@ -10,6 +10,9 @@ const spies = vi.hoisted(() => ({
 }))
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
+vi.mock('../contexts/useToast', () => ({
+  useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }),
+}))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }),
 }))

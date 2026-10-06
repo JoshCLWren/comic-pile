@@ -3,7 +3,7 @@ export { useMoveToPosition, useMoveToFront, useMoveToBack, useQueueThreads } fro
 export { useRate } from './useRate'
 export { useRoll, useOverrideRoll, useDismissPending, useSetDie, useClearManualDie, useReroll } from './useRoll'
 export { useSession, useSessions, useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from './useSession'
-export { useUndo, useSnapshots } from './useUndo'
+export { useUndo, useSnapshots, useUndoLatestRating } from './useUndo'
 export { useSnooze, useUnsnooze } from './useSnooze'
 export { useAnalytics } from './useAnalytics'
 export { useBugReport } from './useBugReport'

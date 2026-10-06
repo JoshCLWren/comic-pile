@@ -96,6 +96,9 @@ export default function SessionPage() {
   const [isRestoreConfirmationOpen, setIsRestoreConfirmationOpen] = useState(false)
 
   const snapshots = snapshotsData?.snapshots ?? []
+  const hasUndoableSnapshot = snapshots.some(
+    (snapshot) => snapshot.description !== 'Session start',
+  )
 
   if (isPending) {
     return <LoadingSpinner fullScreen />
@@ -186,6 +189,14 @@ export default function SessionPage() {
             {restoreMutation.isPending ? 'Restoring...' : 'Restore Start'}
           </button>
         </div>
+        <p className="text-xs text-stone-500">
+          Undo latest reverts only your most recent rating, and each undo can be used once — the
+          snapshot is consumed. Restore start instead resets your entire pile to when this session
+          began.
+        </p>
+        {!hasUndoableSnapshot && snapshots.length > 0 ? (
+          <p className="text-xs text-stone-500">No ratings left to undo.</p>
+        ) : null}
         {snapshots.length === 0 ? (
           <p className="text-xs text-stone-500">No snapshots available.</p>
         ) : (
@@ -265,6 +276,7 @@ export default function SessionPage() {
             onClick={async () => {
               await restoreMutation.mutate(details.session_id)
               setIsRestoreConfirmationOpen(false)
+              await Promise.all([refetchDetails(), refetchSnapshots()])
             }}
             disabled={restoreMutation.isPending}
             className="min-h-11 rounded-xl bg-[var(--theme-danger)] px-4 text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-danger-hover)] disabled:opacity-60"

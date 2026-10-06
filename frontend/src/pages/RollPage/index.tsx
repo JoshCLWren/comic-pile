@@ -420,6 +420,8 @@ export default function RollPage() {
               <PostRateCopyPrompt
                 reference={rating.lastRated}
                 onDismiss={rating.clearLastRated}
+                sessionId={bootstrap?.session_id ?? null}
+                onUndone={rating.clearLastRated}
               />
             )}
 

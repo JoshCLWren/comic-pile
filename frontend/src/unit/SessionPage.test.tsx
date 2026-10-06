@@ -82,6 +82,8 @@ it('renders session details and only allows undoing the latest rating', async ()
   expect(screen.getByText('Earlier rating')).toBeInTheDocument()
   expect(screen.getAllByText('History')).toHaveLength(1)
   expect(screen.getAllByRole('button', { name: /undo latest/i })).toHaveLength(1)
+  // Undo vs restore-start must be explained inline, not left ambiguous (#3194).
+  expect(screen.getByText(/Undo latest reverts only your most recent rating/i)).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: /restore start/i }))
   expect(screen.getByRole('dialog', { name: 'Restore session start?' })).toBeInTheDocument()
@@ -97,11 +99,14 @@ it('renders session details and only allows undoing the latest rating', async ()
   await user.click(screen.getByRole('button', { name: 'Restore session start' }))
   expect(restoreSpy).toHaveBeenCalledWith(12)
   expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
+  // A restore rewrites the whole pile, so the page must refresh its own data too (#3194).
+  expect(refetchDetailsSpy).toHaveBeenCalledTimes(1)
+  expect(refetchSnapshotsSpy).toHaveBeenCalledTimes(1)
 
   await user.click(screen.getByRole('button', { name: /undo latest/i }))
   expect(undoSpy).toHaveBeenCalledWith({ sessionId: 12, snapshotId: 4 })
-  expect(refetchDetailsSpy).toHaveBeenCalledOnce()
-  expect(refetchSnapshotsSpy).toHaveBeenCalledOnce()
+  expect(refetchDetailsSpy).toHaveBeenCalledTimes(2)
+  expect(refetchSnapshotsSpy).toHaveBeenCalledTimes(2)
 })
 
 it('renders loading, missing, empty, and active session branches', () => {
@@ -157,6 +162,7 @@ it('shows session-start snapshots as history instead of rating undo targets', ()
 
   expect(screen.queryByRole('button', { name: /undo latest/i })).not.toBeInTheDocument()
   expect(screen.getByText('History')).toBeInTheDocument()
+  expect(screen.getByText('No ratings left to undo.')).toBeInTheDocument()
 })
 
 it('renders pending restore state and optional event metadata', () => {

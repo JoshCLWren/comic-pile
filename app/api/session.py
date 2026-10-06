@@ -461,7 +461,15 @@ async def list_sessions(
                 (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
                 Event.type == "rate",
                 Event.type == "rolled_but_skipped",
-                (Event.type.in_(("snooze", "unsnooze", "undo", "restore"))) & (Event.die_after.is_not(None)),
+                # Undo events are loaded unconditionally: the rate aggregate
+                # below nets each undo against its rate, but undo rows may
+                # carry a null die_after (restored die unknown), so gating
+                # them on die_after would silently keep undone ratings in
+                # the "issues read" count (#3194). The die projection guards
+                # null die_after itself.
+                Event.type == "undo",
+                (Event.type.in_(("snooze", "unsnooze", "restore")))
+                & (Event.die_after.is_not(None)),
             )
         )
         .order_by(Event.session_id, Event.timestamp, Event.id)

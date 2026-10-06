@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useUndoLatestRating } from '../../../hooks/useUndo'
 import { rollUtilityActionClass } from '../actionClasses'
 
 /** The just-rated comic reference offered on the post-rate copy prompt. */
@@ -11,6 +12,10 @@ export interface PostRateReference {
 interface PostRateCopyPromptProps {
   reference: PostRateReference | null
   onDismiss: () => void
+  /** Current session id. When present the notice offers a one-tap Undo (#3194). */
+  sessionId?: number | null
+  /** Called after a successful undo so the page can retire the notice. */
+  onUndone?: () => void
 }
 
 /**
@@ -19,9 +24,14 @@ interface PostRateCopyPromptProps {
  * surfaces the exact series title + issue string the pre-rate Copy title
  * control would have offered before Mark Read & Save. It never blocks the
  * next roll and follows the pre-rate clipboard feedback pattern.
+ *
+ * The prompt also carries the only in-context Undo for the just-saved rating:
+ * without it the reversal lives three clicks deep in History, where no reader
+ * finds it (#3194).
  */
-export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptProps) {
+export function PostRateCopyPrompt({ reference, onDismiss, sessionId, onUndone }: PostRateCopyPromptProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const { undoLatest, isPending: isUndoPending } = useUndoLatestRating()
 
   useEffect(() => {
     setCopyStatus('idle')
@@ -38,6 +48,12 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
     } catch {
       setCopyStatus('failed')
     }
+  }
+
+  async function handleUndoLatestRating() {
+    if (sessionId == null) return
+    const undone = await undoLatest(sessionId)
+    if (undone) onUndone?.()
   }
 
   return (
@@ -78,6 +94,17 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
           </svg>
           {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title and issue'}
         </button>
+        {sessionId != null ? (
+          <button
+            type="button"
+            onClick={handleUndoLatestRating}
+            disabled={isUndoPending}
+            className={`min-h-11 ${rollUtilityActionClass('idle')}`}
+            aria-label={`Undo rating of ${title} ${issueNumber}`}
+          >
+            {isUndoPending ? 'Undoing…' : 'Undo rating'}
+          </button>
+        ) : null}
         <p className="text-[10px] font-medium text-[var(--theme-text-dim)]">
           Copies “{title} {issueNumber}”
         </p>

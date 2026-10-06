@@ -1,7 +1,15 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PostRateCopyPrompt, type PostRateReference } from '../pages/RollPage/components/PostRateCopyPrompt'
+import { useUndoLatestRating } from '../hooks/useUndo'
+
+vi.mock('../hooks/useUndo', () => ({
+  useUndoLatestRating: vi.fn(),
+}))
+
+const mockedUseUndoLatestRating = vi.mocked(useUndoLatestRating)
+const undoLatest = vi.fn()
 
 const reference: PostRateReference = {
   title: 'B.P.R.D.: War on Frogs',
@@ -9,7 +17,14 @@ const reference: PostRateReference = {
   rating: 4,
 }
 
-function renderPrompt(overrides?: { reference?: PostRateReference | null; onDismiss?: () => void }) {
+function renderPrompt(
+  overrides?: {
+    reference?: PostRateReference | null
+    onDismiss?: () => void
+    sessionId?: number | null
+    onUndone?: () => void
+  },
+) {
   const props = {
     reference,
     onDismiss: vi.fn(),
@@ -18,6 +33,11 @@ function renderPrompt(overrides?: { reference?: PostRateReference | null; onDism
   render(<PostRateCopyPrompt {...props} />)
   return props
 }
+
+beforeEach(() => {
+  undoLatest.mockReset().mockResolvedValue(true)
+  mockedUseUndoLatestRating.mockReturnValue({ undoLatest, isPending: false })
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -92,5 +112,34 @@ describe('PostRateCopyPrompt', () => {
 
     await user.click(dismissButton)
     expect(props.onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers an Undo action directly on the just-rated notice', async () => {
+    const user = userEvent.setup()
+    const onUndone = vi.fn()
+    renderPrompt({ sessionId: 12, onUndone })
+
+    await user.click(screen.getByRole('button', { name: 'Undo rating of B.P.R.D.: War on Frogs 4' }))
+
+    expect(undoLatest).toHaveBeenCalledWith(12)
+    expect(onUndone).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the Undo action when no session is available', () => {
+    renderPrompt({ sessionId: null })
+    expect(screen.queryByRole('button', { name: /undo rating/i })).not.toBeInTheDocument()
+  })
+
+  it('keeps the notice when the undo finds nothing to revert', async () => {
+    const user = userEvent.setup()
+    undoLatest.mockResolvedValueOnce(false)
+    const onUndone = vi.fn()
+    renderPrompt({ sessionId: 12, onUndone })
+
+    await user.click(screen.getByRole('button', { name: 'Undo rating of B.P.R.D.: War on Frogs 4' }))
+
+    expect(undoLatest).toHaveBeenCalledWith(12)
+    expect(onUndone).not.toHaveBeenCalled()
+    expect(screen.getByTestId('post-rate-copy-prompt')).toBeInTheDocument()
   })
 })

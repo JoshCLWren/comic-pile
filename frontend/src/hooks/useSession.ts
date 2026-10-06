@@ -12,6 +12,8 @@ import type {
 import { useToast } from "../contexts/useToast";
 import { trackSessionGreeting } from "../utils/sessionGreeting";
 import { queryKeys, type SessionListParams } from "../query/queryKeys";
+import { queryClient } from "../query/queryClient";
+import { invalidateAfterUndo } from "../query/cacheEffects";
 
 /** Signature of the current-session `refetch` exposed by `useSession`. */
 export type SessionRefetch = ReturnType<typeof useSession>["refetch"];
@@ -126,7 +128,9 @@ export function useSessionDetails(id: number | string | null | undefined) {
 
 export function useSessionSnapshots(id: number | string | null | undefined) {
   const { data, isPending, fetchStatus, isError, error, refetch } = useQuery({
-    queryKey: id ? ['session', 'snapshots', id] : [],
+    // Canonical `undo.snapshots` space shared with `useSnapshots` so an undo
+    // in one view refreshes the snapshot list in the other (#3194).
+    queryKey: id ? queryKeys.undo.snapshots(id) : [],
     queryFn: () => defaultSessionApi.getSnapshots(id!),
     enabled: !!id,
   });
@@ -141,12 +145,29 @@ export function useSessionSnapshots(id: number | string | null | undefined) {
 }
 
 export function useRestoreSessionStart() {
+  const { showToast } = useToast();
   const mutation = useMutation({
     mutationFn: (sessionId: number | string) => defaultSessionApi.restoreSessionStart(sessionId),
+    // A restore rewrites the whole pile, so the same retained caches an
+    // undo touches must refetch (#3194).
+    onSuccess: async (_data, sessionId) => {
+      await invalidateAfterUndo(queryClient, sessionId);
+    },
   });
 
+  const mutate = async (sessionId: number | string) => {
+    try {
+      const result = await mutation.mutateAsync(sessionId);
+      showToast('Session start restored. Roll and History are up to date.', 'success');
+      return result;
+    } catch (error: unknown) {
+      showToast('Restore failed. Nothing was changed.', 'error');
+      throw error;
+    }
+  };
+
   return {
-    mutate: mutation.mutateAsync,
+    mutate,
     isPending: mutation.isPending,
     isError: mutation.isError,
     error: normalizeQueryError(mutation.error, 'Failed to restore session'),
