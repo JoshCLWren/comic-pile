@@ -12,7 +12,6 @@ import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../qu
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { ThreadListItem } from '../../types'
-import QueueThreadCard from './QueueThreadCard'
 import CompletedThreadsSection from './CompletedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
@@ -23,6 +22,8 @@ import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueCrossovers } from './useQueueCrossovers'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
+import { useQueueComicVineMapping } from './useQueueComicVineMapping'
+import { useQueueThreadCards } from './useQueueThreadCards'
 import BulkMapComicVineDialog from './BulkMapComicVineDialog'
 
 /**
@@ -36,8 +37,6 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
-  const [bulkMapDialogOpen, setBulkMapDialogOpen] = useState(false)
-  const [selectedThreadsForMapping, setSelectedThreadsForMapping] = useState<ThreadListItem[]>([])
   const isSearching = searchQuery.trim() !== ''
 
   const {
@@ -119,31 +118,7 @@ export default function QueuePage() {
     if (modals.editingThread) void invalidateAfterIssueEdit(queryClient, modals.editingThread.id)
   }, [modals.editingThread])
 
-  const handleBulkMapComicVine = useCallback(() => {
-    // Find threads that don't have ComicVine mappings
-    const unmappedThreads = activeThreads.filter(thread => {
-      // For now, we'll assume threads without total_issues are unmapped
-      // This is a simplification - in a real implementation, we'd check the actual mapping status
-      return thread.total_issues === null
-    })
-    
-    if (unmappedThreads.length === 0) {
-      window.alert('All series are already mapped to ComicVine!')
-      return
-    }
-    
-    setSelectedThreadsForMapping(unmappedThreads)
-    setBulkMapDialogOpen(true)
-  }, [activeThreads])
-
-  const handleMapSelectedThreads = useCallback(() => {
-    // For now, we'll just roll each thread to trigger the mapping flow
-    selectedThreadsForMapping.forEach(thread => {
-      navigate(`/`, { state: { rollResponse: { thread_id: thread.id, result: 'manual' } } })
-    })
-    setBulkMapDialogOpen(false)
-    setSelectedThreadsForMapping([])
-  }, [selectedThreadsForMapping, navigate])
+  const mapping = useQueueComicVineMapping(activeThreads)
 
   const handleRepositionConfirm = useCallback(
     async (targetPosition: number) => {
@@ -169,70 +144,15 @@ export default function QueuePage() {
     [modals, moveToPositionMutation, authoritativeActiveCount],
   )
 
-  const renderThreadCard = useCallback(
-    (thread: ThreadListItem, index: number) => {
-      const isDragOver = actions.dragOverThreadId === thread.id
-      const isBlocked = thread.is_blocked
-      const blockingDependencies = blockingByThreadId[thread.id] ?? []
-      const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
-      const snoozeIcon = isSnoozed ? '🔔' : '😴'
-      const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
-      const snoozeDisabled = !isSnoozed && session?.pending_thread_id !== thread.id
-      const readDisabled = isBlocked
-      const blockingReasons = blockingDependencies.map((dep) => dep.label)
-      const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'
-      
-      // For now, assume threads without total_issues are unmapped
-      // This is a simplification - in a real implementation, we'd check the actual mapping status
-      const isMapped = thread.total_issues !== null
-
-      return (
-        <QueueThreadCard
-          key={thread.id}
-          thread={thread}
-          index={index}
-          isBlocked={isBlocked}
-          blockingDependencies={blockingDependencies}
-          crossoverGroups={crossovers.groupsForThread(thread.id)}
-          crossoverGroupsLoading={crossovers.isPending}
-          crossoverGroupsError={crossovers.hasError}
-          isDragOver={isDragOver}
-          snoozeIcon={snoozeIcon}
-          snoozeLabel={snoozeLabel}
-          snoozeDisabled={snoozeDisabled}
-          readDisabled={readDisabled}
-          readDisabledReason={readDisabledReason}
-          onCardClick={() => navigate(`/thread/${thread.id}`)}
-          onDragStart={actions.handleDragStart(thread.id)}
-          onDragEnd={actions.handleDragEnd}
-          onDragOver={actions.handleDragOver(thread.id)}
-          onDrop={actions.handleDrop(thread.id, activeThreads)}
-          onRead={() => void actions.handleThreadRead(thread)}
-          onSnooze={() => void actions.handleSnoozeToggle(thread, isSnoozed)}
-          onMoveToFront={() => actions.handleMoveToFront(thread.id)}
-          onMoveToBack={() => actions.handleMoveToBack(thread.id)}
-          onReposition={() => modals.openRepositionModal(thread)}
-          onEdit={() => modals.showEditModal(thread)}
-          onDependencies={() => modals.openDependenciesModal(thread)}
-          onDelete={() => actions.requestDelete(thread)}
-          onMapComicVine={() => {
-            // Navigate to roll page with this thread to trigger mapping flow
-            navigate('/', { state: { rollResponse: { thread_id: thread.id, result: 'manual' } } })
-          }}
-          isMapped={isMapped}
-        />
-      )
-    },
-    [
-      actions,
-      activeThreads,
-      blockingByThreadId,
-      crossovers,
-      modals,
-      navigate,
-      session,
-    ],
-  )
+  const renderThreadCard = useQueueThreadCards({
+    actions,
+    activeThreads,
+    blockingByThreadId,
+    crossovers,
+    modals,
+    session,
+    onMapComicVine: mapping.handleMapSingleThread,
+  })
 
   const handleLoadMore = useCallback(() => {
     void loadMore().catch(() => undefined)
@@ -260,7 +180,7 @@ export default function QueuePage() {
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}
           onCreateThread={modals.showCreateModal}
-          onBulkMapComicVine={handleBulkMapComicVine}
+          onBulkMapComicVine={mapping.handleBulkMapComicVine}
           sortBy={sortBy}
           onSortChange={setSortBy}
           searchQuery={searchQuery}
@@ -379,10 +299,10 @@ export default function QueuePage() {
         />
 
         <BulkMapComicVineDialog
-          isOpen={bulkMapDialogOpen}
-          threads={selectedThreadsForMapping}
-          onMapSelected={handleMapSelectedThreads}
-          onClose={() => setBulkMapDialogOpen(false)}
+          isOpen={mapping.bulkMapDialogOpen}
+          threads={mapping.selectedThreadsForMapping}
+          onMapSelected={mapping.handleMapSelectedThreads}
+          onClose={mapping.closeBulkMapDialog}
         />
       </div>
     </PositionMenuProvider>
