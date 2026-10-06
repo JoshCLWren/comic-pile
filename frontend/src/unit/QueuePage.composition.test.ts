@@ -3,7 +3,9 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const queuePagePath = resolve(__dirname, '../pages/QueuePage/QueuePage.tsx')
-const source = readFileSync(queuePagePath, 'utf-8')
+const queuePageSource = readFileSync(queuePagePath, 'utf-8')
+const queueModalsPath = resolve(__dirname, '../pages/QueuePage/QueueModals.tsx')
+const queueModalsSource = readFileSync(queueModalsPath, 'utf-8')
 
 describe('QueuePage composition boundaries', () => {
   it('does not own inline modal JSX or collection compatibility branches', () => {
