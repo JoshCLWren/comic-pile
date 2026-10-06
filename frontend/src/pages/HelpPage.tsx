@@ -1,118 +1,13 @@
-import React, { useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { requestSemanticScroll } from '../scroll/scrollCoordinator'
+import { GLOSSARY_TERMS } from '../utils/glossaryTerms'
 
 // Simple, static glossary help page for core app concepts.
 // This is intentionally content-forward and does not touch backend.
-
-type Term = {
-  id: string
-  term: string
-  def: string
-}
-
-const DEFINITIONS: Term[] = [
-  {
-    id: 'thread',
-    term: 'Series',
-    def: 'One comic series you are tracking, read issue by issue.',
-  },
-  {
-    id: 'ready-to-read',
-    term: 'Ready to read',
-    def: 'Series that can be picked for your next roll right now, because nothing earlier in their reading order is waiting. The Roll page counts these as "N ready to read".',
-  },
-  {
-    id: 'roll-pool',
-    term: 'Roll pool',
-    def: 'The ready-to-read series a roll picks from.',
-  },
-  {
-    id: 'ladder-mode',
-    term: 'Auto-adjust',
-    def: 'Lets the die pick its own size to match how many series are ready to read. The "Auto" control on Roll turns it back on after you choose a die size by hand.',
-  },
-  {
-    id: 'die-ladder',
-    term: 'Die size',
-    def: 'Sets how many series the roll can pick from. Sizes run d4 → d6 → d8 → d10 → d12 → d20 → d30 → d50 → d100, and a larger die includes more of your ready-to-read series. A readout like "d6 → d8" shows the step your die moves after a rating.',
-  },
-  {
-    id: 'autoladder',
-    term: 'Auto',
-    def: 'Keeps the die size matched to your ready-to-read series. The "Auto" control on Roll turns this back on after you choose a die size by hand.',
-  },
-  {
-    id: 'offset',
-    term: 'Offset',
-    def: 'Shifts your roll result up or down (e.g. +1 means result+1 is selected).',
-  },
-  {
-    id: 'snoozed',
-    term: 'Snoozed',
-    def: 'Temporarily excluded from rolling — won’t appear in the roll pool.',
-  },
-  {
-    id: 'position',
-    term: 'Pos',
-    def: 'Queue-order shortcut. "Pos" sorts your series from first to last in the reading queue.',
-  },
-  {
-    id: 'reading-mode',
-    term: 'Reading mode',
-    def: 'How Comic Pile shapes the roll for your mood. Bandwidth sets how demanding comics feel right now (Light, Balanced, Deep); intent sets what kind of pick sounds good (Balanced, Momentum, Familiar, Explore, Random).',
-  },
-  {
-    id: 'finished-series',
-    term: 'Finished series',
-    def: 'A series you have read to the end. Finished series stay out of the queue until you add new issues — use the "Add back to queue" action to bring one back.',
-  },
-  {
-    id: 'dependency',
-    term: 'Dependency rule',
-    def: 'A reading order rule: "read X before Y". Create or manage them via the Dependency Builder (open from a series\'s Queue card or from the dependency dialog inside an issue list). Deleting a single rule does not require editing an entire plan.',
-  },
-  {
-    id: 'readiness',
-    term: 'Blocked',
-    def: 'A comic with an unsatisfied hard prerequisite stays out of the roll pool until that prerequisite is read. Roll is the authority for what can be selected; the product does not ask a second subsystem whether the selected item is ready.',
-  },
-  {
-    id: 'crossover',
-    term: 'Crossover',
-    def: 'A named group of comics or issues that share one story. Membership labels the group so its continuity is easy to recognize across ComicPile — it does not create a reading block by itself.',
-  },
-  {
-    id: 'continuity-plan',
-    term: 'Continuity Plan',
-    def: 'A saved arrangement of issues, series, and crossovers in one or more reading lanes. Saving creates only the continuity rules you chose — informational plans create none, strict sequential plans create one per step (see Ordering mode).',
-  },
-  {
-    id: 'ordering-mode',
-    term: 'Ordering mode',
-    def: 'What saving a plan commits to. Informational plans create no blocking rules and cannot block anything. Strict sequential plans require you to read each step before the next, compiling one blocking rule per step just like the Dependency Builder. Plan ordering never mixes with the Queue\'s issue-level Dependency Builder unless you choose strict sequential.',
-  },
-  {
-    id: 'lane',
-    term: 'Lane',
-    def: 'One ordered column of steps inside a continuity plan. Multiple lanes let parallel storylines read side by side.',
-  },
-  {
-    id: 'reading-order',
-    term: 'Reading Order',
-    def: 'The saved sequence used to pick what you read. Issues join it as soon as everything before them has been read.',
-  },
-  {
-    id: 'projection',
-    term: 'Projection',
-    def: 'Applying a continuity plan to a saved reading order. You preview the result first and confirm before it is applied — your plan is never modified.',
-  },
-  {
-    id: 'dependency-builder',
-    term: 'Dependency Builder',
-    def: 'The editable surface for creating, viewing, and removing issue-level dependency rules. Access it from any Queue card (Dependencies in the series actions menu) or from the dependency dialog inside an issue list.',
-  },
-]
+// Definition content and the canonical anchor contract live in
+// `utils/glossaryTerms.ts` so the anchor for a term can never drift from the
+// term the reader sees (issue #3146).
 
 /**
  * Scrolls the glossary to a definition when the page is opened through a
@@ -147,6 +42,54 @@ function useGlossaryAnchorScroll(): void {
   }, [location.hash])
 }
 
+/**
+ * Visible permalink for one glossary definition (#3146).
+ *
+ * Deep links used to be guesswork: nothing on the card exposed the anchor, and
+ * the anchor disagreed with the displayed term, so a copied `#series` style link
+ * silently did nothing. This renders the canonical anchor as a real link —
+ * copyable through the browser's own link affordances — and copies the absolute
+ * deep link on activation for one-click sharing.
+ */
+function GlossaryPermalink({ id, term }: { id: string; term: string }) {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const permalink = `/glossary#${id}`
+
+  async function copyPermalink() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${permalink}`)
+      setStatus('copied')
+    } catch {
+      setStatus('failed')
+    }
+  }
+
+  return (
+    <>
+      <Link
+        to={permalink}
+        onClick={() => {
+          void copyPermalink()
+        }}
+        aria-label={`Copy link to ${term} definition`}
+        title={`Copy link to ${term} definition`}
+        data-testid="glossary-permalink"
+        data-status={status}
+        className="shrink-0 rounded px-1 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+      >
+        #
+      </Link>
+      <span aria-live="polite" data-testid="glossary-permalink-status" className="sr-only">
+        {status === 'copied'
+          ? `Link to ${term} copied to clipboard.`
+          : status === 'failed'
+            ? `Could not copy the ${term} link. Copy it from the address bar instead.`
+            : ''}
+      </span>
+    </>
+  )
+}
+
 export default function HelpPage() {
   useGlossaryAnchorScroll()
   return (
@@ -154,9 +97,15 @@ export default function HelpPage() {
       <h1 className="text-2xl font-bold mb-4">Glossary</h1>
       <p className="text-sm text-stone-600 mb-6">Definitions for every reader-facing concept in ComicPile. 1–2 sentence explanations, mobile-friendly layout.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {DEFINITIONS.map((d) => (
+        {GLOSSARY_TERMS.map((d) => (
           <div key={d.id} id={d.id} className="p-4 border rounded-lg bg-white/80 shadow-sm">
-            <div className="text-sm font-semibold uppercase tracking-widest text-stone-600 mb-2" data-testid="glossary-term">{d.term}</div>
+            {(d.aliases ?? []).map((alias) => (
+              <span key={alias} id={alias} aria-hidden="true" className="sr-only" data-testid="glossary-anchor-alias" />
+            ))}
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="text-sm font-semibold uppercase tracking-widest text-stone-600" data-testid="glossary-term">{d.term}</div>
+              <GlossaryPermalink id={d.id} term={d.term} />
+            </div>
             <div className="text-sm text-stone-700" data-testid="glossary-definition">{d.def}</div>
           </div>
         ))}
