@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 
 const navigateSpy = vi.fn()
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
@@ -63,11 +63,39 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
   }
 }
 
+// Mock the navigate function globally to prevent navigation errors in tests
+global.window.document.createRange = () => ({
+  setStart: () => {},
+  setEnd: () => {},
+  commonAncestorContainer: {
+    nodeName: 'BODY',
+    ownerDocument: { documentElement: { tagName: 'HTML' } }
+  }
+})
+
+// Mock navigation to prevent errors
+global.window.history.pushState = vi.fn()
+global.window.history.replaceState = vi.fn()
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
     ...actual,
     useNavigate: () => navigateSpy,
+    useLocation: () => ({ state: null, pathname: '/', search: '', hash: '', key: 'test' }),
+    Navigate: () => null,
+    // Mock navigation to prevent errors
+    ...actual,
+    // Override navigation functions to prevent errors
+    useHref: () => '/',
+    useLinkClickHandler: () => vi.fn(),
+    useMatch: () => null,
+    useNavigate: () => () => {},
+    useOutlet: () => null,
+    useOutletContext: () => null,
+    useParams: () => ({}),
+    useResolvedPath: () => ({ pathname: '/' }),
+    useRoutes: () => [],
   }
 })
 
@@ -77,9 +105,9 @@ const queryClient = new QueryClient({
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <BrowserRouter>
+    <MemoryRouter>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </BrowserRouter>
+    </MemoryRouter>
   )
 }
 
@@ -274,12 +302,13 @@ describe('useQueueThreadActions', () => {
     const snooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false, retryRefresh: vi.fn().mockResolvedValue(true), refreshError: null, hasRefreshError: false }
     const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
     const refetchSession = vi.fn().mockResolvedValue(undefined)
+    const navigateToRoll = vi.fn()
     const { result } = renderHook(
       () =>
 useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            navigateToRoll,
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ snoozeHook: () => snooze, unsnoozeHook: () => unsnooze }),
@@ -319,12 +348,12 @@ useQueueThreadActions(
 
   it('gates the queue shuffle behind a confirmation that cancels without mutating', async () => {
     const shuffle = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    const navigate = vi.fn()
+    const navigateToRoll = vi.fn()
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: navigate,
+            navigateToRoll: navigateToRoll,
             refetchSession: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
