@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { ThreadListItem } from '../../types'
+import type { SessionRefetch } from '../../hooks/useSession'
 import { threadsApi } from '../../services/api-threads'
 import { focusSeriesActionsTrigger } from '../../components/seriesActionsTrigger'
 import {
@@ -26,7 +27,7 @@ interface UseQueueThreadActionsParams {
    * settle, so any promise-producing refetch fits — `useSession`'s `refetch`
    * resolves with a query result rather than `void` (issue #3147).
    */
-  refetchSession: () => Promise<unknown>
+  refetchSession: SessionRefetch
   /**
    * Returns focus to a row's "Series actions" trigger once the queue cache has
    * settled. The reset that follows a queue mutation remounts every row, so

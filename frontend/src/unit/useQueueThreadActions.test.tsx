@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import type { SessionRefetch } from '../hooks/useSession'
 
 const navigateSpy = vi.fn()
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
@@ -14,6 +15,7 @@ import { cast } from '../utils/cast'
 
 const toastSpy = vi.fn()
 const setPending = vi.fn()
+const refetchSession: SessionRefetch = vi.fn().mockResolvedValue({} as never)
 
 function mutationStubs() {
   return {
@@ -98,7 +100,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -126,7 +128,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -151,7 +153,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -195,7 +197,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: navigate,
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -230,7 +232,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: navigate,
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -256,7 +258,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: navigate,
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -275,7 +277,7 @@ describe('useQueueThreadActions', () => {
   it('delegates snooze vs unsnooze based on the current snoozed state', async () => {
     const snooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false, retryRefresh: vi.fn().mockResolvedValue(true), refreshError: null, hasRefreshError: false }
     const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    const refetchSession = vi.fn().mockResolvedValue(undefined)
+    const refetchSession = vi.fn().mockResolvedValue({} as never)
     const navigateToRoll = vi.fn()
     const { result } = renderHook(
       () =>
@@ -304,7 +306,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({
@@ -328,7 +330,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: navigateToRoll,
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ shuffleHook: () => shuffle }),
@@ -357,7 +359,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -378,7 +380,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
@@ -402,7 +404,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
@@ -430,7 +432,7 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession: vi.fn(),
+            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
