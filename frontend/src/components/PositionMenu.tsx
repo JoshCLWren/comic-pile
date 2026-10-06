@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ThreadListItem } from '../types'
 import { usePositionMenu } from '../contexts/usePositionMenu'
 import OverlayPortal from './OverlayPortal'
+import { SERIES_ACTIONS_TRIGGER_ATTRIBUTE } from './seriesActionsTrigger'
 
 interface PositionMenuProps {
   thread: ThreadListItem
@@ -75,7 +76,11 @@ export default function PositionMenu({
 
   const closeMenu = useCallback(() => {
     closeContextMenu()
-    triggerRef.current?.focus()
+    // We use a timeout to ensure the menu has fully unmounted before attempting
+    // to restore focus, which prevents the focus from being lost to the body.
+    setTimeout(() => {
+      triggerRef.current?.focus()
+    }, 0)
   }, [closeContextMenu])
 
   useEffect(() => {
@@ -190,6 +195,9 @@ export default function PositionMenu({
       ariaLabel: 'Move to front',
       action: () => {
         onMoveToFront(thread.id)
+        // The action handler restores focus to this row's trigger once the
+        // refetched list settles; the remount detaches the element closeMenu
+        // would focus (#3147).
         closeMenu()
       },
     },
@@ -199,6 +207,7 @@ export default function PositionMenu({
       ariaLabel: 'Reposition series',
       action: () => {
         onReposition(thread)
+        // The reposition modal should manage focus restoration.
         closeMenu()
       },
     },
@@ -208,6 +217,7 @@ export default function PositionMenu({
       ariaLabel: 'Move to back',
       action: () => {
         onMoveToBack(thread.id)
+        // Same as Move to Front.
         closeMenu()
       },
     },
@@ -217,6 +227,7 @@ export default function PositionMenu({
       ariaLabel: 'Edit series',
       action: () => {
         onEdit(thread)
+        // The edit modal should manage focus restoration.
         closeMenu()
       },
     },
@@ -228,6 +239,8 @@ export default function PositionMenu({
       action: () => {
         if (!snoozeDisabled && onSnooze) {
           onSnooze(thread)
+          // Snooze resets the queue cache, so the action handler restores
+          // focus to the refetched trigger (#3147).
           closeMenu()
         }
       },
@@ -238,6 +251,7 @@ export default function PositionMenu({
       ariaLabel: 'Manage dependencies',
       action: () => {
         onDependencies(thread)
+        // The dependencies modal should manage focus restoration.
         closeMenu()
       },
     },
@@ -248,6 +262,7 @@ export default function PositionMenu({
       destructive: true,
       action: () => {
         onDelete(thread.id)
+        // The delete dialog should manage focus restoration.
         closeMenu()
       },
     },
@@ -264,6 +279,7 @@ export default function PositionMenu({
         aria-label="Series actions"
         aria-haspopup="menu"
         aria-expanded={isOpen}
+        {...{ [SERIES_ACTIONS_TRIGGER_ATTRIBUTE]: thread.id }}
       >
         &#x22EE;
       </button>
