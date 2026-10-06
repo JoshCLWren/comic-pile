@@ -40,7 +40,7 @@ function makePage(overrides: Partial<CreatorDetailResponse> = {}): CreatorDetail
       unread_issues_with_creator_metadata: 3,
       upcoming_complete: true,
     },
-    role_stats: [{ role: 'writer', issue_count: 6, average_rating: 4.5 }],
+    role_stats: [{ role: 'writer', issue_count: 6, rated_issue_count: 4, average_rating: 4.5 }],
     rated_issues: [
       {
         issue_id: 11,

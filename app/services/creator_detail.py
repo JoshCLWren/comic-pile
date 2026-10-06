@@ -263,15 +263,20 @@ async def get_creator_detail(
                 if credit.external_id == creator_id
             )
         ]
-        role_ratings = [
-            inputs.effective_ratings[issue_id]
+        role_rated_issue_ids = [
+            issue_id
             for issue_id in role_issue_ids
             if issue_id in inputs.effective_ratings
+        ]
+        role_ratings = [
+            inputs.effective_ratings[issue_id]
+            for issue_id in role_rated_issue_ids
         ]
         role_stats.append(
             CreatorRoleStat(
                 role=role,
                 issue_count=len(role_issue_ids),
+                rated_issue_count=len(role_rated_issue_ids),
                 average_rating=(
                     round(sum(role_ratings) / len(role_ratings), 2) if role_ratings else None
                 ),

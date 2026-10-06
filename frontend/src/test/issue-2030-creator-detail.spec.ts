@@ -43,8 +43,8 @@ function creatorDetailPayload() {
       upcoming_complete: false,
     },
     role_stats: [
-      { role: 'writer', issue_count: 3, average_rating: 4.5 },
-      { role: 'cover', issue_count: 1, average_rating: null },
+      { role: 'writer', issue_count: 3, rated_issue_count: 2, average_rating: 4.5 },
+      { role: 'cover', issue_count: 1, rated_issue_count: 0, average_rating: null },
     ],
     rated_issues: [
       {
@@ -113,6 +113,17 @@ test.describe('Issue #2030: creator detail route', () => {
     await expect(page.getByRole('heading', { name: /Upcoming in ComicPile/ })).toBeVisible()
     // Partial upcoming coverage is disclosed as a lower bound.
     await expect(page.getByText(/lower bounds, not exhaustive totals/)).toBeVisible()
+
+    // Role cards show credited issue count and rated sample size
+    await expect(page.getByText(/writer/)).toBeVisible()
+    await expect(page.getByText(/3 credited issues/)).toBeVisible()
+    await expect(page.getByText(/4\.5★ across 2 ratings/)).toBeVisible()
+    await expect(page.getByText(/cover/)).toBeVisible()
+    await expect(page.getByText(/1 credited issue/)).toBeVisible()
+    await expect(page.getByText(/unrated/)).toBeVisible()
+
+    // Overlapping roles explanation is present
+    await expect(page.getByText(/Issues may appear under multiple roles/)).toBeVisible()
 
     const ratedLink = page.getByRole('link', { name: /Series A With A Long Title/ })
     await expect(ratedLink).toBeVisible()
