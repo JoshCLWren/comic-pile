@@ -8,6 +8,7 @@ from typing import cast
 import pytest
 
 import app.comicvine_hydration as hydration
+from app.services.image_delivery import canonicalize_source_url, validate_source_url
 from comic_pile.comicvine_provider import ComicVineError, ComicVineResponse
 
 
@@ -97,6 +98,45 @@ def test_provider_timestamp_is_tolerant(value: object, expected: str | None) -> 
     """Provider timestamps should parse when valid and degrade safely when malformed."""
     parsed = hydration._provider_timestamp(value)
     assert (parsed.isoformat() if parsed else None) == expected
+
+
+def test_stored_cover_from_a_real_provider_row_is_deliverable() -> None:
+    """The cover ComicVine returns must survive ComicPile's image delivery gate.
+
+    ``comicvine.gamespot.com/api`` exposes each rendition under a ``_url`` key and
+    publishes the value as a ``static*.comicvine.com`` alias, so that is what gets
+    stored in ``ExternalIdentity.metadata_json`` and what the Roll card asks the
+    image optimizer to fetch. If the delivery layer cannot resolve that alias the
+    request fails, the card reports a failed image load, and a mapped issue renders
+    the generic COMIC COVER placeholder while its creators and story title still
+    render. Regression for #3158.
+    """
+    raw: dict[str, object] = {
+        "id": 453414,
+        "name": "Who Shot the Hulk Part 3",
+        "issue_number": "3",
+        "volume": {"id": 23834, "name": "Hulk (2014)"},
+        "image": {
+            "original_url": "https://static.comicvine.com/uploads/original/50/453414_hulk.jpg",
+            "super_url": "https://static.comicvine.com/uploads/super/50/453414_hulk.jpg",
+            "screen_large_url": (
+                "https://static.comicvine.com/uploads/screen_large/50/453414_hulk.jpg"
+            ),
+            "medium_url": "https://static.comicvine.com/uploads/medium/50/453414_hulk.jpg",
+            "small_url": "https://static.comicvine.com/uploads/small/50/453414_hulk.jpg",
+            "thumb_url": "https://static.comicvine.com/uploads/thumb/50/453414_hulk.jpg",
+            "tiny_url": "https://static.comicvine.com/uploads/tiny/50/453414_hulk.jpg",
+            "icon_url": "https://static.comicvine.com/uploads/icon/50/453414_hulk.jpg",
+        },
+        "person_credits": [{"id": 1001, "name": "Peter David", "role": "writer"}],
+    }
+
+    primary_image = hydration.normalize_issue(raw)["primary_image"]
+
+    assert isinstance(primary_image, str)
+    assert validate_source_url(canonicalize_source_url(primary_image)) == (
+        "https://comicvine.gamespot.com/a/uploads/original/50/453414_hulk.jpg"
+    )
 
 
 @pytest.mark.asyncio

@@ -21,7 +21,7 @@ import ipaddress
 import logging
 import socket
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -36,6 +36,21 @@ _MAX_SOURCE_URL_LENGTH = 2048
 _ALLOWED_SCHEMES = ("http", "https")
 
 _UPSTREAM_USER_AGENT = "ComicPileImageOptimizer/1.0"
+
+# ComicVine publishes cover renditions through ``static*.comicvine.com``. Those
+# names are only aliases: the CDN answers every request with a 301 to the same
+# path under the canonical origin below, which is where the bytes actually live.
+# The optimizer deliberately refuses to follow redirects, because an unvalidated
+# ``Location`` would walk straight past the allowlist and the SSRF guard, so the
+# alias is resolved up front instead. Only the host and the fixed path prefix are
+# substituted; the requested rendition path and query are preserved verbatim.
+_COMICVINE_CDN_HOSTS = frozenset(
+    "static.comicvine.com" if index == 0 else f"static{index}.comicvine.com"
+    for index in range(6)
+)
+_COMICVINE_CANONICAL_SCHEME = "https"
+_COMICVINE_CANONICAL_HOST = "comicvine.gamespot.com"
+_COMICVINE_CANONICAL_PATH_PREFIX = "/a"
 
 
 class ImageDeliveryError(Exception):
@@ -78,6 +93,46 @@ def resolve_variant_width(requested_width: int) -> int:
         if requested_width <= bucket:
             return bucket
     return SUPPORTED_WIDTHS[-1]
+
+
+def canonicalize_source_url(source_url: str) -> str:
+    """Resolve a recognized cover CDN alias onto the origin that serves the bytes.
+
+    ComicVine hands out ``http(s)://static*.comicvine.com/uploads/...`` cover URLs
+    that its CDN redirects to ``https://comicvine.gamespot.com/a/uploads/...``.
+    The optimizer never follows redirects, so an unrewritten alias can never
+    deliver a cover. This mapping is a fixed host/path substitution over a fixed
+    host set, so it cannot widen which origins are reachable; the result is still
+    revalidated by :func:`validate_source_url` before any network call.
+
+    URLs that are not a ComicVine CDN alias are returned unchanged.
+
+    Args:
+        source_url: Canonical external image URL from persisted ComicPile data.
+
+    Returns:
+        The URL to fetch. Identical to ``source_url`` for non-ComicVine hosts.
+    """
+    try:
+        parts = urlsplit(source_url)
+    except ValueError:
+        return source_url
+    hostname = parts.hostname or ""
+    if hostname.lower() not in _COMICVINE_CDN_HOSTS:
+        return source_url
+
+    path = parts.path
+    if not path.startswith(f"{_COMICVINE_CANONICAL_PATH_PREFIX}/"):
+        path = f"{_COMICVINE_CANONICAL_PATH_PREFIX}{path}"
+    return urlunsplit(
+        (
+            _COMICVINE_CANONICAL_SCHEME,
+            _COMICVINE_CANONICAL_HOST,
+            path,
+            parts.query,
+            "",
+        )
+    )
 
 
 def validate_source_url(source_url: str) -> str:
@@ -296,7 +351,7 @@ async def optimize_remote_image(
         InvalidImageSourceError: If validation or SSRF checks fail.
         UpstreamImageUnavailableError: If the upstream fetch fails.
     """
-    validated_url = validate_source_url(source_url)
+    validated_url = validate_source_url(canonicalize_source_url(source_url))
     hostname = urlsplit(validated_url).hostname or ""
     await ensure_publicly_routable(hostname)
 
