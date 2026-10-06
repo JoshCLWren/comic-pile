@@ -216,7 +216,7 @@ export function QueueModals({
           </div>
           <button
             type="submit"
-            disabled={isPendingCreate}
+            disabled={isPendingCreate || issueParseError !== null}
             className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isPendingCreate ? 'Adding...' : 'Create Series'}

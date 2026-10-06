@@ -19,6 +19,10 @@ describe('QueuePage composition boundaries', () => {
     expect(source).not.toMatch(/(?:const |let |useState\(.*)\s*issuePreview\b/)
     expect(source).not.toMatch(/(?:const |let |useState\(.*)\s*issueParseError\b/)
     expect(source).not.toMatch(/(?:const |let |useState\(.*)\s*createForm\b/)
+    // The Create Series button must be disabled when issueParseError is set,
+    // preventing series creation when the issue range is invalid.
+    expect(source).toMatch(/disabled=\{isPendingCreate \|\| issueParseError !== null\}/)
+    expect(source).not.toMatch(/disabled=\{isPendingCreate\}/)
     expect(source).not.toMatch(/(?:const |let |useState\(.*)\s*editForm\b/)
     expect(source).not.toMatch(/(?:const |let |useState\(.*)\s*reactivateThreadId\b/)
     expect(source).not.toMatch(/(?:const |let |useState\(.*)\s*repositioningThread\b/)
