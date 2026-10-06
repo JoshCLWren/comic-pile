@@ -194,3 +194,11 @@ class MetadataCorrectionRevertRequest(BaseModel):
     """Request to revert a canonical correction."""
 
     correction_id: int = Field(..., description="ID of the correction to revert")
+
+
+class UnlinkIdentityRequest(BaseModel):
+    """Request to unlink/remove ComicVine identity from an issue."""
+
+    reason: str | None = Field(
+        None, max_length=500, description="Optional reason for unlinking"
+    )

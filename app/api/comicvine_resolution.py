@@ -28,6 +28,7 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
     ReplaceIdentityRequest,
+    UnlinkIdentityRequest,
 )
 from app.services.comicvine_resolution import (
     ImportTargetNotFoundError,
@@ -38,6 +39,7 @@ from app.services.comicvine_resolution import (
     import_comicvine_issue,
     list_metadata_corrections,
     replace_comicvine_identity,
+    unlink_comicvine_identity,
     request_provider_refresh,
     resolve_comicvine_input,
     revert_metadata_correction,
@@ -300,6 +302,44 @@ async def api_replace_identity(
         return await get_issue_identity_state(
             db, user_id=current_user.id, issue_id=issue_id
         )
+    except ExternalIdentityMappingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/issues/{issue_id}/identity:unlink",
+    response_model=IssueIdentityResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def api_unlink_identity(
+    issue_id: int,
+    request: UnlinkIdentityRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> IssueIdentityResponse:
+    """Remove/unlink ComicVine identity from an issue.
+
+    Deletes all ComicVine mappings for the issue, returning it to an unmapped state.
+
+    Args:
+        issue_id: ComicPile issue ID.
+        request: Unlink request with optional reason.
+        current_user: Authenticated owner.
+        db: Async database session.
+    """
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        result = await unlink_comicvine_identity(
+            db,
+            user_id=current_user.id,
+            issue_id=issue_id,
+            reason=request.reason,
+        )
+        await db.commit()
+        return result
     except ExternalIdentityMappingError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

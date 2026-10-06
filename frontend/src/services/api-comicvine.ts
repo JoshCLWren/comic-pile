@@ -166,6 +166,10 @@ export interface MetadataCorrectionsResponse {
   corrections: CanonicalCorrection[]
 }
 
+export interface UnlinkIdentityRequest {
+  reason?: string
+}
+
 export const comicVineApi = {
   getIssueIntelligence: (issueId: number) =>
     api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
@@ -183,6 +187,8 @@ export const comicVineApi = {
     api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
   replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
     api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
+  unlinkIdentity: (issueId: number, reason?: string) =>
+    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:unlink`, { reason }),
   refreshMetadata: (issueId: number) =>
     api.post<MetadataRefreshResponse>(`/v1/comicvine/issues/${issueId}/metadata:refresh`),
   applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>

@@ -36,6 +36,7 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionRequest,
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
+    UnlinkIdentityRequest,
 )
 from app.services.comicvine_url import looks_like_url, parse_comicvine_url
 from app.services.reading_order_placement import apply_insert, resolve_anchored_position
@@ -582,6 +583,55 @@ async def replace_comicvine_identity(
         user_id=user_id,
         issue_id=issue_id,
         comicvine_issue_id=comicvine_issue_id,
+    )
+
+
+async def unlink_comicvine_identity(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    issue_id: int,
+    reason: str | None = None,
+) -> IssueIdentityResponse:
+    """Remove/unlink ComicVine identity from an issue.
+
+    Deletes all ComicVine mappings for the issue, returning the issue to an
+    unmapped state.
+
+    Args:
+        db: Async database session.
+        user_id: Owner user ID.
+        issue_id: ComicPile issue ID.
+        reason: Optional reason for unlinking.
+
+    Returns:
+        Updated identity state response showing no confirmed mappings.
+    """
+    # Delete all ComicVine mappings for this issue
+    result = await db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
+            IssueExternalIdentityMapping.issue_id == issue_id,
+            ExternalIdentity.provider == "comicvine",
+        )
+    )
+    mappings = result.scalars().all()
+
+    for mapping in mappings:
+        # Mark as rejected with unlink reason instead of hard delete
+        # This preserves the audit trail while effectively unlinking
+        mapping.status = "rejected"
+        mapping.rejection_reason = reason or "unlinked by user"
+
+    await db.flush()
+
+    # Return the updated identity state
+    return await get_issue_identity_state(
+        db, user_id=user_id, issue_id=issue_id
     )
 
 

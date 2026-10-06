@@ -34,6 +34,7 @@ export function ComicPillar({
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
+  const [isUnlinkDialogOpen, setIsUnlinkDialogOpen] = useState(false)
   const [identityState, setIdentityState] = useState<IssueIdentityResponse | null>(null)
   const [searchMode, setSearchMode] = useState<'confirm' | 'replace'>('confirm')
 
@@ -97,6 +98,23 @@ export function ComicPillar({
     onRefreshThread()
   }, [fetchIdentity, onRefreshThread, issueId])
 
+  const handleIdentityUnlinked = useCallback(async (reason?: string) => {
+    if (issueId) {
+      try {
+        await comicVineApi.unlinkIdentity(issueId, reason)
+        await invalidateComicVineIssueIntelligence(queryClient, issueId)
+        await fetchIdentity()
+        onRefreshThread()
+      } catch (error) {
+        console.error('Failed to unlink ComicVine identity:', error)
+      }
+    }
+  }, [fetchIdentity, onRefreshThread, issueId])
+
+  const handleUnlinkConfirm = useCallback(() => {
+    setIsUnlinkDialogOpen(true)
+  }, [])
+
   // Issue #3159: a confirmed volume correction can also confirm the series' other
   // numbered siblings in one step, so each confirmed sibling needs its own cover
   // refetched before the card can show the enriched series.
@@ -158,9 +176,23 @@ export function ComicPillar({
       })
     }
 
+    if (isLinked && issueId) {
+      entries.push({
+        key: 'unlink-comicvine',
+        label: 'Unlink from ComicVine',
+        ariaLabel: 'Unlink from ComicVine',
+        description: 'Remove the ComicVine mapping from this issue',
+        onSelect: () => {
+          // This will open a confirmation dialog - we'll implement this next
+          handleUnlinkConfirm()
+        },
+      })
+    }
+
     return entries
   }, [
     activeRatingThread?.id,
+    handleUnlinkConfirm,
     isLinked,
     issueId,
     issueNumber,
@@ -290,6 +322,35 @@ export function ComicPillar({
           onConfirmed={handleIdentityConfirmed}
           onSiblingsMapped={handleSiblingsMapped}
         />
+      )}
+
+      {/* Unlink confirmation dialog */}
+      {isUnlinkDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="surface-glass rounded-xl p-6 max-w-md w-full mx-4 border border-white/10">
+            <h3 className="text-lg font-bold text-stone-100 mb-2">Unlink from ComicVine?</h3>
+            <p className="text-sm text-stone-300 mb-4">
+              Are you sure you want to remove the ComicVine mapping from "{threadTitle}" {issueNumber ? `#${issueNumber}` : ''}? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setIsUnlinkDialogOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-stone-300 hover:text-stone-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setIsUnlinkDialogOpen(false)
+                  handleIdentityUnlinked()
+                }}
+                className="px-4 py-2 text-sm font-medium text-rose-500 hover:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors"
+              >
+                Unlink
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
