@@ -6,10 +6,6 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_app_settings
-from app.continuity_blocking import (
-    get_continuity_blocked_thread_ids,
-    get_continuity_rule_blocked_thread_ids,
-)
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -24,12 +20,12 @@ def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
 
 
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
-    \"\"\"Read unified blocked thread IDs directly from the current transaction.\"\"\"
+    """Read unified blocked thread IDs directly from the current transaction."""
     _invalidate_continuity_snapshot(user_id, db)
-    source_issue = Issue.__table__.alias(\"source_issue\")
-    next_unread_issue = Issue.__table__.alias(\"next_unread_issue\")
-    target_thread = Thread.__table__.alias(\"target_thread\")
-    source = Thread.__table__.alias(\"source\")
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    target_thread = Thread.__table__.alias("target_thread")
+    source = Thread.__table__.alias("source")
 
     issue_result = await db.execute(
         select(target_thread.c.id)
@@ -42,7 +38,7 @@ async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> se
         .join(source, source_issue.c.thread_id == source.c.id)
         .where(target_thread.c.user_id == user_id)
         .where(source.c.user_id == user_id)
-        .where(source_issue.c.status != \"read\")
+        .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
         .distinct()
     )
@@ -316,10 +312,10 @@ async def _continuity_blocking_explanations_batch(
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
-    \"\"\"Human-readable reasons a thread is blocked.
+    """Human-readable reasons a thread is blocked.
 
     Roll authority is exclusively the canonical issue-level Dependency graph.
-    \"\"\"
+    """
     return await _legacy_blocking_explanations(thread_id, user_id, db)
 
 
@@ -329,7 +325,7 @@ async def get_blocking_explanations_batch(
     user_id: int,
     db: AsyncSession,
 ) -> dict[int, list[BlockingDependency]]:
-    \"\"\"Human-readable blocking reasons for multiple threads in one query.\"\"\"
+    """Human-readable blocking reasons for multiple threads in one query."""
     if not thread_ids:
         return {}
     

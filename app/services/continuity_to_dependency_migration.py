@@ -7,13 +7,12 @@ from app.models import ContinuityRule
 from app.repositories import dependency_repository
 
 async def migrate_continuity_rules_to_dependencies(user_id: int, db: AsyncSession) -> int:
-    """
-    Convert proven hard ContinuityRule semantics into canonical issue-to-issue Dependencies.
-    
+    """Convert proven hard ContinuityRule semantics to canonical issue-to-issue Dependencies.
+
     Target semantics:
     1. satisfaction_type == 'item_read' and source_type == 'issue' and target_type == 'issue'.
     2. satisfaction_type == 'converged' with targets of type 'issue'.
-    
+
     Returns:
         Number of dependencies created.
     """
