@@ -38,7 +38,7 @@ export default function ThreadDetailView() {
   const threadId =
     Number.isInteger(parsedThreadId) && parsedThreadId > 0 ? parsedThreadId : null
 
-  const { data: thread, error: threadError } = useThread(threadId)
+  const { data: thread, error: threadError, refetch } = useThread(threadId)
   const {
     connectedThreads,
     isPending: connectedPending,
@@ -509,6 +509,10 @@ export default function ThreadDetailView() {
             <IssueToggleList
               threadId={thread.id}
               onOpenDependencies={() => setIsDependencyOpen(true)}
+              onIssueChanged={() => {
+                // Refetch thread data to update STATUS display after issue mutations
+                refetch()
+              }}
             />
           )}
 
