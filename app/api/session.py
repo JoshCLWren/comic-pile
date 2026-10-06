@@ -464,7 +464,7 @@ async def list_sessions(
                 (Event.type.in_(("snooze", "unsnooze", "undo", "restore"))) & (Event.die_after.is_not(None)),
             )
         )
-        .order_by(Event.session_id, Event.timestamp.desc(), Event.id.desc())
+        .order_by(Event.session_id, Event.timestamp, Event.id)
     )
     history_events = history_events_result.scalars().all()
 
