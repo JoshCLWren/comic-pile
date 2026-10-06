@@ -140,7 +140,8 @@ export default function ComicVineSearchDialog({
       setQuery(threadTitle)
     }
     if (isOpen) {
-      setStep('search'); setSeriesResults([])
+      setStep('search')
+      setSeriesResults([])
       setSelectedSeries(null)
       setIssueCandidates([])
       setSelectedIssue(null)

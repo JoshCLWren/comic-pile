@@ -25,24 +25,24 @@ export function useSiblingSeriesMappingPreview(
   providerSeriesExternalId: string | null,
   enabled = true,
 ) {
+  const scopeLicensed = !!originIssueId && !!provider && !!providerSeriesExternalId
+
   return useQuery({
     queryKey:
-      originIssueId && provider && providerSeriesExternalId
+      scopeLicensed
         ? queryKeys.comicVine.seriesMappingPreview(
-            originIssueId,
-            provider,
-            providerSeriesExternalId,
+            originIssueId!,
+            provider!,
+            providerSeriesExternalId!,
           )
         : [],
     queryFn: () =>
       seriesMappingApi.preview({
-        // SAFETY: the enabled guard below only allows this fn to run when every
-        // parameter is non-null, so the casts preserve the runtime invariant.
-        origin_issue_id: originIssueId as number,
-        provider: provider as string,
-        provider_series_external_id: providerSeriesExternalId as string,
+        origin_issue_id: originIssueId!,
+        provider: provider!,
+        provider_series_external_id: providerSeriesExternalId!,
       }),
-    enabled: enabled && !!originIssueId && !!provider && !!providerSeriesExternalId,
+    enabled: enabled && scopeLicensed,
   })
 }
 

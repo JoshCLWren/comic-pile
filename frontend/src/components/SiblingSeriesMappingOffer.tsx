@@ -85,7 +85,7 @@ export default function SiblingSeriesMappingOffer({
   const commit = useCommitSeriesMapping()
   const [uncheckedRowIds, setUncheckedRowIds] = useState<ReadonlySet<string>>(() => new Set())
 
-  const rows = preview.data?.rows ?? []
+  const rows = useMemo(() => preview.data?.rows ?? [], [preview.data])
   const ownedRows = useMemo(() => rows.filter(isOwnedSeriesMappingRow), [rows])
   const approvableRows = useMemo(
     () => bulkApprovableSeriesMappingRows(rows).filter((row) => row.issue_id !== originIssueId),

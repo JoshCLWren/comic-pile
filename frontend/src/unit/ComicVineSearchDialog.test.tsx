@@ -33,59 +33,67 @@ vi.mock('../components/Modal', () => ({
     isOpen ? <div role="dialog" data-modal-size={size}><h2>{title}</h2>{children}</div> : null,
 }))
 
-const { useSiblingSeriesMappingPreviewMock, useCommitSeriesMappingMock } = vi.hoisted(() => ({
-  useSiblingSeriesMappingPreviewMock: vi.fn(() => ({
-    data: {
-      preview_token: 'sibling-tok',
-      scope: { status: 'available' as const, scope_key: 'k', origin_issue_id: 1, series_label: 'Saga', basis: 'b' },
-      provider_series: null,
-      counts: { already_confirmed: 0, safe_exact_match: 0, needs_review_ambiguous: 0, needs_review_conflict: 0, unresolved: 0, excluded_special: 0 },
-      rows: [
-        {
-          row_id: 'issue:1',
-          issue_id: 1,
-          issue_number: '1',
-          title: 'Saga #1',
-          classification: 'already_confirmed',
-          thread_id: 10,
-          thread_title: 'Saga',
-          current_mapping_status: null,
-          proposed_mapping: false,
-          default_selected: false,
-          reason: null,
-        },
-        {
-          row_id: 'issue:2',
-          issue_id: 2,
-          issue_number: '2',
-          title: 'Saga #2',
-          classification: 'safe_exact_match',
-          thread_id: 10,
-          thread_title: 'Saga',
-          current_mapping_status: null,
-          proposed_mapping: true,
-          default_selected: true,
-          reason: null,
-        },
-      ],
-      issued_at: 1,
-      expires_at: null,
-    },
-    isPending: false,
-    isError: false,
-    refetch: vi.fn(),
-    reset: vi.fn(),
-  })),
-  useCommitSeriesMappingMock: vi.fn(() => ({
-    mutate: vi.fn(),
-    isPending: false,
-    isError: false,
-    isSuccess: false,
-    data: null,
-    error: null,
-    reset: vi.fn(),
-  })),
-}))
+const {
+  commitMappingMutateMock,
+  useSiblingSeriesMappingPreviewMock,
+  useCommitSeriesMappingMock,
+} = vi.hoisted(() => {
+  const commitMappingMutateMock = vi.fn()
+  return {
+    commitMappingMutateMock,
+    useSiblingSeriesMappingPreviewMock: vi.fn(() => ({
+      data: {
+        preview_token: 'sibling-tok',
+        scope: { status: 'available' as const, scope_key: 'k', origin_issue_id: 1, series_label: 'Saga', basis: 'b' },
+        provider_series: null,
+        counts: { already_confirmed: 0, safe_exact_match: 0, needs_review_ambiguous: 0, needs_review_conflict: 0, unresolved: 0, excluded_special: 0 },
+        rows: [
+          {
+            row_id: 'issue:1',
+            issue_id: 1,
+            issue_number: '1',
+            title: 'Saga #1',
+            classification: 'already_confirmed',
+            thread_id: 10,
+            thread_title: 'Saga',
+            current_mapping_status: null,
+            proposed_mapping: false,
+            default_selected: false,
+            reason: null,
+          },
+          {
+            row_id: 'issue:2',
+            issue_id: 2,
+            issue_number: '2',
+            title: 'Saga #2',
+            classification: 'safe_exact_match',
+            thread_id: 10,
+            thread_title: 'Saga',
+            current_mapping_status: null,
+            proposed_mapping: true,
+            default_selected: true,
+            reason: null,
+          },
+        ],
+        issued_at: 1,
+        expires_at: null,
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+      reset: vi.fn(),
+    })),
+    useCommitSeriesMappingMock: vi.fn(() => ({
+      mutate: commitMappingMutateMock,
+      isPending: false,
+      isError: false,
+      isSuccess: false,
+      data: null,
+      error: null,
+      reset: vi.fn(),
+    })),
+  }
+})
 
 vi.mock('../hooks/useSiblingSeriesMapping', () => ({
   useSiblingSeriesMappingPreview: useSiblingSeriesMappingPreviewMock,
@@ -1085,26 +1093,53 @@ describe('ComicVineSearchDialog branch coverage gaps', () => {
 })
 
 describe('ComicVineSearchDialog sibling mapping offer (#3159)', () => {
-  it('transitions to siblings step after confirming an identity with a volume', async () => {
-    const onSiblingsMapped = vi.fn()
-    render(<ComicVineSearchDialog {...defaultProps({ onSiblingsMapped })} />)
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Earlier suites install one-shot reject implementations that outlive
+    // clearAllMocks, so reset each collaborator before this suite asserts on the
+    // happy confirmation path.
+    confirmIdentitySpy.mockReset()
+    confirmIdentitySpy.mockResolvedValue({})
+    searchSeriesSpy.mockReset()
+    searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1, offset: 0, limit: 10, has_more: false, next_offset: null })
+    getSeriesIssuesSpy.mockReset()
+    getSeriesIssuesSpy.mockResolvedValue({ comicvine_volume_id: 42, series_name: 'Stormwatch', issues: [mockIssue] })
+  })
+
+  it('offers the series siblings after confirming an identity with a volume', async () => {
+    render(<ComicVineSearchDialog {...defaultProps()} />)
 
     const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
     fireEvent.change(input, { target: { value: 'Stormwatch' } })
     await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Stormwatch'))
-    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('#1'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
+
+    expect(confirmIdentitySpy).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+
+    await waitFor(() => expect(confirmIdentitySpy).toHaveBeenCalledWith(43, 36956))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Map Sibling Issues' })).toBeInTheDocument())
+    expect(screen.getByTestId('sibling-mapping-offer')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Search series title or paste a ComicVine URL')).not.toBeInTheDocument()
+  })
+
+  it('passes the confirmed volume to the sibling offer and keeps the dialog open', async () => {
+    render(<ComicVineSearchDialog {...defaultProps()} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
 
-    await waitFor(() => expect(screen.getByText('Map Sibling Issues')).toBeInTheDocument())
-    expect(screen.getByTestId('sibling-mapping-offer')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('sibling-mapping-offer')).toBeInTheDocument())
+    expect(useSiblingSeriesMappingPreviewMock).toHaveBeenCalledWith(43, 'comicvine', '42')
   })
 
-  it('calls onClose instead of siblings when the confirmed volume is missing', async () => {
+  it('closes the dialog instead of offering siblings when the confirmed volume is missing', async () => {
     const onClose = vi.fn()
-    const onSiblingsMapped = vi.fn()
     searchSeriesSpy.mockResolvedValue({
       query: 'Stormwatch',
       results: [{ ...mockSeries, comicvine_volume_id: null }],
@@ -1114,18 +1149,55 @@ describe('ComicVineSearchDialog sibling mapping offer (#3159)', () => {
       has_more: false,
       next_offset: null,
     })
-    render(<ComicVineSearchDialog {...defaultProps({ onClose, onSiblingsMapped })} />)
+    render(<ComicVineSearchDialog {...defaultProps({ onClose })} />)
 
     const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
     fireEvent.change(input, { target: { value: 'Stormwatch' } })
     await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Stormwatch'))
-    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('#1'))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
 
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(screen.queryByTestId('sibling-mapping-offer')).not.toBeInTheDocument()
+  })
+
+  it('reports confirmed sibling issues back to the caller', async () => {
+    const onSiblingsMapped = vi.fn()
+    render(<ComicVineSearchDialog {...defaultProps({ onSiblingsMapped })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+
+    await waitFor(() => expect(screen.getByTestId('sibling-mapping-offer')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('sibling-mapping-approve'))
+
+    expect(commitMappingMutateMock).toHaveBeenCalledTimes(1)
+    const commitHandlers = commitMappingMutateMock.mock.calls[0][1]
+    commitHandlers.onSuccess({ confirmed_issue_ids: [7, 8] })
+
+    expect(onSiblingsMapped).toHaveBeenCalledWith([7, 8])
+  })
+
+  it('closes the dialog when the reader finishes the sibling offer', async () => {
+    const onClose = vi.fn()
+    render(<ComicVineSearchDialog {...defaultProps({ onClose })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+
+    await waitFor(() => expect(screen.getByTestId('sibling-mapping-offer')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('sibling-mapping-dismiss'))
+
     expect(onClose).toHaveBeenCalled()
-    expect(onSiblingsMapped).not.toHaveBeenCalled()
   })
 })
+
