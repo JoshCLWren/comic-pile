@@ -6,6 +6,7 @@ import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
+import type { ThreadCreatePayload } from '../../types'
 
 type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
 
@@ -15,12 +16,7 @@ interface QueueModalsParams {
   onUpdated: () => Promise<void>
   onReactivated: () => Promise<void>
   refetchSession: () => Promise<void>
-  submitCreate: (input: {
-    title: string
-    format: string
-    issues_remaining: number
-    notes: string | null
-  }) => Promise<{ id?: number }>
+  submitCreate: (input: ThreadCreatePayload) => Promise<{ id?: number }>
   submitEdit: (input: {
     id: number
     data: EditThreadData
@@ -286,7 +282,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           title: createForm.title,
           format: createForm.format,
           issues_remaining: issuesRemaining,
-          notes: createForm.notes || null,
+          notes: createForm.notes ?? null,
           manual_creator_credits: createForm.manualCreatorCredits,
         })) as { id?: number } | null
 

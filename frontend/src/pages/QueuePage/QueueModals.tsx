@@ -68,12 +68,13 @@ function CreatorInput({
     )
   }
 
-  const handleCustomRole = (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value.trim()
+  const handleCustomRole = () => {
+    const input = document.activeElement as HTMLInputElement
+    const value = input.value.trim()
     if (value && !editRoles.includes(value)) {
       setEditRoles((prev) => [...prev, value])
     }
-    event.target.value = ''
+    input.value = ''
   }
 
   return (
@@ -111,7 +112,7 @@ function CreatorInput({
                 <input
                   type="text"
                   placeholder="Custom role..."
-                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomRole(e.currentTarget)}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomRole()}
                   className="text-xs rounded-xl px-2 py-1 form-control min-w-[80px]"
                 />
               </div>

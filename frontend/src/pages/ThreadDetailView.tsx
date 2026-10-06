@@ -80,6 +80,7 @@ export default function ThreadDetailView() {
       notes: thread.notes || '',
       issues: '',
       lastIssueRead: 0,
+      manualCreatorCredits: (thread as any).manual_creator_credits || [],
     })
     setIsEditOpen(true)
   }, [location.state, thread])
@@ -139,6 +140,7 @@ export default function ThreadDetailView() {
       notes: currentThread.notes || '',
       issues: '',
       lastIssueRead: 0,
+      manualCreatorCredits: (currentThread as any).manual_creator_credits || [],
     })
     setIsEditOpen(true)
   }
