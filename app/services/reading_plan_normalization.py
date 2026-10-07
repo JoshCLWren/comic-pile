@@ -38,6 +38,36 @@ from app.schemas.reading_plan_membership import (
 )
 
 
+def ensure_plan_issue_uniqueness(nodes: list[ContinuityPlanNode]) -> None:
+    """Enforce the one-membership-per-canonical-issue invariant (#3037).
+
+    Within one Reading Plan a canonical issue may appear at most once;
+    repeated occurrences create ambiguous progress, ordering, dependency,
+    inheritance, and editing semantics. This is the service-level gate all
+    membership write paths funnel through (API, CBL adoption, migrations,
+    prune flows) via :func:`rebuild_plan_membership`.
+
+    Raises:
+        HTTPException: 422 ``duplicate_plan_issue`` naming the first
+            repeated issue reference, so callers get a domain error instead
+            of an opaque database failure.
+    """
+    seen: set[int] = set()
+    for node in nodes:
+        if node.node_type != "issue":
+            continue
+        if node.ref_id in seen:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "duplicate_plan_issue",
+                    "issue_id": node.ref_id,
+                    "node_id": node.id,
+                },
+            )
+        seen.add(node.ref_id)
+
+
 def _source_metadata_for_node(node: ContinuityPlanNode) -> dict[str, object] | None:
     """Collect advisory source annotations from one plan node.
 
@@ -98,6 +128,9 @@ async def rebuild_plan_membership(
         plan_id: Plan whose normalized rows are replaced.
         nodes: Canonical node set just persisted to the plan.
     """
+    # Canonical membership invariant (#3037): fail closed with a domain error
+    # before any row is replaced, so no write path can persist a duplicate.
+    ensure_plan_issue_uniqueness(nodes)
     issue_rows: list[ReadingPlanIssue] = []
     snapshots: dict[str, ReadingPlanSource] = {}
     # (occurrence_id, raw_path, source_position) triples, deduplicated.

@@ -4,8 +4,10 @@ Implements the relational shape from ``docs/READING_GRAPH_PERSISTENCE_DESIGN.md`
 section 2 (Chunk 1 of ``docs/READING_GRAPH_IMPLEMENTATION_PLAN.md``):
 
 - ``reading_plan_issues`` is the explicit ReadingPlan-to-Issue join. One Issue
-  may belong to many plans, including repeated occurrences with separate
-  lane/label context. ``nodes_json`` on ``ContinuityPlan`` remains temporarily
+  may belong to many plans, but within one plan a canonical issue may appear
+  at most once (``uq_reading_plan_issue_once_per_plan``, #3037); repeated
+  occurrences with separate lane/label context are no longer representable.
+  ``nodes_json`` on ``ContinuityPlan`` remains temporarily
   for compatibility/presentation but is no longer the sole canonical
   membership representation.
 - ``reading_plan_dependencies`` links many plans to one canonical executable
@@ -37,7 +39,13 @@ from app.database import Base
 
 
 class ReadingPlanIssue(Base):
-    """One Issue occurrence inside a Reading Plan."""
+    """One Issue occurrence inside a Reading Plan.
+
+    Canonical membership invariant (#3037): within one plan a canonical
+    issue may appear at most once. ``uq_reading_plan_issue_once_per_plan``
+    enforces this at the database level so concurrent writers converge
+    instead of persisting duplicates.
+    """
 
     __tablename__ = "reading_plan_issues"
 
@@ -64,6 +72,11 @@ class ReadingPlanIssue(Base):
             "lane_id",
             "display_position",
             name="uq_reading_plan_issue_lane_position",
+        ),
+        UniqueConstraint(
+            "plan_id",
+            "issue_id",
+            name="uq_reading_plan_issue_once_per_plan",
         ),
         Index("ix_reading_plan_issues_plan_issue", "plan_id", "issue_id"),
         Index("ix_reading_plan_issues_issue_id", "issue_id"),
