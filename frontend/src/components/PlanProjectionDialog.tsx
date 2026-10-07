@@ -59,7 +59,7 @@ export default function PlanProjectionDialog({
     return () => { active = false }
   }, [isOpen])
 
-  const selectedOrder = readingOrders.find((order) => order.id === Number(selectedOrderId)) ?? null
+  const selectedOrder = readingOrders.find((order) => String(order.id) === selectedOrderId) ?? null
 
   const runPreview = async () => {
     if (!selectedOrder) return
@@ -108,26 +108,50 @@ export default function PlanProjectionDialog({
         Your plan is never modified (<GlossaryLink id="projection">Projection</GlossaryLink>).
       </p>
 
-      <label className="mt-4 block">
-        <span className="text-xs font-bold uppercase tracking-wider text-stone-400">Reading order</span>
-        <select
-          value={selectedOrderId}
-          onChange={(event) => {
-            setSelectedOrderId(event.target.value)
-            setPreview(null)
-            setResult(null)
-            setError(null)
-          }}
-          disabled={isLoadingOrders || isConfirming}
-          className="mt-1 min-h-11 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 text-stone-100 disabled:opacity-50"
+      <div className="mt-4">
+        <span id="projection-reading-order-label" className="text-xs font-bold uppercase tracking-wider text-stone-400">Reading order</span>
+        <div
+          role="radiogroup"
+          aria-labelledby="projection-reading-order-label"
           data-testid="projection-reading-order-select"
+          className="mt-1 grid gap-2"
         >
-          <option value="">{isLoadingOrders ? 'Loading reading orders…' : 'Select a reading order'}</option>
-          {readingOrders.map((order) => (
-            <option key={order.id} value={order.id}>{order.name} ({order.total_items} items)</option>
-          ))}
-        </select>
-      </label>
+          {isLoadingOrders ? (
+            <p role="status" className="rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-400">Loading reading orders…</p>
+          ) : readingOrders.length === 0 ? (
+            <p className="rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-400">
+              No saved reading orders yet. Reading orders are legacy lists — crossovers you create appear under “Add steps” instead.
+            </p>
+          ) : (
+            readingOrders.map((order) => {
+              const orderId = String(order.id)
+              const isSelected = selectedOrderId === orderId
+              return (
+                <button
+                  key={order.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  onClick={() => {
+                    setSelectedOrderId(orderId)
+                    setPreview(null)
+                    setResult(null)
+                    setError(null)
+                  }}
+                  disabled={isConfirming}
+                  className={`min-h-11 w-full rounded-xl border px-3 text-left text-sm disabled:opacity-50 ${
+                    isSelected
+                      ? 'border-amber-500 bg-amber-950/30 font-bold text-stone-100'
+                      : 'border-stone-700 bg-stone-900 text-stone-100 hover:border-stone-500'
+                  }`}
+                >
+                  {order.name} <span className="text-stone-400">({order.total_items} items)</span>
+                </button>
+              )
+            })
+          )}
+        </div>
+      </div>
 
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={runPreview} disabled={!selectedOrder || isPreviewing || isConfirming} className="min-h-11 flex-1 rounded-xl bg-stone-800 px-4 font-bold text-stone-100 disabled:opacity-40">
