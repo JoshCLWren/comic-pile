@@ -21,6 +21,7 @@ from app.services.crossover_reading_order_migration import (
     crossover_content_hash,
     inventory_crossover_reader_orders,
 )
+from comic_pile.dependencies import refresh_user_blocked_status
 from tests.conftest import get_or_create_user_async
 
 
@@ -328,6 +329,12 @@ async def test_apply_creates_plan_rules_and_receipt(
         name="X-Over",
         ordered_issue_ids=[issue_a.id, issue_b.id, issue_c.id],
     )
+    # Persist derived blocked state before the dry run, mirroring production
+    # where the app refreshes it on every mutation. Apply re-runs the refresh
+    # internally, so the fixture must start from settled state for the
+    # post-apply reader-state invariant to hold.
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
     spec = _spec(user.id, group, [issue_a.id, issue_b.id, issue_c.id])
     snapshot = await build_crossover_reading_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True
@@ -371,6 +378,10 @@ async def test_apply_is_idempotent(async_db: AsyncSession) -> None:
     group = await _crossover_group(
         async_db, user_id=user.id, name="X-Over", ordered_issue_ids=[issue_a.id, issue_b.id]
     )
+    # See test_apply_creates_plan_rules_and_receipt: settle derived blocked
+    # state before the dry run so apply's internal refresh is a no-op.
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
     spec = _spec(user.id, group, [issue_a.id, issue_b.id])
     snapshot = await build_crossover_reading_order_dry_run(async_db, spec)
     first = await apply_crossover_reading_order_migration(
