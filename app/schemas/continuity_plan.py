@@ -129,6 +129,12 @@ class ContinuityPlanWrite(BaseModel):
         node_ids = [node.id for node in self.nodes]
         if len(set(node_ids)) != len(node_ids):
             raise ValueError("node ids must be unique")
+        # Canonical membership invariant (#3037): one issue per plan, at most
+        # once. Repeated occurrences create ambiguous progress, ordering,
+        # dependency, inheritance, and editing semantics.
+        issue_refs = [node.ref_id for node in self.nodes if node.node_type == "issue"]
+        if len(set(issue_refs)) != len(issue_refs):
+            raise ValueError("an issue may appear at most once in a plan")
         known_lanes = set(lane_ids)
         if any(node.lane_id not in known_lanes for node in self.nodes):
             raise ValueError("every node must reference an existing lane")

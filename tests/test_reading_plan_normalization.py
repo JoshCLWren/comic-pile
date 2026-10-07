@@ -15,6 +15,7 @@ Roll eligibility behavior:
 from datetime import UTC, datetime
 
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +25,6 @@ from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.reading_plan_membership import (
     ReadingPlanDependency,
-    ReadingPlanIssue,
 )
 from app.models.thread import Thread
 from app.repositories import reading_plan_repository
@@ -362,6 +362,7 @@ async def test_provenance_round_trips_through_normalized_representation(
     """Source paths, positions, and advisory metadata survive normalization."""
     user = await get_or_create_user_async(async_db)
     issue = await _make_issue(async_db, user_id=user.id, suffix="sourced")
+    issue2 = await _make_issue(async_db, user_id=user.id, suffix="sourced-second")
     await async_db.commit()
 
     nodes = [
@@ -384,7 +385,7 @@ async def test_provenance_round_trips_through_normalized_representation(
                 "is_checkpoint": True,
             },
         ),
-        _node("recap", issue.id, 1, extra={"label": "Recap context"}),
+        _node("second", issue2.id, 1, extra={"label": "Second context"}),
     ]
     plan_id = await _create_plan(auth_client, "Sourced plan", nodes)
 
@@ -392,12 +393,12 @@ async def test_provenance_round_trips_through_normalized_representation(
     assert membership.status_code == 200, membership.text
     body = membership.json()
 
-    # Repeated occurrences keep display context; distinct membership is one Issue.
+    # Each canonical issue appears once; membership is one row per Issue.
     assert [(row["occurrence_id"], row["issue_id"]) for row in body["issues"]] == [
         ("first", issue.id),
-        ("recap", issue.id),
+        ("second", issue2.id),
     ]
-    assert body["progress"] == {"total_issues": 1, "read_issues": 0}
+    assert body["progress"] == {"total_issues": 2, "read_issues": 0}
     first = next(row for row in body["issues"] if row["occurrence_id"] == "first")
     assert first["source_metadata"] == {
         "source_role": "core",
@@ -496,10 +497,10 @@ async def test_link_rejects_unknown_dependency_and_foreign_edge(
 
 
 @pytest.mark.asyncio
-async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
+async def test_membership_rebuild_rejects_duplicate_issue_occurrences(
     async_db: AsyncSession,
 ) -> None:
-    """Progress counts distinct Issues, not duplicate occurrences."""
+    """Rebuild fails closed when one canonical issue occurs twice (#3037)."""
     user = await get_or_create_user_async(async_db)
     issue = await _make_issue(async_db, user_id=user.id, suffix="duplicate")
     plan = ContinuityPlan(
@@ -530,15 +531,13 @@ async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
             convergence_gate=[],
         ),
     ]
-    await reading_plan_normalization.rebuild_plan_membership(
-        async_db, plan_id=plan.id, nodes=nodes
-    )
+    with pytest.raises(HTTPException) as exc_info:
+        await reading_plan_normalization.rebuild_plan_membership(
+            async_db, plan_id=plan.id, nodes=nodes
+        )
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["code"] == "duplicate_plan_issue"
     rows = await reading_plan_repository.list_plan_issues(async_db, plan_id=plan.id)
-    assert len(rows) == 2
-    assert isinstance(rows[0], ReadingPlanIssue)
-    total, read = await reading_plan_normalization.get_plan_progress(
-        async_db, plan_id=plan.id
-    )
-    assert (total, read) == (1, 0)
+    assert rows == []
     links = await reading_plan_repository.list_plan_dependencies(async_db, plan_id=plan.id)
     assert all(isinstance(link, ReadingPlanDependency) for link in links)
