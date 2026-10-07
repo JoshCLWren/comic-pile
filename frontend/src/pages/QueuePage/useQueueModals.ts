@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import type { Thread, ThreadListItem } from '../../types'
+import type { Thread, ThreadListItem, ThreadCreatePayload } from '../../types'
+import { getManualCreatorCreditList } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -15,12 +16,7 @@ interface QueueModalsParams {
   onUpdated: () => Promise<void>
   onReactivated: () => Promise<void>
   refetchSession: () => Promise<void>
-  submitCreate: (input: {
-    title: string
-    format: string
-    issues_remaining: number
-    notes: string | null
-  }) => Promise<{ id?: number }>
+  submitCreate: (input: ThreadCreatePayload) => Promise<{ id?: number }>
   submitEdit: (input: {
     id: number
     data: EditThreadData
@@ -145,6 +141,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         notes: thread.notes || '',
         issues: '',
         lastIssueRead: 0,
+        manualCreatorCredits: getManualCreatorCreditList(thread),
       })
       setOpenModal('edit')
       setRestoreAction(() => {
@@ -156,6 +153,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           notes: thread.notes || '',
           issues: '',
           lastIssueRead: 0,
+          manualCreatorCredits: getManualCreatorCreditList(thread),
         })
         setOpenModal('edit')
       })
@@ -284,7 +282,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           title: createForm.title,
           format: createForm.format,
           issues_remaining: issuesRemaining,
-          notes: createForm.notes || null,
+          notes: createForm.notes ?? null,
+          manual_creator_credits: createForm.manualCreatorCredits,
         })) as { id?: number } | null
 
         if (hasIssueRange && result?.id) {
@@ -336,6 +335,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           title: editForm.title,
           format: editForm.format,
           notes: editForm.notes || null,
+          manual_creator_credits: editForm.manualCreatorCredits,
         }
         if (editingThread.total_issues == null) {
           data.issues_remaining = Number(editForm.issuesRemaining)

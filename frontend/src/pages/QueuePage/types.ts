@@ -1,5 +1,10 @@
 import type { Issue } from '../../types'
 
+export interface ManualCreatorCredit {
+  name: string
+  roles: string[]
+}
+
 export type IssueMutation =
   | { id: number; type: 'delete'; issueId: number }
   | { id: number; type: 'reorder'; issueIds: number[] }
@@ -17,6 +22,7 @@ export type QueueFormState = {
   notes: string
   issues: string
   lastIssueRead: number
+  manualCreatorCredits: ManualCreatorCredit[]
 }
 
 /** Body of an edit mutation derived from the queue form state. */
@@ -25,6 +31,7 @@ export interface EditThreadData {
   format: string
   notes: string | null
   issues_remaining?: number
+  manual_creator_credits?: ManualCreatorCredit[]
 }
 
 export const DEFAULT_CREATE_STATE: QueueFormState = {
@@ -34,6 +41,7 @@ export const DEFAULT_CREATE_STATE: QueueFormState = {
   notes: '',
   issues: '',
   lastIssueRead: 0,
+  manualCreatorCredits: [],
 }
 
 export const FORMAT_OPTIONS = ['Comic', 'Manga', 'Trade Paperback', 'Graphic Novel', 'Digital', 'Other'] as const

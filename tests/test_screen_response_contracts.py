@@ -26,6 +26,7 @@ QUEUE_FIELDS = {
     "notes",
     "created_at",
     "comicvine_mapping",
+    "manual_creator_credits",
 }
 QUEUE_DROPPED_FIELDS = {
     "last_rating",
@@ -119,15 +120,15 @@ def _component_schema(name: str) -> dict[str, object]:
 
 
 def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
-    """Queue items expose only the documented 14-field screen contract."""
+    """Queue items expose only the documented 15-field screen contract."""
     full_fields = set(ThreadResponse.model_fields)
     queue_fields = set(QueueThreadListItem.model_fields)
 
     assert queue_fields == QUEUE_FIELDS
     assert full_fields - queue_fields == QUEUE_DROPPED_FIELDS
-    assert len(full_fields) == 17
-    assert len(queue_fields) == 14
-    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 3 / 17
+    assert len(full_fields) == 18
+    assert len(queue_fields) == 15
+    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 3 / 18
 
 
 def test_queue_item_records_serialized_byte_reduction() -> None:
@@ -232,7 +233,7 @@ def test_session_history_records_serialized_byte_reduction() -> None:
 def test_thread_detail_preserves_the_complete_thread_contract() -> None:
     """Thread detail remains a named compatibility contract with every full field."""
     assert set(ThreadDetail.model_fields) == set(ThreadResponse.model_fields)
-    assert len(ThreadDetail.model_fields) == 17
+    assert len(ThreadDetail.model_fields) == 18
 
 
 def test_issue_list_item_contract_is_exact_and_named() -> None:

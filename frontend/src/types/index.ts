@@ -15,6 +15,27 @@ export type ThreadListItem = components['schemas']['QueueThreadListItem']
  */
 export type Thread = components['schemas']['ThreadResponse']
 
+/**
+ * Read the manual creator credits off a thread-shaped object without a cast.
+ *
+ * The generated client schema is regenerated from the OpenAPI document, and
+ * the checked-in copy can lag behind the server's live response. Rather than
+ * asserting the field away at each call site, normalize it through this helper
+ * so the read is centralized. The server always returns the column (it
+ * defaults to an empty list), so an absent value is treated as an empty list.
+ *
+ * Args:
+ *     thread: Any thread-shaped object carrying a manual_creator_credits field.
+ *
+ * Returns:
+ *     The stored manual creator credits, or an empty list when absent.
+ */
+export function getManualCreatorCreditList(
+  thread: { manual_creator_credits?: ManualCreatorCredit[] | null },
+): ManualCreatorCredit[] {
+  return thread.manual_creator_credits ?? []
+}
+
 export interface AuthUser {
   id?: number;
   username: string;
@@ -33,18 +54,25 @@ export interface ThreadQueryParams {
   page_token?: string;
 }
 
+export interface ManualCreatorCredit {
+  name: string;
+  roles: string[];
+}
+
 export interface ThreadCreatePayload {
   title: string;
   format: string;
   issues_remaining: number;
   total_issues?: number;
   notes?: string | null;
+  manual_creator_credits?: ManualCreatorCredit[];
 }
 
 export interface ThreadUpdatePayload {
   title?: string;
   format?: string;
   notes?: string | null;
+  manual_creator_credits?: ManualCreatorCredit[];
 }
 
 export interface MoveToPositionPayload {

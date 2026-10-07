@@ -16,6 +16,7 @@ import {
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
+import { getManualCreatorCreditList } from '../types'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -80,6 +81,7 @@ export default function ThreadDetailView() {
       notes: thread.notes || '',
       issues: '',
       lastIssueRead: 0,
+      manualCreatorCredits: getManualCreatorCreditList(thread),
     })
     setIsEditOpen(true)
   }, [location.state, thread])
@@ -139,6 +141,7 @@ export default function ThreadDetailView() {
       notes: currentThread.notes || '',
       issues: '',
       lastIssueRead: 0,
+      manualCreatorCredits: getManualCreatorCreditList(currentThread),
     })
     setIsEditOpen(true)
   }

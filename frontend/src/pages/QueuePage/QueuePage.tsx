@@ -11,7 +11,7 @@ import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
-import type { ThreadListItem } from '../../types'
+import type { ThreadListItem, ThreadCreatePayload, ThreadUpdatePayload } from '../../types'
 import QueueThreadCard from './QueueThreadCard'
 import CompletedThreadsSection from './CompletedThreadsSection'
 import { QueueControls } from './QueueControls'
@@ -75,16 +75,13 @@ export default function QueuePage() {
   })
 
   const submitCreate = useCallback(
-    (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
+    (input: ThreadCreatePayload) =>
       // SAFETY: useCreateThread exposes mutateAsync, so this resolves to the created thread record
       createMutation.mutate(input) as Promise<{ id?: number }>,
     [createMutation],
   )
   const submitEdit = useCallback(
-    (input: {
-      id: number
-      data: { title: string; format: string; notes: string | null; issues_remaining?: number }
-    }) => updateMutation.mutate(input),
+    (input: { id: number; data: ThreadUpdatePayload }) => updateMutation.mutate(input),
     [updateMutation],
   )
   const submitReactivate = useCallback(

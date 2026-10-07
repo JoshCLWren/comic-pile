@@ -1,4 +1,5 @@
-import type { ChangeEvent, FormEvent } from 'react'
+import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import { useState } from 'react'
 import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
@@ -6,7 +7,185 @@ import MigrationDialog from '../../components/MigrationDialog'
 import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
-import type { QueueFormState } from './types'
+import type { QueueFormState, ManualCreatorCredit } from './types'
+
+const CREATOR_ROLE_OPTIONS = [
+  'Writer',
+  'Artist',
+  'Colorist',
+  'Letterer',
+  'Cover Artist',
+  'Editor',
+  'Inker',
+  'Penciller',
+] as const
+
+function CreatorInput({
+  creators,
+  onChange,
+  label = 'Creators (optional)',
+}: {
+  creators: ManualCreatorCredit[]
+  onChange: (next: ManualCreatorCredit[]) => void
+  label?: string
+}) {
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editRoles, setEditRoles] = useState<string[]>([])
+
+  const handleAdd = () => {
+    onChange([...creators, { name: '', roles: [] }])
+  }
+
+  const handleRemove = (index: number) => {
+    onChange(creators.filter((_, i) => i !== index))
+  }
+
+  const handleStartEdit = (index: number, creator: ManualCreatorCredit) => {
+    setEditingIndex(index)
+    setEditName(creator.name)
+    setEditRoles(creator.roles)
+  }
+
+  const handleSaveEdit = (index: number) => {
+    const next = [...creators]
+    next[index] = { name: editName.trim(), roles: editRoles }
+    onChange(next)
+    setEditingIndex(null)
+    setEditName('')
+    setEditRoles([])
+  }
+
+  const handleCancelEdit = () => {
+    setEditingIndex(null)
+    setEditName('')
+    setEditRoles([])
+  }
+
+  const handleRoleToggle = (role: string) => {
+    setEditRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+    )
+  }
+
+  const handleCustomRole = (input: HTMLInputElement) => {
+    const value = input.value.trim()
+    if (value && !editRoles.includes(value)) {
+      setEditRoles((prev) => [...prev, value])
+    }
+    input.value = ''
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+        {label}
+      </label>
+      {creators.map((creator, index) => (
+        <div key={index} className="flex items-center gap-2 p-2 rounded-lg border" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+          {editingIndex === index ? (
+            <>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSaveEdit(index)
+                  }
+                }}
+                placeholder="Creator name"
+                className="flex-1 min-w-0 rounded-xl px-3 py-2 text-sm form-control"
+                autoFocus
+              />
+              <div className="flex flex-wrap items-center gap-1">
+                {CREATOR_ROLE_OPTIONS.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => handleRoleToggle(role)}
+                    className={`text-xs px-2 py-1 rounded-full transition-colors ${
+                      editRoles.includes(role)
+                        ? 'bg-[var(--theme-primary-action)] text-stone-950'
+                        : 'bg-[var(--theme-bg-hover)] text-stone-300 hover:bg-[var(--theme-bg-hover)]/80'
+                    }`}
+                  >
+                    {role}
+                  </button>
+                ))}
+                <input
+                  type="text"
+                  placeholder="Custom role..."
+                  onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleCustomRole(e.currentTarget)
+                    }
+                  }}
+                  className="text-xs rounded-xl px-2 py-1 form-control min-w-[80px]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSaveEdit(index)}
+                className="text-xs px-2 py-1 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="text-xs px-2 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="flex-1 min-w-0 flex items-center gap-2">
+                <span className="font-medium truncate">{creator.name || 'Unnamed creator'}</span>
+                {creator.roles.length > 0 && (
+                  <span className="flex flex-wrap gap-1">
+                    {creator.roles.map((role) => (
+                      <span key={role} className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                        {role}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleStartEdit(index, creator)}
+                className="text-xs px-2 py-1 rounded-lg bg-[var(--theme-bg-hover)] text-stone-300 hover:bg-[var(--theme-bg-hover)]/80 transition-colors"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRemove(index)}
+                className="text-xs px-2 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+              >
+                Remove
+              </button>
+            </>
+          )}
+        </div>
+      ))}
+      {creators.length === 0 && (
+        <p className="text-xs text-stone-400">No creators added yet.</p>
+      )}
+      <button
+        type="button"
+        onClick={handleAdd}
+        className="w-full py-2 px-3 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-300 hover:bg-[var(--theme-bg-hover)] transition-colors text-sm font-medium"
+      >
+        + Add Creator
+      </button>
+    </div>
+  )
+}
 
 interface QueueModalsProps {
   openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | null
@@ -214,6 +393,10 @@ export function QueueModals({
               className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
             />
           </div>
+          <CreatorInput
+            creators={createForm.manualCreatorCredits}
+            onChange={(next) => setCreateForm({ ...createForm, manualCreatorCredits: next })}
+          />
           <button
             type="submit"
             disabled={isPendingCreate || issueParseError !== null}
@@ -301,6 +484,10 @@ export function QueueModals({
                 className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
               />
             </div>
+            <CreatorInput
+              creators={editForm.manualCreatorCredits}
+              onChange={(next) => setEditForm({ ...editForm, manualCreatorCredits: next })}
+            />
 
             {editingThread != null && editingThread.total_issues == null && (
               <div className="space-y-2 pt-2 border-t border-white/10">
