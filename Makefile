@@ -510,3 +510,10 @@ clone-prod-export:  ## Backup production user data (ex: make clone-prod-export A
 
 clone-prod-import:  ## Restore backup into local dev database
 	@python -m scripts.clone_prod_to_local import $(ARGS)
+
+.PHONY: mypy-check mypy-inventory
+mypy-check:  ## Check the explicit strict-clean mypy ratchet (same as CI)
+	uv run --locked python scripts/mypy_baseline.py check
+
+mypy-inventory:  ## Refresh full strict mypy migration evidence
+	uv run --locked python scripts/mypy_baseline.py inventory

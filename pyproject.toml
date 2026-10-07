@@ -63,6 +63,7 @@ dev = [
     "aiosqlite>=0.19.0",
     "jsonschema>=4.0.0",
     "pyyaml>=6.0.0",
+    "mypy==2.4.0",
 ]
 
 # Database migration + operator tooling (alembic + its sync psycopg driver).
@@ -180,3 +181,13 @@ SECRET_KEY = "dev-secret-key-change-in-production"
 AUTO_BACKUP_ENABLED = "false"
 PORT = "8000"
 typeStubPaths = []
+
+# Target profile for the complete application/test surface. The Phase 0 gate
+# ratchets only the explicit clean-module manifest; it never hides diagnostics.
+[tool.mypy]
+python_version = "3.14"
+strict = true
+explicit_package_bases = true
+show_error_codes = true
+warn_unused_configs = true
+files = ["app", "comic_pile", "api", "tests", "scripts/mypy_baseline.py"]

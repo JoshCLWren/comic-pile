@@ -1,0 +1,20 @@
+[
+  "comic_pile/__init__.py",
+  "comic_pile/comicvine_identity_repair.py",
+  "comic_pile/comicvine_live_refresh.py",
+  "comic_pile/comicvine_repair_pipeline.py",
+  "comic_pile/comicvine_report_classification.py",
+  "comic_pile/dice_ladder.py",
+  "comic_pile/familiar_weighting.py",
+  "comic_pile/intent.py",
+  "comic_pile/local_comicvine.py",
+  "comic_pile/reading_effort.py",
+  "comic_pile/reading_effort_observation_rules.py",
+  "comic_pile/recommendation_selection.py",
+  "comic_pile/recommendation_version.py",
+  "comic_pile/recommendation_weighting.py",
+  "comic_pile/recommendation_weights.py",
+  "comic_pile/snooze_backoff.py",
+  "scripts/mypy_baseline.py",
+  "tests/test_mypy_baseline.py"
+]

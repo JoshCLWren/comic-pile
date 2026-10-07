@@ -148,6 +148,22 @@ jobs:
       - name: Run ty check
         run: ty check --error-on-warning
 
+  python-mypy:
+    name: Python Strict-Clean Ratchet (mypy)
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image-ref }}
+    needs: build
+    timeout-minutes: 15
+    env:
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Check strict-clean mypy scope
+        run: uv run --locked python scripts/mypy_baseline.py check
+
   frontend-unit-tests:
     name: Frontend Unit Tests (vitest)
     runs-on: ubuntu-latest
@@ -378,7 +394,7 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, factory-pr-auth, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health, test-unit]
+    needs: [build, factory-pr-auth, frontend-typecheck, python-lint, python-typecheck, python-mypy, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health, test-unit]
     if: always()
     steps:
       - name: Check job results
@@ -388,6 +404,7 @@ jobs:
           echo "Frontend Lint + Typecheck: ${{ needs.frontend-typecheck.result }}"
           echo "Python Lint (ruff): ${{ needs.python-lint.result }}"
           echo "Python Type Check (ty): ${{ needs.python-typecheck.result }}"
+          echo "Python Strict-Clean Ratchet (mypy): ${{ needs.python-mypy.result }}"
           echo "Frontend Unit Tests: ${{ needs.frontend-unit-tests.result }}"
           echo "Rendered UI Audit: ${{ needs.ui-audit.result }}"
           echo "Production Runtime Migrations: ${{ needs.production-runtime-migrations.result }}"
@@ -398,6 +415,7 @@ jobs:
              [ "${{ needs.frontend-typecheck.result }}" != "success" ] || \
              [ "${{ needs.python-lint.result }}" != "success" ] || \
              [ "${{ needs.python-typecheck.result }}" != "success" ] || \
+             [ "${{ needs.python-mypy.result }}" != "success" ] || \
              [ "${{ needs.frontend-unit-tests.result }}" != "success" ] || \
              [ "${{ needs.ui-audit.result }}" != "success" ] || \
              [ "${{ needs.production-runtime-migrations.result }}" != "success" ] || \
