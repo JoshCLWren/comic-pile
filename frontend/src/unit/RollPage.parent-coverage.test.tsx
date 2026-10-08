@@ -76,7 +76,7 @@ vi.mock('../hooks/useRoll', () => ({
   useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
 }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
-vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }) }))
+vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }), useActiveSeriesCount: () => null }))
 vi.mock('../hooks', () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }) }))
 vi.mock('../services/api-taste', () => ({
   tasteApi: {
@@ -105,7 +105,8 @@ vi.mock('../components/LazyDice3D', () => ({
 }))
 vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 vi.mock('../components/GlossaryLink', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
-vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) => isOpen ? <section><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
+// SAFETY: the mock only forwards `data-testid` so tests can scope to a specific dialog; the real Modal owns portal/focus behavior these tests do not exercise.
+vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose, 'data-testid': testId }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void; 'data-testid'?: string }) => isOpen ? <section data-testid={testId}><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
 vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
@@ -183,7 +184,30 @@ describe('RollPage parent handlers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'shuffle pool' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle snoozed' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle blocked' }))
-    expect(spies.shuffle).toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId('confirm-shuffle-queue'))
+    await waitFor(() => expect(spies.shuffle).toHaveBeenCalled())
+  })
+
+  it('gates the whole-queue shuffle behind a cancelable confirmation (#3261)', async () => {
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    await user.click(screen.getByRole('button', { name: 'shuffle pool' }))
+
+    // One click opens the confirmation and must not reorder the queue.
+    const dialog = await screen.findByTestId('shuffle-queue-dialog')
+    expect(within(dialog).getByRole('heading', { name: 'Shuffle Queue' })).toBeInTheDocument()
+    expect(within(dialog).getByText(/cannot be undone/i)).toBeInTheDocument()
+    expect(spies.shuffle).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByTestId('shuffle-queue-dialog')).not.toBeInTheDocument())
+    expect(spies.shuffle).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'shuffle pool' }))
+    await user.click(await screen.findByTestId('confirm-shuffle-queue'))
+    await waitFor(() => expect(spies.shuffle).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.queryByTestId('shuffle-queue-dialog')).not.toBeInTheDocument())
   })
 
   it('refreshes an active rating thread with complete and partial metadata', async () => {
@@ -352,6 +376,12 @@ describe('RollPage parent handlers', () => {
     render(<RollPage />)
 
     await user.click(screen.getByRole('button', { name: 'shuffle pool' }))
+    await user.click(await screen.findByTestId('confirm-shuffle-queue'))
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Failed to shuffle pool: operation failed'),
+    )
+    // A failed shuffle keeps the confirmation open so the retry path stays reachable.
+    await user.click(within(screen.getByTestId('shuffle-queue-dialog')).getByRole('button', { name: 'Cancel' }))
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /move to front/i }))
     await user.click(screen.getByRole('button', { name: 'thread' }))
@@ -1039,6 +1069,7 @@ describe('RollPage parent handlers', () => {
     spies.shuffle.mockRejectedValue(new Error('pool failed'))
     render(<RollPage />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'shuffle pool' }))
+    await userEvent.setup().click(await screen.findByTestId('confirm-shuffle-queue'))
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Failed to shuffle pool: pool failed'))
 
     cleanup()

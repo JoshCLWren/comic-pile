@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { keepPreviousData, useMutation } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { useInfiniteCollection } from '../pagination'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
@@ -134,6 +134,37 @@ export function useQueueThreads(
   }, [query])
 
   return { data, isPending, isError, refetch, nextPageToken, loadMore, activeCount }
+}
+
+/**
+ * Authoritative active-series total without hydrating the paginated Queue list.
+ *
+ * The Roll page's shuffle confirmation has to warn about the *whole* queue, but
+ * its own bootstrap payload only carries the die-sized `roll_pool`, which is
+ * neither authoritative nor the set a shuffle reorders (#3261). Asking for a
+ * single-row page returns the search-independent `active_count` total in one
+ * bounded request, and the gate keeps that cost off readers who never open the
+ * confirmation.
+ *
+ * @param enabled - Only fetch while the caller actually needs the total.
+ * @param threadsList - Injectable lazy thread-list loader (defaults to the real service).
+ * @returns The active-series total, or `null` while unknown or unavailable.
+ */
+export function useActiveSeriesCount(
+  enabled: boolean,
+  threadsList: Pick<typeof threadsApi, 'list'> = threadsApi,
+): number | null {
+  const query = useQuery({
+    queryKey: queryKeys.queue.activeCount(),
+    queryFn: async () => (await threadsList.list({ page_size: 1 })).active_count,
+    enabled,
+    // Membership moves only when a series is added, removed, or reactivated, so
+    // a short window keeps a repeatedly reopened confirmation from refetching
+    // while still reflecting a queue that just changed.
+    staleTime: 60 * 1000,
+  })
+
+  return query.data ?? null
 }
 
 /**

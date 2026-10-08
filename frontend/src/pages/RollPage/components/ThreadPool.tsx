@@ -86,7 +86,7 @@ export function ThreadPool({
             </p>
           )}
         </div>
-         <button
+        <button
           type="button"
           onClick={onShuffle}
           disabled={shuffleIsPending || pool.length < 2}
@@ -95,7 +95,6 @@ export function ThreadPool({
         >
           Shuffle queue
         </button>
-
         <span id="shuffle-queue-description" className="sr-only">Randomizes the complete active queue, then refreshes these die mappings.</span>
       </div>}
 

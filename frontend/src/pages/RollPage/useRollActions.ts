@@ -61,6 +61,7 @@ export function useRollActions({
     setSelectedThread,
     setIsActionSheetOpen,
     setIsSetCurrentIssueOpen,
+    setIsShuffleOpen,
     setErrorMessage,
     setCurrentDie,
     setThreadToMigrate,
@@ -116,8 +117,13 @@ export function useRollActions({
     }
   }
 
+  /**
+   * Opens the whole-queue shuffle confirmation instead of shuffling. The
+   * mutation only runs from `performShuffle`, so one click can never reorder the
+   * reader's entire queue on its own (issue #3261).
+   */
   function handleShufflePool() {
-    state.setIsShuffleOpen(true)
+    setIsShuffleOpen(true)
   }
 
   async function handleAction(action: string) {
@@ -227,15 +233,23 @@ export function useRollActions({
     return true
   }
 
+  /**
+   * Runs the confirmed whole-queue shuffle. The confirmation only closes once
+   * the mutation succeeds, so a failure leaves the dialog in place and the
+   * reader can retry without re-discovering the button. Failure reporting
+   * mirrors the Queue page's identical confirmation
+   * (`useQueueThreadActions.confirmShuffle`): the Roll page has no in-context
+   * error region outside the rating view, so the reason is announced rather
+   * than written to a banner nothing is rendering (issue #3261).
+   */
   async function performShuffle() {
     try {
       await shuffleQueueMutation.mutate()
       await refetchBootstrap()
+      setIsShuffleOpen(false)
     } catch (error) {
       console.error('Shuffle failed:', error)
-      state.setErrorMessage(getApiErrorDetail(error))
-    } finally {
-      state.setIsShuffleOpen(false)
+      alert(`Failed to shuffle pool: ${getApiErrorDetail(error)}`)
     }
   }
 

@@ -64,7 +64,7 @@ function QueueControlsInner({
             type="button"
             onClick={onShuffle}
             disabled={shuffleDisabled || shufflePending}
-            className="h-9 md:h-12 px-3 md:px-5 rounded-lg border border-white/10 bg-white/5 text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap text-stone-300 hover:bg-white/10 disabled:opacity-50"
+            className="h-9 md:h-12 px-3 md:px-5 rounded-lg border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap text-[var(--theme-danger)] hover:bg-[var(--theme-danger)]/20 disabled:opacity-50 transition-colors"
           >
             Shuffle
           </button>

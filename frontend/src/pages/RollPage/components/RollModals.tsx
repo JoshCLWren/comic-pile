@@ -3,7 +3,7 @@ import { useState } from 'react'
 import Modal from '../../../components/Modal'
 import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
-import ShuffleQueueDialog from '../../../pages/QueuePage/ShuffleQueueDialog'
+import ShuffleQueueDialog from '../../QueuePage/ShuffleQueueDialog'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { Thread, ThreadListItem } from '../../../types'
@@ -339,7 +339,7 @@ export function RollModals({
         </div>
       </Modal>
 
-       {isSetCurrentIssueOpen && selectedThread && (
+      {isSetCurrentIssueOpen && selectedThread && (
         <Modal
           isOpen={isSetCurrentIssueOpen}
           title={`Set Current Issue: ${selectedThread.title}`}

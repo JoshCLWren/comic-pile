@@ -47,6 +47,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useShuffleQueue: vi.fn(),
+  useActiveSeriesCount: () => null,
 }))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()

@@ -3,6 +3,7 @@ import type { PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  useActiveSeriesCount,
   useQueueThreads,
   useMoveToBack,
   useMoveToFront,
@@ -367,4 +368,33 @@ it('does not invalidate cache when a queue mutation fails', async () => {
   ).rejects.toThrow('move failed')
 
   expect(invalidate).not.toHaveBeenCalled()
+})
+
+describe('useActiveSeriesCount (bounded whole-queue total)', () => {
+  it('issues no request until the confirmation needs the total (#3261)', async () => {
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(({ enabled }: { enabled: boolean }) => useActiveSeriesCount(enabled, threadsApi), {
+      wrapper,
+      initialProps: { enabled: false },
+    })
+
+    expect(result.current).toBeNull()
+    expect(listThreads).not.toHaveBeenCalled()
+
+    rerender({ enabled: true })
+
+    await waitFor(() => expect(result.current).toBe(0))
+    // One bounded row request, never a hydrated queue page.
+    expect(listThreads).toHaveBeenCalledTimes(1)
+    expect(listThreads).toHaveBeenCalledWith({ page_size: 1 })
+  })
+
+  it('reports null when the bounded total cannot be read', async () => {
+    listThreads.mockRejectedValueOnce(new Error('count unavailable'))
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useActiveSeriesCount(true, threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current).toBeNull())
+    expect(listThreads).toHaveBeenCalledTimes(1)
+  })
 })

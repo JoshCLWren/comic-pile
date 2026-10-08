@@ -178,6 +178,14 @@ describe('QueueControls', () => {
     expect(active.className).toContain('amber')
   })
 
+  it('carries the same danger signal as the Roll shuffle control (#3261)', () => {
+    render(<QueueControls {...baseProps} />)
+
+    // One destructive action must not read as a neutral utility on one surface
+    // and as danger on another.
+    expect(screen.getByRole('button', { name: 'Shuffle' }).className).toContain('var(--theme-danger)')
+  })
+
   it('invokes shuffle, create, and sort callbacks', async () => {
     const user = userEvent.setup()
     render(<QueueControls {...baseProps} />)

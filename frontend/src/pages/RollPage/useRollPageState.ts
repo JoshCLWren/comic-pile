@@ -143,6 +143,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setShowSimpleMigration,
     isRatingView,
     setIsRatingView,
+    isShuffleOpen,
     setIsShuffleOpen,
     rating,
     setRating,

@@ -122,6 +122,7 @@ export function useRollModals({
     clearRestoreAction,
     isActionSheetOpen,
     isOverrideOpen,
+    isShuffleOpen,
     selectedThread,
     setIsActionSheetOpen,
     setIsOverrideOpen,
@@ -132,7 +133,6 @@ export function useRollModals({
     showMigrationDialog,
     showSimpleMigration,
     threadToMigrate,
-    isShuffleOpen,
   ])
 
   function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
@@ -161,12 +161,5 @@ export function useRollModals({
     setOverrideErrorMessage('')
   }
 
-  return {
-    overrideThreads,
-    handleOverrideSubmit,
-    openOverrideModal,
-    closeOverrideModal,
-    isShuffleOpen,
-    setIsShuffleOpen,
-  }
+  return { overrideThreads, handleOverrideSubmit, openOverrideModal, closeOverrideModal }
 }

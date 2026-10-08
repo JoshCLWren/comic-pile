@@ -288,13 +288,18 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(2)
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    // The bounded whole-queue total must not survive a membership change (#3261).
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.activeCount(),
       exact: true,
     })
   })
