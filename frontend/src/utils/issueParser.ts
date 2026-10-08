@@ -69,6 +69,11 @@ export interface ParsedTokenBreakdown {
  * Tokens with a dash are attempted as integer ranges (both endpoints >= 0).
  * If that fails, the whole token is kept as a literal identifier.
  *
+ * Issue expansion, dedupe, limits, and thrown messages must stay in sync with
+ * app/utils/issue_parser.py. The recognized-literal heuristic behind `warnings`
+ * and `breakdown` is a preview-only affordance (#3262): it never changes what is
+ * submitted, and the backend still accepts any literal identifier.
+ *
  * @param input - Issue range string (e.g., "0-25" or "0, Annual 1, 5-7")
  * @returns Detailed parsing result with breakdown and warnings
  * @throws Error if input is invalid
@@ -213,82 +218,4 @@ export function parseIssueRangeDetailed(input: string): ParsedIssueRangeDetail {
  */
 export function parseIssueRange(input: string): number {
   return parseIssueRangeDetailed(input).total;
-}
-  if (!input || !input.trim()) {
-    throw new Error('Issue range cannot be empty');
-  }
-
-  const trimmedInput = input.trim();
-  const result: string[] = [];
-  const parts = trimmedInput.split(',');
-
-  for (const part of parts) {
-    const trimmedPart = part.trim();
-    if (!trimmedPart) {
-      continue;
-    }
-
-    if (trimmedPart.includes('-')) {
-      // Try to parse as an integer range
-      const dashIdx = trimmedPart.indexOf('-');
-      const left = trimmedPart.slice(0, dashIdx).trim();
-      const right = trimmedPart.slice(dashIdx + 1).trim();
-
-      const start = Number.parseInt(left, 10);
-      const end = Number.parseInt(right, 10);
-
-      // Verify entire string is numeric (matches backend int() behavior which rejects partial parses like "5a")
-      // Use regex to allow zero-padded numbers while rejecting trailing non-numeric characters
-      const isNumeric = (str: string) => /^\d+$/.test(str);
-      if (!Number.isNaN(start) && !Number.isNaN(end) && isNumeric(left) && isNumeric(right)) {
-        if (start < 0 || end < 0) {
-          throw new Error('Range endpoints must be >= 0');
-        }
-        if (start > end) {
-          throw new Error(`Range start (${start}) cannot exceed end (${end})`);
-        }
-        // Check range size BEFORE expansion to prevent DoS (matches backend check)
-        const rangeSize = end - start + 1;
-        if (rangeSize > MAX_ISSUES) {
-          throw new Error(`Range too large: ${rangeSize} issues (max ${MAX_ISSUES})`);
-        }
-        // Check cumulative total to prevent combining multiple large ranges
-        if (result.length + rangeSize > MAX_ISSUES) {
-          throw new Error(`Total issues would exceed maximum of ${MAX_ISSUES}`);
-        }
-        for (let i = start; i <= end; i++) {
-          result.push(String(i));
-        }
-      } else {
-        // Not a valid integer range — store as literal
-        if (trimmedPart.length > MAX_LITERAL_LENGTH) {
-          throw new Error(`Issue identifier too long (max ${MAX_LITERAL_LENGTH} chars)`);
-        }
-        result.push(trimmedPart);
-      }
-    } else {
-      // Single token — accept any non-empty string
-      if (trimmedPart.length > MAX_LITERAL_LENGTH) {
-        throw new Error(`Issue identifier too long (max ${MAX_LITERAL_LENGTH} chars)`);
-      }
-      result.push(trimmedPart);
-    }
-  }
-
-  // Deduplicate while preserving order
-  const seen = new Set<string>();
-  const uniqueResult: string[] = [];
-
-  for (const issue of result) {
-    if (!seen.has(issue)) {
-      seen.add(issue);
-      uniqueResult.push(issue);
-    }
-  }
-
-  if (uniqueResult.length > MAX_ISSUES) {
-    throw new Error(`Cannot create more than ${MAX_ISSUES} issues at once`);
-  }
-
-  return uniqueResult.length;
 }

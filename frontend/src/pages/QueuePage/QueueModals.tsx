@@ -8,6 +8,7 @@ import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
 import type { QueueFormState, ManualCreatorCredit } from './types'
+import type { ParsedTokenBreakdown } from '../../utils/issueParser'
 
 const CREATOR_ROLE_OPTIONS = [
   'Writer',
@@ -187,8 +188,6 @@ function CreatorInput({
   )
 }
 
-import type { ParsedTokenBreakdown } from '../../utils/issueParser'
-
 interface QueueModalsProps {
   openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | null
   createForm: QueueFormState
@@ -346,9 +345,9 @@ export function QueueModals({
                   Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
                 </p>
                 {issueParseWarnings.length > 0 && (
-                  <div className="space-y-1">
+                  <div className="space-y-1" data-testid="issue-parse-warnings">
                     {issueParseWarnings.map((warning, idx) => (
-                      <p key={idx} className="text-xs text-amber-400 flex items-center gap-1">
+                      <p key={idx} className="text-xs text-[var(--theme-warning)] flex items-start gap-1">
                         <span aria-hidden="true">⚠</span>
                         {warning}
                       </p>
@@ -356,27 +355,28 @@ export function QueueModals({
                   </div>
                 )}
                 {issueParseBreakdown.length > 0 && (
-                  <details className="group">
+                  <details className="group" data-testid="issue-parse-breakdown">
                     <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-400 flex items-center gap-1 select-none">
-                      <span className="transition-transform group-open:rotate-90">▸</span>
+                      <span
+                        aria-hidden="true"
+                        className="transition-transform motion-reduce:transition-none group-open:rotate-90"
+                      >
+                        ▸
+                      </span>
                       Show issue breakdown
                     </summary>
-                    <div className="mt-1 ml-4 space-y-0.5 border-l border-stone-700 pl-2">
+                    <div className="mt-1 ml-4 space-y-0.5 border-l border-[var(--theme-border)] pl-2">
                       {issueParseBreakdown.map((item, idx) => (
                         <div key={idx} className="text-xs flex items-start gap-1">
-                          <span className="text-stone-500 whitespace-nowrap">{item.token}:</span>
+                          <span className="text-stone-500 break-all">{item.token}:</span>
                           <span className="text-stone-400 flex flex-wrap gap-1">
                             {item.parsedIssues.map((issue, i) => (
                               <span
                                 key={i}
-                                className={`px-1.5 py-0.5 rounded text-[10px] ${
-                                  item.type === 'range'
-                                    ? 'bg-blue-500/20 text-blue-300'
-                                    : item.type === 'number'
-                                    ? 'bg-green-500/20 text-green-300'
-                                    : item.type === 'recognized-literal'
-                                    ? 'bg-emerald-500/20 text-emerald-300'
-                                    : 'bg-amber-500/20 text-amber-300'
+                                className={`px-1.5 py-0.5 rounded text-xs ${
+                                  item.type === 'unrecognized-literal'
+                                    ? 'bg-[var(--theme-warning)]/15 text-[var(--theme-warning)]'
+                                    : 'text-stone-300'
                                 }`}
                               >
                                 {issue}

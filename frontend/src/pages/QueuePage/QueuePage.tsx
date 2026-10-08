@@ -305,9 +305,7 @@ export default function QueuePage() {
           onEditSubmit={modals.handleEditSubmit}
           onReactivateSubmit={modals.handleReactivateSubmit}
           onRepositionConfirm={handleRepositionConfirm}
-          onDependencyChanged={async () => {
-            await invalidateAfterQueueMutation(queryClient)
-          }}
+          onDependencyChanged={() => invalidateAfterQueueMutation(queryClient)}
           onCloseCreate={modals.closeCreateModal}
           onCloseEdit={modals.closeEditModal}
           onCloseReactivate={modals.closeReactivateModal}
