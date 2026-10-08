@@ -630,6 +630,11 @@ async def remove_comicvine_identity(
 
     identity = await db.get(ExternalIdentity, mapping.external_identity_id)
 
+    if identity is None:
+        raise ExternalIdentityMappingError(
+            f"External identity not found for issue {issue_id}"
+        )
+
     return IssueIdentityMapping(
         external_identity_id=identity.id,
         provider=identity.provider,
