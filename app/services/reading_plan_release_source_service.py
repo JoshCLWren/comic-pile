@@ -168,11 +168,16 @@ async def update_source(
     source = await repo.get_by_id(db, source_id=source_id, user_id=user_id)
     if source is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Release source not found")
+    # Extract attributes before commit to avoid MissingGreenlet after session expiry.
+    identity_id = source.external_identity_id
     source.enabled = data.enabled
     await db.commit()
-    await db.refresh(source)
-    identity = await _load_identity(db, identity_id=source.external_identity_id)
-    return _to_response(source, identity)
+    identity = await _load_identity(db, identity_id=identity_id)
+    # Re-fetch after commit so attribute access is safe.
+    refreshed = await repo.get_by_id(db, source_id=source_id, user_id=user_id)
+    if refreshed is None:  # pragma: no cover - defensive
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Release source not found")
+    return _to_response(refreshed, identity)
 
 
 async def delete_source(db: AsyncSession, *, source_id: int, user_id: int) -> None:

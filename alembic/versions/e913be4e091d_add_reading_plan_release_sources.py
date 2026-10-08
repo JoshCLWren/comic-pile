@@ -1,7 +1,7 @@
 """Add reading plan release sources (#3116).
 
 Revision ID: e913be4e091d
-Revises: m5d200000001
+Revises: n6e300000001
 Create Date: 2026-10-08
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "e913be4e091d"
-down_revision: Union[str, Sequence[str], None] = "m5d200000001"
+down_revision: Union[str, Sequence[str], None] = "n6e300000001"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
