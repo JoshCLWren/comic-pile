@@ -76,6 +76,7 @@ const baseInputs: ContinuityPlannerEditorInputs = {
   planPending: false,
   groups: [],
   groupsPending: false,
+  threads: [],
   threadsPending: false,
   isInvalidRoute: false,
   addFromCblRequested: false,
@@ -237,5 +238,62 @@ describe('useContinuityPlannerEditor', () => {
     expect(result.current.nodes[0]?.is_checkpoint).toBeFalsy()
     expect(result.current.isDirty).toBe(false)
     expect(result.current.saveError).toBeNull()
+  })
+
+  it('hydrates thread node labels from the thread list (#3263)', async () => {
+    const planWithThreadNode = {
+      ...savedPlan,
+      nodes: [
+        {
+          id: 'thread-4',
+          node_type: 'thread',
+          ref_id: 4,
+          lane_id: 'main',
+          position: 0,
+          label: '',
+        },
+      ],
+    } as ContinuityPlan
+    const { result } = renderHook(
+      ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
+      {
+        wrapper,
+        initialProps: {
+          inputs: { ...baseInputs, planId: 12, planData: planWithThreadNode, threads: [thread] },
+        },
+      },
+    )
+
+    await waitFor(() => expect(result.current.nodes).toHaveLength(1))
+    // Thread title resolves from the thread list instead of "[deleted series]"
+    expect(result.current.nodes[0]?.label).toBe('Mister Miracle')
+  })
+
+  it('falls back to [deleted series] only when the thread is truly gone (#3263)', async () => {
+    const planWithOrphanThread = {
+      ...savedPlan,
+      nodes: [
+        {
+          id: 'thread-999',
+          node_type: 'thread',
+          ref_id: 999,
+          lane_id: 'main',
+          position: 0,
+          label: '',
+        },
+      ],
+    } as ContinuityPlan
+    const { result } = renderHook(
+      ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
+      {
+        wrapper,
+        initialProps: {
+          inputs: { ...baseInputs, planId: 12, planData: planWithOrphanThread, threads: [thread] },
+        },
+      },
+    )
+
+    await waitFor(() => expect(result.current.nodes).toHaveLength(1))
+    expect(result.current.nodes[0]?.label).toBe('[deleted series]')
   })
 })
