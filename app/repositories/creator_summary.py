@@ -375,7 +375,7 @@ async def load_creator_summary_inputs(
     # the same SQL but is deprecated on SQLAlchemy 2.1 and emits
     # ``SADeprecationWarning``; ``postgresql.distinct_on`` applied as a
     # statement extension is the supported spelling.
-        rate_result = await db.execute(
+    rate_result = await db.execute(
         select(Event.issue_id, Event.rating)
         .join(Issue, Issue.id == Event.issue_id)
         .join(Thread, Thread.id == Issue.thread_id)
