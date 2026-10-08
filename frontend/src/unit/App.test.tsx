@@ -58,7 +58,6 @@ vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="histor
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
 vi.mock('../pages/ThreadDetailView', () => ({ default: () => <div data-testid="thread-detail-page">Thread detail</div> }))
 vi.mock('../pages/HelpPage', () => ({ default: () => <div data-testid="help-page">Help</div> }))
-vi.mock('../pages/NotFoundPage', () => ({ default: () => <div data-testid="not-found-page" data-app-shell-ready>Not Found</div> }))
 
 import App, { AuthProvider, AppRoutes, useAuth } from '../App'
 import AppErrorBoundary from '../components/AppErrorBoundary'
@@ -520,26 +519,29 @@ describe('bootstrap shell and route compatibility (issue #3242)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('roll-page')).toBeInTheDocument()
     })
-    expect(screen.queryByTestId('not-found-page')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Page not found' })).not.toBeInTheDocument()
   })
 
-  test('renders not-found page for unknown route with app-shell-ready marker', async () => {
+  test('renders not-found page for unknown route inside an app-shell-ready subtree', async () => {
     renderWithAuth('/nonexistent-path')
 
     await waitFor(() => {
-      expect(screen.getByTestId('not-found-page')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
     })
-    const notFoundPage = screen.getByTestId('not-found-page')
-    expect(notFoundPage).toHaveAttribute('data-app-shell-ready')
-    expect(notFoundPage.textContent).toContain('Not Found')
+    const heading = screen.getByRole('heading', { name: 'Page not found' })
+    expect(heading.closest('[data-app-shell-ready]')).not.toBeNull()
+    expect(heading.textContent).toBe('Page not found')
   })
 
   test('renders not-found page for deep unknown route', async () => {
     renderWithAuth('/unknown/nested/path')
 
     await waitFor(() => {
-      expect(screen.getByTestId('not-found-page')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
     })
+    expect(
+      screen.getByRole('heading', { name: 'Page not found' }).closest('[data-app-shell-ready]'),
+    ).not.toBeNull()
   })
 })
 

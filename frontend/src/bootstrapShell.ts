@@ -1,5 +1,5 @@
 const READY_SELECTOR = '[data-app-shell-ready]'
-const RECONNECTING_DELAY_MS = 8_000
+const SLOW_STATUS_DELAY_MS = 8_000
 const FAILSAFE_MAX_DELAY_MS = 30_000
 
 export interface BootstrapShellLifecycle {
@@ -9,7 +9,7 @@ export interface BootstrapShellLifecycle {
 export function startBootstrapShellLifecycle(
   rootElement: HTMLElement,
   shellElement: HTMLElement | null,
-  reconnectingDelayMs = RECONNECTING_DELAY_MS,
+  slowStatusDelayMs = SLOW_STATUS_DELAY_MS,
   failsafeMaxDelayMs = FAILSAFE_MAX_DELAY_MS,
 ): BootstrapShellLifecycle {
   if (!shellElement) {
@@ -33,24 +33,25 @@ export function startBootstrapShellLifecycle(
   const observer = new MutationObserver(() => {
     if (removeShellWhenReady()) {
       observer.disconnect()
-      window.clearTimeout(reconnectingTimer)
+      window.clearTimeout(slowStatusTimer)
       window.clearTimeout(failsafeTimer)
     }
   })
 
-  const reconnectingTimer = window.setTimeout(() => {
+  const slowStatusTimer = window.setTimeout(() => {
     if (statusElement && shellElement.isConnected) {
-      statusElement.textContent = 'Still waking ComicPile. Your library is safe while services reconnect.'
-      statusElement.dataset.state = 'reconnecting'
+      statusElement.textContent =
+        'Still loading ComicPile. This is taking longer than usual. Your library is safe.'
+      statusElement.dataset.state = 'slow'
     }
-  }, reconnectingDelayMs)
+  }, slowStatusDelayMs)
 
   const failsafeTimer = window.setTimeout(() => {
     if (shellElement.isConnected) {
       shellElement.remove()
     }
     observer.disconnect()
-    window.clearTimeout(reconnectingTimer)
+    window.clearTimeout(slowStatusTimer)
   }, failsafeMaxDelayMs)
 
   observer.observe(rootElement, { childList: true, subtree: true })
@@ -58,7 +59,7 @@ export function startBootstrapShellLifecycle(
   return {
     disconnect: () => {
       observer.disconnect()
-      window.clearTimeout(reconnectingTimer)
+      window.clearTimeout(slowStatusTimer)
       window.clearTimeout(failsafeTimer)
     },
   }
