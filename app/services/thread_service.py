@@ -582,9 +582,30 @@ async def update_thread(
         if not thread.uses_issue_tracking():
             thread.issues_remaining = thread_data.issues_remaining
             if thread.issues_remaining == 0:
+                old_pos = thread.queue_position
                 thread.status = "completed"
+                thread.queue_position = 0
+                if old_pos > 0:
+                    from sqlalchemy import update
+                    from app.models.thread import Thread
+                    await db.execute(
+                        update(Thread)
+                        .where(Thread.user_id == user_id)
+                        .where(Thread.status == "active")
+                        .where(Thread.queue_position > old_pos)
+                        .values(queue_position=Thread.queue_position - 1)
+                    )
             else:
-                thread.status = "active"
+                if thread.status == "completed":
+                    thread.status = "active"
+                    await db.execute(
+                        update(Thread)
+                        .where(Thread.user_id == user_id)
+                        .where(Thread.status == "active")
+                        .where(Thread.id != thread.id)
+                        .values(queue_position=Thread.queue_position + 1)
+                    )
+                    thread.queue_position = 1
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
     if thread_data.manual_creator_credits is not None:

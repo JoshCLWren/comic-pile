@@ -470,10 +470,22 @@ async def rate_thread(
                     else:
                         thread.issues_remaining = await thread.get_issues_remaining(db)
                 else:
+                    old_pos = thread.queue_position
                     thread.next_unread_issue_id = None
                     thread.reading_progress = "completed"
                     thread.status = "completed"
                     thread.issues_remaining = 0
+                    thread.queue_position = 0
+                    if old_pos > 0:
+                        from sqlalchemy import update
+                        from app.models.thread import Thread
+                        await db.execute(
+                            update(Thread)
+                            .where(Thread.user_id == user_id)
+                            .where(Thread.status == "active")
+                            .where(Thread.queue_position > old_pos)
+                            .values(queue_position=Thread.queue_position - 1)
+                        )
 
         thread_issues_remaining = thread.issues_remaining
     else:
@@ -509,13 +521,19 @@ async def rate_thread(
 
     should_complete_thread = thread_issues_remaining <= 0
     if should_complete_thread:
+        old_pos = thread.queue_position
         thread.status = "completed"
-        queue_position_changes = await move_to_back(
-            thread_id,
-            user_id,
-            db,
-            commit=False,
-        )
+        thread.queue_position = 0
+        if old_pos > 0:
+            from sqlalchemy import update
+            from app.models.thread import Thread
+            await db.execute(
+                update(Thread)
+                .where(Thread.user_id == user_id)
+                .where(Thread.status == "active")
+                .where(Thread.queue_position > old_pos)
+                .values(queue_position=Thread.queue_position - 1)
+            )
     elif rate_data.rating >= rating_threshold:
         queue_position_changes = await move_to_front(
             thread_id,

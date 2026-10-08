@@ -265,7 +265,17 @@ async def create_issues(
     tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
 
     if tracking_state.next_unread_issue_id is None:
+        old_pos = thread.queue_position
         thread.status = "completed"
+        thread.queue_position = 0
+        if old_pos > 0:
+            await db.execute(
+                update(Thread)
+                .where(Thread.user_id == current_user_id)
+                .where(Thread.status == "active")
+                .where(Thread.queue_position > old_pos)
+                .values(queue_position=Thread.queue_position - 1)
+            )
     elif was_unmigrated or not had_next_unread_issue:
         if not was_unmigrated and thread.status == "completed":
             # Shift other active threads in queue
@@ -416,7 +426,17 @@ async def delete_issue(
 
     state = apply_thread_issue_tracking_state(thread, remaining_issues)
     if state.issues_remaining == 0:
+        old_pos = thread.queue_position
         thread.status = "completed"
+        thread.queue_position = 0
+        if old_pos > 0:
+            await db.execute(
+                update(Thread)
+                .where(Thread.user_id == current_user_id)
+                .where(Thread.status == "active")
+                .where(Thread.queue_position > old_pos)
+                .values(queue_position=Thread.queue_position - 1)
+            )
     elif thread.status == "completed":
         thread.status = "active"
 
@@ -528,10 +548,20 @@ async def mark_issue_read(
         thread.reading_progress = "in_progress"
         thread.issues_remaining = await thread.get_issues_remaining(db)
     else:
+        old_pos = thread.queue_position
         thread.next_unread_issue_id = None
         thread.reading_progress = "completed"
         thread.issues_remaining = 0
         thread.status = "completed"
+        thread.queue_position = 0
+        if old_pos > 0:
+            await db.execute(
+                update(Thread)
+                .where(Thread.user_id == current_user_id)
+                .where(Thread.status == "active")
+                .where(Thread.queue_position > old_pos)
+                .values(queue_position=Thread.queue_position - 1)
+            )
 
     event = Event(
         type="issue_read",
@@ -635,7 +665,17 @@ async def bulk_mark_issue_read(
         adopted_issues = await issue_repository.issues_ordered(db, thread_id)
         tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
         if tracking_state.next_unread_issue_id is None:
+            old_pos = thread.queue_position
             thread.status = "completed"
+            thread.queue_position = 0
+            if old_pos > 0:
+                await db.execute(
+                    update(Thread)
+                    .where(Thread.user_id == current_user_id)
+                    .where(Thread.status == "active")
+                    .where(Thread.queue_position > old_pos)
+                    .values(queue_position=Thread.queue_position - 1)
+                )
         else:
             if thread.status == "completed":
                 thread.status = "active"
