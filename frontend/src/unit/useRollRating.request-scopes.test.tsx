@@ -61,7 +61,7 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     overrideErrorMessage: '',
     snoozedExpanded: false,
     skippedExpanded: false,
-    blockedExpanded: false,
+    staleExpanded: false,
     isDieModalOpen: false,
     isSetCurrentIssueOpen: false,
     selectedThread: null,

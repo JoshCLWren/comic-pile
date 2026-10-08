@@ -239,7 +239,7 @@ describe('ThreadPool Component', () => {
           onReadStale={() => {}}
           onToggleSnoozed={() => {}}
           onToggleSkipped={onToggleSkipped}
-          onToggleStale={() => {}}
+          onToggleStale={vi.fn()}
           onToggleBlocked={() => {}}
           onShuffle={() => {}}
           unsnoozeIsPending={false}

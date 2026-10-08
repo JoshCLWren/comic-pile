@@ -143,6 +143,7 @@ describe('ThreadPool', () => {
       skippedThreads={[]}
       skippedExpanded={false}
       blockedExpanded
+      staleExpanded={false}
       unsnoozeIsPending={false}
       unskipIsPending={false}
       shuffleIsPending={false}
