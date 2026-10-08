@@ -4,7 +4,6 @@ import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
 from functools import wraps
 
 logger = logging.getLogger(__name__)
