@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -53,6 +54,24 @@ const callbacks = () => ({
   onToggleSkipped: vi.fn(), onToggleStale: vi.fn(), onToggleBlocked: vi.fn(), onShuffle: vi.fn(),
 })
 
+type ThreadPoolProps = Parameters<typeof ThreadPool>[0]
+
+// SAFETY: staleExpanded is controlled by RollPage state, so a static prop can never expand the
+// section. This harness owns the same toggle state the real page owns, letting the test drive the
+// collapse/expand interaction instead of asserting against a frozen prop.
+function StaleSectionHarness(props: Omit<ThreadPoolProps, 'staleExpanded' | 'onToggleStale'>) {
+  const [staleExpanded, setStaleExpanded] = useState(false)
+  return (
+    <MemoryRouter>
+      <ThreadPool
+        {...props}
+        staleExpanded={staleExpanded}
+        onToggleStale={() => setStaleExpanded((value) => !value)}
+      />
+    </MemoryRouter>
+  )
+}
+
 describe('ThreadPool', () => {
   it('renders empty, blocked, pool, stale, and snoozed states', async () => {
     const empty = callbacks()
@@ -81,7 +100,7 @@ describe('ThreadPool', () => {
     const actions = callbacks()
     // SAFETY: Synthetic stale thread with days field exercises the stale rendering branch; the type widens Thread to the stale shape.
     const stale = cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, title: 'Stale Saga', days: 9 })
-    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    render(<StaleSectionHarness pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} />)
     await userEvent.setup().click(screen.getByRole('button', { name: /series waiting for earlier issues/i }))
     expect(screen.getByText('Prerequisite')).toBeInTheDocument()
     const hiddenBlockerLink = screen.getByRole('link', { name: 'Open Saga' })
@@ -126,11 +145,11 @@ describe('ThreadPool', () => {
   })
 
   it('pluralizes multiple blocked threads and triggers read-stale on space key', async () => {
-    // L158 `blockedThreads.length !== 1 ? 's' : ''` and L189 `e.key === 'Enter' || e.key === ' '`
+    // L158 `blockedThreads.length !== 1 ? 's' : ''` plus the stale roll button's native Space activation
     const actions = callbacks()
     const stale = { ...thread, title: 'Stale Saga', days: 9 }
     // SAFETY: Synthetic stale thread cast widens Thread to the stale shape with days for the pluralization test.
-    render(<MemoryRouter><ThreadPool
+    render(<StaleSectionHarness
       pool={[thread]}
       blockedThreads={[{ ...thread, id: 2, title: 'Blocked A' }, { ...thread, id: 3, title: 'Blocked B' }]}
       blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }}
@@ -143,18 +162,20 @@ describe('ThreadPool', () => {
       skippedThreads={[]}
       skippedExpanded={false}
       blockedExpanded
-      staleExpanded={false}
       unsnoozeIsPending={false}
       unskipIsPending={false}
       shuffleIsPending={false}
       {...actions}
-    /></MemoryRouter>)
+    />)
     expect(screen.getByText(/2 series waiting for earlier issues/)).toBeInTheDocument()
     // SAFETY: the stale section is collapsed by default; the roll affordance is only
     // reachable after expanding it, so toggle it open first.
     await userEvent.setup().click(screen.getByRole('button', { name: /series you haven't opened recently/i }))
     const staleRollButton = screen.getByRole('button', { name: /roll this series now/i })
-    fireEvent.keyDown(staleRollButton, { key: ' ' })
+    // SAFETY: the roll control is a native <button>, so Space activates it on keyup the way a
+    // browser would; drive the real activation path instead of a bare keydown event.
+    staleRollButton.focus()
+    await userEvent.keyboard(' ')
     expect(actions.onReadStale).toHaveBeenCalledWith(thread.id)
   })
 })
