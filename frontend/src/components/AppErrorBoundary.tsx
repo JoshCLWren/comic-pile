@@ -28,7 +28,7 @@ export default class AppErrorBoundary extends Component<
     }
 
     return (
-      <main className="min-h-screen bg-stone-50 px-6 py-16 text-stone-900">
+      <main className="min-h-screen bg-stone-50 px-6 py-16 text-stone-900" data-app-shell-ready>
         <div className="mx-auto max-w-md rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
           <h1 className="text-xl font-semibold">ComicPile needs to reconnect</h1>
           <p className="mt-3 text-sm text-stone-600">

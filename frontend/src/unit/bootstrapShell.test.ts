@@ -30,7 +30,7 @@ describe('startBootstrapShellLifecycle', () => {
     expect(document.getElementById('bootstrap-shell')).toBeNull()
   })
 
-  it('changes to a reconnecting message when bootstrap times out', () => {
+  it('reports a slow start without claiming the backend is reconnecting', () => {
     // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
     // SAFETY: the queried node is the element the component rendered under test
@@ -40,8 +40,10 @@ describe('startBootstrapShellLifecycle', () => {
     vi.advanceTimersByTime(100)
 
     const status = shell.querySelector<HTMLElement>('[data-bootstrap-status]')
-    expect(status?.dataset.state).toBe('reconnecting')
-    expect(status?.textContent).toContain('Still waking ComicPile')
+    expect(status?.dataset.state).toBe('slow')
+    expect(status?.textContent).toContain('taking longer than usual')
+    expect(status?.textContent).not.toMatch(/reconnect/i)
+    expect(status?.textContent).not.toMatch(/unavailable|outage|down/i)
     expect(document.getElementById('bootstrap-shell')).toBe(shell)
   })
 
@@ -84,7 +86,7 @@ describe('startBootstrapShellLifecycle', () => {
     expect(() => lifecycle.disconnect()).not.toThrow()
   })
 
-  it('disconnects observation and cancels the reconnecting timer', async () => {
+  it('disconnects observation and cancels the delayed-status timer', async () => {
     // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
     // SAFETY: the queried node is the element the component rendered under test
@@ -133,5 +135,49 @@ describe('startBootstrapShellLifecycle', () => {
 
     expect(document.getElementById('bootstrap-shell')).toBeNull()
     expect(document.querySelector('.bootstrap-shell__nav')).toBeNull()
+  })
+
+  it('removes the shell via failsafe timeout when ready marker never appears', () => {
+    // SAFETY: the queried node is the element the component rendered under test
+    const root = document.getElementById('root') as HTMLElement
+    // SAFETY: the queried node is the element the component rendered under test
+    const shell = document.getElementById('bootstrap-shell') as HTMLElement
+
+    startBootstrapShellLifecycle(root, shell, 100, 200)
+    vi.advanceTimersByTime(200)
+
+    expect(document.getElementById('bootstrap-shell')).toBeNull()
+  })
+
+  it('removes the shell via failsafe when rendered content lacks the ready marker', async () => {
+    // SAFETY: the queried node is the element the component rendered under test
+    const root = document.getElementById('root') as HTMLElement
+    // SAFETY: the queried node is the element the component rendered under test
+    const shell = document.getElementById('bootstrap-shell') as HTMLElement
+
+    startBootstrapShellLifecycle(root, shell, 100, 200)
+    root.innerHTML = '<main class="min-h-screen">Still resolving</main>'
+    await Promise.resolve()
+
+    expect(document.getElementById('bootstrap-shell')).toBe(shell)
+
+    vi.advanceTimersByTime(200)
+
+    expect(document.getElementById('bootstrap-shell')).toBeNull()
+  })
+
+  it('cancels failsafe when ready marker appears before failsafe timeout', async () => {
+    // SAFETY: the queried node is the element the component rendered under test
+    const root = document.getElementById('root') as HTMLElement
+    // SAFETY: the queried node is the element the component rendered under test
+    const shell = document.getElementById('bootstrap-shell') as HTMLElement
+
+    startBootstrapShellLifecycle(root, shell, 100, 200)
+    vi.advanceTimersByTime(100)
+    root.innerHTML = '<main data-app-shell-ready>Ready</main>'
+    await Promise.resolve()
+    vi.advanceTimersByTime(200)
+
+    expect(document.getElementById('bootstrap-shell')).toBeNull()
   })
 })

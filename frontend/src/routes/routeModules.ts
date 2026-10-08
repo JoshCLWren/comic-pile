@@ -42,6 +42,7 @@ export const routeModules = {
   identityInbox: () => import('../pages/IdentityInboxPage'),
   landing: () => import('../pages/LandingPage'),
   demoRoll: () => import('../pages/DemoRollPage'),
+  notFound: () => import('../pages/NotFoundPage'),
 } as const satisfies Record<string, () => Promise<RouteModule>>
 
 export function lazyRoute<K extends RouteModuleKey>(

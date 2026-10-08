@@ -69,6 +69,7 @@ const ResetPasswordPage = lazyRoute('resetPassword')
 const IdentityInboxPage = lazyRoute('identityInbox')
 const LandingPage = lazyRoute('landing')
 const DemoRollPage = lazyRoute('demoRoll')
+const NotFoundPage = lazyRoute('notFound')
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient()
@@ -452,6 +453,17 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return children
 }
 
+function NotFoundRoute({ children }: { children: ReactNode }) {
+  const { authState } = useAuth()
+  
+  if (authState.isLoading) {
+    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Loading...</div>
+  }
+  
+  // For both authenticated and unauthenticated users, show the NotFoundPage
+  return children
+}
+
 function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
   const { authState } = useAuth()
 
@@ -526,6 +538,7 @@ function AppRoutes() {
         <Route path="/demo" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><DemoRollPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
+        <Route path="/roll" element={<Navigate to="/" replace />} />
         <Route path="/" element={<RootRoute onBugReportSubmit={submit} />} />
         <Route path="/queue" element={
           <ProtectedRoute>
@@ -662,6 +675,13 @@ function AppRoutes() {
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
+        } />
+        <Route path="*" element={
+          <NotFoundRoute>
+            <PublicLayout onBugReportSubmit={submit}>
+              <NotFoundPage />
+            </PublicLayout>
+          </NotFoundRoute>
         } />
       </Routes>
     </Suspense>
