@@ -464,46 +464,46 @@ export default function RollPage() {
 
         {state.isRatingView && <RollFooter />}
 
-         <RollModals
-           showMigrationDialog={state.showMigrationDialog}
-           threadToMigrate={state.threadToMigrate}
-           onMigrationComplete={rating.handleMigrationComplete}
-           onMigrationSkip={rating.handleMigrationSkip}
-           onMigrationClose={rating.handleMigrationClose}
-           showSimpleMigration={state.showSimpleMigration}
-           activeRatingThread={state.activeRatingThread}
-           onSimpleMigrationComplete={rating.handleSimpleMigrationComplete}
-           onCloseSimpleMigration={() => state.setShowSimpleMigration(false)}
-           isOverrideOpen={state.isOverrideOpen}
-           overrideThreads={modals.overrideThreads}
-           overrideThreadId={state.overrideThreadId}
-           onOverrideThreadIdChange={state.setOverrideThreadId}
-           overrideErrorMessage={state.overrideErrorMessage}
-           onSubmitOverride={modals.handleOverrideSubmit}
-           overridePending={overrideMutation.isPending}
-           snoozedThreads={snoozedThreads}
-           onCloseOverride={modals.closeOverrideModal}
-           isDieModalOpen={state.isDieModalOpen}
-           onCloseDieModal={() => state.setIsDieModalOpen(false)}
-           manualDie={bootstrap.manual_die}
-           currentDie={state.currentDie}
-           onSetDie={actions.handleSetDie}
-           onClearManualDie={actions.handleClearManualDie}
-           setDiePending={setDieMutation.isPending}
-           clearManualDiePending={clearManualDieMutation.isPending}
-           isActionSheetOpen={state.isActionSheetOpen}
-           selectedThread={state.selectedThread}
-           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
-           onAction={actions.handleAction}
-           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
-           onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
-           onSetCurrentIssue={handleSetCurrentIssue}
-           isShuffleOpen={modals.isShuffleOpen}
-           onShuffleConfirm={actions.performShuffle}
-           onShuffleCancel={() => modals.setIsShuffleOpen(false)}
-           shufflePending={shuffleQueueMutation.isPending}
-           seriesCount={bootstrap?.total_active_series ?? 0}
-         />
+        <RollModals
+          showMigrationDialog={state.showMigrationDialog}
+          threadToMigrate={state.threadToMigrate}
+          onMigrationComplete={rating.handleMigrationComplete}
+          onMigrationSkip={rating.handleMigrationSkip}
+          onMigrationClose={rating.handleMigrationClose}
+          showSimpleMigration={state.showSimpleMigration}
+          activeRatingThread={state.activeRatingThread}
+          onSimpleMigrationComplete={rating.handleSimpleMigrationComplete}
+          onCloseSimpleMigration={() => state.setShowSimpleMigration(false)}
+          isOverrideOpen={state.isOverrideOpen}
+          overrideThreads={modals.overrideThreads}
+          overrideThreadId={state.overrideThreadId}
+          onOverrideThreadIdChange={state.setOverrideThreadId}
+          overrideErrorMessage={state.overrideErrorMessage}
+          onSubmitOverride={modals.handleOverrideSubmit}
+          overridePending={overrideMutation.isPending}
+          snoozedThreads={snoozedThreads}
+          onCloseOverride={modals.closeOverrideModal}
+          isDieModalOpen={state.isDieModalOpen}
+          onCloseDieModal={() => state.setIsDieModalOpen(false)}
+          manualDie={bootstrap.manual_die}
+          currentDie={state.currentDie}
+          onSetDie={actions.handleSetDie}
+          onClearManualDie={actions.handleClearManualDie}
+          setDiePending={setDieMutation.isPending}
+          clearManualDiePending={clearManualDieMutation.isPending}
+          isActionSheetOpen={state.isActionSheetOpen}
+          selectedThread={state.selectedThread}
+          onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
+          onAction={actions.handleAction}
+          isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
+          onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
+          onSetCurrentIssue={handleSetCurrentIssue}
+          isShuffleOpen={modals.isShuffleOpen}
+          onShuffleConfirm={actions.performShuffle}
+          onShuffleCancel={() => modals.setIsShuffleOpen(false)}
+          shufflePending={shuffleQueueMutation.isPending}
+          seriesCount={bootstrap?.total_active_series ?? 0}
+        />
 
 
         <ModeSelectorSheet

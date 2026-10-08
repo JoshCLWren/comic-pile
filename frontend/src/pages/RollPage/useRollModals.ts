@@ -161,10 +161,10 @@ export function useRollModals({
     setOverrideErrorMessage('')
   }
 
-  return { 
-    overrideThreads, 
-    handleOverrideSubmit, 
-    openOverrideModal, 
+  return {
+    overrideThreads,
+    handleOverrideSubmit,
+    openOverrideModal,
     closeOverrideModal,
     isShuffleOpen,
     setIsShuffleOpen,

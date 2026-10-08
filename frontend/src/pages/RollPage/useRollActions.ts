@@ -238,8 +238,9 @@ export function useRollActions({
       state.setIsShuffleOpen(false)
     }
   }
- 
+
   function handleRoll() {
+    if (isRolling) return
     navigator.vibrate?.(15)
     if (bootstrap?.pending_thread_id && !suppressPendingAutoOpenRef.current) {
       const pendingId = Number(bootstrap.pending_thread_id)

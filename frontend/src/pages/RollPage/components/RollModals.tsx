@@ -340,27 +340,27 @@ export function RollModals({
       </Modal>
 
        {isSetCurrentIssueOpen && selectedThread && (
-         <Modal
-           isOpen={isSetCurrentIssueOpen}
-           title={`Set Current Issue: ${selectedThread.title}`}
-           onClose={onCloseSetCurrentIssue}
-         >
-           <SetCurrentIssueModal
-             onSubmit={onSetCurrentIssue}
-             onClose={onCloseSetCurrentIssue}
-           />
-         </Modal>
-       )}
- 
-       {isShuffleOpen && (
-         <ShuffleQueueDialog
-           isOpen={isShuffleOpen}
-           seriesCount={seriesCount}
-           isPending={shufflePending}
-           onConfirm={onShuffleConfirm}
-           onCancel={onShuffleCancel}
-         />
-       )}
-     </>
-   )
- }
+        <Modal
+          isOpen={isSetCurrentIssueOpen}
+          title={`Set Current Issue: ${selectedThread.title}`}
+          onClose={onCloseSetCurrentIssue}
+        >
+          <SetCurrentIssueModal
+            onSubmit={onSetCurrentIssue}
+            onClose={onCloseSetCurrentIssue}
+          />
+        </Modal>
+      )}
+
+      {isShuffleOpen && (
+        <ShuffleQueueDialog
+          isOpen={isShuffleOpen}
+          seriesCount={seriesCount}
+          isPending={shufflePending}
+          onConfirm={onShuffleConfirm}
+          onCancel={onShuffleCancel}
+        />
+      )}
+    </>
+  )
+}
