@@ -91,7 +91,7 @@ export function ThreadPool({
            onClick={onShuffle}
            disabled={shuffleIsPending || pool.length < 2}
            aria-describedby="shuffle-queue-description"
-           className="h-8 px-3 rounded-lg border border-rose-500/50 bg-rose-500/10 text-[10px] font-black uppercase tracking-widest text-rose-400 hover:bg-rose-500/20 disabled:opacity-50 transition-colors"
+            className="h-8 px-3 rounded-lg border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 text-[10px] font-black uppercase tracking-widest text-[var(--theme-danger)] hover:bg-[var(--theme-danger)]/20 disabled:opacity-50 transition-colors"
          >
            Shuffle queue
          </button>
