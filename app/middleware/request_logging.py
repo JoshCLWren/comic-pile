@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request
 from app.performance_budgets import (
     PerformanceWarning,
     REQUEST_TIMEOUT_MS,
+    REQUEST_WARNING_MS,
     get_performance_budget_manager,
 )
 from app.performance_diagnostics import (
@@ -35,7 +36,6 @@ from app.traffic_metrics import record_route_hit, resolve_route_template
 logger = logging.getLogger(__name__)
 
 MAX_LOG_BODY_SIZE = 1000
-_DEFAULT_SLOW_REQUEST_THRESHOLD_MS = 1000.0
 
 
 def contains_sensitive_keys(body_json: dict | list) -> bool:
@@ -168,21 +168,29 @@ def _sanitize_log_path(path: str) -> str:
 
 
 def _slow_request_threshold_ms() -> float:
-    """Resolve the threshold for structured slow-request warnings.
-    
-    Note: This is deprecated. Use the new performance budget system with
-    REQUEST_WARNING_MS (500ms) and REQUEST_TIMEOUT_MS (1000ms) constants.
+    """Resolve the warm-request structured warning threshold.
+
+    The frozen contract in issue #3243 begins ordinary warm warnings at 500 ms.
+    ``SLOW_REQUEST_THRESHOLD_MS`` may lower that threshold for operators who
+    want more warning coverage, but it can never raise it above the contract
+    ceiling, and an unparseable or non-positive value falls back to the
+    contract default. The 1000 ms violation threshold is not configurable at
+    all, so a warning cannot be converted into a larger timeout.
+
+    Returns:
+        Resolved warning threshold in milliseconds.
     """
     raw_value = os.getenv("SLOW_REQUEST_THRESHOLD_MS")
     if raw_value is None:
-        # Default to 500ms for warnings instead of 1000ms
-        return 500.0
+        return float(REQUEST_WARNING_MS)
 
     try:
         parsed = float(raw_value)
     except ValueError:
-        return 500.0
-    return parsed if parsed > 0 else 500.0
+        return float(REQUEST_WARNING_MS)
+    if parsed <= 0:
+        return float(REQUEST_WARNING_MS)
+    return min(parsed, float(REQUEST_WARNING_MS))
 
 
 def _server_timing_header(total_ms: float) -> str:
@@ -308,8 +316,8 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
 
             log_data = sanitize_for_logging(log_data, environment)
 
-            # Check performance budgets for requests
-            performance_context = {
+            slow_request_threshold = _slow_request_threshold_ms()
+            performance_context: dict[str, object] = {
                 "route": log_path,
                 "method": request.method,
                 "request_id": request_id,
@@ -317,17 +325,21 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "database_queries": diagnostics.database_queries,
                 "database_time_ms": round(diagnostics.database_time_ms, 2),
                 "deployment_id": startup.deployment_id,
+                "warning_budget_ms": slow_request_threshold,
+                "violation_budget_ms": REQUEST_TIMEOUT_MS,
             }
-            
-            slow_request_threshold = _slow_request_threshold_ms()
-            
-            if process_time_ms >= REQUEST_TIMEOUT_MS:  # Performance budget violation (1000ms)
+            operation = f"request.{log_path}"
+
+            # Frozen contract (issue #3243): a warm request at or above 1000 ms is
+            # an error-level budget violation that still completes, because a
+            # running user request is not killed for crossing a clock.
+            if process_time_ms >= REQUEST_TIMEOUT_MS:
                 violation = PerformanceWarning(
-                    operation=f"request.{log_path}",
+                    operation=operation,
                     elapsed_ms=process_time_ms,
                     budget_type="request",
                     context=performance_context,
-                    severity="violation"
+                    severity="violation",
                 )
                 budget_manager.record_violation(violation)
                 logger.error(
@@ -342,13 +354,13 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                         "level": "ERROR",
                     },
                 )
-            elif process_time_ms >= slow_request_threshold:  # Performance warning (configurable, default 500ms)
+            elif process_time_ms >= slow_request_threshold:
                 warning = PerformanceWarning(
-                    operation=f"request.{log_path}",
+                    operation=operation,
                     elapsed_ms=process_time_ms,
                     budget_type="request",
                     context=performance_context,
-                    severity="warning"
+                    severity="warning",
                 )
                 budget_manager.record_warning(warning)
                 logger.warning(

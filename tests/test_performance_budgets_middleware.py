@@ -1,12 +1,24 @@
 """Tests for performance budget middleware integration."""
 
+import os
+from dataclasses import replace
 from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.middleware.request_logging import add_request_logging_middleware
-from app.performance_budgets import get_performance_budget_manager
+from app.middleware.request_logging import (
+    _slow_request_threshold_ms,
+    add_request_logging_middleware,
+)
+from app.performance_budgets import (
+    REQUEST_WARNING_MS,
+    StartupBudgetError,
+    get_performance_budget_manager,
+)
+from app.startup_diagnostics import StartupSnapshot, startup_event_snapshot
 
 
 class TestPerformanceBudgetMiddleware:
@@ -183,52 +195,136 @@ class TestPerformanceBudgetAppIntegration:
         async def error_endpoint():
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Not found")
-        
+
         response = self.client.get("/error-test")
-        
+
         assert response.status_code == 404
-        
+
         # Error responses should still be tracked for performance
         budget_manager = get_performance_budget_manager()
         # Should not have performance violations for a 404
         assert len(budget_manager.get_request_violations()) == 0
 
+    def test_non_production_startup_degrades_instead_of_failing(self):
+        """A long-lived test process records telemetry but still becomes ping-ready."""
+        with TestClient(self.app) as client:
+            assert client.get("/api/ping").status_code == 200
+
+
+class TestStartupHardBudgetEnforcement:
+    """Test that crossing the total startup budget fails production startup."""
+
+    def test_production_startup_fails_when_hard_budget_crossed(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A production process past 2.5 s fails initialization instead of serving."""
+        from app.config import clear_settings_cache
+        from app.performance_budgets import STARTUP_TIMEOUT_MS
+
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("CORS_ORIGINS", "https://example.com")
+        clear_settings_cache()
+        get_performance_budget_manager().clear_all()
+
+        observed_ms = 72420.56
+
+        def _slow_snapshot() -> StartupSnapshot:
+            base = startup_event_snapshot()
+            return replace(base, process_age_ms=observed_ms, startup_duration_ms=observed_ms)
+
+        monkeypatch.setattr("app.startup_diagnostics.startup_event_snapshot", _slow_snapshot)
+
+        app = create_app(serve_frontend=False, defer_router_imports=True)
+        try:
+            with pytest.raises(StartupBudgetError) as exc_info, TestClient(app):
+                pass
+
+            assert exc_info.value.operation == "startup.readiness"
+            assert exc_info.value.timeout_ms == STARTUP_TIMEOUT_MS
+            assert exc_info.value.elapsed_ms == observed_ms
+            assert get_performance_budget_manager().violation_counts_by_operation() == {
+                "startup.readiness": 1
+            }
+        finally:
+            clear_settings_cache()
+
+    def test_production_startup_succeeds_inside_hard_budget(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Healthy production startup inside 2.5 s still becomes ping-ready."""
+        from app.config import clear_settings_cache
+
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("CORS_ORIGINS", "https://example.com")
+        clear_settings_cache()
+        get_performance_budget_manager().clear_all()
+
+        observed_ms = 1603.92
+
+        def _healthy_snapshot() -> StartupSnapshot:
+            base = startup_event_snapshot()
+            return replace(base, process_age_ms=observed_ms, startup_duration_ms=observed_ms)
+
+        monkeypatch.setattr("app.startup_diagnostics.startup_event_snapshot", _healthy_snapshot)
+
+        app = create_app(serve_frontend=False, defer_router_imports=True)
+        try:
+            with TestClient(app) as client:
+                assert client.get("/api/ping").status_code == 200
+
+            assert get_performance_budget_manager().get_startup_violations() == []
+        finally:
+            clear_settings_cache()
+
 
 class TestPerformanceBudgetConfiguration:
     """Test performance budget configuration and environment handling."""
-    
-    def test_deprecated_slow_request_threshold(self):
-        """Test that the deprecated SLOW_REQUEST_THRESHOLD_MS still works."""
-        with patch.dict('os.environ', {'SLOW_REQUEST_THRESHOLD_MS': '750'}):
-            from app.middleware.request_logging import _slow_request_threshold_ms
-            
-            threshold = _slow_request_threshold_ms()
-            # Should return the value from environment
-            assert threshold == 750.0
-    
+
+    def test_slow_request_threshold_defaults_to_contract_ceiling(self):
+        """Warm warnings begin at 500 ms when nothing is configured."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SLOW_REQUEST_THRESHOLD_MS", None)
+            assert _slow_request_threshold_ms() == float(REQUEST_WARNING_MS)
+
+    def test_slow_request_threshold_can_tighten_below_contract(self):
+        """Operators may lower the warning threshold for more coverage."""
+        with patch.dict(os.environ, {"SLOW_REQUEST_THRESHOLD_MS": "250"}):
+            assert _slow_request_threshold_ms() == 250.0
+
+    def test_slow_request_threshold_cannot_exceed_contract_ceiling(self):
+        """A configured threshold cannot relax the 500 ms contract."""
+        with patch.dict(os.environ, {"SLOW_REQUEST_THRESHOLD_MS": "5000"}):
+            assert _slow_request_threshold_ms() == float(REQUEST_WARNING_MS)
+
+    def test_invalid_slow_request_threshold_falls_back_to_contract(self):
+        """Unparseable and non-positive values fall back to the contract default."""
+        for raw_value in ("not-a-number", "0", "-1"):
+            with patch.dict(os.environ, {"SLOW_REQUEST_THRESHOLD_MS": raw_value}):
+                assert _slow_request_threshold_ms() == float(REQUEST_WARNING_MS)
+
     def test_environment_specific_behavior(self):
-        """Test that behavior changes based on environment."""
-        # Test production environment
+        """Performance logging works in every environment."""
         app_prod = FastAPI()
         add_request_logging_middleware(app_prod, "production")
         client_prod = TestClient(app_prod)
-        
+
         @app_prod.get("/prod-test")
         async def prod_endpoint():
             return {"message": "production test"}
-        
+
         response = client_prod.get("/prod-test")
         assert response.status_code == 200
-        
-        # Test development environment
+
         app_dev = FastAPI()
         add_request_logging_middleware(app_dev, "development")
         client_dev = TestClient(app_dev)
-        
+
         @app_dev.get("/dev-test")
         async def dev_endpoint():
             return {"message": "development test"}
-        
+
         response = client_dev.get("/dev-test")
         assert response.status_code == 200
 

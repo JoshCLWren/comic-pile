@@ -37,14 +37,25 @@ from app.middleware.request_logging import add_request_logging_middleware
 from app.performance_budgets import (
     PerformanceWarning,
     StartupBudgetError,
-    STARTUP_WARNING_MS,
-    STARTUP_TIMEOUT_MS,
+    enforce_startup_budget,
     get_performance_budget_manager,
     run_bounded,
 )
 from app.safe_logging import safe_connection_metadata
 
 logger = logging.getLogger(__name__)
+
+# Per-operation startup budgets (issue #3243). Every readiness-critical await on
+# the ping-ready path is bounded well below the 2500 ms total startup budget, so
+# the offending operation is named and cancelled long before the process could
+# reach a pathological cold start.
+_NEON_STARTUP_WARNING_MS = 150
+_NEON_STARTUP_TIMEOUT_MS = 500
+# Heavy database initialization runs on the first non-ping request, not on the
+# ping-ready path, so it carries its own separately budgeted deadline. Its retry
+# backoff can legitimately exceed the ping-readiness budget.
+_HEAVY_INIT_WARNING_MS = 3000
+_HEAVY_INIT_TIMEOUT_MS = 5000
 
 
 # SEO indexability policy (issue #3065). Only the public landing page is a
@@ -767,25 +778,25 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         """
         if _heavy_state["initialized"]:
             return
-            
+
         async with _heavy_lock:
             if _heavy_state["initialized"]:
                 return
             if _heavy_state["in_progress"]:
                 return
             _heavy_state["in_progress"] = True
-            
+
             try:
-                # Initialize database with performance budget
+                # Initialize database under its own separately budgeted deadline.
                 await run_bounded(
                     operation="startup.database_initialization",
                     coroutine=init_database(app_settings.environment),
-                    warning_ms=3000,  # 3 second warning for database init
-                    timeout_ms=5000,  # 5 second hard timeout for database init
+                    warning_ms=_HEAVY_INIT_WARNING_MS,
+                    timeout_ms=_HEAVY_INIT_TIMEOUT_MS,
                     context={
                         "environment": app_settings.environment,
-                        "deployment_id": getattr(app_settings, 'deployment_id', 'unknown')
-                    }
+                        "deployment_id": getattr(app_settings, "deployment_id", "unknown"),
+                    },
                 )
 
                 from app.startup_diagnostics import mark_heavy_init_complete
@@ -794,7 +805,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                 # and returns elapsed ms); it is not an awaitable and must not
                 # be wrapped in run_bounded.
                 heavy_ms = mark_heavy_init_complete()
-                
+
                 logger.warning(
                     "Heavy application initialization completed in %.2f ms",
                     heavy_ms,
@@ -805,28 +816,32 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                     },
                 )
                 _heavy_state["initialized"] = True
-                
+
             except StartupBudgetError as e:
                 logger.error(f"Heavy initialization budget exceeded: {e}")
-                # In production, we should fail fast rather than continue with incomplete initialization
+                # In production, fail the request rather than continue with
+                # incomplete initialization.
                 if app_settings.environment == "production":
                     raise
-                else:
-                    # In non-production, continue but log the violation
-                    from app.performance_budgets import get_performance_budget_manager
-                    budget_manager = get_performance_budget_manager()
-                    violation = PerformanceWarning(
-                        operation="heavy_initialization",
-                        elapsed_ms=e.elapsed_ms,
-                        budget_type="startup",
-                        context={
-                            "environment": app_settings.environment,
-                            "deployment_id": getattr(app_settings, 'deployment_id', 'unknown'),
-                            "error": str(e)
-                        },
-                        severity="violation"
-                    )
-                    budget_manager.record_violation(violation)
+                # In non-production, degrade explicitly: record the violation and
+                # leave the operation uninitialized so the next request retries.
+                violation = PerformanceWarning(
+                    operation="heavy_init.database",
+                    elapsed_ms=e.elapsed_ms,
+                    budget_type="startup",
+                    context={
+                        "environment": app_settings.environment,
+                        "deployment_id": getattr(app_settings, "deployment_id", "unknown"),
+                        "deadline_ms": e.timeout_ms,
+                    },
+                    severity="violation",
+                )
+                get_performance_budget_manager().record_violation(violation)
+                logger.error(
+                    "Heavy initialization degraded: %s",
+                    e,
+                    extra={"performance_violation": violation.to_dict(), "level": "ERROR"},
+                )
             finally:
                 _heavy_state["in_progress"] = False
 
@@ -839,95 +854,61 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
     @app.on_event("startup")
     async def startup_event():
-        """Lightweight startup; heavy DB init is deferred to first non-ping request."""
-        budget_manager = get_performance_budget_manager()
-        
+        """Lightweight startup; heavy DB init is deferred to first non-ping request.
+
+        The total ping-ready budget is evaluated after every readiness-critical
+        await so no awaited startup work can hide from the 2.0 s warning and
+        2.5 s hard budget.
+        """
         try:
             await compute_startup_duration()
             from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
 
             snapshot = startup_event_snapshot()
             startup_duration = snapshot.startup_duration_ms or 0.0
-            
-            # Check startup performance budgets
-            if startup_duration >= STARTUP_TIMEOUT_MS:  # Hard budget exceeded
-                violation = PerformanceWarning(
-                    operation="lightweight_startup",
-                    elapsed_ms=startup_duration,
-                    budget_type="startup",
-                    context={
-                        "deployment_id": snapshot.deployment_id,
-                        "heavy_initialized": is_heavy_initialized(),
-                    },
-                    severity="violation"
-                )
-                budget_manager.record_violation(violation)
-                logger.error(
-                    "Lightweight startup performance budget exceeded: %.2f ms (limit: %d ms)",
-                    startup_duration,
-                    STARTUP_TIMEOUT_MS,
-                    extra={
-                        "event": "lightweight_startup_performance_violation",
-                        "heavy_initialized": is_heavy_initialized(),
-                        "startup_duration_ms": round(startup_duration, 2),
-                        "performance_violation": violation.to_dict(),
-                        "level": "ERROR",
-                    },
-                )
-            elif startup_duration >= STARTUP_WARNING_MS:  # Warning threshold
-                warning = PerformanceWarning(
-                    operation="lightweight_startup",
-                    elapsed_ms=startup_duration,
-                    budget_type="startup",
-                    context={
-                        "deployment_id": snapshot.deployment_id,
-                        "heavy_initialized": is_heavy_initialized(),
-                    },
-                    severity="warning"
-                )
-                budget_manager.record_warning(warning)
-                logger.warning(
-                    "Lightweight startup performance warning: %.2f ms",
-                    startup_duration,
-                    extra={
-                        "event": "lightweight_startup_performance_warning",
-                        "heavy_initialized": is_heavy_initialized(),
-                        "startup_duration_ms": round(startup_duration, 2),
-                        "performance_warning": warning.to_dict(),
-                        "level": "WARNING",
-                    },
-                )
-            else:
-                logger.warning(
-                    "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
-                    startup_duration,
-                    is_heavy_initialized(),
-                    extra={
-                        "event": "lightweight_application_startup",
-                        "heavy_initialized": is_heavy_initialized(),
-                        "startup_duration_ms": round(startup_duration, 2),
-                        "deployment_id": snapshot.deployment_id,
-                    },
-                )
 
-            # Start Neon egress monitor when credentials are configured.
+            # Start Neon egress monitor when credentials are configured. The
+            # monitor is optional monitoring infrastructure, so a budget breach
+            # degrades explicitly instead of extending ping readiness.
             if os.getenv("NEON_TOKEN") and os.getenv("NEON_PROJECT_ID"):
                 try:
                     from app.services.neon_monitor import startup_event as neon_startup
-                    
-                    # Neon monitor startup with performance budget
+
                     await run_bounded(
-                        operation="neon_monitor_startup",
+                        operation="startup.neon_monitor",
                         coroutine=neon_startup(),
-                        warning_ms=5000,  # 5 second warning
-                        timeout_ms=10000,  # 10 second timeout
-                        context={"deployment_id": snapshot.deployment_id}
+                        warning_ms=_NEON_STARTUP_WARNING_MS,
+                        timeout_ms=_NEON_STARTUP_TIMEOUT_MS,
+                        context={"deployment_id": snapshot.deployment_id},
                     )
                 except Exception:
                     logger.warning("Neon monitor startup skipped", exc_info=True)
-                    
-        except StartupBudgetError as e:
-            logger.error(f"Startup budget exceeded during lightweight startup: {e}")
+
+            ready_snapshot = startup_event_snapshot()
+            readiness_ms = max(startup_duration, ready_snapshot.process_age_ms)
+            enforce_startup_budget(
+                readiness_ms,
+                environment=app_settings.environment,
+                operation="startup.readiness",
+                context={
+                    "deployment_id": ready_snapshot.deployment_id,
+                    "heavy_initialized": is_heavy_initialized(),
+                    "invocation": ready_snapshot.invocation,
+                },
+            )
+            logger.warning(
+                "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
+                readiness_ms,
+                is_heavy_initialized(),
+                extra={
+                    "event": "lightweight_application_startup",
+                    "heavy_initialized": is_heavy_initialized(),
+                    "startup_duration_ms": round(readiness_ms, 2),
+                    "deployment_id": ready_snapshot.deployment_id,
+                },
+            )
+        except StartupBudgetError:
+            logger.error("Startup hard budget exceeded; failing initialization")
             raise
         except Exception as e:
             logger.error(f"Unexpected error during startup: {e}")
