@@ -107,8 +107,15 @@ jobs:
             exit 1
           fi
 
-          GIT_SSH_COMMAND="$ssh_command" \
-            pipx install 'git+ssh://git@github.com/JoshCLWren/rotisserie.git@0067e8c49cb3a3142a04f6c56f19795a1e81ad3c'
+          # pipx's VCS wrapper does not preserve this step's SSH identity in its
+          # internal git clone. Clone directly with the proven SSH command, then
+          # install from the pinned local checkout without passing any key to pipx.
+          checkout="$ssh_dir/rotisserie"
+          GIT_SSH_COMMAND="$ssh_command" git clone --quiet \
+            git@github.com:JoshCLWren/rotisserie.git "$checkout"
+          GIT_SSH_COMMAND="$ssh_command" git -C "$checkout" checkout --quiet --detach \
+            0067e8c49cb3a3142a04f6c56f19795a1e81ad3c
+          pipx install "$checkout"
           rotisserie --help >/dev/null
 
       - name: Ensure GitHub CLI supports JSON PR checks

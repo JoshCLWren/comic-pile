@@ -59,7 +59,9 @@ def test_dispatcher_installs_exact_rotisserie_revision_before_assignment():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     pin = "0067e8c49cb3a3142a04f6c56f19795a1e81ad3c"
-    assert f"rotisserie.git@{pin}" in workflow
+    assert 'git -C "$checkout" checkout --quiet --detach' in workflow
+    assert pin in workflow
+    assert 'pipx install "$checkout"' in workflow
     assert "rotisserie --help >/dev/null" in workflow
     assert workflow.index("Install pinned Rotisserie decision CLI") < workflow.index(
         "Resolve and dispatch fixed workers"
@@ -174,6 +176,9 @@ def test_private_rotisserie_secret_has_safe_ssh_preflight():
     assert 'git ls-remote ' in install
     assert 'git@github.com:JoshCLWren/rotisserie.git HEAD' in install
     assert install.index("ssh-keygen -lf") < install.index("git ls-remote")
-    assert install.index("git ls-remote") < install.index("pipx install")
+    assert install.index("git ls-remote") < install.index("git clone --quiet")
+    assert install.index("git clone --quiet") < install.index('pipx install "$checkout"')
+    assert 'git@github.com:JoshCLWren/rotisserie.git "$checkout"' in install
+    assert "git+ssh://" not in install
     assert "StrictHostKeyChecking=yes" in install
     assert 'trap \'rm -rf "$ssh_dir"\' EXIT' in install
