@@ -9,7 +9,7 @@ const reference: PostRateReference = {
   rating: 4,
 }
 
-function renderPrompt(overrides?: { reference?: PostRateReference | null; onDismiss?: () => void }) {
+function renderPrompt(overrides?: { reference?: PostRateReference | null; onDismiss?: () => void; onUndo?: () => void; isUndoPending?: boolean }) {
   const props = {
     reference,
     onDismiss: vi.fn(),
@@ -92,5 +92,32 @@ describe('PostRateCopyPrompt', () => {
 
     await user.click(dismissButton)
     expect(props.onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows Undo button when onUndo is provided', () => {
+    const onUndo = vi.fn()
+    renderPrompt({ onUndo })
+    expect(screen.getByRole('button', { name: /Undo rating of/ })).toBeInTheDocument()
+  })
+
+  it('does not show Undo button when onUndo is not provided', () => {
+    renderPrompt({ onUndo: undefined })
+    expect(screen.queryByRole('button', { name: /Undo rating of/ })).not.toBeInTheDocument()
+  })
+
+  it('calls onUndo when Undo button is clicked', async () => {
+    const user = userEvent.setup()
+    const onUndo = vi.fn()
+    renderPrompt({ onUndo })
+
+    await user.click(screen.getByRole('button', { name: /Undo rating of/ }))
+    expect(onUndo).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables Undo button when isUndoPending is true', () => {
+    const onUndo = vi.fn()
+    renderPrompt({ onUndo, isUndoPending: true })
+    expect(screen.getByRole('button', { name: /Undo rating of/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Undo rating of/ })).toHaveTextContent('Undoing...')
   })
 })

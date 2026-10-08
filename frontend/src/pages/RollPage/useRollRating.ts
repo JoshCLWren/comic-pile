@@ -7,6 +7,7 @@ import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import type { PostRateReference } from './components/PostRateCopyPrompt'
 import { RATING_THRESHOLD, buildRatingThread, createExplosion } from './utils'
+import { undoApi } from '../../services/api-undo'
 
 interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
@@ -14,6 +15,11 @@ interface UseRollRatingParams {
   rateMutation: { mutate: (payload: RatePayload) => Promise<Thread | undefined>; isPending: boolean }
   dismissPendingMutation: { mutate: () => Promise<void>; isPending: boolean }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
+}
+
+interface LastRatedWithSnapshot extends PostRateReference {
+  snapshotId: number
+  sessionId: number
 }
 
 /**
@@ -49,7 +55,7 @@ export function useRollRating({
     setThreadToMigrate,
   } = state
 
-  const [lastRated, setLastRated] = useState<PostRateReference | null>(null)
+  const [lastRated, setLastRated] = useState<LastRatedWithSnapshot | null>(null)
   const [readingContextRequested, setReadingContextRequested] = useState(false)
   const [readingBoundariesRequested, setReadingBoundariesRequested] = useState(false)
 
@@ -190,6 +196,8 @@ export function useRollRating({
             title: activeRatingThread!.title,
             issueNumber,
             rating,
+            snapshotId: 0, // Will be fetched after
+            sessionId: bootstrap?.session_id ?? 0,
           })
           suppressPendingAutoOpenRef.current = true
           setIsRolling(false)
@@ -282,11 +290,26 @@ export function useRollRating({
 
       // Capture the just-rated comic reference before the thread state is cleared
       // so the post-rate copy prompt can offer the clipboard string on the die view.
+      const sessionId = bootstrap?.session_id
+      let snapshotId = 0
+      if (sessionId) {
+        try {
+          const snapshots = await undoApi.listSnapshots(sessionId)
+          if (snapshots.snapshots.length > 0) {
+            snapshotId = snapshots.snapshots[0].id
+          }
+        } catch {
+          // Ignore snapshot fetch errors; undo button will be hidden if no snapshot
+        }
+      }
+
       setLastRated({
         title: activeRatingThread.title,
         issueNumber:
           activeRatingThread.next_issue_number ?? activeRatingThread.issue_number ?? '',
         rating,
+        snapshotId,
+        sessionId: sessionId ?? 0,
       })
       setIsRolling(false)
       setIsRatingView(false)

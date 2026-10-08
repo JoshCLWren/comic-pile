@@ -11,6 +11,8 @@ export interface PostRateReference {
 interface PostRateCopyPromptProps {
   reference: PostRateReference | null
   onDismiss: () => void
+  onUndo?: () => void
+  isUndoPending?: boolean
 }
 
 /**
@@ -20,7 +22,12 @@ interface PostRateCopyPromptProps {
  * control would have offered before Mark Read & Save. It never blocks the
  * next roll and follows the pre-rate clipboard feedback pattern.
  */
-export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptProps) {
+export function PostRateCopyPrompt({
+  reference,
+  onDismiss,
+  onUndo,
+  isUndoPending = false,
+}: PostRateCopyPromptProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   useEffect(() => {
@@ -87,14 +94,27 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
           </p>
         ) : null}
       </div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="mt-3 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
-        aria-label="Dismiss rating saved notice"
-      >
-        Dismiss
-      </button>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {onUndo ? (
+          <button
+            type="button"
+            onClick={onUndo}
+            disabled={isUndoPending}
+            className="min-h-11 px-4 rounded-xl bg-[var(--theme-danger)] text-[var(--theme-text-primary)] font-bold text-xs uppercase tracking-widest hover:bg-[var(--theme-danger-hover)] disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+            aria-label={`Undo rating of ${title} ${issueNumber}`}
+          >
+            {isUndoPending ? 'Undoing...' : 'Undo'}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-3 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+          aria-label="Dismiss rating saved notice"
+        >
+          Dismiss
+        </button>
+      </div>
     </section>
   )
 }

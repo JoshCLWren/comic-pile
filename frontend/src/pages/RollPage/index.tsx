@@ -33,6 +33,7 @@ import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
 import { useRollViewport } from './useRollViewport'
 import { useRatingView } from './useRatingView'
+import { useUndo } from '../../hooks/useUndo'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { ThreadPool } from './components/ThreadPool'
@@ -127,6 +128,7 @@ export default function RollPage() {
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
+  const undoMutation = useUndo()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
 
@@ -420,6 +422,8 @@ export default function RollPage() {
               <PostRateCopyPrompt
                 reference={rating.lastRated}
                 onDismiss={rating.clearLastRated}
+                onUndo={rating.lastRated ? () => undoMutation.mutate({ sessionId: rating.lastRated.sessionId, snapshotId: rating.lastRated.snapshotId })} : undefined
+                isUndoPending={undoMutation.isPending}
               />
             )}
 

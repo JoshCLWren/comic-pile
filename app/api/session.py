@@ -461,7 +461,7 @@ async def list_sessions(
                 (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
                 Event.type == "rate",
                 Event.type == "rolled_but_skipped",
-                (Event.type.in_(("snooze", "unsnooze", "undo", "restore"))) & (Event.die_after.is_not(None)),
+                Event.type.in_(("snooze", "unsnooze", "undo", "restore")),
             )
         )
         .order_by(Event.session_id, Event.timestamp, Event.id)

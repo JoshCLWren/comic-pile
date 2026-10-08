@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useCallback } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { undoApi } from '../services/api-undo'
 import { getApiErrorDetail } from '../utils/apiError'
 import { queryKeys } from '../query/queryKeys'
+import { invalidateAfterQueueMutation } from '../query/cacheEffects'
+import { useToast } from '../contexts/useToast'
 import type { SessionSnapshotsResponse, UndoPayload } from '../types'
 
 export function useSnapshots(sessionId: number | string | null | undefined) {
@@ -11,12 +13,6 @@ export function useSnapshots(sessionId: number | string | null | undefined) {
     queryFn: () => undoApi.listSnapshots(sessionId!),
     enabled: sessionId != null,
   })
-
-  useEffect(() => {
-    if (isError) {
-      console.error('Failed to load snapshots:', getApiErrorDetail(error))
-    }
-  }, [isError, error])
 
   if (sessionId == null) {
     // SAFETY: no session id means no snapshots; null is the intentional shape when the query is disabled.
@@ -27,23 +23,27 @@ export function useSnapshots(sessionId: number | string | null | undefined) {
 }
 
 export function useUndo() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
 
-  const mutate = useCallback(async ({ sessionId, snapshotId }: UndoPayload) => {
-    setIsPending(true)
-    setIsError(false)
-
-    try {
+  const mutation = useMutation({
+    mutationFn: async ({ sessionId, snapshotId }: UndoPayload) => {
       await undoApi.undo(sessionId, snapshotId)
-    } catch (error: unknown) {
-      setIsError(true)
+    },
+    onSuccess: async () => {
+      // Invalidate caches to reflect the undone state
+      await invalidateAfterQueueMutation(queryClient)
+      showToast('Rating undone', 'success')
+    },
+    onError: (error: unknown) => {
       console.error('Failed to undo action:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+      showToast('Failed to undo rating', 'error')
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }

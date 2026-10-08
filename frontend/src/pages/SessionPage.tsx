@@ -182,8 +182,9 @@ export default function SessionPage() {
             onClick={() => setIsRestoreConfirmationOpen(true)}
             disabled={restoreMutation.isPending || snapshots.length === 0}
             className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60"
+            title="Restore the entire session to its initial state (removes all threads added since session start)"
           >
-            {restoreMutation.isPending ? 'Restoring...' : 'Restore Start'}
+            {restoreMutation.isPending ? 'Restoring...' : 'Restore Session Start'}
           </button>
         </div>
         {snapshots.length === 0 ? (
@@ -211,11 +212,12 @@ export default function SessionPage() {
                       }}
                       disabled={undoMutation.isPending}
                       className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60 shrink-0"
+                      title="Undo the most recent rating (single use per snapshot)"
                     >
-                      Undo Latest
+                      {undoMutation.isPending ? 'Undoing...' : 'Undo Last Rating'}
                     </button>
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-600 shrink-0">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-600 shrink-0" title="This snapshot cannot be undone">
                       History
                     </span>
                   )}
