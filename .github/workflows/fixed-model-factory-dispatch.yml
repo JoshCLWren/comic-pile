@@ -89,7 +89,25 @@ jobs:
           # GitHub's published Ed25519 host key; never silently trust an unverified host.
           printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$ssh_dir/known_hosts"
 
-          GIT_SSH_COMMAND="ssh -i $ssh_dir/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ssh_dir/known_hosts" \
+          # Fail clearly if the secret contains a different or malformed private key.
+          # Only a public-key SHA256 fingerprint is printed, never the secret.
+          if ! ssh-keygen -y -P '' -f "$ssh_dir/id_ed25519" > "$ssh_dir/id_ed25519.pub"; then
+            echo '::error::ROTISSERIE_DEPLOY_KEY is not a usable, unencrypted SSH private key'
+            exit 1
+          fi
+          echo 'Rotisserie Actions deploy-key fingerprint (public only):'
+          ssh-keygen -lf "$ssh_dir/id_ed25519.pub" -E sha256
+
+          ssh_command="ssh -i $ssh_dir/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ssh_dir/known_hosts"
+          # Test exactly the private repo access needed before pipx wraps git errors.
+          # SSH verbose output shows whether the expected public key was offered.
+          if ! GIT_SSH_COMMAND="$ssh_command -v" git ls-remote \
+            git@github.com:JoshCLWren/rotisserie.git HEAD >/dev/null; then
+            echo '::error::SSH auth for private Rotisserie failed. Compare the Actions key fingerprint above with your local public key.'
+            exit 1
+          fi
+
+          GIT_SSH_COMMAND="$ssh_command" \
             pipx install 'git+ssh://git@github.com/JoshCLWren/rotisserie.git@0067e8c49cb3a3142a04f6c56f19795a1e81ad3c'
           rotisserie --help >/dev/null
 
