@@ -149,11 +149,12 @@ describe('ThreadPool', () => {
       {...actions}
     /></MemoryRouter>)
     expect(screen.getByText(/2 series waiting for earlier issues/)).toBeInTheDocument()
-    // SAFETY: Tap-to-read button is rendered in the stale branch, so closest returns an element.
-    const staleButton = screen.getByText('Tap to read now').closest('[role="button"]') as HTMLElement
-    expect(staleButton).not.toBeNull()
-    fireEvent.keyDown(staleButton!, { key: ' ' })
-    expect(actions.onReadStale).toHaveBeenCalled()
+    // SAFETY: the stale section is collapsed by default; the roll affordance is only
+    // reachable after expanding it, so toggle it open first.
+    await userEvent.setup().click(screen.getByRole('button', { name: /series you haven't opened recently/i }))
+    const staleRollButton = screen.getByRole('button', { name: /roll this series now/i })
+    fireEvent.keyDown(staleRollButton, { key: ' ' })
+    expect(actions.onReadStale).toHaveBeenCalledWith(thread.id)
   })
 })
 
