@@ -1,4 +1,3 @@
-import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { undoApi } from '../services/api-undo'
 import { getApiErrorDetail } from '../utils/apiError'

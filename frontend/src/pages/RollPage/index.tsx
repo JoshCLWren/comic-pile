@@ -422,7 +422,15 @@ export default function RollPage() {
               <PostRateCopyPrompt
                 reference={rating.lastRated}
                 onDismiss={rating.clearLastRated}
-                onUndo={rating.lastRated ? () => undoMutation.mutate({ sessionId: rating.lastRated.sessionId, snapshotId: rating.lastRated.snapshotId })} : undefined
+                onUndo={
+                  rating.lastRated && rating.lastRated.snapshotId > 0
+                    ? () =>
+                      undoMutation.mutate({
+                        sessionId: rating.lastRated.sessionId,
+                        snapshotId: rating.lastRated.snapshotId,
+                      })
+                    : undefined
+                }
                 isUndoPending={undoMutation.isPending}
               />
             )}
