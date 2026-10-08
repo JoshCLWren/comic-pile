@@ -4,6 +4,7 @@ import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
+import ComicVineSearchDialog from '../../components/ComicVineSearchDialog'
 import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
@@ -188,7 +189,7 @@ function CreatorInput({
 }
 
 interface QueueModalsProps {
-  openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | null
+  openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'map_series' | null
   createForm: QueueFormState
   editForm: QueueFormState
   setCreateForm: (next: QueueFormState) => void
@@ -634,6 +635,20 @@ export function QueueModals({
             </div>
           </div>
         </Modal>
+      )}
+
+      {openModal === 'map_series' && editingThread && (
+        <ComicVineSearchDialog
+          isOpen={openModal === 'map_series'}
+          issueId={editingThread.id} // Note: issueId here is actually the threadId as used by the dialog for mapping
+          threadTitle={editingThread.title}
+          issueNumber={null}
+          onClose={onCloseEdit}
+          onConfirmed={() => {
+            onCloseEdit()
+            onDependencyChanged()
+          }}
+        />
       )}
     </>
   )
