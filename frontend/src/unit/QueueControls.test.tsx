@@ -10,6 +10,7 @@ const baseProps = {
   shufflePending: false,
   onShuffle: vi.fn(),
   onCreateThread: vi.fn(),
+  onBulkMapComicVine: vi.fn(),
   // SAFETY: test fixture uses the valid default sort option
   sortBy: 'position' as QueueSortBy,
   onSortChange: vi.fn(),

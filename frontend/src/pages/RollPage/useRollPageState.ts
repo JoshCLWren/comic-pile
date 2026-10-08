@@ -32,6 +32,8 @@ export interface RollPageState {
   suppressPendingAutoOpenRef: React.MutableRefObject<boolean>
   rollIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
   rollTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>
+  /** Thread ID from navigation state that should trigger the ComicVine mapping flow. */
+  pendingMapThreadId: number | null
 }
 
 export interface RollPageStateSetters {

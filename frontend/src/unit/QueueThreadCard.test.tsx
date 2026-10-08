@@ -117,6 +117,8 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     onEdit: vi.fn(),
     onDependencies: vi.fn(),
     onDelete: vi.fn(),
+    onMapComicVine: vi.fn(),
+    isMapped: false,
     ...overrides,
   }
   return {

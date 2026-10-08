@@ -34,7 +34,7 @@ export default function BulkMapComicVineDialog({
       isOpen={isOpen}
       title="Map Series to ComicVine"
       onClose={onClose}
-      size="medium"
+      size="default"
     >
       <div className="space-y-4">
         <p className="text-sm text-stone-400">
