@@ -27,6 +27,7 @@ export interface RollPageState {
   threadToMigrate: RatingThread | null
   showSimpleMigration: boolean
   isRatingView: boolean
+  isShuffleOpen: boolean
   rating: number
   errorMessage: string
   suppressPendingAutoOpenRef: React.MutableRefObject<boolean>
@@ -58,6 +59,7 @@ export interface RollPageStateSetters {
   setThreadToMigrate: (value: RatingThread | null) => void
   setShowSimpleMigration: (value: boolean) => void
   setIsRatingView: (value: boolean) => void
+  setIsShuffleOpen: (value: boolean) => void
   setRating: (value: number) => void
   setErrorMessage: (value: string) => void
 }
@@ -86,6 +88,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
   const [showSimpleMigration, setShowSimpleMigration] = useState(false)
   const [isRatingView, setIsRatingView] = useState(false)
+  const [isShuffleOpen, setIsShuffleOpen] = useState(false)
   const [rating, setRating] = useState(4.0)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -140,6 +143,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setShowSimpleMigration,
     isRatingView,
     setIsRatingView,
+    setIsShuffleOpen,
     rating,
     setRating,
     errorMessage,

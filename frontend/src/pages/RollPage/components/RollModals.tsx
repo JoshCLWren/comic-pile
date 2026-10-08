@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Modal from '../../../components/Modal'
 import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
+import ShuffleQueueDialog from '../../../pages/QueuePage/ShuffleQueueDialog'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { Thread, ThreadListItem } from '../../../types'
@@ -112,6 +113,11 @@ interface RollModalsProps {
   isSetCurrentIssueOpen: boolean
   onCloseSetCurrentIssue: () => void
   onSetCurrentIssue: (issueNumber: string) => Promise<void>
+  isShuffleOpen: boolean
+  onShuffleConfirm: () => void
+  onShuffleCancel: () => void
+  shufflePending: boolean
+  seriesCount: number
 }
 
 /**
@@ -153,6 +159,11 @@ export function RollModals({
   isSetCurrentIssueOpen,
   onCloseSetCurrentIssue,
   onSetCurrentIssue,
+  isShuffleOpen,
+  onShuffleConfirm,
+  onShuffleCancel,
+  shufflePending,
+  seriesCount,
 }: RollModalsProps) {
   return (
     <>
@@ -328,18 +339,28 @@ export function RollModals({
         </div>
       </Modal>
 
-      {isSetCurrentIssueOpen && selectedThread && (
-        <Modal
-          isOpen={isSetCurrentIssueOpen}
-          title={`Set Current Issue: ${selectedThread.title}`}
-          onClose={onCloseSetCurrentIssue}
-        >
-          <SetCurrentIssueModal
-            onSubmit={onSetCurrentIssue}
-            onClose={onCloseSetCurrentIssue}
-          />
-        </Modal>
-      )}
-    </>
-  )
-}
+       {isSetCurrentIssueOpen && selectedThread && (
+         <Modal
+           isOpen={isSetCurrentIssueOpen}
+           title={`Set Current Issue: ${selectedThread.title}`}
+           onClose={onCloseSetCurrentIssue}
+         >
+           <SetCurrentIssueModal
+             onSubmit={onSetCurrentIssue}
+             onClose={onCloseSetCurrentIssue}
+           />
+         </Modal>
+       )}
+ 
+       {isShuffleOpen && (
+         <ShuffleQueueDialog
+           isOpen={isShuffleOpen}
+           seriesCount={seriesCount}
+           isPending={shufflePending}
+           onConfirm={onShuffleConfirm}
+           onCancel={onShuffleCancel}
+         />
+       )}
+     </>
+   )
+ }

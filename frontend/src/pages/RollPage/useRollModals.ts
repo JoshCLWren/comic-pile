@@ -48,6 +48,8 @@ export function useRollModals({
     isActionSheetOpen,
     selectedThread,
     setIsActionSheetOpen,
+    isShuffleOpen,
+    setIsShuffleOpen,
   } = state
 
   const [overrideThreads, setOverrideThreads] = useState<ThreadListItem[] | null>(null)
@@ -109,6 +111,12 @@ export function useRollModals({
       })
       return
     }
+    if (isShuffleOpen) {
+      setRestoreAction(() => {
+        setIsShuffleOpen(true)
+      })
+      return
+    }
     clearRestoreAction()
   }, [
     clearRestoreAction,
@@ -117,12 +125,14 @@ export function useRollModals({
     selectedThread,
     setIsActionSheetOpen,
     setIsOverrideOpen,
+    setIsShuffleOpen,
     setRestoreAction,
     setShowMigrationDialog,
     setShowSimpleMigration,
     showMigrationDialog,
     showSimpleMigration,
     threadToMigrate,
+    isShuffleOpen,
   ])
 
   function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
@@ -151,5 +161,12 @@ export function useRollModals({
     setOverrideErrorMessage('')
   }
 
-  return { overrideThreads, handleOverrideSubmit, openOverrideModal, closeOverrideModal }
+  return { 
+    overrideThreads, 
+    handleOverrideSubmit, 
+    openOverrideModal, 
+    closeOverrideModal,
+    isShuffleOpen,
+    setIsShuffleOpen,
+  }
 }

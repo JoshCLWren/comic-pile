@@ -116,14 +116,8 @@ export function useRollActions({
     }
   }
 
-  async function handleShufflePool() {
-    try {
-      await shuffleQueueMutation.mutate()
-      await refetchBootstrap()
-    } catch (error) {
-      console.error('Shuffle failed:', error)
-      alert(`Failed to shuffle pool: ${getApiErrorDetail(error)}`)
-    }
+  function handleShufflePool() {
+    state.setIsShuffleOpen(true)
   }
 
   async function handleAction(action: string) {
@@ -233,8 +227,19 @@ export function useRollActions({
     return true
   }
 
+  async function performShuffle() {
+    try {
+      await shuffleQueueMutation.mutate()
+      await refetchBootstrap()
+    } catch (error) {
+      console.error('Shuffle failed:', error)
+      state.setErrorMessage(getApiErrorDetail(error))
+    } finally {
+      state.setIsShuffleOpen(false)
+    }
+  }
+ 
   function handleRoll() {
-    if (isRolling) return
     navigator.vibrate?.(15)
     if (bootstrap?.pending_thread_id && !suppressPendingAutoOpenRef.current) {
       const pendingId = Number(bootstrap.pending_thread_id)
@@ -308,6 +313,7 @@ export function useRollActions({
     handleThreadClick,
     handleReadStale,
     handleShufflePool,
+    performShuffle,
     handleAction,
     handleSetDie,
     handleClearManualDie,

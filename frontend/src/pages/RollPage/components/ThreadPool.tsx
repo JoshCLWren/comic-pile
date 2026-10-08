@@ -86,15 +86,16 @@ export function ThreadPool({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onShuffle}
-          disabled={shuffleIsPending || pool.length < 2}
-          aria-describedby="shuffle-queue-description"
-          className="h-8 px-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
-        >
-          Shuffle queue
-        </button>
+         <button
+           type="button"
+           onClick={onShuffle}
+           disabled={shuffleIsPending || pool.length < 2}
+           aria-describedby="shuffle-queue-description"
+           className="h-8 px-3 rounded-lg border border-rose-500/50 bg-rose-500/10 text-[10px] font-black uppercase tracking-widest text-rose-400 hover:bg-rose-500/20 disabled:opacity-50 transition-colors"
+         >
+           Shuffle queue
+         </button>
+
         <span id="shuffle-queue-description" className="sr-only">Randomizes the complete active queue, then refreshes these die mappings.</span>
       </div>}
 
