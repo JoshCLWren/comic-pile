@@ -43,14 +43,30 @@ function eventLabel(type: string): string {
   return EVENT_LABELS[type] ?? type.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
 }
 
+function selectionLabel(event: DisplayEvent): string | null {
+  if (event.selection_method == null) return null
+  return `Selected by ${event.selection_method.replaceAll('_', ' ')}`
+}
+
+/**
+ * Label for a roll's dice outcome. Every real outcome is `selected_index + 1`, so
+ * `result < 1` means no face was drawn (#3266). That sentinel is read from `result`,
+ * not from `selection_method`, which is nullable for pre-instrumentation events.
+ */
+function rollLabel(event: DisplayEvent): string | null {
+  if (event.result == null) return null
+  if (event.result > 0) return `Rolled ${event.result}`
+  return selectionLabel(event) ?? 'Selected without rolling'
+}
+
 function EventRecord({ event }: { event: DisplayEvent }) {
   const metadata = [
     event.issues_read != null ? `${event.issues_read} ${event.issues_read === 1 ? 'issue' : 'issues'} read` : null,
     event.die != null ? `d${event.die}` : null,
-    event.result != null ? `Rolled ${event.result}` : null,
+    rollLabel(event),
     event.die_after != null ? `Die after: d${event.die_after}` : null,
     event.rating != null ? `Rating ${event.rating}` : null,
-    event.selection_method ? `Selected by ${event.selection_method.replaceAll('_', ' ')}` : null,
+    event.result == null || event.result > 0 ? selectionLabel(event) : null,
   ].filter((value): value is string => value !== null)
 
   return (

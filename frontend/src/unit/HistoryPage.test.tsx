@@ -121,6 +121,7 @@ it('leads with comic identity and readable activity summary for a typical rated 
   expect(dieLine!.textContent).toContain('Die size')
   expect(dieLine!.textContent).toContain('d6 → d4 → d6')
   expect(dieLine!.textContent).toContain('Rolled 3')
+  expect(dieLine!.textContent).toBe('Die size d6 → d4 → d6 · Rolled 3')
 
   const headlineIndex = listitem.children[1]!.children[0]!.compareDocumentPosition(dieLine!)
   expect(headlineIndex & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
