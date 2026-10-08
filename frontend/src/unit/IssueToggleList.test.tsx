@@ -1,9 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createRef } from 'react'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import type {
   IssueToggleListApi,
   IssueToggleListDependenciesApi,
+  IssueToggleListHandle,
 } from '../pages/QueuePage/IssueToggleList'
 import type { Issue, IssueListResponse } from '../types'
 import { cast } from '../utils/cast'
@@ -909,6 +911,68 @@ describe('IssueToggleList reorder mode (#2950)', () => {
     expect(screen.queryByTestId('issue-reorder-list')).not.toBeInTheDocument()
     expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     expect(screen.getByTestId('issue-reorder-toggle')).toHaveAccessibleName('Reorder issues')
+  })
+})
+
+describe('IssueToggleList deferred mode (#3267)', () => {
+  async function renderDeferred() {
+    const ref = createRef<IssueToggleListHandle>()
+    render(
+      <IssueToggleList
+        ref={ref}
+        threadId={99}
+        deferred
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getAllByTestId(/issue-pill-/).length).toBeGreaterThan(0)
+    })
+    return ref
+  }
+
+  it('queues Add without calling the API until flush', async () => {
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+    fireEvent.change(input, { target: { value: '4-5' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    // No API call yet — the create is queued as a draft.
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+    // Pending create is visible in the UI.
+    expect(screen.getByTestId('pending-creates')).toHaveTextContent('4-5')
+    expect(ref.current?.hasPendingMutations()).toBe(true)
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5')
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+  })
+
+  it('discards queued mutations on unmount without flushing', async () => {
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+    fireEvent.change(input, { target: { value: '4-5' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    expect(ref.current?.hasPendingMutations()).toBe(true)
+
+    // Unmount without flushing (dialog X/close).
+    cleanup()
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+  })
+
+  it('queues toggle and delete without flushing in deferred mode', async () => {
+    const ref = await renderDeferred()
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+    expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
+    expect(mockedIssuesApi.markUnread).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+    expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(1)
   })
 })
 })

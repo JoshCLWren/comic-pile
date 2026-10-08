@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import type { DragEvent } from 'react'
 import type { Issue, IssueDependenciesResponse, IssueListResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
@@ -17,6 +17,7 @@ import {
   applyIssueMutation,
   applyIssueMutations,
   getPendingIssueIds,
+  getPendingCreates,
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
 
@@ -42,13 +43,15 @@ export interface IssueToggleListDependenciesApi {
   listForThread: (threadId: number) => Promise<ThreadIssueDependenciesResponse>
 }
 
-export function IssueToggleList({
-  threadId,
-  onOpenDependencies,
-  onIssueChanged,
-  issuesApi: issuesService = issuesApi,
-  dependenciesApi = issueDependenciesApi,
-}: {
+/** Imperative handle for deferred (draft) mode. */
+export interface IssueToggleListHandle {
+  /** Flush queued mutations to the server. Resolves when complete. */
+  flush: () => Promise<void>
+  /** Whether any mutations are queued. */
+  hasPendingMutations: () => boolean
+}
+
+export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId: number
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
@@ -56,7 +59,20 @@ export function IssueToggleList({
   issuesApi?: IssueToggleListApi
   /** Injectable dependency API; defaults to the production issueDependenciesApi. */
   dependenciesApi?: IssueToggleListDependenciesApi
-}) {
+  /**
+   * When true, mutations queue locally without hitting the server until
+   * flush() is called. Closing without flushing discards the draft.
+   * Defaults to false (immediate mode, for ThreadDetailView).
+   */
+  deferred?: boolean
+}>(function IssueToggleList({
+  threadId,
+  onOpenDependencies,
+  onIssueChanged,
+  issuesApi: issuesService = issuesApi,
+  dependenciesApi = issueDependenciesApi,
+  deferred = false,
+}, ref) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [addRange, setAddRange] = useState('')
@@ -107,10 +123,13 @@ export function IssueToggleList({
     return issues.slice(startIndex, endIndex)
   }, [issues, isExpanded, getNextUnreadIssueId, getVisibilityWindow])
 
+  const [pendingCreates, setPendingCreates] = useState<string[]>([])
+
   const syncOptimisticIssues = useCallback((baseIssues: Issue[], pendingMutations: IssueMutation[]) => {
     setIssues(applyIssueMutations(baseIssues, pendingMutations))
     setToggling(getPendingIssueIds(pendingMutations, 'toggle'))
     setDeleting(getPendingIssueIds(pendingMutations, 'delete'))
+    setPendingCreates(getPendingCreates(pendingMutations))
   }, [])
 
   const fetchAllIssues = useCallback(async (): Promise<Issue[]> => {
@@ -185,6 +204,10 @@ export function IssueToggleList({
         return
       case 'reorder':
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
+        return
+      case 'create':
+        await issuesService.create(threadId, mutation.issueRange)
+        return
     }
   }, [issuesService, threadId])
 
@@ -234,8 +257,18 @@ export function IssueToggleList({
 
     pendingMutationsRef.current = [...pendingMutationsRef.current, queuedMutation]
     syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
-    void processIssueMutations()
-  }, [processIssueMutations, syncOptimisticIssues])
+    if (!deferred) {
+      void processIssueMutations()
+    }
+  }, [processIssueMutations, syncOptimisticIssues, deferred])
+
+  // Imperative handle for deferred mode: flush on save, discard on unmount.
+  useImperativeHandle(ref, () => ({
+    flush: async () => {
+      await processIssueMutations()
+    },
+    hasPendingMutations: () => pendingMutationsRef.current.length > 0,
+  }), [processIssueMutations])
 
   const enqueueIssueReorder = useCallback((
     nextIssues: Issue[],
@@ -314,13 +347,21 @@ export function IssueToggleList({
   }
 
   async function handleAddIssues() {
-    if (!addRange.trim()) {
+    const range = addRange.trim()
+    if (!range) {
+      return
+    }
+    setAddError(null)
+    if (deferred) {
+      // Draft mode: queue the create; it flushes on dialog Save.
+      // The range input clears immediately for the next entry.
+      enqueueIssueMutation({ type: 'create', issueRange: range })
+      setAddRange('')
       return
     }
     setIsAdding(true)
-    setAddError(null)
     try {
-      await issuesService.create(threadId, addRange.trim())
+      await issuesService.create(threadId, range)
       setAddRange('')
       await loadIssues()
     } catch (err: unknown) {
@@ -642,6 +683,20 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
       {addError && (
         <p className="text-xs text-red-400">{addError}</p>
       )}
+      {deferred && pendingCreates.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" data-testid="pending-creates">
+          {pendingCreates.map((range, index) => (
+            <span
+              // SAFETY: pending create ranges are display-only; index keys are stable for this list.
+              key={`${range}-${index}`}
+              className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-2 py-1 text-xs text-amber-200"
+              title="Will be added when you save"
+            >
+              + {range} (pending)
+            </span>
+          ))}
+        </div>
+      )}
       {actionError && (
         <p className="text-xs text-red-400">{actionError}</p>
       )}
@@ -710,4 +765,4 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
       )}
     </div>
   )
-}
+})

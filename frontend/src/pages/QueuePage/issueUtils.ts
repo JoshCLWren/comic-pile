@@ -84,6 +84,11 @@ export function applyIssueMutation(issues: Issue[], mutation: IssueMutation): Is
         .map((issueId) => issueMap.get(issueId))
         .filter((issue): issue is Issue => issue !== undefined)
     }
+    case 'create':
+      // Create mutations don't alter the local list optimistically; pending
+      // creates are displayed separately via getPendingCreates(). The server
+      // response on flush provides the real issues.
+      return issues
   }
 }
 
@@ -101,4 +106,15 @@ export function getPendingIssueIds(mutations: IssueMutation[], type: 'delete' | 
   }
 
   return pendingIssueIds
+}
+
+/** Pending create ranges in the mutation queue, for draft-mode display. */
+export function getPendingCreates(mutations: IssueMutation[]): string[] {
+  const ranges: string[] = []
+  for (const mutation of mutations) {
+    if (mutation.type === 'create') {
+      ranges.push(mutation.issueRange)
+    }
+  }
+  return ranges
 }
