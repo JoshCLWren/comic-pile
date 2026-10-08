@@ -15,6 +15,13 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 
+from app.performance_budgets import (
+    PerformanceBudgetManager,
+    PerformanceWarning,
+    RequestBudgetExceeded,
+    get_performance_budget_manager,
+    request_budget,
+)
 from app.performance_diagnostics import (
     begin_request_diagnostics,
     end_request_diagnostics,
@@ -163,16 +170,21 @@ def _sanitize_log_path(path: str) -> str:
 
 
 def _slow_request_threshold_ms() -> float:
-    """Resolve the threshold for structured slow-request warnings."""
+    """Resolve the threshold for structured slow-request warnings.
+    
+    Note: This is deprecated. Use the new performance budget system with
+    REQUEST_WARNING_MS (500ms) and REQUEST_TIMEOUT_MS (1000ms) constants.
+    """
     raw_value = os.getenv("SLOW_REQUEST_THRESHOLD_MS")
     if raw_value is None:
-        return _DEFAULT_SLOW_REQUEST_THRESHOLD_MS
+        # Default to 500ms for warnings instead of 1000ms
+        return 500.0
 
     try:
         parsed = float(raw_value)
     except ValueError:
-        return _DEFAULT_SLOW_REQUEST_THRESHOLD_MS
-    return parsed if parsed > 0 else _DEFAULT_SLOW_REQUEST_THRESHOLD_MS
+        return 500.0
+    return parsed if parsed > 0 else 500.0
 
 
 def _server_timing_header(total_ms: float) -> str:
@@ -199,31 +211,88 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
         app: FastAPI application instance to wire the middleware onto.
         environment: Current application environment.
     """
+    
+    # Initialize performance budget manager
+    budget_manager = get_performance_budget_manager()
 
     @app.on_event("startup")
     async def record_startup_completion() -> None:
         """Emit one process-scoped startup timing event after lifespan startup."""
         mark_startup_complete()
         snapshot = startup_event_snapshot()
-        logger.warning(
-            "Application startup completed in %.2f ms",
-            snapshot.startup_duration_ms or 0.0,
-            extra={
-                "event": "application_startup",
-                "startup_duration_ms": _rounded_optional(snapshot.startup_duration_ms),
-                "application_import_ms": _rounded_optional(snapshot.application_import_ms),
-                "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
-                "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
-                "process_age_ms": round(snapshot.process_age_ms, 2),
-                "deployment_id": snapshot.deployment_id,
-                "process_started_at_ns": snapshot.process_started_at_ns,
-                "level": "WARNING",
-            },
-        )
+        startup_duration = snapshot.startup_duration_ms or 0.0
+        
+        # Check startup performance budgets
+        if startup_duration >= 2500:  # Hard budget exceeded
+            violation = PerformanceWarning(
+                operation="startup",
+                elapsed_ms=startup_duration,
+                budget_type="startup",
+                context={
+                    "deployment_id": snapshot.deployment_id,
+                    "application_import_ms": _rounded_optional(snapshot.application_import_ms),
+                    "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
+                    "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
+                    "process_age_ms": round(snapshot.process_age_ms, 2),
+                },
+                severity="violation"
+            )
+            budget_manager.record_violation(violation)
+            logger.error(
+                "Startup performance budget exceeded: %.2f ms (limit: 2500 ms)",
+                startup_duration,
+                extra={
+                    "event": "startup_performance_violation",
+                    "startup_duration_ms": _rounded_optional(startup_duration),
+                    "performance_warning": violation.to_dict(),
+                    "level": "ERROR",
+                },
+            )
+        elif startup_duration >= 2000:  # Warning threshold
+            warning = PerformanceWarning(
+                operation="startup",
+                elapsed_ms=startup_duration,
+                budget_type="startup",
+                context={
+                    "deployment_id": snapshot.deployment_id,
+                    "application_import_ms": _rounded_optional(snapshot.application_import_ms),
+                    "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
+                    "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
+                    "process_age_ms": round(snapshot.process_age_ms, 2),
+                },
+                severity="warning"
+            )
+            budget_manager.record_warning(warning)
+            logger.warning(
+                "Startup performance warning: %.2f ms",
+                startup_duration,
+                extra={
+                    "event": "startup_performance_warning",
+                    "startup_duration_ms": _rounded_optional(startup_duration),
+                    "performance_warning": warning.to_dict(),
+                    "level": "WARNING",
+                },
+            )
+        else:
+            logger.warning(
+                "Application startup completed in %.2f ms",
+                startup_duration,
+                extra={
+                    "event": "application_startup",
+                    "startup_duration_ms": _rounded_optional(startup_duration),
+                    "application_import_ms": _rounded_optional(snapshot.application_import_ms),
+                    "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
+                    "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
+                    "process_age_ms": round(snapshot.process_age_ms, 2),
+                    "deployment_id": snapshot.deployment_id,
+                    "process_started_at_ns": snapshot.process_started_at_ns,
+                    "level": "WARNING",
+                },
+            )
 
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
-        """Add diagnostics headers and log slow or failed requests."""
+        """Add diagnostics headers and log slow or failed requests with performance budgets."""
         started_at = time.perf_counter()
         request_id = uuid.uuid4().hex
         request.state.startup_snapshot = next_request_snapshot()
@@ -257,7 +326,62 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             response.headers["X-Heavy-Init"] = "1" if startup.heavy_initialized else "0"
             response.headers["Server-Timing"] = _server_timing_header(process_time_ms)
 
-            log_data = {
+            # Prepare log data structure
+            
+
+            # Check performance budgets for requests
+            performance_context = {
+                "route": log_path,
+                "method": request.method,
+                "request_id": request_id,
+                "cold_request": startup.cold,
+                "database_queries": diagnostics.database_queries,
+                "database_time_ms": round(diagnostics.database_time_ms, 2),
+                "deployment_id": startup.deployment_id,
+            }
+            
+            if process_time_ms >= 1000:  # Performance budget violation
+                violation = PerformanceWarning(
+                    operation=f"request.{log_path}",
+                    elapsed_ms=process_time_ms,
+                    budget_type="request",
+                    context=performance_context,
+                    severity="violation"
+                )
+                budget_manager.record_violation(violation)
+                logger.error(
+                    "Performance budget violation: %s %s completed in %.2f ms",
+                    request.method,
+                    log_path,
+                    process_time_ms,
+                    extra={
+                        **log_data,
+                        "event": "performance_budget_violation",
+                        "performance_violation": violation.to_dict(),
+                        "level": "ERROR",
+                    },
+                )
+            elif process_time_ms >= 500:  # Performance warning
+                warning = PerformanceWarning(
+                    operation=f"request.{log_path}",
+                    elapsed_ms=process_time_ms,
+                    budget_type="request",
+                    context=performance_context,
+                    severity="warning"
+                )
+                budget_manager.record_warning(warning)
+                logger.warning(
+                    "Performance warning: %s %s completed in %.2f ms",
+                    request.method,
+                    log_path,
+                    process_time_ms,
+                    extra={
+                        **log_data,
+                        "event": "performance_budget_warning",
+                        "performance_warning": warning.to_dict(),
+                        "level": "WARNING",
+                    },
+                )
                 "timestamp": datetime.now(UTC).isoformat(),
                 "request_id": request_id,
                 "method": request.method,
@@ -293,23 +417,8 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
 
             log_data = sanitize_for_logging(log_data, environment)
 
-            if status_code >= 500:
-                logger.error(
-                    "API Error: %s %s - %s",
-                    request.method,
-                    log_path,
-                    status_code,
-                    extra={**log_data, "level": "ERROR"},
-                )
-            elif status_code >= 400:
-                logger.warning(
-                    "Client Error: %s %s - %s",
-                    request.method,
-                    log_path,
-                    status_code,
-                    extra={**log_data, "level": "WARNING"},
-                )
-            elif process_time_ms >= _slow_request_threshold_ms():
+            # Legacy slow request logging (deprecated)
+            if process_time_ms >= _slow_request_threshold_ms():
                 logger.warning(
                     "Slow HTTP request: %s %s completed in %.2f ms",
                     request.method,

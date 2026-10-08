@@ -34,6 +34,14 @@ from app.lifecycle import init_database
 from app.middleware import limiter, SecurityHeadersMiddleware
 from app.middleware.performance import PerformanceMiddleware, compute_startup_duration
 from app.middleware.request_logging import add_request_logging_middleware
+from app.performance_budgets import (
+    PerformanceBudgetManager,
+    PerformanceWarning,
+    StartupBudgetExceeded,
+    get_performance_budget_manager,
+    run_bounded,
+    startup_budget,
+)
 from app.safe_logging import safe_connection_metadata
 
 logger = logging.getLogger(__name__)
@@ -753,21 +761,47 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         cold ping does not open a PostgreSQL connection.
         Every other operational route triggers heavy init on first use, guarded
         by an async lock so concurrent cold requests only run the sequence once.
+        
+        This operation is protected by performance budgets to prevent slow
+        initialization from blocking the application.
         """
         if _heavy_state["initialized"]:
             return
+            
         async with _heavy_lock:
             if _heavy_state["initialized"]:
                 return
             if _heavy_state["in_progress"]:
                 return
             _heavy_state["in_progress"] = True
+            
             try:
-                await init_database(app_settings.environment)
+                # Initialize database with performance budget
+                await run_bounded(
+                    operation="database_initialization",
+                    coroutine=init_database(app_settings.environment),
+                    warning_ms=3000,  # 3 second warning for database init
+                    timeout_ms=5000,  # 5 second hard timeout for database init
+                    context={
+                        "environment": app_settings.environment,
+                        "deployment_id": getattr(app_settings, 'deployment_id', 'unknown')
+                    }
+                )
 
                 from app.startup_diagnostics import mark_heavy_init_complete
 
-                heavy_ms = mark_heavy_init_complete()
+                # Mark heavy init complete with performance budget
+                heavy_ms = await run_bounded(
+                    operation="heavy_init_marking",
+                    coroutine=mark_heavy_init_complete(),
+                    warning_ms=1000,  # 1 second warning
+                    timeout_ms=2000,  # 2 second timeout
+                    context={
+                        "environment": app_settings.environment,
+                        "deployment_id": getattr(app_settings, 'deployment_id', 'unknown')
+                    }
+                )
+                
                 logger.warning(
                     "Heavy application initialization completed in %.2f ms",
                     heavy_ms,
@@ -778,6 +812,28 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                     },
                 )
                 _heavy_state["initialized"] = True
+                
+            except StartupBudgetExceeded as e:
+                logger.error(f"Heavy initialization budget exceeded: {e}")
+                # In production, we should fail fast rather than continue with incomplete initialization
+                if app_settings.environment == "production":
+                    raise
+                else:
+                    # In non-production, continue but log the violation
+                    from app.performance_budgets import get_performance_budget_manager
+                    budget_manager = get_performance_budget_manager()
+                    violation = PerformanceWarning(
+                        operation="heavy_initialization",
+                        elapsed_ms=e.elapsed_ms,
+                        budget_type="startup",
+                        context={
+                            "environment": app_settings.environment,
+                            "deployment_id": getattr(app_settings, 'deployment_id', 'unknown'),
+                            "error": str(e)
+                        },
+                        severity="violation"
+                    )
+                    budget_manager.record_violation(violation)
             finally:
                 _heavy_state["in_progress"] = False
 
@@ -791,30 +847,97 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
     @app.on_event("startup")
     async def startup_event():
         """Lightweight startup; heavy DB init is deferred to first non-ping request."""
-        await compute_startup_duration()
-        from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
+        budget_manager = get_performance_budget_manager()
+        
+        try:
+            await compute_startup_duration()
+            from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
 
-        snapshot = startup_event_snapshot()
-        logger.warning(
-            "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
-            snapshot.startup_duration_ms or 0.0,
-            is_heavy_initialized(),
-            extra={
-                "event": "lightweight_application_startup",
-                "heavy_initialized": is_heavy_initialized(),
-                "startup_duration_ms": round(snapshot.startup_duration_ms or 0.0, 2),
-                "deployment_id": snapshot.deployment_id,
-            },
-        )
+            snapshot = startup_event_snapshot()
+            startup_duration = snapshot.startup_duration_ms or 0.0
+            
+            # Check startup performance budgets
+            if startup_duration >= 2500:  # Hard budget exceeded
+                violation = PerformanceWarning(
+                    operation="lightweight_startup",
+                    elapsed_ms=startup_duration,
+                    budget_type="startup",
+                    context={
+                        "deployment_id": snapshot.deployment_id,
+                        "heavy_initialized": is_heavy_initialized(),
+                    },
+                    severity="violation"
+                )
+                budget_manager.record_violation(violation)
+                logger.error(
+                    "Lightweight startup performance budget exceeded: %.2f ms (limit: 2500 ms)",
+                    startup_duration,
+                    extra={
+                        "event": "lightweight_startup_performance_violation",
+                        "heavy_initialized": is_heavy_initialized(),
+                        "startup_duration_ms": round(startup_duration, 2),
+                        "performance_violation": violation.to_dict(),
+                        "level": "ERROR",
+                    },
+                )
+            elif startup_duration >= 2000:  # Warning threshold
+                warning = PerformanceWarning(
+                    operation="lightweight_startup",
+                    elapsed_ms=startup_duration,
+                    budget_type="startup",
+                    context={
+                        "deployment_id": snapshot.deployment_id,
+                        "heavy_initialized": is_heavy_initialized(),
+                    },
+                    severity="warning"
+                )
+                budget_manager.record_warning(warning)
+                logger.warning(
+                    "Lightweight startup performance warning: %.2f ms",
+                    startup_duration,
+                    extra={
+                        "event": "lightweight_startup_performance_warning",
+                        "heavy_initialized": is_heavy_initialized(),
+                        "startup_duration_ms": round(startup_duration, 2),
+                        "performance_warning": warning.to_dict(),
+                        "level": "WARNING",
+                    },
+                )
+            else:
+                logger.warning(
+                    "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
+                    startup_duration,
+                    is_heavy_initialized(),
+                    extra={
+                        "event": "lightweight_application_startup",
+                        "heavy_initialized": is_heavy_initialized(),
+                        "startup_duration_ms": round(startup_duration, 2),
+                        "deployment_id": snapshot.deployment_id,
+                    },
+                )
 
-        # Start Neon egress monitor when credentials are configured.
-        if os.getenv("NEON_TOKEN") and os.getenv("NEON_PROJECT_ID"):
-            try:
-                from app.services.neon_monitor import startup_event as neon_startup
-
-                await neon_startup()
-            except Exception:
-                logger.warning("Neon monitor startup skipped", exc_info=True)
+            # Start Neon egress monitor when credentials are configured.
+            if os.getenv("NEON_TOKEN") and os.getenv("NEON_PROJECT_ID"):
+                try:
+                    from app.services.neon_monitor import startup_event as neon_startup
+                    
+                    # Neon monitor startup with performance budget
+                    await run_bounded(
+                        operation="neon_monitor_startup",
+                        coroutine=neon_startup(),
+                        warning_ms=5000,  # 5 second warning
+                        timeout_ms=10000,  # 10 second timeout
+                        context={"deployment_id": snapshot.deployment_id}
+                    )
+                except Exception:
+                    logger.warning("Neon monitor startup skipped", exc_info=True)
+                    
+        except StartupBudgetExceeded as e:
+            logger.error(f"Startup budget exceeded during lightweight startup: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during startup: {e}")
+            raise
 
     @app.middleware("http")
     async def heavy_init_middleware(request: Request, call_next):
@@ -832,7 +955,24 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             # are part of the table the router matches against.
             register_pending_routers()
         if not is_ping_probe and not defer_heavy_init:
-            await _ensure_heavy_init()
+            try:
+                await _ensure_heavy_init()
+            except StartupBudgetExceeded as e:
+                # In production, fail the request if heavy initialization times out
+                if app_settings.environment == "production":
+                    from fastapi import responses
+                    return responses.JSONResponse(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        content={
+                            "detail": "Service temporarily unavailable due to initialization timeout",
+                            "operation": e.operation,
+                            "elapsed_ms": e.elapsed_ms,
+                            "timeout_ms": e.timeout_ms
+                        }
+                    )
+                # In non-production, continue but log the violation
+                logger.warning(f"Heavy initialization performance warning: {e}")
+        
         response = await call_next(request)
         from app.startup_diagnostics import is_heavy_initialized as _is_heavy
 
