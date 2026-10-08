@@ -160,3 +160,20 @@ def test_roster_chain_step_still_fires_on_always_for_schedule_or_roster():
     )
     assert "- cron: '7 * * * *'" in workflow
     assert "queue: single" in workflow
+
+
+def test_private_rotisserie_secret_has_safe_ssh_preflight():
+    """Secret parsing and actual repo authorization must precede the pipx install."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    install = workflow.split("Install pinned Rotisserie decision CLI", 1)[1].split(
+        "Ensure GitHub CLI supports JSON PR checks", 1
+    )[0]
+    assert 'ROTISSERIE_DEPLOY_KEY: ${{ secrets.ROTISSERIE_DEPLOY_KEY }}' in install
+    assert 'ssh-keygen -y -P \'\' -f "$ssh_dir/id_ed25519"' in install
+    assert 'ssh-keygen -lf "$ssh_dir/id_ed25519.pub" -E sha256' in install
+    assert 'git ls-remote ' in install
+    assert 'git@github.com:JoshCLWren/rotisserie.git HEAD' in install
+    assert install.index("ssh-keygen -lf") < install.index("git ls-remote")
+    assert install.index("git ls-remote") < install.index("pipx install")
+    assert "StrictHostKeyChecking=yes" in install
+    assert 'trap \'rm -rf "$ssh_dir"\' EXIT' in install
