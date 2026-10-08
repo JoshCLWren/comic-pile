@@ -152,6 +152,8 @@ async def run_bounded[T](
         # Execute with timeout
         result = asyncio.create_task(_execute_with_timeout())
 
+        warning_task: asyncio.Task[None] | None = None
+
         # Check for warning threshold (only if timeout is positive)
         if timeout_ms is not None and timeout_ms > 0 and warning_ms < timeout_ms:
             async def _check_warning() -> None:
@@ -173,7 +175,7 @@ async def run_bounded[T](
                     )
 
             # Schedule warning check
-            asyncio.create_task(_check_warning())
+            warning_task = asyncio.create_task(_check_warning())
 
         # Wait for completion
         try:
@@ -183,6 +185,14 @@ async def run_bounded[T](
             if not result.done():
                 result.cancel()
             raise
+        finally:
+            # Cancel warning task if it hasn't fired yet
+            if warning_task is not None and not warning_task.done():
+                warning_task.cancel()
+                try:
+                    await warning_task
+                except asyncio.CancelledError:
+                    pass
 
     return await _run_with_warning()
 

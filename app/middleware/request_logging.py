@@ -17,6 +17,7 @@ from fastapi import FastAPI, Request
 
 from app.performance_budgets import (
     PerformanceWarning,
+    REQUEST_TIMEOUT_MS,
     get_performance_budget_manager,
 )
 from app.performance_diagnostics import (
@@ -218,76 +219,6 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
         snapshot = startup_event_snapshot()
         startup_duration = snapshot.startup_duration_ms or 0.0
         
-        # Check startup performance budgets
-        if startup_duration >= 2500:  # Hard budget exceeded
-            violation = PerformanceWarning(
-                operation="startup",
-                elapsed_ms=startup_duration,
-                budget_type="startup",
-                context={
-                    "deployment_id": snapshot.deployment_id,
-                    "application_import_ms": _rounded_optional(snapshot.application_import_ms),
-                    "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
-                    "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
-                    "process_age_ms": round(snapshot.process_age_ms, 2),
-                },
-                severity="violation"
-            )
-            budget_manager.record_violation(violation)
-            logger.error(
-                "Startup performance budget exceeded: %.2f ms (limit: 2500 ms)",
-                startup_duration,
-                extra={
-                    "event": "startup_performance_violation",
-                    "startup_duration_ms": _rounded_optional(startup_duration),
-                    "performance_warning": violation.to_dict(),
-                    "level": "ERROR",
-                },
-            )
-        elif startup_duration >= 2000:  # Warning threshold
-            warning = PerformanceWarning(
-                operation="startup",
-                elapsed_ms=startup_duration,
-                budget_type="startup",
-                context={
-                    "deployment_id": snapshot.deployment_id,
-                    "application_import_ms": _rounded_optional(snapshot.application_import_ms),
-                    "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
-                    "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
-                    "process_age_ms": round(snapshot.process_age_ms, 2),
-                },
-                severity="warning"
-            )
-            budget_manager.record_warning(warning)
-            logger.warning(
-                "Startup performance warning: %.2f ms",
-                startup_duration,
-                extra={
-                    "event": "startup_performance_warning",
-                    "startup_duration_ms": _rounded_optional(startup_duration),
-                    "performance_warning": warning.to_dict(),
-                    "level": "WARNING",
-                },
-            )
-        else:
-            logger.warning(
-                "Application startup completed in %.2f ms",
-                startup_duration,
-                extra={
-                    "event": "application_startup",
-                    "startup_duration_ms": _rounded_optional(startup_duration),
-                    "application_import_ms": _rounded_optional(snapshot.application_import_ms),
-                    "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
-                    "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
-                    "process_age_ms": round(snapshot.process_age_ms, 2),
-                    "deployment_id": snapshot.deployment_id,
-                    "process_started_at_ns": snapshot.process_started_at_ns,
-                    "level": "WARNING",
-                },
-            )
-        
-        # Always log the application_startup event for observability
-        # This ensures the event is logged regardless of performance budget thresholds
         logger.warning(
             "Application startup completed in %.2f ms",
             startup_duration,
@@ -388,7 +319,9 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "deployment_id": startup.deployment_id,
             }
             
-            if process_time_ms >= 1000:  # Performance budget violation
+            slow_request_threshold = _slow_request_threshold_ms()
+            
+            if process_time_ms >= REQUEST_TIMEOUT_MS:  # Performance budget violation (1000ms)
                 violation = PerformanceWarning(
                     operation=f"request.{log_path}",
                     elapsed_ms=process_time_ms,
@@ -409,7 +342,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                         "level": "ERROR",
                     },
                 )
-            elif process_time_ms >= 500:  # Performance warning
+            elif process_time_ms >= slow_request_threshold:  # Performance warning (configurable, default 500ms)
                 warning = PerformanceWarning(
                     operation=f"request.{log_path}",
                     elapsed_ms=process_time_ms,
@@ -446,14 +379,6 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                     request.method,
                     log_path,
                     status_code,
-                    extra={**log_data, "level": "WARNING"},
-                )
-            elif process_time_ms >= _slow_request_threshold_ms():
-                logger.warning(
-                    "Slow HTTP request: %s %s completed in %.2f ms",
-                    request.method,
-                    log_path,
-                    process_time_ms,
                     extra={**log_data, "level": "WARNING"},
                 )
             elif startup.cold:

@@ -37,6 +37,8 @@ from app.middleware.request_logging import add_request_logging_middleware
 from app.performance_budgets import (
     PerformanceWarning,
     StartupBudgetError,
+    STARTUP_WARNING_MS,
+    STARTUP_TIMEOUT_MS,
     get_performance_budget_manager,
     run_bounded,
 )
@@ -848,7 +850,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             startup_duration = snapshot.startup_duration_ms or 0.0
             
             # Check startup performance budgets
-            if startup_duration >= 2500:  # Hard budget exceeded
+            if startup_duration >= STARTUP_TIMEOUT_MS:  # Hard budget exceeded
                 violation = PerformanceWarning(
                     operation="lightweight_startup",
                     elapsed_ms=startup_duration,
@@ -861,8 +863,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                 )
                 budget_manager.record_violation(violation)
                 logger.error(
-                    "Lightweight startup performance budget exceeded: %.2f ms (limit: 2500 ms)",
+                    "Lightweight startup performance budget exceeded: %.2f ms (limit: %d ms)",
                     startup_duration,
+                    STARTUP_TIMEOUT_MS,
                     extra={
                         "event": "lightweight_startup_performance_violation",
                         "heavy_initialized": is_heavy_initialized(),
@@ -871,7 +874,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                         "level": "ERROR",
                     },
                 )
-            elif startup_duration >= 2000:  # Warning threshold
+            elif startup_duration >= STARTUP_WARNING_MS:  # Warning threshold
                 warning = PerformanceWarning(
                     operation="lightweight_startup",
                     elapsed_ms=startup_duration,
