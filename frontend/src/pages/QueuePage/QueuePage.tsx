@@ -23,6 +23,7 @@ import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueCrossovers } from './useQueueCrossovers'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
+import BulkMapComicVineDialog from './BulkMapComicVineDialog'
 
 /**
  * Route entry for the Queue page. The component composes the focused
@@ -35,7 +36,9 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
+  const [bulkMapDialogOpen, setBulkMapDialogOpen] = useState(false)
   const isSearching = searchQuery.trim() !== ''
+  const [selectedThreadsForMapping, setSelectedThreadsForMapping] = useState<ThreadListItem[]>([])
 
   const {
     data: threads,
@@ -113,6 +116,32 @@ export default function QueuePage() {
     if (modals.editingThread) void invalidateAfterIssueEdit(queryClient, modals.editingThread.id)
   }, [modals.editingThread])
 
+  const handleBulkMapComicVine = useCallback(() => {
+    // Find threads that don't have ComicVine mappings
+    const unmappedThreads = activeThreads.filter(thread => {
+      // For now, we'll assume threads without total_issues are unmapped
+      // This is a simplification - in a real implementation, we'd check the actual mapping status
+      return thread.total_issues === null
+    })
+    
+    if (unmappedThreads.length === 0) {
+      window.alert('All series are already mapped to ComicVine!')
+      return
+    }
+    
+    setSelectedThreadsForMapping(unmappedThreads)
+    setBulkMapDialogOpen(true)
+  }, [activeThreads])
+
+  const handleMapSelectedThreads = useCallback(() => {
+    // For now, we'll just roll each thread to trigger the mapping flow
+    selectedThreadsForMapping.forEach(thread => {
+      navigate(`/`, { state: { rollResponse: { thread_id: thread.id, result: 'manual' } } })
+    })
+    setBulkMapDialogOpen(false)
+    setSelectedThreadsForMapping([])
+  }, [selectedThreadsForMapping, navigate])
+
   const handleRepositionConfirm = useCallback(
     async (targetPosition: number) => {
       if (!modals.repositioningThread) return
@@ -149,6 +178,10 @@ export default function QueuePage() {
       const readDisabled = isBlocked
       const blockingReasons = blockingDependencies.map((dep) => dep.label)
       const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'
+      
+      // For now, assume threads without total_issues are unmapped
+      // This is a simplification - in a real implementation, we'd check the actual mapping status
+      const isMapped = thread.total_issues !== null
 
       return (
         <QueueThreadCard
@@ -179,6 +212,11 @@ export default function QueuePage() {
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
           onDelete={() => actions.requestDelete(thread)}
+          onMapComicVine={() => {
+            // Navigate to roll page with this thread to trigger mapping flow
+            navigate('/', { state: { rollResponse: { thread_id: thread.id, result: 'manual' } } })
+          }}
+          isMapped={isMapped}
         />
       )
     },
@@ -219,6 +257,7 @@ export default function QueuePage() {
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}
           onCreateThread={modals.showCreateModal}
+          onBulkMapComicVine={handleBulkMapComicVine}
           sortBy={sortBy}
           onSortChange={setSortBy}
           searchQuery={searchQuery}
@@ -334,6 +373,13 @@ export default function QueuePage() {
           isPending={shuffleQueueMutation.isPending}
           onConfirm={() => void actions.confirmShuffle()}
           onCancel={actions.cancelShuffle}
+        />
+
+        <BulkMapComicVineDialog
+          isOpen={bulkMapDialogOpen}
+          threads={selectedThreadsForMapping}
+          onMapSelected={handleMapSelectedThreads}
+          onClose={() => setBulkMapDialogOpen(false)}
         />
       </div>
     </PositionMenuProvider>

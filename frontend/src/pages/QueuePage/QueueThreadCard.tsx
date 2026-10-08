@@ -6,6 +6,7 @@ import { CrossoverTags } from '../../components/CrossoverTags'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
+import { ComicVineMappingStatus } from '../../components/ComicVineMappingStatus'
 
 interface QueueThreadCardProps {
   thread: ThreadListItem
@@ -42,6 +43,8 @@ interface QueueThreadCardProps {
   onEdit: () => void
   onDependencies: () => void
   onDelete: () => void
+  onMapComicVine: (thread: ThreadListItem) => void
+  isMapped?: boolean
 }
 
 export default function QueueThreadCard({
@@ -71,6 +74,8 @@ export default function QueueThreadCard({
   onEdit,
   onDependencies,
   onDelete,
+  onMapComicVine,
+  isMapped = false,
 }: QueueThreadCardProps) {
   // `total_issues` is optional in the generated list item; absent and null
   // both mean the thread has no known issue total.
@@ -159,6 +164,7 @@ export default function QueueThreadCard({
             <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               {thread.format}
             </span>
+            <ComicVineMappingStatus isMapped={isMapped} />
             {thread.issues_remaining !== null && (
               <span className="text-sm font-medium text-[var(--theme-text-muted)]">
                 {isMigrated && !isBlocked && thread.next_unread_issue_number
@@ -227,6 +233,8 @@ export default function QueueThreadCard({
           readDisabled={readDisabled}
           readDisabledReason={readDisabledReason}
           onRead={onRead}
+          onMapComicVine={() => onMapComicVine(thread)}
+          isMapped={isMapped}
         />
         <PositionMenu
           thread={thread}
