@@ -196,19 +196,4 @@ class MetadataCorrectionRevertRequest(BaseModel):
     correction_id: int = Field(..., description="ID of the correction to revert")
 
 
-class RemoveIdentityRequest(BaseModel):
-    """Request to remove the confirmed ComicVine identity mapping from an issue."""
 
-    pass
-
-
-class RemoveIdentityResponse(BaseModel):
-    """Response confirming removal of a ComicVine identity mapping."""
-
-    issue_id: int
-    comicvine_issue_id: str | None = None
-    has_confirmed_identity: bool
-    message: str = Field(
-        default="ComicVine mapping removed. Issue is now unlinked.",
-        description="Human-readable confirmation message.",
-    )

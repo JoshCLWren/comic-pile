@@ -28,7 +28,6 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
     ReplaceIdentityRequest,
-    RemoveIdentityResponse,
 )
 from app.services.comicvine_resolution import (
     ImportTargetNotFoundError,
@@ -436,7 +435,7 @@ async def api_revert_correction(
 
 @router.delete(
     "/issues/{issue_id}/identity",
-    response_model=RemoveIdentityResponse,
+    response_model=IssueIdentityResponse,
     status_code=status.HTTP_200_OK,
 )
 async def api_remove_identity(
