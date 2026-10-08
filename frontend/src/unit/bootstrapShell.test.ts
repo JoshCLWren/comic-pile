@@ -136,7 +136,9 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('removes the shell via failsafe timeout when ready marker never appears', () => {
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell, 100, 200)
@@ -146,7 +148,9 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('cancels failsafe when ready marker appears before failsafe timeout', async () => {
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell, 100, 200)

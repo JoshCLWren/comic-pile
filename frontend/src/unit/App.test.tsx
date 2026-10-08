@@ -510,6 +510,7 @@ describe('bootstrap shell and route compatibility (issue #3242)', () => {
   })
 
   afterEach(() => {
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -552,6 +553,7 @@ describe('bootstrap shell removal on render error (issue #3242)', () => {
   })
 
   afterEach(() => {
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -592,6 +594,7 @@ describe('slow auth recovery does not leave bootstrap shell mounted (issue #3242
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockGetAccessToken.mockReturnValue('test-token')
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
