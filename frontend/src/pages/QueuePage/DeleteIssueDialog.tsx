@@ -3,23 +3,23 @@ import type { Issue } from '../../types'
 
 interface DeleteIssueDialogProps {
   issue: Issue | null
-  isPending: boolean
-  error: string | null
   onConfirm: () => void
   onCancel: () => void
 }
 
 /**
  * In-app confirmation for deleting an issue from a thread. Replaces the native
- * `window.confirm` flow so destructive deletes always show a clear confirmation
- * and visible success/error feedback instead of silently no-oping. The dialog
- * stays open when the delete fails so the error is actionable: the user can
- * retry or cancel.
+ * `window.confirm` flow, which froze the whole page instead of showing a
+ * confirmation (issue #3269).
+ *
+ * Confirming closes the dialog: the pill is already removed optimistically and
+ * any failure surfaces in the issue list's inline action error. The dialog
+ * must not stay open while a delete settles, because in the Edit Series dialog
+ * the delete is a draft that only flushes on Save Changes, and a
+ * focus-trapping modal would make that button unreachable.
  */
 export default function DeleteIssueDialog({
   issue,
-  isPending,
-  error,
   onConfirm,
   onCancel,
 }: DeleteIssueDialogProps) {
@@ -35,32 +35,21 @@ export default function DeleteIssueDialog({
           <p className="text-sm text-[var(--theme-text-muted)]">
             Are you sure you want to delete issue #{issue.issue_number}? This cannot be undone.
           </p>
-          {error && (
-            <p
-              role="alert"
-              className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-danger)]"
-              data-testid="delete-issue-error"
-            >
-              {error}
-            </p>
-          )}
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <button
               type="button"
               onClick={onCancel}
-              disabled={isPending}
-              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={onConfirm}
-              disabled={isPending}
               data-testid="confirm-delete-issue"
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
             >
-              {isPending ? 'Deleting...' : 'Delete Issue'}
+              Delete Issue
             </button>
           </div>
         </div>

@@ -286,8 +286,10 @@ describe('IssueToggleList', () => {
     fireEvent.click(screen.getByTestId('issue-delete-2'))
     expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
 
-    // Confirm the delete through the in-app dialog
+    // Confirm the delete through the in-app dialog. The dialog closes on
+    // confirmation so it can never trap focus over the list it edits.
     fireEvent.click(screen.getByTestId('confirm-delete-issue'))
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
     expect(getIssueOrder()).toEqual(['3', '1'])
 
     await act(async () => {
@@ -356,6 +358,9 @@ describe('IssueToggleList', () => {
     // Click the Delete button in the dialog
     fireEvent.click(screen.getByTestId('confirm-delete-issue'))
 
+    // Confirming closes the dialog instead of holding a focus trap open while
+    // the delete settles (#3269), and the optimistic removal is immediate.
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
     expect(mockedIssuesApi.delete).toHaveBeenCalledWith(2)
     expect(getIssueOrder()).toEqual(['1', '3'])
 
@@ -380,6 +385,35 @@ describe('IssueToggleList', () => {
     // Click the Cancel button in the dialog
     fireEvent.click(screen.getByText('Cancel'))
 
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
+    expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
+    expect(getIssueOrder()).toEqual(['1', '2', '3'])
+  })
+
+  it('restores the issue and reports the failure inline when a confirmed delete fails', async () => {
+    mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete failed'))
+    await renderIssueToggleList()
+
+    fireEvent.click(screen.getByTestId('issue-delete-2'))
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
+
+    await waitFor(() => expect(screen.getByText('delete failed')).toBeInTheDocument())
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
+    // The failed issue comes back so the reader can retry from the list.
+    await waitFor(() => expect(getIssueOrder()).toEqual(['1', '2', '3']))
+  })
+
+  it('closes the confirmation dialog on Escape without deleting', async () => {
+    await renderIssueToggleList()
+
+    fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
+    )
     expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
     expect(getIssueOrder()).toEqual(['1', '2', '3'])
   })
@@ -672,14 +706,14 @@ describe('IssueToggleList', () => {
     await renderIssueToggleList()
     fireEvent.click(screen.getByTestId('issue-toggle-1'))
     await waitFor(() => expect(screen.getByText('toggle failed')).toBeInTheDocument())
-    // Test delete failure with the new dialog
+    // A confirmed delete reports failures through the same inline action error
+    // channel, since the confirmation dialog closes on confirm.
     mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete failed'))
     fireEvent.click(screen.getByTestId('issue-delete-2'))
     expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
-
-    // Click the Delete button in the dialog (will fail)
     fireEvent.click(screen.getByTestId('confirm-delete-issue'))
     await waitFor(() => expect(screen.getByText('delete failed')).toBeInTheDocument())
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
   })
 
   it('handles dependency fetch errors, no-op moves, and successful additions', async () => {
@@ -740,8 +774,6 @@ describe('IssueToggleList', () => {
 
     fireEvent.click(screen.getByTestId('issue-delete-2'))
     expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
-    
-    // Click the Delete button in the dialog
     fireEvent.click(screen.getByTestId('confirm-delete-issue'))
 
     await waitFor(() => expect(mockedIssuesApi.delete).toHaveBeenCalledWith(2))
