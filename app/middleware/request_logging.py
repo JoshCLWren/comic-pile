@@ -285,6 +285,24 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                     "level": "WARNING",
                 },
             )
+        
+        # Always log the application_startup event for observability
+        # This ensures the event is logged regardless of performance budget thresholds
+        logger.warning(
+            "Application startup completed in %.2f ms",
+            startup_duration,
+            extra={
+                "event": "application_startup",
+                "startup_duration_ms": _rounded_optional(startup_duration),
+                "application_import_ms": _rounded_optional(snapshot.application_import_ms),
+                "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
+                "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
+                "process_age_ms": round(snapshot.process_age_ms, 2),
+                "deployment_id": snapshot.deployment_id,
+                "process_started_at_ns": snapshot.process_started_at_ns,
+                "level": "WARNING",
+            },
+        )
 
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
