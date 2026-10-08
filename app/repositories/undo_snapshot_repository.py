@@ -494,12 +494,20 @@ class UndoSnapshotRepository:
         if restored_die is None and target_event is not None:
             restored_die = target_event.die
 
+        # Use denormalized thread_title from target_event if available,
+        # otherwise look up the thread for backward compatibility
+        thread_title = target_event.thread_title if target_event else None
+        if thread_title is None and target_event and target_event.thread_id:
+            thread = await self.db.get(Thread, target_event.thread_id)
+            thread_title = thread.title if thread else None
+
         event = Event(
             type="undo",
             session_id=session_id,
             thread_id=target_event.thread_id if target_event else None,
             die=target_event.die_after if target_event else None,
             die_after=restored_die,
+            thread_title=thread_title,
         )
         
         self.db.add(event)

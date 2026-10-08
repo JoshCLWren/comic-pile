@@ -504,6 +504,7 @@ async def rate_thread(
         issue_id=rated_issue_id,
         issue_number=rated_issue_number,
         source_roll_event_id=source_roll_event_id,
+        thread_title=thread.title,
     )
     db.add(event)
 

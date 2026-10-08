@@ -630,6 +630,7 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         type="delete",
         timestamp=datetime.now(UTC),
         thread_id=None,
+        thread_title=thread.title,
     )
     db.add(delete_event)
     try:
@@ -862,6 +863,7 @@ async def set_pending_thread(
         die=current_die,
         result=result,
         selection_method="manual",
+        thread_title=thread_title,
     )
     db.add(event)
 

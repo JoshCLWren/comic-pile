@@ -337,6 +337,7 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
         source_roll_event_id=await fetch_source_roll_event(
             db, current_session_id, pending_thread_id
         ),
+        thread_title=active_thread.title if active_thread else None,
     )
     db.add(event)
 
@@ -401,10 +402,13 @@ async def unsnooze_thread(db: AsyncSession, user_id: int, thread_id: int) -> Ses
     snoozed_ids.remove(thread_id)
     current_session.snoozed_thread_ids = snoozed_ids
 
+    thread = await db.get(Thread, thread_id)
+
     event = Event(
         type="unsnooze",
         session_id=current_session.id,
         thread_id=thread_id,
+        thread_title=thread.title if thread else None,
     )
     db.add(event)
 

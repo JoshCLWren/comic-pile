@@ -52,6 +52,12 @@ class Event(Base):
           and "rolled_but_skipped" events where we need referential integrity
           and the relationship to the Thread model.
 
+    Denormalized Display Fields:
+        - `issue_number`: Preserves the issue number at event time for display
+          even if the Issue is later deleted.
+        - `thread_title`: Preserves the thread title at event time for display
+          even if the Thread is later deleted.
+
     Source Roll Linkage:
         - `source_roll_event_id`: Self-referential FK linking rate/snooze events
           back to the originating roll event. NULL for historical events and roll
@@ -88,6 +94,8 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Denormalized thread_title preserved for historical display even if Thread is deleted
+    thread_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Links rate/snooze events back to the originating roll event in the same session.
     # NULL for historical events and roll events themselves.
     source_roll_event_id: Mapped[int | None] = mapped_column(

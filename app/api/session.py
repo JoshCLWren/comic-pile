@@ -769,32 +769,16 @@ async def get_session_details(
     )
     events = events_result.scalars().all()
 
-    thread_ids = set()
-    for event in events:
-        if event.type == "roll":
-            thread_id = event.selected_thread_id
-        else:
-            thread_id = event.thread_id
-        if thread_id:
-            thread_ids.add(thread_id)
-
-    threads_dict = {}
-    if thread_ids:
-        threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
-        threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
-
     formatted_events = []
     for event in events:
-        thread_title = None
-        if event.type == "roll":
-            thread_id = event.selected_thread_id
-        else:
-            thread_id = event.thread_id
-
-        if thread_id:
-            thread = threads_dict.get(thread_id)
-            if thread:
-                thread_title = thread.title
+        # Use denormalized thread_title from event (preserved even if thread deleted)
+        # Fall back to thread lookup for backward compatibility with pre-migration events
+        thread_title = event.thread_title
+        if thread_title is None:
+            thread_id = event.selected_thread_id if event.type == "roll" else event.thread_id
+            if thread_id:
+                thread_result = await db.execute(select(Thread.title).where(Thread.id == thread_id))
+                thread_title = thread_result.scalar_one_or_none()
 
         event_data = EventDetail(
             id=event.id,

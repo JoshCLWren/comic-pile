@@ -282,6 +282,7 @@ async def create_issues(
         type="issues_created",
         timestamp=datetime.now(UTC),
         thread_id=thread.id,
+        thread_title=thread.title,
     )
     db.add(event)
 
@@ -425,6 +426,7 @@ async def delete_issue(
         timestamp=datetime.now(UTC),
         thread_id=thread.id,
         issue_number=deleted_issue_number,
+        thread_title=thread.title,
     )
     db.add(event)
 
@@ -539,6 +541,7 @@ async def mark_issue_read(
         thread_id=thread.id,
         issue_id=issue_id,
         issue_number=issue.issue_number,
+        thread_title=thread.title,
     )
     db.add(event)
 
@@ -588,6 +591,7 @@ async def mark_issue_unread(
         thread_id=thread.id,
         issue_id=issue_id,
         issue_number=issue.issue_number,
+        thread_title=thread.title,
     )
     db.add(event)
 
