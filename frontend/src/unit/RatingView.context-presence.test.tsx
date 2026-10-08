@@ -295,7 +295,7 @@ describe('hasReadingContextContent predicate (#1942)', () => {
 
   it('is true for reading orders or connected threads alone', () => {
     expect(hasReadingContextContent([{ id: 1, name: 'x', description: null, total_items: 1, completed_items: 1, items: [] }], [], null)).toBe(true)
-    expect(hasReadingContextContent([], [{ thread_id: 1, title: 'Other', connection_type: 'blocks', dependency_id: 2 }], null)).toBe(true)
+    expect(hasReadingContextContent([], [{ thread_id: 1, title: 'Other', connection_type: 'blocks', dependency_id: 2, is_circular: false }], null)).toBe(true)
   })
 
   it('is true for a reader context with edges, a series name, or chain beyond current', () => {

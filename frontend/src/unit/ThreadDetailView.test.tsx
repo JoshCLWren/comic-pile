@@ -339,7 +339,7 @@ it('renders named blocked-by dependencies and an empty blocking list as links', 
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
+      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11, is_circular: false },
     ],
   })
   renderPage()
@@ -355,7 +355,7 @@ it('renders blocker issue number on thread detail when known', async () => {
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 9, title: 'Starman', connection_type: 'blocked_by', dependency_id: 11, issue_number: '42' },
+      { thread_id: 9, title: 'Starman', connection_type: 'blocked_by', dependency_id: 11, issue_number: '42', is_circular: false },
     ],
   })
   renderPage()
@@ -368,7 +368,7 @@ it('omits issue number suffix when issue_number is absent', async () => {
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
+      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11, is_circular: false },
     ],
   })
   renderPage()
@@ -381,7 +381,7 @@ it('renders blocking dependency issue number on thread detail when known', async
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, issue_number: '7' },
+      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, issue_number: '7', is_circular: false },
     ],
   })
   renderPage()
@@ -394,12 +394,39 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12 },
+      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, is_circular: false },
     ],
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText('Nothing blocks this series')).toBeInTheDocument())
+  expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
+})
+
+it('lists a circular dependency once instead of under both directions (#3239)', async () => {
+  mockedConnectedThreads.mockResolvedValue({
+    thread_id: 1,
+    connected_threads: [
+      // Bidirectional: this one connection both blocks and is blocked by thread 1.
+      { thread_id: 9, title: 'Magneto Rex', connection_type: 'blocks & blocked_by', dependency_id: 11, issue_number: '42', is_circular: true },
+      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, is_circular: false },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: 'Open Magneto Rex (circular dependency)' }),
+  ).toHaveAttribute('href', '/thread/9')
+
+  // The circular series is presented exactly once in the whole dependencies
+  // region -- it must not reappear as a prerequisite or as a dependent.
+  const circularLinks = screen.getAllByRole('link', { name: /Magneto Rex/ })
+  expect(circularLinks).toHaveLength(1)
+  expect(screen.queryByRole('link', { name: 'Open Magneto Rex' })).not.toBeInTheDocument()
+
+  // The one-way dependency is unaffected.
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 

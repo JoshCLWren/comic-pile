@@ -32,6 +32,7 @@ const connectedThread = (overrides: Partial<ConnectedThreadInfo>): ConnectedThre
   title: 'Ultimate Wolverine',
   connection_type: 'blocks & blocked_by',
   dependency_id: 12,
+  is_circular: false,
   ...overrides,
 })
 
