@@ -174,7 +174,7 @@ class TestRunBounded:
                 await asyncio.sleep(2.0)  # 2000ms
                 return "success"
             
-            with pytest.raises(RequestBudgetExceeded):
+            with pytest.raises(RequestBudgetError):
                 await run_bounded(
                     operation="test_very_slow",
                     coroutine=very_slow_coroutine(),
@@ -211,7 +211,7 @@ class TestRunBounded:
             await asyncio.sleep(1.5)  # 1500ms
             return "success"
         
-        with pytest.raises(RequestBudgetExceeded) as exc_info:
+        with pytest.raises(RequestBudgetError) as exc_info:
             await run_bounded(
                 operation="request_test",
                 coroutine=slow_coroutine(),
@@ -239,7 +239,7 @@ class TestRunBounded:
             )
         
         # Test request operation defaults
-        with pytest.raises(RequestBudgetExceeded):
+        with pytest.raises(RequestBudgetError):
             await run_bounded(
                 operation="request_operation",
                 coroutine=slow_coroutine()
@@ -295,7 +295,7 @@ class TestRequestBudgetDecorator:
             await asyncio.sleep(1.0)
             return "should_not_reach_here"
         
-        with pytest.raises(RequestBudgetExceeded):
+        with pytest.raises(RequestBudgetError):
             await slow_function()
 
 
@@ -425,7 +425,7 @@ class TestPerformanceBudgetEdgeCases:
             await asyncio.sleep(2.0)
             return "should_not_reach"
         
-        with pytest.raises(RequestBudgetExceeded):
+        with pytest.raises(RequestBudgetError):
             await run_bounded(
                 "cancellation_test",
                 slow_coroutine(),

@@ -5,7 +5,6 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +13,6 @@ STARTUP_WARNING_MS = 2000
 STARTUP_TIMEOUT_MS = 2500
 REQUEST_WARNING_MS = 500
 REQUEST_TIMEOUT_MS = 1000
-
-T = TypeVar("T")
-
 
 class PerformanceBudgetError(Exception):
     """Base class for performance budget violations."""
@@ -101,7 +97,7 @@ class PerformanceWarning:
         }
 
 
-async def run_bounded(
+async def run_bounded[T](
     operation: str,
     coroutine: Awaitable[T],
     warning_ms: float | None = None,

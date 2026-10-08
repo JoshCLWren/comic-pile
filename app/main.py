@@ -776,7 +776,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             try:
                 # Initialize database with performance budget
                 await run_bounded(
-                    operation="database_initialization",
+                    operation="startup.database_initialization",
                     coroutine=init_database(app_settings.environment),
                     warning_ms=3000,  # 3 second warning for database init
                     timeout_ms=5000,  # 5 second hard timeout for database init
