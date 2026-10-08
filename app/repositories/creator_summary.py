@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
@@ -22,6 +23,10 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 
 COMICVINE_PROVIDER = "comicvine"
+
+#: Key inside normalized issue metadata that holds provider creator credits.
+#: Named so the SQL projection and the Python extractor cannot drift apart.
+CREATOR_CREDITS_KEY = "creator_credits"
 
 
 @dataclass(frozen=True)
@@ -94,21 +99,20 @@ def _coerce_creator_id(value: object) -> int | None:
     return None
 
 
-def extract_creator_credits(metadata: dict[str, Any]) -> list[CreatorCredit]:
-    """Extract deduplicated creator credits from confirmed issue metadata.
+def extract_creator_credit_list(raw: object) -> list[CreatorCredit]:
+    """Extract deduplicated creator credits from one provider credit list.
 
-    Credits must carry a stable external person id and a display name to be
-    analytics-addressable. A credit with no usable id is never guessed into a
-    key (issue #2036). Provider role strings may be comma-joined; each distinct
-    role is preserved separately.
+    This is the single-credit-list entry point shared by the full-metadata and
+    projected-column readers. ``load_creator_summary_inputs`` only needs this
+    list, so the creator read projects it out of ``metadata_json`` in SQL and
+    never hydrates the whole normalized provider payload (issue #3244).
 
     Args:
-        metadata: Normalized ComicVine issue ``metadata_json``.
+        raw: Raw ``creator_credits`` value read from normalized issue metadata.
 
     Returns:
         One :class:`CreatorCredit` per distinct (creator id, role set).
     """
-    raw = metadata.get("creator_credits")
     if not isinstance(raw, list):
         return []
     credits: list[CreatorCredit] = []
@@ -137,6 +141,23 @@ def extract_creator_credits(metadata: dict[str, Any]) -> list[CreatorCredit]:
             )
         )
     return credits
+
+
+def extract_creator_credits(metadata: dict[str, Any]) -> list[CreatorCredit]:
+    """Extract deduplicated creator credits from confirmed issue metadata.
+
+    Credits must carry a stable external person id and a display name to be
+    analytics-addressable. A credit with no usable id is never guessed into a
+    key (issue #2036). Provider role strings may be comma-joined; each distinct
+    role is preserved separately.
+
+    Args:
+        metadata: Normalized ComicVine issue ``metadata_json``.
+
+    Returns:
+        One :class:`CreatorCredit` per distinct (creator id, role set).
+    """
+    return extract_creator_credit_list(metadata.get("creator_credits"))
 
 
 #: Reserved identifier band for manually entered creators. Provider person ids
@@ -264,7 +285,9 @@ async def load_creator_summary_inputs(
 
     1. the authenticated user's owned issues, their read/unread status, and
        their stable local thread/series identity;
-    2. confirmed ComicVine issue metadata for those issues (creator credits);
+    2. the confirmed ``creator_credits`` key of ComicVine issue metadata for
+       those issues, projected in SQL so the retained raw provider payload is
+       never hydrated for a creator read (issue #3244);
     3. manual thread-level creator credits for threads without issue metadata;
     4. the latest effective ``rate`` event rating per owned issue.
 
@@ -296,8 +319,12 @@ async def load_creator_summary_inputs(
             thread_manual_credits[thread_id_int] = manual_credits
 
     # 2. Confirmed creator credits per owned issue (ComicVine).
+    # Only ``metadata_json->'creator_credits'`` is projected. Normalized issue
+    # metadata also retains the complete raw ComicVine provider payload, and
+    # hydrating that payload for every owned issue on every creator read is what
+    # pushed this route into multi-second responses (issue #3244).
     metadata_result = await db.execute(
-        select(Issue.id, ExternalIdentity.metadata_json)
+        select(Issue.id, ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY])
         .join(Thread, Thread.id == Issue.thread_id)
         .join(
             IssueExternalIdentityMapping,
@@ -313,10 +340,8 @@ async def load_creator_summary_inputs(
     )
     per_issue_credits: dict[int, dict[tuple[int, tuple[str, ...]], CreatorCredit]] = {}
     issues_with_creator_metadata: set[int] = set()
-    for issue_id, metadata in metadata_result.all():
-        if not isinstance(metadata, dict):
-            continue
-        credits = extract_creator_credits(metadata)
+    for issue_id, raw_credits in metadata_result.all():
+        credits = extract_creator_credit_list(raw_credits)
         owned_issue_id = int(issue_id)
         if credits:
             issues_with_creator_metadata.add(owned_issue_id)
@@ -345,7 +370,11 @@ async def load_creator_summary_inputs(
     }
 
     # 4. Latest effective rating per owned issue (latest event wins).
-    # Use PostgreSQL DISTINCT ON for efficient per-issue latest rating.
+    # PostgreSQL ``DISTINCT ON`` collapses the user's rate events to one row per
+    # owned issue inside the database. ``distinct(Event.issue_id)`` would render
+    # the same SQL but is deprecated on SQLAlchemy 2.1 and emits
+    # ``SADeprecationWarning``; ``postgresql.distinct_on`` applied as a
+    # statement extension is the supported spelling.
     rate_result = await db.execute(
         select(Event.issue_id, Event.rating)
         .join(Issue, Issue.id == Event.issue_id)
@@ -354,8 +383,9 @@ async def load_creator_summary_inputs(
         .where(Event.type == "rate")
         .where(Event.issue_id.is_not(None))
         .where(Event.rating.is_not(None))
-        .distinct(Event.issue_id)
         .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
+        .distinct()
+        .ext(distinct_on(Event.issue_id))
     )
     effective_ratings: dict[int, float] = {
         int(issue_id): float(rating) for issue_id, rating in rate_result.all() if issue_id is not None
@@ -372,10 +402,12 @@ async def load_creator_summary_inputs(
 
 __all__ = [
     "COMICVINE_PROVIDER",
+    "CREATOR_CREDITS_KEY",
     "MANUAL_CREATOR_ID_BASE",
     "CreatorCredit",
     "CreatorSummaryInputs",
     "OwnedIssueSeries",
+    "extract_creator_credit_list",
     "extract_creator_credits",
     "extract_manual_creator_credits",
     "load_creator_summary_inputs",
