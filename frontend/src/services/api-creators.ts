@@ -144,7 +144,10 @@ export function createCreatorsApi(client: HttpClient) {
       if (params.min_ratings !== undefined && params.min_ratings > 0) {
         queryParams.min_ratings = params.min_ratings
       }
-      return client.get<CreatorListResponse>('/v1/creators', { params: queryParams, ...RECOVERY_CONFIG })
+      return client.get<CreatorListResponse>('/v1/creators', {
+        params: queryParams,
+        ...RECOVERY_CONFIG,
+      })
     },
   }
 }
