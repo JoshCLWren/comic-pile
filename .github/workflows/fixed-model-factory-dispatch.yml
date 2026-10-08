@@ -69,10 +69,28 @@ jobs:
           ref: main
 
       - name: Install pinned Rotisserie decision CLI
+        id: rotisserie_install
         shell: bash
+        env:
+          ROTISSERIE_DEPLOY_KEY: ${{ secrets.ROTISSERIE_DEPLOY_KEY }}
         run: |
           set -Eeuo pipefail
-          pipx install 'git+https://github.com/JoshCLWren/rotisserie.git@0067e8c49cb3a3142a04f6c56f19795a1e81ad3c'
+          if [[ -z "${ROTISSERIE_DEPLOY_KEY:-}" ]]; then
+            echo '::error::ROTISSERIE_DEPLOY_KEY secret is missing; cannot install private Rotisserie'
+            exit 1
+          fi
+
+          # The private key only exists in this step and only authenticates this dependency.
+          ssh_dir="$(mktemp -d)"
+          trap 'rm -rf "$ssh_dir"' EXIT
+          chmod 700 "$ssh_dir"
+          printf '%s\n' "$ROTISSERIE_DEPLOY_KEY" > "$ssh_dir/id_ed25519"
+          chmod 600 "$ssh_dir/id_ed25519"
+          # GitHub's published Ed25519 host key; never silently trust an unverified host.
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$ssh_dir/known_hosts"
+
+          GIT_SSH_COMMAND="ssh -i $ssh_dir/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ssh_dir/known_hosts" \
+            pipx install 'git+ssh://git@github.com/JoshCLWren/rotisserie.git@0067e8c49cb3a3142a04f6c56f19795a1e81ad3c'
           rotisserie --help >/dev/null
 
       - name: Ensure GitHub CLI supports JSON PR checks
@@ -564,7 +582,7 @@ jobs:
           echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
 
       - name: Self-perpetuate roster cadence
-        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster'))
+        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && steps.rotisserie_install.outcome == 'success'
         continue-on-error: true
         shell: bash
         env:
