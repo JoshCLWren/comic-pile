@@ -13,11 +13,12 @@ timestamps.
 
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread
 from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.queue import claim_queue_front, vacate_queue_position
 
 
 async def _recalculate_thread_state(thread: Thread, issues: list[Issue]) -> bool:
@@ -103,6 +104,14 @@ async def reconcile_contradictory_completed_threads(
                 thread.next_unread_issue_id = None
                 thread.reading_progress = "completed"
                 thread.status = "completed"
+                # A completed thread holds no queue slot, so repair also
+                # releases a stale slot left behind by pre-#3240 completions.
+                if thread.queue_position >= 1:
+                    released_position = thread.queue_position
+                    await vacate_queue_position(
+                        thread.user_id, released_position, db, commit=False
+                    )
+                    thread.queue_position = 0
                 repaired += 1
                 repaired_ids.append(thread.id)
                 affected_user_ids.add(thread.user_id)
@@ -117,12 +126,8 @@ async def reconcile_contradictory_completed_threads(
             # with earlier repaired shifted to 2, etc. This matches the
             # create_issues path that would have shifted had the write been
             # correct originally.
-            await db.execute(
-                update(Thread)
-                .where(Thread.user_id == thread.user_id)
-                .where(Thread.status == "active")
-                .where(Thread.id != thread.id)
-                .values(queue_position=Thread.queue_position + 1)
+            await claim_queue_front(
+                thread.user_id, db, commit=False, exclude_thread_id=thread.id
             )
             thread.queue_position = 1
 

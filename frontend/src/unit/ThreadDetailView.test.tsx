@@ -246,6 +246,40 @@ it('renders migrated progress, paginated issues, and saves edits', async () => {
   await waitFor(() => expect(mutate).toHaveBeenCalled())
 })
 
+it('shows the live queue position for an active thread', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 7,
+    status: 'active', total_issues: null, notes: null,
+  } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Position #7')).toBeInTheDocument())
+})
+
+it('reports a completed thread as no longer holding a queue slot', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads. A stale
+  // position on a completed thread is the #3240 report; the API also parks
+  // completed threads at queue_position 0.
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Hulk', format: 'Comics', issues_remaining: 0, queue_position: 25,
+    status: 'completed', total_issues: 100, notes: null,
+  } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Not in queue')).toBeInTheDocument())
+  expect(screen.queryByText('Position #25')).not.toBeInTheDocument()
+})
+
+it('reports a thread parked at queue position 0 as no longer holding a queue slot', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Hulk', format: 'Comics', issues_remaining: 0, queue_position: 0,
+    status: 'active', total_issues: null, notes: null,
+  } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Not in queue')).toBeInTheDocument())
+  expect(screen.queryByText('Position #0')).not.toBeInTheDocument()
+})
+
 it('stops loading when the route has no thread id', async () => {
   routeParams.id = ''
   renderPage()

@@ -8,7 +8,6 @@ mapping lives in routers.
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_rating_settings
@@ -42,7 +41,11 @@ from app.services.snapshot_contract import (
 from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
-from comic_pile.queue import move_to_front, move_to_safe_position
+from comic_pile.queue import (
+    move_to_front,
+    move_to_safe_position,
+    vacate_queue_position,
+)
 from comic_pile.reading_session import get_current_die_for_session
 
 
@@ -471,20 +474,10 @@ async def rate_thread(
                     else:
                         thread.issues_remaining = await thread.get_issues_remaining(db)
                 else:
-                    old_pos = thread.queue_position
                     thread.next_unread_issue_id = None
                     thread.reading_progress = "completed"
                     thread.status = "completed"
                     thread.issues_remaining = 0
-                    thread.queue_position = 0
-                    if old_pos > 0:
-                        await db.execute(
-                            update(Thread)
-                            .where(Thread.user_id == user_id)
-                            .where(Thread.status == "active")
-                            .where(Thread.queue_position > old_pos)
-                            .values(queue_position=Thread.queue_position - 1)
-                        )
 
         thread_issues_remaining = thread.issues_remaining
     else:
@@ -520,17 +513,17 @@ async def rate_thread(
 
     should_complete_thread = thread_issues_remaining <= 0
     if should_complete_thread:
-        old_pos = thread.queue_position
+        # A completed thread holds no queue slot (#3240): release its position
+        # and close the gap so the active queue stays contiguous.
+        released_position = thread.queue_position
+        queue_position_changes = await vacate_queue_position(
+            user_id,
+            released_position,
+            db,
+            commit=False,
+        )
         thread.status = "completed"
         thread.queue_position = 0
-        if old_pos > 0:
-            await db.execute(
-                update(Thread)
-                .where(Thread.user_id == user_id)
-                .where(Thread.status == "active")
-                .where(Thread.queue_position > old_pos)
-                .values(queue_position=Thread.queue_position - 1)
-            )
     elif rate_data.rating >= rating_threshold:
         queue_position_changes = await move_to_front(
             thread_id,

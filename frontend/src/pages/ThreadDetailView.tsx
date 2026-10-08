@@ -434,7 +434,7 @@ export default function ThreadDetailView() {
           </span>
           <p className="text-sm text-stone-300">
             {thread.status === "completed" || thread.queue_position === 0
-              ? "Historical (archived)"
+              ? "Not in queue"
               : `Position #${thread.queue_position}`}
           </p>
         </div>

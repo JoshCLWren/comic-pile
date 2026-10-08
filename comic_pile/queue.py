@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models import Issue, Thread
+from app.repositories import queue_repository, thread_repository
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,69 @@ async def move_to_back(
     if commit:
         await db.commit()
     return changes
+
+
+async def vacate_queue_position(
+    user_id: int,
+    released_position: int,
+    db: AsyncSession,
+    commit: bool = True,
+) -> QueuePositionChanges:
+    """Close the queue gap left behind by a thread leaving the active queue.
+
+    The caller marks the thread ``completed`` and assigns it
+    ``queue_position = 0`` so it no longer holds a slot; this compacts the
+    remaining active queue behind the released slot while holding the same
+    per-user advisory lock the other queue moves use, so a concurrent
+    reposition cannot interleave with the compaction.
+
+    Args:
+        user_id: Thread owner.
+        released_position: Queue position the leaving thread used to hold, or a
+            value below 1 when the thread was never queued.
+        db: Async database session.
+        commit: Whether to commit inside this helper.
+
+    Returns:
+        Mapping of changed thread IDs to their previous positions.
+    """
+    await _acquire_queue_lock(user_id, db)
+
+    changes = await queue_repository.release_queue_slot(db, user_id, released_position)
+
+    if commit:
+        await db.commit()
+    return changes
+
+
+async def claim_queue_front(
+    user_id: int,
+    db: AsyncSession,
+    commit: bool = True,
+    exclude_thread_id: int | None = None,
+) -> None:
+    """Open a slot at the front of the active queue for a reactivated thread.
+
+    Callers set ``queue_position = 1`` on the reactivated thread; this shifts
+    the threads that already hold a slot back by one under the per-user
+    advisory lock so no position is skipped or duplicated.
+
+    Args:
+        user_id: Thread owner.
+        db: Async database session.
+        commit: Whether to commit inside this helper.
+        exclude_thread_id: Thread to leave in place; pass the thread being
+            reactivated so it is not shifted along with the threads it
+            displaces.
+    """
+    await _acquire_queue_lock(user_id, db)
+
+    await thread_repository.shift_active_queue_positions(
+        db, user_id, exclude_thread_id
+    )
+
+    if commit:
+        await db.commit()
 
 
 async def move_to_position(

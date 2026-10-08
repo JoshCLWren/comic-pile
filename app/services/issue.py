@@ -9,7 +9,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
@@ -21,8 +21,45 @@ from app.utils.issue_natural_order import natural_issue_order
 from app.services.tag_service import purge_target_assignments
 from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.queue import claim_queue_front, vacate_queue_position
 
 logger = logging.getLogger(__name__)
+
+
+async def _complete_queued_thread(db: AsyncSession, thread: Thread, current_user_id: int) -> None:
+    """Mark a thread completed and release its queue slot (#3240).
+
+    A completed thread holds no queue slot, so the active queue behind it
+    closes the gap and the thread is parked at ``queue_position = 0``.
+
+    Args:
+        db: Database session.
+        thread: Thread transitioning to completed.
+        current_user_id: User owning the thread.
+    """
+    released_position = thread.queue_position
+    await vacate_queue_position(current_user_id, released_position, db, commit=False)
+    thread.status = "completed"
+    thread.queue_position = 0
+
+
+async def _reactivate_queued_thread(db: AsyncSession, thread: Thread, current_user_id: int) -> None:
+    """Return a thread that left the queue to the front of the active queue.
+
+    Counterpart of :func:`_complete_queued_thread`: parking a completed thread
+    at position ``0`` means reactivation has to hand out a real slot again, or
+    the thread would stay invisible to every queue-ordered query. The shift runs
+    before position ``1`` is assigned so the reactivated thread is not bumped
+    along with the threads it displaces.
+
+    Args:
+        db: Database session.
+        thread: Thread transitioning back to active.
+        current_user_id: User owning the thread.
+    """
+    await claim_queue_front(current_user_id, db, commit=False, exclude_thread_id=thread.id)
+    thread.status = "active"
+    thread.queue_position = 1
 
 
 async def list_issues(
@@ -265,28 +302,18 @@ async def create_issues(
     tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
 
     if tracking_state.next_unread_issue_id is None:
-        old_pos = thread.queue_position
-        thread.status = "completed"
-        thread.queue_position = 0
-        if old_pos > 0:
-            await db.execute(
-                update(Thread)
-                .where(Thread.user_id == current_user_id)
-                .where(Thread.status == "active")
-                .where(Thread.queue_position > old_pos)
-                .values(queue_position=Thread.queue_position - 1)
-            )
+        await _complete_queued_thread(db, thread, current_user_id)
     elif was_unmigrated or not had_next_unread_issue:
-        if not was_unmigrated and thread.status == "completed":
-            # Shift other active threads in queue
-            await db.execute(
-                update(Thread)
-                .where(Thread.user_id == current_user_id)
-                .where(Thread.status == "active")
-                .values(queue_position=Thread.queue_position + 1)
-            )
-            thread.queue_position = 1
-        thread.status = "active"
+        # A thread coming back to life needs a slot again; a thread that never
+        # held one (or was parked at 0 by completion) would otherwise stay
+        # invisible to every queue-ordered query.
+        needs_slot = (not was_unmigrated and thread.status == "completed") or (
+            thread.queue_position < 1
+        )
+        if needs_slot:
+            await _reactivate_queued_thread(db, thread, current_user_id)
+        else:
+            thread.status = "active"
 
     event = Event(
         type="issues_created",
@@ -426,19 +453,9 @@ async def delete_issue(
 
     state = apply_thread_issue_tracking_state(thread, remaining_issues)
     if state.issues_remaining == 0:
-        old_pos = thread.queue_position
-        thread.status = "completed"
-        thread.queue_position = 0
-        if old_pos > 0:
-            await db.execute(
-                update(Thread)
-                .where(Thread.user_id == current_user_id)
-                .where(Thread.status == "active")
-                .where(Thread.queue_position > old_pos)
-                .values(queue_position=Thread.queue_position - 1)
-            )
+        await _complete_queued_thread(db, thread, current_user_id)
     elif thread.status == "completed":
-        thread.status = "active"
+        await _reactivate_queued_thread(db, thread, current_user_id)
 
     event = Event(
         type="issue_deleted",
@@ -548,20 +565,10 @@ async def mark_issue_read(
         thread.reading_progress = "in_progress"
         thread.issues_remaining = await thread.get_issues_remaining(db)
     else:
-        old_pos = thread.queue_position
         thread.next_unread_issue_id = None
         thread.reading_progress = "completed"
         thread.issues_remaining = 0
-        thread.status = "completed"
-        thread.queue_position = 0
-        if old_pos > 0:
-            await db.execute(
-                update(Thread)
-                .where(Thread.user_id == current_user_id)
-                .where(Thread.status == "active")
-                .where(Thread.queue_position > old_pos)
-                .values(queue_position=Thread.queue_position - 1)
-            )
+        await _complete_queued_thread(db, thread, current_user_id)
 
     event = Event(
         type="issue_read",
@@ -610,7 +617,7 @@ async def mark_issue_unread(
     thread.issues_remaining = await thread.get_issues_remaining(db)
 
     if thread_was_completed:
-        thread.status = "active"
+        await _reactivate_queued_thread(db, thread, current_user_id)
 
     event = Event(
         type="issue_unread",
@@ -665,20 +672,9 @@ async def bulk_mark_issue_read(
         adopted_issues = await issue_repository.issues_ordered(db, thread_id)
         tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
         if tracking_state.next_unread_issue_id is None:
-            old_pos = thread.queue_position
-            thread.status = "completed"
-            thread.queue_position = 0
-            if old_pos > 0:
-                await db.execute(
-                    update(Thread)
-                    .where(Thread.user_id == current_user_id)
-                    .where(Thread.status == "active")
-                    .where(Thread.queue_position > old_pos)
-                    .values(queue_position=Thread.queue_position - 1)
-                )
-        else:
-            if thread.status == "completed":
-                thread.status = "active"
+            await _complete_queued_thread(db, thread, current_user_id)
+        elif thread.status == "completed":
+            await _reactivate_queued_thread(db, thread, current_user_id)
 
     # Create events for each issue
     for issue in issues:
@@ -732,20 +728,9 @@ async def bulk_mark_issue_unread(
         adopted_issues = await issue_repository.issues_ordered(db, thread_id)
         tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
         if tracking_state.next_unread_issue_id is None:
-            old_pos = thread.queue_position
-            thread.status = "completed"
-            thread.queue_position = 0
-            if old_pos > 0:
-                await db.execute(
-                    update(Thread)
-                    .where(Thread.user_id == current_user_id)
-                    .where(Thread.status == "active")
-                    .where(Thread.queue_position > old_pos)
-                    .values(queue_position=Thread.queue_position - 1)
-                )
-        else:
-            if thread.status == "completed":
-                thread.status = "active"
+            await _complete_queued_thread(db, thread, current_user_id)
+        elif thread.status == "completed":
+            await _reactivate_queued_thread(db, thread, current_user_id)
 
     for issue in issues:
         event = Event(

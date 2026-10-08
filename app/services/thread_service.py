@@ -12,7 +12,6 @@ from typing import cast
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,6 +48,7 @@ from app.services.queue_pagination import (
     normalize_queue_search,
 )
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
+from comic_pile.queue import claim_queue_front, vacate_queue_position
 from comic_pile.reading_session import get_current_die, get_or_create
 from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
 
@@ -583,28 +583,15 @@ async def update_thread(
         if not thread.uses_issue_tracking():
             thread.issues_remaining = thread_data.issues_remaining
             if thread.issues_remaining == 0:
-                old_pos = thread.queue_position
+                await vacate_queue_position(user_id, thread.queue_position, db, commit=False)
                 thread.status = "completed"
                 thread.queue_position = 0
-                if old_pos > 0:
-                    await db.execute(
-                        update(Thread)
-                        .where(Thread.user_id == user_id)
-                        .where(Thread.status == "active")
-                        .where(Thread.queue_position > old_pos)
-                        .values(queue_position=Thread.queue_position - 1)
-                    )
-            else:
-                if thread.status == "completed":
-                    thread.status = "active"
-                    await db.execute(
-                        update(Thread)
-                        .where(Thread.user_id == user_id)
-                        .where(Thread.status == "active")
-                        .where(Thread.id != thread.id)
-                        .values(queue_position=Thread.queue_position + 1)
-                    )
-                    thread.queue_position = 1
+            elif thread.status == "completed":
+                await claim_queue_front(
+                    user_id, db, commit=False, exclude_thread_id=thread.id
+                )
+                thread.status = "active"
+                thread.queue_position = 1
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
     if thread_data.manual_creator_credits is not None:
@@ -765,7 +752,9 @@ async def reactivate_completed_thread(
     if request.issues_to_add <= 0:
         raise InvalidRequestError("Must add at least 1 issue")
 
-    await thread_repository.shift_active_queue_positions(db, user_id)
+    await thread_repository.shift_active_queue_positions(
+        db, user_id, exclude_thread_id=thread.id
+    )
 
     if thread.uses_issue_tracking():
         locked_rows = await issue_repository.locked_issue_rows(db, thread.id)
@@ -984,6 +973,11 @@ async def migrate_thread_to_issues(
         raise InvalidRequestError("last_issue_read cannot exceed total_issues")
 
     await thread.migrate_to_issues(last_issue_read, total_issues, db)
+
+    if thread.status == "completed":
+        # Migrating a fully-read thread completes it, so it releases its slot.
+        await vacate_queue_position(user_id, thread.queue_position, db, commit=False)
+        thread.queue_position = 0
 
     response = await thread_to_response(thread, db)
 

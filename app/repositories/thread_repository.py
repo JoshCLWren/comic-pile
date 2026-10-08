@@ -300,19 +300,34 @@ async def insert_thread(db: AsyncSession, thread: Thread) -> None:
     db.add(thread)
 
 
-async def shift_active_queue_positions(db: AsyncSession, user_id: int) -> None:
+async def shift_active_queue_positions(
+    db: AsyncSession,
+    user_id: int,
+    exclude_thread_id: int | None = None,
+) -> None:
     """Move every active thread of a user back by one queue position.
+
+    Only threads that hold a slot move: ``queue_position >= 1`` is the active
+    queue membership contract, and position ``0`` marks a thread that has left
+    the queue, so bumping those rows would hand a reactivated thread's
+    reserved front slot to an unrelated row.
 
     Args:
         db: Database session.
         user_id: Owner of the threads.
+        exclude_thread_id: Thread to leave in place, normally the thread being
+            reactivated. Callers set its own position afterwards, so shifting
+            it would fight the assignment they are about to make.
     """
-    await db.execute(
+    query = (
         update(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
-        .values(queue_position=Thread.queue_position + 1)
+        .where(Thread.queue_position >= 1)
     )
+    if exclude_thread_id is not None:
+        query = query.where(Thread.id != exclude_thread_id)
+    await db.execute(query.values(queue_position=Thread.queue_position + 1))
 
 
 async def delete_thread(db: AsyncSession, thread: Thread) -> None:

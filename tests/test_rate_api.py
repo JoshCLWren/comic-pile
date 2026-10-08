@@ -331,7 +331,9 @@ async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSe
 
     await async_db.refresh(thread)
     assert thread.status == "completed"
-    assert thread.queue_position == 1
+    # A completed thread holds no queue slot (#3240), so it is parked at 0
+    # instead of keeping the last position it held while active.
+    assert thread.queue_position == 0
 
     await async_db.refresh(session)
     assert session.ended_at is not None
