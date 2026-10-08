@@ -345,6 +345,7 @@ async def load_creator_summary_inputs(
     }
 
     # 4. Latest effective rating per owned issue (latest event wins).
+    # Use PostgreSQL DISTINCT ON for efficient per-issue latest rating.
     rate_result = await db.execute(
         select(Event.issue_id, Event.rating)
         .join(Issue, Issue.id == Event.issue_id)
@@ -353,12 +354,12 @@ async def load_creator_summary_inputs(
         .where(Event.type == "rate")
         .where(Event.issue_id.is_not(None))
         .where(Event.rating.is_not(None))
+        .distinct(Event.issue_id)
         .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
     )
-    effective_ratings: dict[int, float] = {}
-    for issue_id, rating in rate_result.all():
-        if issue_id is not None and int(issue_id) not in effective_ratings:
-            effective_ratings[int(issue_id)] = float(rating)
+    effective_ratings: dict[int, float] = {
+        int(issue_id): float(rating) for issue_id, rating in rate_result.all() if issue_id is not None
+    }
 
     return CreatorSummaryInputs(
         owned_issues=owned_issues,
