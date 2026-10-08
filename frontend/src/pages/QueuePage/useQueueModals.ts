@@ -8,7 +8,7 @@ import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 
-type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
+type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'map_series'
 
 interface QueueModalsParams {
   threads: ThreadListItem[] | null | undefined
@@ -60,6 +60,8 @@ interface UseQueueModalsResult {
   closeRepositionModal: () => void
   openDependenciesModal: (thread: ThreadListItem) => void
   closeDependenciesModal: () => void
+  openMapSeriesModal: (thread: ThreadListItem) => void
+  closeMapSeriesModal: () => void
   openMigrationDialog: (thread: Thread | ThreadListItem) => void
   closeMigrationDialog: () => void
   handleCreateSubmit: (event: FormEvent) => Promise<void>
@@ -195,6 +197,16 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
 
   const closeDependenciesModal = useCallback(() => {
     setDependencyThread(null)
+    setOpenModal(null)
+  }, [])
+
+  const openMapSeriesModal = useCallback((thread: ThreadListItem) => {
+    setEditingThread(thread)
+    setOpenModal('map_series')
+  }, [])
+
+  const closeMapSeriesModal = useCallback(() => {
+    setEditingThread(null)
     setOpenModal(null)
   }, [])
 
@@ -424,6 +436,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     closeRepositionModal,
     openDependenciesModal,
     closeDependenciesModal,
+    openMapSeriesModal,
+    closeMapSeriesModal,
     openMigrationDialog,
     closeMigrationDialog,
     handleCreateSubmit,

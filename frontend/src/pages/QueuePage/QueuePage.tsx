@@ -184,6 +184,7 @@ export default function QueuePage() {
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
           onDelete={() => actions.requestDelete(thread)}
+          onMapSeries={() => modals.openMapSeriesModal(thread)}
         />
       )
     },

@@ -117,6 +117,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     onEdit: vi.fn(),
     onDependencies: vi.fn(),
     onDelete: vi.fn(),
+    onMapSeries: vi.fn(),
     ...overrides,
   }
   return {
