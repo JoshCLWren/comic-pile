@@ -147,6 +147,7 @@ describe('ThreadPool Component', () => {
           onReadStale={() => {}}
           onToggleSnoozed={() => {}}
           onToggleSkipped={() => {}}
+          onToggleStale={() => {}}
           onToggleBlocked={onToggleBlocked}
           onShuffle={() => {}}
           unsnoozeIsPending={false}
@@ -198,6 +199,7 @@ describe('ThreadPool Component', () => {
           onReadStale={() => {}}
           onToggleSnoozed={() => {}}
           onToggleSkipped={onToggleSkipped}
+          onToggleStale={() => {}}
           onToggleBlocked={() => {}}
           onShuffle={() => {}}
           unsnoozeIsPending={false}
