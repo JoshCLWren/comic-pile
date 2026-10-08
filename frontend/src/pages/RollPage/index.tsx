@@ -493,6 +493,7 @@ export default function RollPage() {
           clearManualDiePending={clearManualDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}
           selectedThread={state.selectedThread}
+          pendingThreadId={bootstrap.pending_thread_id}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
           onAction={actions.handleAction}
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}

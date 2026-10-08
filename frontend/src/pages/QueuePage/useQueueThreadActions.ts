@@ -299,7 +299,11 @@ export function useQueueThreadActions(
         if (isSnoozed) {
           await unsnoozeMutation.mutate(thread.id)
         } else {
-          await snoozeMutation.mutate()
+          // `expectedPendingThreadId` is what lets the snooze hook recover an
+          // auth-failure snooze and reconcile an ambiguous network failure.
+          // Dropping it would silently disable both recovery paths, so the row
+          // that owns the pending thread must pass its own id (#3260).
+          await snoozeMutation.mutate(thread.id)
         }
         await refetchSession()
         await invalidateAfterQueueMutation(queryClient)

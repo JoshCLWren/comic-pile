@@ -25,6 +25,7 @@ import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import type { ThreadListItem } from '../types'
+import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
 vi.mock('../hooks/useThread', () => ({
@@ -303,6 +304,36 @@ describe('Visible action Snooze/Unsnooze', () => {
 
     expect(mockSnoozeMutation.mutate).toHaveBeenCalledWith(1)
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
+  })
+
+  it('explains why Snooze is unavailable for a series the reader did not roll (#3260)', async () => {
+    mockedUseSession.mockReturnValue({
+      data: {
+        snoozed_threads: [],
+        skipped_thread_ids: [],
+        skipped_threads: [],
+        pending_thread_id: 2,
+      },
+      refetch: vi.fn(),
+    })
+
+    const user = userEvent.setup()
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+
+    // Row 1 is not the pending thread, so its Snooze entry is unavailable.
+    await user.click(screen.getAllByRole('button', { name: /series actions/i })[0])
+    const snoozeItem = screen.getByRole('menuitem', { name: /^snooze$/i })
+    expect(snoozeItem).toBeDisabled()
+    expect(snoozeItem).toHaveAttribute('title', SNOOZE_REQUIRES_PENDING_SERIES_REASON)
+
+    await user.click(snoozeItem)
+    expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
   it('calls unsnooze mutation when the Unsnooze action is clicked', async () => {

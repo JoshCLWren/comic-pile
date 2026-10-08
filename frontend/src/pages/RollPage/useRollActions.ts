@@ -2,6 +2,10 @@ import { useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
 import { threadsApi } from '../../services/api-threads'
+import {
+  canSnoozeSeries,
+  SNOOZE_REQUIRES_PENDING_SERIES_REASON,
+} from '../../components/snoozeAvailability'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RollResponse, SnoozeSessionResponse } from '../../types'
@@ -171,14 +175,32 @@ export function useRollActions({
           await moveToBackMutation.mutate(selectedThread!.id)
           await refetchBootstrap()
           break
-        case 'snooze':
+        case 'snooze': {
           if (isSnoozed) {
             await unsnoozeMutation.mutate(selectedThread!.id)
-          } else {
-            await snoozeMutation.mutate()
+            await refetchBootstrap()
+            break
           }
+          // The snooze endpoint acts on the session's pending thread, so the
+          // action sheet may only snooze the series the reader rolled. Firing
+          // the request for any other pooled series silently snoozed a
+          // different series — or failed with a 400 that this handler used to
+          // swallow into the console after the sheet had already closed, so the
+          // click looked successful and nothing was recorded (#3260).
+          if (!canSnoozeSeries({
+            threadId: selectedThread!.id,
+            isSnoozed,
+            pendingThreadId: bootstrap?.pending_thread_id,
+          })) {
+            setErrorMessage(SNOOZE_REQUIRES_PENDING_SERIES_REASON)
+            break
+          }
+          // The id doubles as `expectedPendingThreadId`, which is what lets the
+          // snooze hook recover an auth failure and reconcile an ambiguous one.
+          await snoozeMutation.mutate(selectedThread!.id)
           await refetchBootstrap()
           break
+        }
         case 'skip':
           const isSkipped =
             bootstrap?.skipped_thread_ids?.includes(selectedThread!.id) ?? false
@@ -195,6 +217,10 @@ export function useRollActions({
       }
     } catch (error) {
       console.error('Action failed:', error)
+      // The sheet already closed by this point, so a console-only failure left
+      // the reader believing a no-op action had worked. Surface the reason
+      // instead (#3260).
+      setErrorMessage(getApiErrorDetail(error))
     }
   }
 
