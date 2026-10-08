@@ -176,6 +176,9 @@ def test_private_rotisserie_secret_has_safe_ssh_preflight():
     assert 'git ls-remote ' in install
     assert 'git@github.com:JoshCLWren/rotisserie.git HEAD' in install
     assert install.index("ssh-keygen -lf") < install.index("git ls-remote")
-    assert install.index("git ls-remote") < install.index("pipx install")
+    assert install.index("git ls-remote") < install.index("git clone --quiet")
+    assert install.index("git clone --quiet") < install.index('pipx install "$checkout"')
+    assert 'git@github.com:JoshCLWren/rotisserie.git "$checkout"' in install
+    assert "git+ssh://" not in install
     assert "StrictHostKeyChecking=yes" in install
     assert 'trap \'rm -rf "$ssh_dir"\' EXIT' in install
