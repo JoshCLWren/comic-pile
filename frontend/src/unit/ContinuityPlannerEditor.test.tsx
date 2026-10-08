@@ -253,6 +253,7 @@ describe('useContinuityPlannerEditor', () => {
           label: '',
         },
       ],
+      // SAFETY: the plan fixture supplies only the fields the editor reads
     } as ContinuityPlan
     const { result } = renderHook(
       ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
@@ -282,6 +283,7 @@ describe('useContinuityPlannerEditor', () => {
           label: '',
         },
       ],
+      // SAFETY: the plan fixture supplies only the fields the editor reads
     } as ContinuityPlan
     const { result } = renderHook(
       ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
