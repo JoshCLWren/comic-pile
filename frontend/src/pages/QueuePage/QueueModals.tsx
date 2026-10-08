@@ -1,10 +1,10 @@
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
-import { IssueToggleList } from './IssueToggleList'
+import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
 import type { QueueFormState, ManualCreatorCredit } from './types'
@@ -289,6 +289,17 @@ export function QueueModals({
   onDismissRollNudge,
   onRollNudgeNavigate,
 }: QueueModalsProps) {
+  // Ref for the Edit dialog's deferred issue list: flush queued issue
+  // mutations when Save is clicked; closing without saving discards them.
+  const editIssueListRef = useRef<IssueToggleListHandle>(null)
+
+  const handleEditSubmit = async (event: FormEvent) => {
+    // Flush deferred issue mutations first so the dialog's Save commits
+    // everything atomically from the user's perspective.
+    await editIssueListRef.current?.flush()
+    await onEditSubmit(event)
+  }
+
   return (
     <>
       <Modal isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
@@ -465,7 +476,7 @@ export function QueueModals({
         overlayClassName="edit-modal__overlay"
       >
         <div className="space-y-4">
-          <form id="edit-thread-form" className="space-y-4" onSubmit={onEditSubmit}>
+          <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
             <div className="space-y-2">
               <label
                 htmlFor="edit-thread-title"
@@ -560,7 +571,13 @@ export function QueueModals({
           </form>
 
           {editingThread && editingThread.total_issues != null && (
-            <IssueToggleList threadId={editingThread.id} onOpenDependencies={onOpenDependencies} onIssueChanged={onIssueChanged} />
+            <IssueToggleList
+              ref={editIssueListRef}
+              threadId={editingThread.id}
+              deferred
+              onOpenDependencies={onOpenDependencies}
+              onIssueChanged={onIssueChanged}
+            />
           )}
 
           <button
