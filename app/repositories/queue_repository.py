@@ -36,13 +36,18 @@ async def active_queue_positions(db: AsyncSession, user_id: int) -> dict[int, in
 async def add_reorder_event(db: AsyncSession, thread_id: int) -> None:
     """Persist a reorder event for a moved thread.
 
+    The thread title is denormalized so the History timeline can still name the
+    thread after the thread row is deleted (issue #3265).
+
     Args:
         db: Database session.
         thread_id: Thread whose queue position changed.
     """
+    thread_title_result = await db.execute(select(Thread.title).where(Thread.id == thread_id))
     reorder_event = Event(
         type="reorder",
         timestamp=datetime.now(UTC),
         thread_id=thread_id,
+        thread_title=thread_title_result.scalar_one_or_none(),
     )
     db.add(reorder_event)

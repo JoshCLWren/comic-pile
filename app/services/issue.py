@@ -634,8 +634,10 @@ async def bulk_mark_issue_read(
 
     # Gather unique threads to recalculate tracking once per thread
     thread_ids = {issue.thread_id for issue in issues}
+    thread_titles: dict[int, str] = {}
     for thread_id in thread_ids:
         thread = await get_owned_thread_or_404(db, current_user_id, thread_id)
+        thread_titles[thread_id] = thread.title
         adopted_issues = await issue_repository.issues_ordered(db, thread_id)
         tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
         if tracking_state.next_unread_issue_id is None:
@@ -650,6 +652,7 @@ async def bulk_mark_issue_read(
             type="issue_read",
             timestamp=datetime.now(UTC),
             thread_id=issue.thread_id,
+            thread_title=thread_titles.get(issue.thread_id),
             issue_id=issue.id,
             issue_number=issue.issue_number,
         )
@@ -691,8 +694,10 @@ async def bulk_mark_issue_unread(
         issue.read_at = None
 
     thread_ids = {issue.thread_id for issue in issues}
+    thread_titles: dict[int, str] = {}
     for thread_id in thread_ids:
         thread = await get_owned_thread_or_404(db, current_user_id, thread_id)
+        thread_titles[thread_id] = thread.title
         adopted_issues = await issue_repository.issues_ordered(db, thread_id)
         tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
         if tracking_state.next_unread_issue_id is None:
@@ -706,6 +711,7 @@ async def bulk_mark_issue_unread(
             type="issue_unread",
             timestamp=datetime.now(UTC),
             thread_id=issue.thread_id,
+            thread_title=thread_titles.get(issue.thread_id),
             issue_id=issue.id,
             issue_number=issue.issue_number,
         )
