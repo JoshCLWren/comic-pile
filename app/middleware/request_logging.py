@@ -327,7 +327,41 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             response.headers["Server-Timing"] = _server_timing_header(process_time_ms)
 
             # Prepare log data structure
-            
+            log_data = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "request_id": request_id,
+                "method": request.method,
+                "path": log_path,
+                "query_params": str(request.url.query) if request.url.query else None,
+                "status_code": status_code,
+                "process_time_ms": round(process_time_ms, 2),
+                "database_queries": diagnostics.database_queries,
+                "database_time_ms": round(diagnostics.database_time_ms, 2),
+                "cold_request": startup.cold,
+                "process_request_number": startup.invocation,
+                "process_age_ms": round(startup.process_age_ms, 2),
+                "startup_complete": startup.startup_complete,
+                "startup_duration_ms": _rounded_optional(startup.startup_duration_ms),
+                "application_import_ms": _rounded_optional(startup.application_import_ms),
+                "application_creation_ms": _rounded_optional(startup.application_creation_ms),
+                "lifespan_ms": _rounded_optional(startup.lifespan_ms),
+                "heavy_initialized": startup.heavy_initialized,
+                "heavy_init_duration_ms": _rounded_optional(startup.heavy_init_duration_ms),
+                "deployment_id": startup.deployment_id,
+                "process_started_at_ns": startup.process_started_at_ns,
+                "client_host": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+                "headers": redact_headers(dict(request.headers)),
+            }
+
+            if hasattr(request.state, "request_body"):
+                log_data["request_body"] = request.state.request_body
+            if hasattr(request.state, "user_id"):
+                log_data["user_id"] = request.state.user_id
+            if hasattr(request.state, "session_id"):
+                log_data["session_id"] = request.state.session_id
+
+            log_data = sanitize_for_logging(log_data, environment)
 
             # Check performance budgets for requests
             performance_context = {
@@ -382,43 +416,25 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                         "level": "WARNING",
                     },
                 )
-                "timestamp": datetime.now(UTC).isoformat(),
-                "request_id": request_id,
-                "method": request.method,
-                "path": log_path,
-                "query_params": str(request.url.query) if request.url.query else None,
-                "status_code": status_code,
-                "process_time_ms": round(process_time_ms, 2),
-                "database_queries": diagnostics.database_queries,
-                "database_time_ms": round(diagnostics.database_time_ms, 2),
-                "cold_request": startup.cold,
-                "process_request_number": startup.invocation,
-                "process_age_ms": round(startup.process_age_ms, 2),
-                "startup_complete": startup.startup_complete,
-                "startup_duration_ms": _rounded_optional(startup.startup_duration_ms),
-                "application_import_ms": _rounded_optional(startup.application_import_ms),
-                "application_creation_ms": _rounded_optional(startup.application_creation_ms),
-                "lifespan_ms": _rounded_optional(startup.lifespan_ms),
-                "heavy_initialized": startup.heavy_initialized,
-                "heavy_init_duration_ms": _rounded_optional(startup.heavy_init_duration_ms),
-                "deployment_id": startup.deployment_id,
-                "process_started_at_ns": startup.process_started_at_ns,
-                "client_host": request.client.host if request.client else None,
-                "user_agent": request.headers.get("user-agent"),
-                "headers": redact_headers(dict(request.headers)),
-            }
 
-            if hasattr(request.state, "request_body"):
-                log_data["request_body"] = request.state.request_body
-            if hasattr(request.state, "user_id"):
-                log_data["user_id"] = request.state.user_id
-            if hasattr(request.state, "session_id"):
-                log_data["session_id"] = request.state.session_id
-
-            log_data = sanitize_for_logging(log_data, environment)
-
-            # Legacy slow request logging (deprecated)
-            if process_time_ms >= _slow_request_threshold_ms():
+            # Error and slow request logging
+            if status_code >= 500:
+                logger.error(
+                    "API Error: %s %s - %s",
+                    request.method,
+                    log_path,
+                    status_code,
+                    extra={**log_data, "level": "ERROR"},
+                )
+            elif status_code >= 400:
+                logger.warning(
+                    "Client Error: %s %s - %s",
+                    request.method,
+                    log_path,
+                    status_code,
+                    extra={**log_data, "level": "WARNING"},
+                )
+            elif process_time_ms >= _slow_request_threshold_ms():
                 logger.warning(
                     "Slow HTTP request: %s %s completed in %.2f ms",
                     request.method,

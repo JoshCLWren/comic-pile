@@ -1,12 +1,14 @@
 """Performance budget enforcement and bounded await primitives."""
 
 import asyncio
+import logging
 import time
 from functools import wraps
 from typing import Any, Callable, Optional
 
 from app.config import get_settings
-from app.logging import logger
+
+logger = logging.getLogger(__name__)
 
 # Performance budget constants (in milliseconds)
 STARTUP_WARNING_MS = 2000
@@ -36,12 +38,12 @@ class StartupBudgetExceeded(PerformanceBudgetError):
 class RequestBudgetExceeded(PerformanceBudgetError):
     """Raised when request performance budget is exceeded."""
     
-    def __init__(self, route: str, elapsed_ms: float, timeout_ms: float):
-        self.route = route
+    def __init__(self, operation: str, elapsed_ms: float, timeout_ms: float):
+        self.operation = operation
         self.elapsed_ms = elapsed_ms
         self.timeout_ms = timeout_ms
         super().__init__(
-            f"Request budget exceeded for route '{route}': "
+            f"Request budget exceeded for operation '{operation}': "
             f"{elapsed_ms:.2f}ms (limit: {timeout_ms}ms)"
         )
 
@@ -76,7 +78,7 @@ class PerformanceWarning:
         }
 
 
-def run_bounded(
+async def run_bounded(
     operation: str,
     coroutine: Any,
     warning_ms: Optional[float] = None,
@@ -111,6 +113,9 @@ def run_bounded(
     
     async def _execute_with_timeout():
         """Execute the coroutine with timeout."""
+        # If timeout is None or <= 0, run without timeout
+        if timeout_ms is None or timeout_ms <= 0:
+            return await coroutine
         try:
             return await asyncio.wait_for(coroutine, timeout_ms / 1000.0)
         except asyncio.TimeoutError:
@@ -126,12 +131,12 @@ def run_bounded(
             else:
                 raise RequestBudgetExceeded(operation, elapsed_ms, timeout_ms)
     
-    try:
+    async def _run_with_warning():
         # Execute with timeout
         result = asyncio.create_task(_execute_with_timeout())
         
-        # Check for warning threshold
-        if warning_ms < timeout_ms:
+        # Check for warning threshold (only if timeout is positive)
+        if timeout_ms is not None and timeout_ms > 0 and warning_ms < timeout_ms:
             async def _check_warning():
                 await asyncio.sleep(warning_ms / 1000.0)
                 if not result.done():
@@ -145,20 +150,23 @@ def run_bounded(
                     )
                     logger.warning(
                         f"Performance warning for '{operation}': {elapsed_ms:.2f}ms "
-                        f"(warning threshold: {warning_ms}ms) - {warning.to_dict()}"
+                        f"(warning threshold: {warning_ms}ms)",
+                        extra={"performance_warning": warning.to_dict()}
                     )
             
             # Schedule warning check
             asyncio.create_task(_check_warning())
         
         # Wait for completion
-        return await result
+        try:
+            return await result
+        except Exception as e:
+            # Ensure the task is cancelled if we're handling an exception
+            if not result.done():
+                result.cancel()
+            raise
     
-    except Exception as e:
-        # Ensure the task is cancelled if we're handling an exception
-        if not result.done():
-            result.cancel()
-        raise
+    return await _run_with_warning()
 
 
 def startup_budget(
@@ -249,7 +257,7 @@ class PerformanceBudgetManager:
         if warning.budget_type == "startup":
             self._startup_warnings.append(warning)
         else:
-            self._request_warnings.append(wwarning)
+            self._request_warnings.append(warning)
         
         # Log structured warning
         logger.warning(f"Performance warning: {warning.to_dict()}")
