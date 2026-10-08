@@ -1730,6 +1730,11 @@
             "title": "Dependency Id",
             "type": "integer"
           },
+          "is_circular": {
+            "default": false,
+            "title": "Is Circular",
+            "type": "boolean"
+          },
           "issue_number": {
             "anyOf": [
               {
