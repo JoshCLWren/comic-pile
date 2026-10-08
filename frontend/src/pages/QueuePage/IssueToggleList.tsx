@@ -9,6 +9,7 @@ import { getApiErrorDetail } from '../../utils/apiError'
 import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
+import DeleteIssueDialog from './DeleteIssueDialog'
 import { getDependencyTooltip } from '../../utils/dependencyHelpers'
 import {
   reorderIssuesForDrop,
@@ -72,6 +73,8 @@ export function IssueToggleList({
   const [selectedDepsIssue, setSelectedDepsIssue] = useState<Issue | null>(null)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isReorderMode, setIsReorderMode] = useState(false)
+  const [deleteDialogIssue, setDeleteDialogIssue] = useState<Issue | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -209,7 +212,13 @@ export function IssueToggleList({
           } catch (refreshErr) {
             console.error('[IssueToggleList] Error refetching issues after mutation failure:', refreshErr)
           }
-          setActionError(getApiErrorDetail(err))
+          
+          // If this is a delete mutation, set the delete error instead of the general action error
+          if (currentMutation.type === 'delete') {
+            setDeleteError(getApiErrorDetail(err))
+          } else {
+            setActionError(getApiErrorDetail(err))
+          }
         } finally {
           pendingMutationsRef.current = pendingMutationsRef.current.filter(
             (mutation) => mutation.id !== currentMutation.id
@@ -366,15 +375,25 @@ export function IssueToggleList({
   }
 
   function handleDeleteIssue(issue: Issue) {
-    if (!window.confirm(`Delete issue #${issue.issue_number}?`)) {
-      return
-    }
+    setDeleteDialogIssue(issue)
+    setDeleteError(null)
+  }
 
+  function handleConfirmDelete() {
+    if (!deleteDialogIssue) return
+    
     setActionError(null)
+    setDeleteError(null)
     enqueueIssueMutation({
       type: 'delete',
-      issueId: issue.id,
+      issueId: deleteDialogIssue.id,
     })
+    setDeleteDialogIssue(null)
+  }
+
+  function handleCancelDelete() {
+    setDeleteDialogIssue(null)
+    setDeleteError(null)
   }
 
   function handleMoveIssue(issue: Issue, direction: 'up' | 'down') {
@@ -708,6 +727,13 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
           </div>
         </Modal>
       )}
+      <DeleteIssueDialog
+        issue={deleteDialogIssue}
+        isPending={deleting.has(deleteDialogIssue?.id || 0)}
+        error={deleteError}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   )
 }

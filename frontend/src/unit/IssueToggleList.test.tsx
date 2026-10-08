@@ -337,9 +337,6 @@ describe('IssueToggleList', () => {
   })
 
   it('deletes an issue after confirmation and updates the pills optimistically', async () => {
-    const confirmMock = vi.mocked(window.confirm)
-    confirmMock.mockReturnValue(true)
-
     const deleteRequest = createDeferred<void>()
     mockedIssuesApi.delete.mockReturnValueOnce(deleteRequest.promise)
 
@@ -347,7 +344,14 @@ describe('IssueToggleList', () => {
 
     fireEvent.click(screen.getByTestId('issue-delete-2'))
 
-    expect(confirmMock).toHaveBeenCalledWith('Delete issue #2?')
+    // The delete dialog should now be open
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+    expect(screen.getByText('Delete Issue')).toBeInTheDocument()
+    expect(screen.getByText('Are you sure you want to delete issue #2?')).toBeInTheDocument()
+
+    // Click the Delete button in the dialog
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
+
     expect(mockedIssuesApi.delete).toHaveBeenCalledWith(2)
     expect(getIssueOrder()).toEqual(['1', '3'])
 
@@ -358,14 +362,18 @@ describe('IssueToggleList', () => {
   })
 
   it('does not delete an issue when confirmation is cancelled', async () => {
-    const confirmMock = vi.mocked(window.confirm)
-    confirmMock.mockReturnValue(false)
-
     await renderIssueToggleList()
 
     fireEvent.click(screen.getByTestId('issue-delete-2'))
 
-    expect(confirmMock).toHaveBeenCalledWith('Delete issue #2?')
+    // The delete dialog should now be open
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+    expect(screen.getByText('Delete Issue')).toBeInTheDocument()
+    expect(screen.getByText('Are you sure you want to delete issue #2?')).toBeInTheDocument()
+
+    // Click the Cancel button in the dialog
+    fireEvent.click(screen.getByText('Cancel'))
+
     expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
     expect(getIssueOrder()).toEqual(['1', '2', '3'])
   })
@@ -658,9 +666,13 @@ describe('IssueToggleList', () => {
     await renderIssueToggleList()
     fireEvent.click(screen.getByTestId('issue-toggle-1'))
     await waitFor(() => expect(screen.getByText('toggle failed')).toBeInTheDocument())
-    vi.mocked(confirm).mockReturnValue(true)
-    mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete failed'))
+    
+    // Test delete failure with the new dialog
     fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+    
+    // Click the Delete button in the dialog (will fail)
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
     await waitFor(() => expect(screen.getByText('delete failed')).toBeInTheDocument())
   })
 
@@ -720,8 +732,11 @@ describe('IssueToggleList', () => {
       expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     })
 
-    vi.mocked(confirm).mockReturnValue(true)
     fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+    
+    // Click the Delete button in the dialog
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
 
     await waitFor(() => expect(mockedIssuesApi.delete).toHaveBeenCalledWith(2))
     await waitFor(() => expect(onIssueChanged).toHaveBeenCalled())
@@ -761,8 +776,11 @@ describe('IssueToggleList', () => {
       expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     })
 
-    vi.mocked(confirm).mockReturnValue(false)
     fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+
+    // Click the Cancel button in the dialog
+    fireEvent.click(screen.getByText('Cancel'))
 
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(onIssueChanged).not.toHaveBeenCalled()
