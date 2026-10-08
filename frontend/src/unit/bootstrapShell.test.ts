@@ -134,4 +134,27 @@ describe('startBootstrapShellLifecycle', () => {
     expect(document.getElementById('bootstrap-shell')).toBeNull()
     expect(document.querySelector('.bootstrap-shell__nav')).toBeNull()
   })
+
+  it('removes the shell via failsafe timeout when ready marker never appears', () => {
+    const root = document.getElementById('root') as HTMLElement
+    const shell = document.getElementById('bootstrap-shell') as HTMLElement
+
+    startBootstrapShellLifecycle(root, shell, 100, 200)
+    vi.advanceTimersByTime(200)
+
+    expect(document.getElementById('bootstrap-shell')).toBeNull()
+  })
+
+  it('cancels failsafe when ready marker appears before failsafe timeout', async () => {
+    const root = document.getElementById('root') as HTMLElement
+    const shell = document.getElementById('bootstrap-shell') as HTMLElement
+
+    startBootstrapShellLifecycle(root, shell, 100, 200)
+    vi.advanceTimersByTime(100)
+    root.innerHTML = '<main data-app-shell-ready>Ready</main>'
+    await Promise.resolve()
+    vi.advanceTimersByTime(200)
+
+    expect(document.getElementById('bootstrap-shell')).toBeNull()
+  })
 })

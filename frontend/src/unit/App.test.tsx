@@ -58,8 +58,10 @@ vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="histor
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
 vi.mock('../pages/ThreadDetailView', () => ({ default: () => <div data-testid="thread-detail-page">Thread detail</div> }))
 vi.mock('../pages/HelpPage', () => ({ default: () => <div data-testid="help-page">Help</div> }))
+vi.mock('../pages/NotFoundPage', () => ({ default: () => <div data-testid="not-found-page" data-app-shell-ready>Not Found</div> }))
 
 import App, { AuthProvider, AppRoutes, useAuth } from '../App'
+import AppErrorBoundary from '../components/AppErrorBoundary'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -495,5 +497,128 @@ describe('anonymous no-token probe suppression', () => {
       skipAuthRedirect: true,
     })
     expect(mockSetAccessToken).toHaveBeenCalledWith('ssr-token')
+  })
+})
+
+describe('bootstrap shell and route compatibility (issue #3242)', () => {
+  beforeEach(() => {
+    mockApiGet.mockReset()
+    mockSetAccessToken.mockReset()
+    mockClearAccessToken.mockReset()
+    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
+  })
+
+  afterEach(() => {
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
+  })
+
+  test('redirects /roll compatibility route to root and renders RollPage', async () => {
+    renderWithAuth('/roll')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('roll-page')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('not-found-page')).not.toBeInTheDocument()
+  })
+
+  test('renders not-found page for unknown route with app-shell-ready marker', async () => {
+    renderWithAuth('/nonexistent-path')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('not-found-page')).toBeInTheDocument()
+    })
+    const notFoundPage = screen.getByTestId('not-found-page')
+    expect(notFoundPage).toHaveAttribute('data-app-shell-ready')
+    expect(notFoundPage.textContent).toContain('Not Found')
+  })
+
+  test('renders not-found page for deep unknown route', async () => {
+    renderWithAuth('/unknown/nested/path')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('not-found-page')).toBeInTheDocument()
+    })
+  })
+})
+
+describe('bootstrap shell removal on render error (issue #3242)', () => {
+  beforeEach(() => {
+    mockApiGet.mockReset()
+    mockSetAccessToken.mockReset()
+    mockClearAccessToken.mockReset()
+    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
+  })
+
+  afterEach(() => {
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
+  })
+
+  test('error boundary fallback includes app-shell-ready', async () => {
+    const ThrowError = () => {
+      throw new Error('Simulated render error')
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <BugReportRestoreProvider>
+            <ToastProvider>
+              <NavCollapseProvider>
+                <AppErrorBoundary>
+                  <ThrowError />
+                </AppErrorBoundary>
+              </NavCollapseProvider>
+            </ToastProvider>
+          </BugReportRestoreProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('ComicPile needs to reconnect')).toBeInTheDocument()
+    })
+
+    const readyShell = document.querySelector('[data-app-shell-ready]')
+    expect(readyShell).not.toBeNull()
+    expect(readyShell?.textContent).toContain('ComicPile needs to reconnect')
+  })
+})
+
+describe('slow auth recovery does not leave bootstrap shell mounted (issue #3242)', () => {
+  beforeEach(() => {
+    mockApiGet.mockReset()
+    mockSetAccessToken.mockReset()
+    mockClearAccessToken.mockReset()
+    mockGetAccessToken.mockReturnValue('test-token')
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
+  })
+
+  afterEach(() => {
+    mockGetAccessToken.mockReset()
+  })
+
+  test('auth-loading state dismisses bootstrap shell while auth resolves', async () => {
+    let resolveAuth!: (value: { username: string }) => void
+    mockApiGet
+      .mockReturnValueOnce(new Promise((resolve) => { resolveAuth = resolve }))
+      .mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+
+    renderWithAuth('/')
+
+    await waitFor(() => {
+      expect(screen.getByText('Checking authentication...')).toBeInTheDocument()
+    })
+
+    const readyShell = document.querySelector('[data-app-shell-ready]')
+    expect(readyShell).not.toBeNull()
+    expect(readyShell?.textContent).toContain('Checking authentication')
+
+    await act(async () => resolveAuth({ username: 'reader' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('roll-page')).toBeInTheDocument()
+    })
   })
 })

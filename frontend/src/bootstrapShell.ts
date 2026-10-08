@@ -1,5 +1,6 @@
 const READY_SELECTOR = '[data-app-shell-ready]'
 const RECONNECTING_DELAY_MS = 8_000
+const FAILSAFE_MAX_DELAY_MS = 30_000
 
 export interface BootstrapShellLifecycle {
   disconnect: () => void
@@ -9,6 +10,7 @@ export function startBootstrapShellLifecycle(
   rootElement: HTMLElement,
   shellElement: HTMLElement | null,
   reconnectingDelayMs = RECONNECTING_DELAY_MS,
+  failsafeMaxDelayMs = FAILSAFE_MAX_DELAY_MS,
 ): BootstrapShellLifecycle {
   if (!shellElement) {
     return { disconnect: () => undefined }
@@ -32,6 +34,7 @@ export function startBootstrapShellLifecycle(
     if (removeShellWhenReady()) {
       observer.disconnect()
       window.clearTimeout(reconnectingTimer)
+      window.clearTimeout(failsafeTimer)
     }
   })
 
@@ -42,12 +45,21 @@ export function startBootstrapShellLifecycle(
     }
   }, reconnectingDelayMs)
 
+  const failsafeTimer = window.setTimeout(() => {
+    if (shellElement.isConnected) {
+      shellElement.remove()
+    }
+    observer.disconnect()
+    window.clearTimeout(reconnectingTimer)
+  }, failsafeMaxDelayMs)
+
   observer.observe(rootElement, { childList: true, subtree: true })
 
   return {
     disconnect: () => {
       observer.disconnect()
       window.clearTimeout(reconnectingTimer)
+      window.clearTimeout(failsafeTimer)
     },
   }
 }
