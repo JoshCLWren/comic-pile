@@ -20,6 +20,7 @@ const thread = {
   is_blocked: false,
   blocking_reasons: [],
   created_at: '2026-08-12T00:00:00Z',
+  last_activity_at: null,
 }
 
 const issue = {
@@ -241,6 +242,7 @@ describe('useContinuityPlannerEditor', () => {
   })
 
   it('hydrates thread node labels from the thread list (#3263)', async () => {
+    // SAFETY: the plan fixture supplies only the fields the editor reads
     const planWithThreadNode = {
       ...savedPlan,
       nodes: [
@@ -253,7 +255,6 @@ describe('useContinuityPlannerEditor', () => {
           label: '',
         },
       ],
-      // SAFETY: the plan fixture supplies only the fields the editor reads
     } as ContinuityPlan
     const { result } = renderHook(
       ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
@@ -271,6 +272,7 @@ describe('useContinuityPlannerEditor', () => {
   })
 
   it('falls back to [deleted series] only when the thread is truly gone (#3263)', async () => {
+    // SAFETY: the plan fixture supplies only the fields the editor reads
     const planWithOrphanThread = {
       ...savedPlan,
       nodes: [
@@ -283,7 +285,6 @@ describe('useContinuityPlannerEditor', () => {
           label: '',
         },
       ],
-      // SAFETY: the plan fixture supplies only the fields the editor reads
     } as ContinuityPlan
     const { result } = renderHook(
       ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
