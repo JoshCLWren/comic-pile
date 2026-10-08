@@ -93,6 +93,24 @@ const renderWithAuth = (initialEntry = '/') => {
   )
 }
 
+const renderWithoutAuth = (initialEntry = '/') => {
+  mockApiGet.mockRejectedValue(unauthenticatedError())
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <AuthProvider>
+        <BugReportRestoreProvider>
+          <ToastProvider>
+            <NavCollapseProvider>
+              <TestAuthConsumer />
+              <AppRoutes />
+            </NavCollapseProvider>
+          </ToastProvider>
+        </BugReportRestoreProvider>
+      </AuthProvider>
+    </MemoryRouter>
+  )
+}
+
 test('renders retained navigation labels', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth('/')
@@ -542,6 +560,17 @@ describe('bootstrap shell and route compatibility (issue #3242)', () => {
     expect(
       screen.getByRole('heading', { name: 'Page not found' }).closest('[data-app-shell-ready]'),
     ).not.toBeNull()
+  })
+
+  test('renders not-found page for unknown route when unauthenticated', async () => {
+    renderWithoutAuth('/nonexistent-path')
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+    })
+    const heading = screen.getByRole('heading', { name: 'Page not found' })
+    expect(heading.closest('[data-app-shell-ready]')).not.toBeNull()
+    expect(heading.textContent).toBe('Page not found')
   })
 })
 

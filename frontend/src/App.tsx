@@ -453,6 +453,17 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return children
 }
 
+function NotFoundRoute({ children }: { children: ReactNode }) {
+  const { authState } = useAuth()
+  
+  if (authState.isLoading) {
+    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Loading...</div>
+  }
+  
+  // For both authenticated and unauthenticated users, show the NotFoundPage
+  return children
+}
+
 function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
   const { authState } = useAuth()
 
@@ -666,13 +677,11 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
         <Route path="*" element={
-          <ProtectedRoute>
-            <ServiceUnavailableWrapper>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <NotFoundPage />
-              </AuthenticatedLayout>
-            </ServiceUnavailableWrapper>
-          </ProtectedRoute>
+          <NotFoundRoute>
+            <PublicLayout onBugReportSubmit={submit}>
+              <NotFoundPage />
+            </PublicLayout>
+          </NotFoundRoute>
         } />
       </Routes>
     </Suspense>
