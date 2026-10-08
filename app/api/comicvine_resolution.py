@@ -442,7 +442,7 @@ async def api_remove_identity(
     issue_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> RemoveIdentityResponse:
+) -> IssueIdentityResponse:
     """Remove the confirmed ComicVine identity mapping from an issue.
 
     Sets the confirmed mapping status to ``unresolved``, effectively unlinking
