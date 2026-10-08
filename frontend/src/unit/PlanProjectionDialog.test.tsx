@@ -47,7 +47,7 @@ describe('PlanProjectionDialog', () => {
 
   it('loads reading orders when opened', async () => {
     renderDialog()
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument())
     expect(readingOrdersApi.list).toHaveBeenCalled()
   })
 
@@ -67,8 +67,8 @@ describe('PlanProjectionDialog', () => {
     })
 
     renderDialog()
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('radio', { name: /Alpha/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Preview projection' }))
 
     await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
@@ -98,8 +98,8 @@ describe('PlanProjectionDialog', () => {
     })
 
     renderDialog()
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('radio', { name: /Alpha/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Preview projection' }))
 
     await waitFor(() => expect(screen.getByText(/Resolve conflicts/)).toBeInTheDocument())
@@ -131,8 +131,8 @@ describe('PlanProjectionDialog', () => {
     })
 
     renderDialog()
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('radio', { name: /Alpha/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Confirm projection' }))
 
     await waitFor(() => expect(screen.getByText(/Projection applied/)).toBeInTheDocument())
@@ -157,8 +157,8 @@ describe('PlanProjectionDialog', () => {
     })
 
     renderDialog()
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('radio', { name: /Alpha/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Preview projection' }))
 
     await waitFor(() => expect(screen.getByText('1')).toBeInTheDocument())
@@ -176,8 +176,8 @@ describe('PlanProjectionDialog', () => {
   it('shows an error when the projection preview fails', async () => {
     mocks.previewProjection.mockRejectedValue(new Error('Preview failed.'))
     renderDialog()
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('radio', { name: /Alpha/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Preview projection' }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Preview failed/))
@@ -187,10 +187,19 @@ describe('PlanProjectionDialog', () => {
   it('shows an error when confirming the projection fails', async () => {
     mocks.confirmProjection.mockRejectedValue(new Error('Confirm failed.'))
     renderDialog()
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha/ })).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByTestId('projection-reading-order-select'), '3')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('radio', { name: /Alpha/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Confirm projection' }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Confirm failed/))
+  })
+
+  it('explains when there are no saved reading orders', async () => {
+    mocks.list.mockResolvedValue({ reading_orders: [] })
+    renderDialog()
+    await waitFor(() => expect(screen.getByText(/No saved reading orders yet/)).toBeInTheDocument())
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Preview projection' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirm projection' })).toBeDisabled()
   })
 })

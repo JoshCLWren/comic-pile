@@ -503,6 +503,24 @@ describe('ContinuityPlannerPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/network down/i)
   })
 
+  it('does not stick the issue combobox on loading before a comic is selected', async () => {
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: queryWrapper },
+    )
+
+    // No comic selected: the issue query is disabled, so the combobox must not
+    // claim to be loading issues and no issue fetch may fire.
+    await waitFor(() => expect(screen.getByLabelText('Issue')).toBeInTheDocument())
+    expect(screen.queryByRole('option', { name: /Loading issues/i })).not.toBeInTheDocument()
+    expect(mocks.listIssues).not.toHaveBeenCalled()
+  })
+
   it('surfaces a save error without discarding the in-progress plan', async () => {
     mocks.create.mockReset()
     mocks.create.mockRejectedValueOnce({

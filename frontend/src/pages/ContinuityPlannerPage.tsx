@@ -60,10 +60,14 @@ export default function ContinuityPlannerPage({
     addFromCblRequested,
   })
 
-  // Issues for the thread selected in the editor — driven by editor selection state
+  // Issues for the thread selected in the editor — driven by editor selection state.
+  // NOTE: useThreadIssues is disabled until a thread is selected, and a disabled
+  // query reports isPending=true with isFetching=false. Gate the spinner on both
+  // so the combobox doesn't get stuck on "Loading issues…" with no thread chosen.
   const {
     data: issues = [],
     isPending: issuesPending,
+    isFetching: issuesFetching,
     error: issuesQueryError,
   } = useThreadIssues(editor.selectedThreadId)
 
@@ -143,7 +147,7 @@ export default function ContinuityPlannerPage({
         editor={editor}
         threads={threads}
         issues={issues}
-        issuesLoading={issuesPending}
+        issuesLoading={issuesPending && issuesFetching}
         issueLoadError={issueLoadError}
         groups={groups}
       />
