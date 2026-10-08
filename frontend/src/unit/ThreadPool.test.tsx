@@ -56,12 +56,14 @@ function renderPool(overrides: Partial<{
         skippedThreads={mockSkippedThreads}
         skippedExpanded={false}
         blockedExpanded={blockedExpanded}
+        staleExpanded={false}
         onThreadClick={() => {}}
         onUnsnooze={() => {}}
         onUnskip={() => {}}
         onReadStale={() => {}}
         onToggleSnoozed={() => {}}
         onToggleSkipped={() => {}}
+        onToggleStale={() => {}}
         onToggleBlocked={() => {}}
         onShuffle={() => {}}
         unsnoozeIsPending={false}
@@ -138,6 +140,7 @@ describe('ThreadPool Component', () => {
           skippedThreads={mockSkippedThreads}
           skippedExpanded={false}
           blockedExpanded={false}
+          staleExpanded={false}
           onThreadClick={() => {}}
           onUnsnooze={() => {}}
           onUnskip={() => {}}
@@ -188,6 +191,7 @@ describe('ThreadPool Component', () => {
           skippedThreads={[{ id: 10, title: 'Skipped Saga', format: 'Comic' }]}
           skippedExpanded={true}
           blockedExpanded={false}
+          staleExpanded={false}
           onThreadClick={() => {}}
           onUnsnooze={() => {}}
           onUnskip={onUnskip}
@@ -228,12 +232,14 @@ describe('ThreadPool Component', () => {
           skippedThreads={[{ id: 10, title: 'Skipped Saga', format: 'Comic' }]}
           skippedExpanded={false}
           blockedExpanded={false}
+          staleExpanded={false}
           onThreadClick={() => {}}
           onUnsnooze={() => {}}
           onUnskip={() => {}}
           onReadStale={() => {}}
           onToggleSnoozed={() => {}}
           onToggleSkipped={onToggleSkipped}
+          onToggleStale={() => {}}
           onToggleBlocked={() => {}}
           onShuffle={() => {}}
           unsnoozeIsPending={false}

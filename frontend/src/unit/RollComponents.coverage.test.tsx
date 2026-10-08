@@ -56,20 +56,20 @@ const callbacks = () => ({
 describe('ThreadPool', () => {
   it('renders empty, blocked, pool, stale, and snoozed states', async () => {
     const empty = callbacks()
-    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
+    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /add a series/i }))
     expect(empty.onShuffle).not.toHaveBeenCalled()
 
     const actions = callbacks()
     // SAFETY: Test injects a synthetic staleThread with extra days field to cover the stale branch; the cast widens Thread to the stale shape the component reads.
-    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} selectedThreadId={null} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 4 })} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} selectedThreadId={null} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 4 })} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     expect(screen.getByText(/Every series is blocked or snoozed/)).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
     expect(actions.onToggleBlocked).not.toHaveBeenCalled()
 
     // SAFETY: Same synthetic staleThread widening for the second stale branch.
-    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={1} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 2 })} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={1} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 2 })} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /snoozed/i }))
     await userEvent.setup().click(screen.getAllByText('Saga')[0]!)
     expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
@@ -81,7 +81,7 @@ describe('ThreadPool', () => {
     const actions = callbacks()
     // SAFETY: Synthetic stale thread with days field exercises the stale rendering branch; the type widens Thread to the stale shape.
     const stale = cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, title: 'Stale Saga', days: 9 })
-    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} staleExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /series waiting for earlier issues/i }))
     expect(screen.getByText('Prerequisite')).toBeInTheDocument()
     const hiddenBlockerLink = screen.getByRole('link', { name: 'Open Saga' })
@@ -90,10 +90,11 @@ describe('ThreadPool', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: /Snoozed \(1\)/i }))
     await userEvent.setup().click(screen.getByRole('button', { name: 'Unsnooze this comic' }))
     expect(actions.onUnsnooze).toHaveBeenCalledWith(3)
-    // SAFETY: closest('[role="button"]') is guaranteed to return the stale card's button in this deterministic render.
-    const staleCard = screen.getByText(/Stale Saga/).closest('[role="button"]') as HTMLElement
-    fireEvent.keyDown(staleCard, { key: 'Enter' })
-    expect(actions.onReadStale).toHaveBeenCalled()
+    // SAFETY: The stale card is rendered once the stale section is expanded; toggle it open first so the roll button is reachable.
+    await userEvent.setup().click(screen.getByRole('button', { name: /series you haven't opened recently/i }))
+    const rollButton = screen.getByRole('button', { name: /roll this series now/i })
+    await userEvent.setup().click(rollButton)
+    expect(actions.onReadStale).toHaveBeenCalledWith(thread.id)
   })
 
   it('handles rating-view pool layout and pending controls', async () => {
@@ -113,6 +114,7 @@ describe('ThreadPool', () => {
       skippedThreads={[]}
       skippedExpanded
       blockedExpanded
+      staleExpanded={false}
       unsnoozeIsPending
       unskipIsPending
       shuffleIsPending
