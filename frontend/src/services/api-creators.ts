@@ -61,11 +61,30 @@ export interface CreatorRatingDistribution {
   max_rating: number
 }
 
+/** Series/run-level aggregate of one creator's attributed rated work (issue #3099). */
+export interface CreatorSeriesGroup {
+  series_key: string
+  thread_id: number
+  thread_title: string
+  rated_issue_count: number
+  average_rating: number | null
+  lowest_rating: number | null
+  highest_rating: number | null
+  roles: string[]
+  unread_issue_count: number
+  read_unrated_issue_count: number
+  metadata_complete: boolean
+  sort_key: string
+}
+
 /** Full personal creator detail payload (issue #2037). */
 export interface CreatorDetailResponse {
   summary: CreatorSummaryItem
   coverage: CreatorSummaryCoverage
   role_stats: CreatorRoleStat[]
+  series_groups: CreatorSeriesGroup[]
+  series_groups_total: number
+  series_groups_complete: boolean
   rated_issues: CreatorIssueRow[]
   read_unrated_issues: CreatorIssueRow[]
   upcoming_issues: CreatorIssueRow[]

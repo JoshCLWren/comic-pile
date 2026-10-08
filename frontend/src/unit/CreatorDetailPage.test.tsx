@@ -38,6 +38,24 @@ function baseState(overrides: Partial<CreatorDetailState> = {}): CreatorDetailSt
       { role: 'cover', issue_count: 1, rated_issue_count: 0, average_rating: null },
     ],
     ratingDistribution: null,
+    seriesGroups: [
+      {
+        series_key: 'thread:1',
+        thread_id: 1,
+        thread_title: 'Series A',
+        rated_issue_count: 2,
+        average_rating: 4.5,
+        lowest_rating: 4,
+        highest_rating: 5,
+        roles: ['writer'],
+        unread_issue_count: 0,
+        read_unrated_issue_count: 0,
+        metadata_complete: true,
+        sort_key: '0002:Series A:thread:1',
+      },
+    ],
+    seriesGroupsTotal: 1,
+    seriesGroupsComplete: true,
     ratedIssues: [
       {
         issue_id: 11,
@@ -117,7 +135,7 @@ describe('CreatorDetailPage', () => {
     expect(screen.getByRole('heading', { name: /Upcoming in ComicPile/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Read, not rated/ })).toBeInTheDocument()
     // Issue rows link into the existing thread route.
-    const ratedLink = screen.getByRole('link', { name: /Series A/ })
+    const ratedLink = screen.getByRole('link', { name: /Series A #1/ })
     expect(ratedLink.getAttribute('href')).toBe('/thread/1')
   })
 
@@ -231,6 +249,29 @@ describe('CreatorDetailPage', () => {
     expect(screen.queryByRole('heading', { name: 'Roles' })).not.toBeInTheDocument()
   })
 
+  it('renders series groups from the API with grouped aggregates', () => {
+    renderAt('creator:7')
+
+    expect(screen.getByRole('heading', { name: 'Series (1)' })).toBeInTheDocument()
+    const seriesLink = screen.getByRole('link', { name: /Series A.*2 issues/ })
+    expect(seriesLink.getAttribute('href')).toBe('/thread/1')
+    expect(screen.getByLabelText('Average 4.5 out of 5')).toBeInTheDocument()
+  })
+
+  it('hides the series section when the backend reports no groups', () => {
+    mockedHook.mockReturnValue(baseState({ seriesGroups: [], seriesGroupsTotal: 0 }))
+    renderAt('creator:7')
+
+    expect(screen.queryByRole('heading', { name: /Series/ })).not.toBeInTheDocument()
+  })
+
+  it('communicates partial series groups as lower-bound results', () => {
+    mockedHook.mockReturnValue(baseState({ seriesGroupsComplete: false }))
+    renderAt('creator:7')
+
+    expect(screen.getByText(/Partial list: showing the most-rated series first/)).toBeInTheDocument()
+  })
+
   it('flags read-but-unrated coverage as partial when metadata is incomplete', () => {
     mockedHook.mockReturnValue(
       baseState({ coverage: { ...baseState().coverage!, read_unrated_complete: false } }),
@@ -252,7 +293,7 @@ describe('CreatorDetailPage', () => {
     renderAt('creator:7')
 
     expect(screen.getByRole('heading', { name: 'Test Creator' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Series A/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Series A #1/ })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('Could not load more')
     expect(screen.queryByRole('heading', { name: 'Could not load creator' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))

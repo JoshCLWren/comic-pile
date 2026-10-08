@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { creatorsApi } from '../services/api-creators'
-import type { CreatorDetailResponse, CreatorIssueRow } from '../services/api-creators'
+import type { CreatorDetailResponse, CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
 import { queryKeys } from '../query/queryKeys'
 
 export const CREATOR_DETAIL_PAGE_SIZE = 50
@@ -39,6 +39,9 @@ export interface CreatorDetailState {
   coverage: CreatorDetailResponse['coverage'] | null
   roleStats: CreatorDetailResponse['role_stats']
   ratingDistribution: CreatorDetailResponse['rating_distribution']
+  seriesGroups: CreatorSeriesGroup[]
+  seriesGroupsTotal: number
+  seriesGroupsComplete: boolean
   ratedIssues: CreatorIssueRow[]
   readUnratedIssues: CreatorIssueRow[]
   upcomingIssues: CreatorIssueRow[]
@@ -89,6 +92,9 @@ export function useCreatorDetail(
     coverage: firstPage?.coverage ?? null,
     roleStats: firstPage?.role_stats ?? [],
     ratingDistribution: firstPage?.rating_distribution ?? null,
+    seriesGroups: firstPage?.series_groups ?? [],
+    seriesGroupsTotal: firstPage?.series_groups_total ?? 0,
+    seriesGroupsComplete: firstPage?.series_groups_complete ?? true,
     ratedIssues,
     readUnratedIssues,
     upcomingIssues,

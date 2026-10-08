@@ -41,6 +41,24 @@ function makePage(overrides: Partial<CreatorDetailResponse> = {}): CreatorDetail
       upcoming_complete: true,
     },
     role_stats: [{ role: 'writer', issue_count: 6, rated_issue_count: 4, average_rating: 4.5 }],
+    series_groups: [
+      {
+        series_key: 'thread:1',
+        thread_id: 1,
+        thread_title: 'Series A',
+        rated_issue_count: 1,
+        average_rating: 5,
+        lowest_rating: 5,
+        highest_rating: 5,
+        roles: ['writer'],
+        unread_issue_count: 0,
+        read_unrated_issue_count: 0,
+        metadata_complete: true,
+        sort_key: '0001:Series A:thread:1',
+      },
+    ],
+    series_groups_total: 1,
+    series_groups_complete: true,
     rated_issues: [
       {
         issue_id: 11,
@@ -78,6 +96,9 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
     expect(getDetail).toHaveBeenCalledWith('creator:7', { limit: 50 })
     expect(result.current.summary?.display_name).toBe('Test Creator')
     expect(result.current.ratedIssues).toHaveLength(1)
+    expect(result.current.seriesGroups).toHaveLength(1)
+    expect(result.current.seriesGroupsTotal).toBe(1)
+    expect(result.current.seriesGroupsComplete).toBe(true)
     expect(result.current.hasMore).toBe(false)
   })
 
