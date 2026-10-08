@@ -539,7 +539,6 @@ async def get_thread_connected_threads(
     circular_thread_ids = {cd["thread_id"] for cd in circular_dependencies}
     
     connected: list[ConnectedThreadInfo] = []
-    circular_thread_ids = {cd["thread_id"] for cd in circular_dependencies}
     
     for entry in connected_by_thread.values():
         types = entry["types"]

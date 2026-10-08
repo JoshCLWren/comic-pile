@@ -364,7 +364,7 @@ export type Dependency = components['schemas']['DependencyResponse']
 export type ThreadDependenciesResponse = components['schemas']['ThreadDependenciesResponse']
 
 export type ConnectedThreadInfo = components['schemas']['ConnectedThreadInfo'] & {
-  is_circular?: boolean;
+  is_circular: boolean;
 }
 
 export type ConnectedDependenciesResponse = components['schemas']['ThreadConnectedResponse']
