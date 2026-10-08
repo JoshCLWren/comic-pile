@@ -44,13 +44,26 @@ function eventLabel(type: string): string {
 }
 
 function EventRecord({ event }: { event: DisplayEvent }) {
+  const getRollDisplay = () => {
+    if (event.result == null) return null
+    
+    // For manually selected rolls (result 0 with selection method), show meaningful text instead of "Rolled 0"
+    if (event.result === 0 && event.selection_method) {
+      const methodText = event.selection_method.replaceAll('_', ' ')
+      return `Selected by ${methodText}`
+    }
+    
+    // For normal rolls, show the result
+    return `Rolled ${event.result}`
+  }
+
   const metadata = [
     event.issues_read != null ? `${event.issues_read} ${event.issues_read === 1 ? 'issue' : 'issues'} read` : null,
     event.die != null ? `d${event.die}` : null,
-    event.result != null ? `Rolled ${event.result}` : null,
+    getRollDisplay(),
     event.die_after != null ? `Die after: d${event.die_after}` : null,
     event.rating != null ? `Rating ${event.rating}` : null,
-    event.selection_method ? `Selected by ${event.selection_method.replaceAll('_', ' ')}` : null,
+    event.selection_method && event.result !== 0 ? `Selected by ${event.selection_method.replaceAll('_', ' ')}` : null,
   ].filter((value): value is string => value !== null)
 
   return (

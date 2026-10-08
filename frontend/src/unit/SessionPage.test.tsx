@@ -250,6 +250,41 @@ it('uses human labels and explicit fallback text for sparse events', () => {
   expect(screen.getAllByText('No additional event details recorded.')).toHaveLength(2)
 })
 
+it('displays "Selected by" text instead of "Rolled 0" for manually selected rolls', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 20, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
+    ladder_path: 'd6', narrative_summary: {},
+    events: [
+      {
+        id: 22,
+        timestamp: '2024-01-01',
+        type: 'roll',
+        thread_title: 'Saga',
+        result: 0, // This indicates a manually selected roll
+        die: 6,
+        selection_method: 'manual', // This indicates manual selection
+      },
+      {
+        id: 23,
+        timestamp: '2024-01-01',
+        type: 'roll',
+        thread_title: 'East of West',
+        result: 0, // This indicates a manually selected roll
+        die: 8,
+        selection_method: 'override', // This indicates override selection
+      },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  // Verify that manually selected rolls show "Selected by" instead of "Rolled 0"
+  expect(screen.getByText('Selected by manual')).toBeInTheDocument()
+  expect(screen.getByText('Selected by override')).toBeInTheDocument()
+  // Verify that "Rolled 0" is NOT displayed for manually selected rolls
+  expect(screen.queryByText('Rolled 0')).not.toBeInTheDocument()
+})
+
 it('renders reader-language event descriptions instead of the placeholder', () => {
   mockedUseSessionDetails.mockReturnValue({ data: {
     session_id: 18, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
