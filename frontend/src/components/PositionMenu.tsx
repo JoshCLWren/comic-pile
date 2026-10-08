@@ -236,6 +236,7 @@ export default function PositionMenu({
       icon: snoozeIcon || '',
       ariaLabel: snoozeLabel,
       disabled: snoozeDisabled,
+      title: snoozeDisabled ? 'Only the pending rolled series can be snoozed from the queue' : undefined,
       action: () => {
         if (!snoozeDisabled && onSnooze) {
           onSnooze(thread)
@@ -303,6 +304,7 @@ export default function PositionMenu({
                 }}
                 aria-label={item.ariaLabel}
                 disabled={item.disabled}
+                title={item.title}
                 className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
                   item.disabled
                     ? 'text-stone-600 cursor-not-allowed'

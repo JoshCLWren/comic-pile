@@ -299,7 +299,7 @@ export function useQueueThreadActions(
         if (isSnoozed) {
           await unsnoozeMutation.mutate(thread.id)
         } else {
-          await snoozeMutation.mutate(thread.id)
+          await snoozeMutation.mutate()
         }
         await refetchSession()
         await invalidateAfterQueueMutation(queryClient)
