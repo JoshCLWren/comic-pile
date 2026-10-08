@@ -403,6 +403,33 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 
+it('lists a circular dependency once instead of under both directions (#3239)', async () => {
+  mockedConnectedThreads.mockResolvedValue({
+    thread_id: 1,
+    connected_threads: [
+      // Bidirectional: this one connection both blocks and is blocked by thread 1.
+      { thread_id: 9, title: 'Magneto Rex', connection_type: 'blocks & blocked_by', dependency_id: 11, issue_number: '42', is_circular: true },
+      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, is_circular: false },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: 'Open Magneto Rex (circular dependency)' }),
+  ).toHaveAttribute('href', '/thread/9')
+
+  // The circular series is presented exactly once in the whole dependencies
+  // region -- it must not reappear as a prerequisite or as a dependent.
+  const circularLinks = screen.getAllByRole('link', { name: /Magneto Rex/ })
+  expect(circularLinks).toHaveLength(1)
+  expect(screen.queryByRole('link', { name: 'Open Magneto Rex' })).not.toBeInTheDocument()
+
+  // The one-way dependency is unaffected.
+  expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
+})
+
 it('passes onIssueChanged callback to IssueToggleList', async () => {
   vi.mocked(issuesApi.list).mockResolvedValue({
     issues: [

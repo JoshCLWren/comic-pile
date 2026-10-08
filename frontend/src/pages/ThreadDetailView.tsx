@@ -259,19 +259,25 @@ export default function ThreadDetailView() {
           {!connectedError && !connectedPending && connectedThreads.length > 0 && (
             <div className="space-y-3">
               {(() => {
-                const blockedBy = connectedThreads.filter((t) => t.connection_type.includes('blocked_by'))
-                const blocking = connectedThreads.filter((t) => t.connection_type.includes('blocks'))
+                // A circular connection both blocks and is blocked by this
+                // series (#3239). Listing it under "Blocked by" and "Blocking"
+                // simultaneously is exactly the impossible reading order the
+                // report describes, so it is presented once in its own region
+                // and excluded from both directional lists.
                 const circular = connectedThreads.filter((t) => t.is_circular)
+                const oneWay = connectedThreads.filter((t) => !t.is_circular)
+                const blockedBy = oneWay.filter((t) => t.connection_type.includes('blocked_by'))
+                const blocking = oneWay.filter((t) => t.connection_type.includes('blocks'))
 
                 return (
                   <>
-                    {/* Circular Dependencies Warning */}
                     {circular.length > 0 && (
                       <div className="space-y-1">
                         <h3 className="text-base font-bold text-[var(--theme-warning)]">⚠️ Circular Dependencies</h3>
                         <p className="text-xs text-[var(--theme-text-muted)]">
                           Each series below both blocks and is blocked by this series — an impossible
-                          reading order until the dependency direction is corrected.
+                          reading order until the dependency direction is corrected. They are listed
+                          here once instead of under both directions.
                         </p>
                         {circular.map((t) => (
                           <Link
@@ -282,7 +288,7 @@ export default function ThreadDetailView() {
                           >
                             <span aria-hidden="true">⚠️</span>
                             <span className="text-sm text-[var(--theme-warning)] truncate">
-                              {t.title}{t.issue_number ? `: #${t.issue_number}` : ''} (circular)
+                              {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
                             </span>
                           </Link>
                         ))}
@@ -296,17 +302,12 @@ export default function ThreadDetailView() {
                         <Link
                           key={`${t.dependency_id}-blocked-by`}
                           to={`/thread/${t.thread_id}`}
-                          className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
-                            t.is_circular
-                              ? 'border-[var(--theme-warning)]/40 bg-[var(--theme-warning)]/10 hover:bg-[var(--theme-warning)]/20'
-                              : 'border-white/10 bg-white/5 hover:bg-white/10'
-                          }`}
+                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
                           aria-label={`Open ${t.title}`}
                         >
                           <span aria-hidden="true">🔒</span>
                           <span className="text-sm text-stone-300 truncate">
                             {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
-                            {t.is_circular && <span className="text-xs text-[var(--theme-warning)] ml-1">(circular)</span>}
                           </span>
                         </Link>
                       ))}
@@ -318,17 +319,12 @@ export default function ThreadDetailView() {
                         <Link
                           key={`${t.dependency_id}-blocking`}
                           to={`/thread/${t.thread_id}`}
-                          className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
-                            t.is_circular
-                              ? 'border-[var(--theme-warning)]/40 bg-[var(--theme-warning)]/10 hover:bg-[var(--theme-warning)]/20'
-                              : 'border-white/10 bg-white/5 hover:bg-white/10'
-                          }`}
+                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
                           aria-label={`Open ${t.title}`}
                         >
                           <span aria-hidden="true">🔓</span>
                           <span className="text-sm text-stone-300 truncate">
                             {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
-                            {t.is_circular && <span className="text-xs text-[var(--theme-warning)] ml-1">(circular)</span>}
                           </span>
                         </Link>
                       ))}
