@@ -206,13 +206,21 @@ export function IssueToggleList({
           await runIssueMutation(currentMutation)
           baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
           hadSuccess = true
+          if (currentMutation.type === 'delete') {
+            // Close the confirmation dialog only once its delete succeeds,
+            // matching the DeleteThreadDialog lifecycle: the dialog stays
+            // open through the pending mutation and on failure so the
+            // error stays actionable.
+            setDeleteDialogIssue((dialogIssue) =>
+              dialogIssue?.id === currentMutation.issueId ? null : dialogIssue
+            )
+          }
         } catch (err: unknown) {
           try {
             baseIssuesRef.current = await fetchAllIssues()
           } catch (refreshErr) {
             console.error('[IssueToggleList] Error refetching issues after mutation failure:', refreshErr)
           }
-          
           // If this is a delete mutation, set the delete error instead of the general action error
           if (currentMutation.type === 'delete') {
             setDeleteError(getApiErrorDetail(err))
@@ -381,14 +389,17 @@ export function IssueToggleList({
 
   function handleConfirmDelete() {
     if (!deleteDialogIssue) return
-    
+
     setActionError(null)
     setDeleteError(null)
     enqueueIssueMutation({
       type: 'delete',
       issueId: deleteDialogIssue.id,
     })
-    setDeleteDialogIssue(null)
+    // The dialog stays open while the delete is pending (the `deleting`
+    // set drives its `isPending` state) and on failure, so the reader
+    // sees the error and can retry or cancel. `processIssueMutations`
+    // closes it when the delete succeeds.
   }
 
   function handleCancelDelete() {

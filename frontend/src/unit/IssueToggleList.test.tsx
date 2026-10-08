@@ -249,8 +249,6 @@ describe('IssueToggleList', () => {
   })
 
   it('keeps later optimistic mutations when an earlier queued mutation fails', async () => {
-    const confirmMock = vi.mocked(window.confirm)
-    confirmMock.mockReturnValue(true)
     const canonicalIssuesAfterFailure: Issue[] = [
       ...BASE_ISSUES,
       {
@@ -286,6 +284,10 @@ describe('IssueToggleList', () => {
     expect(getIssueOrder()).toEqual(['2', '3', '1'])
 
     fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+
+    // Confirm the delete through the in-app dialog
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
     expect(getIssueOrder()).toEqual(['3', '1'])
 
     await act(async () => {
@@ -346,8 +348,10 @@ describe('IssueToggleList', () => {
 
     // The delete dialog should now be open
     expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
-    expect(screen.getByText('Delete Issue')).toBeInTheDocument()
-    expect(screen.getByText('Are you sure you want to delete issue #2?')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Delete Issue' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/Are you sure you want to delete issue #2\?/),
+    ).toBeInTheDocument()
 
     // Click the Delete button in the dialog
     fireEvent.click(screen.getByTestId('confirm-delete-issue'))
@@ -368,8 +372,10 @@ describe('IssueToggleList', () => {
 
     // The delete dialog should now be open
     expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
-    expect(screen.getByText('Delete Issue')).toBeInTheDocument()
-    expect(screen.getByText('Are you sure you want to delete issue #2?')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Delete Issue' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/Are you sure you want to delete issue #2\?/),
+    ).toBeInTheDocument()
 
     // Click the Cancel button in the dialog
     fireEvent.click(screen.getByText('Cancel'))
@@ -666,11 +672,11 @@ describe('IssueToggleList', () => {
     await renderIssueToggleList()
     fireEvent.click(screen.getByTestId('issue-toggle-1'))
     await waitFor(() => expect(screen.getByText('toggle failed')).toBeInTheDocument())
-    
     // Test delete failure with the new dialog
+    mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete failed'))
     fireEvent.click(screen.getByTestId('issue-delete-2'))
     expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
-    
+
     // Click the Delete button in the dialog (will fail)
     fireEvent.click(screen.getByTestId('confirm-delete-issue'))
     await waitFor(() => expect(screen.getByText('delete failed')).toBeInTheDocument())
