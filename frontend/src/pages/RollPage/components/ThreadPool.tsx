@@ -232,6 +232,7 @@ export function ThreadPool({
           <button
             type="button"
             onClick={onToggleStale}
+            aria-expanded={staleExpanded}
             className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
           >
             <span
@@ -263,7 +264,7 @@ export function ThreadPool({
                 <button
                   type="button"
                   onClick={() => onReadStale(staleThread.id)}
-                  className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]/80 hover:bg-[var(--theme-comic-accent)]/10 rounded-lg transition-colors"
+                  className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]/80 hover:bg-[var(--theme-comic-accent)]/10 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                   title="Roll this series now"
                   aria-label="Roll this series now"
                 >

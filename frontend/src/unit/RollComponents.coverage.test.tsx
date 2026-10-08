@@ -110,8 +110,12 @@ describe('ThreadPool', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Unsnooze this comic' }))
     expect(actions.onUnsnooze).toHaveBeenCalledWith(3)
     // SAFETY: The stale card is rendered once the stale section is expanded; toggle it open first so the roll button is reachable.
-    await userEvent.setup().click(screen.getByRole('button', { name: /series you haven't opened recently/i }))
+    const staleToggle = screen.getByRole('button', { name: /series you haven't opened recently/i })
+    expect(staleToggle).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.setup().click(staleToggle)
+    expect(staleToggle).toHaveAttribute('aria-expanded', 'true')
     const rollButton = screen.getByRole('button', { name: /roll this series now/i })
+    expect(rollButton.className).toContain('focus-visible:ring-[var(--theme-focus-ring)]')
     await userEvent.setup().click(rollButton)
     expect(actions.onReadStale).toHaveBeenCalledWith(thread.id)
   })
