@@ -165,37 +165,37 @@ export default function QueueThreadCard({
                 <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
-</div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
-                {thread.format}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
+              {thread.format}
+            </span>
+            {thread.comicvine_mapping?.status && thread.comicvine_mapping.status !== 'fully_mapped' && thread.comicvine_mapping.status !== 'not_applicable' && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMapSeries();
+                }}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--theme-warning)]/10 border border-[var(--theme-warning)]/20 hover:bg-[var(--theme-warning)]/20 transition-colors group"
+                title={`Repair ComicVine mapping for ${thread.title}`}
+              >
+                <span className="text-[var(--theme-warning)] text-[10px] group-hover:scale-110 transition-transform" aria-hidden="true">⚠️</span>
+                <span className="text-[10px] font-bold uppercase tracking-tight text-[var(--theme-warning)]/80 group-hover:text-[var(--theme-warning)] transition-colors">
+                  {thread.comicvine_mapping.status === 'needs_review'
+                    ? 'Review needed'
+                    : `${thread.comicvine_mapping.needs_mapping_count} issues need mapping`}
+                </span>
+              </button>
+            )}
+            {thread.issues_remaining !== null && (
+              <span className="text-sm font-medium text-[var(--theme-text-muted)]">
+                {isMigrated && !isBlocked && thread.next_unread_issue_number
+                  ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`
+                  : `${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`}
               </span>
-              {thread.comicvine_mapping?.status && thread.comicvine_mapping.status !== 'fully_mapped' && thread.comicvine_mapping.status !== 'not_applicable' && (
-                 <button
-                   type="button"
-                   onClick={(event) => {
-                     event.stopPropagation();
-                     onMapSeries();
-                   }}
-                   className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors group"
-                   title={`Repair ComicVine mapping for ${thread.title}`}
-                 >
-                   <span className="text-amber-500 text-[10px] group-hover:scale-110 transition-transform" aria-hidden="true">⚠️</span>
-                   <span className="text-[10px] font-bold uppercase tracking-tight text-amber-500/80 group-hover:text-amber-400 transition-colors">
-                     {thread.comicvine_mapping.status === 'needs_review' 
-                       ? 'Review needed' 
-                       : `${thread.comicvine_mapping.needs_mapping_count} issues need mapping`}
-                   </span>
-                 </button>
-               )}
-             {thread.issues_remaining !== null && (
-               <span className="text-sm font-medium text-[var(--theme-text-muted)]">
-                 {isMigrated && !isBlocked && thread.next_unread_issue_number
-                   ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`
-                   : `${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`}
-               </span>
-             )}
-           </div>
+            )}
+          </div>
           {thread.notes && <p className="mt-1.5 text-xs text-[var(--theme-text-muted)] [overflow-wrap:anywhere] break-words">{thread.notes}</p>}
           <div className="mt-1.5">
             {crossoverGroupsLoading ? (
