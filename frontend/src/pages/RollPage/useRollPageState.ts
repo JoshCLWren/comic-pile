@@ -17,6 +17,7 @@ export interface RollPageState {
   snoozedExpanded: boolean
   skippedExpanded: boolean
   blockedExpanded: boolean
+  staleExpanded: boolean
   isDieModalOpen: boolean
   isSetCurrentIssueOpen: boolean
   selectedThread: RollBootstrapThread | null
@@ -49,6 +50,7 @@ export interface RollPageStateSetters {
   setSnoozedExpanded: (value: boolean) => void
   setSkippedExpanded: (value: boolean) => void
   setBlockedExpanded: (value: boolean) => void
+  setStaleExpanded: (value: boolean) => void
   setIsDieModalOpen: (value: boolean) => void
   setIsSetCurrentIssueOpen: (value: boolean) => void
   setSelectedThread: (value: RollBootstrapThread | null) => void
@@ -78,6 +80,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
   const [skippedExpanded, setSkippedExpanded] = useState(false)
   const [blockedExpanded, setBlockedExpanded] = useState(false)
+  const [staleExpanded, setStaleExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
   const [isSetCurrentIssueOpen, setIsSetCurrentIssueOpen] = useState(false)
   const [selectedThread, setSelectedThread] = useState<RollBootstrapThread | null>(null)
@@ -123,6 +126,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setSkippedExpanded,
     blockedExpanded,
     setBlockedExpanded,
+    staleExpanded,
+    setStaleExpanded,
     isDieModalOpen,
     setIsDieModalOpen,
     isSetCurrentIssueOpen,

@@ -110,9 +110,18 @@ vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onC
 vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
-type MockProps = Record<string, string | (() => void) | ((thread: unknown) => void) | Record<string, string>>
-// SAFETY: the mock replaces ThreadPool, and the test drives the callback prop it declares
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: MockProps) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button><span>{JSON.stringify(props.blockingDependencyMap)}</span></div> }))
+interface ThreadPoolMockProps {
+  onThreadClick: (thread: unknown) => void
+  onShuffle: () => void
+  onReadStale: (threadId: number) => void
+  staleThread: { id: number } | null | undefined
+  onUnsnooze: () => void
+  onToggleSnoozed: () => void
+  onToggleStale: () => void
+  onToggleBlocked: () => void
+  blockingDependencyMap: unknown
+}
+vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div><button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={() => props.onReadStale(props.staleThread?.id ?? -1)}>read stale</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button><button onClick={props.onToggleStale}>toggle stale</button><button onClick={props.onToggleBlocked}>toggle blocked</button><span>{JSON.stringify(props.blockingDependencyMap)}</span></div> }))
 interface RatingViewMockData {
   activeRatingThread: { title?: string; issue_number?: string | null } | null
   errorMessage: string

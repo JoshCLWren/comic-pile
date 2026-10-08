@@ -450,12 +450,14 @@ export default function RollPage() {
               blockedExpanded={state.blockedExpanded}
               skippedThreads={skippedThreads}
               skippedExpanded={state.skippedExpanded}
+              staleExpanded={state.staleExpanded}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
               onUnskip={skip.handleUnskip}
               onReadStale={actions.handleReadStale}
               onToggleSnoozed={() => state.setSnoozedExpanded(!state.snoozedExpanded)}
               onToggleSkipped={() => state.setSkippedExpanded(!state.skippedExpanded)}
+              onToggleStale={() => state.setStaleExpanded(!state.staleExpanded)}
               onToggleBlocked={dependencies.handleToggleBlocked}
               onShuffle={actions.handleShufflePool}
               unsnoozeIsPending={unsnoozeMutation.isPending}

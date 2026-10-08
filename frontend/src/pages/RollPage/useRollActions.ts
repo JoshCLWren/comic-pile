@@ -91,10 +91,11 @@ export function useRollActions({
     setIsActionSheetOpen(true)
   }
 
-  async function handleReadStale() {
-    if (!staleThread) return
+  async function handleReadStale(threadId: number) {
+    const thread = staleThread?.id === threadId ? staleThread : null
+    if (!thread) return
     try {
-      const response = await threadsApi.setPending(staleThread.id)
+      const response = await threadsApi.setPending(thread.id)
       const threadMetadata: ThreadMetadata = {
         id: response.thread_id,
         title: response.title,
