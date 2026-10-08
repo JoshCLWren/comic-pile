@@ -7,8 +7,17 @@ import type { DependencyGroupSummary } from '../../services/api-dependency-group
 import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
 
+interface ComicVineMapping {
+  status: 'fully_mapped' | 'needs_review' | 'partial' | 'not_applicable'
+  needs_mapping_count: number
+}
+
+type ThreadWithMapping = ThreadListItem & {
+  comicvine_mapping?: ComicVineMapping | null
+}
+
 interface QueueThreadCardProps {
-  thread: ThreadListItem
+  thread: ThreadWithMapping
   index: number
   isBlocked: boolean
   blockingDependencies: BlockingDependency[]
@@ -156,29 +165,29 @@ export default function QueueThreadCard({
                 <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
-          </div>
-           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-             <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
-               {thread.format}
-             </span>
-             {(thread as any).comicvine_mapping?.status && (thread as any).comicvine_mapping.status !== 'fully_mapped' && (thread as any).comicvine_mapping.status !== 'not_applicable' && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onMapSeries();
-                  }}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors group"
-                  title={`Repair ComicVine mapping for ${thread.title}`}
-                >
-                  <span className="text-amber-500 text-[10px] group-hover:scale-110 transition-transform" aria-hidden="true">⚠️</span>
-                  <span className="text-[10px] font-bold uppercase tracking-tight text-amber-500/80 group-hover:text-amber-400 transition-colors">
-                    {(thread as any).comicvine_mapping.status === 'needs_review' 
-                      ? 'Review needed' 
-                      : `${(thread as any).comicvine_mapping.needs_mapping_count} issues need mapping`}
-                  </span>
-                </button>
-              )}
+</div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
+                {thread.format}
+              </span>
+              {thread.comicvine_mapping?.status && thread.comicvine_mapping.status !== 'fully_mapped' && thread.comicvine_mapping.status !== 'not_applicable' && (
+                 <button
+                   type="button"
+                   onClick={(event) => {
+                     event.stopPropagation();
+                     onMapSeries();
+                   }}
+                   className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors group"
+                   title={`Repair ComicVine mapping for ${thread.title}`}
+                 >
+                   <span className="text-amber-500 text-[10px] group-hover:scale-110 transition-transform" aria-hidden="true">⚠️</span>
+                   <span className="text-[10px] font-bold uppercase tracking-tight text-amber-500/80 group-hover:text-amber-400 transition-colors">
+                     {thread.comicvine_mapping.status === 'needs_review' 
+                       ? 'Review needed' 
+                       : `${thread.comicvine_mapping.needs_mapping_count} issues need mapping`}
+                   </span>
+                 </button>
+               )}
              {thread.issues_remaining !== null && (
                <span className="text-sm font-medium text-[var(--theme-text-muted)]">
                  {isMigrated && !isBlocked && thread.next_unread_issue_number

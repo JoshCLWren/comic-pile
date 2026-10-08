@@ -345,5 +345,4 @@ export default function QueuePage() {
     </PositionMenuProvider>
   )
 }
-
 export type { QueueSortBy }
