@@ -106,6 +106,14 @@ describe('ThreadPool Component', () => {
     expect(screen.getAllByRole('button', { name: /die face/i }).length).toBeGreaterThan(0)
   })
 
+  it('signals the whole-queue shuffle as a destructive action (#3261)', () => {
+    renderPool()
+
+    const shuffle = screen.getByRole('button', { name: /shuffle queue/i })
+    expect(shuffle.className).toContain('var(--theme-danger)')
+    expect(shuffle).toHaveAccessibleDescription(/randomizes the complete active queue/i)
+  })
+
   it('collapses blocked threads and exposes a toggle', () => {
     const onToggleBlocked = vi.fn()
     const blockedThread: RollBootstrapThread = {

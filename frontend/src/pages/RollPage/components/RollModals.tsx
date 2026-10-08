@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Modal from '../../../components/Modal'
 import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
+import ShuffleQueueDialog from '../../QueuePage/ShuffleQueueDialog'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import {
@@ -121,6 +122,11 @@ interface RollModalsProps {
   isSetCurrentIssueOpen: boolean
   onCloseSetCurrentIssue: () => void
   onSetCurrentIssue: (issueNumber: string) => Promise<void>
+  isShuffleOpen: boolean
+  onShuffleConfirm: () => void
+  onShuffleCancel: () => void
+  shufflePending: boolean
+  seriesCount: number
 }
 
 /**
@@ -163,6 +169,11 @@ export function RollModals({
   isSetCurrentIssueOpen,
   onCloseSetCurrentIssue,
   onSetCurrentIssue,
+  isShuffleOpen,
+  onShuffleConfirm,
+  onShuffleCancel,
+  shufflePending,
+  seriesCount,
 }: RollModalsProps) {
   const actionSheetThreadIsSnoozed =
     snoozedThreads.some((thread) => thread.id === selectedThread?.id) ?? false
@@ -362,6 +373,16 @@ export function RollModals({
             onClose={onCloseSetCurrentIssue}
           />
         </Modal>
+      )}
+
+      {isShuffleOpen && (
+        <ShuffleQueueDialog
+          isOpen={isShuffleOpen}
+          seriesCount={seriesCount}
+          isPending={shufflePending}
+          onConfirm={onShuffleConfirm}
+          onCancel={onShuffleCancel}
+        />
       )}
     </>
   )

@@ -108,6 +108,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }),
   useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }),
   useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }),
+  useActiveSeriesCount: () => null,
 }))
 vi.mock('../hooks', () => ({
   useRate: () => ({ mutate: spies.rate, isPending: false }),

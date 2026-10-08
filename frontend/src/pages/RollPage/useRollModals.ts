@@ -48,6 +48,8 @@ export function useRollModals({
     isActionSheetOpen,
     selectedThread,
     setIsActionSheetOpen,
+    isShuffleOpen,
+    setIsShuffleOpen,
   } = state
 
   const [overrideThreads, setOverrideThreads] = useState<ThreadListItem[] | null>(null)
@@ -109,14 +111,22 @@ export function useRollModals({
       })
       return
     }
+    if (isShuffleOpen) {
+      setRestoreAction(() => {
+        setIsShuffleOpen(true)
+      })
+      return
+    }
     clearRestoreAction()
   }, [
     clearRestoreAction,
     isActionSheetOpen,
     isOverrideOpen,
+    isShuffleOpen,
     selectedThread,
     setIsActionSheetOpen,
     setIsOverrideOpen,
+    setIsShuffleOpen,
     setRestoreAction,
     setShowMigrationDialog,
     setShowSimpleMigration,

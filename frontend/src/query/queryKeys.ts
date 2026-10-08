@@ -57,6 +57,14 @@ export const queryKeys = {
     all: ['queue'] as const,
     pages: () => ['queue', 'pages'] as const,
     /**
+     * Canonical key for the authoritative active-series total (`active_count`)
+     * on its own. Surfaces that need the whole-queue size without loading any
+     * page — the Roll shuffle confirmation (#3261) — read this instead of
+     * hydrating the paginated list. It sits beside `pages`, not under it, so a
+     * bounded count never participates in the queue loader's page reset.
+     */
+    activeCount: () => ['queue', 'active-count'] as const,
+    /**
      * Canonical bounded/infinite Queue list key. `pageToken` is intentionally
      * excluded so the key stays stable across cursor pages; the cursor lives in
      * `pageParam`, not the key. Changing `search`, `sort`, or `pageSize` becomes

@@ -63,7 +63,7 @@ vi.mock('../hooks/useRoll', () => ({
   useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
 }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
-vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }) }))
+vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }), useActiveSeriesCount: () => null }))
 vi.mock('../hooks', () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }) }))
 vi.mock('../hooks/useSkip', () => ({
   useSkip: () => skipHookValue.value ?? ({ mutate: spies.skip, isPending: false, isError: false, refreshError: null, hasRefreshError: false, retryRefresh: vi.fn() }),

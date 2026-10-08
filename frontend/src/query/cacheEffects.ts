@@ -186,6 +186,10 @@ export async function invalidateAfterQueueMovement(
     // each active list re-requests exactly one bounded first page.
     client.resetQueries({ queryKey: queryKeys.queue.pages() }),
     client.invalidateQueries({
+      queryKey: queryKeys.queue.activeCount(),
+      exact: true,
+    }),
+    client.invalidateQueries({
       queryKey: queryKeys.session.current(),
       exact: true,
     }),

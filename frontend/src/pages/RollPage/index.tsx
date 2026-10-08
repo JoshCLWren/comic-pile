@@ -12,7 +12,7 @@ import {
 } from '../../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useSkip, useUnskip } from '../../hooks/useSkip'
-import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useShuffleQueue, useActiveSeriesCount } from '../../hooks/useQueue'
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
 import { useSessionMode } from '../../hooks/useSessionMode'
@@ -216,6 +216,11 @@ export default function RollPage() {
     setRestoreAction,
     clearRestoreAction,
   })
+
+  // The shuffle confirmation has to name the whole-queue blast radius, and the
+  // Roll bootstrap only carries the die-sized roll_pool, so the authoritative
+  // active-series total is fetched while the confirmation is actually open.
+  const activeSeriesCount = useActiveSeriesCount(state.isShuffleOpen)
 
   const handleSetCurrentIssue = async (issueNumber: string) => {
     if (!state.selectedThread) return
@@ -499,6 +504,11 @@ export default function RollPage() {
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
           onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
           onSetCurrentIssue={handleSetCurrentIssue}
+          isShuffleOpen={state.isShuffleOpen}
+          onShuffleConfirm={actions.performShuffle}
+          onShuffleCancel={() => state.setIsShuffleOpen(false)}
+          shufflePending={shuffleQueueMutation.isPending}
+          seriesCount={activeSeriesCount ?? 0}
         />
 
         <ModeSelectorSheet
