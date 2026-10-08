@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
+import { createApiClient, setAccessToken } from '../services/api'
 import { createCreatorsApi } from '../services/api-creators'
+import { setDefaultHttpClient } from '../services/httpClient'
 import { createHttpClientStub } from './httpClientStub'
+import { createTransportDouble } from './transportDouble'
 
 const client = createHttpClientStub()
 const creatorsApi = createCreatorsApi(client)
@@ -67,11 +70,11 @@ describe('creatorsApi', () => {
       client.get.mockResolvedValue(DETAIL_RESPONSE)
 
       await expect(
-        creatorsApi.getDetail('creator:1672', { limit: 10, offset: 0 }),
+        creatorsApi.getDetail('creator:1672', { limit: 10 }),
       ).resolves.toEqual(DETAIL_RESPONSE)
 
       expect(client.get).toHaveBeenCalledWith('/v1/creators/creator%3A1672', {
-        params: { limit: 10, offset: 0 },
+        params: { limit: 10 },
         skipAuthRedirect: true,
       })
     })
@@ -95,11 +98,11 @@ describe('creatorsApi', () => {
       client.get.mockResolvedValue(LIST_RESPONSE)
 
       await expect(
-        creatorsApi.getList({ search: 'test', sort: 'name', limit: 20, offset: 0 }),
+        creatorsApi.getList({ search: 'test', sort: 'name', limit: 20 }),
       ).resolves.toEqual(LIST_RESPONSE)
 
       expect(client.get).toHaveBeenCalledWith('/v1/creators', {
-        params: { search: 'test', sort: 'name', limit: 20, offset: 0 },
+        params: { search: 'test', sort: 'name', limit: 20 },
         skipAuthRedirect: true,
       })
     })
@@ -129,5 +132,122 @@ describe('creatorsApi', () => {
         skipAuthRedirect: true,
       })
     })
+  })
+})
+
+describe('creatorsApi auth recovery', () => {
+  let transport: ReturnType<typeof createTransportDouble>
+  let recoveryApi: ReturnType<typeof createCreatorsApi>
+  let responseInterceptor: (
+    error: {
+      config: { url: string; skipAuthRedirect?: boolean }
+      response: { status: number }
+    },
+  ) => Promise<unknown>
+
+  beforeEach(() => {
+    transport = createTransportDouble()
+    const recoveryClient = createApiClient(() => transport)
+    setDefaultHttpClient(recoveryClient)
+    recoveryApi = createCreatorsApi(recoveryClient)
+    setAccessToken('stale-access-token')
+
+    responseInterceptor = transport.interceptors.response.use.mock.calls[0][1] as (
+      error: {
+        config: { url: string; skipAuthRedirect?: boolean }
+        response: { status: number }
+      },
+    ) => Promise<unknown>
+  })
+
+  it('retries creator detail after refresh succeeds', async () => {
+    transport.post.mockResolvedValue({ access_token: 'refreshed-token' })
+    transport.request.mockResolvedValue(DETAIL_RESPONSE)
+
+    const originalRequest = {
+      url: '/v1/creators/creator%3A1672',
+      headers: {},
+      skipAuthRedirect: true,
+    }
+
+    const result = await responseInterceptor({
+      config: originalRequest,
+      response: { status: 401 },
+    })
+
+    expect(result).toEqual(DETAIL_RESPONSE)
+    expect(transport.post).toHaveBeenCalledWith(
+      '/v1/auth/refresh',
+      undefined,
+      expect.objectContaining({ skipAuthRedirect: true }),
+    )
+    expect(transport.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: '/v1/creators/creator%3A1672',
+        _retry: true,
+        headers: expect.objectContaining({ Authorization: 'Bearer refreshed-token' }),
+      }),
+    )
+  })
+
+  it('retries creator list after refresh succeeds', async () => {
+    transport.post.mockResolvedValue({ access_token: 'refreshed-token' })
+    transport.request.mockResolvedValue(LIST_RESPONSE)
+
+    const originalRequest = {
+      url: '/v1/creators',
+      headers: {},
+      skipAuthRedirect: true,
+    }
+
+    const result = await responseInterceptor({
+      config: originalRequest,
+      response: { status: 401 },
+    })
+
+    expect(result).toEqual(LIST_RESPONSE)
+    expect(transport.post).toHaveBeenCalledWith(
+      '/v1/auth/refresh',
+      undefined,
+      expect.objectContaining({ skipAuthRedirect: true }),
+    )
+  })
+
+  it('rejects creator detail when refresh fails definitively without redirecting', async () => {
+    const refreshError = Object.assign(new Error('refresh unauthorized'), {
+      response: { status: 401 },
+    })
+    transport.post.mockRejectedValueOnce(refreshError)
+
+    await expect(
+      responseInterceptor({
+        config: {
+          url: '/v1/creators/creator%3A1672',
+          skipAuthRedirect: true,
+        },
+        response: { status: 401 },
+      }),
+    ).rejects.toBe(refreshError)
+
+    expect(transport.post).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects creator list when refresh fails definitively without redirecting', async () => {
+    const refreshError = Object.assign(new Error('refresh unauthorized'), {
+      response: { status: 401 },
+    })
+    transport.post.mockRejectedValueOnce(refreshError)
+
+    await expect(
+      responseInterceptor({
+        config: {
+          url: '/v1/creators',
+          skipAuthRedirect: true,
+        },
+        response: { status: 401 },
+      }),
+    ).rejects.toBe(refreshError)
+
+    expect(transport.post).toHaveBeenCalledTimes(1)
   })
 })

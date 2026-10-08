@@ -399,8 +399,8 @@ it('builds bounded creator detail requests with canonical encoded keys', async (
   await creatorsApi.getDetail('creator:9', { limit: 50, offset: 25 })
   await creatorsApi.getDetail('creator:10', { offset: 0 })
 
-  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A7', { params: {} })
-  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A8', { params: { limit: 50 } })
-  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A9', { params: { limit: 50, offset: 25 } })
-  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A10', { params: {} })
+  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A7', { params: {}, skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A8', { params: { limit: 50 }, skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A9', { params: { limit: 50, offset: 25 }, skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A10', { params: {}, skipAuthRedirect: true })
 })
