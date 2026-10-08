@@ -4,7 +4,7 @@ import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
-import ComicVineSearchDialog from '../../components/ComicVineSearchDialog'
+import MapSeriesDialog from './MapSeriesDialog'
 import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
@@ -222,6 +222,7 @@ interface QueueModalsProps {
   onCloseReactivate: () => void
   onCloseReposition: () => void
   onCloseDependency: () => void
+  onCloseMapSeries: () => void
   onMigrationComplete: (thread: Thread) => Promise<void>
   onMigrationSkip: () => void
   onCloseMigration: () => void
@@ -272,6 +273,7 @@ export function QueueModals({
   onCloseReactivate,
   onCloseReposition,
   onCloseDependency,
+  onCloseMapSeries,
   onMigrationComplete,
   onMigrationSkip,
   onCloseMigration,
@@ -638,15 +640,13 @@ export function QueueModals({
       )}
 
       {openModal === 'map_series' && editingThread && (
-        <ComicVineSearchDialog
+        <MapSeriesDialog
           isOpen={openModal === 'map_series'}
-          issueId={editingThread.id} // Note: issueId here is actually the threadId as used by the dialog for mapping
+          threadId={editingThread.id}
           threadTitle={editingThread.title}
-          issueNumber={null}
-          onClose={onCloseEdit}
-          onConfirmed={() => {
-            onCloseEdit()
-            onDependencyChanged()
+          onClose={onCloseMapSeries}
+          onMapped={() => {
+            void onDependencyChanged()
           }}
         />
       )}

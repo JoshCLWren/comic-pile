@@ -87,6 +87,7 @@ function Harness() {
       onCloseReactivate={vi.fn()}
       onCloseReposition={vi.fn()}
       onCloseDependency={vi.fn()}
+      onCloseMapSeries={vi.fn()}
       onMigrationComplete={vi.fn(async () => undefined)}
       onMigrationSkip={vi.fn()}
       onCloseMigration={vi.fn()}

@@ -312,6 +312,7 @@ export default function QueuePage() {
           onCloseReactivate={modals.closeReactivateModal}
           onCloseReposition={modals.closeRepositionModal}
           onCloseDependency={modals.closeDependenciesModal}
+          onCloseMapSeries={modals.closeMapSeriesModal}
           onMigrationComplete={modals.handleMigrationComplete}
           onMigrationSkip={modals.handleMigrationSkip}
           onCloseMigration={modals.closeMigrationDialog}

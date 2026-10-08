@@ -7,13 +7,25 @@ import type { DependencyGroupSummary } from '../../services/api-dependency-group
 import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
 
-interface ComicVineMapping {
-  status: 'fully_mapped' | 'needs_review' | 'partial' | 'not_applicable'
+export interface ComicVineMappingHealth {
+  /**
+   * Compact ComicVine mapping-health projection for a queue row.
+   *
+   * Mirrors the server `ComicVineMappingHealth` contract from #2776:
+   * `fully_mapped` and `not_applicable` stay quiet, while `partial`,
+   * `unresolved`, and `needs_review` surface the repair action. The
+   * generated OpenAPI client predates that projection, so the card declares
+   * the contract locally rather than reading it off `ThreadListItem`.
+   */
+  status: 'fully_mapped' | 'partial' | 'unresolved' | 'needs_review' | 'not_applicable'
+  tracked_issue_count: number
+  confirmed_issue_count: number
   needs_mapping_count: number
+  needs_review_count: number
 }
 
-type ThreadWithMapping = ThreadListItem & {
-  comicvine_mapping?: ComicVineMapping | null
+export type ThreadWithMapping = ThreadListItem & {
+  comicvine_mapping?: ComicVineMappingHealth | null
 }
 
 interface QueueThreadCardProps {
@@ -83,6 +95,23 @@ export default function QueueThreadCard({
   onDelete,
   onMapSeries,
 }: QueueThreadCardProps) {
+  const mapping = thread.comicvine_mapping ?? null
+  const showMappingAction =
+    mapping !== null && mapping.status !== 'fully_mapped' && mapping.status !== 'not_applicable'
+  // Ambiguous/conflicting identities stay visually distinct from ordinary
+  // missing mappings: either an explicit review status or a partial row that
+  // still carries review-count rows reports "Review needed".
+  const mappingNeedsReview =
+    showMappingAction &&
+    mapping !== null &&
+    (mapping.status === 'needs_review' || mapping.needs_review_count > 0)
+  const mappingCount = mapping?.needs_mapping_count ?? 0
+  const mappingLabel =
+    mapping !== null && mappingNeedsReview
+      ? 'Review needed'
+      : `${mappingCount} issue${mappingCount === 1 ? '' : 's'} need mapping`
+  const mappingAccessibleName = `Repair ComicVine mapping for ${thread.title}: ${mappingLabel}`
+
   // `total_issues` is optional in the generated list item; absent and null
   // both mean the thread has no known issue total.
   const isMigrated = thread.total_issues != null
@@ -170,21 +199,20 @@ export default function QueueThreadCard({
             <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               {thread.format}
             </span>
-            {thread.comicvine_mapping?.status && thread.comicvine_mapping.status !== 'fully_mapped' && thread.comicvine_mapping.status !== 'not_applicable' && (
+            {showMappingAction && (
               <button
                 type="button"
                 onClick={(event) => {
-                  event.stopPropagation();
-                  onMapSeries();
+                  event.stopPropagation()
+                  onMapSeries()
                 }}
                 className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--theme-warning)]/10 border border-[var(--theme-warning)]/20 hover:bg-[var(--theme-warning)]/20 transition-colors group"
-                title={`Repair ComicVine mapping for ${thread.title}`}
+                title={mappingAccessibleName}
+                aria-label={mappingAccessibleName}
               >
                 <span className="text-[var(--theme-warning)] text-[10px] group-hover:scale-110 transition-transform" aria-hidden="true">⚠️</span>
-                <span className="text-[10px] font-bold uppercase tracking-tight text-[var(--theme-warning)]/80 group-hover:text-[var(--theme-warning)] transition-colors">
-                  {thread.comicvine_mapping.status === 'needs_review'
-                    ? 'Review needed'
-                    : `${thread.comicvine_mapping.needs_mapping_count} issues need mapping`}
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-warning)]/80 group-hover:text-[var(--theme-warning)] transition-colors">
+                  {mappingLabel}
                 </span>
               </button>
             )}

@@ -92,7 +92,6 @@ interface QueueThreadActionResult {
   handleReposition: (threadId: number, targetPosition: number, total: number) => Promise<void> | void
   handleThreadRead: (thread: ThreadListItem) => Promise<void> | void
   handleSnoozeToggle: (thread: ThreadListItem, isSnoozed: boolean) => Promise<void> | void
-  handleMapSeries: (thread: ThreadListItem) => void
 }
 
 /**
@@ -321,15 +320,6 @@ export function useQueueThreadActions(
     [snoozeMutation, unsnoozeMutation, refetchSession, restoreSeriesActionsFocus],
   )
 
-  const handleMapSeries = useCallback(
-    (thread: ThreadListItem) => {
-      // This callback will be connected to the modal system in the parent component
-      // For now, it's a placeholder that will be implemented in QueuePage
-      console.log('Map series clicked for:', thread.title)
-    },
-    [],
-  )
-
   return {
     draggedThreadId,
     dragOverThreadId,
@@ -354,6 +344,5 @@ export function useQueueThreadActions(
     handleReposition,
     handleThreadRead,
     handleSnoozeToggle,
-    handleMapSeries,
   }
 }
