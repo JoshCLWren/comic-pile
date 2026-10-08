@@ -55,6 +55,7 @@ export default function ContinuityPlannerPage({
     planPending,
     groups,
     groupsPending,
+    threads,
     threadsPending,
     isInvalidRoute,
     addFromCblRequested,

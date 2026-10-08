@@ -28,6 +28,7 @@ export interface ContinuityPlannerEditorInputs {
   planPending: boolean
   groups: DependencyGroup[]
   groupsPending: boolean
+  threads: ThreadListItem[]
   threadsPending: boolean
   isInvalidRoute: boolean
   addFromCblRequested: boolean
@@ -46,6 +47,7 @@ export function useContinuityPlannerEditor({
   planPending,
   groups,
   groupsPending,
+  threads,
   threadsPending,
   isInvalidRoute,
   addFromCblRequested,
@@ -78,8 +80,9 @@ export function useContinuityPlannerEditor({
     typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
 
   const hydrateLabels = useCallback(
-    (rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]): PlannerNode[] => {
+    (rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[], loadedThreads: ThreadListItem[]): PlannerNode[] => {
       const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
+      const threadNames = new Map(loadedThreads.map((thread) => [thread.id, thread.title]))
       return rawNodes.map((node): PlannerNode => {
         // SAFETY: rawNodes are ContinuityPlanNode and PlannerNode only adds optional display fields set below.
         const plannerNode = node as PlannerNode
@@ -90,7 +93,7 @@ export function useContinuityPlannerEditor({
         }
         if (node.node_type === 'thread') {
           if (stored) return { ...plannerNode, label: stored }
-          return { ...plannerNode, label: '[deleted series]' }
+          return { ...plannerNode, label: threadNames.get(node.ref_id) ?? '[deleted series]' }
         }
         if (stored) return { ...plannerNode, label: stored }
         return { ...plannerNode, label: '[deleted series]' }
@@ -131,6 +134,7 @@ export function useContinuityPlannerEditor({
       const hydrated = hydrateLabels(
         [...planData.nodes].sort((a, b) => a.position - b.position),
         groups,
+        threads,
       )
       setName(planData.name)
       setLanes(loadedLanes)
@@ -153,6 +157,7 @@ export function useContinuityPlannerEditor({
     isInvalidRoute,
     threadsPending,
     groups,
+    threads,
     hydrateLabels,
   ])
 
@@ -355,7 +360,7 @@ export function useContinuityPlannerEditor({
       .map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
       .sort((a, b) => a.order - b.order)
     const committedNodes = normalizePositions(
-      hydrateLabels([...committed.nodes].sort((a, b) => a.position - b.position), groups),
+      hydrateLabels([...committed.nodes].sort((a, b) => a.position - b.position), groups, threads),
     )
     setName(committed.name)
     setLanes(committedLanes)
