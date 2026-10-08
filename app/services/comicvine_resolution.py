@@ -585,6 +585,67 @@ async def replace_comicvine_identity(
     )
 
 
+async def remove_comicvine_identity(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    issue_id: int,
+) -> IssueIdentityMapping:
+    """Remove the confirmed ComicVine identity mapping from an issue.
+
+    Sets the confirmed mapping status to ``unresolved``, effectively unlinking
+    the ComicVine badge and returning the issue to the "Not linked" state.
+
+    Args:
+        db: Async database session.
+        user_id: Owner user ID.
+        issue_id: ComicPile issue ID.
+
+    Returns:
+        The updated identity mapping with status set to ``unresolved``.
+    """
+    mapping_result = await db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
+            IssueExternalIdentityMapping.issue_id == issue_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+        )
+    )
+    mapping = mapping_result.scalar_one_or_none()
+
+    if mapping is None:
+        raise ExternalIdentityMappingError(
+            f"No confirmed ComicVine identity mapping found for issue {issue_id}"
+        )
+
+    mapping.status = "unresolved"
+    mapping.evidence_source = None
+    mapping.confidence = None
+    await db.flush()
+
+    identity = await db.get(ExternalIdentity, mapping.external_identity_id)
+
+    if identity is None:
+        raise ExternalIdentityMappingError(
+            f"External identity not found for issue {issue_id}"
+        )
+
+    return IssueIdentityMapping(
+        external_identity_id=identity.id,
+        provider=identity.provider,
+        comicvine_id=identity.external_id,
+        status=mapping.status,
+        confidence=mapping.confidence,
+        evidence_source=mapping.evidence_source,
+        created_at=mapping.created_at,
+    )
+
+
 async def request_provider_refresh(
     db: AsyncSession,
     *,

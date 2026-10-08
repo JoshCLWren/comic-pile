@@ -156,6 +156,25 @@ export function ComicPillar({
           setIsSearchDialogOpen(true)
         },
       })
+
+      entries.push({
+        key: 'remove-comicvine-mapping',
+        label: 'Remove ComicVine mapping',
+        ariaLabel: 'Remove ComicVine mapping',
+        description: 'Unlink the ComicVine mapping from this issue',
+        onSelect: async () => {
+          if (
+            !window.confirm(
+              'Are you sure you want to remove the ComicVine mapping from this issue? This will return the issue to the "Not linked" state.',
+            )
+          ) {
+            return
+          }
+          await comicVineApi.removeIdentity(issueId)
+          await fetchIdentity()
+          await handleIdentityConfirmed()
+        },
+      })
     }
 
     return entries

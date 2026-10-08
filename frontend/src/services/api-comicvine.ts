@@ -191,4 +191,6 @@ export const comicVineApi = {
     api.get<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:corrections`),
   revertCorrection: (issueId: number, correctionId: number) =>
     api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
+  removeIdentity: (issueId: number) =>
+    api.delete<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
 }

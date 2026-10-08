@@ -37,6 +37,7 @@ from app.services.comicvine_resolution import (
     get_issue_identity_state,
     import_comicvine_issue,
     list_metadata_corrections,
+    remove_comicvine_identity,
     replace_comicvine_identity,
     request_provider_refresh,
     resolve_comicvine_input,
@@ -423,6 +424,47 @@ async def api_revert_correction(
         )
         await db.commit()
         return await list_metadata_corrections(
+            db, user_id=current_user.id, issue_id=issue_id
+        )
+    except ExternalIdentityMappingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.delete(
+    "/issues/{issue_id}/identity",
+    response_model=IssueIdentityResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def api_remove_identity(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> IssueIdentityResponse:
+    """Remove the confirmed ComicVine identity mapping from an issue.
+
+    Sets the confirmed mapping status to ``unresolved``, effectively unlinking
+    the ComicVine badge and returning the issue to the "Not linked" state.
+
+    Args:
+        issue_id: ComicPile issue ID.
+        current_user: Authenticated owner.
+        db: Async database session.
+
+    Returns:
+        Confirmation of the removal.
+    """
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        await remove_comicvine_identity(
+            db,
+            user_id=current_user.id,
+            issue_id=issue_id,
+        )
+        await db.commit()
+        return await get_issue_identity_state(
             db, user_id=current_user.id, issue_id=issue_id
         )
     except ExternalIdentityMappingError as exc:
