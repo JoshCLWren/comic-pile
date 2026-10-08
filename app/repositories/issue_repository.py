@@ -66,6 +66,54 @@ async def find_owned(db: AsyncSession, user_id: int, issue_id: int) -> Issue | N
     return result.scalar_one_or_none()
 
 
+async def find_owned_issue_by_confirmed_identity(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    provider: str,
+    external_id: str,
+) -> Issue | None:
+    """Find the user-owned issue with a confirmed mapping to a provider identity.
+
+    The confirmed mapping is the canonical ComicVine identity link established
+    by the #2722 mapping path; this lookup lets adoption reuse the canonical
+    Issue instead of creating a second physical copy.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the issue's thread.
+        provider: External provider name (e.g. "comicvine").
+        external_id: Provider-specific issue identifier.
+
+    Returns:
+        The owned issue with a confirmed mapping to that identity, or None.
+    """
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+
+    result = await db.execute(
+        select(Issue)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .join(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
+            Thread.user_id == user_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == provider,
+            ExternalIdentity.entity_type == "issue",
+            ExternalIdentity.external_id == external_id,
+        )
+        .order_by(Issue.id)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def find_in_thread_by_number(
     db: AsyncSession, thread_id: int, issue_number: str
 ) -> Issue | None:
