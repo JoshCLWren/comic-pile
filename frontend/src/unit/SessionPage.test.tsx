@@ -141,7 +141,7 @@ it('renders fallback labels for sparse summaries and events', () => {
   expect(screen.getByText('Thread unavailable')).toBeInTheDocument()
   expect(screen.getByText('Snapshot')).toBeInTheDocument()
   expect(screen.getByText('Rating 0')).toBeInTheDocument()
-  expect(screen.getByText('Rolled 0')).toBeInTheDocument()
+  expect(screen.getByText('Selected without rolling')).toBeInTheDocument()
   expect(screen.getByText('d0')).toBeInTheDocument()
 })
 
@@ -250,7 +250,7 @@ it('uses human labels and explicit fallback text for sparse events', () => {
   expect(screen.getAllByText('No additional event details recorded.')).toHaveLength(2)
 })
 
-it('displays "Selected by" text instead of "Rolled 0" for manually selected rolls', () => {
+it('describes a roll that never drew a face instead of showing "Rolled 0"', () => {
   mockedUseSessionDetails.mockReturnValue({ data: {
     session_id: 20, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
     ladder_path: 'd6', narrative_summary: {},
@@ -260,29 +260,71 @@ it('displays "Selected by" text instead of "Rolled 0" for manually selected roll
         timestamp: '2024-01-01',
         type: 'roll',
         thread_title: 'Saga',
-        result: 0, // This indicates a manually selected roll
+        result: 0,
         die: 6,
-        selection_method: 'manual', // This indicates manual selection
+        selection_method: 'manual',
       },
       {
         id: 23,
         timestamp: '2024-01-01',
         type: 'roll',
         thread_title: 'East of West',
-        result: 0, // This indicates a manually selected roll
+        result: 0,
         die: 8,
-        selection_method: 'override', // This indicates override selection
+        selection_method: 'override',
+      },
+      {
+        id: 24,
+        timestamp: '2024-01-01',
+        type: 'roll',
+        thread_title: 'Blank Books',
+        result: 0,
+        die: 12,
+        selection_method: 'dependency_recovery',
+      },
+      {
+        id: 25,
+        timestamp: '2024-01-01',
+        type: 'roll',
+        thread_title: 'Unrecorded Pick',
+        result: 0,
+        die: 10,
+        selection_method: null,
       },
     ],
   }, isPending: false, refetch: refetchDetailsSpy })
 
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
 
-  // Verify that manually selected rolls show "Selected by" instead of "Rolled 0"
   expect(screen.getByText('Selected by manual')).toBeInTheDocument()
   expect(screen.getByText('Selected by override')).toBeInTheDocument()
-  // Verify that "Rolled 0" is NOT displayed for manually selected rolls
+  expect(screen.getByText('Selected by dependency recovery')).toBeInTheDocument()
+  expect(screen.getByText('Selected without rolling')).toBeInTheDocument()
   expect(screen.queryByText('Rolled 0')).not.toBeInTheDocument()
+})
+
+it('still reports the drawn face and selection method for a real dice roll', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 21, started_at: '2024-01-01', ended_at: null, start_die: 20, current_die: 20,
+    ladder_path: 'd20', narrative_summary: {},
+    events: [
+      {
+        id: 26,
+        timestamp: '2024-01-01',
+        type: 'roll',
+        thread_title: 'Saga',
+        result: 13,
+        die: 20,
+        selection_method: 'momentum',
+      },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  const eventDetails = within(screen.getByRole('list', { name: 'Event details' }))
+  expect(eventDetails.getByText('Rolled 13')).toBeInTheDocument()
+  expect(eventDetails.getByText('Selected by momentum')).toBeInTheDocument()
 })
 
 it('renders reader-language event descriptions instead of the placeholder', () => {
