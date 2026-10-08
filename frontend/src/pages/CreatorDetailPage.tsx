@@ -178,7 +178,7 @@ export default function CreatorDetailPage() {
               Your average
             </p>
             {summary.average_rating != null ? (
-              <p className="text-3xl font-black leading-tight" style={{ color: 'var(--theme-personal-accent)' }} aria-label={`Average rating ${summary.average_rating} out of 5 from ${summary.ratings_count} ratings`}>
+              <p className="text-3xl font-black leading-tight" style={{ color: 'var(--theme-personal-accent)' }} aria-label={`Average rating ${summary.average_rating} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}`}>
                 {summary.average_rating.toFixed(1)}★
               </p>
             ) : (
