@@ -16,6 +16,7 @@ import type { SnoozeSessionResponse } from '../types'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
 
 function bootstrapWith(overrides: Partial<RollBootstrapResponse> = {}): RollBootstrapResponse {
+  // SAFETY: the literal supplies every required bootstrap field; the spread only narrows them
   return {
     session_id: 1,
     user_id: 1,
@@ -51,6 +52,7 @@ interface HarnessOptions {
 function renderActionSheet(options: HarnessOptions = {}) {
   const { bootstrap = bootstrapWith(), snoozeImpl } = options
 
+  // SAFETY: the hook only awaits the result; the stub stands in for the API's empty 200 body
   const snoozeMutate = vi.fn(snoozeImpl ?? (() => Promise.resolve(undefined as SnoozeSessionResponse | undefined)))
   const unsnoozeMutate = vi.fn(() => Promise.resolve(undefined))
   const refetchBootstrap = vi.fn(() => Promise.resolve(bootstrap))
@@ -62,7 +64,8 @@ function renderActionSheet(options: HarnessOptions = {}) {
       state,
       bootstrap,
       rollPool: bootstrap.roll_pool,
-      navigate: vi.fn() as unknown as NavigateFunction,
+      // SAFETY: the hook only calls navigate in routing flows this test never triggers
+      navigate: vi.fn() as NavigateFunction,
       mutations: {
         setDieMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         clearManualDieMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
@@ -77,6 +80,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
       },
       refetchBootstrap,
       enterRatingView: vi.fn(() => Promise.resolve()),
+      // SAFETY: the hook only calls setPending; the stub omits the rest of the API surface
       threadsApi: { setPending: vi.fn() } as never,
     })
 
