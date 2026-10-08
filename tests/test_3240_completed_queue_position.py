@@ -6,6 +6,7 @@ from app.models.thread import Thread
 
 @pytest.mark.asyncio
 async def test_completed_thread_clears_queue_position(db, auth_client, sample_data):
+    """Test that completing a thread clears its queue position."""
     # Find an active thread for user and manually complete it via update
     result = await db.execute(
         select(Thread).where(Thread.user_id == 1, Thread.status == "active").limit(1)
