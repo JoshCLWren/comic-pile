@@ -3,6 +3,7 @@ import type { ThreadListItem } from '../types'
 import { usePositionMenu } from '../contexts/usePositionMenu'
 import OverlayPortal from './OverlayPortal'
 import { SERIES_ACTIONS_TRIGGER_ATTRIBUTE } from './seriesActionsTrigger'
+import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from './snoozeAvailability'
 
 interface PositionMenuProps {
   thread: ThreadListItem
@@ -16,6 +17,11 @@ interface PositionMenuProps {
   snoozeIcon?: string
   snoozeLabel?: string
   snoozeDisabled?: boolean
+  /**
+   * Why the snooze entry is disabled. Defaults to the shared pending-series
+   * rule so a disabled control always explains itself (#3260).
+   */
+  snoozeDisabledReason?: string
   onSnooze?: (thread: ThreadListItem) => void
 }
 
@@ -30,6 +36,7 @@ export default function PositionMenu({
   snoozeIcon,
   snoozeLabel,
   snoozeDisabled,
+  snoozeDisabledReason = SNOOZE_REQUIRES_PENDING_SERIES_REASON,
   onSnooze,
 }: PositionMenuProps) {
   const { openThreadId, closeMenu: closeContextMenu, openMenu, toggleMenu } = usePositionMenu()
@@ -187,6 +194,10 @@ export default function PositionMenu({
     ariaLabel: string
     destructive?: boolean
     disabled?: boolean
+    // Explains why a disabled entry cannot be used. A disabled button does not
+    // dispatch pointer events reliably, so this is also the only place the
+    // reason can reach the reader on hover (#3260).
+    title?: string
     action: () => void
   }> = [
     {
@@ -236,6 +247,7 @@ export default function PositionMenu({
       icon: snoozeIcon || '',
       ariaLabel: snoozeLabel,
       disabled: snoozeDisabled,
+      title: snoozeDisabled ? snoozeDisabledReason : undefined,
       action: () => {
         if (!snoozeDisabled && onSnooze) {
           onSnooze(thread)
@@ -303,6 +315,7 @@ export default function PositionMenu({
                 }}
                 aria-label={item.ariaLabel}
                 disabled={item.disabled}
+                title={item.title}
                 className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
                   item.disabled
                     ? 'text-stone-600 cursor-not-allowed'

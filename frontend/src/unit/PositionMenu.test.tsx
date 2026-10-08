@@ -2,6 +2,7 @@ import { act, fireEvent, render as baseRender, screen } from '@testing-library/r
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import PositionMenu from '../components/PositionMenu'
+import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import { PositionMenuProvider } from '../contexts/PositionMenuContext'
 
 function render(ui: React.ReactElement) {
@@ -504,6 +505,85 @@ describe('PositionMenu', () => {
 
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(menuItems[0])
+  })
+
+  it('explains why the snooze entry is disabled instead of silently doing nothing (#3260)', async () => {
+    const user = userEvent.setup()
+    const onSnooze = vi.fn()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        snoozeIcon="😴"
+        snoozeLabel="Snooze"
+        snoozeDisabled
+        onSnooze={onSnooze}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /series actions/i }))
+
+    const snoozeItem = screen.getByRole('menuitem', { name: 'Snooze' })
+    expect(snoozeItem).toBeDisabled()
+    expect(snoozeItem).toHaveAttribute('title', SNOOZE_REQUIRES_PENDING_SERIES_REASON)
+    expect(onSnooze).not.toHaveBeenCalled()
+  })
+
+  it('omits the disabled explanation from an available snooze entry', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        snoozeIcon="😴"
+        snoozeLabel="Snooze"
+        snoozeDisabled={false}
+        onSnooze={vi.fn()}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /series actions/i }))
+
+    const snoozeItem = screen.getByRole('menuitem', { name: 'Snooze' })
+    expect(snoozeItem).toBeEnabled()
+    expect(snoozeItem).not.toHaveAttribute('title')
+  })
+
+  it('honors an explicit disabled reason for the snooze entry', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+        snoozeIcon="😴"
+        snoozeLabel="Unsnooze"
+        snoozeDisabled
+        snoozeDisabledReason="Backoff has not elapsed"
+        onSnooze={vi.fn()}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /series actions/i }))
+
+    expect(screen.getByRole('menuitem', { name: 'Unsnooze' })).toHaveAttribute(
+      'title',
+      'Backoff has not elapsed',
+    )
   })
 
   it('moves focus upward through portaled menu items and back to its trigger', async () => {

@@ -23,6 +23,7 @@ import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueCrossovers } from './useQueueCrossovers'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
+import { canSnoozeSeries } from '../../components/snoozeAvailability'
 
 /**
  * Route entry for the Queue page. The component composes the focused
@@ -145,7 +146,11 @@ export default function QueuePage() {
       const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
       const snoozeIcon = isSnoozed ? '🔔' : '😴'
       const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
-      const snoozeDisabled = !isSnoozed && session?.pending_thread_id !== thread.id
+      const snoozeDisabled = !canSnoozeSeries({
+        threadId: thread.id,
+        isSnoozed,
+        pendingThreadId: session?.pending_thread_id,
+      })
       const readDisabled = isBlocked
       const blockingReasons = blockingDependencies.map((dep) => dep.label)
       const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'

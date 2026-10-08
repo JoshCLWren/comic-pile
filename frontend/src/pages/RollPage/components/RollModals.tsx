@@ -5,6 +5,10 @@ import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
+import {
+  canSnoozeSeries,
+  SNOOZE_REQUIRES_PENDING_SERIES_REASON,
+} from '../../../components/snoozeAvailability'
 import type { Thread, ThreadListItem } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import type { RatingThread } from '../types'
@@ -107,6 +111,11 @@ interface RollModalsProps {
   clearManualDiePending: boolean
   isActionSheetOpen: boolean
   selectedThread: RollBootstrapThread | null
+  /**
+   * The reading session's pending thread. `POST /v1/snooze/` acts on this
+   * thread, so the action sheet's Snooze entry is only available for it.
+   */
+  pendingThreadId: number | null
   onCloseActionSheet: () => void
   onAction: (action: string) => void
   isSetCurrentIssueOpen: boolean
@@ -148,12 +157,22 @@ export function RollModals({
   clearManualDiePending,
   isActionSheetOpen,
   selectedThread,
+  pendingThreadId,
   onCloseActionSheet,
   onAction,
   isSetCurrentIssueOpen,
   onCloseSetCurrentIssue,
   onSetCurrentIssue,
 }: RollModalsProps) {
+  const actionSheetThreadIsSnoozed =
+    snoozedThreads.some((thread) => thread.id === selectedThread?.id) ?? false
+  const actionSheetSnoozeDisabled =
+    selectedThread === null ||
+    !canSnoozeSeries({
+      threadId: selectedThread.id,
+      isSnoozed: actionSheetThreadIsSnoozed,
+      pendingThreadId,
+    })
   return (
     <>
       {showMigrationDialog && threadToMigrate && (
@@ -306,15 +325,19 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('snooze')}
-            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            disabled={actionSheetSnoozeDisabled}
+            title={
+              actionSheetSnoozeDisabled
+                ? SNOOZE_REQUIRES_PENDING_SERIES_REASON
+                : undefined
+            }
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[var(--theme-bg-panel)]"
           >
             <span className="text-lg">
-              {snoozedThreads.some((thread) => thread.id === selectedThread?.id) ? '🔔' : '😴'}
+              {actionSheetThreadIsSnoozed ? '🔔' : '😴'}
             </span>
             <span>
-              {snoozedThreads.some((thread) => thread.id === selectedThread?.id)
-                ? 'Unsnooze'
-                : 'Snooze'}
+              {actionSheetThreadIsSnoozed ? 'Unsnooze' : 'Snooze'}
             </span>
           </button>
           <button
