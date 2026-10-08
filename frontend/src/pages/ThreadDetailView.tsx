@@ -261,8 +261,33 @@ export default function ThreadDetailView() {
               {(() => {
                 const blockedBy = connectedThreads.filter((t) => t.connection_type.includes('blocked_by'))
                 const blocking = connectedThreads.filter((t) => t.connection_type.includes('blocks'))
+                const circular = connectedThreads.filter((t) => t.is_circular)
+                
                 return (
                   <>
+                    {/* Circular Dependencies Warning */}
+                    {circular.length > 0 && (
+                      <div className="space-y-1">
+                        <h3 className="text-base font-bold text-amber-400">⚠️ Circular Dependencies</h3>
+                        <p className="text-xs text-amber-300">
+                          These dependencies create impossible reading orders. You cannot read these series until each other is completed.
+                        </p>
+                        {circular.map((t) => (
+                          <Link
+                            key={`circular-${t.thread_id}`}
+                            to={`/thread/${t.thread_id}`}
+                            className="flex items-center gap-2 p-2 rounded-lg border border-amber-400/30 bg-amber-400/10 hover:bg-amber-400/20 transition-colors"
+                            aria-label={`Open ${t.title} (circular dependency)`}
+                          >
+                            <span aria-hidden="true">⚠️</span>
+                            <span className="text-sm text-amber-300 truncate">
+                              {t.title}{t.issue_number ? `: #${t.issue_number}` : ''} (circular)
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                    
                     <div className="space-y-1">
                       <h3 className="text-base font-bold text-stone-400">Blocked by</h3>
                       {blockedBy.length === 0 && <p className="text-xs text-stone-500">Nothing blocks this series</p>}
@@ -270,12 +295,15 @@ export default function ThreadDetailView() {
                         <Link
                           key={`${t.dependency_id}-blocked-by`}
                           to={`/thread/${t.thread_id}`}
-                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                          className={`flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors ${
+                            t.is_circular ? 'border-amber-400/30 bg-amber-400/10' : ''
+                          }`}
                           aria-label={`Open ${t.title}`}
                         >
                           <span aria-hidden="true">🔒</span>
                           <span className="text-sm text-stone-300 truncate">
                             {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
+                            {t.is_circular && <span className="text-xs text-amber-300 ml-1">(circular)</span>}
                           </span>
                         </Link>
                       ))}
@@ -287,12 +315,15 @@ export default function ThreadDetailView() {
                         <Link
                           key={`${t.dependency_id}-blocking`}
                           to={`/thread/${t.thread_id}`}
-                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                          className={`flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors ${
+                            t.is_circular ? 'border-amber-400/30 bg-amber-400/10' : ''
+                          }`}
                           aria-label={`Open ${t.title}`}
                         >
                           <span aria-hidden="true">🔓</span>
                           <span className="text-sm text-stone-300 truncate">
                             {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
+                            {t.is_circular && <span className="text-xs text-amber-300 ml-1">(circular)</span>}
                           </span>
                         </Link>
                       ))}

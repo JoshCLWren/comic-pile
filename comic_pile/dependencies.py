@@ -419,6 +419,100 @@ async def detect_circular_dependency(
     return False
 
 
+async def detect_bidirectional_dependencies(
+    thread_id: int, 
+    user_id: int, 
+    db: AsyncSession,
+) -> list[dict]:
+    """Detect bidirectional dependencies that create circular dependencies between threads.
+    
+    Returns a list of dictionaries with information about circular dependencies found.
+    Each dict contains:
+    - thread_id: The connected thread ID
+    - title: The connected thread title  
+    - issue_number: The specific issue number creating the circular dependency
+    - connection_type: "blocks & blocked_by" indicating circular dependency
+    """
+    from app.repositories import dependency_repository
+    
+    # Get dependencies where this thread blocks others and is blocked by others
+    blocking_deps, blocked_by_deps = await dependency_repository.get_thread_connected_dependencies(
+        db, thread_id
+    )
+    
+    # Build maps to track connections
+    blocking_connections: dict[int, dict] = {}  # thread_id -> {title, issue_number, dep_id}
+    blocked_by_connections: dict[int, dict] = {}  # thread_id -> {title, issue_number, dep_id}
+    
+    # Process blocking dependencies (this thread -> other thread)
+    for dep in blocking_deps:
+        if dep.target_issue_id is not None:
+            # Find the target issue and its thread
+            result = await db.execute(
+                select(Issue.title, Issue.issue_number, Thread.title)
+                .join(Thread, Issue.thread_id == Thread.id)
+                .where(Issue.id == dep.target_issue_id, Thread.user_id == user_id)
+            )
+            target_data = result.fetchone()
+            if target_data:
+                target_thread_id = None
+                # Get the thread ID from the target issue
+                issue_result = await db.execute(
+                    select(Issue.thread_id).where(Issue.id == dep.target_issue_id)
+                )
+                issue_data = issue_result.fetchone()
+                if issue_data:
+                    target_thread_id = issue_data[0]
+                
+                if target_thread_id and target_thread_id != thread_id:
+                    blocking_connections[target_thread_id] = {
+                        "title": target_data[2],  # thread title
+                        "issue_number": target_data[1],  # issue number
+                        "dependency_id": dep.id,
+                    }
+    
+    # Process blocked_by dependencies (other thread -> this thread)
+    for dep in blocked_by_deps:
+        if dep.source_issue_id is not None:
+            # Find the source issue and its thread
+            result = await db.execute(
+                select(Issue.title, Issue.issue_number, Thread.title)
+                .join(Thread, Issue.thread_id == Thread.id)
+                .where(Issue.id == dep.source_issue_id, Thread.user_id == user_id)
+            )
+            source_data = result.fetchone()
+            if source_data:
+                source_thread_id = None
+                # Get the thread ID from the source issue
+                issue_result = await db.execute(
+                    select(Issue.thread_id).where(Issue.id == dep.source_issue_id)
+                )
+                issue_data = issue_result.fetchone()
+                if issue_data:
+                    source_thread_id = issue_data[0]
+                
+                if source_thread_id and source_thread_id != thread_id:
+                    blocked_by_connections[source_thread_id] = {
+                        "title": source_data[2],  # thread title
+                        "issue_number": source_data[1],  # issue number
+                        "dependency_id": dep.id,
+                    }
+    
+    # Find bidirectional connections (circular dependencies)
+    circular_deps = []
+    for thread_id_key in blocking_connections:
+        if thread_id_key in blocked_by_connections:
+            circular_deps.append({
+                "thread_id": thread_id_key,
+                "title": blocking_connections[thread_id_key]["title"],
+                "issue_number": blocking_connections[thread_id_key]["issue_number"],
+                "connection_type": "blocks & blocked_by",
+                "circular": True,
+            })
+    
+    return circular_deps
+
+
 async def get_dependency_order_conflicts(
     thread_id: int,
     user_id: int,

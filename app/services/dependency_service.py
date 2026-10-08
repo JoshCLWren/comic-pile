@@ -25,6 +25,7 @@ from app.schemas.dependency import (
 from app.schemas.issue_dependency_batch import ThreadIssueDependenciesResponse
 from comic_pile.dependencies import (
     BlockingDependency as InternalBlockingDependency,
+    detect_bidirectional_dependencies,
     detect_circular_dependency,
     format_blocking_reason,
     get_blocked_thread_ids,
@@ -531,7 +532,15 @@ async def get_thread_connected_threads(
                         connected_by_thread[tid]["types"].add("blocked_by")
                         connected_by_thread[tid]["dependency_ids"].add(dep.id)
 
+    # Detect circular dependencies
+    circular_dependencies = await detect_bidirectional_dependencies(thread_id, user_id, db)
+    
+    # Mark circular dependencies in the connected threads
+    circular_thread_ids = {cd["thread_id"] for cd in circular_dependencies}
+    
     connected: list[ConnectedThreadInfo] = []
+    circular_thread_ids = {cd["thread_id"] for cd in circular_dependencies}
+    
     for entry in connected_by_thread.values():
         types = entry["types"]
         if types == {"blocks"}:
@@ -540,12 +549,16 @@ async def get_thread_connected_threads(
             connection_type = "blocked_by"
         else:
             connection_type = "blocks & blocked_by"
+        
+        is_circular = entry["thread_id"] in circular_thread_ids
+        
         connected.append(ConnectedThreadInfo(
             thread_id=entry["thread_id"],
             title=entry["title"],
             connection_type=connection_type,
             dependency_id=min(entry["dependency_ids"]),
             issue_number=entry["issue_number"],
+            is_circular=is_circular,
         ))
 
     return ThreadConnectedResponse(thread_id=thread_id, connected_threads=connected)
