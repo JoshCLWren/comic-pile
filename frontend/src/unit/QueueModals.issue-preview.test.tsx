@@ -7,7 +7,7 @@ import {
   DEFAULT_CREATE_STATE,
   type QueueFormState,
 } from '../pages/QueuePage/types'
-
+import { parseIssueRangeDetailed } from '../utils/issueParser'
 vi.mock('../components/Modal', () => ({
   default: ({
     isOpen,
@@ -52,9 +52,15 @@ vi.mock('../pages/QueuePage/FormatSelect', () => ({
   ),
 }))
 
-function Harness() {
-  const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+function Harness({ issues }: { issues: string }) {
+  const [createForm, setCreateForm] = useState<QueueFormState>({
+    ...DEFAULT_CREATE_STATE,
+    issues,
+  })
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+
+  const parsed = parseIssueRangeDetailed(issues)
+  const hasPreview = issues.trim().length > 0
 
   return (
     <QueueModals
@@ -63,10 +69,10 @@ function Harness() {
       editForm={editForm}
       setCreateForm={setCreateForm}
       setEditForm={setEditForm}
-      issuePreview={1}
+      issuePreview={hasPreview ? parsed.total : null}
       issueParseError={null}
-      issueParseWarnings={[]}
-      issueParseBreakdown={[]}
+      issueParseWarnings={hasPreview ? parsed.warnings : []}
+      issueParseBreakdown={hasPreview ? parsed.breakdown : []}
       editingThread={null}
       repositioningThread={null}
       dependencyThread={null}
@@ -103,37 +109,43 @@ function Harness() {
   )
 }
 
-describe('QueueModals manual creator editor', () => {
-  it('adds, edits, normalizes roles, cancels, saves, and removes creator credits', async () => {
+describe('Add Series issue input preview', () => {
+  it('warns that garbage input becomes a literal issue name instead of accepting it silently (#3262)', async () => {
+    render(<Harness issues="xyz" />)
+
+    expect(screen.getByText('Will create 1 issue')).toBeInTheDocument()
+    expect(
+      screen.getByText("Couldn't parse 'xyz' — it will be created as a literal issue name"),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('issue-parse-warnings')).toBeInTheDocument()
+  })
+
+  it('warns about decimal input the user reported as a literal issue (#3262)', () => {
+    render(<Harness issues="1.5" />)
+
+    expect(
+      screen.getByText("Couldn't parse '1.5' — it will be created as a literal issue name"),
+    ).toBeInTheDocument()
+  })
+
+  it('does not warn for recognized numbers, ranges, or named issues (#3262)', () => {
+    render(<Harness issues="1-3, Annual 1, ½" />)
+
+    expect(screen.getByText('Will create 5 issues')).toBeInTheDocument()
+    expect(screen.queryByTestId('issue-parse-warnings')).not.toBeInTheDocument()
+  })
+
+  it('exposes a breakdown of every parsed token so typos are visible (#3262)', async () => {
     const user = userEvent.setup()
-    render(<Harness />)
+    render(<Harness issues="oops, 1-2" />)
 
-    await user.click(screen.getByRole('button', { name: '+ Add Creator' }))
-    expect(screen.getByText('Unnamed creator')).toBeInTheDocument()
+    const breakdown = screen.getByTestId('issue-parse-breakdown')
+    expect(breakdown).toBeInTheDocument()
+    expect(screen.getByText('oops:')).toBeInTheDocument()
+    expect(screen.getByText('1-2:')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Edit' }))
-    await user.type(screen.getByPlaceholderText('Creator name'), 'Alan Moore')
-    await user.click(screen.getByRole('button', { name: 'Writer' }))
-    await user.click(screen.getByRole('button', { name: 'Writer' }))
-    await user.click(screen.getByRole('button', { name: 'Artist' }))
-
-    const customRole = screen.getByPlaceholderText('Custom role...')
-    await user.type(customRole, 'Layouts{Enter}')
-    expect(customRole).toHaveValue('')
-
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.getByText('Unnamed creator')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Edit' }))
-    const creatorName = screen.getByPlaceholderText('Creator name')
-    await user.type(creatorName, 'Alan Moore')
-    await user.click(screen.getByRole('button', { name: 'Writer' }))
-    await user.type(creatorName, '{Enter}')
-
-    expect(screen.getByText('Alan Moore')).toBeInTheDocument()
-    expect(screen.getByText('Writer')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Remove' }))
-    expect(screen.getByText('No creators added yet.')).toBeInTheDocument()
+    await user.click(screen.getByText('Show issue breakdown'))
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
   })
 })

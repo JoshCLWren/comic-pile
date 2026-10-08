@@ -243,6 +243,7 @@ describe('QueuePage callback coverage', () => {
     await user.type(screen.getByLabelText('Issues'), 'Annual 1, 3-4')
     await user.type(screen.getByLabelText(/Issues already read/i), '1')
     expect(screen.getByText(/Will create/)).toBeInTheDocument()
+    expect(screen.queryByTestId('issue-parse-warnings')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /create series/i }))
     await waitFor(() => expect(issuesApi.bulkMarkRead).toHaveBeenCalledWith([21]))
 
@@ -250,6 +251,19 @@ describe('QueuePage callback coverage', () => {
     await user.type(screen.getByLabelText('Title'), 'Invalid')
     await user.type(screen.getByLabelText('Issues'), 'x'.repeat(101))
     await waitFor(() => expect(screen.getByText(/issue identifier too long/i)).toBeInTheDocument())
+  })
+
+  it('warns that unparseable issues input becomes a literal issue name (#3262)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
+    await user.type(screen.getByLabelText('Title'), 'Garbage')
+    await user.type(screen.getByLabelText('Issues'), 'xyz')
+    await waitFor(() => expect(screen.getByText(/Will create 1 issue/)).toBeInTheDocument())
+    expect(
+      screen.getByText("Couldn't parse 'xyz' — it will be created as a literal issue name"),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /create series/i })).toBeEnabled()
   })
 
   it('disables create submit while the issue range is invalid', async () => {
