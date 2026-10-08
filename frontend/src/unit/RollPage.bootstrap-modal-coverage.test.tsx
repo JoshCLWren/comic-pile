@@ -125,7 +125,11 @@ describe('RollPage bootstrap modal coverage', () => {
 
   it('loads override choices, renders active and snoozed groups, and completes the dice callback', async () => {
     const user = userEvent.setup()
-    render(<RollPage />)
+    render(
+      <ToastProvider>
+        <RollPage />
+      </ToastProvider>
+    )
 
     fireEvent.click(screen.getAllByRole('button', { name: 'complete dice' })[0]!)
     await user.click(screen.getByRole('button', { name: 'Pick manually' }))
@@ -145,7 +149,11 @@ describe('RollPage bootstrap modal coverage', () => {
     state.overridePending = true
     state.manualDie = 6
     const user = userEvent.setup()
-    render(<RollPage />)
+    render(
+      <ToastProvider>
+        <RollPage />
+      </ToastProvider>
+    )
 
     await user.click(screen.getByRole('button', { name: 'Pick manually' }))
     expect(screen.getByRole('button', { name: 'Selecting...' })).toBeDisabled()

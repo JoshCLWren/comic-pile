@@ -152,6 +152,27 @@ export default function RollPage() {
     refetchBootstrap,
   })
 
+  // Narrowed into a local so the null check survives into the undo callback
+  // instead of being re-derived from mutable hook state on every click.
+  const lastRatedUndoTarget = rating.lastRated?.undoTarget
+  const clearLastRated = rating.clearLastRated
+  const requestUndo = undoMutation.mutate
+
+  /**
+   * Restores the rating the post-rate prompt is describing, then retires the
+   * prompt. Leaving it mounted after a successful restore would leave the Undo
+   * button armed against a snapshot the server has already consumed: the
+   * snapshot list shifts, so a second click would silently undo the *previous*
+   * rating — the "undid two things on purpose" failure #3194 reported.
+   */
+  const handleUndoLastRating = useCallback(() => {
+    if (!lastRatedUndoTarget) return
+    requestUndo(lastRatedUndoTarget)
+      .then(() => clearLastRated())
+      // useUndo already logged the failure and raised the error toast.
+      .catch(() => undefined)
+  }, [lastRatedUndoTarget, clearLastRated, requestUndo])
+
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
   })
@@ -419,20 +440,12 @@ export default function RollPage() {
             )}
 
             {!state.isRatingView && (
-              <PostRateCopyPrompt
-                reference={rating.lastRated}
-                onDismiss={rating.clearLastRated}
-                onUndo={
-                  rating.lastRated && rating.lastRated.snapshotId > 0
-                    ? () =>
-                      undoMutation.mutate({
-                        sessionId: rating.lastRated.sessionId,
-                        snapshotId: rating.lastRated.snapshotId,
-                      })
-                    : undefined
-                }
-                isUndoPending={undoMutation.isPending}
-              />
+<PostRateCopyPrompt
+                  reference={rating.lastRated}
+                  onDismiss={rating.clearLastRated}
+                  onUndo={lastRatedUndoTarget ? handleUndoLastRating : undefined}
+                  isUndoPending={undoMutation.isPending}
+                />
             )}
 
             {!state.isRatingView && (

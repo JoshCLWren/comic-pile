@@ -7,6 +7,20 @@ vi.mock('../contexts/useToast', () => ({
   useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }),
 }))
 
+// #3194: the rating's restorable snapshot and the restore call itself. Both are
+// service reads, so they are mocked here rather than reaching the network.
+const undoApiSpies = vi.hoisted(() => ({
+  getSnapshots: vi.fn(),
+  undo: vi.fn(),
+}))
+
+vi.mock('../services/api-sessions', () => ({
+  sessionApi: { getSnapshots: undoApiSpies.getSnapshots },
+}))
+vi.mock('../services/api-undo', () => ({
+  undoApi: { undo: undoApiSpies.undo, listSnapshots: undoApiSpies.getSnapshots },
+}))
+
 const spies = vi.hoisted(() => ({
   navigate: vi.fn(),
   refetch: vi.fn().mockResolvedValue({}),
@@ -161,6 +175,11 @@ vi.mock('../components/GlossaryLink', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   bootstrapHook.value = null
+  undoApiSpies.getSnapshots.mockResolvedValue({
+    session_id: 1,
+    snapshots: [{ id: 7, session_id: 1, description: 'After rating', created_at: '2024-05-01T10:00:00Z' }],
+  })
+  undoApiSpies.undo.mockResolvedValue(undefined)
   relatedApi.readingOrders.mockResolvedValue({ reading_orders: [] })
   relatedApi.connectedThreads.mockResolvedValue({ connected_threads: [] })
   relatedApi.blockingInfo.mockResolvedValue({ blocking_reasons: [] })
@@ -242,6 +261,34 @@ describe('RollPage post-rate copy prompt', () => {
     await user.click(screen.getByRole('button', { name: 'Dismiss rating saved notice' }))
     expect(screen.queryByTestId('post-rate-copy-prompt')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument()
+  })
+
+  it('restores the rating from the prompt and retires the prompt (#3194)', async () => {
+    const user = userEvent.setup()
+    render(<RollPage />)
+    await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
+
+    await user.click(screen.getByTestId('save-and-continue'))
+    await waitFor(() => expect(screen.getByTestId('post-rate-copy-prompt')).toBeInTheDocument())
+    expect(undoApiSpies.getSnapshots).toHaveBeenCalledWith(1)
+
+    await user.click(screen.getByRole('button', { name: 'Undo rating of Saga 5' }))
+    await waitFor(() => expect(undoApiSpies.undo).toHaveBeenCalledWith(1, 7))
+
+    // The prompt must not survive the restore: the consumed snapshot shifts the
+    // list, so a still-armed button would undo the previous rating next (#3194).
+    await waitFor(() => expect(screen.queryByTestId('post-rate-copy-prompt')).not.toBeInTheDocument())
+  })
+
+  it('offers no undo when the rating left no restorable snapshot (#3194)', async () => {
+    const user = userEvent.setup()
+    undoApiSpies.getSnapshots.mockResolvedValue({ session_id: 1, snapshots: [] })
+    render(<RollPage />)
+    await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
+
+    await user.click(screen.getByTestId('save-and-continue'))
+    await waitFor(() => expect(screen.getByTestId('post-rate-copy-prompt')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Undo rating of/ })).not.toBeInTheDocument()
   })
 
   it('reports the failure/retry state when clipboard access is denied', async () => {

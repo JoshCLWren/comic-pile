@@ -114,6 +114,17 @@ export const queryKeys = {
     page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
       ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
     detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
+    /** Canonical prefix for every loaded session detail/timeline row. */
+    details: () => ['session', 'detail'] as const,
+    /**
+     * Canonical snapshot-list prefix for one session (#3194). The post-rate
+     * prompt on Roll and the session timeline both restore the newest rating,
+     * so they must share one cache entry for the same payload instead of
+     * reading it under two keys and invalidating only one of them.
+     */
+    snapshotLists: () => ['session', 'snapshots'] as const,
+    snapshots: (sessionId: number | string) =>
+      ['session', 'snapshots', sessionId] as const,
     /**
      * Canonical key for the #2744 correction-sheet example lines. Examples are
      * derived from the reader's own rating history, so this key is invalidated

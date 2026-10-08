@@ -62,7 +62,10 @@ beforeEach(() => {
   mockedUseRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: false })
   mockedUseUndo.mockReturnValue({ mutate: undoSpy, isPending: false })
   restoreSpy.mockReset()
+  // useUndo exposes `mutateAsync`, so the click handler always receives a
+  // promise. Returning undefined here would test a shape the hook cannot produce.
   undoSpy.mockReset()
+  undoSpy.mockResolvedValue(undefined)
   refetchDetailsSpy.mockReset()
   refetchSnapshotsSpy.mockReset()
 })
@@ -81,9 +84,9 @@ it('renders session details and only allows undoing the latest rating', async ()
   expect(screen.getByText('Before twist')).toBeInTheDocument()
   expect(screen.getByText('Earlier rating')).toBeInTheDocument()
   expect(screen.getAllByText('History')).toHaveLength(1)
-  expect(screen.getAllByRole('button', { name: /undo latest/i })).toHaveLength(1)
+  expect(screen.getAllByRole('button', { name: /undo last rating/i })).toHaveLength(1)
 
-  await user.click(screen.getByRole('button', { name: /restore start/i }))
+  await user.click(screen.getByRole('button', { name: /restore session start/i }))
   expect(screen.getByRole('dialog', { name: 'Restore session start?' })).toBeInTheDocument()
   expect(screen.getByText(/replaces your entire current pile/i)).toBeInTheDocument()
   expect(screen.getByText(/reading progress, ratings, and queue order may be reverted/i)).toBeInTheDocument()
@@ -93,15 +96,19 @@ it('renders session details and only allows undoing the latest rating', async ()
   expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
   expect(restoreSpy).not.toHaveBeenCalled()
 
-  await user.click(screen.getByRole('button', { name: /restore start/i }))
+  await user.click(screen.getByRole('button', { name: /restore session start/i }))
   await user.click(screen.getByRole('button', { name: 'Restore session start' }))
   expect(restoreSpy).toHaveBeenCalledWith(12)
   expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
 
-  await user.click(screen.getByRole('button', { name: /undo latest/i }))
+  await user.click(screen.getByRole('button', { name: /undo last rating/i }))
   expect(undoSpy).toHaveBeenCalledWith({ sessionId: 12, snapshotId: 4 })
-  expect(refetchDetailsSpy).toHaveBeenCalledOnce()
-  expect(refetchSnapshotsSpy).toHaveBeenCalledOnce()
+  // #3194: the page no longer hand-refetches after an undo. useUndo's cache
+  // effect invalidates the session detail and snapshot list, and React Query
+  // refetches the mounted queries; asserting the refetch here would lock in the
+  // redundant round trip the invalidation replaced.
+  expect(refetchDetailsSpy).not.toHaveBeenCalled()
+  expect(refetchSnapshotsSpy).not.toHaveBeenCalled()
 })
 
 it('renders loading, missing, empty, and active session branches', () => {
@@ -155,7 +162,7 @@ it('shows session-start snapshots as history instead of rating undo targets', ()
 
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
 
-  expect(screen.queryByRole('button', { name: /undo latest/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /undo last rating/i })).not.toBeInTheDocument()
   expect(screen.getByText('History')).toBeInTheDocument()
 })
 

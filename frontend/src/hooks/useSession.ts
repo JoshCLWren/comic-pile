@@ -126,7 +126,7 @@ export function useSessionDetails(id: number | string | null | undefined) {
 
 export function useSessionSnapshots(id: number | string | null | undefined) {
   const { data, isPending, fetchStatus, isError, error, refetch } = useQuery({
-    queryKey: id ? ['session', 'snapshots', id] : [],
+    queryKey: id ? queryKeys.session.snapshots(id) : [],
     queryFn: () => defaultSessionApi.getSnapshots(id!),
     enabled: !!id,
   });

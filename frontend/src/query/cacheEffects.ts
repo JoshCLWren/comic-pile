@@ -212,6 +212,33 @@ export async function invalidateAfterQueueMutation(
   return invalidateAfterQueueMovement(client)
 }
 
+/**
+ * Refresh every retained resource a snapshot restore rewrites (#3194).
+ *
+ * Undo restores thread state, queue positions, issue read status, and the
+ * session's own die/pending state, so it needs the full queue-movement set —
+ * without the roll bootstrap the die view keeps rendering pre-undo state and
+ * the restored rating looks like it never happened.
+ *
+ * It also rewrites three resources the queue set does not cover:
+ *
+ * - the History index and session detail, because the server recomputes
+ *   `issues_read` and `last_rating` from the undo event. Leaving them cached
+ *   kept the History card reporting a count that included the undone rating
+ *   until a manual reload, which is the #3194 report verbatim.
+ * - the session snapshot list, because a restored delta snapshot is consumed
+ *   server side. A cached list would keep offering an already-restored
+ *   snapshot, and the next click would restore a second rating.
+ */
+export async function invalidateAfterUndoMutation(client: QueryClient): Promise<void> {
+  await Promise.all([
+    invalidateAfterQueueMovement(client),
+    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.session.details() }),
+    client.invalidateQueries({ queryKey: queryKeys.session.snapshotLists() }),
+  ])
+}
+
 export async function invalidateReadingPlans(client: QueryClient): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
   // Plan create/update/delete recompiles eligibility rules that Roll/Queue/session consume.

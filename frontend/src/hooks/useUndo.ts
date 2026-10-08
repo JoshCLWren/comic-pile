@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { undoApi } from '../services/api-undo'
 import { getApiErrorDetail } from '../utils/apiError'
 import { queryKeys } from '../query/queryKeys'
-import { invalidateAfterQueueMutation } from '../query/cacheEffects'
+import { invalidateAfterUndoMutation } from '../query/cacheEffects'
 import { useToast } from '../contexts/useToast'
 import type { SessionSnapshotsResponse, UndoPayload } from '../types'
 
@@ -30,8 +30,10 @@ export function useUndo() {
       await undoApi.undo(sessionId, snapshotId)
     },
     onSuccess: async () => {
-      // Invalidate caches to reflect the undone state
-      await invalidateAfterQueueMutation(queryClient)
+      // A restore rewrites thread, queue, session, History, and snapshot state,
+      // so every retained projection of it has to be re-read before the UI can
+      // claim the undo landed.
+      await invalidateAfterUndoMutation(queryClient)
       showToast('Rating undone', 'success')
     },
     onError: (error: unknown) => {

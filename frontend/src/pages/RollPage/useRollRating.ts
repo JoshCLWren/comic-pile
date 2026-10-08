@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useConnectedThreads, useReadingOrdersForThread } from '../../hooks/useReaderContext'
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RatePayload, Thread } from '../../types'
@@ -7,7 +8,8 @@ import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import type { PostRateReference } from './components/PostRateCopyPrompt'
 import { RATING_THRESHOLD, buildRatingThread, createExplosion } from './utils'
-import { undoApi } from '../../services/api-undo'
+import { queryKeys } from '../../query/queryKeys'
+import { sessionApi } from '../../services/api-sessions'
 
 interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
@@ -17,9 +19,19 @@ interface UseRollRatingParams {
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
 }
 
-interface LastRatedWithSnapshot extends PostRateReference {
-  snapshotId: number
+/**
+ * Snapshot the post-rate prompt can restore. Absent when the rating produced no
+ * restorable snapshot, which is the only truthful reason to hide the affordance
+ * — `snapshotId: 0` sentinels used to distinguish "no snapshot" from "session
+ * unknown" at every call site.
+ */
+export interface PostRateUndoTarget {
   sessionId: number
+  snapshotId: number
+}
+
+interface LastRatedWithUndo extends PostRateReference {
+  undoTarget?: PostRateUndoTarget
 }
 
 /**
@@ -55,11 +67,11 @@ export function useRollRating({
     setThreadToMigrate,
   } = state
 
-  const [lastRated, setLastRated] = useState<LastRatedWithSnapshot | null>(null)
+  const [lastRated, setLastRated] = useState<LastRatedWithUndo | null>(null)
   const [readingContextRequested, setReadingContextRequested] = useState(false)
   const [readingBoundariesRequested, setReadingBoundariesRequested] = useState(false)
-
   const readerContextRequested = readingContextRequested || readingBoundariesRequested
+  const queryClient = useQueryClient()
 
   // Reading orders and connected-thread metadata belong to the Reading Context
   // surface only, so they stay disabled until that surface is requested. The
@@ -87,6 +99,35 @@ export function useRollRating({
   const connectedThreadsIsLoading = readingContextRequested && connectedThreadsPending
 
   const clearLastRated = useCallback(() => setLastRated(null), [])
+
+  /**
+   * Resolves the snapshot the post-rate prompt can restore (#3194).
+   *
+   * Rating appends a snapshot server side, so the newest snapshot for the
+   * session *is* the just-rated rating and the only one the API will accept as
+   * a delta restore. `staleTime: 0` forces a read because any list cached
+   * earlier in the session predates the snapshot being looked for; priming the
+   * canonical session key also means `invalidateAfterUndoMutation` retires
+   * this entry instead of leaving a spent undo target behind.
+   *
+   * A failed lookup costs only the convenience affordance: the rating is
+   * already committed, so the prompt still renders and simply offers no undo.
+   */
+  const captureUndoTarget = useCallback(async (): Promise<PostRateUndoTarget | undefined> => {
+    const sessionId = bootstrap?.session_id
+    if (!sessionId) return undefined
+    try {
+      const snapshots = await queryClient.fetchQuery({
+        queryKey: queryKeys.session.snapshots(sessionId),
+        queryFn: () => sessionApi.getSnapshots(sessionId),
+        staleTime: 0,
+      })
+      const newest = snapshots.snapshots[0]
+      return newest ? { sessionId, snapshotId: newest.id } : undefined
+    } catch {
+      return undefined
+    }
+  }, [bootstrap, queryClient])
 
   const fetchReadingContext = useCallback((_threadId: number | null) => {
     setReadingContextRequested(true)
@@ -192,27 +233,15 @@ export function useRollRating({
               last_rolled_result: null,
             })
           }
-      // Capture the just-rated comic reference before the thread state is cleared
-      // so the post-rate copy prompt can offer the clipboard string on the die view.
-      const sessionId = bootstrap?.session_id
-      let snapshotId = 0
-      if (sessionId) {
-        try {
-          const snapshots = await undoApi.listSnapshots(sessionId)
-          if (snapshots.snapshots.length > 0) {
-            snapshotId = snapshots.snapshots[0].id
-          }
-        } catch {
-          // Ignore snapshot fetch errors; undo button will be hidden if no snapshot
-        }
-      }
-      setLastRated({
-        title: activeRatingThread!.title,
-        issueNumber,
-        rating,
-        snapshotId,
-        sessionId: sessionId ?? 0,
-      })
+          // Capture the just-rated comic reference before the thread state is cleared
+          // so the post-rate copy prompt can offer the clipboard string on the die view.
+          const undoTarget = await captureUndoTarget()
+          setLastRated({
+            title: activeRatingThread!.title,
+            issueNumber,
+            rating,
+            undoTarget,
+          })
           suppressPendingAutoOpenRef.current = true
           setIsRolling(false)
           setIsRatingView(false)
@@ -234,6 +263,7 @@ export function useRollRating({
       rateMutation,
       refetchBootstrap,
       bootstrap,
+      captureUndoTarget,
       setShowSimpleMigration,
       suppressPendingAutoOpenRef,
       setIsRolling,
@@ -304,26 +334,14 @@ export function useRollRating({
 
       // Capture the just-rated comic reference before the thread state is cleared
       // so the post-rate copy prompt can offer the clipboard string on the die view.
-      const sessionId = bootstrap?.session_id
-      let snapshotId = 0
-      if (sessionId) {
-        try {
-          const snapshots = await undoApi.listSnapshots(sessionId)
-          if (snapshots.snapshots.length > 0) {
-            snapshotId = snapshots.snapshots[0].id
-          }
-        } catch {
-          // Ignore snapshot fetch errors; undo button will be hidden if no snapshot
-        }
-      }
+      const undoTarget = await captureUndoTarget()
 
       setLastRated({
         title: activeRatingThread.title,
         issueNumber:
           activeRatingThread.next_issue_number ?? activeRatingThread.issue_number ?? '',
         rating,
-        snapshotId,
-        sessionId: sessionId ?? 0,
+        undoTarget,
       })
       setIsRolling(false)
       setIsRatingView(false)

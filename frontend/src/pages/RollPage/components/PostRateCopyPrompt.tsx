@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { rollUtilityActionClass } from '../actionClasses'
+import { rollDangerActionClass, rollUtilityActionClass } from '../actionClasses'
 
 /** The just-rated comic reference offered on the post-rate copy prompt. */
 export interface PostRateReference {
@@ -21,6 +21,12 @@ interface PostRateCopyPromptProps {
  * surfaces the exact series title + issue string the pre-rate Copy title
  * control would have offered before Mark Read & Save. It never blocks the
  * next roll and follows the pre-rate clipboard feedback pattern.
+ *
+ * When the caller passes `onUndo` it also carries the rating restore (#3194):
+ * Undo was previously reachable only three levels deep, so a mistyped rating
+ * could not be corrected from where it was made. The caller owns the undo
+ * lifecycle — it must retire this prompt once the restore lands so the button
+ * cannot target a second snapshot.
  */
 export function PostRateCopyPrompt({
   reference,
@@ -94,27 +100,31 @@ export function PostRateCopyPrompt({
           </p>
         ) : null}
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {onUndo ? (
+      {/* Undo discards a committed rating, so it wears the shared destructive
+          action role rather than a local button dialect. It keeps its own row so
+          it is not grouped against the quiet Dismiss text action, whose own
+          hierarchy is intentionally lower. */}
+      {onUndo ? (
+        <div className="mt-3">
           <button
             type="button"
             onClick={onUndo}
             disabled={isUndoPending}
-            className="min-h-11 px-4 rounded-xl bg-[var(--theme-danger)] text-[var(--theme-text-primary)] font-bold text-xs uppercase tracking-widest hover:bg-[var(--theme-danger-hover)] disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+            className={`min-h-11 focus:ring-2 focus:ring-[var(--theme-focus-ring)] ${rollDangerActionClass}`}
             aria-label={`Undo rating of ${title} ${issueNumber}`}
           >
-            {isUndoPending ? 'Undoing...' : 'Undo'}
+            {isUndoPending ? 'Undoing...' : 'Undo rating'}
           </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="mt-3 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
-          aria-label="Dismiss rating saved notice"
-        >
-          Dismiss
-        </button>
-      </div>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="mt-3 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+        aria-label="Dismiss rating saved notice"
+      >
+        Dismiss
+      </button>
     </section>
   )
 }

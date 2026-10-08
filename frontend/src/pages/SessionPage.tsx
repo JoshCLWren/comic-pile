@@ -89,8 +89,8 @@ function EventRecord({ event }: { event: DisplayEvent }) {
 
 export default function SessionPage() {
   const { id } = useParams()
-  const { data: details, isPending, refetch: refetchDetails } = useSessionDetails(id)
-  const { data: snapshotsData, refetch: refetchSnapshots } = useSessionSnapshots(id)
+  const { data: details, isPending } = useSessionDetails(id)
+  const { data: snapshotsData } = useSessionSnapshots(id)
   const restoreMutation = useRestoreSessionStart()
   const undoMutation = useUndo()
   const [isRestoreConfirmationOpen, setIsRestoreConfirmationOpen] = useState(false)
@@ -187,6 +187,13 @@ export default function SessionPage() {
             {restoreMutation.isPending ? 'Restoring...' : 'Restore Session Start'}
           </button>
         </div>
+        {/* #3194 reported these two controls as interchangeable. One line
+            names what each one rewinds so the destructive choice is informed. */}
+        <p className="text-xs text-stone-500">
+          <strong className="text-stone-400">Undo Last Rating</strong> rewinds only the most recent
+          rating. <strong className="text-stone-400">Restore Session Start</strong> rewinds the whole
+          session to how it began, including threads added since then.
+        </p>
         {snapshots.length === 0 ? (
           <p className="text-xs text-stone-500">No snapshots available.</p>
         ) : (
@@ -203,21 +210,24 @@ export default function SessionPage() {
                   {canUndo ? (
                     <button
                       type="button"
-                      onClick={async () => {
-                        await undoMutation.mutate({
-                          sessionId: details.session_id,
-                          snapshotId: snapshot.id,
-                        })
-                        await Promise.all([refetchDetails(), refetchSnapshots()])
+                      onClick={() => {
+                        // useUndo's cache effect invalidates this session's detail,
+                        // snapshot list, and every queue/roll projection, so the
+                        // mounted queries refetch themselves. A rejected restore
+                        // is already reported by the hook as an error toast, so
+                        // the rejection must not escape as an unhandled promise.
+                        undoMutation
+                          .mutate({ sessionId: details.session_id, snapshotId: snapshot.id })
+                          .catch(() => undefined)
                       }}
                       disabled={undoMutation.isPending}
                       className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60 shrink-0"
-                      title="Undo the most recent rating (single use per snapshot)"
+                      title="Undo the most recent rating (restores the snapshot taken before it)"
                     >
                       {undoMutation.isPending ? 'Undoing...' : 'Undo Last Rating'}
                     </button>
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-600 shrink-0" title="This snapshot cannot be undone">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-600 shrink-0" title="Only the most recent rating can be restored">
                       History
                     </span>
                   )}
