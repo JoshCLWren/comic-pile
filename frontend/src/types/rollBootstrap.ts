@@ -13,6 +13,15 @@ export interface RollBootstrapThread {
   last_activity_at?: string | null
 }
 
+/** Detailed reason why a thread is excluded from the roll pool. */
+export interface ThreadExclusionReason {
+  thread_id: number
+  title: string
+  format: string
+  reason: 'blocked' | 'snoozed' | 'skipped' | 'not_active' | 'no_queue_position'
+  detail?: string | null
+}
+
 /** One direct continuity blocker for a pending roll. */
 export interface RollRecoveryBlocker {
   rule_id: number | null
@@ -129,4 +138,10 @@ export interface RollBootstrapResponse {
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
   timezone?: string | null
+  
+  // New exclusion information
+  total_threads: number
+  available_threads: number
+  excluded_threads: ThreadExclusionReason[]
+  exclusion_summary: Record<string, number>
 }

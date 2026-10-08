@@ -49,6 +49,7 @@ from app.schemas import (
     SessionModeResponse,
     SessionModeUpdateRequest,
     SessionResponse,
+    ThreadExclusionReason,
 )
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
@@ -1271,6 +1272,74 @@ async def roll_bootstrap(
                     last_activity_at=stale_last_activity,
                 )
 
+    # Get all active threads for the user to calculate exclusions
+    all_active_result = await db.execute(
+        select(Thread.id, Thread.title, Thread.format, Thread.status, Thread.queue_position, Thread.is_blocked)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .order_by(Thread.queue_position)
+    )
+    all_active_threads = all_active_result.all()
+    
+    # Calculate exclusion reasons
+    excluded_threads: list[ThreadExclusionReason] = []
+    exclusion_summary: dict[str, int] = {
+        "blocked": 0,
+        "snoozed": 0,
+        "skipped": 0,
+        "not_active": 0,
+        "no_queue_position": 0,
+    }
+    
+    for thread_row in all_active_threads:
+        thread_id = thread_row.id
+        title = thread_row.title
+        format_val = thread_row.format
+        status = thread_row.status
+        queue_position = thread_row.queue_position
+        is_blocked = thread_row.is_blocked
+        
+        # Check if thread is in roll pool
+        in_roll_pool = any(t.id == thread_id for t in roll_pool)
+        
+        if not in_roll_pool:
+            exclusion_reason: str
+            detail: str | None = None
+            
+            if thread_id in [t.id for t in blocked_threads]:
+                exclusion_reason = "blocked"
+                # Find blocking dependencies for detail
+                blocking_deps = blockingDependencyMap.get(thread_id, [])
+                if blocking_deps:
+                    detail = f"Blocked by: {blocking_deps[0].label}"
+                    if len(blocking_deps) > 1:
+                        detail += f" +{len(blocking_deps) - 1} more"
+            elif thread_id in [t.id for t in snoozed_threads]:
+                exclusion_reason = "snoozed"
+                detail = "Snoozed in current session"
+            elif thread_id in [t.id for t in skipped_threads]:
+                exclusion_reason = "skipped"
+                detail = "Skipped in current session"
+            elif queue_position < 1:
+                exclusion_reason = "no_queue_position"
+                detail = "Not in queue"
+            else:
+                exclusion_reason = "not_active"
+                detail = "Not available for rolling"
+            
+            excluded_threads.append(ThreadExclusionReason(
+                thread_id=thread_id,
+                title=title,
+                format=format_val,
+                reason=exclusion_reason,
+                detail=detail
+            ))
+            
+            exclusion_summary[exclusion_reason] += 1
+    
+    total_threads = len(all_active_threads)
+    available_threads = len(roll_pool)
+
     return RollBootstrapResponse(
         current_die=die_size,
         manual_die=manual_die,
@@ -1292,6 +1361,10 @@ async def roll_bootstrap(
         session_id=current_session_id,
         user_id=user_id,
         timezone=current_session.timezone,
+        total_threads=total_threads,
+        available_threads=available_threads,
+        excluded_threads=excluded_threads,
+        exclusion_summary=exclusion_summary,
     )
 
 

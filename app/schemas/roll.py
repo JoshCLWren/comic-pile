@@ -122,6 +122,16 @@ class RollBootstrapThread(BaseModel):
     last_activity_at: str | None = None
 
 
+class ThreadExclusionReason(BaseModel):
+    """Detailed reason why a thread is excluded from the roll pool."""
+
+    thread_id: int
+    title: str
+    format: str
+    reason: Literal["blocked", "snoozed", "skipped", "not_active", "no_queue_position"]
+    detail: str | None = None
+
+
 class RollRecoveryPrerequisite(BaseModel):
     """One currently readable prerequisite recommended for a blocked active roll."""
 
@@ -189,6 +199,12 @@ class RollBootstrapResponse(BaseModel):
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
     timezone: str | None = None
+    
+    # New exclusion information
+    total_threads: int
+    available_threads: int
+    excluded_threads: list[ThreadExclusionReason]
+    exclusion_summary: dict[str, int]  # Counts by reason type
 
     @model_validator(mode="before")
     @classmethod

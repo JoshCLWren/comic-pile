@@ -18,6 +18,10 @@ interface ThreadPoolProps {
   blockedExpanded: boolean
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedExpanded: boolean
+  totalThreads: number
+  availableThreads: number
+  excludedThreads: Array<{ thread_id: number; title: string; format: string; reason: string; detail?: string | null }>
+  exclusionSummary: Record<string, number>
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
   onUnskip: (threadId: number) => void
@@ -45,6 +49,10 @@ export function ThreadPool({
   blockedExpanded,
   skippedThreads,
   skippedExpanded,
+  totalThreads,
+  availableThreads,
+  excludedThreads,
+  exclusionSummary,
   onThreadClick,
   onUnsnooze,
   onUnskip,
@@ -59,6 +67,28 @@ export function ThreadPool({
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
+
+  function formatExclusionSummary(): string {
+    const parts: string[] = []
+    
+    if (exclusionSummary.blocked > 0) {
+      parts.push(`${exclusionSummary.blocked} blocked`)
+    }
+    if (exclusionSummary.snoozed > 0) {
+      parts.push(`${exclusionSummary.snoozed} snoozed`)
+    }
+    if (exclusionSummary.skipped > 0) {
+      parts.push(`${exclusionSummary.skipped} skipped`)
+    }
+    if (exclusionSummary.not_active > 0) {
+      parts.push(`${exclusionSummary.not_active} inactive`)
+    }
+    if (exclusionSummary.no_queue_position > 0) {
+      parts.push(`${exclusionSummary.no_queue_position} not queued`)
+    }
+    
+    return parts.length > 0 ? parts.join(', ') : 'none'
+  }
 
   useEffect(() => {
     const returnedToRoll = wasRatingView.current && !isRatingView
@@ -79,7 +109,14 @@ export function ThreadPool({
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-[var(--theme-comic-accent)] shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{pool.length} in play</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">
+            {availableThreads} of {totalThreads} series available to roll
+          </p>
+          {totalThreads > availableThreads && (
+            <p className="text-[10px] text-stone-500 mt-1">
+              {totalThreads - availableThreads} series excluded ({formatExclusionSummary()})
+            </p>
+          )}
           {dieSize && pool.length > 0 && pool.length < dieSize && (
             <p className="text-[10px] text-stone-500 mt-1" data-smaller-than-die>
               Only {pool.length} of d{dieSize} faces are mapped to an in-play series — the roll picks among these visible faces.
@@ -332,6 +369,42 @@ export function ThreadPool({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Excluded threads section - shows all threads not in the roll pool with reasons */}
+      {excludedThreads.length > 0 && !isRatingView && (
+        <div className="mt-4 md:mt-8">
+          <div className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl">
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+              Excluded Series ({excludedThreads.length})
+            </span>
+          </div>
+          <div className="mt-2 space-y-1">
+            {excludedThreads.map((excludedThread) => (
+              <div
+                key={excludedThread.thread_id}
+                className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
+              >
+                <span className="text-sm">
+                  {excludedThread.reason === 'blocked' && '🔒'}
+                  {excludedThread.reason === 'snoozed' && '😴'}
+                  {excludedThread.reason === 'skipped' && '⏭️'}
+                  {excludedThread.reason === 'not_active' && '⏸️'}
+                  {excludedThread.reason === 'no_queue_position' && '📋'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-stone-400 truncate">{excludedThread.title}</p>
+                  {excludedThread.detail && (
+                    <p className="text-[10px] text-stone-500 truncate">{excludedThread.detail}</p>
+                  )}
+                </div>
+                <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest">
+                  {excludedThread.reason}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
