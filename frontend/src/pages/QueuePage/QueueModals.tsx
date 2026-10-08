@@ -187,6 +187,8 @@ function CreatorInput({
   )
 }
 
+import type { ParsedTokenBreakdown } from '../../utils/issueParser'
+
 interface QueueModalsProps {
   openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | null
   createForm: QueueFormState
@@ -195,6 +197,8 @@ interface QueueModalsProps {
   setEditForm: (next: QueueFormState) => void
   issuePreview: number | null
   issueParseError: string | null
+  issueParseWarnings: string[]
+  issueParseBreakdown: ParsedTokenBreakdown[]
   editingThread: Thread | ThreadListItem | null
   repositioningThread: ThreadListItem | null
   dependencyThread: ThreadListItem | null
@@ -249,6 +253,8 @@ export function QueueModals({
   setEditForm,
   issuePreview,
   issueParseError,
+  issueParseWarnings,
+  issueParseBreakdown,
   editingThread,
   repositioningThread,
   dependencyThread,
@@ -335,9 +341,54 @@ export function QueueModals({
               required
             />
             {issuePreview !== null && (
-              <p className="text-xs text-stone-400">
-                Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
-              </p>
+              <div className="space-y-1">
+                <p className="text-xs text-stone-400">
+                  Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
+                </p>
+                {issueParseWarnings.length > 0 && (
+                  <div className="space-y-1">
+                    {issueParseWarnings.map((warning, idx) => (
+                      <p key={idx} className="text-xs text-amber-400 flex items-center gap-1">
+                        <span aria-hidden="true">⚠</span>
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {issueParseBreakdown.length > 0 && (
+                  <details className="group">
+                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-400 flex items-center gap-1 select-none">
+                      <span className="transition-transform group-open:rotate-90">▸</span>
+                      Show issue breakdown
+                    </summary>
+                    <div className="mt-1 ml-4 space-y-0.5 border-l border-stone-700 pl-2">
+                      {issueParseBreakdown.map((item, idx) => (
+                        <div key={idx} className="text-xs flex items-start gap-1">
+                          <span className="text-stone-500 whitespace-nowrap">{item.token}:</span>
+                          <span className="text-stone-400 flex flex-wrap gap-1">
+                            {item.parsedIssues.map((issue, i) => (
+                              <span
+                                key={i}
+                                className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                  item.type === 'range'
+                                    ? 'bg-blue-500/20 text-blue-300'
+                                    : item.type === 'number'
+                                    ? 'bg-green-500/20 text-green-300'
+                                    : item.type === 'recognized-literal'
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-amber-500/20 text-amber-300'
+                                }`}
+                              >
+                                {issue}
+                              </span>
+                            ))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
             )}
             <p className="text-xs text-stone-400">
               Enter the exact issues you want to track, such as 71. You do not need to add earlier

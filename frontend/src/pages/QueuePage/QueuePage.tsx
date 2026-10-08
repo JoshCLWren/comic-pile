@@ -287,6 +287,8 @@ export default function QueuePage() {
           setEditForm={modals.setEditForm}
           issuePreview={modals.issuePreview}
           issueParseError={modals.issueParseError}
+          issueParseWarnings={modals.issueParseWarnings}
+          issueParseBreakdown={modals.issueParseBreakdown}
           editingThread={modals.editingThread}
           repositioningThread={modals.repositioningThread}
           dependencyThread={modals.dependencyThread}

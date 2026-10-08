@@ -52,6 +52,8 @@ vi.mock('../pages/QueuePage/FormatSelect', () => ({
   ),
 }))
 
+import type { ParsedTokenBreakdown } from '../../utils/issueParser'
+
 function Harness() {
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
@@ -65,6 +67,8 @@ function Harness() {
       setEditForm={setEditForm}
       issuePreview={1}
       issueParseError={null}
+      issueParseWarnings={[]}
+      issueParseBreakdown={[] as ParsedTokenBreakdown[]}
       editingThread={null}
       repositioningThread={null}
       dependencyThread={null}
