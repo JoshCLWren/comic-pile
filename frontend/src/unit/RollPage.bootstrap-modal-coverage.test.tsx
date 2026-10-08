@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
+import { ToastProvider } from '../contexts/ToastProvider'
 
 // SAFETY: Hoisted bootstrap modal state holds nullable manualDie; null represents automatic die mode in the fixture.
 const state = vi.hoisted(() => ({ overridePending: false, setDiePending: false, manualDie: null as number | null }))

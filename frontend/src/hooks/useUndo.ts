@@ -7,7 +7,7 @@ import { useToast } from '../contexts/useToast'
 import type { SessionSnapshotsResponse, UndoPayload } from '../types'
 
 export function useSnapshots(sessionId: number | string | null | undefined) {
-  const { data, isPending, isError, error } = useQuery({
+  const { data, isPending, isError } = useQuery({
     queryKey: sessionId != null ? queryKeys.undo.snapshots(sessionId) : [],
     queryFn: () => undoApi.listSnapshots(sessionId!),
     enabled: sessionId != null,

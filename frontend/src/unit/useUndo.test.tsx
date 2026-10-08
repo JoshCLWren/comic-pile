@@ -4,10 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { undoApi } from '../services/api-undo'
+import { ToastProvider } from '../contexts/ToastProvider'
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={client}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  )
 }
 
 vi.mock('../services/api-undo', () => ({
