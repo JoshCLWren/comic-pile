@@ -2,14 +2,13 @@
 
 import asyncio
 import pytest
-import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from app.performance_budgets import (
     PerformanceBudgetManager,
     PerformanceWarning,
-    RequestBudgetExceeded,
-    StartupBudgetExceeded,
+    RequestBudgetError,
+    StartupBudgetError,
     get_performance_budget_manager,
     run_bounded,
     startup_budget,
@@ -193,7 +192,7 @@ class TestRunBounded:
             await asyncio.sleep(3.0)  # 3000ms
             return "success"
         
-        with pytest.raises(StartupBudgetExceeded) as exc_info:
+        with pytest.raises(StartupBudgetError) as exc_info:
             await run_bounded(
                 operation="startup_test",
                 coroutine=slow_coroutine(),
@@ -232,7 +231,7 @@ class TestRunBounded:
             return "success"
         
         # Test startup operation defaults
-        with pytest.raises(StartupBudgetExceeded):
+        with pytest.raises(StartupBudgetError):
             await run_bounded(
                 operation="startup_operation",
                 coroutine=slow_coroutine()
@@ -270,7 +269,7 @@ class TestStartupBudgetDecorator:
             await asyncio.sleep(1.0)
             return "should_not_reach_here"
         
-        with pytest.raises(StartupBudgetExceeded):
+        with pytest.raises(StartupBudgetError):
             await slow_function()
 
 

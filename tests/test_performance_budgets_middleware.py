@@ -1,9 +1,7 @@
 """Tests for performance budget middleware integration."""
 
-import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi import FastAPI, Request, Response
+from unittest.mock import MagicMock, patch
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.main import create_app

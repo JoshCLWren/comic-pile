@@ -35,12 +35,10 @@ from app.middleware import limiter, SecurityHeadersMiddleware
 from app.middleware.performance import PerformanceMiddleware, compute_startup_duration
 from app.middleware.request_logging import add_request_logging_middleware
 from app.performance_budgets import (
-    PerformanceBudgetManager,
     PerformanceWarning,
-    StartupBudgetExceeded,
+    StartupBudgetError,
     get_performance_budget_manager,
     run_bounded,
-    startup_budget,
 )
 from app.safe_logging import safe_connection_metadata
 
@@ -790,17 +788,10 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
                 from app.startup_diagnostics import mark_heavy_init_complete
 
-                # Mark heavy init complete with performance budget
-                heavy_ms = await run_bounded(
-                    operation="heavy_init_marking",
-                    coroutine=mark_heavy_init_complete(),
-                    warning_ms=1000,  # 1 second warning
-                    timeout_ms=2000,  # 2 second timeout
-                    context={
-                        "environment": app_settings.environment,
-                        "deployment_id": getattr(app_settings, 'deployment_id', 'unknown')
-                    }
-                )
+                # mark_heavy_init_complete is synchronous (records a timestamp
+                # and returns elapsed ms); it is not an awaitable and must not
+                # be wrapped in run_bounded.
+                heavy_ms = mark_heavy_init_complete()
                 
                 logger.warning(
                     "Heavy application initialization completed in %.2f ms",
@@ -813,7 +804,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                 )
                 _heavy_state["initialized"] = True
                 
-            except StartupBudgetExceeded as e:
+            except StartupBudgetError as e:
                 logger.error(f"Heavy initialization budget exceeded: {e}")
                 # In production, we should fail fast rather than continue with incomplete initialization
                 if app_settings.environment == "production":
@@ -932,7 +923,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                 except Exception:
                     logger.warning("Neon monitor startup skipped", exc_info=True)
                     
-        except StartupBudgetExceeded as e:
+        except StartupBudgetError as e:
             logger.error(f"Startup budget exceeded during lightweight startup: {e}")
             raise
         except Exception as e:
@@ -957,7 +948,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         if not is_ping_probe and not defer_heavy_init:
             try:
                 await _ensure_heavy_init()
-            except StartupBudgetExceeded as e:
+            except StartupBudgetError as e:
                 # In production, fail the request if heavy initialization times out
                 if app_settings.environment == "production":
                     from fastapi import responses

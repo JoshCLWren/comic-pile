@@ -16,11 +16,8 @@ from datetime import UTC, datetime
 from fastapi import FastAPI, Request
 
 from app.performance_budgets import (
-    PerformanceBudgetManager,
     PerformanceWarning,
-    RequestBudgetExceeded,
     get_performance_budget_manager,
-    request_budget,
 )
 from app.performance_diagnostics import (
     begin_request_diagnostics,
@@ -211,7 +208,6 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
         app: FastAPI application instance to wire the middleware onto.
         environment: Current application environment.
     """
-    
     # Initialize performance budget manager
     budget_manager = get_performance_budget_manager()
 
