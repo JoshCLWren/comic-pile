@@ -47,6 +47,8 @@ SESSION_HISTORY_FIELDS = {
     "last_rolled_result",
     "has_restore_point",
     "snapshot_count",
+    "issues_read",
+    "last_rating",
     "reading_bandwidth",
     "reading_intent",
     "reading_mode_source",
@@ -166,15 +168,15 @@ def test_queue_item_records_serialized_byte_reduction() -> None:
 
 
 def test_session_history_item_contract_is_exact_and_measurably_narrower() -> None:
-    """History items expose only the documented 16-field screen contract."""
+    """History items expose only the documented 18-field screen contract."""
     full_fields = set(SessionResponse.model_fields)
     history_fields = set(SessionListItem.model_fields)
 
     assert history_fields == SESSION_HISTORY_FIELDS
     assert full_fields - history_fields == SESSION_HISTORY_DROPPED_FIELDS
-    assert len(full_fields) == 25
-    assert len(history_fields) == 16
-    assert (len(full_fields) - len(history_fields)) / len(full_fields) == 9 / 25
+    assert len(full_fields) == 27
+    assert len(history_fields) == 18
+    assert (len(full_fields) - len(history_fields)) / len(full_fields) == 9 / 27
 
 
 def test_session_history_records_serialized_byte_reduction() -> None:
@@ -261,9 +263,9 @@ def test_roll_screen_contract_is_exact_and_named() -> None:
 
 
 def test_current_session_contract_is_exact_and_named() -> None:
-    """The current-session screen exposes exactly the named 25-field contract."""
+    """The current-session screen exposes exactly the named 27-field contract."""
     assert set(SessionResponse.model_fields) == CURRENT_SESSION_FIELDS
-    assert len(SessionResponse.model_fields) == 25
+    assert len(SessionResponse.model_fields) == 27
 
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:

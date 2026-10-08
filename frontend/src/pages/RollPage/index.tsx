@@ -440,12 +440,12 @@ export default function RollPage() {
             )}
 
             {!state.isRatingView && (
-<PostRateCopyPrompt
-                  reference={rating.lastRated}
-                  onDismiss={rating.clearLastRated}
-                  onUndo={lastRatedUndoTarget ? handleUndoLastRating : undefined}
-                  isUndoPending={undoMutation.isPending}
-                />
+              <PostRateCopyPrompt
+                reference={rating.lastRated}
+                onDismiss={rating.clearLastRated}
+                onUndo={lastRatedUndoTarget ? handleUndoLastRating : undefined}
+                isUndoPending={undoMutation.isPending}
+              />
             )}
 
             {!state.isRatingView && (
