@@ -1,5 +1,7 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
+const RECOVERY_CONFIG = { skipAuthRedirect: true }
+
 /** Headline personal summary for one stable creator identity (issue #2028). */
 export interface CreatorSummaryItem {
   canonical_creator_key: string
@@ -120,7 +122,7 @@ export function createCreatorsApi(client: HttpClient) {
       }
       return client.get<CreatorDetailResponse>(
         `/v1/creators/${encodeURIComponent(creatorKey)}`,
-        { params: queryParams },
+        { params: queryParams, ...RECOVERY_CONFIG },
       )
     },
 
@@ -142,7 +144,10 @@ export function createCreatorsApi(client: HttpClient) {
       if (params.min_ratings !== undefined && params.min_ratings > 0) {
         queryParams.min_ratings = params.min_ratings
       }
-      return client.get<CreatorListResponse>('/v1/creators', { params: queryParams })
+      return client.get<CreatorListResponse>('/v1/creators', {
+        params: queryParams,
+        ...RECOVERY_CONFIG,
+      })
     },
   }
 }
