@@ -143,7 +143,7 @@ describe('creatorsApi auth recovery', () => {
       config: { url: string; skipAuthRedirect?: boolean }
       response: { status: number }
     },
-  ) => Promise<unknown>
+  ) => Promise<Record<string, string | number | boolean | null>>
 
   beforeEach(() => {
     transport = createTransportDouble()
@@ -152,12 +152,14 @@ describe('creatorsApi auth recovery', () => {
     recoveryApi = createCreatorsApi(recoveryClient)
     setAccessToken('stale-access-token')
 
+    // SAFETY: transport.interceptors.response.use is a vi.fn(); the second callback of its
+    // first call is the registered error interceptor with the signature asserted here.
     responseInterceptor = transport.interceptors.response.use.mock.calls[0][1] as (
       error: {
         config: { url: string; skipAuthRedirect?: boolean }
         response: { status: number }
       },
-    ) => Promise<unknown>
+    ) => Promise<Record<string, string | number | boolean | null>>
   })
 
   it('retries creator detail after refresh succeeds', async () => {
