@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
-import type { CreatorIssueRow } from '../services/api-creators'
+import type { CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 function formatRatingDate(value: string | null): string | null {
@@ -56,6 +56,28 @@ function IssueRow({ row, showRating }: { row: CreatorIssueRow; showRating: boole
   )
 }
 
+function SeriesGroupRow({ group }: { group: CreatorSeriesGroup }) {
+  return (
+    <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <Link
+        to={`/thread/${group.thread_id}`}
+        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+      >
+        <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+          {group.thread_title}
+        </span>
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          <span>{group.rated_issue_count} {group.rated_issue_count === 1 ? 'issue' : 'issues'}</span>
+          {group.average_rating != null && (
+            <RatingValue value={group.average_rating} label={`Average ${group.average_rating} out of 5`} />
+          )}
+          {group.roles.length > 0 && <span className="break-words">{group.roles.join(', ')}</span>}
+        </span>
+      </Link>
+    </li>
+  )
+}
+
 function SectionHeading({ id, children }: { id: string; children: ReactNode }) {
   return (
     <h2 id={id} className="text-base font-bold md:text-lg" style={{ color: 'var(--theme-text-primary)' }}>
@@ -73,6 +95,9 @@ export default function CreatorDetailPage() {
     coverage,
     roleStats,
     ratingDistribution,
+    seriesGroups,
+    seriesGroupsTotal,
+    seriesGroupsComplete,
     ratedIssues,
     readUnratedIssues,
     upcomingIssues,
@@ -284,6 +309,24 @@ export default function CreatorDetailPage() {
                   )}
                 </p>
               </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {seriesGroups.length > 0 && (
+        <section aria-labelledby="creator-series-heading" className="mt-6">
+          <SectionHeading id="creator-series-heading">
+            Series{seriesGroupsTotal > 0 ? ` (${seriesGroupsTotal})` : ''}
+          </SectionHeading>
+          {!seriesGroupsComplete && (
+            <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+              Partial list: showing the most-rated series first. Counts shown are lower bounds.
+            </p>
+          )}
+          <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {seriesGroups.map((group) => (
+              <SeriesGroupRow key={group.series_key} group={group} />
             ))}
           </ul>
         </section>
