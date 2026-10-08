@@ -249,23 +249,32 @@ class TestPerformanceBudgetLogging:
         @self.app.get("/warning-test")
         async def warning_endpoint():
             import time
-            time.sleep(0.6)  # Trigger warning
+            time.sleep(0.6)  # Trigger warning (500ms threshold)
             return {"message": "warning test"}
         
         response = self.client.get("/warning-test")
         
         assert response.status_code == 200
         
-        # Check that warning was logged with proper structure
-        mock_logger.warning.assert_called()
-        # The logger.warning call in middleware: logger.warning(msg, *args, extra=extra)
-        # call_args[0] is the positional args, call_args[1] is keyword args.
-        call_args = mock_logger.warning.call_args[1]
+        # Check that warning was logged
+        assert mock_logger.warning.called
         
-        # The logger.warning call uses extra={**log_data, ...}
-        # The performance_warning is in that extra dict.
-        assert "extra" in call_args
-        extra = call_args["extra"]
+        # Find the correct warning call (there might be other log calls)
+        warning_call = None
+        for call in mock_logger.warning.call_args_list:
+            if len(call[0]) >= 3 and "Performance warning" in call[0][0]:
+                warning_call = call
+                break
+        
+        assert warning_call is not None, "No performance warning call found"
+        
+        # The logger.warning call has positional args and extra keyword arg
+        # call_args[0] = positional args (message, method, path, time_ms)
+        # call_args[1] = keyword args (extra={...})
+        assert len(warning_call[0]) >= 4  # message, method, path, time_ms
+        assert "extra" in warning_call[1]
+        
+        extra = warning_call[1]["extra"]
         assert "performance_warning" in extra
         warning_data = extra["performance_warning"]
         
@@ -281,20 +290,32 @@ class TestPerformanceBudgetLogging:
         @self.app.get("/violation-test")
         async def violation_endpoint():
             import time
-            time.sleep(1.1)  # Trigger violation
+            time.sleep(1.1)  # Trigger violation (1000ms threshold)
             return {"message": "violation test"}
         
         response = self.client.get("/violation-test")
         
         assert response.status_code == 200
         
-        # Check that violation was logged with proper structure
-        mock_logger.error.assert_called()
-        call_args = mock_logger.error.call_args[1]
+        # Check that violation was logged
+        assert mock_logger.error.called
         
-        # Should have performance violation in extra data
-        assert "extra" in call_args
-        extra = call_args["extra"]
+        # Find the correct violation call (there might be other log calls)
+        violation_call = None
+        for call in mock_logger.error.call_args_list:
+            if len(call[0]) >= 3 and "Performance budget violation" in call[0][0]:
+                violation_call = call
+                break
+        
+        assert violation_call is not None, "No performance violation call found"
+        
+        # The logger.error call has positional args and extra keyword arg
+        # call_args[0] = positional args (message, method, path, time_ms)
+        # call_args[1] = keyword args (extra={...})
+        assert len(violation_call[0]) >= 4  # message, method, path, time_ms
+        assert "extra" in violation_call[1]
+        
+        extra = violation_call[1]["extra"]
         assert "performance_violation" in extra
         violation_data = extra["performance_violation"]
         
