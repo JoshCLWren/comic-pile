@@ -642,7 +642,7 @@ async def test_current_session_response_includes_ladder_path(
     assert response.status_code == 200
     data = response.json()
     assert "ladder_path" in data
-    assert "6 → 8" in data["ladder_path"]
+    assert "d6 → d8" in data["ladder_path"]
 
 
 @pytest.mark.asyncio

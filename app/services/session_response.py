@@ -54,14 +54,14 @@ async def build_ladder_path(
         die_events = events_result.scalars().all()
 
     if not die_events:
-        return str(session.start_die)
+        return f"d{session.start_die}"
 
     path = [session.start_die]
     for event in die_events:
         if event.die_after:
             path.append(event.die_after)
 
-    return " → ".join(str(d) for d in path)
+    return " → ".join(f"d{d}" for d in path)
 
 
 async def _fetch_thread_issue_metadata(

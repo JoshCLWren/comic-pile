@@ -87,7 +87,7 @@ async def test_history_ladder_is_chronological_and_current_die_uses_latest(
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
-    assert item["ladder_path"] == "6 → 8 → 12 → 10"
+    assert item["ladder_path"] == "d6 → d8 → d12 → d10"
     assert item["current_die"] == 10
     assert item["start_die"] == 6
 
@@ -122,7 +122,7 @@ async def test_history_manual_die_overrides_event_derived_die(
 
     assert item["current_die"] == 20
     assert item["manual_die"] == 20
-    assert item["ladder_path"] == "6 → 8"
+    assert item["ladder_path"] == "d6 → d8"
 
 
 @pytest.mark.asyncio
@@ -138,7 +138,7 @@ async def test_history_no_die_events_falls_back_to_start_die(
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
-    assert item["ladder_path"] == "10"
+    assert item["ladder_path"] == "d10"
     assert item["current_die"] == 10
 
 
@@ -325,7 +325,7 @@ async def test_history_rate_metadata_surfaces_with_single_events_read(
     assert item["active_thread"] is not None
     assert item["active_thread"]["issues_read"] == 2
     assert item["active_thread"]["last_rating"] == 4.5
-    assert item["ladder_path"] == "6 → 8"
+    assert item["ladder_path"] == "d6 → d8"
 
     event_reads = [s for s in statements if "from events" in s.lower()]
     assert len(event_reads) == 1, (
@@ -415,7 +415,7 @@ async def test_history_duplicate_timestamps_break_ties_by_event_id(
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
     assert item["current_die"] == 12
-    assert item["ladder_path"] == "6 → 8 → 12"
+    assert item["ladder_path"] == "d6 → d8 → d12"
 
 
 @pytest.mark.asyncio

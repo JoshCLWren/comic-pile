@@ -61,12 +61,6 @@ export default function HistoryPage() {
     return `${hours}h ${mins}m`
   }
 
-  const formatDiceProgression = (ladderPath: string | null | undefined) => {
-    if (!ladderPath) return ''
-    const dice = ladderPath.split(' → ')
-    return dice.map(d => `d${d}`).join(' → ')
-  }
-
   const buildActivityLine = (
     issuesRead: number | null | undefined,
     lastRating: number | null | undefined,
@@ -148,7 +142,7 @@ export default function HistoryPage() {
 
                 {session.ladder_path && (
                   <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                    Die size {formatDiceProgression(session.ladder_path)}
+                    Die size {session.ladder_path}
                     {session.last_rolled_result != null && session.last_rolled_result > 0 && (
                       <span className="text-amber-400/70"> · Rolled {session.last_rolled_result}</span>
                     )}

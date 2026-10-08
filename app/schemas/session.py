@@ -240,6 +240,8 @@ class SessionResponse(BaseModel):
     last_rolled_result: int | None
     has_restore_point: bool
     snapshot_count: int
+    issues_read: int | None = None
+    last_rating: float | None = None
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
     skipped_thread_ids: list[int] = []
@@ -366,7 +368,9 @@ class SessionListItem(BaseModel):
 
     A deliberate subset of SessionResponse. The list view does not need
     snoozed_thread_ids, snoozed_threads, pending_thread_id, or timezone,
-    which reduces payload size for session history lists.
+    which reduces payload size for session history lists. ``issues_read``
+    and ``last_rating`` are carried at the row level so the History card
+    reports undo-aware aggregates without unwrapping ``active_thread``.
     """
 
     id: int
@@ -381,6 +385,8 @@ class SessionListItem(BaseModel):
     last_rolled_result: int | None
     has_restore_point: bool
     snapshot_count: int
+    issues_read: int | None = None
+    last_rating: float | None = None
     reading_bandwidth: str | None = None
     reading_intent: str | None = None
     reading_mode_source: str | None = None

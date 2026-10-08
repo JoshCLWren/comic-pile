@@ -224,10 +224,10 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
         for evt in reversed(all_events)
         if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None
     ]
-    ladder_path = str(current_session.start_die)
+    ladder_path = f"d{current_session.start_die}"
     if die_events:
         ladder_path = " → ".join(
-            [str(current_session.start_die)] + [str(evt.die_after) for evt in die_events]
+            [f"d{current_session.start_die}"] + [f"d{evt.die_after}" for evt in die_events]
         )
 
     # Active thread: use pending_thread_id from the already-loaded session.

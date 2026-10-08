@@ -30,7 +30,7 @@ it('labels an empty session as No issue selected', () => {
       id: 9,
       started_at: '2024-01-01T10:00:00Z',
       ended_at: null,
-      ladder_path: '6',
+      ladder_path: 'd6',
       active_thread: null,
       last_rolled_result: null,
       current_die: 6,
@@ -58,7 +58,7 @@ it('does not label an active session with a rolled result as abandoned', () => {
       id: 10,
       started_at: '2024-01-01T10:00:00Z',
       ended_at: null,
-      ladder_path: '6 → 8',
+      ladder_path: 'd6 → d8',
       active_thread: { title: 'Saga', format: 'Comic' },
       last_rolled_result: 4,
       current_die: 8,
@@ -84,7 +84,7 @@ it('leads with comic identity and readable activity summary for a typical rated 
       id: 11,
       started_at: '2024-08-23T10:00:00Z',
       ended_at: '2024-08-23T10:45:00Z',
-      ladder_path: '6 → 4 → 6',
+      ladder_path: 'd6 → d4 → d6',
       active_thread: {
         title: 'Cable',
         format: 'Comic',
@@ -132,7 +132,7 @@ it('pluralizes issues read for multi-issue activity', () => {
       id: 12,
       started_at: '2024-01-01T10:00:00Z',
       ended_at: '2024-01-01T10:30:00Z',
-      ladder_path: '20',
+      ladder_path: 'd20',
       active_thread: {
         title: 'Saga',
         format: 'Comic',
@@ -159,12 +159,12 @@ it('pluralizes issues read for multi-issue activity', () => {
 
 it('renders session rows with metadata, duration, and footer links', () => {
   mockedUseSessions.mockReturnValue({ data: [
-    { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6 → 8', active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 3, last_rating: 4.5 }, last_rolled_result: 4, current_die: 6, snapshot_count: 2 },
+    { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: 'd6 → d8', active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 3, last_rating: 4.5 }, last_rolled_result: 4, current_die: 6, snapshot_count: 2 },
     { id: 2, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: null, active_thread: null, snapshot_count: 0 },
-    { id: 3, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T12:30:00Z', ladder_path: '20', active_thread: { title: 'Other', format: 'Manga' }, last_rolled_result: null, current_die: 20, snapshot_count: 1 },
+    { id: 3, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T12:30:00Z', ladder_path: 'd20', active_thread: { title: 'Other', format: 'Manga' }, last_rolled_result: null, current_die: 20, snapshot_count: 1 },
     { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null },
     { id: 5, started_at: '2024-01-01T12:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: '', active_thread: { title: 'Zero', format: 'Comic' }, last_rolled_result: 0, current_die: 4, snapshot_count: 0 },
-    { id: 6, started_at: 'bad', ended_at: 'bad', ladder_path: '6', active_thread: null, snapshot_count: 0 },
+    { id: 6, started_at: 'bad', ended_at: 'bad', ladder_path: 'd6', active_thread: null, snapshot_count: 0 },
     { id: 7, started_at: null, ended_at: 'bad', ladder_path: null, active_thread: null, snapshot_count: null },
     { id: 8, started_at: 'bad', ended_at: 'bad', ladder_path: null, active_thread: null, snapshot_count: null },
   ], isPending: false })

@@ -96,6 +96,8 @@ def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
         last_rolled_result=sr.last_rolled_result,
         has_restore_point=sr.has_restore_point,
         snapshot_count=sr.snapshot_count,
+        issues_read=sr.issues_read,
+        last_rating=sr.last_rating,
     )
 
 
@@ -520,7 +522,7 @@ async def list_sessions(
         session = sessions_by_id[sid]
         die_path = projection.die_path_by_session[sid]
         path = [session.start_die, *die_path]
-        ladder_paths[sid] = " → ".join(str(d) for d in path)
+        ladder_paths[sid] = " → ".join(f"d{d}" for d in path)
 
     current_die: dict[int, int] = {}
     for sid in session_ids:
@@ -647,6 +649,7 @@ async def list_sessions(
     for session in sessions_to_return:
         active_thread = active_threads_dict.get(session.id)
         snapshot_count_num = snapshot_counts.get(session.id, 0)
+        agg = rate_agg.get(session.id, {})
 
         sr = SessionResponse(
             id=session.id,
@@ -666,6 +669,8 @@ async def list_sessions(
             reading_intent=session.reading_intent,
             reading_mode_source=session.reading_mode_source,
             reading_mode_suggested=session.reading_mode_suggested,
+            issues_read=agg.get("issues_read"),
+            last_rating=agg.get("last_rating"),
         )
         responses.append(_to_session_list_item(sr))
 

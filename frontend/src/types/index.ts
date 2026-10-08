@@ -242,6 +242,8 @@ export interface SessionSummary {
   last_rolled_result: number | null;
   current_die: number | null;
   snapshot_count: number | null;
+  issues_read?: number | null;
+  last_rating?: number | null;
 }
 
 export interface SessionEvent {

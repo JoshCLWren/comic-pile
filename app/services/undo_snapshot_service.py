@@ -367,10 +367,10 @@ class UndoSnapshotService:
             evt for evt in reversed(all_events)
             if evt.type in ("rate", "snooze", "undo") and evt.die_after is not None
         ]
-        pre_ladder_path = str(session.start_die)
+        pre_ladder_path = f"d{session.start_die}"
         if die_events:
             pre_ladder_path = " → ".join(
-                [str(session.start_die)] + [str(evt.die_after) for evt in die_events]
+                [f"d{session.start_die}"] + [f"d{evt.die_after}" for evt in die_events]
             )
 
         # Snapshot count: one query regardless of delta/full

@@ -204,7 +204,7 @@ async def test_get_session_includes_ladder_path(
     response = await auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
-    assert "6 → 8" in data["ladder_path"]
+    assert "d6 → d8" in data["ladder_path"]
 
 async def test_get_session_includes_snapshot_info(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
