@@ -129,7 +129,7 @@ async def test_middleware_does_not_warn_below_threshold(
         response = await client.get("/fast")
         assert response.status_code == 200
 
-    assert _find_slow_request_records(caplog) == []
+    assert _find_performance_warning_records(caplog) == []
 
 
 @pytest.mark.asyncio
