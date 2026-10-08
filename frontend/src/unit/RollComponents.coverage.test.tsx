@@ -50,7 +50,7 @@ const thread: Thread = {
 }
 const callbacks = () => ({
   onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onUnskip: vi.fn(), onReadStale: vi.fn(), onToggleSnoozed: vi.fn(),
-  onToggleSkipped: vi.fn(), onToggleBlocked: vi.fn(), onShuffle: vi.fn(),
+  onToggleSkipped: vi.fn(), onToggleStale: vi.fn(), onToggleBlocked: vi.fn(), onShuffle: vi.fn(),
 })
 
 describe('ThreadPool', () => {

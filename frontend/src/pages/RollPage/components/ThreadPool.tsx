@@ -18,12 +18,14 @@ interface ThreadPoolProps {
   blockedExpanded: boolean
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedExpanded: boolean
+  staleExpanded: boolean
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
   onUnskip: (threadId: number) => void
-  onReadStale: () => void
+  onReadStale: (threadId: number) => void
   onToggleSnoozed: () => void
   onToggleSkipped: () => void
+  onToggleStale: () => void
   onToggleBlocked: () => void
   onShuffle: () => void
   unsnoozeIsPending: boolean
@@ -45,12 +47,14 @@ export function ThreadPool({
   blockedExpanded,
   skippedThreads,
   skippedExpanded,
+  staleExpanded,
   onThreadClick,
   onUnsnooze,
   onUnskip,
   onReadStale,
   onToggleSnoozed,
   onToggleSkipped,
+  onToggleStale,
   onToggleBlocked,
   onShuffle,
   unsnoozeIsPending,
@@ -224,32 +228,50 @@ export function ThreadPool({
       )}
 
       {staleThread && !isRatingView && (
-        <div
-          onClick={onReadStale}
-          className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-[var(--theme-comic-accent)]/5 transition-colors rounded-xl"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              onReadStale()
-            }
-          }}
-        >
-          <div className="px-4 py-3 bg-[var(--theme-comic-accent)]/5 border border-[var(--theme-comic-accent)]/10 rounded-xl flex items-center gap-3">
-            <div className="w-8 h-8 bg-[var(--theme-comic-accent)]/10 rounded-lg flex items-center justify-center shrink-0">
-              <span className="text-sm">⏳</span>
+        <div className="mt-4 md:mt-8">
+          <button
+            type="button"
+            onClick={onToggleStale}
+            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+          >
+            <span
+              className={`text-stone-400 text-xs transition-transform ${staleExpanded ? 'rotate-90' : ''}`}
+            >
+              ▶
+            </span>
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+              {staleThreadCount} series you haven&apos;t opened recently
+            </span>
+          </button>
+          {staleExpanded && (
+            <div className="mt-2 space-y-1">
+              <div
+                key={staleThread.id}
+                className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-comic-accent)]/5 border border-[var(--theme-comic-accent)]/10 rounded-lg"
+              >
+                <div className="w-8 h-8 bg-[var(--theme-comic-accent)]/10 rounded-lg flex items-center justify-center shrink-0">
+                  <span className="text-sm">⏳</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-[var(--theme-comic-accent)]/70 font-medium">
+                    {staleThread.title}
+                  </p>
+                  <p className="text-[9px] text-[var(--theme-comic-accent)]/50">
+                    Last opened {staleThread.days} days ago
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onReadStale(staleThread.id)}
+                  className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]/80 hover:bg-[var(--theme-comic-accent)]/10 rounded-lg transition-colors"
+                  title="Roll this series now"
+                  aria-label="Roll this series now"
+                >
+                  🎲
+                </button>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-[var(--theme-comic-accent)]/70 uppercase tracking-wider leading-relaxed">
-                {staleThreadCount} series you haven&apos;t opened recently: <span className="text-[var(--theme-comic-accent)] font-black">{staleThread.title}</span> · last opened{' '}
-                <span className="text-[var(--theme-comic-accent)] font-black">{staleThread.days}</span> days ago
-              </p>
-              <p className="text-[9px] text-[var(--theme-comic-accent)]/70 text-center mt-1">
-                Tap to read now
-              </p>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
