@@ -339,7 +339,7 @@ it('renders named blocked-by dependencies and an empty blocking list as links', 
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
+      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11, is_circular: false },
     ],
   })
   renderPage()
@@ -355,7 +355,7 @@ it('renders blocker issue number on thread detail when known', async () => {
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 9, title: 'Starman', connection_type: 'blocked_by', dependency_id: 11, issue_number: '42' },
+      { thread_id: 9, title: 'Starman', connection_type: 'blocked_by', dependency_id: 11, issue_number: '42', is_circular: false },
     ],
   })
   renderPage()
@@ -368,7 +368,7 @@ it('omits issue number suffix when issue_number is absent', async () => {
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
+      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11, is_circular: false },
     ],
   })
   renderPage()
@@ -381,7 +381,7 @@ it('renders blocking dependency issue number on thread detail when known', async
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, issue_number: '7' },
+      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, issue_number: '7', is_circular: false },
     ],
   })
   renderPage()
@@ -394,7 +394,7 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
-      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12 },
+      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, is_circular: false },
     ],
   })
   renderPage()
