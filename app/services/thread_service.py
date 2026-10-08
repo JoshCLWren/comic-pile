@@ -12,6 +12,7 @@ from typing import cast
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -586,8 +587,6 @@ async def update_thread(
                 thread.status = "completed"
                 thread.queue_position = 0
                 if old_pos > 0:
-                    from sqlalchemy import update
-                    from app.models.thread import Thread
                     await db.execute(
                         update(Thread)
                         .where(Thread.user_id == user_id)

@@ -8,6 +8,7 @@ mapping lives in routers.
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_rating_settings
@@ -41,7 +42,7 @@ from app.services.snapshot_contract import (
 from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
-from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
+from comic_pile.queue import move_to_front, move_to_safe_position
 from comic_pile.reading_session import get_current_die_for_session
 
 
@@ -477,8 +478,6 @@ async def rate_thread(
                     thread.issues_remaining = 0
                     thread.queue_position = 0
                     if old_pos > 0:
-                        from sqlalchemy import update
-                        from app.models.thread import Thread
                         await db.execute(
                             update(Thread)
                             .where(Thread.user_id == user_id)
@@ -525,8 +524,6 @@ async def rate_thread(
         thread.status = "completed"
         thread.queue_position = 0
         if old_pos > 0:
-            from sqlalchemy import update
-            from app.models.thread import Thread
             await db.execute(
                 update(Thread)
                 .where(Thread.user_id == user_id)
