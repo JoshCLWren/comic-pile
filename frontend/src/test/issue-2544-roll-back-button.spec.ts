@@ -64,7 +64,7 @@ function creatorDetailPayload() {
       unread_issues_with_creator_metadata: 0,
       upcoming_complete: true,
     },
-    role_stats: [{ role: 'Writer', issue_count: 1, average_rating: 4.0 }],
+    role_stats: [{ role: 'Writer', issue_count: 1, rated_issue_count: 1, average_rating: 4.0 }],
     rated_issues: [
       {
         issue_id: 101,

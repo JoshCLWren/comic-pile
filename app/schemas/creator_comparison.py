@@ -16,6 +16,9 @@ class CreatorComparisonRoleStat(BaseModel):
     issue_count: int = Field(
         ..., ge=0, description="Number of issues the creator held this role on."
     )
+    rated_issue_count: int = Field(
+        ..., ge=0, description="Number of rated issues backing the average_rating for this role."
+    )
     average_rating: float | None = Field(
         default=None,
         description="Average rating for issues where the creator held this specific role.",

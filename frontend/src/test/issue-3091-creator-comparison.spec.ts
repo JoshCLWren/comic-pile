@@ -64,7 +64,7 @@ function comparisonItem(
     ratings_count: 4,
     rating_distribution: { '5': 2, '4': 2 },
     top_rating_rate: 0.5,
-    role_stats: [{ role: 'writer', issue_count: 4, average_rating: 4.5 }],
+    role_stats: [{ role: 'writer', issue_count: 4, rated_issue_count: 4, average_rating: 4.5 }],
     strongest_series: [
       { thread_id: 1, thread_title: 'Saga', issue_count: 4, rated_issue_count: 3, average_rating: 4.7 },
     ],
