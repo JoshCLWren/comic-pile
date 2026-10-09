@@ -127,6 +127,8 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -202,6 +204,8 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -510,6 +514,8 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -578,6 +584,8 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -648,6 +656,8 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
         _Result(scalar_value=0),
         _Result(rows=[]),
         _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -757,6 +767,8 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
                 )
             ]
         ),
+        _Result(rows=[]),
+        _Result(rows=[]),
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)

@@ -49,6 +49,7 @@ from app.schemas import (
     SessionModeResponse,
     SessionModeUpdateRequest,
     SessionResponse,
+    ThreadExclusionReason,
 )
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
@@ -1292,7 +1293,11 @@ async def roll_bootstrap(
     excluded: dict[int, ThreadExclusionReason] = {}
     inactive: list[ThreadExclusionReason] = []
 
-    for tid, title, fmt, _status, queue_pos in all_active_rows:
+    for row in all_active_rows:
+        tid = row.id
+        title = row.title
+        fmt = row.format
+        queue_pos = row.queue_position
         if tid in pool_ids:
             continue
         if tid in blocked_ids:
@@ -1334,7 +1339,10 @@ async def roll_bootstrap(
         .where(Thread.status == "completed")
         .order_by(Thread.queue_position)
     )
-    for tid, title, fmt in completed_result.all():
+    for row in completed_result.all():
+        tid = row.id
+        title = row.title
+        fmt = row.format
         exc = ThreadExclusionReason(
             thread_id=tid,
             title=title,

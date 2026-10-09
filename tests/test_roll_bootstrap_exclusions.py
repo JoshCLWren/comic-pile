@@ -65,7 +65,14 @@ async def test_bootstrap_excludes_and_explains_completed_series(monkeypatch):
         id=2, title="Completed Series", format="ongoing", status="completed", queue_position=5
     )
     stale_active = SimpleNamespace(
-        id=3, title="Still Active", format="ongoing", status="active", queue_position=2
+        id=3,
+        title="Still Active",
+        format="ongoing",
+        status="active",
+        queue_position=2,
+        issue_id=None,
+        issue_number=None,
+        route_labels=[],
     )
 
     monkeypatch.setattr(roll_api, "get_or_create", AsyncMock(return_value=current_session))
