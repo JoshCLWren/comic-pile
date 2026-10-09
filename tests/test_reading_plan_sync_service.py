@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
@@ -506,7 +507,6 @@ async def test_demoted_mapping_fails_source_without_stamping(
     user, thread, source = await _single_source_fixture(
         async_db, username="sync_demoted@test.com", volume_id=8001
     )
-    from sqlalchemy import update as sa_update
 
     await async_db.execute(
         sa_update(ThreadExternalSeriesMapping)
@@ -558,6 +558,43 @@ async def test_missing_provider_client_key_fails_cleanly(
 
     await async_db.refresh(source)
     assert source.last_synced_at is None
+
+
+@pytest.mark.asyncio
+async def test_corrupt_volume_id_isolated_and_does_not_abort_others(
+    async_db: AsyncSession,
+) -> None:
+    """A source with a non-numeric volume id fails without aborting peers."""
+    user, ok_thread, ok_source = await _single_source_fixture(
+        async_db, username="sync_corrupt@test.com", volume_id=14001
+    )
+    bad_plan = await _make_plan(db := async_db, user_id=user.id, name="Bad plan")
+    bad_thread = await _make_thread(db, user_id=user.id, title="Bad thread")
+    bad_identity = await _make_volume(db, volume_id=14002)
+    await _confirm_mapping(db, thread_id=bad_thread.id, identity_id=bad_identity.id)
+    bad_source = await _subscribe(db, plan=bad_plan, thread=bad_thread, identity=bad_identity)
+    await async_db.execute(
+        sa_update(ExternalIdentity)
+        .where(ExternalIdentity.id == bad_identity.id)
+        .values(external_id="not-a-volume")
+    )
+    await async_db.commit()
+
+    provider = _FakeProvider(
+        rosters={14001: [_roster_row(1401, "1", "2025-06-01")]}
+    )
+    report = await _sync(db, user_id=user.id, provider=provider)
+
+    assert report.failed_sources == 1
+    assert report.successful_sources == 1
+    assert "non-numeric" in report.failures[0].error
+    assert await _issue_numbers(db, thread_id=ok_thread.id) == ["1"]
+    assert await _issue_numbers(db, thread_id=bad_thread.id) == []
+
+    await db.refresh(ok_source)
+    assert ok_source.last_synced_at == FIXED_SYNCED_AT
+    await db.refresh(bad_source)
+    assert bad_source.last_synced_at is None
 
 
 @pytest.mark.asyncio

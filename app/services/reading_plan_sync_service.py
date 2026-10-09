@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
 
 COMICVINE_PROVIDER = "comicvine"
 
+_UNKNOWN_VOLUME_ID = -1
+
 def build_comicvine_client() -> ComicVineClient:
     """Build a ComicVine client from the environment configuration.
 
@@ -291,7 +293,7 @@ async def sync_released_issues(
                         source_id=source.id,
                         plan_id=source.plan_id,
                         thread_id=source.thread_id,
-                        volume_id=_volume_id(source),
+                        volume_id=_safe_volume_id(source),
                         error=message,
                     )
                 )
@@ -299,9 +301,25 @@ async def sync_released_issues(
 
     # Group by provider volume so one roster fetch serves every source that
     # follows the same volume, regardless of how many plans subscribe to it.
+    # A source with a corrupt volume id is isolated as a failure instead of
+    # aborting every other source in the run.
     volume_groups: dict[int, list[ReadingPlanReleaseSource]] = {}
     for source in enabled_sources:
-        volume_groups.setdefault(_volume_id(source), []).append(source)
+        try:
+            volume_key = _volume_id(source)
+        except ValueError as error:
+            report.failed_sources += 1
+            report.failures.append(
+                SourceFailure(
+                    source_id=source.id,
+                    plan_id=source.plan_id,
+                    thread_id=source.thread_id,
+                    volume_id=_UNKNOWN_VOLUME_ID,
+                    error=str(error),
+                )
+            )
+            continue
+        volume_groups.setdefault(volume_key, []).append(source)
 
     synced_source_ids: list[int] = []
 
@@ -404,6 +422,21 @@ def _volume_id(source: ReadingPlanReleaseSource) -> int:
         raise ValueError(
             f"Release source {source.id} has a non-numeric ComicVine volume id: {raw!r}"
         ) from error
+
+
+def _safe_volume_id(source: ReadingPlanReleaseSource) -> int:
+    """Return the provider volume id for failure reporting, never raising.
+
+    Args:
+        source: Release source with an eagerly loaded external identity.
+
+    Returns:
+        The ComicVine volume id, or ``_UNKNOWN_VOLUME_ID`` when it is not numeric.
+    """
+    try:
+        return _volume_id(source)
+    except ValueError:
+        return _UNKNOWN_VOLUME_ID
 
 
 def _accumulate(report: SyncReport, result: SourceSyncResult) -> None:

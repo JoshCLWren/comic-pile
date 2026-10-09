@@ -6,7 +6,7 @@ transaction boundaries.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import Select, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -199,8 +199,3 @@ async def mark_synced(db: AsyncSession, *, source_id: int, synced_at: datetime) 
         .where(ReadingPlanReleaseSource.id == source_id)
         .values(last_synced_at=synced_at)
     )
-
-
-def now_utc() -> datetime:
-    """Return the current UTC instant used for sync bookkeeping."""
-    return datetime.now(UTC)
