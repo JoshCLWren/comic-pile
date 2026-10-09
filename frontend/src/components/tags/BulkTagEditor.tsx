@@ -46,6 +46,9 @@ export function BulkTagEditor({
   const bulkOperations: BulkOperation[] = useMemo(() => {
     if (!selectedTags.length) return []
 
+    // SAFETY: selectedItems is guaranteed non-empty by the parent component which only opens
+    // the BulkTagEditor when at least one item is selected. The type cast is safe because
+    // the component only accepts 'issue' | 'thread' | 'plan' which match TagCacheKeyType values.
     const firstItemType = (selectedItems[0]?.type || 'issue') as TagCacheKeyType
     const targetType = toTagTargetType(firstItemType)
 

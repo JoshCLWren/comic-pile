@@ -56,7 +56,10 @@ describe('TagManagementDialog', () => {
     expect(screen.getByText('private')).toBeInTheDocument()
     expect(screen.getByText('7')).toBeInTheDocument()
     expect(await screen.findByText('Assignments:')).toBeInTheDocument()
-    expect(screen.getByText('0')).toBeInTheDocument()
+    expect(screen.getByText('Filter references:')).toBeInTheDocument()
+    // Check both "0" values exist (for assignments and filter references)
+    const zeroElements = screen.getAllByText('0', { exact: true })
+    expect(zeroElements.length).toBeGreaterThanOrEqual(2)
   })
 
   it('shows the color palette with the current color selected', async () => {
@@ -84,8 +87,9 @@ describe('TagManagementDialog', () => {
 
     await screen.findByText('Manage Tag - Horror')
 
-    await userEvent.clear(screen.getByDisplayValue('Horror'))
-    await userEvent.type(screen.getByDisplayValue('Horror'), 'Supernatural')
+    const nameInput = screen.getByDisplayValue('Horror')
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Supernatural')
 
     const saveButton = await screen.findByRole('button', { name: 'Save Changes' })
     expect(saveButton).toBeEnabled()
@@ -126,7 +130,7 @@ describe('TagManagementDialog', () => {
 
     await screen.findByText('Manage Tag - Horror')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete Tag' })
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Tag' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Delete Tag' }))
 
     await waitFor(() => {
@@ -142,7 +146,9 @@ describe('TagManagementDialog', () => {
     await screen.findByText('Manage Tag - Horror')
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete Tag' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    // Click the Cancel button in the delete confirmation dialog (not the bottom one)
+    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel' })
+    await userEvent.click(cancelButtons[0])
 
     expect(deleteTagMock).not.toHaveBeenCalled()
   })

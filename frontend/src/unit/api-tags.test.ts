@@ -2,12 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { tagsApi } from '../services/api-tags'
 
-function jsonResponse(data: unknown, ok = true) {
+function jsonResponse(data: unknown, ok = true): Response {
   return {
     ok,
+    status: ok ? 200 : 500,
     statusText: ok ? 'OK' : 'Internal Server Error',
+    headers: new Headers(),
+    redirected: false,
+    type: 'default',
+    url: '',
+    clone: () => jsonResponse(data, ok),
+    body: null,
+    bodyUsed: false,
+    arrayBuffer: async () => new ArrayBuffer(0),
+    blob: async () => new Blob(),
+    formData: async () => new FormData(),
+    text: async () => JSON.stringify(data),
     json: async () => data,
-  }
+    bytes: async () => new Uint8Array(),
+  } as Response
 }
 
 describe('tagsApi', () => {
@@ -21,7 +34,7 @@ describe('tagsApi', () => {
 
   it('lists tags from the collection endpoint', async () => {
     const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ tags: [{ id: 1, name: 'Horror' }] }))
+    fetchMock.mockResolvedValueOnce(jsonResponse([{ id: 1, name: 'Horror' }]))
 
     const result = await tagsApi.listTags()
 
