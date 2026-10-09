@@ -69,7 +69,6 @@ export default function QueuePage() {
     },
     [navigate],
   )
-
   const actions = useQueueThreadActions({
     navigateToRoll,
     refetchSession,
@@ -346,5 +345,4 @@ export default function QueuePage() {
     </PositionMenuProvider>
   )
 }
-
 export type { QueueSortBy }

@@ -27,6 +27,7 @@ const EMPTY_PAGINATION = {
   offset: 0,
   limit: SEARCH_PAGE_SIZE,
   hasMore: false,
+  // SAFETY: null is the correct initial value for an optional number field
   nextOffset: null as number | null,
 }
 
