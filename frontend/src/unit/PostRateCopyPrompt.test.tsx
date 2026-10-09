@@ -9,7 +9,15 @@ const reference: PostRateReference = {
   rating: 4,
 }
 
-function renderPrompt(overrides?: { reference?: PostRateReference | null; onDismiss?: () => void }) {
+function renderPrompt(
+  overrides?: {
+    reference?: PostRateReference | null
+    onDismiss?: () => void
+    onUndo?: () => void
+    undoPending?: boolean
+    canUndo?: boolean
+  },
+) {
   const props = {
     reference,
     onDismiss: vi.fn(),
@@ -92,5 +100,34 @@ describe('PostRateCopyPrompt', () => {
 
     await user.click(dismissButton)
     expect(props.onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers undo directly on the notice instead of burying it in History', async () => {
+    const user = userEvent.setup()
+    const props = renderPrompt({ canUndo: true, onUndo: vi.fn() })
+
+    const undoButton = screen.getByRole('button', { name: 'Undo this rating' })
+    expect(undoButton).toHaveTextContent('Undo rating')
+    expect(undoButton).not.toBeDisabled()
+
+    await user.click(undoButton)
+    expect(props.onUndo).toHaveBeenCalledTimes(1)
+  })
+
+  it('withholds undo when the page says there is nothing to undo', () => {
+    renderPrompt({ canUndo: false, onUndo: vi.fn() })
+    expect(screen.queryByRole('button', { name: 'Undo this rating' })).not.toBeInTheDocument()
+  })
+
+  it('locks the undo action while the page-owned mutation is pending', async () => {
+    const user = userEvent.setup()
+    const props = renderPrompt({ canUndo: true, onUndo: vi.fn(), undoPending: true })
+
+    const undoButton = screen.getByRole('button', { name: 'Undo this rating' })
+    expect(undoButton).toHaveTextContent('Undoing...')
+    expect(undoButton).toBeDisabled()
+
+    await user.click(undoButton)
+    expect(props.onUndo).not.toHaveBeenCalled()
   })
 })

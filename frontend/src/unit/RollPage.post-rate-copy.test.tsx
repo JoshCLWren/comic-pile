@@ -3,8 +3,29 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 
+const undoSpies = vi.hoisted(() => ({
+  undo: vi.fn(),
+  refetchSnapshots: vi.fn(),
+  showToast: vi.fn(),
+}))
+
 vi.mock('../contexts/useToast', () => ({
-  useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }),
+  useToast: () => ({ toasts: [], showToast: undoSpies.showToast, removeToast: vi.fn() }),
+}))
+
+const ratingSnapshots = {
+  snapshots: [{ id: 4, description: 'After rating', created_at: '2024-05-01T10:20:00Z' }],
+}
+
+// SAFETY: the module is mocked, so the test supplies the return shape directly.
+vi.mock('../hooks/useUndo', () => ({
+  useUndo: () => ({ mutate: undoSpies.undo, isPending: false, isError: false }),
+  useSnapshots: () => ({
+    data: ratingSnapshots,
+    isPending: false,
+    isError: false,
+    refetch: undoSpies.refetchSnapshots,
+  }),
 }))
 
 const spies = vi.hoisted(() => ({
@@ -162,6 +183,8 @@ vi.mock('../components/GlossaryLink', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   bootstrapHook.value = null
+  undoSpies.undo.mockResolvedValue(undefined)
+  undoSpies.refetchSnapshots.mockResolvedValue({ data: ratingSnapshots })
   relatedApi.readingOrders.mockResolvedValue({ reading_orders: [] })
   relatedApi.connectedThreads.mockResolvedValue({ connected_threads: [] })
   relatedApi.blockingInfo.mockResolvedValue({ blocking_reasons: [] })
@@ -258,5 +281,30 @@ describe('RollPage post-rate copy prompt', () => {
     await user.click(screen.getByRole('button', { name: 'Copy Saga 5' }))
     expect(screen.getByText('Retry copy')).toBeInTheDocument()
     expect(screen.getByText(/Copy failed/)).toBeInTheDocument()
+  })
+
+  it('undoes the rating straight from the notice and confirms it', async () => {
+    const user = userEvent.setup()
+
+    render(<RollPage />)
+    await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
+
+    await user.click(screen.getByTestId('save-and-continue'))
+    await waitFor(() => expect(screen.getByTestId('post-rate-copy-prompt')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Undo this rating' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Undo this rating' }))
+
+    await waitFor(() => {
+      expect(undoSpies.refetchSnapshots).toHaveBeenCalled()
+      expect(undoSpies.undo).toHaveBeenCalledWith({ sessionId: 1, snapshotId: 4 })
+    })
+    expect(undoSpies.showToast).toHaveBeenCalledWith(
+      'Rating for "Saga 5" has been undone',
+      'success',
+    )
+    await waitFor(() =>
+      expect(screen.queryByTestId('post-rate-copy-prompt')).not.toBeInTheDocument(),
+    )
   })
 })

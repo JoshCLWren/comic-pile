@@ -6,6 +6,7 @@ import {
   invalidateAfterIssueEdit,
   invalidateAfterQueueMovement,
   invalidateAfterResumeRecovery,
+  invalidateAfterUndo,
   invalidateCurrentSessionAfterSnooze,
   invalidateAfterSessionModeUpdate,
   applyCreatedCustomCBL,
@@ -302,6 +303,43 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
     })
+  })
+
+  it('refreshes the undo surfaces while leaving session detail to its caller', async () => {
+    const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
+
+    await invalidateAfterUndo(client)
+
+    // The queue half is composed from the queue-movement effect, not re-implemented.
+    expect(resetQueries).toHaveBeenCalledTimes(1)
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
+    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.activeCount(),
+      exact: true,
+    })
+    // The history card's "N issues read" total must stop counting an undone rating (#3194).
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
+    // The next undo reads from the snapshot list, so it cannot serve the pre-undo copy.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.undo.all })
+
+    // SAFETY: mock call args are typed as `unknown[]`; narrowing the first arg
+    // to the optional queryKey shape the test then indexes is the checked invariant.
+    const invalidatedKeys = invalidateQueries.mock.calls.map(
+      (call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
+    )
+    expect(invalidatedKeys.some((key) => key?.[0] === 'session' && key?.[1] === 'detail')).toBe(false)
+    expect(invalidatedKeys.some((key) => key?.[0] === 'session' && key?.[1] === 'snapshots')).toBe(false)
+    expect(invalidatedKeys).not.toContainEqual([...queryKeys.session.all])
+    expect(setQueryData).not.toHaveBeenCalled()
   })
 
   it('limits resume recovery to the scoped resume set without an unscoped invalidate', async () => {

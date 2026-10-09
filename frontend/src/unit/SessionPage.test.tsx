@@ -20,6 +20,12 @@ vi.mock('../hooks/useUndo', () => ({
   useUndo: vi.fn(),
 }))
 
+const showToastSpy = vi.hoisted(() => vi.fn())
+
+vi.mock('../contexts/useToast', () => ({
+  useToast: () => ({ toasts: [], showToast: showToastSpy, removeToast: vi.fn() }),
+}))
+
 const restoreSpy = vi.fn()
 const undoSpy = vi.fn()
 const refetchDetailsSpy = vi.fn()
@@ -65,6 +71,7 @@ beforeEach(() => {
   undoSpy.mockReset()
   refetchDetailsSpy.mockReset()
   refetchSnapshotsSpy.mockReset()
+  showToastSpy.mockClear()
 })
 
 it('renders session details and only allows undoing the latest rating', async () => {
@@ -97,11 +104,41 @@ it('renders session details and only allows undoing the latest rating', async ()
   await user.click(screen.getByRole('button', { name: 'Restore session start' }))
   expect(restoreSpy).toHaveBeenCalledWith(12)
   expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
+  expect(refetchDetailsSpy).toHaveBeenCalledOnce()
+  expect(refetchSnapshotsSpy).toHaveBeenCalledOnce()
+  expect(showToastSpy).toHaveBeenCalledWith('Session restored to its starting state.', 'success')
 
   await user.click(screen.getByRole('button', { name: /undo latest/i }))
   expect(undoSpy).toHaveBeenCalledWith({ sessionId: 12, snapshotId: 4 })
-  expect(refetchDetailsSpy).toHaveBeenCalledOnce()
-  expect(refetchSnapshotsSpy).toHaveBeenCalledOnce()
+  expect(refetchDetailsSpy).toHaveBeenCalledTimes(2)
+  expect(refetchSnapshotsSpy).toHaveBeenCalledTimes(2)
+  expect(showToastSpy).toHaveBeenCalledWith('Last change undone.', 'success')
+})
+
+it('explains how Undo Latest differs from Restore Start instead of leaving two near-identical buttons bare', () => {
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  const explanation = screen.getByText(/reverses only the newest change/)
+  expect(explanation).toHaveTextContent(/Undo Latest/)
+  expect(explanation).toHaveTextContent(/stays on the newest snapshot until it has been used once/)
+  expect(explanation).toHaveTextContent(/Restore Start/)
+  expect(explanation).toHaveTextContent(/rewinds the whole session to the moment it began/)
+  expect(explanation).toHaveTextContent(/asks for confirmation first/)
+})
+
+it('reports a failed undo instead of leaving the page silent', async () => {
+  const user = userEvent.setup()
+  undoSpy.mockRejectedValueOnce(new Error('undo failed'))
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+  await user.click(screen.getByRole('button', { name: /undo latest/i }))
+
+  expect(showToastSpy).toHaveBeenCalledWith(
+    'Failed to undo the last change. Please try again.',
+    'error',
+  )
+  expect(refetchDetailsSpy).not.toHaveBeenCalled()
+  expect(refetchSnapshotsSpy).not.toHaveBeenCalled()
 })
 
 it('renders loading, missing, empty, and active session branches', () => {
