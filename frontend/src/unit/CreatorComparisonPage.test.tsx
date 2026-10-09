@@ -162,8 +162,7 @@ describe('CreatorComparisonPage', () => {
     const seriesLink = screen.getByRole('link', { name: /Saga/ })
     expect(seriesLink).toHaveAttribute('href', '/thread/1')
 
-    // SAFETY: test environment guarantees getAllByTestId returns HTMLElement[]
-    const distributions = screen.getAllByTestId('rating-distribution') as unknown as HTMLElement[]
+    const distributions = screen.getAllByTestId('rating-distribution')
     expect(distributions).toHaveLength(2)
     const vaughanBars = within(distributions[0]).getAllByRole('listitem')
     expect(vaughanBars).toHaveLength(9)
@@ -287,13 +286,11 @@ describe('CreatorComparisonPage', () => {
 
     // Each bar is bucket_count / creator_ratings_count, so bars are directly
     // comparable regardless of sample size.
-    // SAFETY: test environment guarantees getAllByTestId returns HTMLElement[]
-    const distributions = screen
-      .getAllByTestId('rating-distribution') as unknown as HTMLElement[]
+    const distributions = screen.getAllByTestId('rating-distribution')
     const smallDistribution = distributions[0]
     expect(smallDistribution).toHaveTextContent('4 · 100.0%')
     // Screen-reader label for the full 5★ bucket row.
-    const smallRows = smallDistribution.querySelectorAll('[role="listitem"]') as NodeListOf<HTMLElement>
+    const smallRows = within(smallDistribution).getAllByRole('listitem')
     expect(smallRows[0]).toHaveAttribute('aria-label', '5★: 4 ratings, 100.0%')
   })
 
@@ -323,8 +320,7 @@ describe('CreatorComparisonPage', () => {
 
     renderAt('creator:small,creator:large')
 
-    const distributions = screen
-      .getAllByTestId('rating-distribution') as unknown as HTMLElement[]
+    const distributions = screen.getAllByTestId('rating-distribution')
     const largeDistribution = distributions[1]
     expect(largeDistribution).toHaveTextContent('4 · 4.0%')
     expect(largeDistribution).toHaveTextContent('1 · 1.0%')
@@ -356,7 +352,7 @@ describe('CreatorComparisonPage', () => {
 
     renderAt('creator:a,creator:b')
 
-    const distributions = screen.getAllByTestId('rating-distribution') as unknown as HTMLElement[]
+    const distributions = screen.getAllByTestId('rating-distribution')
     const aDistribution = distributions[0]
     const bDistribution = distributions[1]
     // Same raw counts, same totals -> identical labels.
@@ -398,14 +394,14 @@ describe('CreatorComparisonPage', () => {
 
     renderAt('creator:none,creator:other')
 
-    const distributions = screen.getAllByTestId('rating-distribution') as unknown as HTMLElement[]
+    const distributions = screen.getAllByTestId('rating-distribution')
     const noneDistribution = distributions[0]
     expect(noneDistribution).not.toHaveTextContent(' ·')
     // Every emitted bucket row is present and quiet (no count text for empty buckets).
     expect(noneDistribution).toHaveTextContent('5★')
     expect(noneDistribution).toHaveTextContent('1★')
     // Empty buckets expose 0 / 0.0% only via screen-reader labels, never visually.
-    const noneRows = noneDistribution.querySelectorAll('[role="listitem"]') as NodeListOf<HTMLElement>
+    const noneRows = within(noneDistribution).getAllByRole('listitem')
     expect(noneRows.length).toBe(9)
     expect(noneRows[1]).toHaveAttribute('aria-label', '4.5★: 0 ratings (0.0%)')
   })
@@ -428,14 +424,14 @@ describe('CreatorComparisonPage', () => {
 
     renderAt('creator:half,creator:other')
 
-    const distributions = screen.getAllByTestId('rating-distribution') as unknown as HTMLElement[]
+    const distributions = screen.getAllByTestId('rating-distribution')
     const distribution = distributions[0]
     expect(distribution).toHaveTextContent('5★')
     expect(distribution).toHaveTextContent('4.5★')
     expect(distribution).toHaveTextContent('3.5★')
     expect(distribution).toHaveTextContent('3★')
     // Each is 1 of 4 = 25.0% of the headline rated sample.
-    const rows = distribution.querySelectorAll('[role="listitem"]') as NodeListOf<HTMLElement>
+    const rows = within(distribution).getAllByRole('listitem')
     expect(rows[0]).toHaveAttribute('aria-label', '5★: 1 rating, 25.0%')
     expect(rows[1]).toHaveAttribute('aria-label', '4.5★: 1 rating, 25.0%')
     expect(rows[3]).toHaveAttribute('aria-label', '3.5★: 1 rating, 25.0%')
@@ -464,13 +460,13 @@ describe('CreatorComparisonPage', () => {
 
     renderAt('creator:sample,creator:other')
 
-    const distributions = screen.getAllByTestId('rating-distribution') as unknown as HTMLElement[]
+    const distributions = screen.getAllByTestId('rating-distribution')
     expect(distributions).toHaveLength(2)
     expect(distributions[0]).toHaveAttribute(
       'aria-label',
       'Rating distribution across 8 rated issues',
     )
-    const rows = distributions[0].querySelectorAll('[role="listitem"]') as NodeListOf<HTMLElement>
+    const rows = within(distributions[0]).getAllByRole('listitem')
     expect(rows).toHaveLength(9)
     expect(rows[1]).toHaveAttribute('aria-label', '4.5★: 0 ratings (0.0%)')
     expect(rows[2]).toHaveAttribute('aria-label', '4★: 4 ratings, 50.0%')

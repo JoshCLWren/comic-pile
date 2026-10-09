@@ -16,8 +16,7 @@
     ".roo/**",
     ".windsurf/**",
     "tools/oxlint/anti-slop/**",
-    "frontend/src/generated/**",
-    "static/**"
+    "frontend/src/generated/**"
   ],
   "jsPlugins": [
     { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }
