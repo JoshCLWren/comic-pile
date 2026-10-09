@@ -275,6 +275,7 @@ async def test_migrate_thread_to_issues_completed(
     assert data["next_unread_issue_id"] is None
     assert data["status"] == "completed"
     assert data["issues_remaining"] == 0
+    assert data["queue_position"] == 0
 
     await async_db.refresh(thread)
 

@@ -583,6 +583,7 @@ async def update_thread(
             thread.issues_remaining = thread_data.issues_remaining
             if thread.issues_remaining == 0:
                 thread.status = "completed"
+                thread.queue_position = 0
             else:
                 thread.status = "active"
     if thread_data.notes is not None:

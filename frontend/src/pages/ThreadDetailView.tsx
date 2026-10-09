@@ -460,12 +460,14 @@ export default function ThreadDetailView() {
           </div>
         )}
 
-        <div className="surface-panel p-3 md:p-4 space-y-2">
-          <span className="text-xs font-black uppercase tracking-widest text-stone-500">
-            Queue Position
-          </span>
-          <p className="text-sm text-stone-300">Position #{thread.queue_position}</p>
-        </div>
+        {thread.status === 'active' && (
+          <div className="surface-panel p-3 md:p-4 space-y-2">
+            <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+              Queue Position
+            </span>
+            <p className="text-sm text-stone-300">Position #{thread.queue_position}</p>
+          </div>
+        )}
 
         <div className="surface-panel p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">

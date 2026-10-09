@@ -270,6 +270,7 @@ class Thread(Base):
             self.reading_progress = "completed"
             self.next_unread_issue_id = None
             self.status = "completed"
+            self.queue_position = 0
 
         self.issues_remaining = total_issues - last_issue_read
 
