@@ -50,6 +50,42 @@ export interface ComicVineImportIssueResult {
   total_items: number | null
 }
 
+export interface ComicVineImportSeriesPayload {
+  comicvine_volume_id: number
+  reading_order_id?: number | null
+  anchor_before_thread_id?: number | null
+  anchor_after_thread_id?: number | null
+  already_read_count?: number
+}
+
+export interface ComicVineImportSeriesIssueResult {
+  comicvine_issue_id: number
+  issue_number: string | null
+  issue_id: number | null
+  outcome: string
+  hydration: string
+  conflict_detail: string | null
+}
+
+export interface ComicVineImportSeriesResult {
+  thread_id: number
+  series_name: string
+  comicvine_volume_id: number
+  total_issues_in_series: number
+  issues_adopted: number
+  issues_skipped: number
+  issues_conflict: number
+  issue_results: ComicVineImportSeriesIssueResult[]
+  reading_order_id: number | null
+  position: number | null
+  total_items: number | null
+  /**
+   * False when an existing thread already tracked this ComicVine volume, so a
+   * retry adopted into the original series rather than duplicating it.
+   */
+  thread_created: boolean
+}
+
 export interface ComicVineIssueIntelligence {
   comicvine_issue_id: string
   comicvine_url: string | null
@@ -171,6 +207,8 @@ export const comicVineApi = {
     api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
   importIssue: (payload: ComicVineImportIssuePayload) =>
     api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
+  importSeries: (payload: ComicVineImportSeriesPayload) =>
+    api.post<ComicVineImportSeriesResult, ComicVineImportSeriesPayload>('/v1/comicvine/series:import', payload),
   searchSeries: (query: string, limit = 10, offset = 0) =>
     api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit, offset } }),
   resolveIdentity: (input: string) =>

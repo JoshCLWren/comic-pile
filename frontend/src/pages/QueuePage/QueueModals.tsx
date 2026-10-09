@@ -4,6 +4,7 @@ import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
+import AddSeriesFromComicVineDialog from '../../components/AddSeriesFromComicVineDialog'
 import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
@@ -189,7 +190,7 @@ function CreatorInput({
 }
 
 interface QueueModalsProps {
-  openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | null
+  openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'addSeriesComicVine' | null
   createForm: QueueFormState
   editForm: QueueFormState
   setCreateForm: (next: QueueFormState) => void
@@ -236,6 +237,7 @@ interface QueueModalsProps {
   showRollNudge: boolean
   onDismissRollNudge: () => void
   onRollNudgeNavigate: () => void
+  onCloseAddSeriesComicVine?: () => void
 }
 
 /**
@@ -288,6 +290,7 @@ export function QueueModals({
   showRollNudge,
   onDismissRollNudge,
   onRollNudgeNavigate,
+  onCloseAddSeriesComicVine,
 }: QueueModalsProps) {
   // Ref for the Edit dialog's deferred issue list: flush queued issue
   // mutations when Save is clicked; closing without saving discards them.
@@ -709,6 +712,16 @@ export function QueueModals({
             </div>
           </div>
         </Modal>
+      )}
+
+      {openModal === 'addSeriesComicVine' && (
+        <AddSeriesFromComicVineDialog
+          isOpen={true}
+          onClose={onCloseAddSeriesComicVine ?? (() => {})}
+          onAdded={() => {
+            // The dialog's onAdded callback handles cache invalidation internally
+          }}
+        />
       )}
     </>
   )

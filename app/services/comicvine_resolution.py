@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.external_identities import (
     ExternalIdentityMappingError,
     link_issue_external_identity,
+    link_thread_external_series,
     upsert_external_identity,
 )
 from app.models.external_identity import (
@@ -21,6 +22,7 @@ from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.thread import Thread
+from app.repositories import catalog_repository
 from app.schemas.comicvine_resolution import (
     CanonicalCorrection,
     ComicVineIssueCandidate,
@@ -31,6 +33,9 @@ from app.schemas.comicvine_resolution import (
     ComicVineSeriesResult,
     ImportIssueRequest,
     ImportIssueResponse,
+    ImportSeriesRequest,
+    ImportSeriesResponse,
+    ImportSeriesIssueResult,
     IssueIdentityMapping,
     IssueIdentityResponse,
     MetadataCorrectionRequest,
@@ -38,10 +43,15 @@ from app.schemas.comicvine_resolution import (
     MetadataRefreshResponse,
 )
 from app.services.comicvine_url import looks_like_url, parse_comicvine_url
+from app.services.issue_tracking import apply_thread_issue_tracking_state
+from app.services.ownership import get_owned_thread_or_404
 from app.services.reading_order_placement import apply_insert, resolve_anchored_position
 from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
 
 logger = logging.getLogger(__name__)
+
+COMICVINE_PROVIDER = "comicvine"
+"""Canonical provider key for ComicVine identities, mappings, and catalog rows."""
 
 
 def _coerce_provider_int(value: object) -> int | None:
@@ -986,3 +996,316 @@ async def import_comicvine_issue(
         response.total_items = len(existing_items) + 1
 
     return response
+
+
+class SeriesImportError(Exception):
+    """Error during series import."""
+
+    def __init__(self, code: str, message: str, *, status_code: int = 400) -> None:
+        """Initialize the series import error.
+
+        Args:
+            code: Machine-readable error code.
+            message: Human-readable error message.
+            status_code: HTTP status code for API responses.
+        """
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+
+
+async def import_comicvine_series(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    request: ImportSeriesRequest,
+    comicvine_client: ComicVineClient | None = None,
+) -> ImportSeriesResponse:
+    """Import a ComicVine series/volume as a new thread with all issues.
+
+    Creates a thread with the series title and adopts all issues from the
+    confirmed ComicVine volume using the shared provider-issue adoption
+    primitive. Preserves irregular issue numbers and reuses existing
+    canonical issues.
+
+    Args:
+        db: Async database session; the caller owns the transaction commit.
+        user_id: Owner who will receive the imported thread.
+        request: Validated import payload with optional reading progress and
+            anchored placement.
+        comicvine_client: Optional configured ComicVine client. When present,
+            provider metadata is hydrated for each adopted issue.
+
+    Returns:
+        ImportSeriesResponse with thread details and per-issue adoption results.
+
+    Raises:
+        SeriesImportError: If the series cannot be fetched or imported.
+        ImportTargetNotFoundError: If reading_order_id does not exist for user.
+    """
+    from app.services.provider_issue_adoption import adopt_comicvine_issue
+
+    if comicvine_client is None:
+        from app.api.comicvine_resolution import _get_comicvine_client
+        comicvine_client = _get_comicvine_client()
+
+    if comicvine_client is None:
+        raise SeriesImportError(
+            "provider_unavailable",
+            "ComicVine is not configured on this server",
+            status_code=503,
+        )
+
+    # Fetch the series/volume metadata
+    try:
+        volume_response = await comicvine_client.fetch_volume(request.comicvine_volume_id)
+    except (ComicVineError, TimeoutError) as exc:
+        raise SeriesImportError(
+            "provider_failure",
+            f"Failed to fetch ComicVine series: {type(exc).__name__}",
+            status_code=502,
+        ) from exc
+
+    volume_data = volume_response.payload.get("results")
+    if not isinstance(volume_data, dict):
+        raise SeriesImportError(
+            "provider_failure",
+            "ComicVine series response did not contain valid data",
+            status_code=502,
+        )
+
+    series_name = volume_data.get("name")
+    if not isinstance(series_name, str) or not series_name.strip():
+        raise SeriesImportError(
+            "provider_failure",
+            "ComicVine series has no name",
+            status_code=502,
+        )
+
+    # Fetch all issues in the series
+    try:
+        issues_rows = await comicvine_client.fetch_volume_issues(request.comicvine_volume_id)
+    except (ComicVineError, TimeoutError) as exc:
+        raise SeriesImportError(
+            "provider_failure",
+            f"Failed to fetch series issues: {type(exc).__name__}",
+            status_code=502,
+        ) from exc
+
+    if not issues_rows:
+        raise SeriesImportError(
+            "no_issues",
+            "ComicVine series has no issues",
+            status_code=400,
+        )
+
+    # Validate reading order if provided
+    order: ReadingOrder | None = None
+    if request.reading_order_id is not None:
+        order = (
+            await db.execute(
+                select(ReadingOrder).where(
+                    ReadingOrder.id == request.reading_order_id,
+                    ReadingOrder.user_id == user_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if order is None:
+            raise ImportTargetNotFoundError(
+                f"Reading order {request.reading_order_id} not found"
+            )
+
+    # Reuse the thread this user already created for the same provider volume so
+    # a retry after a partial provider failure adopts the missing roster items
+    # into the existing series instead of creating a duplicate copy.
+    reused_thread_id = await catalog_repository.find_owned_thread_for_provider_series(
+        db,
+        user_id=user_id,
+        provider=COMICVINE_PROVIDER,
+        series_external_id=str(request.comicvine_volume_id),
+    )
+    created_new_thread = reused_thread_id is None
+
+    if reused_thread_id is not None:
+        thread = await get_owned_thread_or_404(db, user_id, reused_thread_id, for_update=True)
+    else:
+        max_position = (
+            await db.execute(
+                select(func.max(Thread.queue_position)).where(Thread.user_id == user_id)
+            )
+        ).scalar() or 0
+        thread = Thread(
+            title=series_name.strip(),
+            format="Comic",
+            issues_remaining=0,  # Recalculated from adopted rows below
+            total_issues=0,  # Recalculated from adopted rows below
+            queue_position=max_position + 1,
+            status="active",
+            user_id=user_id,
+        )
+        db.add(thread)
+        await db.flush()
+
+    # Link thread to the series external identity
+    series_identity = await upsert_external_identity(
+        db,
+        provider="comicvine",
+        entity_type="series",
+        external_id=str(request.comicvine_volume_id),
+        external_url=f"https://comicvine.gamespot.com/volume/4050-{request.comicvine_volume_id}/",
+    )
+    await link_thread_external_series(
+        db,
+        user_id=user_id,
+        thread_id=thread.id,
+        external_identity_id=series_identity.id,
+        status="confirmed",
+        evidence_source="comicvine_series_import",
+        confidence=1.0,
+    )
+
+    # Adopt each issue from the series
+    issue_results: list[ImportSeriesIssueResult] = []
+    adopted_count = 0
+    skipped_count = 0
+    conflict_count = 0
+
+    for idx, row in enumerate(issues_rows):
+        issue_id = row.get("id")
+        if not isinstance(issue_id, int):
+            continue
+
+        issue_number = row.get("issue_number")
+        issue_name = row.get("name")
+        external_url = row.get("site_detail_url")
+        metadata = {}
+        if isinstance(issue_name, str):
+            metadata["name"] = issue_name
+        if isinstance(issue_number, str):
+            metadata["issue_number"] = issue_number
+
+        try:
+            adoption_result = await adopt_comicvine_issue(
+                db,
+                user_id=user_id,
+                thread_id=thread.id,
+                comicvine_issue_id=issue_id,
+                issue_number=str(issue_number) if issue_number is not None else str(idx + 1),
+                external_url=external_url if isinstance(external_url, str) else None,
+                metadata=metadata if metadata else None,
+                comicvine_client=comicvine_client,
+            )
+
+            result = ImportSeriesIssueResult(
+                comicvine_issue_id=issue_id,
+                issue_number=str(issue_number) if issue_number is not None else str(idx + 1),
+                issue_id=adoption_result.issue_id,
+                outcome=adoption_result.outcome,
+                hydration=adoption_result.hydration,
+                conflict_detail=adoption_result.conflict_detail,
+            )
+            issue_results.append(result)
+
+            if adoption_result.outcome == "created":
+                adopted_count += 1
+            elif adoption_result.outcome == "reused":
+                skipped_count += 1
+            elif adoption_result.outcome == "conflict":
+                conflict_count += 1
+
+        except Exception as exc:
+            # One bad provider row must not abandon the rest of the roster; the
+            # failure stays bounded in the per-issue result and the derived
+            # counters below count only issues that actually exist locally.
+            logger.warning(
+                "series_import_issue_failed volume_id=%s issue_id=%s error=%s",
+                request.comicvine_volume_id,
+                issue_id,
+                type(exc).__name__,
+                exc_info=True,
+            )
+            result = ImportSeriesIssueResult(
+                comicvine_issue_id=issue_id,
+                issue_number=str(issue_number) if issue_number is not None else str(idx + 1),
+                issue_id=None,
+                outcome="error",
+                hydration="not_attempted",
+                conflict_detail=str(exc),
+            )
+            issue_results.append(result)
+
+    # If the user reported prior reading progress, mark the leading issues read.
+    # Personal progress is applied to the locally adopted rows only, never to the
+    # provider roster size, so counters are always derived below from real rows.
+    thread_issues = list((await db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )).scalars().all())
+
+    read_count = min(request.already_read_count, len(thread_issues))
+    read_at = datetime.now(UTC)
+    for issue in thread_issues[:read_count]:
+        issue.status = "read"
+        issue.read_at = read_at
+
+    # Counters come from the canonical derivation. `issue_results` also contains
+    # rows for adoption errors and conflicts, which own no Issue row, so
+    # counting it would publish a reading commitment ComicPile never created.
+    tracking_state = apply_thread_issue_tracking_state(thread, thread_issues)
+    if tracking_state.next_unread_issue_id is None:
+        thread.status = "completed"
+    else:
+        thread.status = "active"
+
+    await db.flush()
+
+    # Handle reading order placement
+    response_reading_order_id = None
+    response_position = None
+    response_total_items = None
+
+    if order is not None:
+        existing_items = (
+            (
+                await db.execute(
+                    select(ReadingOrderItem)
+                    .where(ReadingOrderItem.reading_order_id == order.id)
+                    .order_by(ReadingOrderItem.position)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        positions_by_thread = {item.thread_id: item.position for item in existing_items}
+        target_pos = resolve_anchored_position(
+            positions_by_thread,
+            request.anchor_before_thread_id,
+            request.anchor_after_thread_id,
+            len(existing_items),
+        )
+        apply_insert(list(existing_items), thread.id, target_pos)
+        db.add(
+            ReadingOrderItem(
+                reading_order_id=order.id,
+                thread_id=thread.id,
+                position=target_pos,
+            )
+        )
+        response_reading_order_id = order.id
+        response_position = target_pos
+        response_total_items = len(existing_items) + 1
+
+    return ImportSeriesResponse(
+        thread_id=thread.id,
+        series_name=series_name,
+        comicvine_volume_id=request.comicvine_volume_id,
+        total_issues_in_series=len(issues_rows),
+        issues_adopted=adopted_count,
+        issues_skipped=skipped_count,
+        issues_conflict=conflict_count,
+        issue_results=issue_results,
+        reading_order_id=response_reading_order_id,
+        position=response_position,
+        total_items=response_total_items,
+        thread_created=created_new_thread,
+    )
