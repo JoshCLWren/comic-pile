@@ -7,6 +7,7 @@ import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
+import type { ParsedIssueRangeDetail } from '../../utils/issueParser'
 
 type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'map_series'
 
@@ -39,6 +40,8 @@ interface UseQueueModalsResult {
   editForm: QueueFormState
   issuePreview: number | null
   issueParseError: string | null
+  issueParseWarnings: string[]
+  issueParseBreakdown: ParsedIssueRangeDetail['breakdown']
   editingThread: Thread | ThreadListItem | null
   repositioningThread: ThreadListItem | null
   dependencyThread: ThreadListItem | null
@@ -111,6 +114,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
+  const [issueParseWarnings, setIssueParseWarnings] = useState<string[]>([])
+  const [issueParseBreakdown, setIssueParseBreakdown] = useState<ParsedIssueRangeDetail['breakdown']>([])
 
   const showRollNudge = params.showRollNudge
 
@@ -257,20 +262,26 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
       const issueInput = createForm.issues
       if (issueInput) {
         try {
-          const { parseIssueRange } = await import('../../utils/issueParser')
-          const total = parseIssueRange(issueInput)
+          const { parseIssueRangeDetailed } = await import('../../utils/issueParser')
+          const detail = parseIssueRangeDetailed(issueInput)
           if (cancelled) return
-          setIssuePreview(total)
+          setIssuePreview(detail.total)
           setIssueParseError(null)
+          setIssueParseWarnings(detail.warnings)
+          setIssueParseBreakdown(detail.breakdown)
         } catch (err) {
           if (cancelled) return
           setIssuePreview(null)
           setIssueParseError(err instanceof Error ? err.message : 'Invalid issue range')
+          setIssueParseWarnings([])
+          setIssueParseBreakdown([])
         }
       } else {
         if (cancelled) return
         setIssuePreview(null)
         setIssueParseError(null)
+        setIssueParseWarnings([])
+        setIssueParseBreakdown([])
       }
     }
     calculatePreview()
@@ -415,6 +426,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     editForm,
     issuePreview,
     issueParseError,
+    issueParseWarnings,
+    issueParseBreakdown,
     editingThread,
     repositioningThread,
     dependencyThread,

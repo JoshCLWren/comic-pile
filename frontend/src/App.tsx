@@ -1,6 +1,6 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
 import { clearSessionCache } from './query/cacheEffects'
@@ -464,6 +464,11 @@ function NotFoundRoute({ children }: { children: ReactNode }) {
   return children
 }
 
+function LegacyThreadsRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/thread/${id ?? ''}`} replace />
+}
+
 function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
   const { authState } = useAuth()
 
@@ -558,6 +563,7 @@ function AppRoutes() {
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
         } />
+        <Route path="/threads/:id" element={<LegacyThreadsRedirect />} />
         <Route path="/creators/compare" element={
           <ProtectedRoute>
             <ServiceUnavailableWrapper>

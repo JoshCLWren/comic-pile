@@ -1,14 +1,15 @@
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
+import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
 import MapSeriesDialog from './MapSeriesDialog'
-import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
 import type { QueueFormState, ManualCreatorCredit } from './types'
+import type { ParsedTokenBreakdown } from '../../utils/issueParser'
 
 const CREATOR_ROLE_OPTIONS = [
   'Writer',
@@ -196,6 +197,8 @@ interface QueueModalsProps {
   setEditForm: (next: QueueFormState) => void
   issuePreview: number | null
   issueParseError: string | null
+  issueParseWarnings: string[]
+  issueParseBreakdown: ParsedTokenBreakdown[]
   editingThread: Thread | ThreadListItem | null
   repositioningThread: ThreadListItem | null
   dependencyThread: ThreadListItem | null
@@ -251,6 +254,8 @@ export function QueueModals({
   setEditForm,
   issuePreview,
   issueParseError,
+  issueParseWarnings,
+  issueParseBreakdown,
   editingThread,
   repositioningThread,
   dependencyThread,
@@ -287,6 +292,17 @@ export function QueueModals({
   onDismissRollNudge,
   onRollNudgeNavigate,
 }: QueueModalsProps) {
+  // Ref for the Edit dialog's deferred issue list: flush queued issue
+  // mutations when Save is clicked; closing without saving discards them.
+  const editIssueListRef = useRef<IssueToggleListHandle>(null)
+
+  const handleEditSubmit = async (event: FormEvent) => {
+    // Flush deferred issue mutations first so the dialog's Save commits
+    // everything atomically from the user's perspective.
+    await editIssueListRef.current?.flush()
+    await onEditSubmit(event)
+  }
+
   return (
     <>
       <Modal isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
@@ -338,9 +354,55 @@ export function QueueModals({
               required
             />
             {issuePreview !== null && (
-              <p className="text-xs text-stone-400">
-                Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
-              </p>
+              <div className="space-y-1">
+                <p className="text-xs text-stone-400">
+                  Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
+                </p>
+                {issueParseWarnings.length > 0 && (
+                  <div className="space-y-1" data-testid="issue-parse-warnings">
+                    {issueParseWarnings.map((warning, idx) => (
+                      <p key={idx} className="text-xs text-[var(--theme-warning)] flex items-start gap-1">
+                        <span aria-hidden="true">⚠</span>
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {issueParseBreakdown.length > 0 && (
+                  <details className="group" data-testid="issue-parse-breakdown">
+                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-400 flex items-center gap-1 select-none">
+                      <span
+                        aria-hidden="true"
+                        className="transition-transform motion-reduce:transition-none group-open:rotate-90"
+                      >
+                        ▸
+                      </span>
+                      Show issue breakdown
+                    </summary>
+                    <div className="mt-1 ml-4 space-y-0.5 border-l border-[var(--theme-border)] pl-2">
+                      {issueParseBreakdown.map((item, idx) => (
+                        <div key={idx} className="text-xs flex items-start gap-1">
+                          <span className="text-stone-500 break-all">{item.token}:</span>
+                          <span className="text-stone-400 flex flex-wrap gap-1">
+                            {item.parsedIssues.map((issue, i) => (
+                              <span
+                                key={i}
+                                className={`px-1.5 py-0.5 rounded text-xs ${
+                                  item.type === 'unrecognized-literal'
+                                    ? 'bg-[var(--theme-warning)]/15 text-[var(--theme-warning)]'
+                                    : 'text-stone-300'
+                                }`}
+                              >
+                                {issue}
+                              </span>
+                            ))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
             )}
             <p className="text-xs text-stone-400">
               Enter the exact issues you want to track, such as 71. You do not need to add earlier
@@ -417,7 +479,7 @@ export function QueueModals({
         overlayClassName="edit-modal__overlay"
       >
         <div className="space-y-4">
-          <form id="edit-thread-form" className="space-y-4" onSubmit={onEditSubmit}>
+          <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
             <div className="space-y-2">
               <label
                 htmlFor="edit-thread-title"
@@ -512,7 +574,13 @@ export function QueueModals({
           </form>
 
           {editingThread && editingThread.total_issues != null && (
-            <IssueToggleList threadId={editingThread.id} onOpenDependencies={onOpenDependencies} onIssueChanged={onIssueChanged} />
+            <IssueToggleList
+              ref={editIssueListRef}
+              threadId={editingThread.id}
+              deferred
+              onOpenDependencies={onOpenDependencies}
+              onIssueChanged={onIssueChanged}
+            />
           )}
 
           <button

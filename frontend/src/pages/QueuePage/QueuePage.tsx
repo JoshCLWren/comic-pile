@@ -287,6 +287,8 @@ export default function QueuePage() {
           setEditForm={modals.setEditForm}
           issuePreview={modals.issuePreview}
           issueParseError={modals.issueParseError}
+          issueParseWarnings={modals.issueParseWarnings}
+          issueParseBreakdown={modals.issueParseBreakdown}
           editingThread={modals.editingThread}
           repositioningThread={modals.repositioningThread}
           dependencyThread={modals.dependencyThread}
@@ -303,9 +305,7 @@ export default function QueuePage() {
           onEditSubmit={modals.handleEditSubmit}
           onReactivateSubmit={modals.handleReactivateSubmit}
           onRepositionConfirm={handleRepositionConfirm}
-          onDependencyChanged={async () => {
-            await invalidateAfterQueueMutation(queryClient)
-          }}
+          onDependencyChanged={() => invalidateAfterQueueMutation(queryClient)}
           onCloseCreate={modals.closeCreateModal}
           onCloseEdit={modals.closeEditModal}
           onCloseReactivate={modals.closeReactivateModal}

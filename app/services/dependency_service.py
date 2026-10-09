@@ -532,6 +532,7 @@ async def get_thread_connected_threads(
                         connected_by_thread[tid]["dependency_ids"].add(dep.id)
 
     connected: list[ConnectedThreadInfo] = []
+
     for entry in connected_by_thread.values():
         types = entry["types"]
         if types == {"blocks"}:
@@ -540,12 +541,18 @@ async def get_thread_connected_threads(
             connection_type = "blocked_by"
         else:
             connection_type = "blocks & blocked_by"
+
+        # A thread that both blocks and is blocked by this thread forms a
+        # two-edge cycle: an impossible reading order (issue #3239).
+        is_circular = "blocks" in types and "blocked_by" in types
+
         connected.append(ConnectedThreadInfo(
             thread_id=entry["thread_id"],
             title=entry["title"],
             connection_type=connection_type,
             dependency_id=min(entry["dependency_ids"]),
             issue_number=entry["issue_number"],
+            is_circular=is_circular,
         ))
 
     return ThreadConnectedResponse(thread_id=thread_id, connected_threads=connected)

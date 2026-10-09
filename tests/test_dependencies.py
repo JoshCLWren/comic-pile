@@ -822,6 +822,77 @@ async def test_connected_threads_expose_blocker_issue_number(
 
 
 @pytest.mark.asyncio
+async def test_connected_threads_flag_circular_dependencies(
+    async_db, auth_client, default_user
+):
+    """Bidirectional connections are flagged as circular (issue #3239).
+
+    A thread that both blocks and is blocked by the current thread forms an
+    impossible reading order; the connected-threads API must expose that
+    state via ``is_circular`` instead of presenting it as ordinary.
+    """
+    user = default_user
+
+    thread_a = Thread(
+        title="X-Men",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    thread_b = Thread(
+        title="Magneto Rex",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    thread_c = Thread(
+        title="One-Way Block",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    async_db.add_all([thread_a, thread_b, thread_c])
+    await async_db.flush()
+
+    a_issue = Issue(thread_id=thread_a.id, issue_number="1", position=1, status="unread")
+    b_issue = Issue(thread_id=thread_b.id, issue_number="1", position=1, status="unread")
+    c_issue = Issue(thread_id=thread_c.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([a_issue, b_issue, c_issue])
+    await async_db.flush()
+
+    # Circular: A issue 1 -> B issue 1 AND B issue 1 -> A issue 1.
+    # One-way: C issue 1 -> A issue 1 only.
+    async_db.add_all([
+        Dependency(source_issue_id=a_issue.id, target_issue_id=b_issue.id),
+        Dependency(source_issue_id=b_issue.id, target_issue_id=a_issue.id),
+        Dependency(source_issue_id=c_issue.id, target_issue_id=a_issue.id),
+    ])
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{thread_a.id}/connected")
+    assert response.status_code == 200
+
+    connected = {
+        ct["thread_id"]: ct for ct in response.json()["connected_threads"]
+    }
+
+    assert connected[thread_b.id]["connection_type"] == "blocks & blocked_by"
+    assert connected[thread_b.id]["is_circular"] is True
+
+    assert connected[thread_c.id]["connection_type"] == "blocked_by"
+    assert connected[thread_c.id]["is_circular"] is False
+
+
+@pytest.mark.asyncio
 async def test_blocking_explanations_identify_comics_without_raw_thread_ids(async_db):
     """Queue blocked-thread copy uses human identity; raw thread ids never render.
 

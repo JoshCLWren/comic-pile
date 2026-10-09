@@ -127,7 +127,7 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Average rating
@@ -203,7 +203,7 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Role breakdown
           </p>
-          <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="mt-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
             {item.role_stats.map((stat) => (
               <RoleStatRow key={stat.role} stat={stat} />
             ))}
@@ -257,7 +257,7 @@ export default function CreatorComparisonPage() {
         <h1 className="mt-1 text-xl font-bold md:text-2xl" style={{ color: 'var(--theme-text-primary)' }}>
           Creator Comparison
         </h1>
-        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+<div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
           {[0, 1, 2, 3].slice(0, keys.length).map((i) => (
             <div key={i} className="h-72 animate-pulse rounded-2xl" style={{ backgroundColor: 'var(--theme-bg-panel)' }} />
           ))}
@@ -338,7 +338,7 @@ export default function CreatorComparisonPage() {
         </p>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
         {comparisonItems.map((item) => (
           <ComparisonCard key={item.canonical_creator_key} item={item} />
         ))}

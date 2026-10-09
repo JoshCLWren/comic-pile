@@ -1,9 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createRef } from 'react'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import type {
   IssueToggleListApi,
   IssueToggleListDependenciesApi,
+  IssueToggleListHandle,
 } from '../pages/QueuePage/IssueToggleList'
 import type { Issue, IssueListResponse } from '../types'
 import { cast } from '../utils/cast'
@@ -249,8 +251,6 @@ describe('IssueToggleList', () => {
   })
 
   it('keeps later optimistic mutations when an earlier queued mutation fails', async () => {
-    const confirmMock = vi.mocked(window.confirm)
-    confirmMock.mockReturnValue(true)
     const canonicalIssuesAfterFailure: Issue[] = [
       ...BASE_ISSUES,
       {
@@ -286,6 +286,12 @@ describe('IssueToggleList', () => {
     expect(getIssueOrder()).toEqual(['2', '3', '1'])
 
     fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+
+    // Confirm the delete through the in-app dialog. The dialog closes on
+    // confirmation so it can never trap focus over the list it edits.
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
     expect(getIssueOrder()).toEqual(['3', '1'])
 
     await act(async () => {
@@ -337,9 +343,6 @@ describe('IssueToggleList', () => {
   })
 
   it('deletes an issue after confirmation and updates the pills optimistically', async () => {
-    const confirmMock = vi.mocked(window.confirm)
-    confirmMock.mockReturnValue(true)
-
     const deleteRequest = createDeferred<void>()
     mockedIssuesApi.delete.mockReturnValueOnce(deleteRequest.promise)
 
@@ -347,7 +350,19 @@ describe('IssueToggleList', () => {
 
     fireEvent.click(screen.getByTestId('issue-delete-2'))
 
-    expect(confirmMock).toHaveBeenCalledWith('Delete issue #2?')
+    // The delete dialog should now be open
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Delete Issue' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/Are you sure you want to delete issue #2\?/),
+    ).toBeInTheDocument()
+
+    // Click the Delete button in the dialog
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
+
+    // Confirming closes the dialog instead of holding a focus trap open while
+    // the delete settles (#3269), and the optimistic removal is immediate.
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
     expect(mockedIssuesApi.delete).toHaveBeenCalledWith(2)
     expect(getIssueOrder()).toEqual(['1', '3'])
 
@@ -358,14 +373,49 @@ describe('IssueToggleList', () => {
   })
 
   it('does not delete an issue when confirmation is cancelled', async () => {
-    const confirmMock = vi.mocked(window.confirm)
-    confirmMock.mockReturnValue(false)
-
     await renderIssueToggleList()
 
     fireEvent.click(screen.getByTestId('issue-delete-2'))
 
-    expect(confirmMock).toHaveBeenCalledWith('Delete issue #2?')
+    // The delete dialog should now be open
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Delete Issue' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/Are you sure you want to delete issue #2\?/),
+    ).toBeInTheDocument()
+
+    // Click the Cancel button in the dialog
+    fireEvent.click(screen.getByText('Cancel'))
+
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
+    expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
+    expect(getIssueOrder()).toEqual(['1', '2', '3'])
+  })
+
+  it('restores the issue and reports the failure inline when a confirmed delete fails', async () => {
+    mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete failed'))
+    await renderIssueToggleList()
+
+    fireEvent.click(screen.getByTestId('issue-delete-2'))
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
+
+    await waitFor(() => expect(screen.getByText('delete failed')).toBeInTheDocument())
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
+    // The failed issue comes back so the reader can retry from the list.
+    await waitFor(() => expect(getIssueOrder()).toEqual(['1', '2', '3']))
+  })
+
+  it('closes the confirmation dialog on Escape without deleting', async () => {
+    await renderIssueToggleList()
+
+    fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
+    )
     expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
     expect(getIssueOrder()).toEqual(['1', '2', '3'])
   })
@@ -658,10 +708,14 @@ describe('IssueToggleList', () => {
     await renderIssueToggleList()
     fireEvent.click(screen.getByTestId('issue-toggle-1'))
     await waitFor(() => expect(screen.getByText('toggle failed')).toBeInTheDocument())
-    vi.mocked(confirm).mockReturnValue(true)
+    // A confirmed delete reports failures through the same inline action error
+    // channel, since the confirmation dialog closes on confirm.
     mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete failed'))
     fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
     await waitFor(() => expect(screen.getByText('delete failed')).toBeInTheDocument())
+    expect(screen.queryByTestId('delete-issue-dialog')).not.toBeInTheDocument()
   })
 
   it('handles dependency fetch errors, no-op moves, and successful additions', async () => {
@@ -720,8 +774,9 @@ describe('IssueToggleList', () => {
       expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     })
 
-    vi.mocked(confirm).mockReturnValue(true)
     fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('confirm-delete-issue'))
 
     await waitFor(() => expect(mockedIssuesApi.delete).toHaveBeenCalledWith(2))
     await waitFor(() => expect(onIssueChanged).toHaveBeenCalled())
@@ -761,8 +816,11 @@ describe('IssueToggleList', () => {
       expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     })
 
-    vi.mocked(confirm).mockReturnValue(false)
     fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(screen.getByTestId('delete-issue-dialog')).toBeInTheDocument()
+
+    // Click the Cancel button in the dialog
+    fireEvent.click(screen.getByText('Cancel'))
 
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(onIssueChanged).not.toHaveBeenCalled()
@@ -909,6 +967,68 @@ describe('IssueToggleList reorder mode (#2950)', () => {
     expect(screen.queryByTestId('issue-reorder-list')).not.toBeInTheDocument()
     expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     expect(screen.getByTestId('issue-reorder-toggle')).toHaveAccessibleName('Reorder issues')
+  })
+})
+
+describe('IssueToggleList deferred mode (#3267)', () => {
+  async function renderDeferred() {
+    const ref = createRef<IssueToggleListHandle>()
+    render(
+      <IssueToggleList
+        ref={ref}
+        threadId={99}
+        deferred
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getAllByTestId(/issue-pill-/).length).toBeGreaterThan(0)
+    })
+    return ref
+  }
+
+  it('queues Add without calling the API until flush', async () => {
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+    fireEvent.change(input, { target: { value: '4-5' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    // No API call yet — the create is queued as a draft.
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+    // Pending create is visible in the UI.
+    expect(screen.getByTestId('pending-creates')).toHaveTextContent('4-5')
+    expect(ref.current?.hasPendingMutations()).toBe(true)
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5')
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+  })
+
+  it('discards queued mutations on unmount without flushing', async () => {
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+    fireEvent.change(input, { target: { value: '4-5' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    expect(ref.current?.hasPendingMutations()).toBe(true)
+
+    // Unmount without flushing (dialog X/close).
+    cleanup()
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+  })
+
+  it('queues toggle and delete without flushing in deferred mode', async () => {
+    const ref = await renderDeferred()
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+    expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
+    expect(mockedIssuesApi.markUnread).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+    expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(1)
   })
 })
 })

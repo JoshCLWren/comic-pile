@@ -4973,6 +4973,11 @@ export interface components {
             connection_type: string;
             /** Dependency Id */
             dependency_id: number;
+            /**
+             * Is Circular
+             * @default false
+             */
+            is_circular: boolean;
             /** Issue Number */
             issue_number?: string | null;
             /** Thread Id */

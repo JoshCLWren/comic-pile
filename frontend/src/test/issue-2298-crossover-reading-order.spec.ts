@@ -199,7 +199,10 @@ async function assertLastRowReachableViaPageScroll(
   const openAction = lastRow.getByRole('link', { name: 'Open' })
   await expect(openAction).toBeVisible()
   await openAction.click()
-  await expect(page).toHaveURL(new RegExp(`/threads/${fixture.lastThreadId}$`))
+  await expect(page).toHaveURL(new RegExp(`/thread/${fixture.lastThreadId}$`))
+  await expect(
+    page.getByRole('heading', { name: `Crossover Series ${LARGE_CROSSOVER_MEMBER_COUNT}` }),
+  ).toBeVisible()
 }
 
 test.describe('Crossover Reading Order nested scroller (#2298)', () => {

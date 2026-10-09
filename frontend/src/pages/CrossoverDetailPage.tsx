@@ -99,7 +99,7 @@ export default function CrossoverDetailPage() {
           <p className="text-sm text-[var(--theme-text-dim)]">ID: {crossover.id} • {crossover.memberships.length} member{crossover.memberships.length !== 1 ? 's' : ''}</p>
         </div>
         <Link
-          to={'/threads/' + (nextUnread?.thread?.id ?? sortedMembers[0]?.thread?.id)}
+          to={'/thread/' + (nextUnread?.thread?.id ?? sortedMembers[0]?.thread?.id)}
           className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
         >
           Continue Reading
@@ -145,7 +145,7 @@ export default function CrossoverDetailPage() {
               </div>
             </div>
             <Link
-              to={'/threads/' + nextUnread.thread?.id}
+              to={'/thread/' + nextUnread.thread?.id}
               className="shrink-0 inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
             >
               Read Now
@@ -202,7 +202,7 @@ export default function CrossoverDetailPage() {
                     </span>
                     {member.thread && (
                       <Link
-                        to={`/threads/${member.thread.id}`}
+                        to={`/thread/${member.thread.id}`}
                         className="text-sm text-[var(--theme-continuity-accent)] hover:text-[var(--theme-text-primary)]"
                       >
                         Open
@@ -235,7 +235,7 @@ export default function CrossoverDetailPage() {
             ))}
             {sortedMembers.length > 0 && sortedMembers[0].thread && (
               <Link
-                to={`/threads/${sortedMembers[0].thread.id}`}
+                to={`/thread/${sortedMembers[0].thread.id}`}
                 className="rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-[var(--theme-text-primary)]"
               >
                 View First Series

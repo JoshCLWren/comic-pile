@@ -119,7 +119,7 @@ function renderPage() {
     <MemoryRouter initialEntries={['/crossovers/7']}>
       <Routes>
         <Route path="/crossovers/:group" element={<CrossoverDetailPage />} />
-        <Route path="/threads/:id" element={<div>Thread page</div>} />
+        <Route path="/thread/:id" element={<div>Thread page</div>} />
         <Route path="/continuity-plans/:id" element={<div>Plan page</div>} />
       </Routes>
     </MemoryRouter>,
@@ -242,5 +242,28 @@ describe('CrossoverDetailPage', () => {
     expect(await screen.findByText('No members in this crossover yet.')).toBeInTheDocument()
     expect(screen.queryByText('Next Up')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'View First Series' })).not.toBeInTheDocument()
+  })
+
+  it('links every reading-flow action to the working /thread/:id route', async () => {
+    mockedGroups.getDetail.mockResolvedValue(makeDetail(populatedMembers))
+
+    renderPage()
+
+    expect(await screen.findByRole('heading', { name: 'Annihilation' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Continue Reading' })).toHaveAttribute('href', '/thread/101')
+    expect(screen.getByRole('link', { name: 'Read Now' })).toHaveAttribute('href', '/thread/101')
+    expect(screen.getByRole('link', { name: 'View First Series' })).toHaveAttribute('href', '/thread/22')
+
+    const rows = screen.getAllByTestId('crossover-member-row')
+    expect(within(rows[0]).getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/thread/22')
+    expect(within(rows[1]).getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/thread/101')
+
+    const hrefs = screen
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href') ?? '')
+    expect(hrefs.some((href) => href.startsWith('/threads/'))).toBe(false)
+
+    fireEvent.click(screen.getByRole('link', { name: 'Continue Reading' }))
+    expect(screen.getByText('Thread page')).toBeInTheDocument()
   })
 })
