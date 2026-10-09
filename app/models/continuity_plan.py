@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 
 
 class ContinuityPlan(Base):
@@ -29,6 +33,10 @@ class ContinuityPlan(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
+    )
+
+    release_sources: Mapped[list["ReadingPlanReleaseSource"]] = relationship(
+        "ReadingPlanReleaseSource", back_populates="reading_plan", lazy="raise"
     )
 
     __table_args__ = (Index("ix_continuity_plans_user_id", "user_id"),)
