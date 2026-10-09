@@ -133,7 +133,7 @@ async def test_converged_rule_persists_prerequisite_into_rule_target(
 
     assert await _script.persist_converged_edges() == 2
 
-    edges = set(
+    edges = {
         (row.source_issue_id, row.target_issue_id)
         for row in (
             await async_db.execute(
@@ -142,7 +142,7 @@ async def test_converged_rule_persists_prerequisite_into_rule_target(
         )
         .scalars()
         .all()
-    )
+    }
     assert edges == {(first.id, gated.id), (second.id, gated.id)}
     # The decorative self-referential source must never become an edge source.
     assert (gated.id, first.id) not in edges

@@ -29,8 +29,7 @@ logger = logging.getLogger(__name__)
 async def _get_db_session() -> AsyncSession:
     """Get an async database session."""
     from app.database import async_engine
-    async with AsyncSession(async_engine) as db:
-        return db
+    return AsyncSession(async_engine)
 
 
 async def persist_rule_native_item_read_edges() -> int:
