@@ -14,7 +14,12 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ReadingSession, Thread
-from app.schemas import RollBootstrapResponse, RollBootstrapThread, SessionMode
+from app.schemas import (
+    RollBootstrapResponse,
+    RollBootstrapThread,
+    SessionMode,
+    ThreadExclusionReason,
+)
 from app.schemas.session import SessionBandwidthState
 from tests.conftest import get_or_create_user_async
 
@@ -53,7 +58,7 @@ async def _bootstrap(
     return RollBootstrapResponse.model_validate(response.json())
 
 
-def _by_id(payload: RollBootstrapResponse) -> dict[int, object]:
+def _by_id(payload: RollBootstrapResponse) -> dict[int, ThreadExclusionReason]:
     return {item.thread_id: item for item in payload.excluded_threads}
 
 
