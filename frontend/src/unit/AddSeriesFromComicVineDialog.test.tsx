@@ -7,7 +7,7 @@ const { importSeriesSpy, searchSeriesSpy, invalidateSpy, toastSpy } = vi.hoisted
   searchSeriesSpy: vi.fn(),
   invalidateSpy: vi.fn().mockResolvedValue(undefined),
   toastSpy: {
-    toasts: [] as unknown[],
+    toasts: [],
     showToast: vi.fn(() => 'toast-id'),
     removeToast: vi.fn(),
   },
