@@ -9,6 +9,7 @@ import { getApiErrorDetail } from '../../utils/apiError'
 import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
+import DeleteIssueDialog from './DeleteIssueDialog'
 import { getDependencyTooltip } from '../../utils/dependencyHelpers'
 import {
   reorderIssuesForDrop,
@@ -88,6 +89,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [selectedDepsIssue, setSelectedDepsIssue] = useState<Issue | null>(null)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isReorderMode, setIsReorderMode] = useState(false)
+  const [deleteDialogIssue, setDeleteDialogIssue] = useState<Issue | null>(null)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -407,15 +409,28 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }
 
   function handleDeleteIssue(issue: Issue) {
-    if (!window.confirm(`Delete issue #${issue.issue_number}?`)) {
-      return
-    }
+    setDeleteDialogIssue(issue)
+  }
+
+  function handleConfirmDelete() {
+    if (!deleteDialogIssue) return
 
     setActionError(null)
     enqueueIssueMutation({
       type: 'delete',
-      issueId: issue.id,
+      issueId: deleteDialogIssue.id,
     })
+    // Confirming is the destructive action, so close right away. The pill is
+    // already removed optimistically and a failed delete is restored by the
+    // refetch in `processIssueMutations` with its message in the inline action
+    // error. Holding the dialog open until the delete settles would also trap
+    // focus: inside the Edit Series dialog the delete is a draft that only
+    // flushes on Save Changes (#3267), which a modal on top would block.
+    setDeleteDialogIssue(null)
+  }
+
+  function handleCancelDelete() {
+    setDeleteDialogIssue(null)
   }
 
   function handleMoveIssue(issue: Issue, direction: 'up' | 'down') {
@@ -763,6 +778,11 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
           </div>
         </Modal>
       )}
+      <DeleteIssueDialog
+        issue={deleteDialogIssue}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   )
 })
