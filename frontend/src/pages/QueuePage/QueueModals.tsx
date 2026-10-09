@@ -237,7 +237,7 @@ interface QueueModalsProps {
   showRollNudge: boolean
   onDismissRollNudge: () => void
   onRollNudgeNavigate: () => void
-  onCloseAddSeriesComicVine: () => void
+  onCloseAddSeriesComicVine?: () => void
 }
 
 /**
@@ -710,7 +710,7 @@ export function QueueModals({
       {openModal === 'addSeriesComicVine' && (
         <AddSeriesFromComicVineDialog
           isOpen={true}
-          onClose={onCloseAddSeriesComicVine}
+          onClose={onCloseAddSeriesComicVine ?? (() => {})}
           onAdded={() => {
             // The dialog's onAdded callback handles cache invalidation internally
           }}
