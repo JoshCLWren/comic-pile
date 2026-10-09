@@ -761,12 +761,12 @@ def test_authoritative_diff_is_read_but_never_dumped_into_review_log():
 def test_thousands_of_appended_diff_lines_cannot_evict_semantic_repair_finding():
     controller = load_controller()
     finding = "Changing the auth guard permits unauthorized requests to bypass token validation."
-    diff = "diff --git a/app.py b/app.py\\n" + "+    return unsafe_code()\\n" * 4000
+    diff = "diff --git a/app.py b/app.py\n" + "+    return unsafe_code()\n" * 4000
     log = (
         finding
-        + "\\nFACTORY_GATE_BLOCKED\\n"
+        + "\nFACTORY_GATE_BLOCKED\n"
         + controller.AUTHORITATIVE_DIFF_EVIDENCE
-        + "\\ngh pr diff 3200\\n"
+        + "\ngh pr diff 3200\n"
         + diff
     )
     excerpt = controller.semantic_review_excerpt(log)
@@ -780,10 +780,10 @@ def test_thousands_of_appended_diff_lines_cannot_evict_semantic_repair_finding()
     "unusable",
     [
         "FACTORY_GATE_BLOCKED",
-        "# comic-pile-factory-authoritative-diff-evidence\\ngh pr diff 3200",
-        "diff --git a/app.py b/app.py\\n+++ b/app.py\\n+const result = unsafe();",
-        "```python\\ndef broken():\\n    return unsafe()\\n```",
-        "semantic blockers remain\\nthe pr is returning to repair",
+        "# comic-pile-factory-authoritative-diff-evidence\ngh pr diff 3200",
+        "diff --git a/app.py b/app.py\n+++ b/app.py\n+const result = unsafe();",
+        "```python\ndef broken():\n    return unsafe()\n```",
+        "semantic blockers remain\nthe pr is returning to repair",
     ],
 )
 def test_diff_source_and_terminal_markers_are_not_actionable(unusable):
@@ -798,7 +798,7 @@ def test_diff_only_semantic_verdict_returns_to_review(monkeypatch, verdict):
     monkeypatch.setattr(
         controller,
         "review_excerpt",
-        lambda _path, worker: "diff --git a/app.py b/app.py\\n+const value = true;\\nFACTORY_GATE_BLOCKED",
+        lambda _path, worker: "diff --git a/app.py b/app.py\n+const value = true;\nFACTORY_GATE_BLOCKED",
     )
     comments = []
     transitions = []
