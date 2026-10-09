@@ -620,6 +620,7 @@ export interface ReaderContextEdge {
 export interface CreatorComparisonRoleStat {
   role: string
   issue_count: number
+  rated_issue_count: number
   average_rating: number | null
 }
 

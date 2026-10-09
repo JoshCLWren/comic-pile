@@ -34,7 +34,7 @@ function makeItem(overrides: Partial<CreatorComparisonItem> & { canonical_creato
     ratings_count: 4,
     rating_distribution: { '5': 2, '4': 2 },
     top_rating_rate: 0.5,
-    role_stats: [{ role: 'writer', issue_count: 4, average_rating: 4.5 }],
+    role_stats: [{ role: 'writer', issue_count: 4, rated_issue_count: 4, average_rating: 4.5 }],
     strongest_series: [
       { thread_id: 1, thread_title: 'Saga', issue_count: 4, rated_issue_count: 3, average_rating: 4.7 },
     ],
@@ -234,7 +234,7 @@ describe('CreatorComparisonPage', () => {
               ratings_count: 0,
               rating_distribution: {},
               top_rating_rate: null,
-              role_stats: [{ role: 'artist', issue_count: 2, average_rating: null }],
+              role_stats: [{ role: 'artist', issue_count: 2, rated_issue_count: 0, average_rating: null }],
               strongest_series: [],
               min_rated_issues_per_series: 3,
               unread_upcoming_count: 0,
@@ -305,9 +305,9 @@ describe('CreatorComparisonPage', () => {
           comparisons: {
             'creator:7': makeItem({
               canonical_creator_key: 'creator:7',
-              role_stats: [
-                { role: 'colorist', issue_count: 4, average_rating: 4.5 },
-                { role: longRole, issue_count: 2, average_rating: null },
+role_stats: [
+                { role: 'writer', issue_count: 3, rated_issue_count: 3, average_rating: 4.0 },
+                { role: 'artist', issue_count: 1, rated_issue_count: 1, average_rating: 5.0 },
               ],
             }),
           },
@@ -441,7 +441,7 @@ describe('CreatorComparisonPage', () => {
               ratings_count: 0,
               rating_distribution: {},
               top_rating_rate: null,
-              role_stats: [{ role: 'writer', issue_count: 0, average_rating: null }],
+              role_stats: [{ role: 'writer', issue_count: 0, rated_issue_count: 0, average_rating: null }],
               strongest_series: [],
               unread_upcoming_count: 0,
               read_unrated_count: 0,
