@@ -1,10 +1,34 @@
-"""Schemas for the bounded personal creator comparison API (issue #3091)."""
+"""Schemas for the bounded personal creator comparison API (issue #3091).
+
+Includes the bounded metric drilldown contracts (issue #3176): every
+summary metric can be opened into its exact calculation and supporting
+issue set, using the same shared aggregation semantics as the batch
+comparison so summary and drilldown always reconcile.
+"""
 
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.constants import MIN_RATED_ISSUES_PER_SERIES
+
+#: Rating buckets the distribution drilldown accepts. These are exactly
+#: the keys the summary rating distribution can emit on ComicPile's
+#: 1-5 half-star scale, so a drilldown bucket always names a real
+#: summary bucket.
+RATING_BUCKETS: tuple[str, ...] = (
+    "5",
+    "4.5",
+    "4",
+    "3.5",
+    "3",
+    "2.5",
+    "2",
+    "1.5",
+    "1",
+)
 
 
 class CreatorComparisonRoleStat(BaseModel):
@@ -188,10 +212,280 @@ class CreatorComparisonResponse(BaseModel):
     )
 
 
+class CreatorDrilldownIssue(BaseModel):
+    """One issue contributing to a metric drilldown evidence page."""
+
+    model_config = {"frozen": True}
+
+    issue_id: int = Field(..., description="Local ComicPile issue id.")
+    issue_number: str = Field(
+        ..., description="Reader-facing issue number as stored in ComicPile."
+    )
+    rating: float | None = Field(
+        default=None,
+        description="Latest effective rating for the issue, when the "
+        "metric evidence consists of rated issues.",
+    )
+    role: str | None = Field(
+        default=None,
+        description="Creator role on this issue for the drilled metric.",
+    )
+    thread_id: int | None = Field(
+        default=None, description="Local thread (series/run) id."
+    )
+    thread_title: str | None = Field(
+        default=None, description="Series/run title for local context."
+    )
+
+
+class CreatorDrilldownRatingObservation(BaseModel):
+    """One ranked rating observation in the median drilldown.
+
+    The observation doubles as the supporting-issue row for the
+    median metric, so the ranked evidence and the issue list are
+    one bounded, paginated surface.
+    """
+
+    model_config = {"frozen": True}
+
+    issue_id: int = Field(..., description="Local ComicPile issue id.")
+    issue_number: str = Field(..., description="Reader-facing issue number.")
+    rank: int = Field(
+        ...,
+        ge=1,
+        description="1-based rank, strongest rating first.",
+    )
+    rating: float = Field(..., ge=1, le=5, description="Latest effective rating.")
+    determines_median: bool = Field(
+        default=False,
+        description="True for the middle observation(s) that determine "
+        "the median.",
+    )
+    role: str | None = Field(
+        default=None, description="Creator's headline role on this issue."
+    )
+    thread_id: int | None = Field(
+        default=None, description="Local thread (series/run) id."
+    )
+    thread_title: str | None = Field(
+        default=None, description="Series/run title for local context."
+    )
+
+
+class CreatorDrilldownResponse(BaseModel):
+    """Shared bounded evidence envelope for every metric drilldown.
+
+    ``total_count`` is the size of the complete evidence set, so a
+    client can always tell how much of the evidence the current page
+    carries; ``next_cursor`` is null on the last page.
+    """
+
+    model_config = {"frozen": True}
+
+    metric: str = Field(..., description="Drilldown metric identifier.")
+    creator_key: str = Field(
+        ..., description="Canonical creator key the evidence belongs to."
+    )
+    calculation: str = Field(
+        ...,
+        description="Human-readable formula that produces the visible "
+        "summary metric from the stored evidence.",
+    )
+    total_count: int = Field(
+        ...,
+        ge=0,
+        description="Total issues in the complete evidence set across "
+        "all pages.",
+    )
+    next_cursor: str | None = Field(
+        default=None,
+        description="Opaque cursor requesting the next evidence page; "
+        "null on the last page.",
+    )
+
+
+class CreatorAverageDrilldownResponse(CreatorDrilldownResponse):
+    """Evidence page for the average rating metric."""
+
+    model_config = {"frozen": True}
+
+    metric: Literal["average"] = "average"
+    total_rated: int = Field(
+        ..., ge=0, description="Rated issues contributing to the average."
+    )
+    total_points: float = Field(
+        ..., ge=0, description="Sum of effective ratings behind the average."
+    )
+    issues: list[CreatorDrilldownIssue] = Field(
+        default_factory=list, description="Bounded page of rated issues."
+    )
+
+
+class CreatorMedianDrilldownResponse(CreatorDrilldownResponse):
+    """Evidence page for the median rating metric."""
+
+    model_config = {"frozen": True}
+
+    metric: Literal["median"] = "median"
+    ratings_count: int = Field(
+        ..., ge=0, description="Rated issues in the ranked sample."
+    )
+    median_rating: float | None = Field(
+        default=None,
+        description="Median of the ranked sample, matching the summary "
+        "median exactly.",
+    )
+    sorted_ratings: list[CreatorDrilldownRatingObservation] = Field(
+        default_factory=list,
+        description="Bounded page of ranked observations, strongest first.",
+    )
+
+
+class CreatorDistributionDrilldownResponse(CreatorDrilldownResponse):
+    """Evidence page for one rating-distribution bucket."""
+
+    model_config = {"frozen": True}
+
+    metric: Literal["distribution"] = "distribution"
+    bucket: str = Field(..., description="Rating bucket key (e.g. ``4.5``).")
+    bucket_count: int = Field(
+        ..., ge=0, description="Rated issues with exactly this bucket rating."
+    )
+    total_rated: int = Field(
+        ..., ge=0, description="Rated issues in the creator's headline sample."
+    )
+    issues: list[CreatorDrilldownIssue] = Field(
+        default_factory=list, description="Bounded page of bucket issues."
+    )
+
+
+class CreatorFiveStarRateDrilldownResponse(CreatorDrilldownResponse):
+    """Evidence page for the 5★ rate metric."""
+
+    model_config = {"frozen": True}
+
+    metric: Literal["5-star-rate"] = "5-star-rate"
+    top_count: int = Field(..., ge=0, description="Rated issues at 5.0★.")
+    rated_count: int = Field(
+        ..., ge=0, description="Rated issues in the creator's headline sample."
+    )
+    issues: list[CreatorDrilldownIssue] = Field(
+        default_factory=list, description="Bounded page of five-star issues."
+    )
+
+
+class CreatorRoleAverageDrilldownResponse(CreatorDrilldownResponse):
+    """Evidence page for one role's average rating."""
+
+    model_config = {"frozen": True}
+
+    metric: Literal["role-average"] = "role-average"
+    role: str = Field(..., description="The drilled creator role.")
+    issue_count: int = Field(
+        ..., ge=0, description="Total issues credited to the creator in this role."
+    )
+    rated_issue_count: int = Field(
+        ..., ge=0, description="Credited issues with an effective rating."
+    )
+    average_rating: float | None = Field(
+        default=None,
+        description="Average effective rating across the rated credited "
+        "issues, matching the summary role statistic.",
+    )
+    issues: list[CreatorDrilldownIssue] = Field(
+        default_factory=list,
+        description="Bounded page of rated issues credited in this role.",
+    )
+
+
+class CreatorSeriesAverageDrilldownResponse(CreatorDrilldownResponse):
+    """Evidence page for one series' average rating."""
+
+    model_config = {"frozen": True}
+
+    metric: Literal["series-average"] = "series-average"
+    thread_id: int = Field(..., description="Local thread (series/run) id.")
+    thread_title: str = Field(..., description="Series/run title.")
+    issue_count: int = Field(
+        ..., ge=0, description="Total issues attributed to the creator here."
+    )
+    rated_issue_count: int = Field(
+        ..., ge=0, description="Attributed issues with an effective rating."
+    )
+    average_rating: float | None = Field(
+        default=None,
+        description="Average effective rating across the rated attributed "
+        "issues, matching the summary series aggregate.",
+    )
+    min_rated_issues_per_series: int = Field(
+        ...,
+        ge=1,
+        description="Minimum rated issues before a series is ranked in "
+        "strongest_series.",
+    )
+    issues: list[CreatorDrilldownIssue] = Field(
+        default_factory=list,
+        description="Bounded page of rated issues attributed in this series.",
+    )
+
+
+class CreatorReadWithoutRatingDrilldownResponse(CreatorDrilldownResponse):
+    """Evidence page for the read-without-rating count.
+
+    The per-issue cause classification does not exist yet (issue
+    #3175), so ``classification_available`` is always false and the
+    response says so explicitly instead of implying a known cause.
+    """
+
+    model_config = {"frozen": True}
+
+    metric: Literal["read-without-rating"] = "read-without-rating"
+    count: int = Field(
+        ..., ge=0, description="Attributed issues marked read with no "
+        "effective rate event."
+    )
+    classification_available: bool = Field(
+        default=False,
+        description="Always false until issue #3175 lands; per-issue "
+        "missing-rating causes are not classified yet.",
+    )
+    issues: list[CreatorDrilldownIssue] = Field(
+        default_factory=list,
+        description="Bounded page of read-but-unrated attributed issues.",
+    )
+
+
+class CreatorUnreadDrilldownResponse(CreatorDrilldownResponse):
+    """Evidence page for the unread/attributed-unread count."""
+
+    model_config = {"frozen": True}
+
+    metric: Literal["unread"] = "unread"
+    count: int = Field(
+        ..., ge=0, description="Attributed issues still unread in ComicPile."
+    )
+    issues: list[CreatorDrilldownIssue] = Field(
+        default_factory=list,
+        description="Bounded page of unread attributed issues.",
+    )
+
+
 __all__ = [
     "CreatorComparisonResponse",
     "CreatorComparisonItem",
     "CreatorComparisonCoverage",
     "CreatorComparisonRoleStat",
     "CreatorComparisonSeriesAggregate",
+    "CreatorAverageDrilldownResponse",
+    "CreatorDistributionDrilldownResponse",
+    "CreatorDrilldownIssue",
+    "CreatorDrilldownRatingObservation",
+    "CreatorDrilldownResponse",
+    "CreatorFiveStarRateDrilldownResponse",
+    "CreatorMedianDrilldownResponse",
+    "CreatorReadWithoutRatingDrilldownResponse",
+    "CreatorRoleAverageDrilldownResponse",
+    "CreatorSeriesAverageDrilldownResponse",
+    "CreatorUnreadDrilldownResponse",
+    "RATING_BUCKETS",
 ]

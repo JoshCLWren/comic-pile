@@ -65,6 +65,9 @@ class CreatorComparisonInputs:
     """
 
     owned_issues: dict[int, str] = field(default_factory=dict)
+    issue_numbers: dict[int, str] = field(
+        default_factory=dict,
+    )
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = field(default_factory=dict)
     issues_with_creator_metadata: frozenset[int] = field(default_factory=frozenset)
     effective_ratings: dict[int, float] = field(default_factory=dict)
@@ -137,17 +140,20 @@ async def load_creator_comparison_inputs(
     Returns:
         User-scoped :class:`CreatorComparisonInputs`.
     """
-    # 1. Owned issues, statuses, and stable local series identity.
+    # 1. Owned issues, statuses, reader-facing issue numbers, and
+    # stable local series identity.
     issue_result = await db.execute(
-        select(Issue.id, Issue.status, Issue.thread_id, Thread.title)
+        select(Issue.id, Issue.issue_number, Issue.status, Issue.thread_id, Thread.title)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
     owned_issues: dict[int, str] = {}
+    issue_numbers: dict[int, str] = {}
     owned_issue_threads: dict[int, OwnedIssueThread] = {}
-    for issue_id, status, thread_id, thread_title in issue_result.all():
+    for issue_id, issue_number, status, thread_id, thread_title in issue_result.all():
         owned_issue_id = int(issue_id)
         owned_issues[owned_issue_id] = str(status)
+        issue_numbers[owned_issue_id] = str(issue_number)
         owned_issue_threads[owned_issue_id] = OwnedIssueThread(
             thread_id=int(thread_id),
             thread_title=str(thread_title),
@@ -211,6 +217,7 @@ async def load_creator_comparison_inputs(
 
     return CreatorComparisonInputs(
         owned_issues=owned_issues,
+        issue_numbers=issue_numbers,
         issue_creator_credits=issue_creator_credits,
         issues_with_creator_metadata=frozenset(issues_with_creator_metadata),
         effective_ratings=effective_ratings,

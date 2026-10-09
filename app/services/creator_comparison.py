@@ -22,6 +22,7 @@ Key semantics (matching #2028 exactly):
 
 from __future__ import annotations
 
+import bisect
 from collections import defaultdict
 from statistics import median
 
@@ -38,12 +39,24 @@ from app.repositories.creator_comparison import (
     load_creator_comparison_inputs,
 )
 from app.schemas.creator_comparison import (
+    CreatorAverageDrilldownResponse,
     CreatorComparisonCoverage,
     CreatorComparisonItem,
     CreatorComparisonResponse,
     CreatorComparisonRoleStat,
     CreatorComparisonSeriesAggregate,
+    CreatorDistributionDrilldownResponse,
+    CreatorDrilldownIssue,
+    CreatorDrilldownRatingObservation,
+    CreatorFiveStarRateDrilldownResponse,
+    CreatorMedianDrilldownResponse,
+    CreatorReadWithoutRatingDrilldownResponse,
+    CreatorRoleAverageDrilldownResponse,
+    CreatorSeriesAverageDrilldownResponse,
+    CreatorUnreadDrilldownResponse,
+    RATING_BUCKETS,
 )
+from app.services.creator_series import parse_series_key
 from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
 
 
