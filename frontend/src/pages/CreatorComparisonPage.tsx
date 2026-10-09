@@ -469,7 +469,7 @@ export default function CreatorComparisonPage() {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible-ring-[var(--theme-focus-ring)]"
+            className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
           >
             Try again
@@ -478,7 +478,7 @@ export default function CreatorComparisonPage() {
         <div className="mt-2">
           <Link
             to="/creators"
-            className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible-ring-[var(--theme-focus-ring)]"
+            className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             style={{ color: 'var(--theme-text-muted)' }}
           >
             Back to Creators
@@ -564,7 +564,7 @@ export default function CreatorComparisonPage() {
           <button
             type="button"
             onClick={() => { /* close modal */ }}
-            className="rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible-ring-[var(--theme-focus-ring)]"
+            className="rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
           >
             Close
