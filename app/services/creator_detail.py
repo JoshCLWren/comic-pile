@@ -13,6 +13,18 @@ keyed by the stable local thread id, never by display title text, and each
 aggregate is computed over the creator's complete attributed work for that
 thread so paging never changes a group's numbers.
 
+Rated-collection consistency (issue #3235): the ``rated_issues`` collection
+is scoped to exactly the headline-eligible rated set that feeds
+``summary.ratings_count``, ``summary.average_rating``, and
+``rating_distribution`` (one issue at most once, latest effective rating,
+headline roles only). The detail page's "Rated (N)" heading, distribution
+histogram, and listed rows therefore always agree. Rated credits held only in
+non-headline roles (pure cover/editorial or unknown roles) stay visible
+through ``role_stats`` and the series aggregates, whose per-group drill-down
+lists every attributed rated issue. The read-but-unrated and upcoming
+collections intentionally remain role-agnostic "library presence" lists and
+match their own counts.
+
 Ordering semantics:
 
 - Rated history and read-but-unrated rows are deterministic recent-first.
@@ -173,10 +185,9 @@ async def get_creator_detail(
     # 1. Headline summary scoped to this creator, mirroring #2028 exactly:
     #    latest effective rate event wins, one issue counts at most once even
     #    for multi-role credits, and pure cover/editorial or unknown roles never
-    #    feed the headline average.
-    rated_ids = frozenset(
-        issue_id for issue_id in creator_id_set if issue_id in inputs.effective_ratings
-    )
+    #    feed the headline average. The same headline-eligible issue set also
+    #    backs the rated collection (#3235) so the count, the distribution,
+    #    and the listed rows can never disagree.
     read_unrated_ids = frozenset(
         issue_id
         for issue_id in creator_id_set
@@ -186,7 +197,7 @@ async def get_creator_detail(
         issue_id for issue_id in creator_id_set if inputs.owned_issues.get(issue_id) == "unread"
     )
 
-    headline_rated: list[float] = []
+    headline_rated_ids: set[int] = set()
     for issue_id in creator_id_set:
         if issue_id not in inputs.effective_ratings:
             continue
@@ -197,8 +208,10 @@ async def get_creator_detail(
             if credit.external_id == creator_id
             for role in credit.roles
         ):
-            headline_rated.append(inputs.effective_ratings[issue_id])
-    ratings_count = len(headline_rated)
+            headline_rated_ids.add(issue_id)
+    headline_rated_ids_frozen = frozenset(headline_rated_ids)
+    headline_rated = [inputs.effective_ratings[issue_id] for issue_id in headline_rated_ids_frozen]
+    ratings_count = len(headline_rated_ids_frozen)
     average_rating = (
         round(sum(headline_rated) / ratings_count, 2) if ratings_count else None
     )
@@ -283,11 +296,15 @@ async def get_creator_detail(
             )
         )
 
-    # 4. Bounded collections with the ordering contract from the issue.
+    # 4. Bounded collections with the ordering contract from the issue. The
+    #    rated collection uses the headline-eligible set so its rows, the
+    #    headline count, and the distribution always describe the same issues
+    #    (#3235); read-but-unrated and upcoming stay role-agnostic presence
+    #    lists that match their own summary counts.
     rated_rows = await load_recent_creator_issue_rows(
         db,
         user_id=user_id,
-        creator_issue_ids=rated_ids,
+        creator_issue_ids=headline_rated_ids_frozen,
         limit=limit,
         offset=page_offset,
     )
@@ -379,7 +396,7 @@ async def get_creator_detail(
     ]
 
     has_next_page = (
-        len(rated_ids) > page_offset + len(rated_rows)
+        len(headline_rated_ids_frozen) > page_offset + len(rated_rows)
         or len(read_unrated_ids) > page_offset + len(read_unrated_rows)
         or len(upcoming_ids) > page_offset + len(upcoming_rows)
         or len(series_aggregates) > page_offset + len(series_groups)
