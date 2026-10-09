@@ -17,8 +17,9 @@ interface BulkTagEditorProps {
 }
 
 interface BulkOperation {
-  tagId: number
-  targetIds: number[]
+  tag_id: number
+  target_type: 'Issue' | 'Thread' | 'ContinuityPlan'
+  target_ids: number[]
   action: 'add' | 'remove'
 }
 
@@ -45,8 +46,9 @@ export function BulkTagEditor({
     if (!selectedTags.length) return []
 
     return selectedTags.map(tag => ({
-      tagId: tag.id,
-      targetIds: selectedItems.map(item => item.id),
+      tag_id: tag.id,
+      target_type: (selectedItems[0]?.type.charAt(0).toUpperCase() + selectedItems[0]?.type.slice(1) || 'Issue') as 'Issue' | 'Thread' | 'ContinuityPlan',
+      target_ids: selectedItems.map(item => item.id),
       action,
     }))
   }, [selectedTags, selectedItems, action])
@@ -93,14 +95,7 @@ export function BulkTagEditor({
     <Modal 
       isOpen={isOpen} 
       onClose={handleClose} 
-      title={
-        <div className="flex items-center gap-2">
-          <span>Bulk Tag Editor</span>
-          <span className="text-sm text-gray-500 font-normal">
-            ({selectedItems.length} items selected)
-          </span>
-        </div>
-      }
+      title={`Bulk Tag Editor (${selectedItems.length} items selected)`}
     >
       <div className="p-6 space-y-6">
         {/* Selected Items */}

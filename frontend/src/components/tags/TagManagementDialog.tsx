@@ -142,15 +142,7 @@ export function TagManagementDialog({
     <Modal 
       isOpen={isOpen} 
       onClose={onClose} 
-      title={
-        <div className="flex items-center gap-2">
-          <div
-            className="w-4 h-4 rounded-full"
-            style={{ backgroundColor: tagData.color }}
-          />
-          <span>Manage Tag</span>
-        </div>
-      }
+      title={`Manage Tag - ${tagData.name}`}
     >
       <div className="p-6 space-y-6">
         {/* Tag Information */}
