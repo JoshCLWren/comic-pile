@@ -286,6 +286,47 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getByLabelText('Average 4.7 out of 5')).toBeInTheDocument()
   })
 
+  it('pairs each role average with its rated denominator instead of the credited total', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({
+              canonical_creator_key: 'creator:7',
+              role_stats: [
+                { role: 'writer', issue_count: 4, rated_issue_count: 2, average_rating: 4.5 },
+                { role: 'colorist', issue_count: 3, rated_issue_count: 3, average_rating: 3.0 },
+                { role: 'letterer', issue_count: 1, rated_issue_count: 0, average_rating: null },
+              ],
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:12')
+
+    // A partially rated role shows credited and rated counts side by side, so
+    // 4.5 cannot be read as an average over all 4 credited issues.
+    const writerRow = screen.getByTitle('writer').closest('li')!
+    expect(writerRow).toHaveTextContent('4 issues · 2 rated ·')
+    expect(within(writerRow).getByLabelText('Average 4.5 out of 5 as writer')).toBeInTheDocument()
+
+    // A fully rated role still labels both counts.
+    const coloristRow = screen.getByTitle('colorist').closest('li')!
+    expect(coloristRow).toHaveTextContent('3 issues · 3 rated ·')
+
+    // A zero-rated role stays truthful: no fake 0.0★ is manufactured.
+    const lettererRow = screen.getByTitle('letterer').closest('li')!
+    expect(lettererRow).toHaveTextContent('1 issue · 0 rated · unrated')
+    expect(lettererRow.textContent).not.toContain('★')
+
+    // Overlapping roles are disclosed rather than implied.
+    expect(
+      screen.getByText(/Issues may appear under multiple roles/),
+    ).toBeInTheDocument()
+  })
+
   it('explains an empty comparison instead of rendering empty cards', () => {
     mockedHook.mockReturnValue(baseHook({ data: makeResponse() }))
 
@@ -305,9 +346,9 @@ describe('CreatorComparisonPage', () => {
           comparisons: {
             'creator:7': makeItem({
               canonical_creator_key: 'creator:7',
-role_stats: [
-                { role: 'writer', issue_count: 3, rated_issue_count: 3, average_rating: 4.0 },
-                { role: 'artist', issue_count: 1, rated_issue_count: 1, average_rating: 5.0 },
+              role_stats: [
+                { role: 'colorist', issue_count: 4, rated_issue_count: 4, average_rating: 4.5 },
+                { role: longRole, issue_count: 2, rated_issue_count: 0, average_rating: null },
               ],
             }),
           },

@@ -576,7 +576,7 @@ async def test_role_stats_includes_rated_issue_count(
 ) -> None:
     """Role stats expose rated_issue_count distinct from total issue_count."""
     _thread, issues = await _make_thread(
-        async_db, default_user, title="MultiRole", issue_count=4, queue_position=1, read_through=4
+        async_db, default_user, title="MultiRole", issue_count=5, queue_position=1, read_through=5
     )
     # Issue 1: writer + artist, both rated
     await _confirm_identity(
@@ -602,8 +602,14 @@ async def test_role_stats_includes_rated_issue_count(
         async_db, issues[3], creators=[{"id": 100, "name": "Multi Role", "role": "cover"}]
     )
     await _rate(async_db, issues[3], rating=3.0, timestamp=D3)
+    # Issue 5: letterer only, unrated (zero-rated role)
+    await _confirm_identity(
+        async_db, issues[4], creators=[{"id": 100, "name": "Multi Role", "role": "letterer"}]
+    )
 
-    response = await auth_client.get("/api/v1/creators/compare?keys=creator:100")
+    # Comparison requires at least two keys; the second key is not in the
+    # library and is silently omitted, leaving only creator:100 to assert on.
+    response = await auth_client.get("/api/v1/creators/compare?keys=creator:100,creator:9999")
 
     assert response.status_code == 200
     body = response.json()
@@ -623,3 +629,8 @@ async def test_role_stats_includes_rated_issue_count(
     assert by_role["cover"]["issue_count"] == 1
     assert by_role["cover"]["rated_issue_count"] == 1
     assert by_role["cover"]["average_rating"] == pytest.approx(3.0)
+
+    # letterer: 1 issue total, 0 rated, so no average is manufactured
+    assert by_role["letterer"]["issue_count"] == 1
+    assert by_role["letterer"]["rated_issue_count"] == 0
+    assert by_role["letterer"]["average_rating"] is None
