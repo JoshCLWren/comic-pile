@@ -1213,12 +1213,14 @@ async def roll_bootstrap(
         .order_by(Thread.queue_position)
         .limit(20)
     )
-    blocked_threads = [
+blocked_threads = [
         RollBootstrapThread(
             id=row.id, title=row.title, format=normalize_format_value(row.format)
         )
-        for row in blocked_result.all()
-    ]
+    for row in blocked_result.all()
+]
+
+blocked_ids = [t.id for t in blocked_threads]
     snoozed_count = len(snoozed_threads)
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
