@@ -62,17 +62,41 @@ function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
   )
 }
 
-function RatingDistributionBar({ distribution, maxCount }: { distribution: Record<string, number>; maxCount: number }) {
+function RatingDistributionBar({ distribution, totalCount }: { distribution: Record<string, number>; totalCount: number }) {
   // ComicPile rates on a 1-5 scale with 0.5 increments; every bucket the API
   // can emit gets a row so half-star ratings are never silently dropped.
+  //
+  // Bar length uses a shared 0-100% scale: bucket_count / total_ratings.
+  // This makes bars directly comparable across creators with very different
+  // sample sizes. Each non-empty bucket exposes both raw count and
+  // percentage, while screen readers receive bucket, count, percentage and
+  // the region communicates the creator's sample size.
   const ratings = ['5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1']
+  const total = totalCount > 0 ? totalCount : 0
+
   return (
-    <div className="space-y-1" role="img" aria-label="Rating distribution">
+    <div
+      role="list"
+      aria-label={`Rating distribution across ${total} rated issue${total === 1 ? '' : 's'}`}
+      data-testid="rating-distribution"
+      className="space-y-1"
+    >
       {ratings.map((rating) => {
-        const count = distribution[rating] || 0
-        const percentage = maxCount > 0 ? (count / maxCount) * 100 : 0
+        const count = distribution[rating] ?? 0
+        const percentage = total > 0 ? (count / total) * 100 : 0
+        const isEmpty = count === 0
         return (
-          <div key={rating} className="flex items-center gap-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          <div
+            key={rating}
+            role="listitem"
+            className="flex items-center gap-2 text-xs"
+            style={{ color: 'var(--theme-text-muted)' }}
+            aria-label={
+              isEmpty
+                ? `${rating}★: 0 ratings (0.0%)`
+                : `${rating}★: ${count} rating${count === 1 ? '' : 's'}, ${percentage.toFixed(1)}%`
+            }
+          >
             <span className="w-6 text-right font-medium">{rating}★</span>
             <div className="flex-1 h-2 rounded bg-[var(--theme-border)] overflow-hidden">
               <div
@@ -84,7 +108,14 @@ function RatingDistributionBar({ distribution, maxCount }: { distribution: Recor
                 }}
               />
             </div>
-            <span className="w-10 text-right">{count > 0 ? count : ''}</span>
+            {!isEmpty && (
+              <span
+                className="w-20 text-right"
+                aria-hidden="true"
+              >
+                {`${count} · ${percentage.toFixed(1)}%`}
+              </span>
+            )}
           </div>
         )
       })}
@@ -93,8 +124,8 @@ function RatingDistributionBar({ distribution, maxCount }: { distribution: Recor
 }
 
 function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
-  const maxDistributionCount = Math.max(...Object.values(item.rating_distribution), 0)
-  const hasRatings = item.ratings_count > 0
+  const totalRatings = item.ratings_count
+  const hasRatings = totalRatings > 0
   const isValidKey = parseCreatorKey(item.canonical_creator_key) != null
   const detailPath = isValidKey ? creatorRoutePath(item.canonical_creator_key) : null
 
@@ -177,7 +208,7 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Rating distribution
           </p>
-          <RatingDistributionBar distribution={item.rating_distribution} maxCount={maxDistributionCount} />
+          <RatingDistributionBar distribution={item.rating_distribution} totalCount={totalRatings} />
         </div>
 
         <div className="sm:col-span-2">

@@ -171,8 +171,11 @@ describe('CreatorComparisonPage', () => {
     const seriesLink = screen.getByRole('link', { name: /Saga/ })
     expect(seriesLink).toHaveAttribute('href', '/thread/1')
 
-    const distributions = screen.getAllByRole('img', { name: 'Rating distribution' })
-    expect(within(distributions[0]).getByText('4.5★')).toBeInTheDocument()
+    const distributions = screen.getAllByTestId('rating-distribution')
+    expect(distributions).toHaveLength(2)
+    const vaughanBars = within(distributions[0]).getAllByRole('listitem')
+    expect(vaughanBars).toHaveLength(9)
+    expect(vaughanBars).toContainEqual(expect.objectContaining({ ariaLabel: '4★: 1 rating, 25.0%' }))
   })
 
   it('marks thin samples and partial metadata explicitly instead of implying totals', () => {
@@ -292,5 +295,220 @@ describe('CreatorComparisonPage', () => {
     expect(
       screen.getByText('None of the selected creators were found in your library.'),
     ).toBeInTheDocument()
+  })
+
+  it('normalizes distribution bars to a shared 0-100% scale (count / ratings_count)', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:small': makeItem({
+              canonical_creator_key: 'creator:small',
+              display_name: 'Few Ratings Creator',
+              ratings_count: 4,
+              rating_distribution: { '5': 4 },
+            }),
+            'creator:large': makeItem({
+              canonical_creator_key: 'creator:large',
+              display_name: 'Many Ratings Creator',
+              average_rating: 4.2,
+              median_rating: 4.5,
+              ratings_count: 100,
+              rating_distribution: { '5': 4, '4': 1, '3': 1, '2': 1, '1': 1 },
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:small,creator:large')
+
+    // Each bar is bucket_count / creator_ratings_count, so bars are directly
+    // comparable regardless of sample size.
+    const distributions = screen.getAllByTestId('rating-distribution')
+    const smallDistribution = distributions[0]
+    expect(smallDistribution).toHaveTextContent('4 · 100.0%')
+    // Screen-reader label for the full 5★ bucket row.
+    const smallRows = within(smallDistribution).getAllByRole('listitem')
+    expect(smallRows[0]).toHaveAttribute('aria-label', '5★: 4 ratings, 100.0%')
+  })
+
+  it('prevents unequal sample sizes from rendering visually equivalent bars', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:small': makeItem({
+              canonical_creator_key: 'creator:small',
+              display_name: 'Few Ratings Creator',
+              ratings_count: 4,
+              rating_distribution: { '5': 4 },
+            }),
+            'creator:large': makeItem({
+              canonical_creator_key: 'creator:large',
+              display_name: 'Many Ratings Creator',
+              average_rating: 4.2,
+              median_rating: 4.5,
+              ratings_count: 100,
+              rating_distribution: { '5': 4, '4': 1, '3': 1, '2': 1, '1': 1 },
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:small,creator:large')
+
+    const distributions = screen.getAllByTestId('rating-distribution')
+    const largeDistribution = distributions[1]
+    expect(largeDistribution).toHaveTextContent('4 · 4.0%')
+    expect(largeDistribution).toHaveTextContent('1 · 1.0%')
+  })
+
+  it('renders ties correctly: identical counts with different totals yield different percentages', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:a': makeItem({
+              canonical_creator_key: 'creator:a',
+              display_name: 'Creator A',
+              ratings_count: 4,
+              rating_distribution: { '4': 2, '5': 2 },
+            }),
+            'creator:b': makeItem({
+              canonical_creator_key: 'creator:b',
+              display_name: 'Creator B',
+              average_rating: 4.5,
+              median_rating: 4.5,
+              ratings_count: 100,
+              rating_distribution: { '4': 2, '5': 2 },
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:a,creator:b')
+
+    const distributions = screen.getAllByTestId('rating-distribution')
+    const aDistribution = distributions[0]
+    const bDistribution = distributions[1]
+    // Same raw counts, same totals -> identical labels.
+    expect(aDistribution).toHaveTextContent('2 · 50.0%')
+    expect(bDistribution).toHaveTextContent('2 · 2.0%')
+  })
+
+  it('handles zero ratings without percentage artifacts', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:none': makeItem({
+              canonical_creator_key: 'creator:none',
+              display_name: 'Unrated Creator',
+              average_rating: null,
+              median_rating: null,
+              ratings_count: 0,
+              rating_distribution: {},
+              top_rating_rate: null,
+              role_stats: [{ role: 'writer', issue_count: 0, average_rating: null }],
+              strongest_series: [],
+              unread_upcoming_count: 0,
+              read_unrated_count: 0,
+              insufficient_data: false,
+            }),
+            'creator:other': makeItem({
+              canonical_creator_key: 'creator:other',
+              display_name: 'Other Creator',
+              average_rating: 4,
+              median_rating: 4,
+              ratings_count: 10,
+              rating_distribution: { '4': 10 },
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:none,creator:other')
+
+    const distributions = screen.getAllByTestId('rating-distribution')
+    const noneDistribution = distributions[0]
+    expect(noneDistribution).not.toHaveTextContent(' ·')
+    // Every emitted bucket row is present and quiet (no count text for empty buckets).
+    expect(noneDistribution).toHaveTextContent('5★')
+    expect(noneDistribution).toHaveTextContent('1★')
+    // Empty buckets expose 0 / 0.0% only via screen-reader labels, never visually.
+    const noneRows = within(noneDistribution).getAllByRole('listitem')
+    expect(noneRows.length).toBe(9)
+    expect(noneRows[1]).toHaveAttribute('aria-label', '4.5★: 0 ratings (0.0%)')
+  })
+
+  it('keeps half-star buckets intact and computes their percentages from the headline sample', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:half': makeItem({
+              canonical_creator_key: 'creator:half',
+              display_name: 'Half-Star Creator',
+              ratings_count: 4,
+              rating_distribution: { '5': 1, '4.5': 1, '3.5': 1, '3': 1 },
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:half,creator:other')
+
+    const distributions = screen.getAllByTestId('rating-distribution')
+    const distribution = distributions[0]
+    expect(distribution).toHaveTextContent('5★')
+    expect(distribution).toHaveTextContent('4.5★')
+    expect(distribution).toHaveTextContent('3.5★')
+    expect(distribution).toHaveTextContent('3★')
+    // Each is 1 of 4 = 25.0% of the headline rated sample.
+    const rows = within(distribution).getAllByRole('listitem')
+    expect(rows[0]).toHaveAttribute('aria-label', '5★: 1 rating, 25.0%')
+    expect(rows[1]).toHaveAttribute('aria-label', '4.5★: 1 rating, 25.0%')
+    expect(rows[3]).toHaveAttribute('aria-label', '3.5★: 1 rating, 25.0%')
+    expect(rows[4]).toHaveAttribute('aria-label', '3★: 1 rating, 25.0%')
+  })
+
+  it('labels distribution rows with bucket, count, percentage and the region the sample size', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:sample': makeItem({
+              canonical_creator_key: 'creator:sample',
+              display_name: 'Sample Creator',
+              ratings_count: 8,
+              rating_distribution: { '4': 4, '5': 4 },
+            }),
+            'creator:other': makeItem({
+              canonical_creator_key: 'creator:other',
+              display_name: 'Other Creator',
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:sample,creator:other')
+
+    const distributions = screen.getAllByTestId('rating-distribution')
+    expect(distributions).toHaveLength(2)
+    expect(distributions[0]).toHaveAttribute(
+      'aria-label',
+      'Rating distribution across 8 rated issues',
+    )
+    const rows = within(distributions[0]).getAllByRole('listitem')
+    expect(rows).toHaveLength(9)
+    expect(rows[1]).toHaveAttribute('aria-label', '4.5★: 0 ratings (0.0%)')
+    expect(rows[2]).toHaveAttribute('aria-label', '4★: 4 ratings, 50.0%')
+    expect(rows[0]).toHaveAttribute('aria-label', '5★: 4 ratings, 50.0%')
   })
 })
