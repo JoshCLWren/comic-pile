@@ -13,6 +13,15 @@ export interface RollBootstrapThread {
   last_activity_at?: string | null
 }
 
+/** One series excluded from the roll pool, with the reason the user can understand. */
+export interface ThreadExclusionReason {
+  thread_id: number
+  title: string
+  format: string
+  reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue"
+  detail?: string | null
+}
+
 /** One direct continuity blocker for a pending roll. */
 export interface RollRecoveryBlocker {
   rule_id: number | null
@@ -129,4 +138,13 @@ export interface RollBootstrapResponse {
   stale_thread_count: number
   stale_thread: RollBootstrapThread | null
   timezone?: string | null
+
+  // Issue #3125: exclusion transparency — every series not in the pool is
+  // explained so the user can see why options vanish.
+  total_threads?: number
+  available_threads?: number
+  excluded_count?: number
+  excluded_threads?: ThreadExclusionReason[]
+  inactive_count?: number
+  inactive_threads?: ThreadExclusionReason[]
 }
