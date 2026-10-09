@@ -192,7 +192,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     setTimeout(focusTarget, 0)
   }, [])
 
-  const runIssueMutation = useCallback(async (mutation: IssueMutation) => {
+  const runIssueMutation = useCallback(async (mutation: IssueMutation): Promise<Issue[] | null> => {
     switch (mutation.type) {
       case 'toggle':
         if (mutation.nextStatus === 'read') {
@@ -200,16 +200,17 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         } else {
           await issuesService.markUnread(mutation.issueId)
         }
-        return
+        return null
       case 'delete':
         await issuesService.delete(mutation.issueId)
-        return
+        return null
       case 'reorder':
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
-        return
-      case 'create':
-        await issuesService.create(threadId, mutation.issueRange)
-        return
+        return null
+      case 'create': {
+        const response = await issuesService.create(threadId, mutation.issueRange)
+        return response.issues
+      }
     }
   }, [issuesService, threadId])
 
@@ -225,8 +226,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       while (pendingMutationsRef.current.length > 0) {
         const currentMutation = pendingMutationsRef.current[0]
         try {
-          await runIssueMutation(currentMutation)
-          baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
+          const createdIssues = await runIssueMutation(currentMutation)
+          if (currentMutation.type === 'create' && createdIssues) {
+            // Add newly created issues to the base list so subsequent mutations
+            // have the correct state and the UI reflects the server state.
+            baseIssuesRef.current = [...baseIssuesRef.current, ...createdIssues]
+          } else {
+            baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
+          }
           hadSuccess = true
         } catch (err: unknown) {
           try {
