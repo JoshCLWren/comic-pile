@@ -94,6 +94,7 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     setSkippedExpanded: vi.fn(),
     setBlockedExpanded: vi.fn(),
     setStaleExpanded: vi.fn(),
+    setInactiveExpanded: vi.fn(),
     setIsDieModalOpen: vi.fn(),
     setIsSetCurrentIssueOpen: vi.fn(),
     setSelectedThread: vi.fn(),

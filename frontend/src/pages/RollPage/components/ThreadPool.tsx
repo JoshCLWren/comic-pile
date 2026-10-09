@@ -19,9 +19,9 @@ interface ThreadPoolProps {
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedExpanded: boolean
   staleExpanded: boolean
-  inactiveExpanded: boolean
+  inactiveExpanded?: boolean
   inactiveThreads?: ThreadExclusionReason[]
-  onToggleInactive: () => void
+  onToggleInactive?: () => void
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
   onUnskip: (threadId: number) => void
@@ -374,7 +374,7 @@ export function ThreadPool({
         </div>
       )}
 
-      {inactiveThreads && inactiveThreads.length > 0 && !isRatingView && (
+      {inactiveThreads && inactiveThreads.length > 0 && !isRatingView && onToggleInactive && (
         <div className="mt-4 md:mt-8">
           <button
             type="button"
@@ -382,7 +382,7 @@ export function ThreadPool({
             className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
           >
             <span
-              className={`text-stone-400 text-xs transition-transform ${inactiveExpanded ? 'rotate-90' : ''}`}
+              className={`text-stone-400 text-xs transition-transform ${(inactiveExpanded ?? false) ? 'rotate-900' : ''}`}
             >
               ▶
             </span>

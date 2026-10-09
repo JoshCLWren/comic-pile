@@ -1301,11 +1301,11 @@ async def roll_bootstrap(
 
     for row in all_active_rows:
         tid = row.id
+        if tid in pool_ids:
+            continue
         title = row.title
         fmt = row.format
         queue_pos = row.queue_position
-        if tid in pool_ids:
-            continue
         if tid in blocked_ids:
             excluded[tid] = ThreadExclusionReason(
                 thread_id=tid, title=title, format=fmt, reason="blocked",
