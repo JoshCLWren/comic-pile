@@ -13,6 +13,7 @@ import type {
   TagTargetType,
   TagBulkOperation,
 } from '../types'
+import { tagTargetTypeUrlSegment } from '../utils/tagTargetType'
 
 export type { TagBulkOperation }
 
@@ -139,7 +140,7 @@ export class TagsApi {
    * Get effective tags (direct + inherited) for a target
    */
   async getEffectiveTags(type: TagTargetType, id: number): Promise<EffectiveTag[]> {
-    const response = await fetch(`${this.baseUrl}/effective/${type.toLowerCase()}/${id}/`)
+    const response = await fetch(`${this.baseUrl}/effective/${tagTargetTypeUrlSegment(type)}/${id}/`)
     if (!response.ok) {
       throw new Error(`Failed to get effective tags for ${type} ${id}: ${response.statusText}`)
     }

@@ -4,6 +4,7 @@ import { TagInput } from './TagInput'
 import { TagList } from './TagChip'
 import type { Tag } from '../../types'
 import { useBulkTagOperations } from '../../hooks/useTags'
+import { toTagTargetType, type TagCacheKeyType } from '../../utils/tagTargetType'
 
 interface BulkTagEditorProps {
   selectedItems: Array<{
@@ -45,9 +46,12 @@ export function BulkTagEditor({
   const bulkOperations: BulkOperation[] = useMemo(() => {
     if (!selectedTags.length) return []
 
+    const firstItemType = (selectedItems[0]?.type || 'issue') as TagCacheKeyType
+    const targetType = toTagTargetType(firstItemType)
+
     return selectedTags.map(tag => ({
       tag_id: tag.id,
-      target_type: (selectedItems[0]?.type.charAt(0).toUpperCase() + selectedItems[0]?.type.slice(1) || 'Issue') as 'Issue' | 'Thread' | 'ContinuityPlan',
+      target_type: targetType,
       target_ids: selectedItems.map(item => item.id),
       action,
     }))

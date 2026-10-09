@@ -8,6 +8,7 @@ import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutation
 import type { Tag, TagAssignment, EffectiveTag } from '../types'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
+import { toTagTargetType, type TagCacheKeyType } from '../utils/tagTargetType'
 
 /**
  * Centralized cache effects for all React Query mutations in ComicPile.
@@ -701,7 +702,7 @@ export async function applyDeletedTag(
 export function optimisticallyAssignTag(
   client: QueryClient,
   tag: Tag,
-  targetType: 'issue' | 'thread' | 'plan',
+  targetType: TagCacheKeyType,
   targetId: number,
 ): TagCacheRollback {
   const effectiveKey = queryKeys.tags.effective(targetType, targetId)
@@ -711,8 +712,7 @@ export function optimisticallyAssignTag(
     const newAssignment: TagAssignment = {
       id: Date.now(), // Temporary ID for optimistic update
       tag_id: tag.id,
-      // SAFETY: targetType is validated to be 'issue' | 'thread' | 'plan' by the caller
-      target_type: targetType.charAt(0).toUpperCase() + targetType.slice(1) as 'Issue' | 'Thread' | 'ContinuityPlan',
+      target_type: toTagTargetType(targetType),
       target_id: targetId,
       created_at: new Date().toISOString(),
     }
@@ -743,21 +743,21 @@ export function optimisticallyAssignTag(
 export function optimisticallyUnassignTag(
   client: QueryClient,
   tagId: number,
-  targetType: 'issue' | 'thread' | 'plan',
+  targetType: TagCacheKeyType,
   targetId: number,
 ): TagCacheRollback {
   const effectiveKey = queryKeys.tags.effective(targetType, targetId)
   const previousEffective = client.getQueryData<EffectiveTag[]>(effectiveKey)
+  const targetTypeString = toTagTargetType(targetType)
 
   if (previousEffective) {
     const updatedEffective = previousEffective.map(effective => {
       if (effective.tag.id === tagId) {
         return {
           ...effective,
-          assignments: effective.assignments.filter(assignment => 
-            !(assignment.tag_id === tagId && 
-              // SAFETY: targetType is validated to be 'issue' | 'thread' | 'plan' by the caller
-              assignment.target_type === targetType.charAt(0).toUpperCase() + targetType.slice(1) as 'Issue' | 'Thread' | 'ContinuityPlan' &&
+          assignments: effective.assignments.filter(assignment =>
+            !(assignment.tag_id === tagId &&
+              assignment.target_type === targetTypeString &&
               assignment.target_id === targetId)
           ),
         }

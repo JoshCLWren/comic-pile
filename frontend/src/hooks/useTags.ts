@@ -11,7 +11,6 @@ import type {
   TagUsageInfo,
   TagNearMatch,
   TagSearchResult,
-  TagTargetType,
 } from '../types'
 import { queryKeys } from '../query/queryKeys'
 import { queryClient } from '../query/queryClient'
@@ -24,6 +23,7 @@ import {
   invalidateAfterTagDelete,
   invalidateAfterTagAssignment,
 } from '../query/cacheEffects'
+import { fromTagTargetType, toTagTargetType, type TagCacheKeyType } from '../utils/tagTargetType'
 
 /**
  * Hook to list all visible tags (global + user's private)
@@ -97,11 +97,10 @@ export function useAssignTag() {
       tagsApi.assignTag(tagId, request),
     onMutate: async ({ tagId, request }) => {
       const tag = await tagsApi.getTag(tagId)
-      // SAFETY: target_type is validated by the API to be 'Issue' | 'Thread' | 'ContinuityPlan'
       const rollback = optimisticallyAssignTag(
         queryClient,
         tag,
-        request.target_type.toLowerCase() as 'issue' | 'thread' | 'plan',
+        fromTagTargetType(request.target_type),
         request.target_id
       )
       return { rollback }
@@ -112,8 +111,7 @@ export function useAssignTag() {
     onSuccess: async (_, { request }) => {
       await invalidateAfterTagAssignment(
         queryClient,
-        // SAFETY: target_type is validated by the API to be 'Issue' | 'Thread' | 'ContinuityPlan'
-        request.target_type.toLowerCase() as 'issue' | 'thread' | 'plan',
+        fromTagTargetType(request.target_type),
         request.target_id
       )
     },
@@ -128,11 +126,10 @@ export function useUnassignTag() {
     mutationFn: ({ tagId, request }: { tagId: number; request: TagAssignmentRequest }) =>
       tagsApi.unassignTag(tagId, request),
     onMutate: async ({ tagId, request }) => {
-      // SAFETY: target_type is validated by the API to be 'Issue' | 'Thread' | 'ContinuityPlan'
       const rollback = optimisticallyUnassignTag(
         queryClient,
         tagId,
-        request.target_type.toLowerCase() as 'issue' | 'thread' | 'plan',
+        fromTagTargetType(request.target_type),
         request.target_id
       )
       return { rollback }
@@ -143,8 +140,7 @@ export function useUnassignTag() {
     onSuccess: async (_, { request }) => {
       await invalidateAfterTagAssignment(
         queryClient,
-        // SAFETY: target_type is validated by the API to be 'Issue' | 'Thread' | 'ContinuityPlan'
-        request.target_type.toLowerCase() as 'issue' | 'thread' | 'plan',
+        fromTagTargetType(request.target_type),
         request.target_id
       )
     },
@@ -167,14 +163,10 @@ export function useTagUsage(id: number) {
 /**
  * Hook to get effective tags (direct + inherited) for a target
  */
-export function useEffectiveTags(type: 'issue' | 'thread' | 'plan', id: number) {
+export function useEffectiveTags(type: TagCacheKeyType, id: number) {
   return useQuery({
     queryKey: queryKeys.tags.effective(type, id),
-    queryFn: () => tagsApi.getEffectiveTags(
-      // SAFETY: type is constrained to 'issue' | 'thread' | 'plan' by the function signature
-      type.charAt(0).toUpperCase() + type.slice(1) as TagTargetType,
-      id
-    ),
+    queryFn: () => tagsApi.getEffectiveTags(toTagTargetType(type), id),
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
