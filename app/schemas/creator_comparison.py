@@ -30,6 +30,9 @@ class CreatorComparisonSeriesAggregate(BaseModel):
     issue_count: int = Field(
         ..., ge=0, description="Number of issues by this creator in this series."
     )
+    rated_issue_count: int = Field(
+        ..., ge=3, description="Number of rated issues in this series (minimum 3 for strongest ranking)."
+    )
     average_rating: float | None = Field(
         default=None,
         description="Average rating for this creator's issues in this series.",

@@ -39,6 +39,7 @@ function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate
       </span>
       <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
         <span>{aggregate.issue_count} {aggregate.issue_count === 1 ? 'issue' : 'issues'}</span>
+        <span>({aggregate.rated_issue_count} rated)</span>
         {aggregate.average_rating != null && (
           <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} />
         )}

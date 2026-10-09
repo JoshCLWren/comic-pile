@@ -231,9 +231,10 @@ async def get_creator_comparison(
                 thread_id=thread_id,
                 thread_title=thread_title,
                 issue_count=issue_count,
+                rated_issue_count=rated_issue_count,
                 average_rating=average_rating,
             )
-            for thread_id, thread_title, issue_count, average_rating in series_aggregates
+            for thread_id, thread_title, issue_count, rated_issue_count, average_rating in series_aggregates
         ]
 
         # Unread/upcoming and read-unrated counts
