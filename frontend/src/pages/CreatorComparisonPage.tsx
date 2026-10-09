@@ -49,7 +49,7 @@ function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate
 function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
-      <p className="whitespace-nowrap text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
+      <p className="truncate text-sm font-bold" title={stat.role} style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
       <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
         {stat.issue_count} {stat.issue_count === 1 ? 'issue' : 'issues'}
         {stat.average_rating != null ? (

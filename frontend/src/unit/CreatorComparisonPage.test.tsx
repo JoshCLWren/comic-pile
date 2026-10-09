@@ -297,6 +297,35 @@ describe('CreatorComparisonPage', () => {
     ).toBeInTheDocument()
   })
 
+  it('keeps role chips on one clipped line instead of breaking words mid-word (#3237)', () => {
+    const longRole = 'interior pencils and inks'
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({
+              canonical_creator_key: 'creator:7',
+              role_stats: [
+                { role: 'colorist', issue_count: 4, average_rating: 4.5 },
+                { role: longRole, issue_count: 2, average_rating: null },
+              ],
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:12')
+
+    const shortChip = screen.getByText('colorist')
+    expect(shortChip).toHaveClass('truncate')
+    expect(shortChip).not.toHaveClass('break-words')
+
+    const longChip = screen.getByText(longRole)
+    expect(longChip).toHaveClass('truncate')
+    expect(longChip).toHaveAttribute('title', longRole)
+  })
+
   it('normalizes distribution bars to a shared 0-100% scale (count / ratings_count)', () => {
     mockedHook.mockReturnValue(
       baseHook({
