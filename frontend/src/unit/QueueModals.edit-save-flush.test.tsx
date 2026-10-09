@@ -60,6 +60,7 @@ vi.mock('../pages/QueuePage/FormatSelect', () => ({
   ),
 }))
 
+// SAFETY: test fixture supplies only the fields QueueModals reads for the edit form.
 const EDITING_THREAD = {
   id: 99,
   title: 'Test Series',
@@ -68,9 +69,12 @@ const EDITING_THREAD = {
   issues_remaining: 1,
   total_issues: 12,
   queue_position: 1,
-  last_read_issue: null,
-  date_added: '2026-03-08T00:00:00Z',
-} as unknown as ThreadListItem
+  blocking_reasons: [],
+  created_at: '2026-03-08T00:00:00Z',
+  is_blocked: false,
+  last_activity_at: null,
+  status: 'active',
+} as ThreadListItem
 
 function Harness({ onEditSubmit }: { onEditSubmit: (event: FormEvent) => Promise<void> }) {
   const editForm: QueueFormState = { ...DEFAULT_CREATE_STATE, title: 'Test Series' }
