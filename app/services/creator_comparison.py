@@ -363,34 +363,7 @@ async def get_average_drilldown(
             if creator_name is None:
                 creator_name = credit.display_name
 
-    # Headline-rated issues: issues with headline-eligible role AND effective rating
-    headline_rated: list[tuple[int, float, str | None]] = []  # (issue_id, rating, role)
-    for issue_id in creator_issue_ids:
-        if issue_id not in inputs.effective_ratings:
-            continue
-        credits = inputs.issue_creator_credits[issue_id]
-        headline_credits = [
-            c for c in credits if any(role in HEADLINE_ROLES for role in c.roles)]
-        if not any(
-            role in HEADLINE_ROLES for credit in headlines for role in credit.roles
-        ):
-            # Check if any credit has a headline role
-            has_headline = False
-            for c in credits:
-                if any(role in HEADLINE_ROLES for role in c.roles):
-                    has_headline = True
-                    break
-            if not has_headline:
-                continue
-        # More correct: find the credit with a headline role
-        for credit in credits:
-            if any(role in HEADLINE_ROLES for role in credit.roles):
-                headline_rated.append(
-                    (issue_id, inputs.effective_ratings[issue_id], credit.external_id)
-                )
-                break
-
-    # Actually, let me redo this more carefully using the existing pattern from get_creator_comparison
+    # Filter to headline-eligible rated issues (same shared semantics as the summary)
     rated_issue_ids = frozenset(inputs.effective_ratings)
     creator_rated_ids = frozenset(
         issue_id for issue_id in creator_issue_ids if issue_id in rated_issue_ids

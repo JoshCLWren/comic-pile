@@ -328,6 +328,7 @@ async def compare_creators_endpoint(
 
 @router.get("/compare/average", response_model=dict[str, object])
 async def get_average_drilldown_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
@@ -356,6 +357,7 @@ async def get_average_drilldown_endpoint(
 
 @router.get("/compare/median", response_model=dict[str, object])
 async def get_median_drilldown_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
@@ -380,6 +382,7 @@ async def get_median_drilldown_endpoint(
 
 @router.get("/compare/distribution", response_model=dict[str, object])
 async def get_rating_distribution_drilldown_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
@@ -408,6 +411,7 @@ async def get_rating_distribution_drilldown_endpoint(
 
 @router.get("/compare/5-star-rate", response_model=dict[str, object])
 async def get_5_star_rate_drilldown_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
@@ -432,6 +436,7 @@ async def get_5_star_rate_drilldown_endpoint(
 
 @router.get("/compare/role-average", response_model=dict[str, object])
 async def get_role_average_drilldown_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
@@ -460,6 +465,7 @@ async def get_role_average_drilldown_endpoint(
 
 @router.get("/compare/series-average", response_model=dict[str, object])
 async def get_series_average_drilldown_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
@@ -488,6 +494,7 @@ async def get_series_average_drilldown_endpoint(
 
 @router.get("/compare/read-without-rating", response_model=dict[str, object])
 async def get_read_without_rating_drilldown_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",

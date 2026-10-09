@@ -123,10 +123,13 @@ export function useCreatorComparisonDrilldown(
           break
       }
 
-      const response = await fetch(url, {
+      const urlWithParams = new URL(url, window.location.origin)
+      if (Object.keys(params).length > 0) {
+        urlWithParams.search = new URLSearchParams(params).toString()
+      }
+      const response = await fetch(urlWithParams.toString(), {
         method: 'GET',
         headers: { Accept: 'application/json' },
-        ...(Object.keys(params).length > 0 ? { searchParams: new URLSearchParams(params) } : {}),
       })
 
       if (!response.ok) {
