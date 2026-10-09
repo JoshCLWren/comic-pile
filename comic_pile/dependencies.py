@@ -254,6 +254,7 @@ async def get_blocking_explanations_batch(
                 ~Dependency.note.like("cbl-order:%"),
             )
         )
+        .distinct()
     )
 
     reasons_map: dict[int, list[BlockingDependency]] = {}

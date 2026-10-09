@@ -15,7 +15,7 @@ from comic_pile.dependencies import (
     format_blocking_reason,
     get_blocking_explanations,
     get_blocking_explanations_batch,
-    refresh_canonical_blocked_status,
+    refresh_user_blocked_status,
 )
 from tests.conftest import get_or_create_user_async
 
@@ -81,7 +81,7 @@ async def test_blocking_explanations_use_canonical_dependencies(
         )
     )
     await async_db.commit()
-    await refresh_canonical_blocked_status(user.id, async_db)
+    await refresh_user_blocked_status(user.id, async_db)
     await async_db.refresh(target_thread)
     assert target_thread.is_blocked is True
 
@@ -109,7 +109,7 @@ async def test_blocking_explanations_use_canonical_dependencies(
     source_thread.next_unread_issue_id = None
     source_thread.issues_remaining = 0
     await async_db.flush()
-    await refresh_canonical_blocked_status(user.id, async_db)
+    await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
     await async_db.refresh(target_thread)
     assert target_thread.is_blocked is False
