@@ -226,7 +226,15 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         const currentMutation = pendingMutationsRef.current[0]
         try {
           await runIssueMutation(currentMutation)
-          baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
+          if (currentMutation.type === 'create') {
+            // A create changes which issues exist, and the server places new
+            // issues at their natural position rather than appending them.
+            // Re-read the thread so the base list matches server order before
+            // any later queued mutation (notably reorder) is derived from it.
+            baseIssuesRef.current = await fetchAllIssues()
+          } else {
+            baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
+          }
           hadSuccess = true
         } catch (err: unknown) {
           try {
