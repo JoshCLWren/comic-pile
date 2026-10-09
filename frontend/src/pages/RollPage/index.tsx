@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
@@ -35,6 +36,11 @@ import { useRollViewport } from './useRollViewport'
 import { useRatingView } from './useRatingView'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
+import { useUndo } from '../../hooks/useUndo'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '../../query/queryKeys'
+import { useSessionMode } from '../../hooks/useSessionMode'
+import { useToast } from '../../contexts/useToast'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
@@ -58,6 +64,7 @@ import CorrectionSheet from '../../components/CorrectionSheet'
 export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const {
     data: bootstrap,
@@ -129,6 +136,24 @@ export default function RollPage() {
   const rateMutation = useRate()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
+  const { showToast } = useToast()
+  
+  // Undo functionality
+  const undo = useUndo()
+  const sessionMode = useSessionMode()
+  
+  // Get current session for undo functionality
+  const { data: currentSession } = useQuery({
+    queryKey: queryKeys.session.current(),
+    queryFn: async () => {
+      const response = await fetch('/api/v1/session/current')
+      if (!response.ok) {
+        throw new Error('Failed to get current session')
+      }
+      return response.json()
+    },
+    enabled: true,
+  })
 
   useRollBootstrapSync({
     state,
@@ -246,6 +271,35 @@ export default function RollPage() {
     } catch (error) {
       console.error('Set current issue failed:', error)
       throw error
+    }
+  }
+
+  const handleUndoRating = async () => {
+    if (!currentSession || !rating.lastRated) return
+    
+    try {
+      await undo.mutate({
+        sessionId: currentSession.id,
+        snapshotId: currentSession.latest_snapshot_id,
+      })
+      
+      // Show success toast
+      showToast(`Rating for "${rating.lastRated.title} ${rating.lastRated.issueNumber}" has been undone`, 'success')
+      
+      // Clear the last rated state to remove the prompt
+      rating.clearLastRated()
+      
+      // Refetch bootstrap to update the UI with fresh state
+      await refetchBootstrap()
+      
+      // Invalidate session queries to ensure fresh data
+      // This will fix the stale state issue on the Roll page
+      queryClient.invalidateQueries({ queryKey: queryKeys.session.current() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.roll.bootstrap() })
+      
+    } catch (error) {
+      console.error('Undo failed:', error)
+      showToast('Failed to undo rating. Please try again.', 'error')
     }
   }
 
@@ -425,6 +479,8 @@ export default function RollPage() {
               <PostRateCopyPrompt
                 reference={rating.lastRated}
                 onDismiss={rating.clearLastRated}
+                onUndo={handleUndoRating}
+                canUndo={!!currentSession && !!rating.lastRated}
               />
             )}
 

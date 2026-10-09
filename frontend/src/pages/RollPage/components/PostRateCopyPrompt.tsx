@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { rollUtilityActionClass } from '../actionClasses'
+import { useUndo } from '../../../hooks/useUndo'
+import { queryKeys } from '../../../query/queryKeys'
 
 /** The just-rated comic reference offered on the post-rate copy prompt. */
 export interface PostRateReference {
@@ -11,6 +14,8 @@ export interface PostRateReference {
 interface PostRateCopyPromptProps {
   reference: PostRateReference | null
   onDismiss: () => void
+  onUndo?: () => void
+  canUndo?: boolean
 }
 
 /**
@@ -20,8 +25,10 @@ interface PostRateCopyPromptProps {
  * control would have offered before Mark Read & Save. It never blocks the
  * next roll and follows the pre-rate clipboard feedback pattern.
  */
-export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptProps) {
+export function PostRateCopyPrompt({ reference, onDismiss, onUndo, canUndo = false }: PostRateCopyPromptProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const queryClient = useQueryClient()
+  const { mutate: undo, isPending: isUndoPending } = useUndo()
 
   useEffect(() => {
     setCopyStatus('idle')
@@ -40,6 +47,12 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
     }
   }
 
+  async function handleUndo() {
+    if (onUndo) {
+      onUndo()
+    }
+  }
+
   return (
     <section
       aria-label="Just rated"
@@ -54,7 +67,7 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
         </strong>{' '}
         a <strong className="text-[var(--theme-personal-accent)]">{reference.rating}/5</strong>.
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+<div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={handleCopyComicReference}
@@ -78,8 +91,19 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
           </svg>
           {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title and issue'}
         </button>
+        {canUndo && (
+          <button
+            type="button"
+            onClick={handleUndo}
+            disabled={isUndoPending}
+            className="min-h-11 px-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-amber-300 hover:bg-white/10 disabled:opacity-60"
+            aria-label="Undo this rating"
+          >
+            {isUndoPending ? 'Undoing...' : 'Undo rating'}
+          </button>
+        )}
         <p className="text-[10px] font-medium text-[var(--theme-text-dim)]">
-          Copies “{title} {issueNumber}”
+          Copies "{title} {issueNumber}"
         </p>
         {copyStatus === 'failed' ? (
           <p className="text-[10px] font-bold text-[var(--theme-danger)]" role="status">
