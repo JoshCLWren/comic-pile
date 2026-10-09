@@ -33,7 +33,7 @@ async def test_session_details_deduplicates_identical_events(auth_client, async_
         async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert response.status_code == 200
     data = response.json()
     events = data.get("events", [])
@@ -88,7 +88,7 @@ async def test_session_details_deleted_thread_shows_graceful_placeholder(auth_cl
     await async_db.execute(delete(Thread).where(Thread.id == thread.id))
     await async_db.commit()
 
-    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert response.status_code == 200
     data = response.json()
     roll_events = [e for e in data.get("events", []) if e["type"] == "roll"]
