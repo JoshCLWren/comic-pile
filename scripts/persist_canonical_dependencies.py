@@ -18,11 +18,8 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.config import get_database_settings
-from app.database import get_db
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 

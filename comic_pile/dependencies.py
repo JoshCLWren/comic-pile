@@ -284,54 +284,7 @@ async def _canonical_blocking_explanations(
     return reasons
 
 
-async def _continuity_blocking_explanations_batch(
-    thread_ids: list[int],
-    user_id: int,
-    db: AsyncSession,
-) -> dict[int, list[BlockingDependency]]:
-    """Convert continuity-graph blockers for many threads in one snapshot load."""
-    from app.services.continuity_graph import (
-        issue_readiness,
-        issue_rule_readiness,
-        load_snapshot,
-    )
 
-    _invalidate_continuity_snapshot(user_id, db)
-    snapshot = await load_snapshot(db, user_id)
-    readiness = (
-        issue_rule_readiness
-        if not get_app_settings().legacy_dependency_blocking_enabled
-        else issue_readiness
-    )
-    reasons_map: dict[int, list[BlockingDependency]] = {}
-    for thread_id in thread_ids:
-        thread = snapshot.threads.get(thread_id)
-        if thread is None or thread.next_unread_issue_id is None:
-            continue
-        reasons: list[BlockingDependency] = []
-        seen: set[tuple[int, str]] = set()
-        for blocker in readiness(thread.next_unread_issue_id, snapshot):
-            for detail in blocker.unread_issue_details:
-                issue = snapshot.issues.get(detail.issue_id)
-                if issue is None:
-                    continue
-                source_thread = snapshot.threads.get(issue.thread_id)
-                if source_thread is None:
-                    continue
-                key = (source_thread.id, str(issue.issue_number))
-                if key in seen:
-                    continue
-                seen.add(key)
-                reasons.append(
-                    BlockingDependency(
-                        thread_id=source_thread.id,
-                        thread_title=source_thread.title,
-                        issue_number=str(issue.issue_number),
-                    )
-                )
-        if reasons:
-            reasons_map[thread_id] = reasons
-    return reasons_map
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
