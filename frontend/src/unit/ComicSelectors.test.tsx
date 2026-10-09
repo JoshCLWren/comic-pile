@@ -103,15 +103,100 @@ describe('continuity comic selectors', () => {
     expect(screen.getByRole('searchbox')).toHaveValue('New Mutants')
   })
 
-  it('selects arbitrary human-facing issue identifiers without numeric parsing', () => {
+  it('selects arbitrary human-facing issue identifiers by mouse click', () => {
     const onChange = vi.fn()
     render(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} />)
 
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '13' } })
-    expect(onChange).toHaveBeenCalledWith(issues[2])
+    fireEvent.click(screen.getByRole('combobox'))
     expect(screen.getByRole('option', { name: '#Omega' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '#Annual 1' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '#1/2' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('option', { name: '#Omega' }))
+    expect(onChange).toHaveBeenCalledWith(issues[2])
+  })
+
+  // #3308 regression: the native select reported every option as disabled in the
+  // accessibility tree and refused mouse clicks, so only keyboard selection
+  // worked. Options must stay enabled and a real pointer press must select.
+  it('renders every issue option enabled and free of the disabled attribute', () => {
+    render(<ContinuityIssueSelector issues={issues} value={null} onChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('combobox'))
+
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(issues.length)
+    for (const option of options) {
+      expect(option).toBeEnabled()
+      expect(option.hasAttribute('disabled')).toBe(false)
+      expect(option.hasAttribute('aria-disabled')).toBe(false)
+    }
+  })
+
+  // The reverted attempt for #3308 closed the list from the trigger's onBlur.
+  // Chromium shifts focus on mousedown, so the option unmounted before its
+  // click landed and the press silently did nothing.
+  it('keeps the option alive long enough for a pointer press to select it', () => {
+    const onChange = vi.fn()
+    render(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} />)
+
+    const combobox = screen.getByRole('combobox')
+    fireEvent.click(combobox)
+    const option = screen.getByRole('option', { name: '#Omega' })
+
+    // A real press starts with focus moving to the option, which is what
+    // triggered the premature close.
+    fireEvent.blur(combobox, { relatedTarget: option })
+    expect(screen.getByRole('option', { name: '#Omega' })).toBeInTheDocument()
+
+    fireEvent.click(option)
+    expect(onChange).toHaveBeenCalledWith(issues[2])
+  })
+
+  it('closes on Escape and an outside pointer press without selecting', () => {
+    const onChange = vi.fn()
+    render(
+      <div>
+        <ContinuityIssueSelector issues={issues} value={null} onChange={onChange} />
+        <button type="button">outside</button>
+      </div>,
+    )
+
+    const combobox = screen.getByRole('combobox')
+    fireEvent.click(combobox)
+    expect(screen.getByRole('option', { name: '#Omega' })).toBeInTheDocument()
+    fireEvent.keyDown(combobox, { key: 'Escape' })
+    expect(screen.queryByRole('option', { name: '#Omega' })).not.toBeInTheDocument()
+
+    fireEvent.click(combobox)
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'outside' }))
+    expect(screen.queryByRole('option', { name: '#Omega' })).not.toBeInTheDocument()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('moves option focus with the arrow, Home, and End keys', () => {
+    render(<ContinuityIssueSelector issues={issues} value={null} onChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('combobox'))
+    const [annual, oneTwo, omega] = screen.getAllByRole('option')
+
+    fireEvent.keyDown(omega, { key: 'ArrowDown' })
+    expect(annual).toHaveFocus()
+
+    fireEvent.keyDown(annual, { key: 'End' })
+    expect(omega).toHaveFocus()
+
+    fireEvent.keyDown(omega, { key: 'Home' })
+    expect(annual).toHaveFocus()
+
+    fireEvent.keyDown(annual, { key: 'ArrowUp' })
+    expect(omega).toHaveFocus()
+
+    fireEvent.keyDown(omega, { key: 'ArrowDown' })
+    expect(annual).toHaveFocus()
+
+    oneTwo.focus()
+    expect(oneTwo).toHaveFocus()
   })
 
   it('covers issue loading, empty, error, disabled, and cleared-selection states', () => {
@@ -119,7 +204,8 @@ describe('continuity comic selectors', () => {
     const { rerender } = render(
       <ContinuityIssueSelector issues={issues} value={issues[0]} onChange={onChange} />,
     )
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('option', { name: 'Select an issue' }))
     expect(onChange).toHaveBeenLastCalledWith(null)
 
     rerender(<ContinuityIssueSelector issues={[]} value={null} onChange={onChange} isLoading />)
@@ -149,8 +235,10 @@ describe('continuity comic selectors', () => {
     )
 
     const [start, end] = screen.getAllByRole('combobox')
-    fireEvent.change(start, { target: { value: '11' } })
-    fireEvent.change(end, { target: { value: '13' } })
+    fireEvent.click(start)
+    fireEvent.click(screen.getByRole('option', { name: '#Annual 1' }))
+    fireEvent.click(end)
+    fireEvent.click(screen.getByRole('option', { name: '#Omega' }))
 
     expect(onChange).toHaveBeenLastCalledWith({
       thread,
@@ -159,8 +247,10 @@ describe('continuity comic selectors', () => {
     })
     expect(screen.queryByText(/position/i)).not.toBeInTheDocument()
 
-    fireEvent.change(start, { target: { value: '13' } })
-    fireEvent.change(end, { target: { value: '11' } })
+    fireEvent.click(start)
+    fireEvent.click(screen.getByRole('option', { name: '#Omega' }))
+    fireEvent.click(end)
+    fireEvent.click(screen.getByRole('option', { name: '#Annual 1' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Choose a valid issue range in reading order.')
     expect(onChange).toHaveBeenLastCalledWith(null)
   })
@@ -176,10 +266,12 @@ describe('continuity comic selectors', () => {
       />,
     )
     const [start, end] = screen.getAllByRole('combobox')
-    expect(start).toHaveValue('11')
-    expect(end).toHaveValue('13')
+    expect(start).toHaveTextContent('#Annual 1')
+    expect(end).toHaveTextContent('#Omega')
 
-    fireEvent.change(end, { target: { value: '' } })
+    // Clearing an end issue publishes null until a complete range exists.
+    fireEvent.click(end)
+    fireEvent.click(screen.getByRole('option', { name: 'Select an issue' }))
     expect(onChange).toHaveBeenLastCalledWith(null)
 
     rerender(
@@ -191,8 +283,8 @@ describe('continuity comic selectors', () => {
       />,
     )
     const [resyncedStart, resyncedEnd] = screen.getAllByRole('combobox')
-    expect(resyncedStart).toHaveValue('12')
-    expect(resyncedEnd).toHaveValue('13')
+    expect(resyncedStart).toHaveTextContent('#1/2')
+    expect(resyncedEnd).toHaveTextContent('#Omega')
   })
 
   it('shows no unfiltered dump on empty search and requires typing to show results', () => {

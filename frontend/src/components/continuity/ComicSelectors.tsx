@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Issue, ThreadListItem } from '../../types'
 import { isNumber } from '../../utils/runtimeChecks'
+import OverlayPortal from '../OverlayPortal'
 
 export interface SelectedComic {
   thread: ThreadListItem
@@ -161,6 +162,25 @@ interface ContinuityIssueSelectorProps extends SelectorStateProps {
   emptyMessage?: string
 }
 
+/**
+ * Issue picker built as an explicit button + listbox rather than a native
+ * `<select>`.
+ *
+ * #3308: the native select rendered every `<option>` as `disabled` in the
+ * accessibility tree and silently refused mouse clicks, so the only working
+ * path was the keyboard. Chromium derives the option's disabled state from the
+ * owning control, so a select that is disabled for any reason reports its whole
+ * option list as unselectable with no per-option explanation. Owning the trigger
+ * and the list surface directly makes click, keyboard, and assistive
+ * selection the same code path.
+ *
+ * The listbox renders through `OverlayPortal layer="menu"` (see
+ * `frontend/AGENTS.md`) so a 100+ issue list is never clipped by an ancestor.
+ * Closing is driven by selection, Escape, Tab, or an outside pointer press.
+ * There is deliberately no `onBlur` close: on Chromium a mouse press on an
+ * option shifts focus first, so a blur-based close unmounts the option before
+ * its `click` can land, which is the silent-mouse-failure this replaces.
+ */
 export function ContinuityIssueSelector({
   issues,
   value,
@@ -171,25 +191,224 @@ export function ContinuityIssueSelector({
   error = null,
   disabled = false,
 }: ContinuityIssueSelectorProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const triggerContainerRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const listboxId = useId()
+
+  const isUnavailable = disabled || isLoading || issues.length === 0
+  const displayValue = value
+    ? `#${value.issue_number}`
+    : isLoading
+      ? 'Loading issues…'
+      : issues.length === 0
+        ? emptyMessage
+        : 'Select an issue'
+
+  // The native select cleared the selection through its placeholder option, so
+  // a chosen issue must stay clearable. The clear row only appears once there
+  // is something to clear.
+  const clearLabel = 'Select an issue'
+  const entries: Array<{ key: string; issue: Issue | null }> = [
+    ...(value ? [{ key: 'clear', issue: null }] : []),
+    ...issues.map((issue) => ({ key: `issue-${issue.id}`, issue })),
+  ]
+
+  const closeListbox = useCallback((restoreFocus: boolean) => {
+    setIsOpen(false)
+    setPosition(null)
+    if (restoreFocus) {
+      triggerRef.current?.focus()
+    }
+  }, [])
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger) return
+
+    const rect = trigger.getBoundingClientRect()
+    const listRect = listRef.current?.getBoundingClientRect()
+    const viewportWidth = document.documentElement.clientWidth
+    const viewportPadding = 8
+    const offset = 4
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, viewportWidth - rect.width - viewportPadding),
+    )
+    const listHeight = listRect?.height ?? 0
+    const belowTop = rect.bottom + offset
+    const top = belowTop + listHeight > window.innerHeight - viewportPadding
+      ? Math.max(viewportPadding, rect.top - listHeight - offset)
+      : belowTop
+
+    setPosition((current) =>
+      current && current.top === top && current.left === left ? current : { top, left },
+    )
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    updatePosition()
+    const frame = requestAnimationFrame(updatePosition)
+    window.addEventListener('resize', updatePosition)
+    document.addEventListener('scroll', updatePosition, true)
+
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', updatePosition)
+      document.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [isOpen, updatePosition])
+
+  // Close on an outside press rather than on blur. A pointer press inside the
+  // list must not tear the option down before its click handler runs.
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handlePointerDownOutside = (event: MouseEvent) => {
+      // SAFETY: mousedown targets are always DOM nodes, and Node.contains() requires a Node argument.
+      const target = event.target as Node
+      if (!listRef.current?.contains(target) && !triggerContainerRef.current?.contains(target)) {
+        closeListbox(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDownOutside)
+    return () => document.removeEventListener('mousedown', handlePointerDownOutside)
+  }, [isOpen, closeListbox])
+
+  // A new issue set or an externally cleared selection must not leave a stale
+  // list open with options that no longer belong to the current series.
+  useEffect(() => {
+    setIsOpen(false)
+    setPosition(null)
+  }, [issues, value])
+
+  const focusOptionAt = (index: number) => {
+    const options = optionRefs.current.filter((option): option is HTMLButtonElement => option != null)
+    if (options.length === 0) return
+    const wrapped = (index + options.length) % options.length
+    options[wrapped]?.focus()
+  }
+
+  const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (isUnavailable) return
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setIsOpen(true)
+      // Options mount with the list, so focus lands on the next frame.
+      window.requestAnimationFrame(() =>
+        focusOptionAt(event.key === 'ArrowDown' ? 0 : entries.length - 1),
+      )
+      return
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      // The trigger's native click already toggles; do not open a second path.
+      event.preventDefault()
+      setIsOpen((open) => !open)
+      return
+    }
+    if (event.key === 'Escape' && isOpen) {
+      event.preventDefault()
+      closeListbox(false)
+    }
+  }
+
+  const handleOptionKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      focusOptionAt(index + 1)
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      focusOptionAt(index - 1)
+      return
+    }
+    if (event.key === 'Home') {
+      event.preventDefault()
+      focusOptionAt(0)
+      return
+    }
+    if (event.key === 'End') {
+      event.preventDefault()
+      focusOptionAt(entries.length - 1)
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeListbox(true)
+      return
+    }
+    if (event.key === 'Tab') {
+      closeListbox(false)
+    }
+  }
+
+  const selectIssue = (issue: Issue | null) => {
+    onChange(issue)
+    closeListbox(true)
+  }
+
   return (
     <div className="space-y-1">
       <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-500">
         {label}
-        <select
-          value={value?.id ?? ''}
-          onChange={(event) => {
-            const next = issues.find((issue) => issue.id === Number(event.target.value)) ?? null
-            onChange(next)
-          }}
-          disabled={disabled || isLoading || issues.length === 0}
-          className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
-        >
-          <option value="">{isLoading ? 'Loading issues…' : issues.length === 0 ? emptyMessage : 'Select an issue'}</option>
-          {issues.map((issue) => (
-            <option key={issue.id} value={issue.id}>#{issue.issue_number}</option>
-          ))}
-        </select>
+        <div className="relative" ref={triggerContainerRef}>
+          <button
+            ref={triggerRef}
+            type="button"
+            role="combobox"
+            aria-expanded={isOpen}
+            aria-haspopup="listbox"
+            aria-controls={isOpen ? listboxId : undefined}
+            disabled={isUnavailable}
+            onClick={() => (isOpen ? closeListbox(false) : setIsOpen(true))}
+            onKeyDown={handleTriggerKeyDown}
+            className="form-control mt-1 min-h-11 w-full rounded-xl px-3 py-2 text-left text-sm disabled:opacity-50"
+          >
+            <span className="block truncate">{displayValue}</span>
+          </button>
+        </div>
       </label>
+      {isOpen && (
+        <OverlayPortal layer="menu">
+          <div
+            ref={listRef}
+            id={listboxId}
+            role="listbox"
+            aria-label={`${label} options`}
+            className="surface-glass fixed max-h-60 w-56 overflow-auto p-1 shadow-xl"
+            style={position ? { top: position.top, left: position.left } : { top: 0, left: 0, visibility: 'hidden' }}
+          >
+            {entries.map((entry, index) => (
+              <button
+                key={entry.key}
+                ref={(element) => {
+                  optionRefs.current[index] = element
+                }}
+                type="button"
+                role="option"
+                aria-selected={entry.issue ? value?.id === entry.issue.id : value === null}
+                onClick={() => selectIssue(entry.issue)}
+                onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                className={`w-full rounded-lg px-3 py-2 text-left text-sm focus:outline-none focus-visible:bg-white/10 ${
+                  entry.issue && value?.id === entry.issue.id
+                    ? 'bg-white/10 font-semibold text-[var(--theme-text-primary)]'
+                    : 'text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)]'
+                }`}
+              >
+                {entry.issue ? `#${entry.issue.issue_number}` : clearLabel}
+              </button>
+            ))}
+          </div>
+        </OverlayPortal>
+      )}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
     </div>
   )
