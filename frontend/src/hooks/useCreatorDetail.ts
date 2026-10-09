@@ -79,6 +79,11 @@ export function useCreatorDetail(
   const ratedIssues = pages.flatMap((page) => page.rated_issues)
   const readUnratedIssues = pages.flatMap((page) => page.read_unrated_issues)
   const upcomingIssues = pages.flatMap((page) => page.upcoming_issues)
+  
+  // Calculate actual counts from all loaded pages to match displayed lists
+  const actualRatingsCount = ratedIssues.length
+  const actualUpcomingCount = upcomingIssues.length
+  const actualReadUnratedCount = readUnratedIssues.length
 
   const loadMore = useCallback((): Promise<void> => {
     if (!query.hasNextPage || query.isFetchingNextPage) {
@@ -87,8 +92,16 @@ export function useCreatorDetail(
     return query.fetchNextPage().then(() => undefined)
   }, [query])
 
+  const summary = firstPage?.summary ? {
+      ...firstPage.summary,
+      // Override counts with actual values from loaded pages
+      ratings_count: actualRatingsCount,
+      upcoming_count: actualUpcomingCount,
+      read_unrated_count: actualReadUnratedCount,
+    } : null
+
   return {
-    summary: firstPage?.summary ?? null,
+    summary,
     coverage: firstPage?.coverage ?? null,
     roleStats: firstPage?.role_stats ?? [],
     ratingDistribution: firstPage?.rating_distribution ?? null,
