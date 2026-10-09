@@ -34,11 +34,15 @@ This made the data appear more complete than it actually was, as users couldn't 
 
 #### 2. Updated RoleStatRow Component (`frontend/src/pages/CreatorComparisonPage.tsx`)
 - Changed display from: `{stat.issue_count} issues`
-- To: `{stat.issue_count} credited{stat.rated_issue_count !== stat.issue_count && ` · ${stat.rated_issue_count} rated`}`
+- To: `{stat.issue_count} issues · {stat.rated_issue_count} rated`
 - Shows both total credited issues and rated sample count
-- Uses "credited" instead of "issues" for clarity regarding role attribution
+- Uses "issues" (matching the existing Creator Detail page wording) rather than "credited"
 
-#### 3. Updated Test Mocks
+#### 3. Added a shared caveat line under the "Role breakdown" heading
+- "Issues may appear under multiple roles. The average rating uses only the rated subset."
+- Mirrors the existing caveat on the Creator Detail page so the comparison page does not invent a new convention.
+
+#### 4. Updated Test Mocks
 - Updated all frontend test files to include `rated_issue_count` in role stat mocks
 - Ensures test data matches the new schema
 

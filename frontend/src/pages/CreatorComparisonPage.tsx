@@ -51,10 +51,8 @@ function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <p className="truncate text-sm font-bold" title={stat.role} style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
       <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-        {stat.issue_count} {stat.issue_count === 1 ? 'credited' : 'credited'}
-        {stat.rated_issue_count !== stat.issue_count && (
-          <> · {stat.rated_issue_count} rated</>
-        )}
+        {stat.issue_count} {stat.issue_count === 1 ? 'issue' : 'issues'}
+        <> · {stat.rated_issue_count} rated</>
         {stat.average_rating != null ? (
           <> · <RatingValue value={stat.average_rating} label={`Average ${stat.average_rating} out of 5 as ${stat.role}`} /></>
         ) : (
@@ -235,6 +233,9 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
         <div className="mt-6">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Role breakdown
+          </p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Issues may appear under multiple roles. The average rating uses only the rated subset.
           </p>
           <ul className="mt-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
             {item.role_stats.map((stat) => (
