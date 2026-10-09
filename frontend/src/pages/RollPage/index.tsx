@@ -454,7 +454,6 @@ export default function RollPage() {
               staleExpanded={state.staleExpanded}
               inactiveExpanded={state.inactiveExpanded}
               inactiveThreads={inactiveThreads}
-              excludedCount={bootstrap?.excluded_count ?? 0}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
               onUnskip={skip.handleUnskip}

@@ -243,6 +243,9 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         blocked_threads=summaries,
         stale_thread_count=0,
         stale_thread=None,
+        total_threads=len(summaries),
+        available_threads=len(summaries),
+        excluded_count=0,
     )
 
     assert len(response.roll_pool) == 25

@@ -4,14 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import roll as roll_api
-from app.models import Issue, Thread
 from app.schemas import RollBootstrapResponse, RollBootstrapThread, SessionMode
 from app.schemas.session import SessionBandwidthState
-from tests.conftest import get_or_create_user_async
 
 
 class _Result:
@@ -189,7 +185,7 @@ async def test_bootstrap_includes_multiple_inactive_series(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_bootstrap_exclusion_counts_remain_consistent(monkeypatch):
-    """total - available equals the union of all excluded reasons."""
+    """Total - available equals the union of all excluded reasons."""
     current_session = _mode_session(id=55, timezone=None)
     current_user = SimpleNamespace(id=7)
 

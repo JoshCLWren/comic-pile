@@ -19,8 +19,7 @@ interface ThreadPoolProps {
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedExpanded: boolean
   staleExpanded: boolean
-  inactiveThreads: ThreadExclusionReason[]
-  excludedCount: number
+  inactiveThreads?: ThreadExclusionReason[]
   onToggleInactive: () => void
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
@@ -51,8 +50,7 @@ export function ThreadPool({
   skippedThreads,
   skippedExpanded,
   staleExpanded,
-  inactiveThreads,
-  excludedCount,
+  inactiveThreads = [],
   onToggleInactive,
   onThreadClick,
   onUnsnooze,
