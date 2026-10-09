@@ -159,7 +159,7 @@ export default function QueueThreadCard({
             <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               {thread.format}
             </span>
-            {thread.comicvine_mapping !== null && (
+            {thread.comicvine_mapping != null && (
               <span
                 data-testid="queue-thread-mapping-status"
                 className="ml-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-stone-800/50 border border-stone-400/30 text-stone-300"
