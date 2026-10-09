@@ -50,7 +50,7 @@ async def persist_rule_native_item_read_edges() -> int:
             .where(
                 ContinuityRule.satisfaction_type == "item_read",
                 ContinuityRule.source_type == "issue",
-                ContinuityRule.legacy_dependency_id.is_(None),  # noqa: E711
+                ContinuityRule.legacy_dependency_id.is_(None),
             )
         )
         rules = result.scalars().all()
@@ -121,11 +121,16 @@ async def persist_converged_edges() -> int:
                     # crossover targets are handled separately
                     continue
 
-                # Check if a Dependency row already exists for this edge
+                # A converged rule blocks its own target while any convergence
+                # target is unread, so each prerequisite is an incoming edge:
+                # Dependency(prerequisite, rule.target_id). Production converged
+                # rules are self-referential (source_id == target_id) and the
+                # source_id is decorative, so it must not be used as the edge
+                # source. See docs/READING_GRAPH_RUNTIME_AUDIT.md section 4.2.
                 existing = await db.execute(
                     select(Dependency).where(
-                        Dependency.source_issue_id == rule.source_id,
-                        Dependency.target_issue_id == target_id,
+                        Dependency.source_issue_id == target_id,
+                        Dependency.target_issue_id == rule.target_id,
                     )
                 )
                 if existing.scalar_one_or_none() is not None:
@@ -134,8 +139,8 @@ async def persist_converged_edges() -> int:
 
                 # Insert new Dependency row with note = NULL (canonical set)
                 new_dep = Dependency(
-                    source_issue_id=rule.source_id,
-                    target_issue_id=target_id,
+                    source_issue_id=target_id,
+                    target_issue_id=rule.target_id,
                     # note stays NULL by default
                 )
                 db.add(new_dep)

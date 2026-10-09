@@ -79,9 +79,14 @@ async def test_canonical_dependency_immediately_updates_denormalized_blocked_sta
     )
     await async_db.commit()
 
+    # Writing a Dependency row does not itself refresh the denormalized flag;
+    # every runtime write path calls the refresh explicitly.
+    changes = await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
     await async_db.refresh(target_thread)
     assert target_thread.is_blocked is True
-
+    assert changes[target_thread.id] is False
 
     source_issue.status = "read"
     await async_db.flush()

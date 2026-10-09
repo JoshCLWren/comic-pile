@@ -14,7 +14,10 @@ from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services import reader_order_cutover
-from comic_pile.dependencies import _get_blocked_thread_ids_uncached
+from comic_pile.dependencies import (
+    _get_blocked_thread_ids_uncached,
+    refresh_user_blocked_status,
+)
 from comic_pile.queue import get_roll_pool
 from tests.conftest import get_or_create_user_async
 
@@ -307,28 +310,31 @@ async def test_canonical_dependencies_only_for_roll_eligibility(
     assert threads[1].id in blocked  # reader_order target blocked
     assert threads[3].id in blocked  # standalone target blocked
 
-    # Now add a cbl-order:% Dependency which should NOT block
-    cbl_dep = Dependency(
-        source_issue_id=issues[0].id,
-        target_issue_id=issues[1].id,
-        note="cbl-order:source:test",
+    # Historical CBL materialization is inert, so reclassifying the reader_order
+    # edge as cbl-order:% must stop it blocking. The edge is unique in the
+    # dependencies table, so the existing row is reclassified in place rather
+    # than inserting a conflicting duplicate.
+    reclassified = await async_db.scalar(
+        select(Dependency).where(Dependency.id == reader_order.id)
     )
-    async_db.add(cbl_dep)
-    await async_db.commit()
-
-    # The cbl-order:% row should not affect blocking since the canonical reader_order already blocks
-    # But if we remove the canonical reader_order, the cbl-order:% should not block
-    await async_db.execute(delete(Dependency).where(Dependency.id == reader_order.id))
+    assert reclassified is not None
+    reclassified.note = "cbl-order:source:test"
     await async_db.commit()
 
     blocked_after = await _get_blocked_thread_ids_uncached(user_id, async_db)
     assert threads[1].id not in blocked_after  # cbl-order:% does not block
 
-    # The standalone prerequisite should still block
+    # The standalone prerequisite is still canonical, so it keeps blocking.
     assert threads[3].id in blocked_after
 
-    await _get_blocked_thread_ids_uncached(user_id, async_db)
+    await refresh_user_blocked_status(user_id, async_db)
     await async_db.commit()
     roll_ids = {thread.id for thread in await get_roll_pool(user_id, async_db)}
     assert threads[1].id in roll_ids  # unblocked
     assert threads[3].id not in roll_ids  # still blocked by standalone
+
+    # Promoting the same edge back to a canonical note blocks it again, proving
+    # the note predicate is the sole discriminator.
+    reclassified.note = "classified reader order"
+    await async_db.commit()
+    assert threads[1].id in await _get_blocked_thread_ids_uncached(user_id, async_db)
