@@ -70,10 +70,10 @@ function paginationFromResponse(response: {
   next_offset: number | null
 }) {
   return {
-    offset: response.offset,
-    limit: response.limit,
-    hasMore: response.has_more,
-    nextOffset: response.next_offset,
+    offset: response.offset || 0,
+    limit: response.limit || 10,
+    hasMore: response.has_more || false,
+    nextOffset: response.next_offset || null,
   }
 }
 
@@ -137,6 +137,11 @@ export default function AddSeriesFromComicVineDialog({
       try {
         const response = await comicVineApi.searchSeries(searchQuery.trim(), SEARCH_PAGE_SIZE, offset)
         if (requestId !== asyncRef.current) return
+        if (!response?.results) {
+          setError('Invalid response from ComicVine. Please try again.')
+          setSeriesResults((previous) => (append ? previous : []))
+          return
+        }
         setSeriesResults((previous) =>
           append ? mergeSeriesResults(previous, response.results) : response.results,
         )
