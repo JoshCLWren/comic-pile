@@ -1,9 +1,8 @@
-"""Regression coverage for the guarded raw-Dependency Roll cutover."""
+"""Regression coverage for the canonical Dependency-only Roll cutover."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -15,7 +14,7 @@ from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services import reader_order_cutover
-from comic_pile import dependencies
+from comic_pile.dependencies import _get_blocked_thread_ids_uncached
 from comic_pile.queue import get_roll_pool
 from tests.conftest import get_or_create_user_async
 
@@ -283,12 +282,11 @@ async def test_cutover_fails_when_sequence_order_contributes_to_eligibility(
 
 
 @pytest.mark.asyncio
-async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
+async def test_canonical_dependencies_only_for_roll_eligibility(
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Turning off raw blocking ignores debris while canonical prerequisites remain."""
-    user_id, threads, _issues, reader_order, _standalone = await _two_dependency_families(
+    """Only canonical Dependency rows (note IS NULL OR note NOT LIKE 'cbl-order:%') are used for Roll eligibility."""
+    user_id, threads, issues, reader_order, standalone = await _two_dependency_families(
         async_db
     )
     linked_reader_rule = await async_db.scalar(
@@ -302,17 +300,35 @@ async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
     )
     await async_db.commit()
 
-    monkeypatch.setattr(
-        dependencies,
-        "get_app_settings",
-        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
-    )
-    blocked = await dependencies._get_blocked_thread_ids_uncached(user_id, async_db)
-    assert threads[1].id not in blocked
-    assert threads[3].id in blocked
+    # The reader_order Dependency has note="classified reader order" which is canonical
+    # The standalone Dependency has note="genuine standalone prerequisite" which is canonical
+    # Both should block
+    blocked = await _get_blocked_thread_ids_uncached(user_id, async_db)
+    assert threads[1].id in blocked  # reader_order target blocked
+    assert threads[3].id in blocked  # standalone target blocked
 
-    await dependencies.refresh_user_blocked_status(user_id, async_db)
+    # Now add a cbl-order:% Dependency which should NOT block
+    cbl_dep = Dependency(
+        source_issue_id=issues[0].id,
+        target_issue_id=issues[1].id,
+        note="cbl-order:source:test",
+    )
+    async_db.add(cbl_dep)
+    await async_db.commit()
+
+    # The cbl-order:% row should not affect blocking since the canonical reader_order already blocks
+    # But if we remove the canonical reader_order, the cbl-order:% should not block
+    await async_db.execute(delete(Dependency).where(Dependency.id == reader_order.id))
+    await async_db.commit()
+
+    blocked_after = await _get_blocked_thread_ids_uncached(user_id, async_db)
+    assert threads[1].id not in blocked_after  # cbl-order:% does not block
+
+    # The standalone prerequisite should still block
+    assert threads[3].id in blocked_after
+
+    await _get_blocked_thread_ids_uncached(user_id, async_db)
     await async_db.commit()
     roll_ids = {thread.id for thread in await get_roll_pool(user_id, async_db)}
-    assert threads[1].id in roll_ids
-    assert threads[3].id not in roll_ids
+    assert threads[1].id in roll_ids  # unblocked
+    assert threads[3].id not in roll_ids  # still blocked by standalone

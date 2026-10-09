@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 async def _get_db_session() -> AsyncSession:
     """Get an async database session."""
-    from app.database import engine
-    async with AsyncSession(engine) as db:
+    from app.database import async_engine
+    async with AsyncSession(async_engine) as db:
         return db
 
 
@@ -45,15 +45,6 @@ async def persist_rule_native_item_read_edges() -> int:
     db = await _get_db_session()
     try:
         # Find all rule-native item_read rules (source_type = 'issue', no legacy_dependency_id)
-        result = await db.execute(
-            select(ContinuityRule)
-            .where(
-                ContinuityRule.satisfaction_type == "item_read",
-                ContinuityRule.source_type == "issue",
-                ContinuityRule.legacy_dependency_id.is_(None),
-            )  # noqa: E711  intentional: checking IS NULL vs is_(None)
-        )
-        # Actually, the above has a typo - let me fix this
         result = await db.execute(
             select(ContinuityRule)
             .where(

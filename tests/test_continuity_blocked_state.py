@@ -50,38 +50,34 @@ async def _make_thread_with_issue(
 
 
 @pytest.mark.asyncio
-async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
+async def test_canonical_dependency_immediately_updates_denormalized_blocked_state(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Continuity rules refresh persisted blocked state immediately."""
+    """Canonical Dependency rows refresh persisted blocked state immediately."""
     user = await get_or_create_user_async(async_db)
     source_thread, source_issue = await _make_thread_with_issue(
         async_db,
         user_id=user.id,
-        title="Continuity source",
+        title="Canonical source",
         queue_position=901,
     )
     target_thread, target_issue = await _make_thread_with_issue(
         async_db,
         user_id=user.id,
-        title="Continuity target",
+        title="Canonical target",
         queue_position=902,
     )
     await async_db.commit()
 
-    response = await auth_client.post(
-        "/api/v1/continuity-rules/",
-        json={
-            "source_type": "issue",
-            "source_id": source_issue.id,
-            "target_type": "issue",
-            "target_id": target_issue.id,
-            "satisfaction_type": "item_read",
-            "selected_member_issue_ids": [],
-        },
+    # Create a canonical Dependency row directly (note=NULL)
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue.id,
+            target_issue_id=target_issue.id,
+        )
     )
-    assert response.status_code == 201, response.text
+    await async_db.commit()
 
     await async_db.refresh(target_thread)
     assert target_thread.is_blocked is True
