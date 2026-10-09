@@ -22,6 +22,7 @@ from app.models.external_identity import ExternalIdentity, IssueExternalIdentity
 D1 = datetime(2026, 3, 1, tzinfo=UTC)
 D2 = datetime(2026, 3, 2, tzinfo=UTC)
 D3 = datetime(2026, 3, 3, tzinfo=UTC)
+D4 = datetime(2026, 3, 4, tzinfo=UTC)
 
 _identity_serial = 0
 
@@ -176,8 +177,6 @@ async def test_compare_returns_bounded_side_by_side_metrics(
     assert artist["read_unrated_count"] == 1
 
     assert body["insufficient_data_keys"] == ["creator:2"]
-
-    coverage = body["coverage"]
 
 
 @pytest.mark.asyncio
@@ -439,18 +438,20 @@ async def test_series_average_uses_latest_effective_rating(
     _thread, issues = await _make_thread(
         async_db, default_user, title="Rerated", issue_count=3, queue_position=1, read_through=3
     )
-    await _confirm_identity(
-        async_db,
-        issues[0],
-        creators=[
-            {"id": 1, "name": "Writer One", "role": "writer"},
-            {"id": 2, "name": "Artist Two", "role": "artist"},
-        ],
-    )
-    # Rate first issue twice (re-rating from 1.0 to 5.0)
+    for issue in issues:
+        await _confirm_identity(
+            async_db,
+            issue,
+            creators=[
+                {"id": 1, "name": "Writer One", "role": "writer"},
+                {"id": 2, "name": "Artist Two", "role": "artist"},
+            ],
+        )
+    # Rate first issue twice (re-rating from 1.0 to 5.0). The latest event
+    # wins, so this issue contributes 5.0 once, never the mean of its history.
     await _rate(async_db, issues[0], rating=1.0, timestamp=D1)
     await _rate(async_db, issues[0], rating=5.0, timestamp=D2)
-    # Rate other issues once to meet minimum sample requirement
+    # Rate other issues once to meet the minimum sample requirement.
     await _rate(async_db, issues[1], rating=4.0, timestamp=D3)
     await _rate(async_db, issues[2], rating=3.0, timestamp=D3)
 
@@ -459,6 +460,6 @@ async def test_series_average_uses_latest_effective_rating(
     assert response.status_code == 200
     comparisons = response.json()["comparisons"]
     for key in ("creator:1", "creator:2"):
-        assert comparisons[key]["average_rating"] == pytest.approx(5.0)
+        assert comparisons[key]["average_rating"] == pytest.approx(4.0)
         assert comparisons[key]["strongest_series"][0]["average_rating"] == pytest.approx(4.0)  # (5.0 + 4.0 + 3.0) / 3 = 4.0
         assert comparisons[key]["strongest_series"][0]["rated_issue_count"] == 3

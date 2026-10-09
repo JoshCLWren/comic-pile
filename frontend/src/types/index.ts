@@ -627,6 +627,7 @@ export interface CreatorComparisonSeriesAggregate {
   thread_id: number
   thread_title: string
   issue_count: number
+  rated_issue_count: number
   average_rating: number | null
 }
 
