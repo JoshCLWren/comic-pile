@@ -129,7 +129,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         _Result(scalar_value=0),
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     snoozed_statement = db.execute.await_args_list[1].args[0]
     compiled = str(snoozed_statement)
@@ -204,7 +204,7 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         _Result(scalar_value=0),
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     pool_statement = db.execute.await_args_list[0].args[0]
     compiled = str(pool_statement.compile(compile_kwargs={"literal_binds": True}))
@@ -509,7 +509,7 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
         _Result(scalar_value=0),
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     mode = response.session_mode
     assert mode.active_bandwidth is None
@@ -577,7 +577,7 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
         _Result(scalar_value=0),
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     mode = response.session_mode
     assert mode.active_bandwidth == "light"
@@ -647,7 +647,7 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
         _Result(scalar_value=0),
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     assert response.session_mode.session_mode_correction_guidance == guidance
 
@@ -756,7 +756,7 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
         ),
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     assert stale_ids_captured == [10, 20, 30]
     assert response.stale_thread_count == 3

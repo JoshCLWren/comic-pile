@@ -59,6 +59,7 @@ from app.schemas.roll import (
     SetCurrentIssueResponse,
     SessionModeResponse,
     SessionModeUpdateRequest,
+    ThreadExclusionReason,
 )
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
@@ -148,6 +149,7 @@ __all__ = [
     "OverrideRequest",
     "RollBootstrapThread",
     "RollBootstrapResponse",
+    "ThreadExclusionReason",
     "SetCurrentIssueRequest",
     "SetCurrentIssueResponse",
     "RecommendationExplanationResponse",

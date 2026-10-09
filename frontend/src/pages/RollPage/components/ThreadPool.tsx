@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import type { BlockingDependency } from '../../../types'
-import type { RollBootstrapThread } from '../../../types/rollBootstrap'
+import type { RollBootstrapThread, ThreadExclusionReason } from '../../../types/rollBootstrap'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
@@ -19,6 +19,9 @@ interface ThreadPoolProps {
   skippedThreads: Array<{ id: number; title: string; format: string }>
   skippedExpanded: boolean
   staleExpanded: boolean
+  inactiveThreads: ThreadExclusionReason[]
+  excludedCount: number
+  onToggleInactive: () => void
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
   onUnskip: (threadId: number) => void
@@ -48,6 +51,9 @@ export function ThreadPool({
   skippedThreads,
   skippedExpanded,
   staleExpanded,
+  inactiveThreads,
+  excludedCount,
+  onToggleInactive,
   onThreadClick,
   onUnsnooze,
   onUnskip,
@@ -103,7 +109,7 @@ export function ThreadPool({
       </div>}
 
       {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`${pool.length} in play, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
-        {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
+        {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 && inactiveThreads.length === 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
@@ -125,12 +131,22 @@ export function ThreadPool({
               </ul>
             </div>
           </div>
-        ) : pool.length === 0 && (blockedThreads.length > 0 || snoozedThreads.length > 0) ? (
+        ) : pool.length === 0 && (blockedThreads.length > 0 || snoozedThreads.length > 0 || inactiveThreads.length > 0) ? (
           <div className="text-center py-6 space-y-4">
-            <div className="text-4xl">🔒</div>
+            <div className="text-4xl">
+              {inactiveThreads.length > 0 ? '📚' : '🔒'}
+            </div>
             <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">Every series is blocked or snoozed</p>
-              <p className="text-xs text-stone-500 mt-1">Check your queue to see what needs to be read to unlock more options.</p>
+              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+                {inactiveThreads.length > 0
+                  ? 'All series are blocked, snoozed, or completed'
+                  : 'Every series is blocked or snoozed'}
+              </p>
+              <p className="text-xs text-stone-500 mt-1">
+                {inactiveThreads.length > 0
+                  ? 'Complete, snoozed, or dependency-blocked series live in the inactive list below — reopen them from the queue.'
+                  : 'Check your queue to see what needs to be read to unlock more options.'}
+              </p>
             </div>
             <button
               onClick={() => navigate('/queue')}
@@ -351,6 +367,45 @@ export function ThreadPool({
                   >
                     ✕
                   </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {inactiveThreads && inactiveThreads.length > 0 && !isRatingView && (
+        <div className="mt-4 md:mt-8">
+          <button
+            type="button"
+            onClick={onToggleInactive}
+            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+          >
+            <span
+              className={`text-stone-400 text-xs transition-transform ${inactiveExpanded ? 'rotate-90' : ''}`}
+            >
+              ▶
+            </span>
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+              Inactive ({inactiveThreads.length})
+            </span>
+          </button>
+          {inactiveExpanded && (
+            <div className="mt-2 space-y-1">
+              {inactiveThreads.map((thread) => (
+                <div
+                  key={thread.thread_id}
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
+                >
+                  <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
+                  <span className="text-xs text-stone-500 truncate">
+                    {' - '}
+                    {thread.reason === 'completed'
+                      ? 'Read the full series'
+                      : thread.reason === 'not_in_queue'
+                      ? 'Not in the active queue'
+                      : thread.reason}
+                  </span>
                 </div>
               ))}
             </div>

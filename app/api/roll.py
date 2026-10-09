@@ -69,6 +69,7 @@ from comic_pile.recommendation_version import (
     recommendation_algorithm_version,
 )
 from comic_pile.reading_session import get_current_die_for_session, get_or_create
+from comic_pile.dependencies import get_blocking_explanations_batch
 
 router = APIRouter(tags=["roll"])
 v2_router = APIRouter(tags=["roll"])
@@ -1271,6 +1272,91 @@ async def roll_bootstrap(
                     last_activity_at=stale_last_activity,
                 )
 
+    # Exclusion transparency for issue #3125: enumerate every series not in the
+    # roll pool and explain why, so the user can see what vanished and why.
+    pool_ids = {t.id for t in roll_pool}
+
+    all_active_result = await db.execute(
+        select(Thread.id, Thread.title, Thread.format, Thread.status, Thread.queue_position)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .order_by(Thread.queue_position)
+    )
+    all_active_rows = all_active_result.all()
+
+    total_threads = len(all_active_rows)
+    available_threads = len(roll_pool)
+
+    excluded: dict[int, ThreadExclusionReason] = {}
+    inactive: list[ThreadExclusionReason] = []
+
+    for tid, title, fmt, _status, queue_pos in all_active_rows:
+        if tid in pool_ids:
+            continue
+        if tid in blocked_ids:
+            excluded[tid] = ThreadExclusionReason(
+                thread_id=tid, title=title, format=fmt, reason="blocked",
+            )
+        elif tid in effective_snoozed_ids:
+            excluded[tid] = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="snoozed",
+                detail="Snoozed in current session",
+            )
+        elif tid in skipped_ids:
+            excluded[tid] = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="skipped",
+                detail="Skipped in current session",
+            )
+        elif queue_pos < 1:
+            exc = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="not_in_queue",
+                detail="Not in the active queue",
+            )
+            excluded[tid] = exc
+            inactive.append(exc)
+
+    # Completed series sit outside the active status and never reach the pool
+    # query, so they vanish silently unless explained here.
+    completed_result = await db.execute(
+        select(Thread.id, Thread.title, Thread.format)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "completed")
+        .order_by(Thread.queue_position)
+    )
+    for tid, title, fmt in completed_result.all():
+        exc = ThreadExclusionReason(
+            thread_id=tid,
+            title=title,
+            format=fmt,
+            reason="completed",
+            detail="Read the full series",
+        )
+        excluded[tid] = exc
+        inactive.append(exc)
+
+    # Attach human-readable blocking detail where it exists, then materialize
+    # the bounded exclusion lists for the response.
+    if blocked_ids:
+        blocking_map = await get_blocking_explanations_batch(
+            sorted(blocked_ids), user_id, db
+        )
+        for tid, explanations in blocking_map.items():
+            if tid in excluded and explanations:
+                excluded[tid].detail = explanations[0].label
+
+    excluded_list = list(excluded.values())
+    excluded_count = len(excluded_list)
+    inactive_count = len(inactive)
+
     return RollBootstrapResponse(
         current_die=die_size,
         manual_die=manual_die,
@@ -1292,6 +1378,14 @@ async def roll_bootstrap(
         session_id=current_session_id,
         user_id=user_id,
         timezone=current_session.timezone,
+
+        # Issue #3125: exclusion transparency.
+        total_threads=total_threads,
+        available_threads=available_threads,
+        excluded_count=excluded_count,
+        excluded_threads=excluded_list,
+        inactive_count=inactive_count,
+        inactive_threads=inactive,
     )
 
 
