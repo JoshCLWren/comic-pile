@@ -16,7 +16,6 @@ from comic_pile.dependencies import (
     get_blocking_explanations,
     get_blocking_explanations_batch,
     refresh_canonical_blocked_status,
-    refresh_user_blocked_status,
 )
 from tests.conftest import get_or_create_user_async
 
