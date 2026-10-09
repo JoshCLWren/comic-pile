@@ -61,7 +61,6 @@ function mockState(
     blockedExpanded: false,
     staleExpanded: false,
     inactiveExpanded: false,
-    inactiveExpanded: false,
     isDieModalOpen: false,
     isSetCurrentIssueOpen: false,
     selectedThread: null,

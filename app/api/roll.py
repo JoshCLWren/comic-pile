@@ -1214,14 +1214,20 @@ async def roll_bootstrap(
         .order_by(Thread.queue_position)
         .limit(20)
     )
+    blocked_ids_query = await db.execute(
+        select(Thread.id)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.is_blocked.is_(True))
+    )
+    blocked_ids = [row[0] for row in blocked_ids_query.all()]
+
     blocked_threads = [
         RollBootstrapThread(
             id=row.id, title=row.title, format=normalize_format_value(row.format)
         )
         for row in blocked_result.all()
     ]
-
-    blocked_ids = [t.id for t in blocked_threads]
     snoozed_count = len(snoozed_threads)
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]

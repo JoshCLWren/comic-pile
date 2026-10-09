@@ -82,12 +82,13 @@ async def test_bootstrap_excludes_and_explains_completed_series(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[rollable, stale_active]),  # pool query (die-limited)
+        _Result(rows=[rollable, stale_active]),  # pool
         _Result(scalar_value=0),                  # blocked count
+        _Result(rows=[]),                         # blocked ids
         _Result(rows=[]),                         # blocked threads
         _Result(scalar_value=0),                  # stale count
-        _Result(rows=[rollable, completed, stale_active]),  # all active threads
-        _Result(rows=[completed]),                # completed threads
+        _Result(rows=[rollable, completed, stale_active]),  # all active
+        _Result(rows=[completed]),                # completed
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -133,6 +134,7 @@ async def test_bootstrap_explains_not_in_queue_series(monkeypatch):
     db.execute.side_effect = [
         _Result(rows=[rollable]),  # pool
         _Result(scalar_value=0),   # blocked count
+        _Result(rows=[]),          # blocked ids
         _Result(rows=[]),          # blocked threads
         _Result(scalar_value=0),   # stale count
         _Result(rows=[rollable, not_in_queue]),  # all active
@@ -173,6 +175,7 @@ async def test_bootstrap_includes_multiple_inactive_series(monkeypatch):
         _Result(rows=[rollable_a]),
         _Result(scalar_value=0),
         _Result(rows=[]),
+        _Result(rows=[]),
         _Result(scalar_value=0),
         _Result(rows=[rollable_a, completed_b, not_in_queue_c]),
         _Result(rows=[completed_b]),
@@ -211,6 +214,7 @@ async def test_bootstrap_exclusion_counts_remain_consistent(monkeypatch):
     db.execute.side_effect = [
         _Result(rows=[rollable]),
         _Result(scalar_value=0),
+        _Result(rows=[]),
         _Result(rows=[]),
         _Result(scalar_value=0),
         _Result(rows=[rollable, completed, not_in_queue]),
