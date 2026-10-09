@@ -525,16 +525,16 @@ async def refresh_user_blocked_status(
     return changes
 
 
-async def refresh_legacy_blocked_status(
+async def refresh_canonical_blocked_status(
     user_id: int,
     db: AsyncSession,
 ) -> dict[int, bool]:
-    """Recalculate dependency-based blocked flags and return prior values that changed.
+    """Recalculate canonical dependency-based blocked flags and return prior values that changed.
 
     Uses canonical Dependency rows (note IS NULL OR note NOT LIKE 'cbl-order:%')
     so the fallback path agrees with the primary eligibility authority.
     """
-    blocked_ids = await get_blocked_thread_ids(user_id, db)
+    blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
 
     candidate_filter = Thread.is_blocked.is_(True)
     if blocked_ids:
