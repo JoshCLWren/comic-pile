@@ -192,7 +192,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     setTimeout(focusTarget, 0)
   }, [])
 
-  const runIssueMutation = useCallback(async (mutation: IssueMutation): Promise<Issue[] | null> => {
+  const runIssueMutation = useCallback(async (mutation: IssueMutation) => {
     switch (mutation.type) {
       case 'toggle':
         if (mutation.nextStatus === 'read') {
@@ -200,17 +200,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         } else {
           await issuesService.markUnread(mutation.issueId)
         }
-        return null
+        return
       case 'delete':
         await issuesService.delete(mutation.issueId)
-        return null
+        return
       case 'reorder':
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
-        return null
-      case 'create': {
-        const response = await issuesService.create(threadId, mutation.issueRange)
-        return response.issues
-      }
+        return
+      case 'create':
+        await issuesService.create(threadId, mutation.issueRange)
+        return
     }
   }, [issuesService, threadId])
 
@@ -226,11 +225,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       while (pendingMutationsRef.current.length > 0) {
         const currentMutation = pendingMutationsRef.current[0]
         try {
-          const createdIssues = await runIssueMutation(currentMutation)
-          if (currentMutation.type === 'create' && createdIssues) {
-            // Add newly created issues to the base list so subsequent mutations
-            // have the correct state and the UI reflects the server state.
-            baseIssuesRef.current = [...baseIssuesRef.current, ...createdIssues]
+          await runIssueMutation(currentMutation)
+          if (currentMutation.type === 'create') {
+            // A create changes which issues exist, and the server places new
+            // issues at their natural position rather than appending them.
+            // Re-read the thread so the base list matches server order before
+            // any later queued mutation (notably reorder) is derived from it.
+            baseIssuesRef.current = await fetchAllIssues()
           } else {
             baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
           }

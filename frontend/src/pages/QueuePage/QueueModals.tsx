@@ -294,6 +294,13 @@ export function QueueModals({
   const editIssueListRef = useRef<IssueToggleListHandle>(null)
 
   const handleEditSubmit = async (event: FormEvent) => {
+    // Cancel the native submit synchronously. The form's default action is a
+    // full-page reload, and the browser performs it as soon as this handler
+    // yields at its first `await` — so a preventDefault() reached through
+    // `onEditSubmit` after the flush arrives too late. That reload aborted the
+    // queued issue creates in flight, so every pending chip after the first was
+    // silently dropped (#3309).
+    event.preventDefault()
     // Flush deferred issue mutations first so the dialog's Save commits
     // everything atomically from the user's perspective.
     await editIssueListRef.current?.flush()

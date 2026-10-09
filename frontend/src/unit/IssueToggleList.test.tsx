@@ -1094,5 +1094,75 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     expect(screen.getByText('Issue number already exists')).toBeInTheDocument()
     expect(ref.current?.hasPendingMutations()).toBe(false)
   })
+
+  it('re-reads server order after a create so the base list is not appended blindly', async () => {
+    // The server inserts an ordinary numeric issue at its natural position
+    // rather than appending it, so a mid-series create must not be assumed to
+    // land at the end of the list.
+    mockedIssuesApi.create.mockResolvedValue(
+      buildListResponse([
+        {
+          id: 4,
+          thread_id: 99,
+          issue_number: '2',
+          status: 'unread',
+          read_at: null,
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ]),
+    )
+    mockedIssuesApi.list
+      .mockResolvedValueOnce(buildListResponse())
+      .mockResolvedValue(
+        buildListResponse([
+          {
+            id: 2,
+            thread_id: 99,
+            issue_number: '2',
+            status: 'unread',
+            read_at: null,
+            created_at: '2026-03-08T00:00:00Z',
+          },
+          {
+            id: 4,
+            thread_id: 99,
+            issue_number: '2b',
+            status: 'unread',
+            read_at: null,
+            created_at: '2026-03-08T00:00:00Z',
+          },
+          {
+            id: 1,
+            thread_id: 99,
+            issue_number: '1',
+            status: 'unread',
+            read_at: null,
+            created_at: '2026-03-08T00:00:00Z',
+          },
+          {
+            id: 3,
+            thread_id: 99,
+            issue_number: '3',
+            status: 'read',
+            read_at: null,
+            created_at: '2026-03-08T00:00:00Z',
+          },
+        ]),
+      )
+
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+    fireEvent.change(input, { target: { value: '2b' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+
+    // The re-read happened rather than trusting the create response position.
+    expect(mockedIssuesApi.list).toHaveBeenCalledTimes(2)
+    // Server order wins: #2b sits after #2, not at the end of the list.
+    expect(getIssueOrder()).toEqual(['2', '2b', '1', '3'])
+  })
 })
 })
