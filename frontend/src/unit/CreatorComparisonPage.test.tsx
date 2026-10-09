@@ -35,7 +35,10 @@ function makeItem(overrides: Partial<CreatorComparisonItem> & { canonical_creato
     rating_distribution: { '5': 2, '4': 2 },
     top_rating_rate: 0.5,
     role_stats: [{ role: 'writer', issue_count: 4, average_rating: 4.5 }],
-    strongest_series: [{ thread_id: 1, thread_title: 'Saga', issue_count: 3, average_rating: 4.7 }],
+    strongest_series: [
+      { thread_id: 1, thread_title: 'Saga', issue_count: 4, rated_issue_count: 3, average_rating: 4.7 },
+    ],
+    min_rated_issues_per_series: 3,
     unread_upcoming_count: 2,
     read_unrated_count: 1,
     insufficient_data: false,
@@ -138,7 +141,13 @@ describe('CreatorComparisonPage', () => {
               ratings_count: 5,
               top_rating_rate: 0.2,
               strongest_series: [
-                { thread_id: 2, thread_title: 'Old Man Logan', issue_count: 2, average_rating: 3.5 },
+                {
+                  thread_id: 2,
+                  thread_title: 'Old Man Logan',
+                  issue_count: 3,
+                  rated_issue_count: 3,
+                  average_rating: 3.5,
+                },
               ],
               read_unrated_count: 0,
             }),
@@ -223,9 +232,8 @@ describe('CreatorComparisonPage', () => {
               rating_distribution: {},
               top_rating_rate: null,
               role_stats: [{ role: 'artist', issue_count: 2, average_rating: null }],
-              strongest_series: [
-                { thread_id: 9, thread_title: 'Old Man Logan', issue_count: 2, average_rating: null },
-              ],
+              strongest_series: [],
+              min_rated_issues_per_series: 3,
               unread_upcoming_count: 0,
               read_unrated_count: 0,
             }),
@@ -240,8 +248,39 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getAllByText('No ratings yet')).toHaveLength(2)
     expect(screen.getByText('N/A')).toBeInTheDocument()
     expect(screen.getByText(/unrated/)).toBeInTheDocument()
-    expect(screen.getByText('Old Man Logan')).toBeInTheDocument()
     expect(screen.queryByText('Read, not rated')).not.toBeInTheDocument()
+    // Below the minimum rated sample the section explains itself instead of
+    // silently omitting ranked series.
+    expect(screen.getByText(/No series has 3 rated issues yet/)).toBeInTheDocument()
+  })
+
+  it('shows the rated sample beside each strongest series and ranks by rating strength', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({
+              canonical_creator_key: 'creator:7',
+              strongest_series: [
+                {
+                  thread_id: 5,
+                  thread_title: 'Saga',
+                  issue_count: 4,
+                  rated_issue_count: 3,
+                  average_rating: 4.7,
+                },
+              ],
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:12')
+
+    expect(screen.getByText('4 issues')).toBeInTheDocument()
+    expect(screen.getByText('3 rated')).toBeInTheDocument()
+    expect(screen.getByLabelText('Average 4.7 out of 5')).toBeInTheDocument()
   })
 
   it('explains an empty comparison instead of rendering empty cards', () => {

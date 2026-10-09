@@ -28,6 +28,7 @@ from app.repositories.creator_comparison import (
     MAX_SERIES_AGGREGATES,
     MIN_COMPARISON_CREATORS,
     MIN_RATED_FOR_RELIABLE,
+    MIN_RATED_ISSUES_PER_SERIES,
     CreatorComparisonInputs,
     build_series_aggregates,
     load_creator_comparison_inputs,
@@ -234,7 +235,13 @@ async def get_creator_comparison(
                 rated_issue_count=rated_issue_count,
                 average_rating=average_rating,
             )
-            for thread_id, thread_title, issue_count, rated_issue_count, average_rating in series_aggregates
+            for (
+                thread_id,
+                thread_title,
+                issue_count,
+                rated_issue_count,
+                average_rating,
+            ) in series_aggregates
         ]
 
         # Unread/upcoming and read-unrated counts
@@ -264,6 +271,7 @@ async def get_creator_comparison(
             top_rating_rate=top_rating_rate,
             role_stats=role_stats,
             strongest_series=strongest_series,
+            min_rated_issues_per_series=MIN_RATED_ISSUES_PER_SERIES,
             unread_upcoming_count=unread_upcoming_count,
             read_unrated_count=read_unrated_count,
             insufficient_data=insufficient_data,

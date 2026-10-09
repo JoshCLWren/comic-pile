@@ -39,10 +39,8 @@ function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate
       </span>
       <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
         <span>{aggregate.issue_count} {aggregate.issue_count === 1 ? 'issue' : 'issues'}</span>
-        <span>({aggregate.rated_issue_count} rated)</span>
-        {aggregate.average_rating != null && (
-          <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} />
-        )}
+        <span>{aggregate.rated_issue_count} rated</span>
+        <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} />
       </span>
     </Link>
   )
@@ -212,11 +210,11 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
         </div>
       )}
 
-      {item.strongest_series.length > 0 && (
-        <div className="mt-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Strongest series
-          </p>
+      <div className="mt-6">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+          Strongest series
+        </p>
+        {item.strongest_series.length > 0 ? (
           <ul className="mt-2 space-y-2">
             {item.strongest_series.map((aggregate) => (
               <li key={aggregate.thread_id}>
@@ -224,8 +222,13 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        ) : (
+          <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            No series has {item.min_rated_issues_per_series} rated issues yet, so there is no
+            strongest series to rank.
+          </p>
+        )}
+      </div>
     </section>
   )
 }

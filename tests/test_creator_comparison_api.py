@@ -9,7 +9,7 @@ aggregates, explicit insufficient-data flags, unknown-key omission without
 leakage, and request validation.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.repositories.creator_comparison import MIN_RATED_ISSUES_PER_SERIES
 
 D1 = datetime(2026, 3, 1, tzinfo=UTC)
 D2 = datetime(2026, 3, 2, tzinfo=UTC)
@@ -164,6 +165,7 @@ async def test_compare_returns_bounded_side_by_side_metrics(
         {"role": "writer", "issue_count": 3, "average_rating": pytest.approx(4.0)}
     ]
     assert writer["insufficient_data"] is False
+    assert writer["min_rated_issues_per_series"] == MIN_RATED_ISSUES_PER_SERIES
     assert writer["strongest_series"][0]["thread_title"] == "Team Book"
     assert writer["strongest_series"][0]["issue_count"] == 3
     assert writer["strongest_series"][0]["rated_issue_count"] == 3
@@ -178,6 +180,13 @@ async def test_compare_returns_bounded_side_by_side_metrics(
 
     assert body["insufficient_data_keys"] == ["creator:2"]
 
+    coverage = body["coverage"]
+    assert coverage["rated_issues_total"] == 4
+    assert coverage["rated_issues_with_creator_metadata"] == 4
+    assert coverage["ratings_complete"] is True
+    assert coverage["read_unrated_issues_total"] == 1
+    assert coverage["unread_issues_total"] == 1
+
 
 @pytest.mark.asyncio
 async def test_strongest_series_requires_minimum_sample_threshold(
@@ -185,10 +194,14 @@ async def test_strongest_series_requires_minimum_sample_threshold(
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
-    """Strongest series excludes series with fewer than 3 rated issues."""
-    # Create thread with 3 rated issues (should appear in strongest_series)
+    """Strongest series excludes series below the documented minimum rated sample."""
     _thread_good, issues_good = await _make_thread(
-        async_db, default_user, title="Good Series", issue_count=3, queue_position=1, read_through=3
+        async_db,
+        default_user,
+        title="Good Series",
+        issue_count=3,
+        queue_position=1,
+        read_through=3,
     )
     for issue in issues_good:
         await _confirm_identity(
@@ -198,9 +211,13 @@ async def test_strongest_series_requires_minimum_sample_threshold(
     await _rate(async_db, issues_good[1], rating=4.0, timestamp=D2)
     await _rate(async_db, issues_good[2], rating=3.0, timestamp=D3)
 
-    # Create thread with 2 rated issues (should NOT appear in strongest_series)
     _thread_weak, issues_weak = await _make_thread(
-        async_db, default_user, title="Weak Series", issue_count=2, queue_position=2, read_through=2
+        async_db,
+        default_user,
+        title="Weak Series",
+        issue_count=2,
+        queue_position=2,
+        read_through=2,
     )
     for issue in issues_weak:
         await _confirm_identity(
@@ -215,11 +232,38 @@ async def test_strongest_series_requires_minimum_sample_threshold(
     body = response.json()
     writer = body["comparisons"]["creator:1"]
 
-    # Only the good series should appear in strongest_series
+    # The two-rated series has the lower average yet is excluded by sample size,
+    # so only the qualifying series appears.
+    assert writer["min_rated_issues_per_series"] == MIN_RATED_ISSUES_PER_SERIES
     assert len(writer["strongest_series"]) == 1
     assert writer["strongest_series"][0]["thread_title"] == "Good Series"
     assert writer["strongest_series"][0]["rated_issue_count"] == 3
     assert writer["strongest_series"][0]["average_rating"] == pytest.approx(4.0)
+
+    # A creator whose every series is under the sample threshold returns an
+    # empty list plus the documented threshold so the UI can explain the gap.
+    only_thin, thin_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Thin Only",
+        issue_count=2,
+        queue_position=3,
+        read_through=2,
+    )
+    for issue in thin_issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 3, "name": "Thin Writer", "role": "writer"}]
+        )
+    await _rate(async_db, thin_issues[0], rating=5.0, timestamp=D1)
+    await _rate(async_db, thin_issues[1], rating=5.0, timestamp=D2)
+
+    thin_response = await auth_client.get(
+        "/api/v1/creators/compare?keys=creator:1,creator:3"
+    )
+    assert thin_response.status_code == 200
+    thin = thin_response.json()["comparisons"]["creator:3"]
+    assert thin["strongest_series"] == []
+    assert thin["min_rated_issues_per_series"] == MIN_RATED_ISSUES_PER_SERIES
 
 
 @pytest.mark.asyncio
@@ -228,10 +272,14 @@ async def test_strongest_series_sorts_by_rating_first(
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
-    """Strongest series sorts by average rating first, then issue count."""
-    # Create high-rated series (3 rated issues, avg 5.0)
+    """A smaller high-rated series outranks a longer, lower-rated series."""
     _thread_high, issues_high = await _make_thread(
-        async_db, default_user, title="High Rated", issue_count=3, queue_position=1, read_through=3
+        async_db,
+        default_user,
+        title="High Rated",
+        issue_count=3,
+        queue_position=1,
+        read_through=3,
     )
     for issue in issues_high:
         await _confirm_identity(
@@ -241,9 +289,13 @@ async def test_strongest_series_sorts_by_rating_first(
     await _rate(async_db, issues_high[1], rating=5.0, timestamp=D2)
     await _rate(async_db, issues_high[2], rating=5.0, timestamp=D3)
 
-    # Create lower-rated series with more total issues (4 rated, avg 3.0)
     _thread_low, issues_low = await _make_thread(
-        async_db, default_user, title="Low Rated", issue_count=4, queue_position=2, read_through=4
+        async_db,
+        default_user,
+        title="Low Rated",
+        issue_count=4,
+        queue_position=2,
+        read_through=4,
     )
     for issue in issues_low:
         await _confirm_identity(
@@ -260,15 +312,62 @@ async def test_strongest_series_sorts_by_rating_first(
     body = response.json()
     writer = body["comparisons"]["creator:1"]
 
-    # High-rated series should appear first despite fewer total issues
+    # Rating strength wins over attributed issue count.
     assert len(writer["strongest_series"]) == 2
     assert writer["strongest_series"][0]["thread_title"] == "High Rated"
+    assert writer["strongest_series"][0]["issue_count"] == 3
     assert writer["strongest_series"][0]["rated_issue_count"] == 3
     assert writer["strongest_series"][0]["average_rating"] == pytest.approx(5.0)
 
     assert writer["strongest_series"][1]["thread_title"] == "Low Rated"
+    assert writer["strongest_series"][1]["issue_count"] == 4
     assert writer["strongest_series"][1]["rated_issue_count"] == 4
     assert writer["strongest_series"][1]["average_rating"] == pytest.approx(3.0)
+
+
+@pytest.mark.asyncio
+async def test_strongest_series_ties_break_deterministically(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Equal averages and equal samples resolve by title then stable thread id."""
+    _thread_zebra, issues_zebra = await _make_thread(
+        async_db,
+        default_user,
+        title="Zebra Run",
+        issue_count=3,
+        queue_position=1,
+        read_through=3,
+    )
+    _thread_alpha, issues_alpha = await _make_thread(
+        async_db,
+        default_user,
+        title="Alpha Run",
+        issue_count=3,
+        queue_position=2,
+        read_through=3,
+    )
+    for thread_issues in (issues_zebra, issues_alpha):
+        for issue in thread_issues:
+            await _confirm_identity(
+                async_db, issue, creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+            )
+    for index, issue in enumerate([*issues_zebra, *issues_alpha], start=1):
+        await _rate(
+            async_db,
+            issue,
+            rating=4.0,
+            timestamp=D1 + timedelta(days=index),
+        )
+
+    response = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
+
+    assert response.status_code == 200
+    writer = response.json()["comparisons"]["creator:1"]
+
+    assert [entry["thread_title"] for entry in writer["strongest_series"]] == ["Alpha Run", "Zebra Run"]
+    assert all(entry["average_rating"] == pytest.approx(4.0) for entry in writer["strongest_series"])
 
 
 @pytest.mark.asyncio
@@ -436,7 +535,12 @@ async def test_series_average_uses_latest_effective_rating(
 ) -> None:
     """A re-rated issue contributes its current rating once to series averages."""
     _thread, issues = await _make_thread(
-        async_db, default_user, title="Rerated", issue_count=3, queue_position=1, read_through=3
+        async_db,
+        default_user,
+        title="Rerated",
+        issue_count=3,
+        queue_position=1,
+        read_through=3,
     )
     for issue in issues:
         await _confirm_identity(
@@ -447,11 +551,10 @@ async def test_series_average_uses_latest_effective_rating(
                 {"id": 2, "name": "Artist Two", "role": "artist"},
             ],
         )
-    # Rate first issue twice (re-rating from 1.0 to 5.0). The latest event
-    # wins, so this issue contributes 5.0 once, never the mean of its history.
+    # Rating the first issue twice (1.0 then 5.0) must contribute only 5.0.
+    # Averaging its history instead would yield 3.0 and a 3.33 series average.
     await _rate(async_db, issues[0], rating=1.0, timestamp=D1)
     await _rate(async_db, issues[0], rating=5.0, timestamp=D2)
-    # Rate other issues once to meet the minimum sample requirement.
     await _rate(async_db, issues[1], rating=4.0, timestamp=D3)
     await _rate(async_db, issues[2], rating=3.0, timestamp=D3)
 
@@ -461,5 +564,5 @@ async def test_series_average_uses_latest_effective_rating(
     comparisons = response.json()["comparisons"]
     for key in ("creator:1", "creator:2"):
         assert comparisons[key]["average_rating"] == pytest.approx(4.0)
-        assert comparisons[key]["strongest_series"][0]["average_rating"] == pytest.approx(4.0)  # (5.0 + 4.0 + 3.0) / 3 = 4.0
         assert comparisons[key]["strongest_series"][0]["rated_issue_count"] == 3
+        assert comparisons[key]["strongest_series"][0]["average_rating"] == pytest.approx(4.0)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.constants import MIN_RATED_ISSUES_PER_SERIES
+
 
 class CreatorComparisonRoleStat(BaseModel):
     """Role-specific statistics for a creator in comparison."""
@@ -31,11 +33,15 @@ class CreatorComparisonSeriesAggregate(BaseModel):
         ..., ge=0, description="Number of issues by this creator in this series."
     )
     rated_issue_count: int = Field(
-        ..., ge=3, description="Number of rated issues in this series (minimum 3 for strongest ranking)."
+        ...,
+        ge=MIN_RATED_ISSUES_PER_SERIES,
+        description="Number of rated issues backing average_rating. Series below "
+        "the minimum rated sample are excluded from strongest_series entirely.",
     )
-    average_rating: float | None = Field(
-        default=None,
-        description="Average rating for this creator's issues in this series.",
+    average_rating: float = Field(
+        ...,
+        description="Average rating for this creator's rated issues in this series. "
+        "Always present because only series meeting the minimum rated sample are returned.",
     )
 
 
@@ -84,7 +90,14 @@ class CreatorComparisonItem(BaseModel):
     )
     strongest_series: list[CreatorComparisonSeriesAggregate] = Field(
         default_factory=list,
-        description="Top series/threads by issue count and average rating.",
+        description="Series ranked by rating strength, strongest first. Series with fewer "
+        "than min_rated_issues_per_series rated issues are excluded.",
+    )
+    min_rated_issues_per_series: int = Field(
+        default=MIN_RATED_ISSUES_PER_SERIES,
+        ge=1,
+        description="Minimum rated issues a series needs before strongest_series ranks it. "
+        "Exposed so the UI can explain an empty list instead of silently hiding it.",
     )
     unread_upcoming_count: int = Field(
         default=0,
