@@ -138,7 +138,7 @@ it('renders fallback labels for sparse summaries and events', () => {
   })
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
   expect(screen.getAllByText('None').length).toBeGreaterThan(0)
-  expect(screen.getByText('Thread unavailable')).toBeInTheDocument()
+  expect(screen.getByText('Deleted thread')).toBeInTheDocument()
   expect(screen.getByText('Snapshot')).toBeInTheDocument()
   expect(screen.getByText('Rating 0')).toBeInTheDocument()
   expect(screen.getByText('Selected without rolling')).toBeInTheDocument()
@@ -246,7 +246,7 @@ it('uses human labels and explicit fallback text for sparse events', () => {
 
   expect(screen.getByText('Snoozed')).toBeInTheDocument()
   expect(screen.getByText('Restored')).toBeInTheDocument()
-  expect(screen.getByText('Thread unavailable')).toBeInTheDocument()
+  expect(screen.getByText('Deleted thread')).toBeInTheDocument()
   expect(screen.getAllByText('No additional event details recorded.')).toHaveLength(2)
 })
 

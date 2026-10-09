@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from app.models import Event, Issue, ReadingSession, Thread, User
 
