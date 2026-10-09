@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -108,9 +107,7 @@ describe('continuity comic selectors', () => {
     const onChange = vi.fn()
     render(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} />)
 
-    const combobox = screen.getByRole('combobox')
-    fireEvent.click(combobox)
-    fireEvent.click(screen.getByRole('option', { name: '#Omega' }))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '13' } })
     expect(onChange).toHaveBeenCalledWith(issues[2])
     expect(screen.getByRole('option', { name: '#Omega' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '#Annual 1' })).toBeInTheDocument()
@@ -122,9 +119,7 @@ describe('continuity comic selectors', () => {
     const { rerender } = render(
       <ContinuityIssueSelector issues={issues} value={issues[0]} onChange={onChange} />,
     )
-    const combobox = screen.getByRole('combobox')
-    fireEvent.click(combobox)
-    fireEvent.click(screen.getByRole('option', { name: 'Select an issue' }))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } })
     expect(onChange).toHaveBeenLastCalledWith(null)
 
     rerender(<ContinuityIssueSelector issues={[]} value={null} onChange={onChange} isLoading />)
@@ -154,10 +149,8 @@ describe('continuity comic selectors', () => {
     )
 
     const [start, end] = screen.getAllByRole('combobox')
-    fireEvent.click(start)
-    fireEvent.click(screen.getByRole('option', { name: '#Annual 1' }))
-    fireEvent.click(end)
-    fireEvent.click(screen.getByRole('option', { name: '#Omega' }))
+    fireEvent.change(start, { target: { value: '11' } })
+    fireEvent.change(end, { target: { value: '13' } })
 
     expect(onChange).toHaveBeenLastCalledWith({
       thread,
@@ -166,10 +159,8 @@ describe('continuity comic selectors', () => {
     })
     expect(screen.queryByText(/position/i)).not.toBeInTheDocument()
 
-    fireEvent.click(start)
-    fireEvent.click(screen.getByRole('option', { name: '#Omega' }))
-    fireEvent.click(end)
-    fireEvent.click(screen.getByRole('option', { name: '#Annual 1' }))
+    fireEvent.change(start, { target: { value: '13' } })
+    fireEvent.change(end, { target: { value: '11' } })
     expect(screen.getByRole('alert')).toHaveTextContent('Choose a valid issue range in reading order.')
     expect(onChange).toHaveBeenLastCalledWith(null)
   })
@@ -185,11 +176,10 @@ describe('continuity comic selectors', () => {
       />,
     )
     const [start, end] = screen.getAllByRole('combobox')
-    expect(start).toHaveTextContent('#Annual 1')
-    expect(end).toHaveTextContent('#Omega')
+    expect(start).toHaveValue('11')
+    expect(end).toHaveValue('13')
 
-    fireEvent.click(end)
-    fireEvent.click(screen.getByRole('option', { name: 'Select an issue' }))
+    fireEvent.change(end, { target: { value: '' } })
     expect(onChange).toHaveBeenLastCalledWith(null)
 
     rerender(
@@ -201,8 +191,8 @@ describe('continuity comic selectors', () => {
       />,
     )
     const [resyncedStart, resyncedEnd] = screen.getAllByRole('combobox')
-    expect(resyncedStart).toHaveTextContent('#1/2')
-    expect(resyncedEnd).toHaveTextContent('#Omega')
+    expect(resyncedStart).toHaveValue('12')
+    expect(resyncedEnd).toHaveValue('13')
   })
 
   it('shows no unfiltered dump on empty search and requires typing to show results', () => {

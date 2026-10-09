@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { KeyboardEvent, FocusEvent } from 'react'
+import type { KeyboardEvent } from 'react'
 import type { Issue, ThreadListItem } from '../../types'
 import { isNumber } from '../../utils/runtimeChecks'
 
@@ -171,151 +171,26 @@ export function ContinuityIssueSelector({
   error = null,
   disabled = false,
 }: ContinuityIssueSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [highlightedIndex, setHighlightedIndex] = useState(-1)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
-
-  useEffect(() => {
-    setHighlightedIndex(-1)
-    setIsOpen(false)
-  }, [value, disabled, isLoading, issues.length])
-
-  function closeDropdown() {
-    setIsOpen(false)
-    setHighlightedIndex(-1)
-  }
-
-  function handleButtonKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (disabled || isLoading || issues.length === 0) return
-
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault()
-      setIsOpen(true)
-      const nextIndex = event.key === 'ArrowDown' ? 0 : issues.length - 1
-      setHighlightedIndex(nextIndex)
-      optionRefs.current[nextIndex]?.focus()
-    } else if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      setIsOpen(!isOpen)
-      if (!isOpen) setHighlightedIndex(0)
-    } else if (event.key === 'Escape') {
-      closeDropdown()
-      buttonRef.current?.focus()
-    }
-  }
-
-  function handleOptionKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      const nextIndex = index + 1 < issues.length ? index + 1 : 0
-      setHighlightedIndex(nextIndex)
-      optionRefs.current[nextIndex]?.focus()
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      const nextIndex = index - 1 >= 0 ? index - 1 : issues.length - 1
-      setHighlightedIndex(nextIndex)
-      optionRefs.current[nextIndex]?.focus()
-    } else if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      const issue = issues[index]
-      onChange(issue)
-      closeDropdown()
-      buttonRef.current?.focus()
-    } else if (event.key === 'Escape') {
-      closeDropdown()
-      buttonRef.current?.focus()
-    } else if (event.key === 'Home') {
-      event.preventDefault()
-      setHighlightedIndex(0)
-      optionRefs.current[0]?.focus()
-    } else if (event.key === 'End') {
-      event.preventDefault()
-      const lastIndex = issues.length - 1
-      setHighlightedIndex(lastIndex)
-      optionRefs.current[lastIndex]?.focus()
-    }
-  }
-
-  function handleButtonBlur(event: FocusEvent<HTMLButtonElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      closeDropdown()
-    }
-  }
-
-  function handleOptionBlur(event: FocusEvent<HTMLButtonElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      closeDropdown()
-    }
-  }
-
-  const displayValue = value
-    ? `#${value.issue_number}`
-    : isLoading
-      ? 'Loading issues…'
-      : issues.length === 0
-        ? emptyMessage
-        : 'Select an issue'
-
   return (
-    <div className="space-y-1 relative">
+    <div className="space-y-1">
       <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-500">
         {label}
-        <div className="relative">
-          <button
-            ref={buttonRef}
-            type="button"
-            role="combobox"
-            aria-expanded={isOpen && !disabled && !isLoading && issues.length > 0}
-            aria-haspopup="listbox"
-            aria-disabled={disabled || isLoading || issues.length === 0}
-            onClick={() => {
-              if (!disabled && !isLoading && issues.length > 0) setIsOpen(!isOpen)
-            }}
-            onKeyDown={handleButtonKeyDown}
-            onBlur={handleButtonBlur}
-            disabled={disabled || isLoading || issues.length === 0}
-            className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50 text-left"
-            style={{ backgroundColor: 'var(--theme-bg-panel)', borderColor: 'var(--theme-border)', color: 'var(--theme-text-primary)' }}
-          >
-            <span className="block truncate">{displayValue}</span>
-          </button>
-          {isOpen && !disabled && !isLoading && issues.length > 0 && (
-            <div
-              role="listbox"
-              aria-label={`${label} options`}
-              className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] shadow-lg"
-            >
-              {issues.map((issue, index) => (
-                <button
-                  key={issue.id}
-                  ref={(element) => { optionRefs.current[index] = element }}
-                  type="button"
-                  role="option"
-                  aria-selected={value?.id === issue.id}
-                  onClick={() => {
-                    onChange(issue)
-                    closeDropdown()
-                    buttonRef.current?.focus()
-                  }}
-                  onKeyDown={(event) => handleOptionKeyDown(event, index)}
-                  onBlur={handleOptionBlur}
-                  className={`w-full border-b border-[var(--theme-border)] px-3 py-2 text-left text-sm last:border-b-0 hover:bg-[var(--theme-bg-hover)] ${
-                    value?.id === issue.id ? 'bg-[var(--theme-bg-hover)] text-[var(--theme-text-primary)]' : 'text-[var(--theme-text-primary)]'
-                  } ${highlightedIndex === index ? 'bg-[var(--theme-bg-hover)] outline-none' : ''}`}
-                >
-                  <span className="block font-semibold">#{issue.issue_number}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <select
+          value={value?.id ?? ''}
+          onChange={(event) => {
+            const next = issues.find((issue) => issue.id === Number(event.target.value)) ?? null
+            onChange(next)
+          }}
+          disabled={disabled || isLoading || issues.length === 0}
+          className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
+        >
+          <option value="">{isLoading ? 'Loading issues…' : issues.length === 0 ? emptyMessage : 'Select an issue'}</option>
+          {issues.map((issue) => (
+            <option key={issue.id} value={issue.id}>#{issue.issue_number}</option>
+          ))}
+        </select>
       </label>
-      {isLoading && <p className="text-xs text-stone-500">Loading issues…</p>}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
-      {!isLoading && !error && !disabled && issues.length === 0 && (
-        <p className="text-xs text-stone-500">{emptyMessage}</p>
-      )}
     </div>
   )
 }
