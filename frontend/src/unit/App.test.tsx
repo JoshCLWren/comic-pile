@@ -219,6 +219,31 @@ test('redirects the retired /help route to the canonical /glossary route', async
   expect(screen.getByTestId('location-path')).toHaveTextContent('/glossary')
 })
 
+test('redirects legacy /threads/:id URLs to the working /thread/:id page', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  const LocationProbe = () => {
+    const location = useLocation()
+    return <div data-testid="location-path">{location.pathname}</div>
+  }
+  render(
+    <MemoryRouter initialEntries={['/threads/1000084']}>
+      <AuthProvider>
+        <BugReportRestoreProvider>
+          <ToastProvider>
+            <NavCollapseProvider>
+              <LocationProbe />
+              <AppRoutes />
+            </NavCollapseProvider>
+          </ToastProvider>
+        </BugReportRestoreProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => expect(screen.getByTestId('thread-detail-page')).toBeInTheDocument())
+  expect(screen.getByTestId('location-path')).toHaveTextContent('/thread/1000084')
+})
+
 test('redirects the retired analytics route to Roll', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth('/analytics')
