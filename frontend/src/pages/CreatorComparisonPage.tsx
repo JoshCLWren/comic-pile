@@ -389,7 +389,7 @@ function renderDrilldownContent(
                       {issue.roles.length > 0 ? issue.roles.join(', ') : 'no role'}
                     </span>
                   </li>
-                )))
+                 ))}
               </ul>
             </div>
           )}
