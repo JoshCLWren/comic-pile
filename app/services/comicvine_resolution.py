@@ -992,31 +992,17 @@ async def import_comicvine_issue(
     return response
 
 
-class ImportTargetNotFoundError(Exception):
-    """A referenced import target (reading order) does not exist for the user."""
-
-
-class DuplicatePhysicalIssueError(Exception):
-    """Import would create a second logical copy of an already-known physical issue."""
-
-    def __init__(self, comicvine_issue_id: int, existing_issue_id: int) -> None:
-        """Initialize the duplicate physical-issue error.
-
-        Args:
-            comicvine_issue_id: ComicVine issue ID that already exists.
-            existing_issue_id: Existing canonical Issue ID for that physical issue.
-        """
-        super().__init__(
-            f"ComicVine issue {comicvine_issue_id} already exists as issue {existing_issue_id}"
-        )
-        self.comicvine_issue_id = comicvine_issue_id
-        self.existing_issue_id = existing_issue_id
-
-
 class SeriesImportError(Exception):
     """Error during series import."""
 
     def __init__(self, code: str, message: str, *, status_code: int = 400) -> None:
+        """Initialize the series import error.
+
+        Args:
+            code: Machine-readable error code.
+            message: Human-readable error message.
+            status_code: HTTP status code for API responses.
+        """
         super().__init__(message)
         self.code = code
         self.message = message

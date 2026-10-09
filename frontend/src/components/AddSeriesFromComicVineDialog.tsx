@@ -10,6 +10,8 @@ import type {
 import ImageWithLoading from './ImageWithLoading'
 import { optimizedImageUrl, optimizedImageSrcSet } from '../services/imageDelivery'
 import { useToast } from '../contexts/useToast'
+import { queryClient } from '../query/queryClient'
+import { invalidateAfterQueueMutation } from '../query/cacheEffects'
 
 interface AddSeriesFromComicVineDialogProps {
   isOpen: boolean
@@ -191,6 +193,7 @@ export default function AddSeriesFromComicVineDialog({
       }
       const result = await comicVineApi.importSeries(payload)
       showToast(`Added "${result.series_name}" to ComicPile (${result.issues_adopted} issues)`, 'success')
+      await invalidateAfterQueueMutation(queryClient)
       onAdded(result.thread_id)
       onClose()
     } catch (err: unknown) {
