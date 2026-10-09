@@ -471,7 +471,7 @@ describe('CreatorComparisonPage', () => {
     const rows = distributions[0].querySelectorAll('[role="listitem"]') as NodeListOf<HTMLElement>
     expect(rows).toHaveLength(9)
     expect(rows[1]).toHaveAttribute('aria-label', '4.5★: 0 ratings (0.0%)')
-    expect(rows[4]).toHaveAttribute('aria-label', '4★: 4 ratings, 50.0%')
+    expect(rows[2]).toHaveAttribute('aria-label', '4★: 4 ratings, 50.0%')
     expect(rows[0]).toHaveAttribute('aria-label', '5★: 4 ratings, 50.0%')
   })
 })
