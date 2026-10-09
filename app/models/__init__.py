@@ -27,6 +27,7 @@ from app.models.reading_plan_membership import (
     ReadingPlanSource,
     ReadingPlanSourcePlacement,
 )
+from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.reading_session import ReadingSession
@@ -63,6 +64,7 @@ __all__ = [
     "ReadingOrderItem",
     "ReadingPlanDependency",
     "ReadingPlanIssue",
+    "ReadingPlanReleaseSource",
     "ReadingPlanSource",
     "ReadingPlanSourcePlacement",
     "Release",
