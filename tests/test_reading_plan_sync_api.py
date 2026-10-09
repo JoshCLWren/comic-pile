@@ -18,7 +18,7 @@ from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.models.thread import Thread
 from app.models.user import User
 from app.services import reading_plan_sync_service as sync_service
-from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
+from comic_pile.comicvine_provider import ComicVineClient, ComicVineError, ComicVineResponse
 from tests.conftest import get_or_create_user_async
 
 SYNC_URL = "/api/v1/reading-plan-sync/sync"
@@ -39,10 +39,10 @@ class _FakeProvider(ComicVineClient):
     ) -> list[dict[str, object]]:
         return list(self.rosters.get(volume_id, []))
 
-    async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> None:
+    async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> ComicVineResponse:
         raise ComicVineError("fake provider does not hydrate issues")
 
-    async def fetch_story_arc(self, arc_id: int, *, refresh: bool = False) -> None:
+    async def fetch_story_arc(self, arc_id: int, *, refresh: bool = False) -> ComicVineResponse:
         raise ComicVineError("fake provider has no story arcs")
 
 

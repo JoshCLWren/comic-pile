@@ -24,7 +24,7 @@ from app.models.external_identity import (
 )
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.services.reading_plan_sync_service import parse_store_date, sync_released_issues
-from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
+from comic_pile.comicvine_provider import ComicVineClient, ComicVineError, ComicVineResponse
 from tests.conftest import get_or_create_user_async
 
 FIXED_AS_OF = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
@@ -56,10 +56,10 @@ class _FakeProvider(ComicVineClient):
             raise self.failures[volume_id]
         return list(self.rosters.get(volume_id, []))
 
-    async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> None:
+    async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> ComicVineResponse:
         raise ComicVineError("fake provider does not hydrate issues")
 
-    async def fetch_story_arc(self, arc_id: int, *, refresh: bool = False) -> None:
+    async def fetch_story_arc(self, arc_id: int, *, refresh: bool = False) -> ComicVineResponse:
         raise ComicVineError("fake provider has no story arcs")
 
 
