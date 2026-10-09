@@ -76,6 +76,7 @@ async def test_migrate_thread_to_issues_completed(async_db: AsyncSession):
     assert migrated.next_unread_issue_id is None
     assert migrated.status == "completed"
     assert migrated.issues_remaining == 0
+    assert migrated.queue_position == 0
 
     # All issues should be read
     result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))

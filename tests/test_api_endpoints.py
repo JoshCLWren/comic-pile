@@ -302,6 +302,7 @@ async def test_update_thread_complete_status(
     thread = response.json()
     assert thread["status"] == "completed"
     assert thread["issues_remaining"] == 0
+    assert thread["queue_position"] == 0
 
     from app.models import Thread
 
