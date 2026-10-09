@@ -80,7 +80,11 @@ function EventRecord({ event }: { event: DisplayEvent }) {
         </span>
       </div>
       <p className="min-w-0 break-words text-sm font-bold text-stone-200">
-        {event.thread_title || 'Thread unavailable'}
+        {event.thread_title
+          ? event.thread_title
+          : event.issue_number
+            ? `Deleted · #${event.issue_number}`
+            : 'Deleted thread'}
         {event.thread_title && event.issue_number ? (
           <span className="text-stone-400"> · #{event.issue_number}</span>
         ) : null}

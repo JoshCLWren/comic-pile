@@ -767,7 +767,31 @@ async def get_session_details(
     events_result = await db.execute(
         select(Event).where(Event.session_id == session_id).order_by(Event.timestamp.desc(), Event.id.desc())
     )
-    events = events_result.scalars().all()
+    raw_events = events_result.scalars().all()
+
+    # Deduplicate identical event pairs (double-logged events) by content fingerprint.
+    seen_fingerprints: set[tuple] = set()
+    events = []
+    for event in raw_events:
+        fp = (
+            event.session_id,
+            event.type,
+            event.selected_thread_id,
+            event.thread_id,
+            event.timestamp,
+            event.die,
+            event.result,
+            event.selection_method,
+            event.rating,
+            event.issues_read,
+            event.die_after,
+            event.issue_number,
+            event.issue_id,
+        )
+        if fp in seen_fingerprints:
+            continue
+        seen_fingerprints.add(fp)
+        events.append(event)
 
     thread_ids = set()
     for event in events:
