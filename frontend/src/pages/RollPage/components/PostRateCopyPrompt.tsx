@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { rollUtilityActionClass } from '../actionClasses'
-import { useUndo } from '../../../hooks/useUndo'
-import { queryKeys } from '../../../query/queryKeys'
 
 /** The just-rated comic reference offered on the post-rate copy prompt. */
 export interface PostRateReference {
@@ -14,7 +11,10 @@ export interface PostRateReference {
 interface PostRateCopyPromptProps {
   reference: PostRateReference | null
   onDismiss: () => void
+  /** Reverses the rating behind this notice. Owned by the page, not this prompt. */
   onUndo?: () => void
+  /** Pending state of the page-owned undo mutation. */
+  undoPending?: boolean
   canUndo?: boolean
 }
 
@@ -24,11 +24,20 @@ interface PostRateCopyPromptProps {
  * surfaces the exact series title + issue string the pre-rate Copy title
  * control would have offered before Mark Read & Save. It never blocks the
  * next roll and follows the pre-rate clipboard feedback pattern.
+ *
+ * The optional undo action is what keeps a mis-tap from being buried three
+ * screens deep in History → session → snapshots (#3194); the page owns the
+ * mutation and passes its pending state down so the notice stays the single
+ * source of truth for both actions.
  */
-export function PostRateCopyPrompt({ reference, onDismiss, onUndo, canUndo = false }: PostRateCopyPromptProps) {
+export function PostRateCopyPrompt({
+  reference,
+  onDismiss,
+  onUndo,
+  undoPending = false,
+  canUndo = false,
+}: PostRateCopyPromptProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const queryClient = useQueryClient()
-  const { mutate: undo, isPending: isUndoPending } = useUndo()
 
   useEffect(() => {
     setCopyStatus('idle')
@@ -47,12 +56,6 @@ export function PostRateCopyPrompt({ reference, onDismiss, onUndo, canUndo = fal
     }
   }
 
-  async function handleUndo() {
-    if (onUndo) {
-      onUndo()
-    }
-  }
-
   return (
     <section
       aria-label="Just rated"
@@ -67,7 +70,7 @@ export function PostRateCopyPrompt({ reference, onDismiss, onUndo, canUndo = fal
         </strong>{' '}
         a <strong className="text-[var(--theme-personal-accent)]">{reference.rating}/5</strong>.
       </p>
-<div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={handleCopyComicReference}
@@ -91,19 +94,19 @@ export function PostRateCopyPrompt({ reference, onDismiss, onUndo, canUndo = fal
           </svg>
           {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title and issue'}
         </button>
-        {canUndo && (
+        {canUndo && onUndo && (
           <button
             type="button"
-            onClick={handleUndo}
-            disabled={isUndoPending}
-            className="min-h-11 px-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-amber-300 hover:bg-white/10 disabled:opacity-60"
+            onClick={onUndo}
+            disabled={undoPending}
+            className={`min-h-11 ${rollUtilityActionClass()}`}
             aria-label="Undo this rating"
           >
-            {isUndoPending ? 'Undoing...' : 'Undo rating'}
+            {undoPending ? 'Undoing...' : 'Undo rating'}
           </button>
         )}
         <p className="text-[10px] font-medium text-[var(--theme-text-dim)]">
-          Copies "{title} {issueNumber}"
+          Copies “{title} {issueNumber}”
         </p>
         {copyStatus === 'failed' ? (
           <p className="text-[10px] font-bold text-[var(--theme-danger)]" role="status">

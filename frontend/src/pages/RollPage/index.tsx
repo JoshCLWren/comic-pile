@@ -36,11 +36,9 @@ import { useRollViewport } from './useRollViewport'
 import { useRatingView } from './useRatingView'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
-import { useUndo } from '../../hooks/useUndo'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '../../query/queryKeys'
-import { useSessionMode } from '../../hooks/useSessionMode'
+import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
+import { invalidateAfterUndo } from '../../query/cacheEffects'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
@@ -137,23 +135,7 @@ export default function RollPage() {
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
   const { showToast } = useToast()
-  
-  // Undo functionality
   const undo = useUndo()
-  const sessionMode = useSessionMode()
-  
-  // Get current session for undo functionality
-  const { data: currentSession } = useQuery({
-    queryKey: queryKeys.session.current(),
-    queryFn: async () => {
-      const response = await fetch('/api/v1/session/current')
-      if (!response.ok) {
-        throw new Error('Failed to get current session')
-      }
-      return response.json()
-    },
-    enabled: true,
-  })
 
   useRollBootstrapSync({
     state,
@@ -174,6 +156,17 @@ export default function RollPage() {
     dismissPendingMutation,
     refetchBootstrap,
   })
+
+  // Undoing a rating restores the snapshot the rating itself wrote, which is the
+  // newest one while nothing else has been rated since (#3194). The list stays
+  // disabled until a just-rated notice is on screen so Roll costs nothing at
+  // rest, and the click path re-reads it before acting so a second rating inside
+  // the snapshot query's stale window cannot undo two ratings at once.
+  const undoSessionId = rating.lastRated ? bootstrap?.session_id ?? null : null
+  const { data: undoSnapshots, refetch: refetchUndoSnapshots } = useSnapshots(undoSessionId)
+  const latestUndoSnapshot = undoSnapshots?.snapshots[0]
+  const canUndoLastRating =
+    latestUndoSnapshot != null && latestUndoSnapshot.description !== 'Session start'
 
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
@@ -275,28 +268,25 @@ export default function RollPage() {
   }
 
   const handleUndoRating = async () => {
-    if (!currentSession || !rating.lastRated) return
-    
+    const rated = rating.lastRated
+    const sessionId = bootstrap?.session_id
+    if (!rated || sessionId == null) return
+
     try {
-      await undo.mutate({
-        sessionId: currentSession.id,
-        snapshotId: currentSession.latest_snapshot_id,
-      })
-      
-      // Show success toast
-      showToast(`Rating for "${rating.lastRated.title} ${rating.lastRated.issueNumber}" has been undone`, 'success')
-      
-      // Clear the last rated state to remove the prompt
+      const freshSnapshots = await refetchUndoSnapshots()
+      const snapshot = freshSnapshots.data?.snapshots[0]
+      if (!snapshot || snapshot.description === 'Session start') {
+        showToast('No undo point is recorded for this rating.', 'error')
+        return
+      }
+
+      await undo.mutate({ sessionId, snapshotId: snapshot.id })
+      showToast(`Rating for "${rated.title} ${rated.issueNumber}" has been undone`, 'success')
+      // Drop the notice before the refresh lands: the restored state is the
+      // one the reader asked for, and keeping a "you just rated" prompt up
+      // over a state where the rating no longer exists is the stale read #3194.
       rating.clearLastRated()
-      
-      // Refetch bootstrap to update the UI with fresh state
-      await refetchBootstrap()
-      
-      // Invalidate session queries to ensure fresh data
-      // This will fix the stale state issue on the Roll page
-      queryClient.invalidateQueries({ queryKey: queryKeys.session.current() })
-      queryClient.invalidateQueries({ queryKey: queryKeys.roll.bootstrap() })
-      
+      await invalidateAfterUndo(queryClient)
     } catch (error) {
       console.error('Undo failed:', error)
       showToast('Failed to undo rating. Please try again.', 'error')
@@ -480,7 +470,8 @@ export default function RollPage() {
                 reference={rating.lastRated}
                 onDismiss={rating.clearLastRated}
                 onUndo={handleUndoRating}
-                canUndo={!!currentSession && !!rating.lastRated}
+                undoPending={undo.isPending}
+                canUndo={canUndoLastRating}
               />
             )}
 

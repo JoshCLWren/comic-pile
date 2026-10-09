@@ -216,6 +216,28 @@ export async function invalidateAfterQueueMutation(
   return invalidateAfterQueueMovement(client)
 }
 
+/**
+ * Refresh every surface an undo (or session restore) rewrites (#3194).
+ *
+ * An undo restores queue order/membership, the current session, the roll
+ * bootstrap, and the session-history aggregates that count reads and ratings,
+ * so this composes the queue-movement refresh and adds the two undo-specific
+ * spaces: the paginated Session history cards (whose "N issues read" total
+ * must stop counting an undone rating) and the snapshot lists the next undo
+ * reads from. Session detail and session snapshots stay on their callers'
+ * explicit refetch because those are the surfaces the caller already owns.
+ *
+ * TanStack Query refetches invalidated active queries — callers must not also
+ * call `refetch()` for a key this helper already refreshes.
+ */
+export async function invalidateAfterUndo(client: QueryClient): Promise<void> {
+  await Promise.all([
+    invalidateAfterQueueMovement(client),
+    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.undo.all }),
+  ])
+}
+
 export async function invalidateReadingPlans(client: QueryClient): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
   // Plan create/update/delete recompiles eligibility rules that Roll/Queue/session consume.
