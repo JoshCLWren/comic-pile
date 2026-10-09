@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import MIN_RATED_FOR_RELIABLE, MIN_RATED_ISSUES_PER_SERIES
 from app.models.event import Event
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
@@ -24,9 +25,6 @@ COMICVINE_PROVIDER = "comicvine"
 # Maximum number of creators allowed in a single comparison request
 MAX_COMPARISON_CREATORS = 4
 MIN_COMPARISON_CREATORS = 2
-
-# Minimum rated issues for reliable statistics
-MIN_RATED_FOR_RELIABLE = 3
 
 # Maximum series aggregates to return per creator
 MAX_SERIES_AGGREGATES = 5
@@ -226,12 +224,19 @@ def build_series_aggregates(
     creator_issue_ids: frozenset[int],
     effective_ratings: dict[int, float],
     limit: int = MAX_SERIES_AGGREGATES,
-) -> list[tuple[int, str, int, float | None]]:
+) -> list[tuple[int, str, int, int, float]]:
     """Build strongest series/thread aggregates for a creator's issues.
 
     Series averages use the latest effective rating per issue (shared
     ``#2028``/``#2037`` semantics): an issue re-rated later contributes its
     current rating once, never the mean of its rating history.
+
+    ``#3173`` makes the ranking match the "Strongest series" label: rating
+    strength is the primary ordering key, and a series must reach
+    ``MIN_RATED_ISSUES_PER_SERIES`` rated issues before it can be ranked at
+    all. Series below that sample are excluded rather than ranked on a thin
+    average, which is what previously let one lucky 5* issue outrank a long,
+    consistently strong run.
 
     The aggregates are derived from the already-loaded user-scoped inputs, so
     every creator in one bounded batch is served without any further query.
@@ -243,9 +248,11 @@ def build_series_aggregates(
         limit: Maximum aggregates returned.
 
     Returns:
-        List of ``(thread_id, thread_title, issue_count, average_rating)``
-        ordered by issue_count desc, average_rating desc (nulls last), then
-        case-insensitive title and stable thread id.
+        List of ``(thread_id, thread_title, issue_count, rated_issue_count, average_rating)``
+        ordered by average_rating desc, then issue_count desc, then
+        case-insensitive title and stable thread id. Only series with at least
+        ``MIN_RATED_ISSUES_PER_SERIES`` rated issues are included, so every
+        returned average is non-null.
     """
     if not creator_issue_ids:
         return []
@@ -259,19 +266,29 @@ def build_series_aggregates(
         titles.setdefault(owned_thread.thread_id, owned_thread.thread_title)
         thread_issues.setdefault(owned_thread.thread_id, []).append(issue_id)
 
-    aggregates: list[tuple[int, str, int, float | None]] = []
+    aggregates: list[tuple[int, str, int, int, float]] = []
     for thread_id_int, issue_ids in thread_issues.items():
         ratings = [
             effective_ratings[issue_id] for issue_id in issue_ids if issue_id in effective_ratings
         ]
-        average = round(sum(ratings) / len(ratings), 2) if ratings else None
-        aggregates.append((thread_id_int, titles[thread_id_int], len(issue_ids), average))
+        if len(ratings) < MIN_RATED_ISSUES_PER_SERIES:
+            # Documented minimum-sample exclusion (#3173). A thinner series is
+            # omitted entirely rather than ranked on an unreliable average.
+            continue
+        aggregates.append(
+            (
+                thread_id_int,
+                titles[thread_id_int],
+                len(issue_ids),
+                len(ratings),
+                round(sum(ratings) / len(ratings), 2),
+            )
+        )
 
     aggregates.sort(
         key=lambda aggregate: (
+            -aggregate[4],
             -aggregate[2],
-            aggregate[3] is None,
-            -(aggregate[3] or 0.0),
             titles[aggregate[0]].casefold(),
             titles[aggregate[0]],
             aggregate[0],
@@ -287,6 +304,7 @@ __all__ = [
     "MAX_COMPARISON_CREATORS",
     "MIN_COMPARISON_CREATORS",
     "MIN_RATED_FOR_RELIABLE",
+    "MIN_RATED_ISSUES_PER_SERIES",
     "MAX_SERIES_AGGREGATES",
     "OwnedIssueThread",
     "build_series_aggregates",

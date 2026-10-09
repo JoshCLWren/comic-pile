@@ -627,7 +627,8 @@ export interface CreatorComparisonSeriesAggregate {
   thread_id: number
   thread_title: string
   issue_count: number
-  average_rating: number | null
+  rated_issue_count: number
+  average_rating: number
 }
 
 export interface CreatorComparisonItem {
@@ -641,6 +642,7 @@ export interface CreatorComparisonItem {
   top_rating_rate: number | null
   role_stats: CreatorComparisonRoleStat[]
   strongest_series: CreatorComparisonSeriesAggregate[]
+  min_rated_issues_per_series: number
   unread_upcoming_count: number
   read_unrated_count: number
   insufficient_data: boolean

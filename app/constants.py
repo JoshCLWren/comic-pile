@@ -163,6 +163,14 @@ NEAR_MATCH_DISTANCE: int = 2
 # Maximum number of near-match suggestions returned by the API.
 NEAR_MATCH_LIMIT: int = 8
 
+# Minimum rated issues needed before personal creator statistics are treated as
+# reliable. Applies to creator-level averages and, since #3173, also gates which
+# series "strongest series" is allowed to rank. Shared by the aggregation layer
+# and the response schema so the documented minimum sample and the enforced
+# contract cannot drift apart.
+MIN_RATED_FOR_RELIABLE: int = 3
+MIN_RATED_ISSUES_PER_SERIES: int = MIN_RATED_FOR_RELIABLE
+
 
 def validate_tag_color(color: object) -> tuple[str, str]:
     """Validate and normalize a tag color against the fixed palette.
