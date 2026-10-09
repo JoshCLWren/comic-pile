@@ -159,6 +159,24 @@ export default function QueueThreadCard({
             <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               {thread.format}
             </span>
+            {thread.comicvine_mapping != null && (
+              <span
+                data-testid="queue-thread-mapping-status"
+                className="ml-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-stone-800/50 border border-stone-400/30 text-stone-300"
+              >
+                {thread.comicvine_mapping.confirmed_issue_count > 0 ? (
+                  <>
+                    <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    Linked
+                  </>
+                ) : (
+                  <>
+                    <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-stone-400" />
+                    Not linked
+                  </>
+                )}
+              </span>
+            )}
             {thread.issues_remaining !== null && (
               <span className="text-sm font-medium text-[var(--theme-text-muted)]">
                 {isMigrated && !isBlocked && thread.next_unread_issue_number
