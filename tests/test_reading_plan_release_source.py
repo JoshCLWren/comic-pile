@@ -213,3 +213,164 @@ async def test_disable_is_idempotent(async_db: AsyncSession) -> None:
         user_id=user.id,
     )
     assert enabled.enabled is True
+
+
+@pytest.mark.asyncio
+async def test_reenable_rejected_after_mapping_demotion(
+    async_db: AsyncSession,
+) -> None:
+    """Re-enabling fails if the mapping was demoted after creation."""
+    user = await get_or_create_user_async(async_db, "release6@test.com")
+    plan = await _make_plan(async_db, user_id=user.id)
+    thread = await _make_thread(async_db, user_id=user.id, title="T6")
+    identity = await _make_identity(async_db, external_id="555")
+    await _confirm_mapping(async_db, thread_id=thread.id, identity_id=identity.id)
+    await async_db.commit()
+
+    created = await service.create_source(
+        async_db,
+        data=ReleaseSourceCreate(
+            plan_id=plan.id,
+            thread_id=thread.id,
+            external_identity_id=identity.id,
+        ),
+        user_id=user.id,
+    )
+    await service.update_source(
+        async_db,
+        source_id=created.id,
+        data=ReleaseSourceUpdate(enabled=False),
+        user_id=user.id,
+    )
+    # Demote the mapping.
+    from sqlalchemy import update as sa_update
+
+    await async_db.execute(
+        sa_update(ThreadExternalSeriesMapping)
+        .where(
+            ThreadExternalSeriesMapping.thread_id == thread.id,
+            ThreadExternalSeriesMapping.external_identity_id == identity.id,
+        )
+        .values(status="candidate")
+    )
+    await async_db.commit()
+
+    with pytest.raises(HTTPException, match="confirmed"):
+        await service.update_source(
+            async_db,
+            source_id=created.id,
+            data=ReleaseSourceUpdate(enabled=True),
+            user_id=user.id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_rejects_non_comicvine_provider(async_db: AsyncSession) -> None:
+    """Only ComicVine series volumes can be subscribed."""
+    user = await get_or_create_user_async(async_db, "release7@test.com")
+    plan = await _make_plan(async_db, user_id=user.id)
+    thread = await _make_thread(async_db, user_id=user.id, title="T7")
+    identity = ExternalIdentity(
+        provider="other",
+        entity_type="series",
+        external_id="111",
+        metadata_json={"name": "Other Volume"},
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    await _confirm_mapping(async_db, thread_id=thread.id, identity_id=identity.id)
+    await async_db.commit()
+
+    with pytest.raises(HTTPException, match="ComicVine"):
+        await service.create_source(
+            async_db,
+            data=ReleaseSourceCreate(
+                plan_id=plan.id,
+                thread_id=thread.id,
+                external_identity_id=identity.id,
+            ),
+            user_id=user.id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_rejects_non_series_entity(async_db: AsyncSession) -> None:
+    """Only series entities (not issues) can be subscribed."""
+    user = await get_or_create_user_async(async_db, "release8@test.com")
+    plan = await _make_plan(async_db, user_id=user.id)
+    thread = await _make_thread(async_db, user_id=user.id, title="T8")
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="222",
+        metadata_json={"name": "Some Issue"},
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    await _confirm_mapping(async_db, thread_id=thread.id, identity_id=identity.id)
+    await async_db.commit()
+
+    with pytest.raises(HTTPException, match="ComicVine"):
+        await service.create_source(
+            async_db,
+            data=ReleaseSourceCreate(
+                plan_id=plan.id,
+                thread_id=thread.id,
+                external_identity_id=identity.id,
+            ),
+            user_id=user.id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_multiple_volumes_one_thread(async_db: AsyncSession) -> None:
+    """One thread can follow multiple provider volumes."""
+    user = await get_or_create_user_async(async_db, "release9@test.com")
+    plan = await _make_plan(async_db, user_id=user.id)
+    thread = await _make_thread(async_db, user_id=user.id, title="T9")
+    id_a = await _make_identity(async_db, external_id="401")
+    id_b = await _make_identity(async_db, external_id="402")
+    await _confirm_mapping(async_db, thread_id=thread.id, identity_id=id_a.id)
+    await _confirm_mapping(async_db, thread_id=thread.id, identity_id=id_b.id)
+    await async_db.commit()
+
+    for identity in (id_a, id_b):
+        await service.create_source(
+            async_db,
+            data=ReleaseSourceCreate(
+                plan_id=plan.id,
+                thread_id=thread.id,
+                external_identity_id=identity.id,
+            ),
+            user_id=user.id,
+        )
+    listed = await service.list_sources(async_db, plan_id=plan.id, user_id=user.id)
+    assert len(listed) == 2
+
+
+@pytest.mark.asyncio
+async def test_shared_volume_across_plans(async_db: AsyncSession) -> None:
+    """One volume can feed the same thread under different plans."""
+    user = await get_or_create_user_async(async_db, "release10@test.com")
+    plan_a = await _make_plan(async_db, user_id=user.id)
+    plan_b = await _make_plan(async_db, user_id=user.id)
+    thread = await _make_thread(async_db, user_id=user.id, title="T10")
+    identity = await _make_identity(async_db, external_id="501")
+    await _confirm_mapping(async_db, thread_id=thread.id, identity_id=identity.id)
+    await async_db.commit()
+
+    for plan in (plan_a, plan_b):
+        await service.create_source(
+            async_db,
+            data=ReleaseSourceCreate(
+                plan_id=plan.id,
+                thread_id=thread.id,
+                external_identity_id=identity.id,
+            ),
+            user_id=user.id,
+        )
+    for plan in (plan_a, plan_b):
+        listed = await service.list_sources(
+            async_db, plan_id=plan.id, user_id=user.id
+        )
+        assert len(listed) == 1

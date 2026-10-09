@@ -44,7 +44,7 @@ async def _get_thread(db: AsyncSession, *, thread_id: int, user_id: int) -> Thre
 async def _require_confirmed_mapping(
     db: AsyncSession, *, thread_id: int, external_identity_id: int
 ) -> ExternalIdentity:
-    """Ensure the volume is a confirmed mapping for the thread."""
+    """Ensure the volume is a confirmed ComicVine series mapping for the thread."""
     stmt = select(ThreadExternalSeriesMapping).where(
         ThreadExternalSeriesMapping.thread_id == thread_id,
         ThreadExternalSeriesMapping.external_identity_id == external_identity_id,
@@ -60,6 +60,11 @@ async def _require_confirmed_mapping(
     identity = (await db.execute(stmt)).scalar_one_or_none()
     if identity is None:  # pragma: no cover - FK guarantees existence
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Provider identity not found")
+    if identity.provider != "comicvine" or identity.entity_type != "series":
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Release source must reference a confirmed ComicVine series volume",
+        )
     return identity
 
 
@@ -132,12 +137,13 @@ async def create_source(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        # Lost a race; fetch the winner.
+        # Rollback expires ORM state; re-fetch both rows fresh.
         existing = (await db.execute(stmt)).scalar_one_or_none()
         if existing is None:  # pragma: no cover - defensive
             raise
         await db.refresh(existing)
-        return _to_response(existing, identity)
+        fresh_identity = await _load_identity(db, identity_id=identity.id)
+        return _to_response(existing, fresh_identity)
 
     # Extract before refresh to avoid MissingGreenlet.
     source_id = source.id
@@ -154,9 +160,18 @@ async def list_sources(
     """List release sources for a plan with provider metadata."""
     await _get_plan(db, plan_id=plan_id, user_id=user_id)
     sources = await repo.list_for_plan(db, plan_id=plan_id, user_id=user_id)
+    if not sources:
+        return []
+    # Batch-load identities to avoid N+1.
+    identity_ids = {s.external_identity_id for s in sources}
+    stmt = select(ExternalIdentity).where(ExternalIdentity.id.in_(identity_ids))
+    identities = list((await db.execute(stmt)).scalars().all())
+    by_id = {i.id: i for i in identities}
     responses = []
     for source in sources:
-        identity = await _load_identity(db, identity_id=source.external_identity_id)
+        identity = by_id.get(source.external_identity_id)
+        if identity is None:  # pragma: no cover - FK guarantees existence
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Provider identity not found")
         responses.append(_to_response(source, identity))
     return responses
 
@@ -168,16 +183,18 @@ async def update_source(
     source = await repo.get_by_id(db, source_id=source_id, user_id=user_id)
     if source is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Release source not found")
-    # Extract attributes before commit to avoid MissingGreenlet after session expiry.
-    identity_id = source.external_identity_id
+    if data.enabled:
+        # Revalidate: the mapping may have been demoted since creation.
+        await _require_confirmed_mapping(
+            db,
+            thread_id=source.thread_id,
+            external_identity_id=source.external_identity_id,
+        )
     source.enabled = data.enabled
     await db.commit()
-    identity = await _load_identity(db, identity_id=identity_id)
-    # Re-fetch after commit so attribute access is safe.
-    refreshed = await repo.get_by_id(db, source_id=source_id, user_id=user_id)
-    if refreshed is None:  # pragma: no cover - defensive
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Release source not found")
-    return _to_response(refreshed, identity)
+    await db.refresh(source)
+    identity = await _load_identity(db, identity_id=source.external_identity_id)
+    return _to_response(source, identity)
 
 
 async def delete_source(db: AsyncSession, *, source_id: int, user_id: int) -> None:
