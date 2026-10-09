@@ -309,7 +309,6 @@ async def plans_containing_issue_for_user(
             ReadingPlanIssue.issue_id == issue_id,
             ContinuityPlan.user_id == user_id,
         )
-        .distinct()
         .order_by(ContinuityPlan.id)
     )
     return list(result.scalars().all())
