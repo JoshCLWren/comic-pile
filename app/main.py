@@ -34,9 +34,28 @@ from app.lifecycle import init_database
 from app.middleware import limiter, SecurityHeadersMiddleware
 from app.middleware.performance import PerformanceMiddleware, compute_startup_duration
 from app.middleware.request_logging import add_request_logging_middleware
+from app.performance_budgets import (
+    PerformanceWarning,
+    StartupBudgetError,
+    enforce_startup_budget,
+    get_performance_budget_manager,
+    run_bounded,
+)
 from app.safe_logging import safe_connection_metadata
 
 logger = logging.getLogger(__name__)
+
+# Per-operation startup budgets (issue #3243). Every readiness-critical await on
+# the ping-ready path is bounded well below the 2500 ms total startup budget, so
+# the offending operation is named and cancelled long before the process could
+# reach a pathological cold start.
+_NEON_STARTUP_WARNING_MS = 150
+_NEON_STARTUP_TIMEOUT_MS = 500
+# Heavy database initialization runs on the first non-ping request, not on the
+# ping-ready path, so it carries its own separately budgeted deadline. Its retry
+# backoff can legitimately exceed the ping-readiness budget.
+_HEAVY_INIT_WARNING_MS = 3000
+_HEAVY_INIT_TIMEOUT_MS = 5000
 
 
 # SEO indexability policy (issue #3065). Only the public landing page is a
@@ -753,21 +772,40 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         cold ping does not open a PostgreSQL connection.
         Every other operational route triggers heavy init on first use, guarded
         by an async lock so concurrent cold requests only run the sequence once.
+        
+        This operation is protected by performance budgets to prevent slow
+        initialization from blocking the application.
         """
         if _heavy_state["initialized"]:
             return
+
         async with _heavy_lock:
             if _heavy_state["initialized"]:
                 return
             if _heavy_state["in_progress"]:
                 return
             _heavy_state["in_progress"] = True
+
             try:
-                await init_database(app_settings.environment)
+                # Initialize database under its own separately budgeted deadline.
+                await run_bounded(
+                    operation="startup.database_initialization",
+                    coroutine=init_database(app_settings.environment),
+                    warning_ms=_HEAVY_INIT_WARNING_MS,
+                    timeout_ms=_HEAVY_INIT_TIMEOUT_MS,
+                    context={
+                        "environment": app_settings.environment,
+                        "deployment_id": getattr(app_settings, "deployment_id", "unknown"),
+                    },
+                )
 
                 from app.startup_diagnostics import mark_heavy_init_complete
 
+                # mark_heavy_init_complete is synchronous (records a timestamp
+                # and returns elapsed ms); it is not an awaitable and must not
+                # be wrapped in run_bounded.
                 heavy_ms = mark_heavy_init_complete()
+
                 logger.warning(
                     "Heavy application initialization completed in %.2f ms",
                     heavy_ms,
@@ -778,6 +816,32 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                     },
                 )
                 _heavy_state["initialized"] = True
+
+            except StartupBudgetError as e:
+                logger.error(f"Heavy initialization budget exceeded: {e}")
+                # In production, fail the request rather than continue with
+                # incomplete initialization.
+                if app_settings.environment == "production":
+                    raise
+                # In non-production, degrade explicitly: record the violation and
+                # leave the operation uninitialized so the next request retries.
+                violation = PerformanceWarning(
+                    operation="heavy_init.database",
+                    elapsed_ms=e.elapsed_ms,
+                    budget_type="startup",
+                    context={
+                        "environment": app_settings.environment,
+                        "deployment_id": getattr(app_settings, "deployment_id", "unknown"),
+                        "deadline_ms": e.timeout_ms,
+                    },
+                    severity="violation",
+                )
+                get_performance_budget_manager().record_violation(violation)
+                logger.error(
+                    "Heavy initialization degraded: %s",
+                    e,
+                    extra={"performance_violation": violation.to_dict(), "level": "ERROR"},
+                )
             finally:
                 _heavy_state["in_progress"] = False
 
@@ -790,31 +854,65 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
     @app.on_event("startup")
     async def startup_event():
-        """Lightweight startup; heavy DB init is deferred to first non-ping request."""
-        await compute_startup_duration()
-        from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
+        """Lightweight startup; heavy DB init is deferred to first non-ping request.
 
-        snapshot = startup_event_snapshot()
-        logger.warning(
-            "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
-            snapshot.startup_duration_ms or 0.0,
-            is_heavy_initialized(),
-            extra={
-                "event": "lightweight_application_startup",
-                "heavy_initialized": is_heavy_initialized(),
-                "startup_duration_ms": round(snapshot.startup_duration_ms or 0.0, 2),
-                "deployment_id": snapshot.deployment_id,
-            },
-        )
+        The total ping-ready budget is evaluated after every readiness-critical
+        await so no awaited startup work can hide from the 2.0 s warning and
+        2.5 s hard budget.
+        """
+        try:
+            await compute_startup_duration()
+            from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
 
-        # Start Neon egress monitor when credentials are configured.
-        if os.getenv("NEON_TOKEN") and os.getenv("NEON_PROJECT_ID"):
-            try:
-                from app.services.neon_monitor import startup_event as neon_startup
+            snapshot = startup_event_snapshot()
+            startup_duration = snapshot.startup_duration_ms or 0.0
 
-                await neon_startup()
-            except Exception:
-                logger.warning("Neon monitor startup skipped", exc_info=True)
+            # Start Neon egress monitor when credentials are configured. The
+            # monitor is optional monitoring infrastructure, so a budget breach
+            # degrades explicitly instead of extending ping readiness.
+            if os.getenv("NEON_TOKEN") and os.getenv("NEON_PROJECT_ID"):
+                try:
+                    from app.services.neon_monitor import startup_event as neon_startup
+
+                    await run_bounded(
+                        operation="startup.neon_monitor",
+                        coroutine=neon_startup(),
+                        warning_ms=_NEON_STARTUP_WARNING_MS,
+                        timeout_ms=_NEON_STARTUP_TIMEOUT_MS,
+                        context={"deployment_id": snapshot.deployment_id},
+                    )
+                except Exception:
+                    logger.warning("Neon monitor startup skipped", exc_info=True)
+
+            ready_snapshot = startup_event_snapshot()
+            readiness_ms = max(startup_duration, ready_snapshot.process_age_ms)
+            enforce_startup_budget(
+                readiness_ms,
+                environment=app_settings.environment,
+                operation="startup.readiness",
+                context={
+                    "deployment_id": ready_snapshot.deployment_id,
+                    "heavy_initialized": is_heavy_initialized(),
+                    "invocation": ready_snapshot.invocation,
+                },
+            )
+            logger.warning(
+                "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
+                readiness_ms,
+                is_heavy_initialized(),
+                extra={
+                    "event": "lightweight_application_startup",
+                    "heavy_initialized": is_heavy_initialized(),
+                    "startup_duration_ms": round(readiness_ms, 2),
+                    "deployment_id": ready_snapshot.deployment_id,
+                },
+            )
+        except StartupBudgetError:
+            logger.error("Startup hard budget exceeded; failing initialization")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during startup: {e}")
+            raise
 
     @app.middleware("http")
     async def heavy_init_middleware(request: Request, call_next):
@@ -832,7 +930,24 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             # are part of the table the router matches against.
             register_pending_routers()
         if not is_ping_probe and not defer_heavy_init:
-            await _ensure_heavy_init()
+            try:
+                await _ensure_heavy_init()
+            except StartupBudgetError as e:
+                # In production, fail the request if heavy initialization times out
+                if app_settings.environment == "production":
+                    from fastapi import responses
+                    return responses.JSONResponse(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        content={
+                            "detail": "Service temporarily unavailable due to initialization timeout",
+                            "operation": e.operation,
+                            "elapsed_ms": e.elapsed_ms,
+                            "timeout_ms": e.timeout_ms
+                        }
+                    )
+                # In non-production, continue but log the violation
+                logger.warning(f"Heavy initialization performance warning: {e}")
+        
         response = await call_next(request)
         from app.startup_diagnostics import is_heavy_initialized as _is_heavy
 

@@ -15,6 +15,12 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 
+from app.performance_budgets import (
+    PerformanceWarning,
+    REQUEST_TIMEOUT_MS,
+    REQUEST_WARNING_MS,
+    get_performance_budget_manager,
+)
 from app.performance_diagnostics import (
     begin_request_diagnostics,
     end_request_diagnostics,
@@ -30,7 +36,6 @@ from app.traffic_metrics import record_route_hit, resolve_route_template
 logger = logging.getLogger(__name__)
 
 MAX_LOG_BODY_SIZE = 1000
-_DEFAULT_SLOW_REQUEST_THRESHOLD_MS = 1000.0
 
 
 def contains_sensitive_keys(body_json: dict | list) -> bool:
@@ -163,16 +168,29 @@ def _sanitize_log_path(path: str) -> str:
 
 
 def _slow_request_threshold_ms() -> float:
-    """Resolve the threshold for structured slow-request warnings."""
+    """Resolve the warm-request structured warning threshold.
+
+    The frozen contract in issue #3243 begins ordinary warm warnings at 500 ms.
+    ``SLOW_REQUEST_THRESHOLD_MS`` may lower that threshold for operators who
+    want more warning coverage, but it can never raise it above the contract
+    ceiling, and an unparseable or non-positive value falls back to the
+    contract default. The 1000 ms violation threshold is not configurable at
+    all, so a warning cannot be converted into a larger timeout.
+
+    Returns:
+        Resolved warning threshold in milliseconds.
+    """
     raw_value = os.getenv("SLOW_REQUEST_THRESHOLD_MS")
     if raw_value is None:
-        return _DEFAULT_SLOW_REQUEST_THRESHOLD_MS
+        return float(REQUEST_WARNING_MS)
 
     try:
         parsed = float(raw_value)
     except ValueError:
-        return _DEFAULT_SLOW_REQUEST_THRESHOLD_MS
-    return parsed if parsed > 0 else _DEFAULT_SLOW_REQUEST_THRESHOLD_MS
+        return float(REQUEST_WARNING_MS)
+    if parsed <= 0:
+        return float(REQUEST_WARNING_MS)
+    return min(parsed, float(REQUEST_WARNING_MS))
 
 
 def _server_timing_header(total_ms: float) -> str:
@@ -199,18 +217,22 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
         app: FastAPI application instance to wire the middleware onto.
         environment: Current application environment.
     """
+    # Initialize performance budget manager
+    budget_manager = get_performance_budget_manager()
 
     @app.on_event("startup")
     async def record_startup_completion() -> None:
         """Emit one process-scoped startup timing event after lifespan startup."""
         mark_startup_complete()
         snapshot = startup_event_snapshot()
+        startup_duration = snapshot.startup_duration_ms or 0.0
+        
         logger.warning(
             "Application startup completed in %.2f ms",
-            snapshot.startup_duration_ms or 0.0,
+            startup_duration,
             extra={
                 "event": "application_startup",
-                "startup_duration_ms": _rounded_optional(snapshot.startup_duration_ms),
+                "startup_duration_ms": _rounded_optional(startup_duration),
                 "application_import_ms": _rounded_optional(snapshot.application_import_ms),
                 "application_creation_ms": _rounded_optional(snapshot.application_creation_ms),
                 "lifespan_ms": _rounded_optional(snapshot.lifespan_ms),
@@ -223,7 +245,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
 
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
-        """Add diagnostics headers and log slow or failed requests."""
+        """Add diagnostics headers and log slow or failed requests with performance budgets."""
         started_at = time.perf_counter()
         request_id = uuid.uuid4().hex
         request.state.startup_snapshot = next_request_snapshot()
@@ -257,6 +279,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             response.headers["X-Heavy-Init"] = "1" if startup.heavy_initialized else "0"
             response.headers["Server-Timing"] = _server_timing_header(process_time_ms)
 
+            # Prepare log data structure
             log_data = {
                 "timestamp": datetime.now(UTC).isoformat(),
                 "request_id": request_id,
@@ -293,6 +316,67 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
 
             log_data = sanitize_for_logging(log_data, environment)
 
+            slow_request_threshold = _slow_request_threshold_ms()
+            performance_context: dict[str, object] = {
+                "route": log_path,
+                "method": request.method,
+                "request_id": request_id,
+                "cold_request": startup.cold,
+                "database_queries": diagnostics.database_queries,
+                "database_time_ms": round(diagnostics.database_time_ms, 2),
+                "deployment_id": startup.deployment_id,
+                "warning_budget_ms": slow_request_threshold,
+                "violation_budget_ms": REQUEST_TIMEOUT_MS,
+            }
+            operation = f"request.{log_path}"
+
+            # Frozen contract (issue #3243): a warm request at or above 1000 ms is
+            # an error-level budget violation that still completes, because a
+            # running user request is not killed for crossing a clock.
+            if process_time_ms >= REQUEST_TIMEOUT_MS:
+                violation = PerformanceWarning(
+                    operation=operation,
+                    elapsed_ms=process_time_ms,
+                    budget_type="request",
+                    context=performance_context,
+                    severity="violation",
+                )
+                budget_manager.record_violation(violation)
+                logger.error(
+                    "Performance budget violation: %s %s completed in %.2f ms",
+                    request.method,
+                    log_path,
+                    process_time_ms,
+                    extra={
+                        **log_data,
+                        "event": "performance_budget_violation",
+                        "performance_violation": violation.to_dict(),
+                        "level": "ERROR",
+                    },
+                )
+            elif process_time_ms >= slow_request_threshold:
+                warning = PerformanceWarning(
+                    operation=operation,
+                    elapsed_ms=process_time_ms,
+                    budget_type="request",
+                    context=performance_context,
+                    severity="warning",
+                )
+                budget_manager.record_warning(warning)
+                logger.warning(
+                    "Performance warning: %s %s completed in %.2f ms",
+                    request.method,
+                    log_path,
+                    process_time_ms,
+                    extra={
+                        **log_data,
+                        "event": "performance_budget_warning",
+                        "performance_warning": warning.to_dict(),
+                        "level": "WARNING",
+                    },
+                )
+
+            # Error and slow request logging
             if status_code >= 500:
                 logger.error(
                     "API Error: %s %s - %s",
@@ -307,14 +391,6 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                     request.method,
                     log_path,
                     status_code,
-                    extra={**log_data, "level": "WARNING"},
-                )
-            elif process_time_ms >= _slow_request_threshold_ms():
-                logger.warning(
-                    "Slow HTTP request: %s %s completed in %.2f ms",
-                    request.method,
-                    log_path,
-                    process_time_ms,
                     extra={**log_data, "level": "WARNING"},
                 )
             elif startup.cold:

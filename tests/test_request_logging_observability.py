@@ -63,17 +63,17 @@ def test_configure_logging_sets_production_level_when_no_handlers(monkeypatch: p
         root.setLevel(original_level)
 
 
-def _find_slow_request_records(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+def _find_performance_warning_records(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
     return [
         record
         for record in caplog.records
         if record.name == "app.middleware.request_logging"
-        and record.getMessage().startswith("Slow HTTP request:")
+        and record.getMessage().startswith("Performance warning:")
     ]
 
 
 @pytest.mark.asyncio
-async def test_middleware_emits_structured_slow_request_warning(
+async def test_middleware_emits_structured_performance_warning(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -95,7 +95,7 @@ async def test_middleware_emits_structured_slow_request_warning(
         response = await client.get("/slow")
         assert response.status_code == 200
 
-    records = _find_slow_request_records(caplog)
+    records = _find_performance_warning_records(caplog)
     assert len(records) == 1
     record = records[0]
     assert record.levelno == logging.WARNING
@@ -129,7 +129,7 @@ async def test_middleware_does_not_warn_below_threshold(
         response = await client.get("/fast")
         assert response.status_code == 200
 
-    assert _find_slow_request_records(caplog) == []
+    assert _find_performance_warning_records(caplog) == []
 
 
 @pytest.mark.asyncio
