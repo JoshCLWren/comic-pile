@@ -31,7 +31,16 @@ from app.schemas.creator_comparison import CreatorComparisonResponse
 from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
 from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
-from app.services.creator_comparison import get_creator_comparison
+from app.services.creator_comparison import (
+    get_creator_comparison,
+    get_average_drilldown,
+    get_median_drilldown,
+    get_rating_distribution_drilldown,
+    get_5_star_rate_drilldown,
+    get_role_average_drilldown,
+    get_series_average_drilldown,
+    get_read_without_rating_drilldown,
+)
 from app.services.creator_detail import get_creator_detail, get_creator_series_issues
 from app.services.creator_list import get_creator_list
 from app.services.creator_summary import get_creator_summaries
@@ -313,6 +322,190 @@ async def compare_creators_endpoint(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+
+@router.get("/compare/average", response_model=dict[str, object])
+async def get_average_drilldown_endpoint(
+    creator: str = Query(
+        ...,
+        description="Canonical creator key (e.g. ``creator:12345``)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Return average rating drilldown for one creator (issue #3176).
+
+    The calculation and issue set use the exact same shared aggregation semantics
+    as the comparison summary, so the summary value and drilldown always reconcile.
+    """
+    creator_id = parse_creator_key(creator)
+    if creator_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid creator key: {creator}",
+        )
+    try:
+        return await get_average_drilldown(db, current_user.id, creator_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.get("/compare/median", response_model=dict[str, object])
+async def get_median_drilldown_endpoint(
+    creator: str = Query(
+        ...,
+        description="Canonical creator key (e.g. ``creator:12345``)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Return median rating drilldown for one creator (issue #3176)."""
+    creator_id = parse_creator_key(creator)
+    if creator_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid creator key: {creator}",
+        )
+    try:
+        return await get_median_drilldown(db, current_user.id, creator_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.get("/compare/distribution", response_model=dict[str, object])
+async def get_rating_distribution_drilldown_endpoint(
+    creator: str = Query(
+        ...,
+        description="Canonical creator key (e.g. ``creator:12345``)",
+    ),
+    bucket: str = Query(
+        ...,
+        description="Rating bucket (``5``, ``4.5``, ``4``, ``3.5``, ``3``, ``2.5``, ``2``, ``1.5``, ``1``)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Return rating distribution bucket drilldown for one creator (issue #3176)."""
+    creator_id = parse_creator_key(creator)
+    if creator_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid creator key: {creator}",
+        )
+    try:
+        return await get_rating_distribution_drilldown(db, current_user.id, creator_id, bucket)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.get("/compare/5-star-rate", response_model=dict[str, object])
+async def get_5_star_rate_drilldown_endpoint(
+    creator: str = Query(
+        ...,
+        description="Canonical creator key (e.g. ``creator:12345``)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Return 5★ rate drilldown for one creator (issue #3176)."""
+    creator_id = parse_creator_key(creator)
+    if creator_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid creator key: {creator}",
+        )
+    try:
+        return await get_5_star_rate_drilldown(db, current_user.id, creator_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.get("/compare/role-average", response_model=dict[str, object])
+async def get_role_average_drilldown_endpoint(
+    creator: str = Query(
+        ...,
+        description="Canonical creator key (e.g. ``creator:12345``)",
+    ),
+    role: str = Query(
+        ...,
+        description="Role name (e.g. ``writer``, ``artist``, ``penciler``, ``inker``, ``colorist``, ``letterer``)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Return role-specific average rating drilldown for one creator (issue #3176)."""
+    creator_id = parse_creator_key(creator)
+    if creator_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid creator key: {creator}",
+        )
+    try:
+        return await get_role_average_drilldown(db, current_user.id, creator_id, role)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.get("/compare/series-average", response_model=dict[str, object])
+async def get_series_average_drilldown_endpoint(
+    creator: str = Query(
+        ...,
+        description="Canonical creator key (e.g. ``creator:12345``)",
+    ),
+    series: str = Query(
+        ...,
+        description="Canonical series key (e.g. ``thread:123``)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Return series average drilldown for one creator and series (issue #3176)."""
+    creator_id = parse_creator_key(creator)
+    if creator_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid creator key: {creator}",
+        )
+    try:
+        return await get_series_average_drilldown(db, current_user.id, creator_id, series)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.get("/compare/read-without-rating", response_model=dict[str, object])
+async def get_read_without_rating_drilldown_endpoint(
+    creator: str = Query(
+        ...,
+        description="Canonical creator key (e.g. ``creator:12345``)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Return read-without-rating drilldown for one creator (issue #3176)."""
+    creator_id = parse_creator_key(creator)
+    if creator_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid creator key: {creator}",
+        )
+    try:
+        return await get_read_without_rating_drilldown(db, current_user.id, creator_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),
         ) from e
 

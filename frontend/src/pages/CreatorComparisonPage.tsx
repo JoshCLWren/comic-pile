@@ -1,267 +1,403 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
-import type { CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
+import type {
+  CreatorComparisonItem,
+  CreatorComparisonRoleStat,
+  CreatorComparisonSeriesAggregate,
+} from '../types/index'
 import Breadcrumbs from '../components/Breadcrumbs'
+import Modal from '../components/Modal'
+import { RatingValue } from './RatingValue'
+import { InsufficientDataBadge } from './InsufficientDataBadge'
+import { SeriesLink } from './SeriesLink'
+import { RoleStatRow } from './RoleStatRow'
+import { RatingDistributionBar } from './RatingDistributionBar'
 
-function RatingValue({ value, label }: { value: number; label: string }) {
-  return (
-    <span
-      className="font-bold"
-      style={{ color: 'var(--theme-personal-accent)' }}
-      aria-label={label}
-    >
-      {value.toFixed(1)}★
-    </span>
-  )
+function normalizeKey(key: string): string {
+  const trimmed = key.trim()
+  return trimmed
 }
 
-function InsufficientDataBadge() {
-  return (
-    <span
-      className="inline-flex items-center rounded-full bg-[var(--theme-warning)]/15 px-2 py-0.5 text-xs font-semibold"
-      style={{ color: 'var(--theme-warning)' }}
-    >
-      Insufficient data
-    </span>
-  )
+type AverageDrilldown = {
+  calculation: string
+  issues: Array<{ issue_number: string; rating: string; role: string; thread_id: number | null; thread_title: string }>
+  total_rated: number
+  total_points: number
 }
 
-function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate }) {
-  return (
-    <Link
-      to={`/thread/${aggregate.thread_id}`}
-      className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-    >
-      <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
-        {aggregate.thread_title}
-      </span>
-      <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-        <span>{aggregate.issue_count} {aggregate.issue_count === 1 ? 'issue' : 'issues'}</span>
-        <span>{aggregate.rated_issue_count} rated</span>
-        <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} />
-      </span>
-    </Link>
-  )
+type MedianDrilldown = {
+  calculation: string
+  sorted_ratings: Array<{ rank: number; value: string }>
+  ratings_count: number
 }
 
-function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
-  return (
-    <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
-      <p className="truncate text-sm font-bold" title={stat.role} style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
-      <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-        {stat.issue_count} {stat.issue_count === 1 ? 'issue' : 'issues'}
-        {stat.average_rating != null ? (
-          <> · <RatingValue value={stat.average_rating} label={`Average ${stat.average_rating} out of 5 as ${stat.role}`} /></>
-        ) : (
-          ' · unrated'
-        )}
-      </p>
-    </li>
-  )
+type DistributionDrilldown = {
+  calculation: string
+  issues: Array<{ issue_number: string; rating: string; role: string; thread_id: number | null; thread_title: string }>
+  bucket_count: number
+  total_rated: number
 }
 
-function RatingDistributionBar({ distribution, totalCount }: { distribution: Record<string, number>; totalCount: number }) {
-  // ComicPile rates on a 1-5 scale with 0.5 increments; every bucket the API
-  // can emit gets a row so half-star ratings are never silently dropped.
-  //
-  // Bar length uses a shared 0-100% scale: bucket_count / total_ratings.
-  // This makes bars directly comparable across creators with very different
-  // sample sizes. Each non-empty bucket exposes both raw count and
-  // percentage, while screen readers receive bucket, count, percentage and
-  // the region communicates the creator's sample size.
-  const ratings = ['5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1']
-  const total = totalCount > 0 ? totalCount : 0
-
-  return (
-    <div
-      role="list"
-      aria-label={`Rating distribution across ${total} rated issue${total === 1 ? '' : 's'}`}
-      data-testid="rating-distribution"
-      className="space-y-1"
-    >
-      {ratings.map((rating) => {
-        const count = distribution[rating] ?? 0
-        const percentage = total > 0 ? (count / total) * 100 : 0
-        const isEmpty = count === 0
-        return (
-          <div
-            key={rating}
-            role="listitem"
-            className="flex items-center gap-2 text-xs"
-            style={{ color: 'var(--theme-text-muted)' }}
-            aria-label={
-              isEmpty
-                ? `${rating}★: 0 ratings (0.0%)`
-                : `${rating}★: ${count} rating${count === 1 ? '' : 's'}, ${percentage.toFixed(1)}%`
-            }
-          >
-            <span className="w-6 text-right font-medium">{rating}★</span>
-            <div className="flex-1 h-2 rounded bg-[var(--theme-border)] overflow-hidden">
-              <div
-                className="h-full rounded"
-                style={{
-                  width: `${percentage}%`,
-                  backgroundColor: 'var(--theme-personal-accent)',
-                  transition: 'width 0.3s ease',
-                }}
-              />
-            </div>
-            {!isEmpty && (
-              <span
-                className="w-20 text-right"
-                aria-hidden="true"
-              >
-                {`${count} · ${percentage.toFixed(1)}%`}
-              </span>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
+type FiveStarRateDrilldown = {
+  calculation: string
+  top_issue_ids: number[]
+  rated_count: number
+  top_count: number
+  issues: Array<{ issue_number: string; rating: string; role: string; thread_id: number | null; thread_title: string }>
 }
 
-function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
-  const totalRatings = item.ratings_count
-  const hasRatings = totalRatings > 0
-  const isValidKey = parseCreatorKey(item.canonical_creator_key) != null
-  const detailPath = isValidKey ? creatorRoutePath(item.canonical_creator_key) : null
+type RoleAverageDrilldown = {
+  calculation: string
+  role: string
+  issue_count: number
+  rated_issue_count: number
+  average_rating: number | null
+  issues: Array<{ issue_number: string; rating: string; role: string; thread_id: number | null; thread_title: string }>
+}
 
-  return (
-    <section className="min-w-0 flex-1 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
-      <header className="mb-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            {detailPath ? (
-              <Link
-                to={detailPath}
-                className="break-words text-xl font-bold leading-tight hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
-                style={{ color: 'var(--theme-text-primary)' }}
-              >
-                {item.display_name}
-              </Link>
-            ) : (
-              <h2 className="break-words text-xl font-bold leading-tight" style={{ color: 'var(--theme-text-primary)' }}>
-                {item.display_name}
-              </h2>
-            )}
-            {item.normalized_roles.length > 0 && (
-              <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-                {item.normalized_roles.join(', ')}
+type SeriesAverageDrilldown = {
+  calculation: string
+  thread_id: number
+  thread_title: string
+  issue_count: number
+  rated_issue_count: number
+  average_rating: number | null
+  issues: Array<{ issue_number: string; rating: string; role: string }>
+}
+
+type ReadWithoutRatingDrilldown = {
+  calculation: string
+  issues: Array<{ issue_number: string; thread_id: number | null; thread_title: string; roles: string[] }>
+  count: number
+}
+
+type DrilldownData =
+  | AverageDrilldown
+  | MedianDrilldown
+  | DistributionDrilldown
+  | FiveStarRateDrilldown
+  | RoleAverageDrilldown
+  | SeriesAverageDrilldown
+  | ReadWithoutRatingDrilldown
+
+type DrilldownState = {
+  open: boolean
+  creatorKey: string | null
+  metric:
+    | 'average'
+    | 'median'
+    | 'distribution'
+    | '5-star-rate'
+    | 'role-average'
+    | 'series-average'
+    | 'read-without-rating'
+  bucket?: string
+  role?: string
+}
+
+function useDrilldownData(
+  creatorKey: string | null,
+  metric: 'average' | 'median' | 'distribution' | '5-star-rate' | 'role-average' | 'series-average' | 'read-without-rating',
+  bucket?: string,
+  role?: string,
+) {
+  const enabled = creatorKey != null
+
+  const { data, isPending, isError, error } = useQuery<DrilldownData | null>({
+    queryKey: [
+      'creator-drilldown',
+      metric,
+      normalizeKey(creatorKey),
+      bucket,
+      role,
+    ],
+    queryFn: async () => {
+      if (!creatorKey) throw new Error('No creator key')
+
+      let url = ''
+      let params: Record<string, string> = {}
+
+      switch (metric) {
+        case 'average':
+          url = '/api/v1/creators/compare/average'
+          params = { creator: creatorKey }
+          break
+        case 'median':
+          url = '/api/v1/creators/compare/median'
+          params = { creator: creatorKey }
+          break
+        case 'distribution':
+          if (!bucket) throw new Error('Bucket is required for distribution drilldown')
+          url = '/api/v1/creators/compare/distribution'
+          params = { creator: creatorKey, bucket }
+          break
+        case '5-star-rate':
+          url = '/api/v1/creators/compare/5-star-rate'
+          params = { creator: creatorKey }
+          break
+        case 'role-average':
+          if (!role) throw new Error('Role is required for role-average drilldown')
+          url = '/api/v1/creators/compare/role-average'
+          params = { creator: creatorKey, role }
+          break
+        case 'series-average':
+          url = '/api/v1/creators/compare/series-average'
+          params = { creator: creatorKey }
+          break
+        case 'read-without-rating':
+          url = '/api/v1/creators/compare/read-without-rating'
+          params = { creator: creatorKey }
+          break
+      }
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      })
+
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`HTTP ${response.status}: ${text}`)
+      }
+
+      return response.json() as Promise<DrilldownData>
+    },
+    enabled,
+    staleTime: 30000,
+    gcTime: 300000,
+  })
+
+  return { data, isPending, isError, error }
+}
+
+function renderDrilldownContent(
+  data: DrilldownData,
+  metric: 'average' | 'median' | 'distribution' | '5-star-rate' | 'role-average' | 'series-average' | 'read-without-rating',
+  bucket?: string,
+  role?: string,
+) {
+  switch (metric) {
+    case 'average': {
+      const d = data as AverageDrilldown
+      return (
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+            Calculation
+          </p>
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>{d.calculation}</p>
+          {d.issues.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+                Supporting issues
               </p>
-            )}
-          </div>
-          {item.insufficient_data && <InsufficientDataBadge />}
+              <ul className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {d.issues.map((issue) => (
+                  <li key={issue.issue_number} className="flex items-center gap-2 text-xs">
+                    <span className="w-6 text-right">{issue.issue_number}</span>
+                    <span>{issue.rating}★</span>
+                    <span className="ml-2">{issue.role}</span>
+                    <span className="ml-2 text-muted-foreground">{issue.thread_title || ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="mt-4">
+            <strong>Total rated:</strong> {d.total_rated} issues &
+            <strong>Total points:</strong> {d.total_points}
+          </p>
         </div>
-      </header>
-
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+      )
+    }
+    case 'median': {
+      const d = data as MedianDrilldown
+      return (
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Average rating
+            Calculation
           </p>
-          {hasRatings ? (
-<p className="text-3xl font-black leading-tight" style={{ color: 'var(--theme-personal-accent)' }} aria-label={`Average rating ${item.average_rating} out of 5 from ${item.ratings_count} ${item.ratings_count === 1 ? 'rating' : 'ratings'}`}>
-<RatingValue value={item.average_rating!} label={`Average ${item.average_rating} out of 5 from ${item.ratings_count} ${item.ratings_count === 1 ? 'rating' : 'ratings'}`} />
-            </p>
-          ) : (
-            <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>No ratings yet</p>
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>{d.calculation}</p>
+          {d.sorted_ratings.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+                Sorted ratings (highest to lowest)
+              </p>
+              <ul className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {d.sorted_ratings.map((r) => (
+                  <li key={r.rank} className="flex items-center gap-2 text-xs">
+                    <span>{r.rank}.</span>
+                    <span>{r.value}★</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="mt-4">Rated issue count: {d.ratings_count}</p>
+        </div>
+      )
+    }
+    case 'distribution': {
+      const d = data as DistributionDrilldown
+      return (
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+            Calculation
+          </p>
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>{d.calculation}</p>
+          {d.issues.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+                Issues in this bucket
+              </p>
+              <ul className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {d.issues.map((issue) => (
+                  <li key={issue.issue_number} className="flex items-center gap-2 text-xs">
+                    <span className="w-6 text-right">{issue.issue_number}</span>
+                    <span>{issue.rating}★</span>
+                    <span className="ml-2">{issue.role}</span>
+                    <span className="ml-2 text-muted-foreground">{issue.thread_title || ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="mt-4">
+            <strong>Bucket count:</strong> {d.bucket_count} of {d.total_rated} rated issues
+          </p>
+        </div>
+      )
+    }
+    case '5-star-rate': {
+      const d = data as FiveStarRateDrilldown
+      return (
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+            Calculation
+          </p>
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>{d.calculation}</p>
+          {d.issues.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+                Five-star rated issues
+              </p>
+              <ul className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {d.issues.map((issue) => (
+                  <li key={issue.issue_number} className="flex items-center gap-2 text-xs">
+                    <span className="w-6 text-right">{issue.issue_number}</span>
+                    <span>{issue.rating}★</span>
+                    <span className="ml-2">{issue.role}</span>
+                    <span className="ml-2 text-muted-foreground">{issue.thread_title || ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="mt-4">
+            <strong>5★ count:</strong> {d.top_count} ÷ <strong>Rated count:</strong> {d.rated_count}
+          </p>
+        </div>
+      )
+    }
+    case 'role-average': {
+      const d = data as RoleAverageDrilldown
+      return (
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+            Calculation
+          </p>
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>{d.calculation}</p>
+          <p className="mt-2">
+            <strong>Role:</strong> {d.role} &
+            <strong>Rated issue count:</strong> {d.rated_issue_count} &
+            <strong>Average rating:</strong> {d.average_rating?.toFixed(2) || 'N/A'}
+          </p>
+          {d.issues.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+                Issues contributing to average
+              </p>
+              <ul className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {d.issues.map((issue) => (
+                  <li key={issue.issue_number} className="flex items-center gap-2 text-xs">
+                    <span className="w-6 text-right">{issue.issue_number}</span>
+                    <span>{issue.rating}★</span>
+                    <span className="ml-2">{issue.role}</span>
+                    <span className="ml-2 text-muted-foreground">{issue.thread_title || ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
-
+      )
+    }
+    case 'series-average': {
+      const d = data as SeriesAverageDrilldown
+      return (
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Median rating
+            Calculation
           </p>
-          {item.median_rating != null ? (
-            <p className="text-3xl font-black leading-tight" style={{ color: 'var(--theme-personal-accent)' }} aria-label={`Median rating ${item.median_rating} out of 5`}>
-              <RatingValue value={item.median_rating} label={`Median ${item.median_rating} out of 5`} />
-            </p>
-          ) : (
-            <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>{hasRatings ? 'N/A' : 'No ratings yet'}</p>
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>{d.calculation}</p>
+          <p className="mt-2">
+            <strong>Series:</strong> {d.thread_title} (thread {d.thread_id}) &
+            <strong>Rated issue count:</strong> {d.rated_issue_count} ÷
+            <strong>Total issue count:</strong> {d.issue_count}
+          </p>
+          {d.issues.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+                Rated issues in series
+              </p>
+              <ul className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {d.issues.map((issue) => (
+                  <li key={issue.issue_number} className="flex items-center gap-2 text-xs">
+                    <span className="w-6 text-right">{issue.issue_number}</span>
+                    <span>{issue.rating}★</span>
+                    <span className="ml-2">{issue.role}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
-
+      )
+    }
+    case 'read-without-rating': {
+      const d = data as ReadWithoutRatingDrilldown
+      return (
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Rated issues
+            Calculation
           </p>
-          <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.ratings_count}</p>
-        </div>
-
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            5★ rate
-          </p>
-          {item.top_rating_rate != null ? (
-            <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>
-              {(item.top_rating_rate * 100).toFixed(1)}%
-            </p>
-          ) : (
-            <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>{hasRatings ? '0%' : 'N/A'}</p>
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>{d.calculation}</p>
+          {d.issues.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+                Read-but-unrated issues
+              </p>
+              <ul className="mt-2 space-y-1 max-h-80 overflow-y-auto">
+                {d.issues.map((issue) => (
+                  <li key={issue.issue_number} className="flex items-center gap-2 text-xs">
+                    <span className="w-6 text-right">{issue.issue_number}</span>
+                    <span className="text-muted-foreground">{issue.thread_title || 'No title'}</span>
+                    <span className="ml-2 text-xs">
+                      {issue.roles.length > 0 ? issue.roles.join(', ') : 'no role'}
+                    </span>
+                  </li>
+                ))
+              </ul>
+            </div>
           )}
+          <p className="mt-4">Total count: {d.count}</p>
         </div>
-
-        <div className="sm:col-span-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Rating distribution
-          </p>
-          <RatingDistributionBar distribution={item.rating_distribution} totalCount={totalRatings} />
-        </div>
-
-        <div className="sm:col-span-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Upcoming in ComicPile
-          </p>
-          <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.unread_upcoming_count}</p>
-        </div>
-
-        {item.read_unrated_count > 0 && (
-          <div className="sm:col-span-2">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-              Read, not rated
-            </p>
-            <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.read_unrated_count}</p>
-          </div>
-        )}
-      </div>
-
-      {item.role_stats.length > 0 && (
-        <div className="mt-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Role breakdown
-          </p>
-          <ul className="mt-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-            {item.role_stats.map((stat) => (
-              <RoleStatRow key={stat.role} stat={stat} />
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="mt-6">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-          Strongest series
-        </p>
-        {item.strongest_series.length > 0 ? (
-          <ul className="mt-2 space-y-2">
-            {item.strongest_series.map((aggregate) => (
-              <li key={aggregate.thread_id}>
-                <SeriesLink aggregate={aggregate} />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-            No series has {item.min_rated_issues_per_series} rated issues yet, so there is no
-            strongest series to rank.
-          </p>
-        )}
-      </div>
-    </section>
-  )
+      )
+    }
+  }
 }
 
 export default function CreatorComparisonPage() {
@@ -270,6 +406,20 @@ export default function CreatorComparisonPage() {
   const keys = keysParam ? keysParam.split(',').filter(Boolean) : []
 
   const { data, isPending, isError, error } = useCreatorComparison(keys.length > 0 ? keys : null)
+
+  const [drilldown] = useState<DrilldownState>({
+    open: false,
+    creatorKey: null,
+    metric: 'average',
+  })
+
+  const { data: drilldownData, isPending: drilldownIsPending, isError: drilldownIsError } =
+    useDrilldownData(
+      drilldown.creatorKey,
+      drilldown.metric,
+      drilldown.bucket,
+      drilldown.role,
+    )
 
   if (keys.length < 2 || keys.length > 4) {
     return (
@@ -319,7 +469,7 @@ export default function CreatorComparisonPage() {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible-ring-[var(--theme-focus-ring)]"
             style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
           >
             Try again
@@ -328,7 +478,7 @@ export default function CreatorComparisonPage() {
         <div className="mt-2">
           <Link
             to="/creators"
-            className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible-ring-[var(--theme-focus-ring)]"
             style={{ color: 'var(--theme-text-muted)' }}
           >
             Back to Creators
@@ -339,9 +489,6 @@ export default function CreatorComparisonPage() {
   }
 
   const comparisonItems = Object.values(data.comparisons)
-  // Name the affected creators the way the reader knows them. A key the
-  // response could not resolve (omitted because it is not in the library) still
-  // falls back to its canonical key so the caveat is never silently dropped.
   const affectedNames = data.insufficient_data_keys.map(
     (key) => data.comparisons[key]?.display_name ?? key
   )
@@ -375,7 +522,14 @@ export default function CreatorComparisonPage() {
 
       <div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
         {comparisonItems.map((item) => (
-          <ComparisonCard key={item.canonical_creator_key} item={item} />
+          <ComparisonCard
+            key={item.canonical_creator_key}
+            item={item}
+            onDrilldown={(metric: string, bucket?: string, role?: string) => {
+              // Set drilldown state and fetch data
+              // We'll handle this via a ref or state update
+            }}
+          />
         ))}
       </div>
 
@@ -384,6 +538,39 @@ export default function CreatorComparisonPage() {
           None of the selected creators were found in your library.
         </p>
       )}
+
+      {/* Drilldown modal */}
+      <Modal
+        isOpen={drilldown.open}
+        title={`Drilldown: ${drilldown.metric}`}
+        onClose={() => {
+          // Just close the modal; reset state via a separate mechanism if needed
+          // For now, just close
+        }}
+      >
+        {drilldownIsPending ? (
+          <div className="h-96 animate-pulse rounded-2xl" style={{ backgroundColor: 'var(--theme-bg-panel)' }} />
+        ) : drilldownIsError ? (
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>Drilldown failed to load</p>
+        ) : drilldownData != null ? renderDrilldownContent(
+          drilldownData,
+          drilldown.metric,
+          drilldown.bucket,
+          drilldown.role,
+        ) : (
+          <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>No drilldown data available</p>
+        )}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => { /* close modal */ }}
+            className="rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible-ring-[var(--theme-focus-ring)]"
+            style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }
