@@ -26,42 +26,103 @@ from app.models.dependency import Dependency
 logger = logging.getLogger(__name__)
 
 
-async def _get_db_session() -> AsyncSession:
-    """Get an async database session."""
-    from app.database import async_engine
-    return AsyncSession(async_engine)
-
-
-async def persist_rule_native_item_read_edges() -> int:
+async def persist_rule_native_item_read_edges(db: AsyncSession) -> int:
     """Persist rule-native item_read rules as canonical Dependency rows.
 
     These are ContinuityRules with satisfaction_type = 'item_read',
     source_type = 'issue', and no existing Dependency row (legacy_dependency_id is NULL).
 
+    Args:
+        db: Database session to use.
+
     Returns:
         Number of Dependency rows inserted.
     """
-    db = await _get_db_session()
-    try:
-        # Find all rule-native item_read rules (source_type = 'issue', no legacy_dependency_id)
-        result = await db.execute(
-            select(ContinuityRule)
-            .where(
-                ContinuityRule.satisfaction_type == "item_read",
-                ContinuityRule.source_type == "issue",
-                ContinuityRule.legacy_dependency_id.is_(None),
+    # Find all rule-native item_read rules (source_type = 'issue', no legacy_dependency_id)
+    result = await db.execute(
+        select(ContinuityRule)
+        .where(
+            ContinuityRule.satisfaction_type == "item_read",
+            ContinuityRule.source_type == "issue",
+            ContinuityRule.legacy_dependency_id.is_(None),
+        )
+    )
+    rules = result.scalars().all()
+
+    logger.info(f"Found {len(rules)} rule-native item_read ContinuityRules")
+
+    inserted = 0
+    for rule in rules:
+        # Check if a Dependency row already exists for this edge
+        existing = await db.execute(
+            select(Dependency).where(
+                Dependency.source_issue_id == rule.source_id,
+                Dependency.target_issue_id == rule.target_id,
             )
         )
-        rules = result.scalars().all()
+        if existing.scalar_one_or_none() is not None:
+            # Dependency row already exists; skip
+            continue
 
-        logger.info(f"Found {len(rules)} rule-native item_read ContinuityRules")
+        # Insert new Dependency row with note = NULL (canonical set)
+        new_dep = Dependency(
+            source_issue_id=rule.source_id,
+            target_issue_id=rule.target_id,
+            # note stays NULL by default
+        )
+        db.add(new_dep)
+        inserted += 1
 
-        inserted = 0
-        for rule in rules:
-            # Check if a Dependency row already exists for this edge
+    if inserted > 0:
+        await db.commit()
+    logger.info(f"Inserted {inserted} rule-native item_read Dependency rows")
+    return inserted
+
+
+async def persist_converged_edges(db: AsyncSession) -> int:
+    """Persist converged rule prerequisites as canonical Dependency rows.
+
+    Converged rules block the target while any convergence_target is unread.
+    Each convergence target becomes a separate Dependency edge.
+
+    Args:
+        db: Database session to use.
+
+    Returns:
+        Number of Dependency rows inserted.
+    """
+    # Find all converged rules
+    result = await db.execute(
+        select(ContinuityRule)
+        .where(ContinuityRule.satisfaction_type == "converged")
+    )
+    rules = result.scalars().all()
+
+    logger.info(f"Found {len(rules)} converged ContinuityRules")
+
+    inserted = 0
+    for rule in rules:
+        # Each converged rule has convergence_targets JSON
+        # Example: [{"type": "issue", "id": 52322}, {"type": "issue", "id": 52323}]
+        targets = rule.convergence_targets or []
+        for target_info in targets:
+            target_id = int(target_info["id"])
+            target_type = str(target_info["type"])
+
+            if target_type != "issue":
+                # Only issue targets become Dependency edges;
+                # crossover targets are handled separately
+                continue
+
+            # A converged rule blocks its own target while any convergence
+            # target is unread, so each prerequisite is an incoming edge:
+            # Dependency(prerequisite, rule.target_id). Production converged
+            # rules are self-referential (source_id == target_id) and the
+            # source_id is decorative, so it must not be used as the edge
+            # source. See docs/READING_GRAPH_RUNTIME_AUDIT.md section 4.2.
             existing = await db.execute(
                 select(Dependency).where(
-                    Dependency.source_issue_id == rule.source_id,
+                    Dependency.source_issue_id == target_id,
                     Dependency.target_issue_id == rule.target_id,
                 )
             )
@@ -71,94 +132,35 @@ async def persist_rule_native_item_read_edges() -> int:
 
             # Insert new Dependency row with note = NULL (canonical set)
             new_dep = Dependency(
-                source_issue_id=rule.source_id,
+                source_issue_id=target_id,
                 target_issue_id=rule.target_id,
                 # note stays NULL by default
             )
             db.add(new_dep)
             inserted += 1
 
-        if inserted > 0:
-            await db.commit()
-        logger.info(f"Inserted {inserted} rule-native item_read Dependency rows")
-        return inserted
-    finally:
-        await db.close()
+    if inserted > 0:
+        await db.commit()
+    logger.info(f"Inserted {inserted} converged Dependency rows")
+    return inserted
 
 
-async def persist_converged_edges() -> int:
-    """Persist converged rule prerequisites as canonical Dependency rows.
-
-    Converged rules block the target while any convergence_target is unread.
-    Each convergence target becomes a separate Dependency edge.
-
-    Returns:
-        Number of Dependency rows inserted.
-    """
-    db = await _get_db_session()
-    try:
-        # Find all converged rules
-        result = await db.execute(
-            select(ContinuityRule)
-            .where(ContinuityRule.satisfaction_type == "converged")
-        )
-        rules = result.scalars().all()
-
-        logger.info(f"Found {len(rules)} converged ContinuityRules")
-
-        inserted = 0
-        for rule in rules:
-            # Each converged rule has convergence_targets JSON
-            # Example: [{"type": "issue", "id": 52322}, {"type": "issue", "id": 52323}]
-            targets = rule.convergence_targets or []
-            for target_info in targets:
-                target_id = int(target_info["id"])
-                target_type = str(target_info["type"])
-
-                if target_type != "issue":
-                    # Only issue targets become Dependency edges;
-                    # crossover targets are handled separately
-                    continue
-
-                # A converged rule blocks its own target while any convergence
-                # target is unread, so each prerequisite is an incoming edge:
-                # Dependency(prerequisite, rule.target_id). Production converged
-                # rules are self-referential (source_id == target_id) and the
-                # source_id is decorative, so it must not be used as the edge
-                # source. See docs/READING_GRAPH_RUNTIME_AUDIT.md section 4.2.
-                existing = await db.execute(
-                    select(Dependency).where(
-                        Dependency.source_issue_id == target_id,
-                        Dependency.target_issue_id == rule.target_id,
-                    )
-                )
-                if existing.scalar_one_or_none() is not None:
-                    # Dependency row already exists; skip
-                    continue
-
-                # Insert new Dependency row with note = NULL (canonical set)
-                new_dep = Dependency(
-                    source_issue_id=target_id,
-                    target_issue_id=rule.target_id,
-                    # note stays NULL by default
-                )
-                db.add(new_dep)
-                inserted += 1
-
-        if inserted > 0:
-            await db.commit()
-        logger.info(f"Inserted {inserted} converged Dependency rows")
-        return inserted
-    finally:
-        await db.close()
+async def _get_db_session() -> AsyncSession:
+    """Get an async database session."""
+    from app.database import async_engine
+    return AsyncSession(async_engine)
 
 
 async def main() -> None:
     """Run the persistence script."""
-    item_read_inserted = await persist_rule_native_item_read_edges()
-    converged_inserted = await persist_converged_edges()
-    total = item_read_inserted + converged_inserted
-    logger.info(f"Total canonical Dependency rows persisted: {total}")
+    db = await _get_db_session()
+    try:
+        item_read_inserted = await persist_rule_native_item_read_edges(db)
+        converged_inserted = await persist_converged_edges(db)
+        total = item_read_inserted + converged_inserted
+        logger.info(f"Total canonical Dependency rows persisted: {total}")
+    finally:
+        await db.close()
 
 
 if __name__ == "__main__":

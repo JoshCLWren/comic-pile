@@ -136,94 +136,6 @@ def _merge_blocking_explanations(
     return merged
 
 
-async def _legacy_blocking_explanations(
-    thread_id: int,
-    user_id: int,
-    db: AsyncSession,
-) -> list[BlockingDependency]:
-    """Return unread raw-Dependency blockers for one thread."""
-    source_issue = Issue.__table__.alias("source_issue")
-    next_unread_issue = Issue.__table__.alias("next_unread_issue")
-    source_thread = Thread.__table__.alias("source_thread")
-    target_thread = Thread.__table__.alias("target_thread")
-
-    issue_result = await db.execute(
-        select(
-            source_thread.c.id,
-            source_thread.c.title,
-            source_issue.c.id,
-            source_issue.c.issue_number,
-        )
-        .select_from(target_thread)
-        .join(
-            next_unread_issue,
-            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
-        )
-        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
-        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
-        .where(target_thread.c.id == thread_id)
-        .where(target_thread.c.user_id == user_id)
-        .where(source_thread.c.user_id == user_id)
-        .where(source_issue.c.status != "read")
-        .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .distinct()
-    )
-    return [
-        BlockingDependency(
-            thread_id=thread_id_val,
-            thread_title=thread_title,
-            issue_number=str(issue_number),
-        )
-        for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
-    ]
-
-
-async def _legacy_blocking_explanations_batch(
-    thread_ids: list[int],
-    user_id: int,
-    db: AsyncSession,
-) -> dict[int, list[BlockingDependency]]:
-    """Return unread raw-Dependency blockers for many threads."""
-    source_issue = Issue.__table__.alias("source_issue")
-    next_unread_issue = Issue.__table__.alias("next_unread_issue")
-    source_thread = Thread.__table__.alias("source_thread")
-    target_thread = Thread.__table__.alias("target_thread")
-
-    result = await db.execute(
-        select(
-            target_thread.c.id,
-            source_thread.c.id,
-            source_thread.c.title,
-            source_issue.c.id,
-            source_issue.c.issue_number,
-        )
-        .join(
-            next_unread_issue,
-            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
-        )
-        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
-        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
-        .where(target_thread.c.id.in_(thread_ids))
-        .where(target_thread.c.user_id == user_id)
-        .where(source_thread.c.user_id == user_id)
-        .where(source_issue.c.status != "read")
-        .where(target_thread.c.next_unread_issue_id.isnot(None))
-    )
-
-    reasons_map: dict[int, list[BlockingDependency]] = {}
-    for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
-        reasons_map.setdefault(target_tid, []).append(
-            BlockingDependency(
-                thread_id=src_tid,
-                thread_title=src_title,
-                issue_number=str(src_issue_num),
-            )
-        )
-    return reasons_map
-
-
 async def _canonical_blocking_explanations(
     thread_id: int,
     user_id: int,
@@ -311,12 +223,49 @@ async def get_blocking_explanations_batch(
     if not thread_ids:
         return {}
 
-    canonical_map: dict[int, list[BlockingDependency]] = {}
-    for thread_id in thread_ids:
-        canonical_map[thread_id] = await _canonical_blocking_explanations(
-            thread_id, user_id, db,
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    source_thread = Thread.__table__.alias("source_thread")
+    target_thread = Thread.__table__.alias("target_thread")
+
+    result = await db.execute(
+        select(
+            target_thread.c.id,
+            source_thread.c.id,
+            source_thread.c.title,
+            source_issue.c.id,
+            source_issue.c.issue_number,
         )
-    return canonical_map
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(target_thread.c.id.in_(thread_ids))
+        .where(target_thread.c.user_id == user_id)
+        .where(source_thread.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .where(
+            or_(
+                Dependency.note.is_(None),
+                ~Dependency.note.like("cbl-order:%"),
+            )
+        )
+    )
+
+    reasons_map: dict[int, list[BlockingDependency]] = {}
+    for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
+        reasons_map.setdefault(target_tid, []).append(
+            BlockingDependency(
+                thread_id=src_tid,
+                thread_title=src_title,
+                issue_number=str(src_issue_num),
+            )
+        )
+    return reasons_map
 
 
 async def validate_position_dependency_consistency(
@@ -485,54 +434,6 @@ async def refresh_user_blocked_status(
 
     Returns:
         Mapping of changed thread IDs to their previous blocked flag.
-    """
-    blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
-
-    candidate_filter = Thread.is_blocked.is_(True)
-    if blocked_ids:
-        candidate_filter = or_(candidate_filter, Thread.id.in_(blocked_ids))
-
-    result = await db.execute(
-        select(Thread.id, Thread.is_blocked)
-        .where(Thread.user_id == user_id)
-        .where(candidate_filter)
-    )
-    prior_values = {row.id: row.is_blocked for row in result.all()}
-    changes = {
-        thread_id: old_value
-        for thread_id, old_value in prior_values.items()
-        if old_value != (thread_id in blocked_ids)
-    }
-
-    to_unblock = [thread_id for thread_id in changes if thread_id not in blocked_ids]
-    if to_unblock:
-        await db.execute(
-            update(Thread)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(to_unblock))
-            .values(is_blocked=False)
-        )
-
-    to_block = [thread_id for thread_id in changes if thread_id in blocked_ids]
-    if to_block:
-        await db.execute(
-            update(Thread)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(to_block))
-            .values(is_blocked=True)
-        )
-
-    return changes
-
-
-async def refresh_canonical_blocked_status(
-    user_id: int,
-    db: AsyncSession,
-) -> dict[int, bool]:
-    """Recalculate canonical dependency-based blocked flags and return prior values that changed.
-
-    Uses canonical Dependency rows (note IS NULL OR note NOT LIKE 'cbl-order:%')
-    so the fallback path agrees with the primary eligibility authority.
     """
     blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
 

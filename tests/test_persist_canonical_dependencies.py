@@ -88,7 +88,7 @@ async def test_item_read_rule_becomes_canonical_dependency(async_db: AsyncSessio
     )
     await async_db.commit()
 
-    assert await _script.persist_rule_native_item_read_edges() == 1
+    assert await _script.persist_rule_native_item_read_edges(async_db) == 1
 
     row = (
         await async_db.execute(
@@ -131,7 +131,7 @@ async def test_converged_rule_persists_prerequisite_into_rule_target(
     )
     await async_db.commit()
 
-    assert await _script.persist_converged_edges() == 2
+    assert await _script.persist_converged_edges(async_db) == 2
 
     edges = {
         (row.source_issue_id, row.target_issue_id)
@@ -168,7 +168,7 @@ async def test_backfill_is_idempotent(async_db: AsyncSession) -> None:
     )
     await async_db.commit()
 
-    assert await _script.persist_rule_native_item_read_edges() == 1
-    assert await _script.persist_rule_native_item_read_edges() == 0
-    assert await _script.persist_converged_edges() == 0
+    assert await _script.persist_rule_native_item_read_edges(async_db) == 1
+    assert await _script.persist_rule_native_item_read_edges(async_db) == 0
+    assert await _script.persist_converged_edges(async_db) == 0
     await async_db.commit()
