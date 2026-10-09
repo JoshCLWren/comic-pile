@@ -162,6 +162,7 @@ describe('CreatorComparisonPage', () => {
     const seriesLink = screen.getByRole('link', { name: /Saga/ })
     expect(seriesLink).toHaveAttribute('href', '/thread/1')
 
+    // SAFETY: test environment guarantees getAllByTestId returns HTMLElement[]
     const distributions = screen.getAllByTestId('rating-distribution') as unknown as HTMLElement[]
     expect(distributions).toHaveLength(2)
     const vaughanBars = within(distributions[0]).getAllByRole('listitem')
@@ -286,6 +287,7 @@ describe('CreatorComparisonPage', () => {
 
     // Each bar is bucket_count / creator_ratings_count, so bars are directly
     // comparable regardless of sample size.
+    // SAFETY: test environment guarantees getAllByTestId returns HTMLElement[]
     const distributions = screen
       .getAllByTestId('rating-distribution') as unknown as HTMLElement[]
     const smallDistribution = distributions[0]
