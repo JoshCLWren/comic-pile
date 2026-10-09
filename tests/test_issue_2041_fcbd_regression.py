@@ -16,6 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -115,7 +116,9 @@ async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
     await async_db.flush()
     async_db.add(DependencyGroupMembership(group_id=crossover.id, issue_id=fcbd_issue.id))
     async_db.add(DependencyGroupMembership(group_id=crossover.id, issue_id=ultimates_18.id))
-    # Rule: FCBD must be read before Ultimates #18.
+    # Rule: FCBD must be read before Ultimates #18. Keep the ContinuityRule for
+    # the continuity-graph readiness assertions, and persist the canonical
+    # Dependency edge that Roll eligibility now requires after the cutover.
     async_db.add(
         ContinuityRule(
             user_id=user.id,
@@ -125,6 +128,9 @@ async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
             target_id=ultimates_18.id,
             satisfaction_type="item_read",
         )
+    )
+    async_db.add(
+        Dependency(source_issue_id=fcbd_issue.id, target_issue_id=ultimates_18.id)
     )
     await async_db.commit()
     await refresh_user_blocked_status(user.id, async_db)
@@ -239,6 +245,14 @@ async def test_crossover_aggregate_blocked_identifies_remaining_cause_not_read_f
             target_id=ultimates_18.id,
             satisfaction_type="item_read",
         )
+    )
+    # Canonical Dependency edges are the Roll eligibility authority after the
+    # cutover; the ContinuityRules above only drive the readiness assertions.
+    async_db.add(
+        Dependency(source_issue_id=fcbd_issue.id, target_issue_id=ultimates_18.id)
+    )
+    async_db.add(
+        Dependency(source_issue_id=other_issue.id, target_issue_id=ultimates_18.id)
     )
     await async_db.commit()
 

@@ -119,7 +119,7 @@ async def test_blocking_explanations_use_canonical_dependencies(
     cleared_batch = await get_blocking_explanations_batch(
         [target_thread.id], user.id, async_db
     )
-    assert cleared_batch[target_thread.id] == []
+    assert cleared_batch == {}
 
 
 @pytest.mark.asyncio
