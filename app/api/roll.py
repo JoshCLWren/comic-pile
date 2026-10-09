@@ -1214,13 +1214,6 @@ async def roll_bootstrap(
         .order_by(Thread.queue_position)
         .limit(20)
     )
-    blocked_ids_query = await db.execute(
-        select(Thread.id)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(True))
-    )
-    blocked_ids = [row[0] for row in blocked_ids_query.all()]
 
     blocked_threads = [
         RollBootstrapThread(
@@ -1288,7 +1281,13 @@ async def roll_bootstrap(
     # the pool filters themselves: a rollable series beyond the die
     # window is still available and must never be reported as excluded.
     all_active_result = await db.execute(
-        select(Thread.id, Thread.title, Thread.format, Thread.status, Thread.queue_position)
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.queue_position,
+            Thread.is_blocked,
+        )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .order_by(Thread.queue_position)
@@ -1298,30 +1297,33 @@ async def roll_bootstrap(
     available_ids: set[int] = set()
     excluded: dict[int, ThreadExclusionReason] = {}
     inactive: list[ThreadExclusionReason] = []
+    blocked_ids: list[int] = []
 
     for row in all_active_rows:
         tid = row.id
         title = row.title
-        fmt = row.format
+        fmt = normalize_format_value(row.format)
         queue_pos = row.queue_position
         # Mirrors pool_query's WHERE clause exactly: active (already
         # filtered above), queued, unblocked, and not snoozed or
         # skipped in any scope.
+        is_blocked = row.is_blocked
         is_rollable = (
             queue_pos >= 1
-            and tid not in blocked_ids
+            and not is_blocked
             and tid not in effective_snoozed_ids
             and tid not in skipped_ids
         )
         if is_rollable:
             available_ids.add(tid)
             continue
-        if tid in blocked_ids:
-            excluded[tid] = ThreadExclusionReason(
+        if is_blocked:
+            blocked_ids.append(tid)
+            exc = ThreadExclusionReason(
                 thread_id=tid, title=title, format=fmt, reason="blocked",
             )
         elif tid in snoozed_ids:
-            excluded[tid] = ThreadExclusionReason(
+            exc = ThreadExclusionReason(
                 thread_id=tid,
                 title=title,
                 format=fmt,
@@ -1329,7 +1331,7 @@ async def roll_bootstrap(
                 detail="Snoozed in current session",
             )
         elif tid in derived_snoozed_ids:
-            excluded[tid] = ThreadExclusionReason(
+            exc = ThreadExclusionReason(
                 thread_id=tid,
                 title=title,
                 format=fmt,
@@ -1337,7 +1339,7 @@ async def roll_bootstrap(
                 detail="Snoozed by cross-session backoff",
             )
         elif tid in skipped_ids:
-            excluded[tid] = ThreadExclusionReason(
+            exc = ThreadExclusionReason(
                 thread_id=tid,
                 title=title,
                 format=fmt,
@@ -1352,8 +1354,8 @@ async def roll_bootstrap(
                 reason="not_in_queue",
                 detail="Not in the active queue",
             )
-            excluded[tid] = exc
             inactive.append(exc)
+        excluded[tid] = exc
 
     # Completed series sit outside the active status and never reach the
     # pool query, so they vanish silently unless explained here.
@@ -1367,7 +1369,7 @@ async def roll_bootstrap(
     for row in completed_rows:
         tid = row.id
         title = row.title
-        fmt = row.format
+        fmt = normalize_format_value(row.format)
         exc = ThreadExclusionReason(
             thread_id=tid,
             title=title,

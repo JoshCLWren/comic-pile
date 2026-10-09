@@ -311,7 +311,7 @@ export default function RollPage() {
   )
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(state.currentDie) ? state.currentDie : 6
-  const hasRollableContent = pool.length > 0 || blockedThreads.length > 0 || snoozedThreads.length > 0 || inactiveThreads.length > 0
+  const hasRollableContent = pool.length > 0 || blockedThreads.length > 0 || snoozedThreads.length > 0
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     return (

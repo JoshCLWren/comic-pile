@@ -81,7 +81,6 @@ def _patch_bootstrap(monkeypatch, current_session):
     db.execute.side_effect = [
         _Result(rows=[]),          # pool
         _Result(scalar_value=0),  # blocked count
-        _Result(rows=[]),          # blocked ids
         _Result(rows=[]),          # blocked threads
         _Result(scalar_value=0),  # stale count
         _Result(rows=[]),          # all active

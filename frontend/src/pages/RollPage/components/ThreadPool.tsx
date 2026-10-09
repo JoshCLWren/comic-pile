@@ -4,6 +4,18 @@ import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import type { BlockingDependency } from '../../../types'
 import type { RollBootstrapThread, ThreadExclusionReason } from '../../../types/rollBootstrap'
 
+const EXCLUSION_REASON_LABELS: Record<ThreadExclusionReason['reason'], string> = {
+  completed: 'Read the full series',
+  not_in_queue: 'Not in the active queue',
+  blocked: 'Waiting on an earlier issue',
+  snoozed: 'Snoozed',
+  skipped: 'Skipped this session',
+}
+
+function exclusionReasonLabel(thread: ThreadExclusionReason): string {
+  return thread.detail ?? EXCLUSION_REASON_LABELS[thread.reason]
+}
+
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
@@ -133,18 +145,16 @@ export function ThreadPool({
           </div>
         ) : pool.length === 0 && (blockedThreads.length > 0 || snoozedThreads.length > 0 || inactiveThreads.length > 0) ? (
           <div className="text-center py-6 space-y-4">
-            <div className="text-4xl">
-              {inactiveThreads.length > 0 ? '📚' : '🔒'}
-            </div>
+            <div className="text-4xl">🔒</div>
             <div>
               <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
                 {inactiveThreads.length > 0
-                  ? 'All series are blocked, snoozed, or completed'
+                  ? 'No series in play right now'
                   : 'Every series is blocked or snoozed'}
               </p>
               <p className="text-xs text-stone-500 mt-1">
                 {inactiveThreads.length > 0
-                  ? 'Complete, snoozed, or dependency-blocked series live in the inactive list below — reopen them from the queue.'
+                  ? 'Every series is waiting on something. The lists below say which reason applies to each one.'
                   : 'Check your queue to see what needs to be read to unlock more options.'}
               </p>
             </div>
@@ -379,6 +389,7 @@ export function ThreadPool({
           <button
             type="button"
             onClick={onToggleInactive}
+            aria-expanded={inactiveExpanded ?? false}
             className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
           >
             <span
@@ -387,7 +398,7 @@ export function ThreadPool({
               ▶
             </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              Inactive ({inactiveThreads.length})
+              {inactiveThreads.length} series out of the roll pool
             </span>
           </button>
           {inactiveExpanded && (
@@ -397,14 +408,9 @@ export function ThreadPool({
                   key={thread.thread_id}
                   className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
-                  <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
-                  <span className="text-xs text-stone-500 truncate">
-                    {' - '}
-                    {thread.reason === 'completed'
-                      ? 'Read the full series'
-                      : thread.reason === 'not_in_queue'
-                      ? 'Not in the active queue'
-                      : thread.reason}
+                  <p className="flex-1 min-w-0 text-sm text-stone-400 truncate">{thread.title}</p>
+                  <span className="shrink-0 text-xs text-stone-500">
+                    {exclusionReasonLabel(thread)}
                   </span>
                 </div>
               ))}
