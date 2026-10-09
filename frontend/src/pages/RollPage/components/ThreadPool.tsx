@@ -382,7 +382,7 @@ export function ThreadPool({
             className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
           >
             <span
-              className={`text-stone-400 text-xs transition-transform ${(inactiveExpanded ?? false) ? 'rotate-900' : ''}`}
+              className={`text-stone-400 text-xs transition-transform ${(inactiveExpanded ?? false) ? 'rotate-90' : ''}`}
             >
               ▶
             </span>

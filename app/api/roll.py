@@ -1281,10 +1281,12 @@ async def roll_bootstrap(
                     last_activity_at=stale_last_activity,
                 )
 
-    # Exclusion transparency for issue #3125: enumerate every series not in the
-    # roll pool and explain why, so the user can see what vanished and why.
-    pool_ids = {t.id for t in roll_pool}
-
+    # Exclusion transparency for issue #3125: enumerate every series
+    # not in the roll pool and explain why, so the user can see what
+    # vanished and why. The pool query above is capped at the die size
+    # and only drives the face mapping, so availability is decided by
+    # the pool filters themselves: a rollable series beyond the die
+    # window is still available and must never be reported as excluded.
     all_active_result = await db.execute(
         select(Thread.id, Thread.title, Thread.format, Thread.status, Thread.queue_position)
         .where(Thread.user_id == user_id)
@@ -1293,30 +1295,46 @@ async def roll_bootstrap(
     )
     all_active_rows = all_active_result.all()
 
-    total_threads = len(all_active_rows)
-    available_threads = len(roll_pool)
-
+    available_ids: set[int] = set()
     excluded: dict[int, ThreadExclusionReason] = {}
     inactive: list[ThreadExclusionReason] = []
 
     for row in all_active_rows:
         tid = row.id
-        if tid in pool_ids:
-            continue
         title = row.title
         fmt = row.format
         queue_pos = row.queue_position
+        # Mirrors pool_query's WHERE clause exactly: active (already
+        # filtered above), queued, unblocked, and not snoozed or
+        # skipped in any scope.
+        is_rollable = (
+            queue_pos >= 1
+            and tid not in blocked_ids
+            and tid not in effective_snoozed_ids
+            and tid not in skipped_ids
+        )
+        if is_rollable:
+            available_ids.add(tid)
+            continue
         if tid in blocked_ids:
             excluded[tid] = ThreadExclusionReason(
                 thread_id=tid, title=title, format=fmt, reason="blocked",
             )
-        elif tid in effective_snoozed_ids:
+        elif tid in snoozed_ids:
             excluded[tid] = ThreadExclusionReason(
                 thread_id=tid,
                 title=title,
                 format=fmt,
                 reason="snoozed",
                 detail="Snoozed in current session",
+            )
+        elif tid in derived_snoozed_ids:
+            excluded[tid] = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="snoozed",
+                detail="Snoozed by cross-session backoff",
             )
         elif tid in skipped_ids:
             excluded[tid] = ThreadExclusionReason(
@@ -1326,7 +1344,7 @@ async def roll_bootstrap(
                 reason="skipped",
                 detail="Skipped in current session",
             )
-        elif queue_pos < 1:
+        else:
             exc = ThreadExclusionReason(
                 thread_id=tid,
                 title=title,
@@ -1337,15 +1355,16 @@ async def roll_bootstrap(
             excluded[tid] = exc
             inactive.append(exc)
 
-    # Completed series sit outside the active status and never reach the pool
-    # query, so they vanish silently unless explained here.
+    # Completed series sit outside the active status and never reach the
+    # pool query, so they vanish silently unless explained here.
     completed_result = await db.execute(
         select(Thread.id, Thread.title, Thread.format)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "completed")
         .order_by(Thread.queue_position)
     )
-    for row in completed_result.all():
+    completed_rows = completed_result.all()
+    for row in completed_rows:
         tid = row.id
         title = row.title
         fmt = row.format
@@ -1359,8 +1378,11 @@ async def roll_bootstrap(
         excluded[tid] = exc
         inactive.append(exc)
 
-    # Attach human-readable blocking detail where it exists, then materialize
-    # the bounded exclusion lists for the response.
+    # Attach human-readable blocking detail where it exists, then
+    # materialize the bounded exclusion lists for the response. Every
+    # active row is either available or excluded and every completed
+    # row is excluded, so total - available always equals the union of
+    # all exclusion reasons.
     if blocked_ids:
         blocking_map = await get_blocking_explanations_batch(
             sorted(blocked_ids), user_id, db
@@ -1369,6 +1391,8 @@ async def roll_bootstrap(
             if tid in excluded and explanations:
                 excluded[tid].detail = explanations[0].label
 
+    total_threads = len(all_active_rows) + len(completed_rows)
+    available_threads = len(available_ids)
     excluded_list = list(excluded.values())
     excluded_count = len(excluded_list)
     inactive_count = len(inactive)
