@@ -785,6 +785,7 @@ async def get_session_details(
             event.rating,
             event.issues_read,
             event.die_after,
+            event.queue_move,
             event.issue_number,
             event.issue_id,
         )

@@ -232,6 +232,25 @@ it('always pairs a thread title with its issue number in the event timeline', ()
   expect(screen.queryByText('Issue 44')).not.toBeInTheDocument()
 })
 
+it('shows a deleted marker with the last known issue number for orphaned events', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 23, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
+    ladder_path: 'd6', narrative_summary: {},
+    events: [
+      { id: 30, timestamp: '2024-01-01', type: 'roll', thread_title: null, issue_number: '1', result: 4, die: 6, selection_method: 'random' },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+  mockedUseSessionSnapshots.mockReturnValue({
+    data: { snapshots: [{ id: 8, description: 'Snapshot', created_at: '2024-01-01' }] },
+    refetch: refetchSnapshotsSpy,
+  })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.getByText('Deleted · #1')).toBeInTheDocument()
+  expect(screen.queryByText('Thread unavailable')).not.toBeInTheDocument()
+})
+
 it('uses human labels and explicit fallback text for sparse events', () => {
   mockedUseSessionDetails.mockReturnValue({ data: {
     session_id: 17, started_at: '2024-01-01', ended_at: null, start_die: 4, current_die: 4,
