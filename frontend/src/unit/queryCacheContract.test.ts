@@ -331,6 +331,8 @@ describe('targeted cache effects', () => {
     // The next undo reads from the snapshot list, so it cannot serve the pre-undo copy.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.undo.all })
 
+    // SAFETY: mock call args are typed as `unknown[]`; narrowing the first arg
+    // to the optional queryKey shape the test then indexes is the checked invariant.
     const invalidatedKeys = invalidateQueries.mock.calls.map(
       (call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
     )
