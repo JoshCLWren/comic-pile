@@ -237,6 +237,14 @@ class ImportSeriesResponse(BaseModel):
     reading_order_id: int | None = None
     position: int | None = None
     total_items: int | None = None
+    thread_created: bool = Field(
+        ...,
+        description=(
+            "True when this call created the local series thread. False when an "
+            "existing thread already tracked this ComicVine volume, so a retry "
+            "adopted into the original series instead of duplicating it."
+        ),
+    )
 
 
 

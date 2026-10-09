@@ -22,6 +22,7 @@ from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.thread import Thread
+from app.repositories import catalog_repository
 from app.schemas.comicvine_resolution import (
     CanonicalCorrection,
     ComicVineIssueCandidate,
@@ -42,10 +43,15 @@ from app.schemas.comicvine_resolution import (
     MetadataRefreshResponse,
 )
 from app.services.comicvine_url import looks_like_url, parse_comicvine_url
+from app.services.issue_tracking import apply_thread_issue_tracking_state
+from app.services.ownership import get_owned_thread_or_404
 from app.services.reading_order_placement import apply_insert, resolve_anchored_position
 from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
 
 logger = logging.getLogger(__name__)
+
+COMICVINE_PROVIDER = "comicvine"
+"""Canonical provider key for ComicVine identities, mappings, and catalog rows."""
 
 
 def _coerce_provider_int(value: object) -> int | None:
@@ -1110,23 +1116,36 @@ async def import_comicvine_series(
                 f"Reading order {request.reading_order_id} not found"
             )
 
-    # Create the thread
-    max_position = (
-        await db.execute(
-            select(func.max(Thread.queue_position)).where(Thread.user_id == user_id)
-        )
-    ).scalar() or 0
-    thread = Thread(
-        title=series_name.strip(),
-        format="Comic",
-        issues_remaining=0,  # Will be recalculated after issue creation
-        total_issues=0,  # Will be set after all issues are adopted
-        queue_position=max_position + 1,
-        status="active",
+    # Reuse the thread this user already created for the same provider volume so
+    # a retry after a partial provider failure adopts the missing roster items
+    # into the existing series instead of creating a duplicate copy.
+    reused_thread_id = await catalog_repository.find_owned_thread_for_provider_series(
+        db,
         user_id=user_id,
+        provider=COMICVINE_PROVIDER,
+        series_external_id=str(request.comicvine_volume_id),
     )
-    db.add(thread)
-    await db.flush()
+    created_new_thread = reused_thread_id is None
+
+    if reused_thread_id is not None:
+        thread = await get_owned_thread_or_404(db, user_id, reused_thread_id, for_update=True)
+    else:
+        max_position = (
+            await db.execute(
+                select(func.max(Thread.queue_position)).where(Thread.user_id == user_id)
+            )
+        ).scalar() or 0
+        thread = Thread(
+            title=series_name.strip(),
+            format="Comic",
+            issues_remaining=0,  # Recalculated from adopted rows below
+            total_issues=0,  # Recalculated from adopted rows below
+            queue_position=max_position + 1,
+            status="active",
+            user_id=user_id,
+        )
+        db.add(thread)
+        await db.flush()
 
     # Link thread to the series external identity
     series_identity = await upsert_external_identity(
@@ -1196,13 +1215,15 @@ async def import_comicvine_series(
                 conflict_count += 1
 
         except Exception as exc:
-            # Log but continue with other issues
-            import logging
-            logging.getLogger(__name__).warning(
+            # One bad provider row must not abandon the rest of the roster; the
+            # failure stays bounded in the per-issue result and the derived
+            # counters below count only issues that actually exist locally.
+            logger.warning(
                 "series_import_issue_failed volume_id=%s issue_id=%s error=%s",
                 request.comicvine_volume_id,
                 issue_id,
                 type(exc).__name__,
+                exc_info=True,
             )
             result = ImportSeriesIssueResult(
                 comicvine_issue_id=issue_id,
@@ -1214,32 +1235,27 @@ async def import_comicvine_series(
             )
             issue_results.append(result)
 
-    # Update thread with final issue counts
-    thread.total_issues = len(issue_results)
-    # Issues remaining = total - already_read_count (clamped)
-    thread.issues_remaining = max(0, len(issue_results) - min(request.already_read_count, len(issue_results)))
+    # If the user reported prior reading progress, mark the leading issues read.
+    # Personal progress is applied to the locally adopted rows only, never to the
+    # provider roster size, so counters are always derived below from real rows.
+    thread_issues = list((await db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )).scalars().all())
 
-    # If user has read some issues, mark the first N issues as read
-    if request.already_read_count > 0 and issue_results:
-        # Get all issues in the thread in order
-        all_issues = await db.execute(
-            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-        )
-        all_issues = all_issues.scalars().all()
+    read_count = min(request.already_read_count, len(thread_issues))
+    read_at = datetime.now(UTC)
+    for issue in thread_issues[:read_count]:
+        issue.status = "read"
+        issue.read_at = read_at
 
-        read_count = min(request.already_read_count, len(all_issues))
-        for i in range(read_count):
-            if i < len(all_issues):
-                issue = all_issues[i]
-                issue.status = "read"
-                issue.read_at = datetime.now(UTC)
-
-        # Update next_unread_issue_id
-        if read_count < len(all_issues):
-            thread.next_unread_issue_id = all_issues[read_count].id
-        else:
-            thread.next_unread_issue_id = None
-            thread.status = "completed"
+    # Counters come from the canonical derivation. `issue_results` also contains
+    # rows for adoption errors and conflicts, which own no Issue row, so
+    # counting it would publish a reading commitment ComicPile never created.
+    tracking_state = apply_thread_issue_tracking_state(thread, thread_issues)
+    if tracking_state.next_unread_issue_id is None:
+        thread.status = "completed"
+    else:
+        thread.status = "active"
 
     await db.flush()
 
@@ -1291,4 +1307,5 @@ async def import_comicvine_series(
         reading_order_id=response_reading_order_id,
         position=response_position,
         total_items=response_total_items,
+        thread_created=created_new_thread,
     )

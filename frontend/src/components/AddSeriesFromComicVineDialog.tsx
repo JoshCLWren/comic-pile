@@ -180,6 +180,10 @@ export default function AddSeriesFromComicVineDialog({
 
   const handleSelectSeries = useCallback((series: ComicVineSeriesResult) => {
     setSelectedSeries(series)
+    // Personal read progress belongs to one specific series. Selecting a
+    // different run must not carry the previous volume's already-read count
+    // into the new confirmation, where it would exceed the new issue count.
+    setAlreadyReadCount(0)
     setStep('confirm')
   }, [])
 
@@ -193,7 +197,12 @@ export default function AddSeriesFromComicVineDialog({
         already_read_count: alreadyReadCount,
       }
       const result = await comicVineApi.importSeries(payload)
-      showToast(`Added "${result.series_name}" to ComicPile (${result.issues_adopted} issues)`, 'success')
+      showToast(
+        result.thread_created
+          ? `Added "${result.series_name}" to ComicPile (${result.issues_adopted} issues)`
+          : `Added ${result.issues_adopted} more issues to "${result.series_name}"`,
+        'success',
+      )
       await invalidateAfterQueueMutation(queryClient)
       onAdded(result.thread_id)
       onClose()

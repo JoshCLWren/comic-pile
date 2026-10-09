@@ -79,6 +79,11 @@ export interface ComicVineImportSeriesResult {
   reading_order_id: number | null
   position: number | null
   total_items: number | null
+  /**
+   * False when an existing thread already tracked this ComicVine volume, so a
+   * retry adopted into the original series rather than duplicating it.
+   */
+  thread_created: boolean
 }
 
 export interface ComicVineIssueIntelligence {
