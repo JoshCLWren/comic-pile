@@ -665,3 +665,85 @@ export interface CreatorComparisonResponse {
   coverage: CreatorComparisonCoverage
   insufficient_data_keys: string[]
 }
+
+/**
+ * Tag-related types for the tag editing and bulk assignment feature
+ */
+
+export type TagScope = 'global' | 'private'
+
+export type TagTargetType = 'Issue' | 'Thread' | 'ContinuityPlan'
+
+export interface Tag {
+  id: number
+  name: string
+  normalized_name: string
+  scope: TagScope
+  owner_user_id: number | null
+  color: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TagAssignment {
+  id: number
+  tag_id: number
+  target_type: TagTargetType
+  target_id: number
+  created_at: string
+}
+
+export interface TagInheritanceSource {
+  id: number
+  type: TagTargetType
+  name: string
+  direct: boolean
+}
+
+export interface EffectiveTag {
+  tag: Tag
+  assignments: TagAssignment[]
+  inheritance_sources: TagInheritanceSource[]
+}
+
+export interface TagCreateRequest {
+  name: string
+  scope: TagScope
+  color?: string
+}
+
+export interface TagUpdateRequest {
+  name?: string
+  color?: string
+}
+
+export interface TagAssignmentRequest {
+  target_type: TagTargetType
+  target_id: number
+}
+
+export interface TagUsageInfo {
+  assignment_count: number
+  filter_references: number
+}
+
+export interface TagNearMatch {
+  tag: Tag
+  distance: number
+}
+
+export interface TagBulkOperation {
+  tag_id: number
+  target_type: TagTargetType
+  target_ids: number[]
+  action: 'add' | 'remove'
+}
+
+export interface TagSearchResult {
+  id: number
+  name: string
+  color: string
+  scope: TagScope
+  is_private: boolean
+  is_global: boolean
+}

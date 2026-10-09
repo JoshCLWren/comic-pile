@@ -5,6 +5,7 @@ import type { IssueListResponse } from '../services/api-issues'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
+import type { Tag, TagAssignment, EffectiveTag } from '../types'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 
@@ -627,4 +628,172 @@ export async function invalidateAfterSessionModeUpdate(
   client: QueryClient,
 ): Promise<void> {
   await invalidateAfterRollDieModeUpdate(client)
+}
+
+/**
+ * Tag-related cache effects
+ */
+
+export type TagCacheRollback = () => void
+
+/**
+ * Optimistically update a tag in the cache.
+ */
+export function optimisticallyUpdateTag(
+  client: QueryClient,
+  tagId: number,
+  update: (tag: Tag) => Tag,
+): TagCacheRollback {
+  const detailKey = queryKeys.tags.detail(tagId)
+  const previousTag = client.getQueryData<Tag>(detailKey)
+
+  if (previousTag) {
+    client.setQueryData(detailKey, update(previousTag))
+  }
+
+  return () => {
+    if (previousTag) {
+      client.setQueryData(detailKey, previousTag)
+    } else {
+      client.removeQueries({ queryKey: detailKey, exact: true })
+    }
+  }
+}
+
+/**
+ * Apply a created tag to the cache and refresh the list view.
+ */
+export async function applyCreatedTag(
+  client: QueryClient,
+  tag: Tag,
+): Promise<void> {
+  client.setQueryData(queryKeys.tags.detail(tag.id), tag)
+  await client.invalidateQueries({ queryKey: queryKeys.tags.list(), exact: true })
+}
+
+/**
+ * Apply an updated tag to the cache and refresh dependent queries.
+ */
+export async function applyUpdatedTag(
+  client: QueryClient,
+  tag: Tag,
+): Promise<void> {
+  client.setQueryData(queryKeys.tags.detail(tag.id), tag)
+  await client.invalidateQueries({ queryKey: queryKeys.tags.list(), exact: true })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName(tag.name, tag.scope), exact: true })
+}
+
+/**
+ * Remove a tag from the cache and refresh dependent queries.
+ */
+export async function applyDeletedTag(
+  client: QueryClient,
+  tagId: number,
+): Promise<void> {
+  client.removeQueries({ queryKey: queryKeys.tags.detail(tagId), exact: true })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.list(), exact: true })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.nearMatches(''), exact: true })
+}
+
+/**
+ * Optimistically add a tag assignment to a target.
+ */
+export function optimisticallyAssignTag(
+  client: QueryClient,
+  tag: Tag,
+  targetType: 'issue' | 'thread' | 'plan',
+  targetId: number,
+): TagCacheRollback {
+  const effectiveKey = queryKeys.tags.effective(targetType, targetId)
+  const previousEffective = client.getQueryData<EffectiveTag[]>(effectiveKey)
+
+  if (previousEffective) {
+    const newAssignment: TagAssignment = {
+      id: Date.now(), // Temporary ID for optimistic update
+      tag_id: tag.id,
+      target_type: targetType.charAt(0).toUpperCase() + targetType.slice(1) as 'Issue' | 'Thread' | 'ContinuityPlan',
+      target_id: targetId,
+      created_at: new Date().toISOString(),
+    }
+
+    const updatedEffective = previousEffective.map(effective => {
+      if (effective.tag.id === tag.id) {
+        return {
+          ...effective,
+          assignments: [...effective.assignments, newAssignment],
+        }
+      }
+      return effective
+    })
+
+    client.setQueryData(effectiveKey, updatedEffective)
+  }
+
+  return () => {
+    if (previousEffective) {
+      client.setQueryData(effectiveKey, previousEffective)
+    }
+  }
+}
+
+/**
+ * Optimistically remove a tag assignment from a target.
+ */
+export function optimisticallyUnassignTag(
+  client: QueryClient,
+  tagId: number,
+  targetType: 'issue' | 'thread' | 'plan',
+  targetId: number,
+): TagCacheRollback {
+  const effectiveKey = queryKeys.tags.effective(targetType, targetId)
+  const previousEffective = client.getQueryData<EffectiveTag[]>(effectiveKey)
+
+  if (previousEffective) {
+    const updatedEffective = previousEffective.map(effective => {
+      if (effective.tag.id === tagId) {
+        return {
+          ...effective,
+          assignments: effective.assignments.filter(assignment => 
+            !(assignment.tag_id === tagId && 
+              assignment.target_type === targetType.charAt(0).toUpperCase() + targetType.slice(1) as 'Issue' | 'Thread' | 'ContinuityPlan' &&
+              assignment.target_id === targetId)
+          ),
+        }
+      }
+      return effective
+    })
+
+    client.setQueryData(effectiveKey, updatedEffective)
+  }
+
+  return () => {
+    if (previousEffective) {
+      client.setQueryData(effectiveKey, previousEffective)
+    }
+  }
+}
+
+/**
+ * Invalidate all tag-related queries after a bulk tag operation.
+ */
+export async function invalidateAfterBulkTagOperation(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.tags.all })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.search('') })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.nearMatches('') })
+}
+
+/**
+ * Refresh effective tags for a target after a tag assignment change.
+ */
+export async function invalidateEffectiveTags(
+  client: QueryClient,
+  targetType: 'issue' | 'thread' | 'plan',
+  targetId: number,
+): Promise<void> {
+  await client.invalidateQueries({ 
+    queryKey: queryKeys.tags.effective(targetType, targetId),
+    exact: true,
+  })
 }

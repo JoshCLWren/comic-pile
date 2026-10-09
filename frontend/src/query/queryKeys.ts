@@ -312,4 +312,16 @@ export const queryKeys = {
     page: ({ offset, limit }: { offset: number; limit: number }) =>
       ['releases', 'pages', { offset, limit }] as const,
   },
+  tags: {
+    all: ['tags'] as const,
+    list: () => ['tags', 'list'] as const,
+    detail: (tagId: number) => ['tags', 'detail', tagId] as const,
+    effective: (type: 'issue' | 'thread' | 'plan', id: number) =>
+      ['tags', 'effective', type, id] as const,
+    search: (query: string) => ['tags', 'search', normalizedSearch(query)] as const,
+    nearMatches: (name: string) => ['tags', 'near-matches', name] as const,
+    usage: (tagId: number) => ['tags', 'usage', tagId] as const,
+    checkName: (name: string, scope: 'global' | 'private') =>
+      ['tags', 'check-name', { name: normalizedSearch(name), scope }] as const,
+  },
 } as const
