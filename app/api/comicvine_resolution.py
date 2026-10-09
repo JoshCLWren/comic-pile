@@ -22,6 +22,8 @@ from app.schemas.comicvine_resolution import (
     ConfirmIdentityRequest,
     ImportIssueRequest,
     ImportIssueResponse,
+    ImportSeriesRequest,
+    ImportSeriesResponse,
     IssueIdentityResponse,
     MetadataCorrectionRevertRequest,
     MetadataCorrectionRequest,
@@ -31,11 +33,13 @@ from app.schemas.comicvine_resolution import (
 )
 from app.services.comicvine_resolution import (
     ImportTargetNotFoundError,
+    SeriesImportError,
     apply_metadata_correction,
     confirm_comicvine_identity,
     get_comicvine_series_issues,
     get_issue_identity_state,
     import_comicvine_issue,
+    import_comicvine_series,
     list_metadata_corrections,
     remove_comicvine_identity,
     replace_comicvine_identity,
@@ -262,6 +266,63 @@ async def api_import_issue(
                     "message": str(exc),
                 },
             ) from exc
+        raise
+    await db.commit()
+    return result
+
+
+@router.post(
+    "/series:import",
+    response_model=ImportSeriesResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def api_import_series(
+    request: ImportSeriesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ImportSeriesResponse:
+    """Import a ComicVine series/volume as a new thread with all issues.
+
+    Creates a thread with the series title and adopts all issues from the
+    confirmed ComicVine volume using the shared provider-issue adoption
+    primitive. Preserves irregular issue numbers and reuses existing
+    canonical issues.
+
+    Args:
+        request: Import payload with ComicVine volume ID, optional reading
+            progress, and optional anchored reading-order placement.
+        current_user: Authenticated owner.
+        db: Async database session.
+
+    Returns:
+        ImportSeriesResponse with thread details and per-issue adoption results.
+
+    Raises:
+        HTTPException: 503 if ComicVine unavailable, 502 if provider fails,
+            404 if reading order not found, 400 if series has no issues.
+    """
+    client = _get_comicvine_client()
+    try:
+        result = await import_comicvine_series(
+            db,
+            user_id=current_user.id,
+            request=request,
+            comicvine_client=client,
+        )
+    except ImportTargetNotFoundError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except SeriesImportError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except Exception:
+        await db.rollback()
         raise
     await db.commit()
     return result

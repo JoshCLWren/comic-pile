@@ -9,6 +9,7 @@ interface QueueControlsProps {
   shufflePending: boolean
   onShuffle: () => void
   onCreateThread: () => void
+  onAddFromComicVine: () => void
   sortBy: QueueSortBy
   onSortChange: (next: QueueSortBy) => void
   searchQuery: string
@@ -31,6 +32,7 @@ function QueueControlsInner({
   shufflePending,
   onShuffle,
   onCreateThread,
+  onAddFromComicVine,
   sortBy,
   onSortChange,
   searchQuery,
@@ -67,6 +69,17 @@ function QueueControlsInner({
             className="h-9 md:h-12 px-3 md:px-5 rounded-lg border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap text-[var(--theme-danger)] hover:bg-[var(--theme-danger)]/20 disabled:opacity-50 transition-colors"
           >
             Shuffle
+          </button>
+          <button
+            type="button"
+            onClick={onAddFromComicVine}
+            className="hidden md:flex h-12 px-5 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 font-semibold whitespace-nowrap hover:bg-[var(--theme-bg-hover)] items-center gap-2"
+            data-testid="queue-add-comicvine-desktop"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Add from ComicVine
           </button>
           <button
             type="button"

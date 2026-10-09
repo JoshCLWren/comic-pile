@@ -224,6 +224,7 @@ export default function QueuePage() {
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}
           onCreateThread={modals.showCreateModal}
+          onAddFromComicVine={modals.showAddSeriesComicVineModal}
           sortBy={sortBy}
           onSortChange={setSortBy}
           searchQuery={searchQuery}
@@ -323,6 +324,7 @@ export default function QueuePage() {
           showRollNudge={modals.showRollNudge}
           onDismissRollNudge={modals.dismissRollNudge}
           onRollNudgeNavigate={modals.rollNudgeNavigate}
+          onCloseAddSeriesComicVine={modals.closeAddSeriesComicVineModal}
         />
 
         <DeleteThreadDialog
