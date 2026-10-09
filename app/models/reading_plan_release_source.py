@@ -50,11 +50,13 @@ class ReadingPlanReleaseSource(Base):
         nullable=False,
     )
 
-    reading_plan: Mapped["ContinuityPlan"] = relationship(
+    reading_plan: Mapped[ContinuityPlan] = relationship(
         "ContinuityPlan", back_populates="release_sources", lazy="raise"
     )
-    thread: Mapped["Thread"] = relationship("Thread", lazy="raise")
-    external_identity: Mapped["ExternalIdentity"] = relationship("ExternalIdentity", lazy="raise")
+    thread: Mapped[Thread] = relationship("Thread", lazy="raise")
+    external_identity: Mapped[ExternalIdentity] = relationship(
+        "ExternalIdentity", lazy="raise"
+    )
 
     __table_args__ = (
         UniqueConstraint(

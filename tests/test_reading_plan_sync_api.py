@@ -1,355 +1,333 @@
-"""Tests for reading plan sync API endpoints."""
+"""API contract tests for Reading Plan release-source sync endpoints (#3117)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.main import create_app
+from sqlalchemy import select
+
+from app.models.continuity_plan import ContinuityPlan
+from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
+from app.models.issue import Issue
+from app.models.reading_plan_release_source import ReadingPlanReleaseSource
+from app.models.thread import Thread
 from app.models.user import User
-from app.auth import get_current_user
-from app.database import get_db
+from app.services import reading_plan_sync_service as sync_service
+from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
+from tests.conftest import get_or_create_user_async
+
+SYNC_URL = "/api/v1/reading-plan-sync/sync"
+STATUS_URL = "/api/v1/reading-plan-sync/status"
 
 
-@pytest.fixture
-def mock_user():
-    """Mock current user."""
-    user = User(
-        id=1,
-        email="test@example.com",
-        username="testuser",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    return user
+@dataclass
+class _FakeProvider(ComicVineClient):
+    """Provider double returning a fixed released roster."""
+
+    rosters: dict[int, list[dict[str, object]]] = field(default_factory=dict)
+
+    def __init__(self, rosters: dict[int, list[dict[str, object]]] | None = None) -> None:
+        self.rosters = rosters or {}
+
+    async def fetch_volume_issues(
+        self, volume_id: int, *, refresh: bool = False
+    ) -> list[dict[str, object]]:
+        return list(self.rosters.get(volume_id, []))
+
+    async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> None:
+        raise ComicVineError("fake provider does not hydrate issues")
+
+    async def fetch_story_arc(self, arc_id: int, *, refresh: bool = False) -> None:
+        raise ComicVineError("fake provider has no story arcs")
 
 
-@pytest.fixture
-def mock_db():
-    """Mock database session."""
-    return AsyncMock()
-
-
-@pytest.fixture
-def client(mock_user, mock_db):
-    """Test client with authenticated user."""
-    app = create_app(serve_frontend=False)
-
-    # Override the dependencies
-    async def override_get_current_user():
-        return mock_user
-
-    async def override_get_db():
-        return mock_db
-
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    app.dependency_overrides[get_db] = override_get_db
-
-    return TestClient(app)
-
-
-@pytest.fixture
-def mock_sync_service():
-    """Mock the sync service."""
-    with patch("app.api.reading_plan_sync.sync_released_issues") as mock:
-        yield mock
-
-
-@pytest.fixture
-def sample_sync_result():
-    """Sample sync result for testing."""
+def _released_row(issue_id: int, issue_number: str) -> dict[str, object]:
     return {
-        "total_sources": 3,
-        "enabled_sources": 2,
-        "successful_sources": 1,
-        "failed_sources": 0,
-        "created_issues": 3,
-        "reused_issues": 1,
-        "future_skips": 0,
-        "unknown_date_skips": 1,
-        "conflicts": 0,
-        "errors": [],
+        "id": issue_id,
+        "issue_number": issue_number,
+        "store_date": "2025-06-01",
+        "cover_date": "1999-01-01",
     }
 
 
-def test_sync_released_issues_endpoint_success(client, mock_user, mock_db, mock_sync_service, sample_sync_result):
-    """Test successful sync endpoint."""
-    # Setup mocks
-    mock_sync_service.return_value = type(
-        "MockSyncResult", (), sample_sync_result
-    )()
-
-    # Make request
-    response = client.post(
-        "/api/sync",
-        json={
-            "as_of": "2023-04-01T00:00:00Z",
-            "refresh": True,
-        }
-    )
-
-    # Verify response
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    assert data["result"] == sample_sync_result
-    assert "created 3 issues" in data["message"]
-    assert "reused 1 issues" in data["message"]
-
-    # Verify service was called correctly
-    mock_sync_service.assert_called_once()
-    call_args = mock_sync_service.call_args
-    assert call_args.kwargs["as_of"] == datetime(2023, 4, 1, tzinfo=timezone.utc)
-    assert call_args.kwargs["refresh"] is True
-    assert call_args.kwargs["db"] == mock_db
-
-
-def test_sync_released_issues_endpoint_with_partial_failure(
-    client, mock_user, mock_db, mock_sync_service
-):
-    """Test sync endpoint with partial failures."""
-    # Setup mocks for partial failure
-    partial_result = {
-        "total_sources": 3,
-        "enabled_sources": 2,
-        "successful_sources": 1,
-        "failed_sources": 1,
-        "created_issues": 2,
-        "reused_issues": 1,
-        "future_skips": 0,
-        "unknown_date_skips": 0,
-        "conflicts": 0,
-        "errors": [
-            {
-                "source_id": 3,
-                "plan_id": 2,
-                "thread_id": 2,
-                "volume_id": 2002,
-                "error": "Volume sync failed: API error",
-            }
-        ],
-    }
-
-    mock_sync_service.return_value = type("MockSyncResult", (), partial_result)()
-
-    # Make request
-    response = client.post(
-        "/api/sync",
-        json={
-            "as_of": "2023-04-01T00:00:00Z",
-            "refresh": False,
-        }
-    )
-
-    # Verify response
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is False  # Should be False when there are failures
-    assert data["result"] == partial_result
-    assert "1 failed" in data["message"]
-
-    # Verify service was called correctly
-    mock_sync_service.assert_called_once()
-    call_args = mock_sync_service.call_args
-    assert call_args.kwargs["refresh"] is False
-
-
-def test_sync_released_issues_endpoint_invalid_date(client, mock_user, mock_db, mock_sync_service):
-    """Test sync endpoint with invalid date format."""
-    # Make request with invalid date
-    response = client.post(
-        "/api/sync",
-        json={
-            "as_of": "invalid-date-format",
-            "refresh": True,
-        }
-    )
-
-    # Verify response
-    assert response.status_code == 422  # Validation error
-    data = response.json()
-    assert "date" in data["detail"][0]["msg"].lower()
-
-
-def test_sync_released_issues_endpoint_exception(client, mock_user, mock_db, mock_sync_service):
-    """Test sync endpoint with service exception."""
-    # Setup mocks for service exception
-    mock_sync_service.side_effect = Exception("Database connection failed")
-
-    # Make request
-    response = client.post(
-        "/api/sync",
-        json={
-            "as_of": "2023-04-01T00:00:00Z",
-            "refresh": True,
-        }
-    )
-
-    # Verify response
-    assert response.status_code == 500
-    data = response.json()
-    assert "Sync failed" in data["detail"]
-
-
-def test_get_sync_status_endpoint_success(client, mock_user, mock_db):
-    """Test sync status endpoint success."""
-    # Setup mocks
-    from app.models.reading_plan_release_source import ReadingPlanReleaseSource
-    from app.models.continuity_plan import ContinuityPlan
-    from app.models.thread import Thread
-    from app.models.external_identity import ExternalIdentity
-
+async def _seed_source(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    volume_id: int,
+    enabled: bool = True,
+) -> Thread:
+    """Create a plan, thread, confirmed volume mapping, and release source."""
     plan = ContinuityPlan(
-        id=1,
-        user_id=1,
-        name="Test Plan",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        user_id=user_id,
+        name=f"Plan {volume_id}",
+        ordering_mode="informational",
+        nodes_json=[],
+        lanes_json=[],
     )
-
+    db.add(plan)
+    await db.flush()
     thread = Thread(
-        id=1,
-        user_id=1,
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        title=f"Thread {volume_id}",
+        format="comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user_id,
     )
-
-    external_identity = ExternalIdentity(
-        id=1,
+    db.add(thread)
+    await db.flush()
+    identity = ExternalIdentity(
         provider="comicvine",
         entity_type="series",
-        external_id="2001",
-        confirmed=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        external_id=str(volume_id),
+        metadata_json={"name": f"Fixture Saga {volume_id}"},
+    )
+    db.add(identity)
+    await db.flush()
+    db.add(
+        ThreadExternalSeriesMapping(
+            thread_id=thread.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            evidence_source="test",
+        )
+    )
+    db.add(
+        ReadingPlanReleaseSource(
+            plan_id=plan.id,
+            thread_id=thread.id,
+            external_identity_id=identity.id,
+            enabled=enabled,
+        )
+    )
+    await db.commit()
+    return thread
+
+
+def _use_provider(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> None:
+    monkeypatch.setattr(
+        sync_service, "build_comicvine_client", lambda: provider, raising=True
     )
 
-    source1 = ReadingPlanReleaseSource(
-        id=1,
-        plan_id=1,
-        thread_id=1,
-        external_identity_id=1,
-        enabled=True,
-        last_synced_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+
+@pytest.mark.asyncio
+async def test_sync_endpoint_adopts_released_issue(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The endpoint adopts released issues and returns structured counters."""
+    user = default_user
+    await _seed_source(async_db, user_id=user.id, volume_id=6101)
+    provider = _FakeProvider({6101: [_released_row(61011, "1")]})
+    _use_provider(monkeypatch, provider)
+
+    response = await auth_client.post(
+        SYNC_URL, json={"as_of": "2025-06-15T00:00:00Z"}
     )
-    # Set relationships manually for test
-    source1.reading_plan = plan
-    source1.thread = thread
-    source1.external_identity = external_identity
 
-    source2 = ReadingPlanReleaseSource(
-        id=2,
-        plan_id=1,
-        thread_id=1,
-        external_identity_id=2,
-        enabled=False,
-        last_synced_at=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    external_identity2 = ExternalIdentity(
-        id=2,
-        provider="comicvine",
-        entity_type="series",
-        external_id="2002",
-        confirmed=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    source2.reading_plan = plan
-    source2.thread = thread
-    source2.external_identity = external_identity2
-
-    with patch("app.api.reading_plan_sync.get_enabled_sources_by_user") as mock_get_sources:
-        mock_get_sources.return_value = [source1, source2]
-
-        # Make request
-        response = client.get("/api/status")
-
-    # Verify response
     assert response.status_code == 200
-    data = response.json()
-    assert data["total_enabled_sources"] == 2
-    assert len(data["sources"]) == 2
-
-    # Verify first source
-    source1_data = data["sources"][0]
-    assert source1_data["id"] == 1
-    assert source1_data["reading_plan_id"] == 1
-    assert source1_data["thread_id"] == 1
-    assert source1_data["volume_id"] == 2001
-    assert source1_data["enabled"] is True
-    assert source1_data["last_synced_at"] is not None
-
-    # Verify second source
-    source2_data = data["sources"][1]
-    assert source2_data["id"] == 2
-    assert source2_data["enabled"] is False
-    assert source2_data["last_synced_at"] is None
+    body = response.json()
+    assert body["success"] is True, body
+    assert "1 created" in body["message"]
+    result = body["result"]
+    assert result["enabled_sources"] == 1
+    assert result["successful_sources"] == 1
+    assert result["failed_sources"] == 0
+    assert result["created_issues"] == 1
+    assert result["future_skips"] == 0
+    assert result["unknown_date_skips"] == 0
+    assert result["conflicts"] == 0
+    assert result["failures"] == []
 
 
-def test_get_sync_status_endpoint_exception(client, mock_user, mock_db):
-    """Test sync status endpoint with repository exception."""
-    # Setup mocks for repository exception
-    with patch("app.api.reading_plan_sync.get_enabled_sources_by_user") as mock_get_sources:
-        mock_get_sources.side_effect = Exception("Database error")
+@pytest.mark.asyncio
+async def test_sync_endpoint_reports_future_skips(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Future solicitations are reported rather than adopted."""
+    user = default_user
+    await _seed_source(async_db, user_id=user.id, volume_id=6201)
+    provider = _FakeProvider({6201: [_released_row(62011, "1")]})
+    _use_provider(monkeypatch, provider)
 
-        # Make request
-        response = client.get("/api/status")
-
-    # Verify response
-    assert response.status_code == 500
-    data = response.json()
-    assert "Failed to get sync status" in data["detail"]
-
-
-def test_sync_endpoint_without_refresh(client, mock_user, mock_db, mock_sync_service, sample_sync_result):
-    """Test sync endpoint with refresh=False."""
-    # Setup mocks
-    mock_sync_service.return_value = type(
-        "MockSyncResult", (), sample_sync_result
-    )()
-
-    # Make request without refresh
-    response = client.post(
-        "/api/sync",
-        json={
-            "as_of": "2023-04-01T00:00:00Z",
-            "refresh": False,
-        }
+    response = await auth_client.post(
+        SYNC_URL, json={"as_of": "2020-01-01T00:00:00Z"}
     )
 
-    # Verify response
     assert response.status_code == 200
-
-    # Verify service was called with refresh=False
-    mock_sync_service.assert_called_once()
-    call_args = mock_sync_service.call_args
-    assert call_args.kwargs["refresh"] is False
+    result = response.json()["result"]
+    assert result["future_skips"] == 1
+    assert result["created_issues"] == 0
 
 
-def test_sync_endpoint_default_refresh(client, mock_user, mock_db, mock_sync_service, sample_sync_result):
-    """Test sync endpoint with default refresh=True."""
-    # Setup mocks
-    mock_sync_service.return_value = type(
-        "MockSyncResult", (), sample_sync_result
-    )()
+@pytest.mark.asyncio
+async def test_sync_endpoint_requires_authentication(
+    client: AsyncClient,
+) -> None:
+    """An unauthenticated sync request is rejected."""
+    response = await client.post(SYNC_URL, json={"as_of": "2025-06-15T00:00:00Z"})
 
-    # Make request without refresh parameter (should default to True)
-    response = client.post(
-        "/api/sync",
-        json={
-            "as_of": "2023-04-01T00:00:00Z",
-        }
+    assert response.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_sync_endpoint_rejects_malformed_as_of(
+    auth_client: AsyncClient,
+) -> None:
+    """A non-datetime boundary is a validation error, not a 500."""
+    response = await auth_client.post(SYNC_URL, json={"as_of": "not-a-date"})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_sync_endpoint_only_touches_the_calling_user(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sync request cannot adopt into another reader's thread."""
+    stranger = await get_or_create_user_async(async_db, "api_sync_stranger@test.com")
+    stranger_thread = await _seed_source(async_db, user_id=stranger.id, volume_id=6301)
+    provider = _FakeProvider({6301: [_released_row(63011, "1")]})
+    _use_provider(monkeypatch, provider)
+
+    response = await auth_client.post(
+        SYNC_URL, json={"as_of": "2025-06-15T00:00:00Z"}
     )
 
-    # Verify response
     assert response.status_code == 200
+    result = response.json()["result"]
+    assert result["enabled_sources"] == 0
+    assert result["created_issues"] == 0
+    assert stranger_thread.user_id == stranger.id
 
-    # Verify service was called with refresh=True (default)
-    mock_sync_service.assert_called_once()
-    call_args = mock_sync_service.call_args
-    assert call_args.kwargs["refresh"] is True
+    issues = await auth_client.get(f"/api/v1/threads/{stranger_thread.id}/issues/")
+    if issues.status_code == 200:
+        assert issues.json() == []
+
+
+@pytest.mark.asyncio
+async def test_status_endpoint_reports_persisted_state(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Status exposes every release source the caller owns."""
+    user = default_user
+    await _seed_source(async_db, user_id=user.id, volume_id=6401)
+    await _seed_source(async_db, user_id=user.id, volume_id=6402, enabled=False)
+
+    response = await auth_client.get(STATUS_URL)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_sources"] == 2
+    assert body["enabled_sources"] == 1
+    assert {source["provider_volume_id"] for source in body["sources"]} == {
+        "6401",
+        "6402",
+    }
+    assert all(source["last_synced_at"] is None for source in body["sources"])
+
+
+@pytest.mark.asyncio
+async def test_sync_endpoint_persists_adopted_issue(
+    async_db_committed: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The endpoint commits its writes instead of rolling them back.
+
+    The request runs against a real-committing session and a fresh connection
+    reads the result back, so a flush-only implementation fails this test.
+    """
+    from httpx import ASGITransport
+
+    from app.auth import create_access_token
+    from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
+    from app.database import get_db
+    from app.main import app
+    from tests.conftest import _create_async_db_override
+
+    db = async_db_committed
+    user = default_user
+    thread = await _seed_source(db, user_id=user.id, volume_id=6601)
+    provider = _FakeProvider({6601: [_released_row(66011, "1")]})
+    _use_provider(monkeypatch, provider)
+
+    app.dependency_overrides[get_db] = await _create_async_db_override(db)
+    try:
+        csrf = generate_csrf_token()
+        token = create_access_token(data={"sub": user.username, "jti": "sync"})
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as caller:
+            caller.cookies.set(CSRF_COOKIE_NAME, csrf)
+            caller.headers[CSRF_HEADER_NAME] = csrf
+            caller.headers["Authorization"] = f"Bearer {token}"
+            response = await caller.post(
+                SYNC_URL, json={"as_of": "2025-06-15T00:00:00Z"}
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["created_issues"] == 1
+
+    stored = await db.scalar(
+        select(Issue.issue_number).where(Issue.thread_id == thread.id)
+    )
+    assert stored == "1"
+
+
+@pytest.mark.asyncio
+async def test_status_endpoint_requires_authentication(client: AsyncClient) -> None:
+    """An unauthenticated status request is rejected."""
+    response = await client.get(STATUS_URL)
+
+    assert response.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_sync_then_status_shows_last_synced_at(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful sync advances last_synced_at for the evaluated source."""
+    user = default_user
+    await _seed_source(async_db, user_id=user.id, volume_id=6501)
+    provider = _FakeProvider({6501: [_released_row(65011, "1")]})
+    _use_provider(monkeypatch, provider)
+
+    sync_response = await auth_client.post(
+        SYNC_URL, json={"as_of": "2025-06-15T00:00:00Z"}
+    )
+    assert sync_response.status_code == 200
+
+    status_response = await auth_client.get(STATUS_URL)
+    assert status_response.status_code == 200
+    sources = status_response.json()["sources"]
+    assert len(sources) == 1
+    assert sources[0]["last_synced_at"] is not None
+    assert datetime.fromisoformat(
+        sources[0]["last_synced_at"].replace("Z", "+00:00")
+    ).tzinfo is not None
+    assert sources[0]["last_synced_at"].endswith("Z") or sources[0][
+        "last_synced_at"
+    ].endswith("+00:00")
+    assert sources[0]["provider_volume_id"] == "6501"
+    assert UTC is not None

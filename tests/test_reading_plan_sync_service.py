@@ -1,616 +1,636 @@
-"""Tests for reading plan sync service."""
+"""Contract tests for Reading Plan release-source sync (#3117).
+
+These exercise the real service against the real database with a fake provider
+client, so they prove the release gate, dedupe, failure isolation, and
+``last_synced_at`` semantics rather than mock choreography.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.reading_plan_release_source import ReadingPlanReleaseSource
-from app.models.thread import Thread
-from app.models.reading_plan import ReadingPlan
-from app.models.external_identity import ExternalIdentity
-from app.models.issue import Issue
-from app.services.reading_plan_sync_service import (
-    sync_released_issues,
-    SyncResult,
-    SourceSyncResult,
+from app.models import Issue, Thread, User
+from app.models.continuity_plan import ContinuityPlan
+from app.models.external_identity import (
+    ExternalIdentity,
+    IssueExternalIdentityMapping,
+    ThreadExternalSeriesMapping,
 )
-from app.comicvine_provider import ComicVineProvider
+from app.models.reading_plan_release_source import ReadingPlanReleaseSource
+from app.services.reading_plan_sync_service import parse_store_date, sync_released_issues
+from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
+from tests.conftest import get_or_create_user_async
+
+FIXED_AS_OF = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
+FIXED_SYNCED_AT = datetime(2025, 6, 15, 12, 30, tzinfo=UTC)
 
 
-@pytest.fixture
-def mock_db():
-    """Mock database session."""
-    return AsyncMock()
+@dataclass
+class _FakeProvider(ComicVineClient):
+    """Provider double that records fetch calls and replays scripted rosters."""
+
+    rosters: dict[int, list[dict[str, object]]] = field(default_factory=dict)
+    failures: dict[int, Exception] = field(default_factory=dict)
+    calls: list[tuple[int, bool]] = field(default_factory=list)
+
+    def __init__(
+        self,
+        rosters: dict[int, list[dict[str, object]]] | None = None,
+        failures: dict[int, Exception] | None = None,
+    ) -> None:
+        self.rosters = rosters or {}
+        self.failures = failures or {}
+        self.calls = []
+
+    async def fetch_volume_issues(
+        self, volume_id: int, *, refresh: bool = False
+    ) -> list[dict[str, object]]:
+        self.calls.append((volume_id, refresh))
+        if volume_id in self.failures:
+            raise self.failures[volume_id]
+        return list(self.rosters.get(volume_id, []))
+
+    async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> None:
+        raise ComicVineError("fake provider does not hydrate issues")
+
+    async def fetch_story_arc(self, arc_id: int, *, refresh: bool = False) -> None:
+        raise ComicVineError("fake provider has no story arcs")
 
 
-@pytest.fixture
-def mock_comicvine_provider():
-    """Mock ComicVine provider."""
-    with patch("app.services.reading_plan_sync_service.ComicVineProvider") as mock:
-        provider = AsyncMock()
-        mock.return_value = provider
-        yield provider
+def _roster_row(
+    issue_id: int,
+    issue_number: str,
+    store_date: str | None,
+) -> dict[str, object]:
+    return {
+        "id": issue_id,
+        "issue_number": issue_number,
+        "name": f"Fixture Saga #{issue_number}",
+        "store_date": store_date,
+        "cover_date": "1999-01-01",
+        "site_detail_url": f"https://comicvine.gamespot.com/issue/4000-{issue_id}/",
+    }
 
 
-@pytest.fixture
-def mock_adopt_comicvine_issue():
-    """Mock the comicvine issue adoption service."""
-    with patch("app.services.reading_plan_sync_service.adopt_comicvine_issue") as mock:
-        yield mock
-
-
-@pytest.fixture
-def mock_release_source_repo():
-    """Mock release source repository."""
-    with patch("app.services.reading_plan_sync_service.reading_plan_release_source_repository") as mock:
-        yield mock
-
-
-@pytest.fixture
-def mock_thread_repo():
-    """Mock thread repository."""
-    with patch("app.services.reading_plan_sync_service.thread_repository") as mock:
-        yield mock
-
-
-@pytest.fixture
-def mock_external_identity_repo():
-    """Mock external identity repository."""
-    with patch("app.services.reading_plan_sync_service.external_identity_repository") as mock:
-        yield mock
-
-
-@pytest.fixture
-def mock_issue_repo():
-    """Mock issue repository."""
-    with patch("app.services.reading_plan_sync_service.issue_repository") as mock:
-        yield mock
-
-
-@pytest.fixture
-def sample_comicvine_issues():
-    """Sample ComicVine issues for testing."""
-    return [
-        {
-            "id": 1001,
-            "issue_number": "1",
-            "store_date": "2023-01-15T00:00:00Z",
-            "cover_date": "2023-01-10T00:00:00Z",
-            "title": "Issue 1",
-        },
-        {
-            "id": 1002,
-            "issue_number": "2",
-            "store_date": "2023-02-20T00:00:00Z",
-            "cover_date": "2023-02-15T00:00:00Z",
-            "title": "Issue 2",
-        },
-        {
-            "id": 1003,
-            "issue_number": "3",
-            "store_date": "2023-03-25T00:00:00Z",
-            "cover_date": "2023-03-20T00:00:00Z",
-            "title": "Issue 3",
-        },
-        {
-            "id": 1004,
-            "issue_number": "4",
-            "store_date": None,  # Missing store_date
-            "cover_date": "2023-04-20T00:00:00Z",
-            "title": "Issue 4 (No Store Date)",
-        },
-        {
-            "id": 1005,
-            "issue_number": "5",
-            "store_date": "2023-05-30T00:00:00Z",
-            "cover_date": "2023-05-25T00:00:00Z",
-            "title": "Issue 5",
-        },
-    ]
-
-
-@pytest.fixture
-def sample_release_sources():
-    """Sample release sources for testing."""
-    plan = ReadingPlan(
-        id=1,
-        user_id=1,
-        title="Test Plan",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+async def _make_plan(db: AsyncSession, *, user_id: int, name: str) -> ContinuityPlan:
+    plan = ContinuityPlan(
+        user_id=user_id,
+        name=name,
+        ordering_mode="informational",
+        nodes_json=[],
+        lanes_json=[],
     )
-    
+    db.add(plan)
+    await db.flush()
+    return plan
+
+
+async def _make_thread(db: AsyncSession, *, user_id: int, title: str) -> Thread:
     thread = Thread(
-        id=1,
-        user_id=1,
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        title=title,
+        format="comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user_id,
     )
-    
-    source1 = ReadingPlanReleaseSource(
-        id=1,
-        reading_plan_id=1,
-        thread_id=1,
-        volume_id=2001,
-        enabled=True,
-        last_synced_at=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        reading_plan=plan,
-    )
-    
-    source2 = ReadingPlanReleaseSource(
-        id=2,
-        reading_plan_id=1,
-        thread_id=1,
-        volume_id=2001,  # Same volume as source1
-        enabled=True,
-        last_synced_at=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        reading_plan=plan,
-    )
-    
-    source3 = ReadingPlanReleaseSource(
-        id=3,
-        reading_plan_id=2,
-        thread_id=2,
-        volume_id=2002,
-        enabled=False,  # Disabled source
-        last_synced_at=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        reading_plan=ReadingPlan(
-            id=2,
-            user_id=1,
-            title="Another Plan",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ),
-    )
-    
-    return [source1, source2, source3]
+    db.add(thread)
+    await db.flush()
+    return thread
 
 
-@pytest.fixture
-def sample_external_identities():
-    """Sample external identities for testing."""
-    return [
-        ExternalIdentity(
-            id=1,
-            provider="comicvine",
-            external_id="1001",
-            confirmed=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ),
-        ExternalIdentity(
-            id=2,
-            provider="comicvine",
-            external_id="1002",
-            confirmed=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ),
-    ]
-
-
-@pytest.mark.asyncio
-async def test_sync_released_issues_basic(
-    mock_db,
-    mock_comicvine_provider,
-    mock_adopt_comicvine_issue,
-    mock_release_source_repo,
-    mock_thread_repo,
-    mock_external_identity_repo,
-    mock_issue_repo,
-    sample_comicvine_issues,
-    sample_release_sources,
-    sample_external_identities,
-):
-    """Test basic sync functionality."""
-    # Setup mocks
-    mock_release_source_repo.get_enabled_sources.return_value = sample_release_sources
-    mock_comicvine_provider.fetch_volume_issues.return_value = sample_comicvine_issues
-    mock_external_identity_repo.get_by_provider_and_volume.return_value = sample_external_identities
-    mock_thread_repo.get_by_id.return_value = Thread(
-        id=1,
-        user_id=1,
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    mock_external_identity_repo.get_by_provider_and_external_id.return_value = ExternalIdentity(
-        id=1,
+async def _make_volume(db: AsyncSession, *, volume_id: int) -> ExternalIdentity:
+    identity = ExternalIdentity(
         provider="comicvine",
-        external_id="2001",
-        confirmed=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        entity_type="series",
+        external_id=str(volume_id),
+        metadata_json={"name": f"Fixture Saga {volume_id}"},
     )
-    
-    # Mock adoption results
-    mock_adopt_comicvine_issue.side_effect = [
-        "created",  # Issue 1001 - created
-        "reused",   # Issue 1002 - already exists
-        "created",  # Issue 1003 - created
-        "created",  # Issue 1005 - created (skips 1004 due to missing store_date)
-    ]
-    
-    # Set sync boundary date
-    as_of = datetime(2023, 4, 1, tzinfo=timezone.utc)
-    
-    # Execute sync
-    result = await sync_released_issues(mock_db, as_of, refresh=True)
-    
-    # Verify results
-    assert isinstance(result, SyncResult)
-    assert result.total_sources == 3
-    assert result.enabled_sources == 2  # Only 2 sources are enabled
-    assert result.successful_sources == 1  # 1 volume (2001) with 2 sources
-    assert result.failed_sources == 0
-    assert result.created_issues == 3  # Issues 1001, 1003, 1005 created
-    assert result.reused_issues == 1  # Issue 1002 reused
-    assert result.future_skips == 0
-    assert result.unknown_date_skips == 1  # Issue 1004 skipped (no store_date)
-    assert result.conflicts == 0
-    assert len(result.errors) == 0
-    
-    # Verify ComicVine provider was called once for volume 2001
-    mock_comicvine_provider.fetch_volume_issues.assert_called_once_with(2001, refresh=True)
+    db.add(identity)
+    await db.flush()
+    return identity
+
+
+async def _confirm_mapping(
+    db: AsyncSession, *, thread_id: int, identity_id: int
+) -> None:
+    db.add(
+        ThreadExternalSeriesMapping(
+            thread_id=thread_id,
+            external_identity_id=identity_id,
+            status="confirmed",
+            evidence_source="test",
+        )
+    )
+    await db.flush()
+
+
+async def _subscribe(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    thread: Thread,
+    identity: ExternalIdentity,
+    enabled: bool = True,
+) -> ReadingPlanReleaseSource:
+    source = ReadingPlanReleaseSource(
+        plan_id=plan.id,
+        thread_id=thread.id,
+        external_identity_id=identity.id,
+        enabled=enabled,
+    )
+    db.add(source)
+    await db.flush()
+    return source
+
+
+async def _issue_numbers(db: AsyncSession, *, thread_id: int) -> list[str]:
+    rows = await db.execute(
+        select(Issue.issue_number)
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position, Issue.id)
+    )
+    return list(rows.scalars().all())
+
+
+async def _sync(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    provider: _FakeProvider,
+    as_of: datetime = FIXED_AS_OF,
+    refresh: bool = True,
+):
+    return await sync_released_issues(
+        db,
+        user_id=user_id,
+        as_of=as_of,
+        refresh=refresh,
+        client=provider,
+        now=lambda: FIXED_SYNCED_AT,
+    )
+
+
+async def _single_source_fixture(
+    db: AsyncSession,
+    *,
+    username: str,
+    volume_id: int = 2001,
+) -> tuple[User, Thread, ReadingPlanReleaseSource]:
+    user = await get_or_create_user_async(db, username)
+    plan = await _make_plan(db, user_id=user.id, name=f"Plan {volume_id}")
+    thread = await _make_thread(db, user_id=user.id, title=f"Thread {volume_id}")
+    identity = await _make_volume(db, volume_id=volume_id)
+    await _confirm_mapping(db, thread_id=thread.id, identity_id=identity.id)
+    source = await _subscribe(
+        db, plan=plan, thread=thread, identity=identity
+    )
+    await db.commit()
+    return user, thread, source
+
+
+# --------------------------------------------------------------------------
+# store_date normalization
+# --------------------------------------------------------------------------
+
+
+def test_parse_store_date_normalizes_provider_shapes() -> None:
+    """Provider date shapes all normalize to aware UTC; junk returns None."""
+    assert parse_store_date("2025-06-01") == datetime(2025, 6, 1, tzinfo=UTC)
+    assert parse_store_date("2025-06-01T00:00:00Z") == datetime(2025, 6, 1, tzinfo=UTC)
+    assert parse_store_date("2025-06-01T02:00:00+02:00") == datetime(
+        2025, 6, 1, tzinfo=UTC
+    )
+    assert parse_store_date(None) is None
+    assert parse_store_date("   ") is None
+    assert parse_store_date("not-a-date") is None
+
+
+# --------------------------------------------------------------------------
+# Release gate
+# --------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_sync_released_issues_future_skips(
-    mock_db,
-    mock_comicvine_provider,
-    mock_adopt_comicvine_issue,
-    mock_release_source_repo,
-    mock_thread_repo,
-    mock_external_identity_repo,
-    sample_comicvine_issues,
-    sample_release_sources,
-    sample_external_identities,
-):
-    """Test that future issues are skipped."""
-    # Setup mocks
-    mock_release_source_repo.get_enabled_sources.return_value = [sample_release_sources[0]]
-    mock_comicvine_provider.fetch_volume_issues.return_value = sample_comicvine_issues
-    mock_external_identity_repo.get_by_provider_and_volume.return_value = []
-    mock_thread_repo.get_by_id.return_value = Thread(
-        id=1,
-        user_id=1,
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+async def test_adopts_only_released_issues(async_db: AsyncSession) -> None:
+    """Future solicitations and unknown-date issues are never adopted."""
+    user, thread, source = await _single_source_fixture(
+        async_db, username="sync_gate@test.com"
     )
-    mock_external_identity_repo.get_by_provider_and_external_id.return_value = ExternalIdentity(
-        id=1,
-        provider="comicvine",
-        external_id="2001",
-        confirmed=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    
-    # Mock adoption results - all should be skipped due to future dates
-    mock_adopt_comicvine_issue.side_effect = [
-        "future_skip",  # Issue 1001 - future (store_date > as_of)
-        "future_skip",  # Issue 1002 - future
-        "future_skip",  # Issue 1003 - future
-        "future_skip",  # Issue 1005 - future
-    ]
-    
-    # Set sync boundary date (before any issues)
-    as_of = datetime(2022, 12, 1, tzinfo=timezone.utc)
-    
-    # Execute sync
-    result = await sync_released_issues(mock_db, as_of, refresh=True)
-    
-    # Verify results
-    assert result.total_sources == 3
-    assert result.enabled_sources == 2
-    assert result.successful_sources == 1
-    assert result.failed_sources == 0
-    assert result.created_issues == 0
-    assert result.reused_issues == 0
-    assert result.future_skips == 4  # All issues are future
-    assert result.unknown_date_skips == 1  # Issue 1004 skipped (no store_date)
-    assert result.conflicts == 0
-
-
-@pytest.mark.asyncio
-async def test_sync_released_issues_volume_failure_isolation(
-    mock_db,
-    mock_comicvine_provider,
-    mock_adopt_comicvine_issue,
-    mock_release_source_repo,
-    mock_thread_repo,
-    mock_external_identity_repo,
-    sample_release_sources,
-):
-    """Test that failure in one volume doesn't affect others."""
-    # Setup mocks for volume failure
-    mock_release_source_repo.get_enabled_sources.return_value = sample_release_sources
-    mock_comicvine_provider.fetch_volume_issues.side_effect = Exception("ComicVine API error")
-    
-    # Execute sync
-    as_of = datetime(2023, 4, 1, tzinfo=timezone.utc)
-    result = await sync_released_issues(mock_db, as_of, refresh=True)
-    
-    # Verify results
-    assert result.total_sources == 3
-    assert result.enabled_sources == 2
-    assert result.successful_sources == 0
-    assert result.failed_sources == 1  # Volume 2001 failed
-    assert result.created_issues == 0
-    assert result.reused_issues == 0
-    assert result.future_skips == 0
-    assert result.unknown_date_skips == 0
-    assert result.conflicts == 0
-    assert len(result.errors) == 1
-    assert "ComicVine API error" in result.errors[0]["error"]
-
-
-@pytest.mark.asyncio
-async def test_sync_released_issues_duplicate_volume_deduplication(
-    mock_db,
-    mock_comicvine_provider,
-    mock_adopt_comicvine_issue,
-    mock_release_source_repo,
-    mock_thread_repo,
-    mock_external_identity_repo,
-    mock_issue_repo,
-    sample_comicvine_issues,
-    sample_release_sources,
-    sample_external_identities,
-):
-    """Test that multiple sources for same volume don't cause duplicate fetching."""
-    # Setup mocks
-    mock_release_source_repo.get_enabled_sources.return_value = sample_release_sources[:2]  # 2 sources for same volume
-    mock_comicvine_provider.fetch_volume_issues.return_value = sample_comicvine_issues
-    mock_external_identity_repo.get_by_provider_and_volume.return_value = sample_external_identities
-    mock_thread_repo.get_by_id.return_value = Thread(
-        id=1,
-        user_id=1,
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    mock_external_identity_repo.get_by_provider_and_external_id.return_value = ExternalIdentity(
-        id=1,
-        provider="comicvine",
-        external_id="2001",
-        confirmed=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    
-    # Mock adoption results
-    mock_adopt_comicvine_issue.side_effect = [
-        "created",  # Issue 1001
-        "reused",   # Issue 1002
-        "created",  # Issue 1003
-        "created",  # Issue 1005
-    ]
-    
-    # Set sync boundary date
-    as_of = datetime(2023, 4, 1, tzinfo=timezone.utc)
-    
-    # Execute sync
-    result = await sync_released_issues(mock_db, as_of, refresh=True)
-    
-    # Verify results - should only fetch volume once but process both sources
-    assert result.total_sources == 3
-    assert result.enabled_sources == 2
-    assert result.successful_sources == 1  # Only 1 volume processed
-    assert result.failed_sources == 0
-    assert result.created_issues == 3  # Same as single volume test
-    assert result.reused_issues == 1
-    assert result.future_skips == 0
-    assert result.unknown_date_skips == 1
-    assert result.conflicts == 0
-    
-    # Verify ComicVine provider was called only once for volume 2001
-    mock_comicvine_provider.fetch_volume_issues.assert_called_once_with(2001, refresh=True)
-
-
-@pytest.mark.asyncio
-async def test_sync_released_issues_conflict_handling(
-    mock_db,
-    mock_comicvine_provider,
-    mock_adopt_comicvine_issue,
-    mock_release_source_repo,
-    mock_thread_repo,
-    mock_external_identity_repo,
-    sample_release_sources,
-    sample_external_identities,
-):
-    """Test that conflicts are handled properly."""
-    # Setup mocks
-    mock_release_source_repo.get_enabled_sources.return_value = [sample_release_sources[0]]
-    mock_comicvine_provider.fetch_volume_issues.return_value = [
-        {"id": 1001, "issue_number": "1", "store_date": "2023-01-15T00:00:00Z", "title": "Issue 1"}
-    ]
-    mock_external_identity_repo.get_by_provider_and_volume.return_value = sample_external_identities
-    mock_thread_repo.get_by_id.return_value = Thread(
-        id=1,
-        user_id=1,
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    mock_external_identity_repo.get_by_provider_and_external_id.return_value = ExternalIdentity(
-        id=1,
-        provider="comicvine",
-        external_id="2001",
-        confirmed=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    
-    # Mock adoption result - conflict
-    mock_adopt_comicvine_issue.return_value = "conflict"
-    
-    # Set sync boundary date
-    as_of = datetime(2023, 4, 1, tzinfo=timezone.utc)
-    
-    # Execute sync
-    result = await sync_released_issues(mock_db, as_of, refresh=True)
-    
-    # Verify results
-    assert result.total_sources == 3
-    assert result.enabled_sources == 2
-    assert result.successful_sources == 1
-    assert result.failed_sources == 0
-    assert result.created_issues == 0
-    assert result.reused_issues == 0
-    assert result.future_skips == 0
-    assert result.unknown_date_skips == 0
-    assert result.conflicts == 1
-    assert len(result.errors) == 0
-
-
-@pytest.mark.asyncio
-async def test_sync_released_issues_invalid_store_date(
-    mock_db,
-    mock_comicvine_provider,
-    mock_adopt_comicvine_issue,
-    mock_release_source_repo,
-    mock_thread_repo,
-    mock_external_identity_repo,
-    sample_release_sources,
-    sample_external_identities,
-):
-    """Test handling of invalid store_date values."""
-    # Setup mocks with invalid store_date
-    mock_release_source_repo.get_enabled_sources.return_value = [sample_release_sources[0]]
-    mock_comicvine_provider.fetch_volume_issues.return_value = [
-        {
-            "id": 1001,
-            "issue_number": "1",
-            "store_date": "invalid-date",  # Invalid date format
-            "title": "Issue 1",
+    provider = _FakeProvider(
+        rosters={
+            2001: [
+                _roster_row(101, "1", "2025-06-01"),
+                _roster_row(102, "2", "2025-12-01"),
+                _roster_row(103, "3", None),
+                _roster_row(104, "4", "garbage"),
+            ]
         }
-    ]
-    mock_external_identity_repo.get_by_provider_and_volume.return_value = []
-    mock_thread_repo.get_by_id.return_value = Thread(
-        id=1,
-        user_id=1,
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
     )
-    mock_external_identity_repo.get_by_provider_and_external_id.return_value = ExternalIdentity(
-        id=1,
-        provider="comicvine",
-        external_id="2001",
-        confirmed=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    
-    # Set sync boundary date
-    as_of = datetime(2023, 4, 1, tzinfo=timezone.utc)
-    
-    # Execute sync
-    result = await sync_released_issues(mock_db, as_of, refresh=True)
-    
-    # Verify results - invalid store_date should be treated as unknown_date_skip
-    assert result.total_sources == 3
-    assert result.enabled_sources == 2
-    assert result.successful_sources == 1
-    assert result.failed_sources == 0
-    assert result.created_issues == 0
-    assert result.reused_issues == 0
-    assert result.future_skips == 0
-    assert result.unknown_date_skips == 1  # Invalid date treated as unknown
-    assert result.conflicts == 0
+
+    report = await _sync(async_db, user_id=user.id, provider=provider)
+
+    assert report.created_issues == 1
+    assert report.future_skips == 1
+    assert report.unknown_date_skips == 2
+    assert report.failed_sources == 0
+    assert await _issue_numbers(async_db, thread_id=thread.id) == ["1"]
+    assert provider.calls == [(2001, True)]
+
+    await async_db.refresh(source)
+    assert source.last_synced_at == FIXED_SYNCED_AT
 
 
 @pytest.mark.asyncio
-async def test_sync_released_issues_thread_user_mismatch(
-    mock_db,
-    mock_comicvine_provider,
-    mock_release_source_repo,
-    mock_thread_repo,
-    sample_release_sources,
-):
-    """Test handling of thread/user mismatch."""
-    # Setup mocks for thread user mismatch
-    mock_release_source_repo.get_enabled_sources.return_value = [sample_release_sources[0]]
-    mock_thread_repo.get_by_id.return_value = Thread(
-        id=1,
-        user_id=2,  # Different user than plan
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+async def test_store_date_on_boundary_is_adopted(async_db: AsyncSession) -> None:
+    """A store_date exactly equal to as_of counts as released."""
+    user, thread, _ = await _single_source_fixture(
+        async_db, username="sync_boundary@test.com"
     )
-    
-    # Set sync boundary date
-    as_of = datetime(2023, 4, 1, tzinfo=timezone.utc)
-    
-    # Execute sync
-    result = await sync_released_issues(mock_db, as_of, refresh=True)
-    
-    # Verify results - should fail due to user mismatch
-    assert result.total_sources == 3
-    assert result.enabled_sources == 2
-    assert result.successful_sources == 0
-    assert result.failed_sources == 1
-    assert result.created_issues == 0
-    assert result.reused_issues == 0
-    assert result.future_skips == 0
-    assert result.unknown_date_skips == 0
-    assert result.conflicts == 0
-    assert len(result.errors) == 1
-    assert "user mismatch" in result.errors[0]["error"]
+    provider = _FakeProvider(
+        rosters={2001: [_roster_row(201, "1", "2025-06-15T12:00:00Z")]}
+    )
+
+    report = await _sync(async_db, user_id=user.id, provider=provider)
+
+    assert report.created_issues == 1
+    assert await _issue_numbers(async_db, thread_id=thread.id) == ["1"]
 
 
 @pytest.mark.asyncio
-async def test_sync_released_issues_unconfirmed_volume_mapping(
-    mock_db,
-    mock_comicvine_provider,
-    mock_release_source_repo,
-    mock_thread_repo,
-    mock_external_identity_repo,
-    sample_release_sources,
-):
-    """Test handling of unconfirmed volume mapping."""
-    # Setup mocks for unconfirmed mapping
-    mock_release_source_repo.get_enabled_sources.return_value = [sample_release_sources[0]]
-    mock_thread_repo.get_by_id.return_value = Thread(
-        id=1,
-        user_id=1,
-        title="Test Thread",
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+async def test_naive_as_of_is_treated_as_utc(async_db: AsyncSession) -> None:
+    """A naive boundary is interpreted as UTC rather than local time."""
+    user, thread, _ = await _single_source_fixture(
+        async_db, username="sync_naive@test.com"
     )
-    mock_external_identity_repo.get_by_provider_and_external_id.return_value = ExternalIdentity(
-        id=1,
-        provider="comicvine",
-        external_id="2001",
-        confirmed=False,  # Unconfirmed mapping
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+    provider = _FakeProvider(
+        rosters={2001: [_roster_row(301, "1", "2025-06-15T12:00:00Z")]}
     )
-    
-    # Set sync boundary date
-    as_of = datetime(2023, 4, 1, tzinfo=timezone.utc)
-    
-    # Execute sync
-    result = await sync_released_issues(mock_db, as_of, refresh=True)
-    
-    # Verify results - should fail due to unconfirmed mapping
-    assert result.total_sources == 3
-    assert result.enabled_sources == 2
-    assert result.successful_sources == 0
-    assert result.failed_sources == 1
-    assert result.created_issues == 0
-    assert result.reused_issues == 0
-    assert result.future_skips == 0
-    assert result.unknown_date_skips == 0
-    assert result.conflicts == 0
-    assert len(result.errors) == 1
-    assert "not confirmed" in result.errors[0]["error"]
+
+    report = await _sync(
+        async_db,
+        user_id=user.id,
+        provider=provider,
+        as_of=datetime(2025, 6, 15, 12, 0),
+    )
+
+    assert report.created_issues == 1
+    assert await _issue_numbers(async_db, thread_id=thread.id) == ["1"]
+
+
+@pytest.mark.asyncio
+async def test_issue_number_alone_never_implies_release(
+    async_db: AsyncSession,
+) -> None:
+    """A high issue number with no store_date stays unadopted."""
+    user, thread, _ = await _single_source_fixture(
+        async_db, username="sync_number_only@test.com"
+    )
+    provider = _FakeProvider(
+        rosters={2001: [_roster_row(401, "900", None)]}
+    )
+
+    report = await _sync(async_db, user_id=user.id, provider=provider)
+
+    assert report.created_issues == 0
+    assert report.unknown_date_skips == 1
+    assert await _issue_numbers(async_db, thread_id=thread.id) == []
+
+
+# --------------------------------------------------------------------------
+# Idempotency and duplicate subscriptions
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_repeat_sync_reuses_existing_issue(async_db: AsyncSession) -> None:
+    """Re-running the same sync never creates a second Issue row."""
+    user, thread, _ = await _single_source_fixture(
+        async_db, username="sync_retry@test.com"
+    )
+    provider = _FakeProvider(
+        rosters={2001: [_roster_row(501, "1", "2025-06-01")]}
+    )
+
+    first = await _sync(async_db, user_id=user.id, provider=provider)
+    second = await _sync(async_db, user_id=user.id, provider=provider)
+
+    assert first.created_issues == 1
+    assert second.created_issues == 0
+    assert second.reused_issues == 1
+    assert await _issue_numbers(async_db, thread_id=thread.id) == ["1"]
+
+    issue_count = await async_db.scalar(
+        select(func.count())
+        .select_from(Issue)
+        .join(IssueExternalIdentityMapping, IssueExternalIdentityMapping.issue_id == Issue.id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(ExternalIdentity.external_id == "501")
+    )
+    assert issue_count == 1
+
+
+@pytest.mark.asyncio
+async def test_shared_volume_fetches_once_for_two_plans(
+    async_db: AsyncSession,
+) -> None:
+    """Two plans on one volume fetch one roster and converge on one Issue."""
+    user = await get_or_create_user_async(async_db, "sync_shared_volume@test.com")
+    plan_a = await _make_plan(db := async_db, user_id=user.id, name="Plan A")
+    plan_b = await _make_plan(db, user_id=user.id, name="Plan B")
+    thread = await _make_thread(db, user_id=user.id, title="Shared thread")
+    identity = await _make_volume(db, volume_id=3001)
+    await _confirm_mapping(db, thread_id=thread.id, identity_id=identity.id)
+    await _subscribe(db, plan=plan_a, thread=thread, identity=identity)
+    await _subscribe(db, plan=plan_b, thread=thread, identity=identity)
+    await db.commit()
+
+    provider = _FakeProvider(
+        rosters={3001: [_roster_row(601, "1", "2025-06-01")]}
+    )
+    report = await _sync(db, user_id=user.id, provider=provider)
+
+    assert provider.calls == [(3001, True)]
+    assert report.successful_sources == 2
+    assert report.created_issues == 1
+    assert report.reused_issues == 1
+    assert await _issue_numbers(db, thread_id=thread.id) == ["1"]
+
+
+@pytest.mark.asyncio
+async def test_disabled_sources_are_ignored(async_db: AsyncSession) -> None:
+    """Disabled sources are counted but never fetched or adopted."""
+    user = await get_or_create_user_async(async_db, "sync_disabled@test.com")
+    plan = await _make_plan(db := async_db, user_id=user.id, name="Plan")
+    thread = await _make_thread(db, user_id=user.id, title="Disabled thread")
+    identity = await _make_volume(db, volume_id=4001)
+    await _confirm_mapping(db, thread_id=thread.id, identity_id=identity.id)
+    source = await _subscribe(
+        db, plan=plan, thread=thread, identity=identity, enabled=False
+    )
+    await db.commit()
+
+    provider = _FakeProvider(
+        rosters={4001: [_roster_row(701, "1", "2025-06-01")]}
+    )
+    report = await _sync(db, user_id=user.id, provider=provider)
+
+    assert report.total_sources == 1
+    assert report.enabled_sources == 0
+    assert report.checked_sources == 0
+    assert provider.calls == []
+    assert await _issue_numbers(db, thread_id=thread.id) == []
+
+    await db.refresh(source)
+    assert source.last_synced_at is None
+
+
+@pytest.mark.asyncio
+async def test_user_without_sources_is_a_no_op(async_db: AsyncSession) -> None:
+    """A user with no sources reports a clean empty run."""
+    user = await get_or_create_user_async(async_db, "sync_empty@test.com")
+    provider = _FakeProvider()
+
+    report = await _sync(async_db, user_id=user.id, provider=provider)
+
+    assert report.total_sources == 0
+    assert report.enabled_sources == 0
+    assert report.failed_sources == 0
+    assert provider.calls == []
+
+
+# --------------------------------------------------------------------------
+# Ownership isolation
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_sync_never_crosses_user_boundaries(async_db: AsyncSession) -> None:
+    """One reader's sync cannot adopt into another reader's thread."""
+    owner = await get_or_create_user_async(async_db, "sync_owner@test.com")
+    other = await get_or_create_user_async(async_db, "sync_other@test.com")
+    plan = await _make_plan(db := async_db, user_id=owner.id, name="Owner plan")
+    thread = await _make_thread(db, user_id=owner.id, title="Owner thread")
+    identity = await _make_volume(db, volume_id=5001)
+    await _confirm_mapping(db, thread_id=thread.id, identity_id=identity.id)
+    await _subscribe(db, plan=plan, thread=thread, identity=identity)
+    await db.commit()
+
+    provider = _FakeProvider(
+        rosters={5001: [_roster_row(801, "1", "2025-06-01")]}
+    )
+    report = await _sync(db, user_id=other.id, provider=provider)
+
+    assert report.enabled_sources == 0
+    assert provider.calls == []
+    assert await _issue_numbers(db, thread_id=thread.id) == []
+
+
+# --------------------------------------------------------------------------
+# Failure isolation and last_synced_at semantics
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_volume_failure_isolated_and_not_marked_current(
+    async_db: AsyncSession,
+) -> None:
+    """A failing volume reports a failure and leaves last_synced_at unset."""
+    user, thread, source = await _single_source_fixture(
+        async_db, username="sync_volume_fail@test.com", volume_id=6001
+    )
+    provider = _FakeProvider(
+        failures={6001: ComicVineError("ComicVine API error")}
+    )
+
+    report = await _sync(async_db, user_id=user.id, provider=provider)
+
+    assert report.failed_sources == 1
+    assert report.successful_sources == 0
+    assert len(report.failures) == 1
+    failure = report.failures[0]
+    assert failure.source_id == source.id
+    assert failure.volume_id == 6001
+    assert "ComicVine API error" in failure.error
+    assert report.success is False
+
+    await async_db.refresh(source)
+    assert source.last_synced_at is None
+
+
+@pytest.mark.asyncio
+async def test_one_failing_volume_does_not_block_another(
+    async_db: AsyncSession,
+) -> None:
+    """A provider failure for one volume leaves the other volume current."""
+    user, ok_thread, ok_source = await _single_source_fixture(
+        async_db, username="sync_partial@test.com", volume_id=7001
+    )
+    failing_plan = await _make_plan(db := async_db, user_id=user.id, name="Fail plan")
+    failing_thread = await _make_thread(db, user_id=user.id, title="Fail thread")
+    failing_identity = await _make_volume(db, volume_id=7002)
+    await _confirm_mapping(
+        db, thread_id=failing_thread.id, identity_id=failing_identity.id
+    )
+    await _subscribe(db, plan=failing_plan, thread=failing_thread, identity=failing_identity)
+    await db.commit()
+
+    provider = _FakeProvider(
+        rosters={7001: [_roster_row(901, "1", "2025-06-01")]},
+        failures={7002: ComicVineError("rate limited")},
+    )
+    report = await _sync(db, user_id=user.id, provider=provider)
+
+    assert report.successful_sources == 1
+    assert report.failed_sources == 1
+    assert report.created_issues == 1
+    assert await _issue_numbers(db, thread_id=ok_thread.id) == ["1"]
+
+    await db.refresh(ok_source)
+    assert ok_source.last_synced_at == FIXED_SYNCED_AT
+
+
+@pytest.mark.asyncio
+async def test_demoted_mapping_fails_source_without_stamping(
+    async_db: AsyncSession,
+) -> None:
+    """A demoted volume mapping fails the source instead of adopting."""
+    user, thread, source = await _single_source_fixture(
+        async_db, username="sync_demoted@test.com", volume_id=8001
+    )
+    from sqlalchemy import update as sa_update
+
+    await async_db.execute(
+        sa_update(ThreadExternalSeriesMapping)
+        .where(
+            ThreadExternalSeriesMapping.thread_id == thread.id,
+            ThreadExternalSeriesMapping.external_identity_id == source.external_identity_id,
+        )
+        .values(status="candidate")
+    )
+    await async_db.commit()
+
+    provider = _FakeProvider(
+        rosters={8001: [_roster_row(1001, "1", "2025-06-01")]}
+    )
+    report = await _sync(async_db, user_id=user.id, provider=provider)
+
+    assert report.failed_sources == 1
+    assert "no longer a confirmed" in report.failures[0].error
+    assert await _issue_numbers(async_db, thread_id=thread.id) == []
+
+    await async_db.refresh(source)
+    assert source.last_synced_at is None
+
+
+@pytest.mark.asyncio
+async def test_missing_provider_client_key_fails_cleanly(
+    async_db: AsyncSession,
+) -> None:
+    """A missing ComicVine API key reports every source as failed, not crashed."""
+
+    def _explode() -> ComicVineClient:
+        raise ValueError("api_key is required")
+
+    user, thread, source = await _single_source_fixture(
+        async_db, username="sync_no_key@test.com", volume_id=9001
+    )
+
+    report = await sync_released_issues(
+        async_db,
+        user_id=user.id,
+        as_of=FIXED_AS_OF,
+        refresh=True,
+        client_factory=_explode,
+    )
+
+    assert report.failed_sources == 1
+    assert "api_key is required" in report.failures[0].error
+    assert await _issue_numbers(async_db, thread_id=thread.id) == []
+
+    await async_db.refresh(source)
+    assert source.last_synced_at is None
+
+
+@pytest.mark.asyncio
+async def test_single_bad_issue_does_not_fail_the_source(
+    async_db: AsyncSession,
+) -> None:
+    """A malformed issue row is isolated while its siblings still adopt."""
+    user, thread, _ = await _single_source_fixture(
+        async_db, username="sync_bad_issue@test.com", volume_id=11001
+    )
+    provider = _FakeProvider(
+        rosters={
+            11001: [
+                _roster_row(1101, "1", "2025-06-01"),
+                {"id": None, "issue_number": "2", "store_date": "2025-06-01"},
+                _roster_row(1102, "3", "2025-06-01"),
+            ]
+        }
+    )
+
+    report = await _sync(async_db, user_id=user.id, provider=provider)
+
+    assert report.successful_sources == 1
+    assert report.created_issues == 2
+    assert report.issue_failures == 1
+    assert report.failed_sources == 0
+    assert await _issue_numbers(async_db, thread_id=thread.id) == ["1", "3"]
+
+
+@pytest.mark.asyncio
+async def test_sync_writes_survive_a_real_commit(
+    async_db_committed: AsyncSession,
+) -> None:
+    """Adopted issues and last_synced_at persist beyond the sync session.
+
+    The endpoint commits the run, so this proves a fresh connection observes
+    both the canonical Issue and the advanced sync timestamp.
+    """
+    db = async_db_committed
+    user, thread, source = await _single_source_fixture(
+        db, username="sync_committed@test.com", volume_id=13001
+    )
+    provider = _FakeProvider(
+        rosters={13001: [_roster_row(1301, "1", "2025-06-01")]}
+    )
+
+    report = await _sync(db, user_id=user.id, provider=provider)
+    await db.commit()
+
+    assert report.created_issues == 1
+
+    verifier = await db.scalar(
+        select(Issue.issue_number).where(Issue.thread_id == thread.id)
+    )
+    assert verifier == "1"
+
+    persisted = await db.scalar(
+        select(ReadingPlanReleaseSource.last_synced_at).where(
+            ReadingPlanReleaseSource.id == source.id
+        )
+    )
+    assert persisted is not None
+    assert persisted.tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_refresh_flag_reaches_the_provider(async_db: AsyncSession) -> None:
+    """The refresh flag is forwarded to the provider roster fetch."""
+    user, _, _ = await _single_source_fixture(
+        async_db, username="sync_refresh@test.com", volume_id=12001
+    )
+    provider = _FakeProvider()
+
+    await _sync(async_db, user_id=user.id, provider=provider, refresh=False)
+
+    assert provider.calls == [(12001, False)]

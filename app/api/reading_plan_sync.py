@@ -1,127 +1,131 @@
-"""API endpoints for reading plan sync service."""
+"""API endpoints for Reading Plan release-source sync."""
 
-from datetime import datetime
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.services.reading_plan_sync_service import sync_released_issues, SyncResult
+from app.schemas.reading_plan_sync import (
+    SyncReport,
+    SyncRequest,
+    SyncResponse,
+    SyncStatusResponse,
+    SyncStatusSource,
+)
+from app.services.reading_plan_sync_service import SyncReport as ServiceReport
+from app.services.reading_plan_sync_service import (
+    list_sync_status,
+    sync_released_issues,
+)
 
-router = APIRouter()
+router = APIRouter(tags=["reading-plan-sync"])
 
 
-class SyncRequest(BaseModel):
-    """Request for sync operation."""
-    as_of: datetime = Field(
-        description="UTC timestamp defining the release boundary - only issues with "
-                   "store_date <= as_of will be adopted"
+def _to_report(report: ServiceReport) -> SyncReport:
+    """Project the service report onto its API schema.
+
+    Args:
+        report: Service-layer run report.
+
+    Returns:
+        The API-shaped report.
+    """
+    return SyncReport(
+        total_sources=report.total_sources,
+        enabled_sources=report.enabled_sources,
+        checked_sources=report.checked_sources,
+        successful_sources=report.successful_sources,
+        failed_sources=report.failed_sources,
+        issues_checked=report.issues_checked,
+        created_issues=report.created_issues,
+        reused_issues=report.reused_issues,
+        future_skips=report.future_skips,
+        unknown_date_skips=report.unknown_date_skips,
+        conflicts=report.conflicts,
+        issue_failures=report.issue_failures,
+        failures=[
+            {
+                "source_id": failure.source_id,
+                "plan_id": failure.plan_id,
+                "thread_id": failure.thread_id,
+                "volume_id": failure.volume_id,
+                "error": failure.error,
+            }
+            for failure in report.failures
+        ],
     )
-    refresh: bool = Field(
-        default=True,
-        description="Whether to refresh the ComicVine cache"
+
+
+def _message(report: ServiceReport) -> str:
+    """Build the human-readable run summary.
+
+    Args:
+        report: Service-layer run report.
+
+    Returns:
+        One-line summary of the run.
+    """
+    return (
+        f"Sync completed: {report.successful_sources} successful, "
+        f"{report.failed_sources} failed, "
+        f"{report.created_issues} created, "
+        f"{report.reused_issues} reused"
     )
 
 
-class SyncResponse(BaseModel):
-    """Response from sync operation."""
-    success: bool
-    message: str
-    result: SyncResult
-
-
-@router.post("/sync", response_model=SyncResponse)
+@router.post("/reading-plan-sync/sync", response_model=SyncResponse)
 async def sync_released_issues_endpoint(
-    request: SyncRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Synchronize followed ComicVine volumes and adopt only released issues.
+    payload: SyncRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SyncResponse:
+    """Sync the caller's followed ComicVine volumes and adopt released issues.
 
-    This endpoint processes all enabled release sources for the current user,
-    fetching ComicVine volume issues and adopting only those that have been
-    released (store_date <= as_of).
+    Only the authenticated user's release sources are evaluated. An issue is
+    adopted only when ComicVine reports a ``store_date`` on or before ``as_of``.
     """
-    try:
-        # Perform the sync
-        result = await sync_released_issues(
-            db=db,
-            as_of=request.as_of,
-            refresh=request.refresh,
-        )
-
-        # Convert SyncResult to dict for serialization
-        result_dict = {
-            "total_sources": result.total_sources,
-            "enabled_sources": result.enabled_sources,
-            "successful_sources": result.successful_sources,
-            "failed_sources": result.failed_sources,
-            "created_issues": result.created_issues,
-            "reused_issues": result.reused_issues,
-            "future_skips": result.future_skips,
-            "unknown_date_skips": result.unknown_date_skips,
-            "conflicts": result.conflicts,
-            "errors": result.errors,
-        }
-
-        return SyncResponse(
-            success=result.failed_sources == 0,
-            message=f"Sync completed: {result.successful_sources} successful, "
-                   f"{result.failed_sources} failed, "
-                   f"{result.created_issues} created, "
-                   f"{result.reused_issues} reused",
-            result=result_dict,
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Sync failed: {str(e)}",
-        ) from e
+    report = await sync_released_issues(
+        db,
+        user_id=current_user.id,
+        as_of=payload.as_of,
+        refresh=payload.refresh,
+    )
+    # Project before committing: the report holds only plain values, so no ORM
+    # attribute is read after the commit expires the session state.
+    response = SyncResponse(
+        success=report.success,
+        message=_message(report),
+        result=_to_report(report),
+    )
+    await db.commit()
+    return response
 
 
-@router.get("/status")
+@router.get("/reading-plan-sync/status", response_model=SyncStatusResponse)
 async def get_sync_status(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get sync status for the current user's enabled release sources.
-
-    Returns information about enabled sources and their last sync status.
-    """
-    try:
-        from app.repositories.reading_plan_release_source_repository import (
-            get_enabled_sources_by_user,
-        )
-
-        # Get all enabled sources for the current user
-        enabled_sources = await get_enabled_sources_by_user(db, current_user.id)
-
-        # Prepare status information
-        status_info = {
-            "total_enabled_sources": len(enabled_sources),
-            "sources": [],
-        }
-
-        for source in enabled_sources:
-            status_info["sources"].append({
-                "id": source.id,
-                "reading_plan_id": source.plan_id,
-                "thread_id": source.thread_id,
-                "volume_id": int(source.external_identity.external_id),
-                "enabled": source.enabled,
-                "last_synced_at": source.last_synced_at,
-                "created_at": source.created_at,
-                "updated_at": source.updated_at,
-            })
-
-        return status_info
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get sync status: {str(e)}",
-        ) from e
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SyncStatusResponse:
+    """Report persisted sync state for the caller's release sources."""
+    statuses = await list_sync_status(db, user_id=current_user.id)
+    return SyncStatusResponse(
+        total_sources=len(statuses),
+        enabled_sources=sum(1 for status in statuses if status.enabled),
+        sources=[
+            SyncStatusSource(
+                id=status.source_id,
+                reading_plan_id=status.plan_id,
+                thread_id=status.thread_id,
+                external_identity_id=status.external_identity_id,
+                provider_volume_id=status.provider_volume_id,
+                enabled=status.enabled,
+                last_synced_at=status.last_synced_at,
+            )
+            for status in statuses
+        ],
+    )

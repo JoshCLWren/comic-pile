@@ -454,29 +454,3 @@ def _validate_mapping_fields(*, status: str, confidence: float | None) -> None:
         raise ExternalIdentityMappingError(f"unsupported mapping status: {status}")
     if confidence is not None and not 0 <= confidence <= 1:
         raise ExternalIdentityMappingError("confidence must be between 0 and 1")
-
-
-async def get_by_provider_and_external_id(
-    db: AsyncSession,
-    provider: str,
-    external_id: str,
-) -> list[ExternalIdentity]:
-    """Get external identities by provider and external_id.
-
-    Args:
-        db: Database session
-        provider: Provider name (e.g., "comicvine")
-        external_id: External identifier
-
-    Returns:
-        List of matching external identities
-    """
-    normalized_provider = provider.strip().lower()
-    normalized_external_id = external_id.strip()
-    result = await db.execute(
-        select(ExternalIdentity).where(
-            ExternalIdentity.provider == normalized_provider,
-            ExternalIdentity.external_id == normalized_external_id,
-        )
-    )
-    return list(result.scalars().all())

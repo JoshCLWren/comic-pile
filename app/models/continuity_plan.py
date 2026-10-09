@@ -35,7 +35,7 @@ class ContinuityPlan(Base):
         nullable=False,
     )
 
-    release_sources: Mapped[list["ReadingPlanReleaseSource"]] = relationship(
+    release_sources: Mapped[list[ReadingPlanReleaseSource]] = relationship(
         "ReadingPlanReleaseSource", back_populates="reading_plan", lazy="raise"
     )
 

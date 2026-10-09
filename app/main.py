@@ -302,9 +302,6 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
     app.include_router(reading_orders.router, tags=["reading-orders"])
     app.include_router(
-        reading_plan_sync.router, prefix="/api", tags=["reading-plan-sync"]
-    )
-    app.include_router(
         reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"]
     )
     app.include_router(
