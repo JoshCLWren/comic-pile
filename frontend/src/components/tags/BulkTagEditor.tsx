@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Modal } from '../ui/Modal'
+import Modal from '../Modal'
 import { TagInput } from './TagInput'
 import { TagList } from './TagChip'
 import type { Tag } from '../../types'

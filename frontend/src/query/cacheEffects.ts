@@ -711,6 +711,7 @@ export function optimisticallyAssignTag(
     const newAssignment: TagAssignment = {
       id: Date.now(), // Temporary ID for optimistic update
       tag_id: tag.id,
+      // SAFETY: targetType is validated to be 'issue' | 'thread' | 'plan' by the caller
       target_type: targetType.charAt(0).toUpperCase() + targetType.slice(1) as 'Issue' | 'Thread' | 'ContinuityPlan',
       target_id: targetId,
       created_at: new Date().toISOString(),
@@ -755,6 +756,7 @@ export function optimisticallyUnassignTag(
           ...effective,
           assignments: effective.assignments.filter(assignment => 
             !(assignment.tag_id === tagId && 
+              // SAFETY: targetType is validated to be 'issue' | 'thread' | 'plan' by the caller
               assignment.target_type === targetType.charAt(0).toUpperCase() + targetType.slice(1) as 'Issue' | 'Thread' | 'ContinuityPlan' &&
               assignment.target_id === targetId)
           ),
@@ -796,4 +798,57 @@ export async function invalidateEffectiveTags(
     queryKey: queryKeys.tags.effective(targetType, targetId),
     exact: true,
   })
+}
+
+/**
+ * Invalidate all tag queries after a tag is created.
+ */
+export async function invalidateAfterTagCreate(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.tags.list() })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.nearMatches('') })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName('', 'private') })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName('', 'global') })
+}
+
+/**
+ * Invalidate all tag queries after a tag is updated.
+ */
+export async function invalidateAfterTagUpdate(
+  client: QueryClient,
+  tag: Tag,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.tags.detail(tag.id) })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.list() })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName(tag.name, tag.scope) })
+}
+
+/**
+ * Invalidate all tag queries after a tag is deleted.
+ */
+export async function invalidateAfterTagDelete(
+  client: QueryClient,
+  tagId: number,
+): Promise<void> {
+  await client.removeQueries({ queryKey: queryKeys.tags.detail(tagId), exact: true })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.list() })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.nearMatches('') })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName('', 'private') })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName('', 'global') })
+}
+
+/**
+ * Invalidate all tag queries after a tag assignment change.
+ */
+export async function invalidateAfterTagAssignment(
+  client: QueryClient,
+  targetType: 'issue' | 'thread' | 'plan',
+  targetId: number,
+): Promise<void> {
+  await client.invalidateQueries({ 
+    queryKey: queryKeys.tags.effective(targetType, targetId),
+    exact: true,
+  })
+  await client.invalidateQueries({ queryKey: queryKeys.tags.list() })
 }

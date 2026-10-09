@@ -52,6 +52,7 @@ export function TagChip({
     }
   }
 
+  // SAFETY: tag.color comes from backend palette, TAG_COLORS covers all known colors
   const backgroundColor = TAG_COLORS[tag.color as keyof typeof TAG_COLORS] || tag.color
   const textColor = tag.color === 'yellow' || tag.color === 'lime' || tag.color === 'amber' 
     ? 'text-gray-900' 
@@ -89,7 +90,7 @@ export function TagChip({
           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
             <div className="text-xs font-medium text-gray-700 mb-1">Inherited from:</div>
             <div className="space-y-1">
-              {inheritanceSources.map((source, index) => (
+              {inheritanceSources.map((source, _index) => (
                 <button
                   key={source.id}
                   className="block w-full text-left text-xs text-blue-600 hover:text-blue-800 hover:underline"

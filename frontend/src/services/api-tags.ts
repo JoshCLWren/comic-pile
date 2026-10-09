@@ -1,5 +1,3 @@
-import type { components } from '../generated/openapi'
-
 // Import types from the main types file
 import type {
   Tag,
@@ -13,7 +11,10 @@ import type {
   TagNearMatch,
   TagSearchResult,
   TagTargetType,
+  TagBulkOperation,
 } from '../types'
+
+export type { TagBulkOperation }
 
 /**
  * API service for tag operations
@@ -149,7 +150,7 @@ export class TagsApi {
    * Search for tags by name (for autocomplete)
    */
   async searchTags(query: string, limit: number = 10): Promise<TagSearchResult[]> {
-    const params = new URLSearchParams({ query, limit })
+    const params = new URLSearchParams({ query, limit: String(limit) })
     const response = await fetch(`${this.baseUrl}/search/?${params}`)
     if (!response.ok) {
       throw new Error(`Failed to search tags: ${response.statusText}`)
@@ -161,7 +162,7 @@ export class TagsApi {
    * Get near-matches for tag creation (suggestions)
    */
   async getNearMatches(name: string, limit: number = 8): Promise<TagNearMatch[]> {
-    const params = new URLSearchParams({ name, limit })
+    const params = new URLSearchParams({ name, limit: String(limit) })
     const response = await fetch(`${this.baseUrl}/near-matches/?${params}`)
     if (!response.ok) {
       throw new Error(`Failed to get near matches: ${response.statusText}`)

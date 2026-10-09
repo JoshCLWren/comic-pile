@@ -154,17 +154,6 @@ export function TagInput({
 
     if (option.isNew) {
       // Create new tag
-      const newTag: Tag = {
-        id: option.id,
-        name: option.name,
-        normalized_name: option.name.toLowerCase().trim(),
-        scope: scope,
-        owner_user_id: scope === 'private' ? 1 : null, // TODO: Get actual user ID
-        color: option.color,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
       createTagMutation.mutate(
         {
           name: option.name,
@@ -217,8 +206,10 @@ export function TagInput({
     const handleClickOutside = (event: MouseEvent) => {
       if (
         dropdownRef.current &&
+        // SAFETY: event.target is always an EventTarget, and in browser DOM it's a Node
         !dropdownRef.current.contains(event.target as Node) &&
         inputRef.current &&
+        // SAFETY: event.target is always an EventTarget, and in browser DOM it's a Node
         !inputRef.current.contains(event.target as Node)
       ) {
         setShowDropdown(false)

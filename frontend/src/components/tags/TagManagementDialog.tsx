@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Modal } from '../ui/Modal'
+import Modal from '../Modal'
 import { TagInput } from './TagInput'
 import type { Tag, TagAssignment, TagUsageInfo } from '../../types'
 import { useTag, useTagUsage, useUpdateTag, useDeleteTag } from '../../hooks/useTags'
@@ -120,12 +120,6 @@ export function TagManagementDialog({
     }
   }
 
-  // Check if form is valid
-  const isFormValid = formData.name.trim() !== '' && 
-                     tagData && 
-                     formData.name !== tagData.name || 
-                     formData.color !== tagData.color
-
   if (!tagData) {
     return (
       <Modal isOpen={isOpen} onClose={onClose} title="Tag Management">
@@ -139,6 +133,10 @@ export function TagManagementDialog({
       </Modal>
     )
   }
+
+  // Check if form is valid
+  const isFormValid = formData.name.trim() !== '' && 
+                     (formData.name !== tagData.name || formData.color !== tagData.color)
 
   return (
     <Modal 
