@@ -70,14 +70,14 @@ VALID_SUBSYSTEM_LABELS = frozenset({"backend", "api", "frontend", "infrastructur
 HIGH_PRIORITY_LABEL = "ralph-priority:high"
 
 _SENSITIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"(?i)(authorization\s*:\s*)([^\s]+)"),
-    re.compile(r"(?i)(bearer\s+)([A-Za-z0-9\-._~+/=]+)"),
-    re.compile(r"(?i)(cookie\s*:\s*)([^\n]+)"),
-    re.compile(r"(?i)(api[_-]?key\s*[:=]\s*)([^\s,;]+)"),
-    re.compile(r"(?i)(access[_-]?token\s*[:=]\s*)([^\s,;]+)"),
-    re.compile(r"(?i)(refresh[_-]?token\s*[:=]\s*)([^\s,;]+)"),
-    re.compile(r"(?i)(password\s*[:=]\s*)([^\s,;]+)"),
-    re.compile(r"(?i)(secret\s*[:=]\s*)([^\s,;]+)"),
+    re.compile(r"(?i)(authorization\s*:\s*)(.+)"),
+    re.compile(r"(?i)(bearer\s+)(.+?)\b"),
+    re.compile(r"(?i)(cookie\s*:\s*)(.+)"),
+    re.compile(r"(?i)(api[_-]?key\s*[:=]\s*)(.+)"),
+    re.compile(r"(?i)(access[_-]?token\s*[:=]\s*)(.+)"),
+    re.compile(r"(?i)(refresh[_-]?token\s*[:=]\s*)(.+)"),
+    re.compile(r"(?i)(password\s*[:=]\s*)(.+)"),
+    re.compile(r"(?i)(secret\s*[:=]\s*)(.+)"),
 )
 
 
