@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime, UTC
 
 
@@ -22,7 +23,7 @@ from scripts.audit_read_without_rating import (
 
 
 @pytest.fixture
-async def db_session(async_db: AsyncSession) -> AsyncSession:
+async def db_session(async_db: AsyncSession) -> AsyncIterator[AsyncSession]:
     """Create a test database session."""
     yield async_db
 
@@ -42,8 +43,8 @@ async def test_thread(db_session: AsyncSession, test_user: User) -> Thread:
     """Create a test thread."""
     thread = Thread(
         title="Chris Claremont X-Men",
+        format="Comic",
         user_id=test_user.id,
-        position=1
     )
     db_session.add(thread)
     await db_session.commit()
@@ -87,6 +88,8 @@ async def test_external_identity(db_session: AsyncSession, test_issues: list[Iss
     """Create test external identity with historical rating."""
     external_identity = ExternalIdentity(
         provider="comicvine",
+        entity_type="issue",
+        external_id="cv-1",
         metadata_json={"rating": "4.5", "other_data": "test"}
     )
     db_session.add(external_identity)
@@ -154,11 +157,13 @@ class TestFindHistoricalRatings:
         # Should not find rating for issue 1 (no external identity)
         assert test_issues[1].id not in historical_ratings
     
-    async def test_ignores_invalid_ratings(self, db_session: AsyncSession, test_user: User):
+    async def test_ignores_invalid_ratings(self, db_session: AsyncSession, test_user: User, test_thread: Thread):
         """Test ignores invalid rating values."""
         # Create external identity with invalid rating
         external_identity = ExternalIdentity(
             provider="comicvine",
+            entity_type="issue",
+            external_id="cv-2",
             metadata_json={"rating": "invalid", "other_data": "test"}
         )
         db_session.add(external_identity)
@@ -166,7 +171,7 @@ class TestFindHistoricalRatings:
         
         # Create issue mapping
         issue = Issue(
-            thread_id=1,  # Assume thread 1 exists
+            thread_id=test_thread.id,
             issue_number="1",
             position=1,
             status="read"
@@ -231,8 +236,8 @@ class TestClassifyIssue:
         # Create another thread with same issue number
         conflict_thread = Thread(
             title="Chris Claremont X-Men Duplicate",
+            format="Comic",
             user_id=test_user.id,
-            position=2
         )
         db_session.add(conflict_thread)
         await db_session.commit()
@@ -403,7 +408,7 @@ class TestEdgeCases:
     async def test_no_read_issues(self, db_session: AsyncSession, test_user: User):
         """Test audit with no read issues."""
         # Create unread issues only
-        thread = Thread(title="Test Thread", user_id=test_user.id, position=1)
+        thread = Thread(title="Test Thread", format="Comic", user_id=test_user.id)
         db_session.add(thread)
         await db_session.commit()
         

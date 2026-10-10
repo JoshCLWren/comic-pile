@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 import json
 from pathlib import Path
 import sys
-from typing import Any, Literal
+from typing import Literal
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,7 +63,7 @@ class ClassificationResult:
         "no_source_rating", 
         "other_cause"
     ]
-    details: dict[str, Any] = field(default_factory=dict)
+    details: dict[str, object] = field(default_factory=dict)
     historical_rating_exists: bool = False
     historical_rating_value: float | None = None
     mapping_confidence: str | None = None
@@ -135,7 +135,7 @@ async def find_historical_ratings(db: AsyncSession, user_id: int) -> dict[int, f
     # Look for historical ratings in external identity mappings
     # This might include ratings from LoCG or other historical sources
     historical_ratings_query = text("""
-        SELECT i.id as issue_id, json_extract_path_text(e.metadata_json, 'rating') as rating
+        SELECT i.id as issue_id, e.metadata_json ->> 'rating' as rating
         FROM issues i
         JOIN threads t ON i.thread_id = t.id
         JOIN issue_external_identity_mappings iem ON i.id = iem.issue_id
@@ -143,7 +143,8 @@ async def find_historical_ratings(db: AsyncSession, user_id: int) -> dict[int, f
         WHERE t.user_id = :user_id
         AND iem.status = 'confirmed'
         AND e.provider = :provider
-        AND json_extract_path_text(e.metadata_json, 'rating') IS NOT NULL
+        AND e.entity_type = 'issue'
+        AND e.metadata_json ->> 'rating' IS NOT NULL
         AND i.status = 'read'
     """)
     
@@ -193,11 +194,12 @@ async def classify_issue(
         # Check for potential mapping conflicts
         # Look for duplicate issues with same number in different threads
         duplicate_check_query = text("""
-            SELECT id, thread_id, thread_title
-            FROM issues 
-            WHERE issue_number = :issue_number 
-            AND thread_id != :thread_id
-            AND status = 'read'
+            SELECT i.id as id, i.thread_id as thread_id, t.title as thread_title
+            FROM issues i
+            JOIN threads t ON t.id = i.thread_id
+            WHERE i.issue_number = :issue_number 
+            AND i.thread_id != :thread_id
+            AND i.status = 'read'
         """)
         
         duplicate_result = await db.execute(duplicate_check_query, {
