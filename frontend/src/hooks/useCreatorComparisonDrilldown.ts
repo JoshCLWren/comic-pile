@@ -9,30 +9,29 @@ function normalizeKey(key: string | null): string {
 
 type AverageDrilldown = {
   calculation: string
-  issues: Array<{ issue_number: string; rating: string; role: string; thread_id: number | null; thread_title: string }>
+  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
   total_rated: number
   total_points: number
 }
 
 type MedianDrilldown = {
   calculation: string
-  sorted_ratings: Array<{ rank: number; value: string }>
+  sorted_ratings: Array<{ rank: number; rating: number; determines_median: boolean; issue_number: string; role: string | null; thread_id: number | null; thread_title: string | null }>
   ratings_count: number
 }
 
 type DistributionDrilldown = {
   calculation: string
-  issues: Array<{ issue_number: string; rating: string; role: string; thread_id: number | null; thread_title: string }>
+  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
   bucket_count: number
   total_rated: number
 }
 
 type FiveStarRateDrilldown = {
   calculation: string
-  top_issue_ids: number[]
-  rated_count: number
   top_count: number
-  issues: Array<{ issue_number: string; rating: string; role: string; thread_id: number | null; thread_title: string }>
+  rated_count: number
+  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
 }
 
 type RoleAverageDrilldown = {
@@ -41,7 +40,7 @@ type RoleAverageDrilldown = {
   issue_count: number
   rated_issue_count: number
   average_rating: number | null
-  issues: Array<{ issue_number: string; rating: string; role: string; thread_id: number | null; thread_title: string }>
+  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
 }
 
 type SeriesAverageDrilldown = {
@@ -51,13 +50,15 @@ type SeriesAverageDrilldown = {
   issue_count: number
   rated_issue_count: number
   average_rating: number | null
-  issues: Array<{ issue_number: string; rating: string; role: string }>
+  min_rated_issues_per_series: number
+  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
 }
 
 type ReadWithoutRatingDrilldown = {
   calculation: string
-  issues: Array<{ issue_number: string; thread_id: number | null; thread_title: string; roles: string[] }>
+  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
   count: number
+  classification_available: boolean
 }
 
 type DrilldownData =
@@ -89,7 +90,7 @@ export function useCreatorComparisonDrilldown(
       if (!creatorKey) throw new Error('No creator key')
 
       let url = ''
-      let params = {}
+      let params: Record<string, string> = {}
 
       switch (metricType) {
         case 'average':
