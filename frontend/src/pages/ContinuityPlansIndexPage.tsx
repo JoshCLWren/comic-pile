@@ -62,6 +62,13 @@ export default function ContinuityPlansIndexPage() {
           >
             Add from CBL
           </button>
+          <button
+            type="button"
+            onClick={() => navigate('/cbl-sources')}
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+          >
+            Browse CBL sources
+          </button>
         </div>
       </header>
 

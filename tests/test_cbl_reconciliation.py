@@ -368,9 +368,11 @@ async def test_cbl_adoption_preview_is_read_only_and_supports_overrides(
         list_id=source_list_id,
     )
     assert plan.entries[0]["adoption_decision"] == "included_existing"
-    assert plan.entries[1]["adoption_decision"] == "awaiting_opt_in"
+    # #2128: safely creatable missing entries default to included; the final Add
+    # is the explicit approval for them.
+    assert plan.entries[1]["adoption_decision"] == "would_create_missing"
     assert plan.entries[2]["adoption_decision"] == "unresolved"
-    assert plan.final_adopted_order == (1,)
+    assert plan.final_adopted_order == (1, 2)
     assert plan.excluded_count == 0
     assert report.content_hash == "hash-1"
     assert report.revision_sha == "sha-1"
@@ -581,8 +583,8 @@ def test_cbl_series_group_id_does_not_confuse_identity_row_ids_with_external_ids
     ).startswith("source-series:")
 
 
-def test_cbl_adoption_selection_precedence_requires_missing_opt_in() -> None:
-    """Series choices select missing entries, while entry choices take precedence."""
+def test_cbl_adoption_selection_precedence_defaults_missing_included() -> None:
+    """Missing entries default to included (#2128); choices still take precedence."""
     entries = [
         {
             "cbl_position": 2,
@@ -604,8 +606,8 @@ def test_cbl_adoption_selection_precedence_requires_missing_opt_in() -> None:
         },
     ]
     default = calculate_cbl_adoption_plan(entries)
-    assert default.final_adopted_order == (2,)
-    assert default.entries[1]["adoption_decision"] == "awaiting_opt_in"
+    assert default.final_adopted_order == (2, 5)
+    assert default.entries[1]["adoption_decision"] == "would_create_missing"
 
     excluded = calculate_cbl_adoption_plan(entries, series_decisions={"run-key": False})
     assert excluded.final_adopted_order == ()

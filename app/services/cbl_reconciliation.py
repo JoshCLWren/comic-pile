@@ -155,7 +155,11 @@ def calculate_cbl_adoption_plan(
             decision = "unresolved"
             unresolved += 1
         else:
-            default_selected = resolved
+            # #2128: safely creatable missing entries default to included. The
+            # reader's single Add confirmation is the explicit approval for the
+            # missing comics shown in the reviewed summary; only ambiguous or
+            # unresolvable identities interrupt the happy path.
+            default_selected = resolved or importable
             selected = entry_choices.get(
                 entry_key,
                 series_choices.get(series_group_id, default_selected),

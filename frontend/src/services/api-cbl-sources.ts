@@ -85,6 +85,44 @@ export interface CBLAdoptionPlanChoices {
  * @returns The CBL source service bound to `client`.
  */
 export function createCblSourcesApi(client: HttpClient) {
+  /**
+   * Expand reader choices into the per-position override payload the commit
+   * endpoints expect. Identity-aware group decisions are expanded so two runs
+   * that share a series_name cannot collapse on the backend.
+   */
+  const commitPayload = (
+    preview: CBLAdoptionPreview,
+    choices: CBLAdoptionPlanChoices,
+  ) => {
+    const entriesById = new Map(
+      preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
+    )
+    const overridesByPosition = new Map<number, 'include' | 'exclude'>()
+    for (const [groupId, include] of Object.entries(choices.series_decisions)) {
+      const decision = include ? 'include' : 'exclude'
+      for (const entry of preview.entries) {
+        if (entry.series_group_id === groupId) {
+          overridesByPosition.set(entry.cbl_position, decision)
+        }
+      }
+    }
+    for (const [entryId, include] of Object.entries(choices.entry_decisions)) {
+      const entry = entriesById.get(entryId)
+      if (entry) {
+        overridesByPosition.set(entry.cbl_position, include ? 'include' : 'exclude')
+      }
+    }
+    const seriesOverrides = [...overridesByPosition.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([cbl_position, decision]) => ({ cbl_position, decision }))
+    return {
+      entry_decisions: {},
+      series_decisions: [],
+      series_overrides: seriesOverrides,
+      content_hash: preview.source.content_hash,
+      revision_sha: preview.source.revision_sha,
+    }
+  }
   return {
     discover: (query: string, limit = 25) =>
       client.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
@@ -99,41 +137,25 @@ export function createCblSourcesApi(client: HttpClient) {
       planId: number,
       preview: CBLAdoptionPreview,
       choices: CBLAdoptionPlanChoices,
-    ) => {
-      const entriesById = new Map(
-        preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
-      )
-      // Expand identity-aware group decisions into per-position overrides so two
-      // runs that share a series_name cannot collapse on the backend.
-      const overridesByPosition = new Map<number, 'include' | 'exclude'>()
-      for (const [groupId, include] of Object.entries(choices.series_decisions)) {
-        const decision = include ? 'include' : 'exclude'
-        for (const entry of preview.entries) {
-          if (entry.series_group_id === groupId) {
-            overridesByPosition.set(entry.cbl_position, decision)
-          }
-        }
-      }
-      for (const [entryId, include] of Object.entries(choices.entry_decisions)) {
-        const entry = entriesById.get(entryId)
-        if (entry) {
-          overridesByPosition.set(entry.cbl_position, include ? 'include' : 'exclude')
-        }
-      }
-      const seriesOverrides = [...overridesByPosition.entries()]
-        .sort(([left], [right]) => left - right)
-        .map(([cbl_position, decision]) => ({ cbl_position, decision }))
-      return client.post<CBLAdoptionCommitResult>(
+    ) =>
+      client.post<CBLAdoptionCommitResult>(
         `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
-        {
-          entry_decisions: {},
-          series_decisions: [],
-          series_overrides: seriesOverrides,
-          content_hash: preview.source.content_hash,
-          revision_sha: preview.source.revision_sha,
-        },
-      )
-    },
+        commitPayload(preview, choices),
+      ),
+    /**
+     * One-decision adoption: adopt the source into a Reading Plan, creating the
+     * plan from the source when it has none yet. This is the "Add this reading
+     * order" action for the CBL browser.
+     */
+    commitNew: (
+      listId: number,
+      preview: CBLAdoptionPreview,
+      choices: CBLAdoptionPlanChoices,
+    ) =>
+      client.post<CBLAdoptionCommitResult>(
+        `/v1/cbl/${listId}/adoption-commit`,
+        commitPayload(preview, choices),
+      ),
   }
 }
 

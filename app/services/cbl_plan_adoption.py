@@ -653,7 +653,7 @@ async def adopt_cbl_material_into_reading_plan(
     if existing_plan is None:
         plan = ContinuityPlan(
             user_id=user_id,
-            name=f"CBL adoption for {source_path}",
+            name=cbl_list.name or f"CBL adoption for {source_path}",
             ordering_mode="informational",
             lanes_json=_default_lane(),
             nodes_json=[],
