@@ -8,9 +8,7 @@ import type { DependencyGroupSummary } from '../../services/api-dependency-group
 import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
 import QueueMappingHealthIndicator from './QueueMappingHealthIndicator'
-import ComicVineSearchDialog from '../../components/ComicVineSearchDialog'
-import { queryClient } from '../../query/queryClient'
-import { queryKeys } from '../../query/queryKeys'
+import QueueMapSeriesDialog from '../../components/QueueMapSeriesDialog'
 
 interface QueueThreadCardProps {
   thread: ThreadListItem
@@ -108,10 +106,10 @@ export default function QueueThreadCard({
 
   const [repairOpen, setRepairOpen] = useState(false)
 
-  const handleRepairConfirmed = () => {
+  const handleRepairMapped = () => {
     setRepairOpen(false)
-    // Invalidate queue so mapping indicator updates without hard reload
-    queryClient.invalidateQueries({ queryKey: queryKeys.queue.list() })
+    // Queue pages refresh through the shared series-mapping commit hook, so the
+    // mapping indicator updates without a hard reload or a manual refetch here.
   }
 
   return (
@@ -263,14 +261,12 @@ export default function QueueThreadCard({
         />
       </div>
     </div>
-    <ComicVineSearchDialog
+    <QueueMapSeriesDialog
         isOpen={repairOpen}
-        issueId={null}
+        threadId={thread.id}
         threadTitle={thread.title}
-        issueNumber={null}
-        mode="replace"
         onClose={() => setRepairOpen(false)}
-        onConfirmed={handleRepairConfirmed}
+        onMapped={handleRepairMapped}
       />
     </>
   )

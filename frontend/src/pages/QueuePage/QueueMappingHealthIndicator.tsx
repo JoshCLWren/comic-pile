@@ -24,12 +24,20 @@ export default function QueueMappingHealthIndicator({
 
   let label: string
   if (isReview) {
-    label = needs_review_count > 0 ? `${needs_review_count} issue${needs_review_count === 1 ? '' : 's'} need review` : 'Review needed'
+    label = needs_review_count > 0
+      ? needs_review_count === 1
+        ? '1 issue needs review'
+        : `${needs_review_count} issues need review`
+      : 'Review needed'
   } else if (isPartial) {
     label = `${confirmed_issue_count} of ${tracked_issue_count} mapped`
   } else {
     // unresolved
-    label = needs_mapping_count > 0 ? `${needs_mapping_count} issue${needs_mapping_count === 1 ? '' : 's'} need mapping` : 'Mapping needed'
+    label = needs_mapping_count > 0
+      ? needs_mapping_count === 1
+        ? '1 issue needs mapping'
+        : `${needs_mapping_count} issues need mapping`
+      : 'Mapping needed'
   }
 
   return (

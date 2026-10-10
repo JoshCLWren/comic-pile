@@ -66,6 +66,31 @@ vi.mock('../components/PositionMenu', () => ({
   ),
 }))
 
+vi.mock('../components/QueueMapSeriesDialog', () => ({
+  default: ({
+    isOpen,
+    threadTitle,
+    onClose,
+    onMapped,
+  }: {
+    isOpen: boolean
+    threadTitle: string
+    onClose: () => void
+    onMapped: (ids: number[]) => void
+  }) =>
+    isOpen ? (
+      <div data-testid="mock-map-series-dialog">
+        <span data-testid="mock-map-series-thread">{threadTitle}</span>
+        <button type="button" data-testid="mock-map-series-close" onClick={onClose}>
+          Close
+        </button>
+        <button type="button" data-testid="mock-map-series-done" onClick={() => onMapped([7])}>
+          Done
+        </button>
+      </div>
+    ) : null,
+}))
+
 function createMockThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: 1,
@@ -770,5 +795,51 @@ describe('QueueThreadCard', () => {
 
       const snoozeButton = screen.getByTestId('mock-position-snooze')
       expect(snoozeButton).not.toBeDisabled()
+    })
+
+    it('opens the Map series repair dialog from an unresolved mapping indicator', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      const threadWithMapping = {
+        ...createMockThread(),
+        comicvine_mapping: {
+          status: 'unresolved' as const,
+          tracked_issue_count: 4,
+          confirmed_issue_count: 0,
+          needs_mapping_count: 4,
+          needs_review_count: 0,
+        },
+      }
+      renderCard(threadWithMapping, { onCardClick })
+
+      expect(screen.getByText('4 issues need mapping')).toBeInTheDocument()
+      expect(screen.queryByTestId('mock-map-series-dialog')).not.toBeInTheDocument()
+
+      await user.click(screen.getByTestId('queue-map-series-btn'))
+
+      expect(screen.getByTestId('mock-map-series-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('mock-map-series-thread')).toHaveTextContent('Test Thread')
+      expect(onCardClick).not.toHaveBeenCalled()
+
+      await user.click(screen.getByTestId('mock-map-series-done'))
+
+      expect(screen.queryByTestId('mock-map-series-dialog')).not.toBeInTheDocument()
+    })
+
+    it('stays quiet without a Map series action for fully mapped series', () => {
+      const threadWithMapping = {
+        ...createMockThread(),
+        comicvine_mapping: {
+          status: 'fully_mapped' as const,
+          tracked_issue_count: 5,
+          confirmed_issue_count: 5,
+          needs_mapping_count: 0,
+          needs_review_count: 0,
+        },
+      }
+      renderCard(threadWithMapping)
+
+      expect(screen.queryByTestId('queue-map-series-btn')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('mock-map-series-dialog')).not.toBeInTheDocument()
     })
   })
