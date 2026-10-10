@@ -159,6 +159,35 @@ test('transient GitHub failures are retried', async () => {
   assert.equal(attempts, 2);
 });
 
+test('primary installation quota exhaustion does not hot-loop before reset', async () => {
+  const { rateLimitDelay } = reconcile._test;
+  const error = Object.assign(new Error('API rate limit exceeded for installation'), {
+    status: 403,
+    response: { headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '2000' } },
+  });
+  assert.equal(rateLimitDelay(error, 1000000), 1001000);
+  let attempts = 0;
+  await assert.rejects(withRetry(async () => {
+    attempts += 1;
+    throw error;
+  }, { maxRateLimitWait: 30000, sleep: () => { throw Error('must not sleep'); } }), /rate limit/);
+  assert.equal(attempts, 1);
+});
+
+test('429 Retry-After is honored for a bounded retry', async () => {
+  let attempts = 0;
+  const sleeps = [];
+  const result = await withRetry(async () => {
+    attempts += 1;
+    if (attempts === 1) throw Object.assign(new Error('secondary rate limit'), {
+      status: 429, response: { headers: { 'retry-after': '2' } },
+    });
+    return 'ok';
+  }, { sleep: async ms => { sleeps.push(ms); } });
+  assert.equal(result, 'ok');
+  assert.deepEqual(sleeps, [2000]);
+});
+
 test('PR progress comments preserve an advanced review stage and local owner', async () => {
   const calls = [];
   const github = githubFor({
