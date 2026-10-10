@@ -370,13 +370,61 @@ it('renders reader-language event descriptions instead of the placeholder', () =
     ladder_path: 'd6', narrative_summary: {},
     events: [
       { id: 10, timestamp: '2024-01-01', type: 'snooze', thread_title: 'Wolverine', description: 'Snoozed Wolverine' },
-      { id: 11, timestamp: '2024-01-02', type: 'undo', thread_title: null, description: 'Restored thread' },
+      { id: 11, timestamp: '2024-01-02', type: 'skip', thread_title: null, description: 'Skipped thread' },
     ],
   }, isPending: false, refetch: refetchDetailsSpy })
 
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
 
   expect(screen.getByText('Snoozed Wolverine')).toBeInTheDocument()
-  expect(screen.getByText('Restored thread')).toBeInTheDocument()
+  expect(screen.getByText('Skipped thread')).toBeInTheDocument()
   expect(screen.queryByText('No additional event details recorded.')).not.toBeInTheDocument()
+})
+
+// #3300: an undo/restore description that only repeats the card's own label made
+// two genuinely different actions read as the same card. The repeated segment
+// goes; the trailing detail the backend appended stays.
+it('drops a restore description that only repeats the card label but keeps its extras', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 22, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
+    ladder_path: 'd6', narrative_summary: {},
+    events: [
+      { id: 30, timestamp: '2024-01-01T13:04:03Z', type: 'undo', thread_title: 'Saga', description: 'Restored Saga' },
+      {
+        id: 31,
+        timestamp: '2024-01-01T13:04:47Z',
+        type: 'restore',
+        thread_title: null,
+        issue_number: '5',
+        description: 'Restored thread · #5',
+      },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(screen.queryByText('Restored Saga')).not.toBeInTheDocument()
+  expect(screen.queryByText('Restored thread · #5')).not.toBeInTheDocument()
+  expect(screen.getByText('#5')).toBeInTheDocument()
+  expect(screen.getByText('Thread unavailable')).toBeInTheDocument()
+  expect(screen.queryByText('No additional event details recorded.')).not.toBeInTheDocument()
+})
+
+// #3300: minute-precision rendering collapsed distinct events into one block of
+// identical timestamps, which is what made the reported pairs look duplicated.
+it('separates same-minute timeline events with second precision', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 23, started_at: '2024-01-01', ended_at: null, start_die: 20, current_die: 20,
+    ladder_path: 'd20', narrative_summary: {},
+    events: [
+      { id: 32, timestamp: '2024-01-01T13:04:03Z', type: 'roll', thread_title: 'Flash', result: 20, die: 20, selection_method: 'random' },
+      { id: 33, timestamp: '2024-01-01T13:04:47Z', type: 'roll', thread_title: 'Flash', result: 20, die: 20, selection_method: 'random' },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  const timestamps = screen.getAllByText(/\d{1,2}:\d{2}:\d{2}/)
+  expect(timestamps).toHaveLength(2)
+  expect(new Set(timestamps.map((node) => node.textContent)).size).toBe(2)
 })

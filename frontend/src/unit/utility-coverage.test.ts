@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { formatDate, formatDateTime, formatTime, formatTime24 } from '../utils/dateFormat'
+import { formatDate, formatDateTime, formatDateTimeWithSeconds, formatTime, formatTime24 } from '../utils/dateFormat'
 import { parseIssueRange } from '../utils/issueParser'
 import { getDependencyTooltip } from '../utils/dependencyHelpers'
 import { layoutGraph } from '../utils/graphLayout'
@@ -45,6 +45,25 @@ describe('date and issue utilities', () => {
         hour12: false,
       }),
     )
+  })
+
+  // #3300: the session timeline reads at second precision so two events logged
+  // in the same minute stop rendering as the same timestamp.
+  it('keeps second precision so same-minute events stay distinguishable', () => {
+    expect(formatDateTimeWithSeconds(null)).toBe('—')
+    expect(formatDateTimeWithSeconds('not a date')).toBe('—')
+
+    const early = formatDateTimeWithSeconds('2024-01-02T13:04:03Z')
+    const late = formatDateTimeWithSeconds('2024-01-02T13:04:47Z')
+
+    expect(early).toMatch(/:03\s?(AM|PM)?$/)
+    expect(late).toMatch(/:47\s?(AM|PM)?$/)
+    expect(early).not.toBe(late)
+
+    // Minute precision collapses both instants onto one string; that collapse
+    // is exactly what the timeline stopped doing.
+    expect(formatDateTime('2024-01-02T13:04:03Z')).toBe(formatDateTime('2024-01-02T13:04:47Z'))
+    expect(formatDateTime('2024-01-02T13:04:03Z')).not.toBe(early)
   })
 
   it('parses ranges, literals, duplicates, and rejects unsafe ranges', () => {
