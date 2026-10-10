@@ -1,13 +1,16 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getEffectiveTagsMock, getTagMock, assignTagMock, unassignTagMock } = vi.hoisted(() => ({
-  getEffectiveTagsMock: vi.fn(),
-  getTagMock: vi.fn(),
-  assignTagMock: vi.fn(),
-  unassignTagMock: vi.fn(),
-}))
+const { getEffectiveTagsMock, getTagMock, assignTagMock, unassignTagMock, testQueryClient } = vi.hoisted(() => {
+  const { QueryClient } = require('@tanstack/react-query')
+  return {
+    getEffectiveTagsMock: vi.fn(),
+    getTagMock: vi.fn(),
+    assignTagMock: vi.fn(),
+    unassignTagMock: vi.fn(),
+    testQueryClient: new QueryClient(),
+  }
+})
 
 vi.mock('../services/api-tags', () => ({
   tagsApi: {
@@ -27,6 +30,12 @@ vi.mock('../services/api-tags', () => ({
   },
 }))
 
+// Mock the singleton queryClient so hooks use the test client
+vi.mock('../query/queryClient', () => ({
+  queryClient: testQueryClient,
+}))
+
+import { QueryClientProvider } from '@tanstack/react-query'
 import { useAssignTag, useEffectiveTags, useUnassignTag } from '../hooks/useTags'
 import { queryKeys } from '../query/queryKeys'
 import type { EffectiveTag, Tag } from '../types'
@@ -50,13 +59,14 @@ const effectiveTags: EffectiveTag[] = [
   },
 ]
 
-function makeWrapper(client: QueryClient) {
+function makeWrapper() {
   return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={testQueryClient}>{children}</QueryClientProvider>
   )
 }
 
 beforeEach(() => {
+  testQueryClient.clear()
   getEffectiveTagsMock.mockReset().mockResolvedValue(effectiveTags)
   getTagMock.mockReset().mockResolvedValue(tag)
   assignTagMock.mockReset().mockResolvedValue({ id: 1, tag_id: 3 })
@@ -65,9 +75,8 @@ beforeEach(() => {
 
 describe('useEffectiveTags', () => {
   it('fetches effective tags for an issue target', async () => {
-    const client = new QueryClient()
     const { result } = renderHook(() => useEffectiveTags('issue', 11), {
-      wrapper: makeWrapper(client),
+      wrapper: makeWrapper(),
     })
 
     await waitFor(() => {
@@ -76,13 +85,12 @@ describe('useEffectiveTags', () => {
 
     expect(getEffectiveTagsMock).toHaveBeenCalledWith('Issue', 11)
     expect(result.current.data).toEqual(effectiveTags)
-    expect(client.getQueryData(queryKeys.tags.effective('issue', 11))).toEqual(effectiveTags)
+    expect(testQueryClient.getQueryData(queryKeys.tags.effective('issue', 11))).toEqual(effectiveTags)
   })
 
   it('fetches effective tags for a plan target using the ContinuityPlan type', async () => {
-    const client = new QueryClient()
     const { result } = renderHook(() => useEffectiveTags('plan', 42), {
-      wrapper: makeWrapper(client),
+      wrapper: makeWrapper(),
     })
 
     await waitFor(() => {
@@ -92,24 +100,23 @@ describe('useEffectiveTags', () => {
     expect(getEffectiveTagsMock).toHaveBeenCalledWith('ContinuityPlan', 42)
   })
 
-  it('does not fetch when the id is missing', () => {
-    const client = new QueryClient()
-
+  it('does not fetch when the id is missing', async () => {
     const { result } = renderHook(() => useEffectiveTags('issue', 0), {
-      wrapper: makeWrapper(client),
+      wrapper: makeWrapper(),
     })
 
-    expect(result.current.isPending).toBe(false)
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
     expect(getEffectiveTagsMock).not.toHaveBeenCalled()
   })
 })
 
 describe('useAssignTag', () => {
   it('assigns a tag and invalidates the effective tags for the target', async () => {
-    const client = new QueryClient()
-    client.setQueryData(queryKeys.tags.effective('plan', 42), effectiveTags)
+    testQueryClient.setQueryData(queryKeys.tags.effective('plan', 42), effectiveTags)
 
-    const { result } = renderHook(() => useAssignTag(), { wrapper: makeWrapper(client) })
+    const { result } = renderHook(() => useAssignTag(), { wrapper: makeWrapper() })
 
     result.current.mutate({
       tagId: 3,
@@ -123,12 +130,17 @@ describe('useAssignTag', () => {
       })
     })
 
-    expect(client.getQueryState(queryKeys.tags.effective('plan', 42))?.isInvalidated).toBe(true)
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    await waitFor(() => {
+      expect(testQueryClient.getQueryState(queryKeys.tags.effective('plan', 42))?.isInvalidated).toBe(true)
+    })
   })
 
   it('optimistically adds the assignment before the mutation resolves', async () => {
-    const client = new QueryClient()
-    client.setQueryData(queryKeys.tags.effective('issue', 11), effectiveTags)
+    testQueryClient.setQueryData(queryKeys.tags.effective('issue', 11), effectiveTags)
 
     let resolveAssign: (value: unknown) => void = () => {}
     assignTagMock.mockReturnValue(
@@ -137,7 +149,7 @@ describe('useAssignTag', () => {
       }),
     )
 
-    const { result } = renderHook(() => useAssignTag(), { wrapper: makeWrapper(client) })
+    const { result } = renderHook(() => useAssignTag(), { wrapper: makeWrapper() })
 
     result.current.mutate({
       tagId: 3,
@@ -145,7 +157,7 @@ describe('useAssignTag', () => {
     })
 
     await waitFor(() => {
-      const cached = client.getQueryData<EffectiveTag[]>(queryKeys.tags.effective('issue', 11))
+      const cached = testQueryClient.getQueryData<EffectiveTag[]>(queryKeys.tags.effective('issue', 11))
       expect(cached?.[0].assignments).toHaveLength(1)
       expect(cached?.[0].assignments[0]).toMatchObject({
         tag_id: 3,
@@ -174,10 +186,9 @@ describe('useUnassignTag', () => {
   ]
 
   it('unassigns a tag and invalidates the effective tags for the target', async () => {
-    const client = new QueryClient()
-    client.setQueryData(queryKeys.tags.effective('issue', 11), assignedEffectiveTags)
+    testQueryClient.setQueryData(queryKeys.tags.effective('issue', 11), assignedEffectiveTags)
 
-    const { result } = renderHook(() => useUnassignTag(), { wrapper: makeWrapper(client) })
+    const { result } = renderHook(() => useUnassignTag(), { wrapper: makeWrapper() })
 
     result.current.mutate({
       tagId: 3,
@@ -191,6 +202,12 @@ describe('useUnassignTag', () => {
       })
     })
 
-    expect(client.getQueryState(queryKeys.tags.effective('issue', 11))?.isInvalidated).toBe(true)
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    await waitFor(() => {
+      expect(testQueryClient.getQueryState(queryKeys.tags.effective('issue', 11))?.isInvalidated).toBe(true)
+    })
   })
 })

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tagsApi } from '../services/api-tags'
 
 function jsonResponse(data: unknown, ok = true): Response {
+  // SAFETY: this stub implements every Response field the tagsApi methods read (ok, status, statusText, json); the cast asserts that invariant for the test double.
   return {
     ok,
     status: ok ? 200 : 500,
@@ -20,7 +21,6 @@ function jsonResponse(data: unknown, ok = true): Response {
     text: async () => JSON.stringify(data),
     json: async () => data,
     bytes: async () => new Uint8Array(),
-    // SAFETY: this stub implements every Response field the tagsApi methods read (ok, status, statusText, json); the cast asserts that invariant for the test double.
   } as Response
 }
 
