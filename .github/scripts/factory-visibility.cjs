@@ -151,11 +151,29 @@ function stageFrom(body) {
   return null;
 }
 
-function isTransient(error) {
-  return error?.status === 429 || (error?.status >= 500 && error?.status <= 599);
+function rateLimitDelay(error, now = Date.now()) {
+  const headers = error?.response?.headers || error?.headers || {};
+  const remaining = Number(headers['x-ratelimit-remaining']);
+  const limited = (error?.status === 403 && headers['x-ratelimit-remaining'] != null && remaining === 0)
+    || error?.status === 429;
+  if (!limited) return null;
+
+  const retryAfter = Number(headers['retry-after']);
+  if (headers['retry-after'] != null && Number.isFinite(retryAfter) && retryAfter >= 0) {
+    return Math.ceil(retryAfter * 1000);
+  }
+  const reset = Number(headers['x-ratelimit-reset']);
+  if (Number.isFinite(reset) && reset > 0) return Math.max(0, reset * 1000 - now + 1000);
+  return null;
 }
 
-async function withRetry(operation, { attempts = 3, delay = 250 } = {}) {
+function isTransient(error) {
+  return error?.status === 429
+    || (error?.status >= 500 && error?.status <= 599)
+    || (error?.status === 403 && rateLimitDelay(error) !== null);
+}
+
+async function withRetry(operation, { attempts = 3, delay = 250, maxRateLimitWait = 30000, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
@@ -163,7 +181,12 @@ async function withRetry(operation, { attempts = 3, delay = 250 } = {}) {
     } catch (error) {
       lastError = error;
       if (!isTransient(error) || attempt === attempts) throw error;
-      await new Promise(resolve => setTimeout(resolve, delay * attempt));
+      const rateDelay = rateLimitDelay(error);
+      // Never spin on exhausted installation quota. Fail the run if reset is too
+      // distant or unknown: Actions can resume on the next scheduled/event run.
+      if ((error.status === 403 || error.status === 429)
+          && (rateDelay === null || rateDelay > maxRateLimitWait)) throw error;
+      await sleep(rateDelay === null ? delay * attempt : rateDelay);
     }
   }
   throw lastError;
