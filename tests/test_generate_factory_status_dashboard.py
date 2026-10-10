@@ -399,10 +399,15 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
         completion_worker_target=lambda _demand: 1,
     )
 
+    original_load_module = dashboard.load_module
+
     def fake_load_module(_name: str, path: Path):
+        if path.name == "factory_heartbeat_health.py":
+            return original_load_module(_name, path)
         return full if path.name == "factory_full_completion_controller.py" else completion
 
     monkeypatch.setattr(dashboard, "load_module", fake_load_module)
+    monkeypatch.setattr(dashboard, "load_expected_roster", lambda: {"expected_workers": [39, 40]})
     monkeypatch.setattr(dashboard, "github_search_total", lambda *_args: 0)
     monkeypatch.setattr(dashboard, "recently_merged_prs", lambda _controller: [])
     monkeypatch.setattr(
@@ -455,3 +460,23 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     assert snapshot["busy_workers"] == 1
     assert len(snapshot["workers"]) == 2
     assert snapshot["opencode_free_roster"]["freshness"] == "stale"
+
+
+def test_dashboard_exposes_stale_and_quota_limited_worker_with_fresh_peer() -> None:
+    """Fresh provider capacity cannot hide worker-specific heartbeat observations."""
+    snapshot = sample_snapshot()
+    observations = [
+        {"worker": "45", "freshness": "fresh", "updated": "2026-10-10T11:55:00Z", "run": "123", "attempt_run": "123", "runtime_status": "success"},
+        {"worker": "46", "freshness": "stale", "updated": "2026-10-09T12:00:00Z", "run": "456", "attempt_run": "456", "runtime_status": "quota-limited"},
+    ]
+    snapshot["heartbeat_health"] = {"workers": observations}
+    snapshot["workers"] = [
+        {"worker": row["worker"], "health": "healthy", "heartbeat": row}
+        for row in observations
+    ]
+    rendered = dashboard.render_dashboard(snapshot)
+    assert "#46: stale, last heartbeat 2026-10-09T12:00:00Z, run 456, quota-limited" in rendered
+    assert "Heartbeat: fresh" in rendered
+    assert "Heartbeat: stale" in rendered
+    assert "/actions/runs/456" in rendered
+    assert "quota-limited workers are not classified as crashed" in rendered
