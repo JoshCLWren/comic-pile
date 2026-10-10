@@ -19,7 +19,16 @@ from factory_review_policy import (
 # factory_eligibility lives in scripts/ (the shared home for both selectors).
 # Resolve it relative to this file and load it explicitly so the module
 # imports cleanly no matter which directory the caller placed on sys.path.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+# The trusted worker stages this policy outside the repository before reviewing
+# untrusted PR branches. Prefer the staged canonical module when it is present;
+# otherwise use the repository's shared scripts/ module.
+_policy_dir = Path(__file__).resolve().parent
+_eligibility_dir = (
+    _policy_dir
+    if (_policy_dir / "factory_eligibility.py").is_file()
+    else Path(__file__).resolve().parents[2] / "scripts"
+)
+sys.path.insert(0, str(_eligibility_dir))
 eligibility = importlib.import_module("factory_eligibility")
 
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
