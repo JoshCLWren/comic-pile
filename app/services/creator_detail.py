@@ -173,9 +173,21 @@ async def get_creator_detail(
     # 1. Headline summary scoped to this creator, mirroring #2028 exactly:
     #    latest effective rate event wins, one issue counts at most once even
     #    for multi-role credits, and pure cover/editorial or unknown roles never
-    #    feed the headline average.
+    #    feed the headline average. The rated-issues collection below is scoped
+    #    to this same headline-eligible set so the "Rated (N)" heading, the
+    #    rating distribution, and the listed rows always agree (issue #3235).
+    def _has_headline_role(issue_id: int) -> bool:
+        return any(
+            role in HEADLINE_ROLES
+            for credit in inputs.issue_creator_credits[issue_id]
+            if credit.external_id == creator_id
+            for role in credit.roles
+        )
+
     rated_ids = frozenset(
-        issue_id for issue_id in creator_id_set if issue_id in inputs.effective_ratings
+        issue_id
+        for issue_id in creator_id_set
+        if issue_id in inputs.effective_ratings and _has_headline_role(issue_id)
     )
     read_unrated_ids = frozenset(
         issue_id
@@ -187,17 +199,8 @@ async def get_creator_detail(
     )
 
     headline_rated: list[float] = []
-    for issue_id in creator_id_set:
-        if issue_id not in inputs.effective_ratings:
-            continue
-        credits = inputs.issue_creator_credits[issue_id]
-        if any(
-            role in HEADLINE_ROLES
-            for credit in credits
-            if credit.external_id == creator_id
-            for role in credit.roles
-        ):
-            headline_rated.append(inputs.effective_ratings[issue_id])
+    for issue_id in rated_ids:
+        headline_rated.append(inputs.effective_ratings[issue_id])
     ratings_count = len(headline_rated)
     average_rating = (
         round(sum(headline_rated) / ratings_count, 2) if ratings_count else None

@@ -273,7 +273,11 @@ async def test_cover_only_credit_is_preserved_in_role_stats_but_not_headline(
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
-    """A pure cover credit stays visible but never feeds the headline average."""
+    """A pure cover credit stays visible but never feeds the headline average.
+
+    The rated-issues collection is headline-scoped too (issue #3235), so the
+    "Rated (N)" heading, the distribution, and the listed rows always agree.
+    """
     _thread, issues = await _make_thread(
         async_db, default_user, title="Covered", issue_count=1, queue_position=1, read_through=1
     )
@@ -291,6 +295,7 @@ async def test_cover_only_credit_is_preserved_in_role_stats_but_not_headline(
     assert summary["normalized_roles"] == ["cover"]
     assert summary["ratings_count"] == 0
     assert summary["average_rating"] is None
+    assert body["rating_distribution"] is None
 
     assert body["role_stats"] == [
         {
@@ -300,9 +305,7 @@ async def test_cover_only_credit_is_preserved_in_role_stats_but_not_headline(
             "average_rating": pytest.approx(4.0),
         }
     ]
-    assert len(body["rated_issues"]) == 1
-    assert body["rated_issues"][0]["effective_rating"] == pytest.approx(4.0)
-    assert body["rated_issues"][0]["roles"] == ["cover"]
+    assert body["rated_issues"] == []
 
 
 @pytest.mark.asyncio
@@ -760,3 +763,55 @@ async def test_role_stats_includes_rated_issue_count(
     # Headline summary uses headline-eligible roles only (writer)
     assert body["summary"]["ratings_count"] == 2
     assert body["summary"]["average_rating"] == pytest.approx(4.5)
+
+    # The rated-issues collection is headline-scoped (issue #3235): the
+    # cover-only issue is preserved in role stats but never listed, so the
+    # heading count, the distribution sample, and the rows always agree.
+    rated = body["rated_issues"]
+    assert len(rated) == 2
+    assert {row["issue_id"] for row in rated} == {issues[0].id, issues[1].id}
+    assert body["rating_distribution"] is not None
+    assert body["rating_distribution"]["sample_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_rated_collection_matches_headline_when_roles_are_mixed(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Mixed interior/cover credits keep heading, distribution, and rows in sync.
+
+    Regression coverage for issue #3235: a creator with one headline-eligible
+    rated issue and two cover-only rated issues reports "Rated (1)", a
+    single-sample distribution, and exactly one listed row.
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Mixed", issue_count=3, queue_position=1, read_through=3
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 77, "name": "Mixed Marie", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 77, "name": "Mixed Marie", "role": "cover"}]
+    )
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 77, "name": "Mixed Marie", "role": "cover"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=3.5, timestamp=D2)
+    await _rate(async_db, issues[2], rating=2.0, timestamp=D3)
+
+    response = await auth_client.get("/api/v1/creators/creator:77")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["ratings_count"] == 1
+    assert body["summary"]["average_rating"] == pytest.approx(4.0)
+    assert body["rating_distribution"] is not None
+    assert body["rating_distribution"]["sample_count"] == 1
+    rated = body["rated_issues"]
+    assert len(rated) == 1
+    assert rated[0]["issue_id"] == issues[0].id
+    assert rated[0]["effective_rating"] == pytest.approx(4.0)
+    assert body["next_cursor"] is None
