@@ -24,7 +24,7 @@ import argparse
 import asyncio
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 import sys
@@ -37,13 +37,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Import database and models
-from app.database import AsyncSessionLocal
-from app.models.event import Event
-from app.models.issue import Issue
-from app.models.thread import Thread
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
-from app.repositories.creator_summary import load_creator_summary_inputs
+from app.database import AsyncSessionLocal  # noqa: E402
+from app.models.event import Event  # noqa: E402
+from app.models.issue import Issue  # noqa: E402
+from app.models.thread import Thread  # noqa: E402
 
 # Constants
 USER_ID = 1
@@ -81,16 +78,15 @@ class AuditReport:
     classifications: dict[Literal["missing_rate_event", "unresolved_mapping", "edition_conflict", "no_source_rating", "other_cause"], int]
     by_thread: dict[int, dict[str, int]]
     by_creator: dict[str, dict[str, int]]
-    creator_impact: dict[str, int]
+    creator_impact: list[tuple[str, int]]
     issues_by_classification: dict[Literal["missing_rate_event", "unresolved_mapping", "edition_conflict", "no_source_rating", "other_cause"], list[ClassificationResult]]
     historical_ratings_found: int
     repairs_made: int
     timestamp: datetime = field(default_factory=datetime.now)
 
 
-async def get_read_without_rating_issues(db: AsyncSession, user_id: int) -> tuple[set[int], dict[int, str], dict[int, int], dict[int, int]]:
+async def get_read_without_rating_issues(db: AsyncSession, user_id: int) -> tuple[set[int], dict[int, str], dict[int, str], dict[int, int]]:
     """Get all read issues without effective ratings for the user."""
-    
     # Get user's owned issues with their status
     owned_issues_result = await db.execute(
         select(Issue.id, Issue.status, Issue.thread_id, Issue.issue_number, Thread.title)
@@ -136,19 +132,18 @@ async def find_historical_ratings(db: AsyncSession, user_id: int) -> dict[int, f
     This looks for any historical rating data that was imported but may not have
     been properly converted to ComicPile rate events.
     """
-    
     # Look for historical ratings in external identity mappings
     # This might include ratings from LoCG or other historical sources
     historical_ratings_query = text("""
-        SELECT i.id as issue_id, jsonb_extract_path_text(e.metadata_json, 'rating') as rating
+        SELECT i.id as issue_id, json_extract_path_text(e.metadata_json, 'rating') as rating
         FROM issues i
         JOIN threads t ON i.thread_id = t.id
         JOIN issue_external_identity_mappings iem ON i.id = iem.issue_id
-        JOIN external identities e ON iem.external_identity_id = e.id
+        JOIN external_identities e ON iem.external_identity_id = e.id
         WHERE t.user_id = :user_id
         AND iem.status = 'confirmed'
         AND e.provider = :provider
-        AND jsonb_extract_path_text(e.metadata_json, 'rating') IS NOT NULL
+        AND json_extract_path_text(e.metadata_json, 'rating') IS NOT NULL
         AND i.status = 'read'
     """)
     
@@ -175,7 +170,6 @@ async def classify_issue(
     db: AsyncSession
 ) -> ClassificationResult:
     """Classify a single read-without-rating issue."""
-    
     classification = ClassificationResult(
         issue_id=issue_id,
         thread_id=thread_id,
@@ -245,11 +239,10 @@ async def audit_read_without_rating(
     classify_only: bool = False
 ) -> AuditReport:
     """Perform complete audit of read-without-rating issues."""
-    
     print("🔍 Starting audit of read-without-rating issues...")
     
     # Get read-without-rating issues
-    read_unrated_issues, issue_numbers, thread_titles = await get_read_without_rating_issues(db, user_id)
+    read_unrated_issues, issue_numbers, thread_titles, issue_to_thread = await get_read_without_rating_issues(db, user_id)
     print(f"📊 Found {len(read_unrated_issues)} read-without-rating issues")
     
     # Find historical ratings
@@ -312,7 +305,7 @@ async def audit_read_without_rating(
         classifications=dict(classification_counts),
         by_thread=dict(by_thread),
         by_creator=dict(by_creator),
-        creator_impact=dict(top_creators),
+        creator_impact=top_creators,
         issues_by_classification=classifications_by_type,
         historical_ratings_found=len(historical_ratings),
         repairs_made=repairs_made
@@ -323,7 +316,6 @@ async def audit_read_without_rating(
 
 async def perform_safe_repairs(db: AsyncSession, repairable_issues: list[ClassificationResult]) -> int:
     """Perform safe repairs for issues with missing rate events."""
-    
     repairs_made = 0
     
     for classification in repairable_issues:
@@ -337,7 +329,7 @@ async def perform_safe_repairs(db: AsyncSession, repairable_issues: list[Classif
                 rating=classification.historical_rating_value,
                 issue_id=classification.issue_id,
                 thread_id=classification.thread_id,
-                timestamp=datetime.now(),  # Use current timestamp for repair events
+                timestamp=datetime.now(UTC),  # Use current UTC timestamp for repair events
                 issues_read=1  # Assume 1 issue was read
             )
             
@@ -355,7 +347,6 @@ async def perform_safe_repairs(db: AsyncSession, repairable_issues: list[Classif
 
 async def save_evidence(report: AuditReport) -> None:
     """Save audit evidence to JSON file."""
-    
     evidence = {
         "timestamp": report.timestamp.isoformat(),
         "total_read_unrated": report.total_read_unrated,
@@ -393,7 +384,6 @@ async def save_evidence(report: AuditReport) -> None:
 
 async def main() -> None:
     """Main audit script entry point."""
-    
     parser = argparse.ArgumentParser(description="Audit and reconcile read-without-rating issues")
     parser.add_argument("--user-id", type=int, default=1, help="User ID to audit")
     parser.add_argument("--dry-run", action="store_true", help="Run audit without repairs")

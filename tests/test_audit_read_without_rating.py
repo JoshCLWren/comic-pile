@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
-from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime, UTC
+
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread, User, ExternalIdentity, IssueExternalIdentityMapping
@@ -63,14 +60,14 @@ async def test_issues(db_session: AsyncSession, test_thread: Thread) -> list[Iss
             issue_number="1",
             position=1,
             status="read",
-            read_at=asyncio.get_event_loop().time()
+            read_at=datetime.now(UTC)
         ),
         Issue(
             thread_id=test_thread.id,
             issue_number="2", 
             position=2,
             status="read",
-            read_at=asyncio.get_event_loop().time()
+            read_at=datetime.now(UTC)
         ),
         Issue(
             thread_id=test_thread.id,
@@ -116,7 +113,7 @@ async def test_rate_event(db_session: AsyncSession, test_issues: list[Issue]) ->
         rating=4.0,
         issue_id=test_issues[1].id,
         thread_id=test_issues[1].thread_id,
-        timestamp=asyncio.get_event_loop().time()
+        timestamp=datetime.now(UTC)
     )
     db_session.add(event)
     await db_session.commit()
@@ -129,7 +126,7 @@ class TestGetReadWithoutRatingIssues:
     async def test_gets_read_unrated_issues(self, db_session: AsyncSession, test_user: User, test_issues: list[Issue]):
         """Test correctly identifies read issues without ratings."""
         # Should find 2 read issues (issues 0 and 1), but issue 1 has a rate event
-        read_unrated, issue_numbers, thread_titles = await get_read_without_rating_issues(db_session, test_user.id)
+        read_unrated, issue_numbers, thread_titles, issue_to_thread = await get_read_without_rating_issues(db_session, test_user.id)
         
         # Issue 0 should be read without rating
         assert test_issues[0].id in read_unrated
@@ -351,7 +348,7 @@ class TestIntegration:
     async def test_full_workflow_with_repairs(self, db_session: AsyncSession, test_user: User, test_issues: list[Issue], test_external_identity: ExternalIdentity):
         """Test complete workflow including repairs."""
         # Verify initial state: one read issue without rating
-        initial_read_unrated, _, _ = await get_read_without_rating_issues(db_session, test_user.id)
+        initial_read_unrated, _, _, _ = await get_read_without_rating_issues(db_session, test_user.id)
         assert len(initial_read_unrated) == 1
         
         # Perform audit with repairs
@@ -371,7 +368,7 @@ class TestIntegration:
         assert events[0].rating == 4.5
         
         # Verify the issue is no longer read-without-rating
-        final_read_unrated, _, _ = await get_read_without_rating_issues(db_session, test_user.id)
+        final_read_unrated, _, _, _ = await get_read_without_rating_issues(db_session, test_user.id)
         assert len(final_read_unrated) == 0
     
     async def test_idempotent_repairs(self, db_session: AsyncSession, test_user: User, test_issues: list[Issue], test_external_identity: ExternalIdentity):
@@ -443,7 +440,7 @@ class TestEdgeCases:
                 rating=4.0,
                 issue_id=issue.id,
                 thread_id=test_thread.id,
-                timestamp=asyncio.get_event_loop().time()
+                timestamp=datetime.now(UTC)
             )
             db_session.add(event)
             await db_session.commit()
