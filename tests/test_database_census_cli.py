@@ -23,6 +23,10 @@ def mock_database_url():
 
 @pytest.fixture
 def sample_census_data():
+
+
+@pytest.fixture
+def sample_census_data():
     """Sample census data for testing."""
     return {
         "metadata": {

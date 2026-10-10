@@ -2,22 +2,20 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional
-from uuid import UUID
+from typing import Any, Dict, List
 
-from sqlalchemy import func, select, text, inspect
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.engine.reflection import Inspector
 
 from app.models import (
     User, Thread, Issue, Event, Snapshot, ReadingSession,
-    ExternalIdentity, Tag, CustomCBL, ContinuityPlan, Dependency,
-    ReadingPlanMembership, Release, MetadataCorrection, PasswordResetToken,
-    RevokedToken, FailedLoginAttempt, UserPreferences, TasteSignal,
-    RecommendationContext, ReadingPlanReleaseSource, Delivery,
-    ContinuityRule, CBLReference, ReadingSession as ReadingSessionModel,
-    CatalogCommitReceipt, PerformanceMetric
+    ExternalIdentity, Tag, CustomCBLEntry, CustomCBLList, ContinuityPlan,
+    Dependency, ReadingPlanIssue, ReadingPlanDependency, ReadingPlanSource,
+    ReadingPlanSourcePlacement, Release, IssueMetadataCorrection,
+    PasswordResetToken, RevokedToken, FailedLoginAttempt, UserPreferences,
+    TasteSignal, RecommendationContext, ReadingPlanReleaseSource,
+    DeliveryRecord, ContinuityRule, CBLSource, CBLSourceList,
+    CBLSourceEntry, CatalogCommitReceipt, PerformanceMetric,
 )
 
 
@@ -177,12 +175,16 @@ class DatabaseCensusService:
             (ReadingSession, "reading_sessions"),
             (ExternalIdentity, "external_identities"),
             (Tag, "tags"),
-            (CustomCBL, "custom_cbls"),
+            (CustomCBLEntry, "custom_cbl_entries"),
+            (CustomCBLList, "custom_cbl_lists"),
             (ContinuityPlan, "continuity_plans"),
             (Dependency, "dependencies"),
-            (ReadingPlanMembership, "reading_plan_memberships"),
+            (ReadingPlanIssue, "reading_plan_issues"),
+            (ReadingPlanDependency, "reading_plan_dependencies"),
+            (ReadingPlanSource, "reading_plan_sources"),
+            (ReadingPlanSourcePlacement, "reading_plan_source_placements"),
             (Release, "releases"),
-            (MetadataCorrection, "metadata_corrections"),
+            (IssueMetadataCorrection, "issue_metadata_corrections"),
             (PasswordResetToken, "password_reset_tokens"),
             (RevokedToken, "revoked_tokens"),
             (FailedLoginAttempt, "failed_login_attempts"),
@@ -190,9 +192,11 @@ class DatabaseCensusService:
             (TasteSignal, "taste_signals"),
             (RecommendationContext, "recommendation_contexts"),
             (ReadingPlanReleaseSource, "reading_plan_release_sources"),
-            (Delivery, "deliveries"),
+            (DeliveryRecord, "delivery_records"),
             (ContinuityRule, "continuity_rules"),
-            (CBLReference, "cbl_references"),
+            (CBLSource, "cbl_sources"),
+            (CBLSourceList, "cbl_source_lists"),
+            (CBLSourceEntry, "cbl_source_entries"),
             (CatalogCommitReceipt, "catalog_commit_receipts"),
             (PerformanceMetric, "performance_metrics"),
         ]
