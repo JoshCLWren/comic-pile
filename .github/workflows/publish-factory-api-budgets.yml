@@ -1,0 +1,61 @@
+name: Publish Factory API Budgets
+
+on:
+  schedule:
+    # ComicPile owns its own scheduled automation. Rotisserie stays portable.
+    # Deliberately offset from the hourly :17 quota observation.
+    - cron: '37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-factory-api-budgets
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Disabled until dedicated observability App permissions and secrets exist.
+    # Do not generate hourly failure noise before the integration is provisioned.
+    if: github.ref == 'refs/heads/main' && vars.FACTORY_OBSERVABILITY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout pinned, tested Rotisserie publisher
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: 9e65bcb7754798c7a1df7a9d29bb80afe7461dda
+          path: rotisserie
+          ssh-key: ${{ secrets.ROTISSERIE_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Require dedicated GitHub App credentials
+        env:
+          APP_ID: ${{ secrets.FACTORY_OBSERVABILITY_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.FACTORY_OBSERVABILITY_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" ]]; then
+            echo "::error::FACTORY_OBSERVABILITY_APP_ID and FACTORY_OBSERVABILITY_APP_PRIVATE_KEY must be configured."
+            exit 1
+          fi
+
+      - name: Mint short-lived installation token
+        uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ secrets.FACTORY_OBSERVABILITY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_OBSERVABILITY_APP_PRIVATE_KEY }}
+          owner: JoshCLWren
+          repositories: |
+            comic-pile
+            JoshCLWren.github.io
+          permission-actions: read
+          permission-contents: write
+
+      - name: Aggregate private observations and publish allowlisted JSON
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PYTHONPATH: ${{ github.workspace }}/rotisserie
+        run: python3 -m scripts.sync_factory_quota
