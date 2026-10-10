@@ -104,9 +104,7 @@ async def _seed_source(
             thread_id=thread.id,
             external_identity_id=identity.id,
             enabled=enabled,
-        )
-    )
-    await db.commit()
+        ))
     return thread
 
 

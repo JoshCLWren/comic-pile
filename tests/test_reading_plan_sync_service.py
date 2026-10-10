@@ -191,7 +191,6 @@ async def _single_source_fixture(
     source = await _subscribe(
         db, plan=plan, thread=thread, identity=identity
     )
-    await db.commit()
     return user, thread, source
 
 
