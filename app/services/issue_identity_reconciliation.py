@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import cast
+import re
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -542,6 +543,41 @@ async def get_identity_report(
     )
 
 
+def _normalize_title_number(value: str) -> str:
+    """Normalize a series title or issue number for fallback matching."""
+    return re.sub(r"\s+", " ", value.strip().casefold())
+
+
+async def _owned_issues_by_title_number(
+    db: AsyncSession,
+    *,
+    user_id: int,
+) -> dict[tuple[str, str], list[dict[str, object]]]:
+    """Index user-owned issues by normalized (series title, issue number).
+
+    Built once per CBL resolution and consulted only for entries whose
+    ComicVine ID has no owned mapping. Normalization (casefold + whitespace
+    collapse) happens in Python because SQL lower() does neither reliably.
+    """
+    result = await db.execute(
+        select(Issue.id, Issue.status, Issue.read_at, Thread.title, Issue.issue_number)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.user_id == user_id)
+    )
+    index: dict[tuple[str, str], list[dict[str, object]]] = {}
+    for row in result.all():
+        key = (
+            _normalize_title_number(str(row[3] or "")),
+            _normalize_title_number(str(row[4] or "")),
+        )
+        if not key[0] or not key[1]:
+            continue
+        index.setdefault(key, []).append(
+            {"id": int(row[0]), "status": row[1], "read_at": row[2]}
+        )
+    return index
+
+
 async def resolve_cbl_entries_to_canonical(
     db: AsyncSession,
     *,
@@ -556,7 +592,10 @@ async def resolve_cbl_entries_to_canonical(
     When a ComicVine issue ID is available and confirmed on any user-owned
     Issue, the canonical Issue for that physical comic is returned. Title +
     issue_number alone is never treated as identity when ComicVine evidence
-    disagrees.
+    disagrees. When ComicVine evidence is absent (no owned mapping for the
+    entry's ComicVine ID), a single exact title + issue number match against
+    user-owned issues is reused instead of declaring the entry missing;
+    multiple matches are reported ambiguous rather than merged.
 
     Args:
         db: Async database session.
@@ -567,6 +606,9 @@ async def resolve_cbl_entries_to_canonical(
         One resolved entry per input, with canonical resolution status.
     """
     results: list[CBLCanonicalEntry] = []
+    # Lazily built on first fallback need: index of owned issues by
+    # normalized (series title, issue number).
+    title_number_index: dict[tuple[str, str], list[dict[str, object]]] | None = None
     for entry in cbl_entries:
         position = int(entry.get("position") or 0)
         series_name = str(entry.get("series_name") or "")
@@ -601,6 +643,58 @@ async def resolve_cbl_entries_to_canonical(
                 )
                 continue
             if resolution.reason == "no_owned_issue":
+                # No owned ComicVine mapping: the owner may still hold the
+                # physical comic without a mapping. Fall back to title +
+                # issue number before declaring the entry missing.
+                if title_number_index is None:
+                    title_number_index = await _owned_issues_by_title_number(
+                        db, user_id=user_id
+                    )
+                fallback_matches = title_number_index.get(
+                    (
+                        _normalize_title_number(series_name),
+                        _normalize_title_number(issue_number),
+                    ),
+                    [],
+                )
+                if len(fallback_matches) == 1:
+                    match = fallback_matches[0]
+                    match_read_at = match["read_at"]
+                    results.append(
+                        CBLCanonicalEntry(
+                            cbl_position=position,
+                            cbl_series_name=series_name,
+                            cbl_issue_number=issue_number,
+                            comicvine_issue_id=cvid_str,
+                            resolved_issue_id=int(match["id"]),
+                            canonical_issue_id=int(match["id"]),
+                            resolution_status="resolved_via_title_number_fallback",
+                            is_duplicate_identity=False,
+                            read_status=str(match["status"])
+                            if match["status"] is not None
+                            else None,
+                            read_at=match_read_at
+                            if isinstance(match_read_at, datetime)
+                            else None,
+                        )
+                    )
+                    continue
+                if len(fallback_matches) > 1:
+                    results.append(
+                        CBLCanonicalEntry(
+                            cbl_position=position,
+                            cbl_series_name=series_name,
+                            cbl_issue_number=issue_number,
+                            comicvine_issue_id=cvid_str,
+                            resolved_issue_id=None,
+                            canonical_issue_id=None,
+                            resolution_status="ambiguous_title_number_multiple_matches",
+                            is_duplicate_identity=False,
+                            read_status=None,
+                            read_at=None,
+                        )
+                    )
+                    continue
                 results.append(
                     CBLCanonicalEntry(
                         cbl_position=position,

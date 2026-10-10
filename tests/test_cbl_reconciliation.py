@@ -212,6 +212,9 @@ async def test_reconcile_surfaces_unresolved_and_extra_members(
         async_db,
         issues=[issue],
         omit_identity_at={1},
+        # A different series name keeps the title+number fallback from
+        # reusing the owned issue, so the entry stays genuinely unresolved.
+        series_names={1: "Unowned Series"},
     )
 
     report = await reconcile_cbl_source_list(

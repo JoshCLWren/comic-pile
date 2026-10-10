@@ -367,6 +367,7 @@ async def reconcile_cbl_source_list(
             unresolved_count += 1
         if canon.resolution_status in (
             "ambiguous_no_comicvine_id",
+            "ambiguous_title_number_multiple_matches",
             "comicvine_identity_not_known",
             "resolved_via_comicvine_canonical_ambiguous",
         ):

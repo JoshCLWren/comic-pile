@@ -14,6 +14,9 @@ import {
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
   switch (entry.adoption_decision) {
     case 'included_existing':
+      if (entry.resolution_status === 'resolved_via_title_number_fallback') {
+        return 'Already in ComicPile · matched by title'
+      }
       return entry.read_status === 'read' ? 'Already in ComicPile · read' : 'Already in ComicPile'
     case 'would_create_missing':
       return 'Missing · will be added'
