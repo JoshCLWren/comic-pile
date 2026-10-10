@@ -204,8 +204,8 @@ describe('TagEditor', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/Unable to load tags/)
   })
 
-  it('reports a failed assignment instead of closing silently', async () => {
-    assignTagMock.mockRejectedValue(new Error('nope'))
+  it('reports a failed removal instead of closing silently', async () => {
+    unassignTagMock.mockRejectedValue(new Error('nope'))
 
     renderEditor(<TagEditor targetType="issue" targetId={11} targetLabel="B.P.R.D. #3" />)
 
@@ -214,4 +214,5 @@ describe('TagEditor', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not be saved/i)
   })
+
 })
