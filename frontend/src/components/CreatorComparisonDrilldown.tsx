@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import Modal from './Modal'
 import {
   useCreatorComparisonDrilldown,
@@ -44,6 +45,126 @@ export function isDrilldownMetricParam(
   return value != null && (DRILLDOWN_METRICS as readonly string[]).includes(value)
 }
 
+/** Optional scoping a drilled metric may need beyond the creator key. */
+export interface DrilldownMetricScope {
+  /** Rating-distribution bucket key (`"5"`, `"4.5"`, ...). */
+  bucket?: string
+  /** Creator role name. */
+  role?: string
+  /** Canonical series key the backend addresses (`thread:<id>`). */
+  series?: string
+  /** Display title for `series`, used only in the modal heading. */
+  seriesTitle?: string
+}
+
+/**
+ * Build the metric selection for one drilled metric, deriving its title.
+ *
+ * @param creatorKey - Canonical creator key the metric belongs to.
+ * @param metric - The drilled metric.
+ * @param scope - Optional bucket/role/series scoping the metric needs.
+ * @returns The complete selection the modal and query state share.
+ */
+export function drilldownSelection(
+  creatorKey: string,
+  metric: DrilldownMetricParam,
+  scope: DrilldownMetricScope = {},
+): MetricSelection {
+  return {
+    creatorKey,
+    metric,
+    bucket: scope.bucket,
+    role: scope.role,
+    series: scope.series,
+    title: drilldownMetricLabel(metric, scope),
+  }
+}
+
+/** Query-parameter keys that encode one open drilldown selection. */
+export const DRILLDOWN_PARAM_KEYS = {
+  creator: 'metric_creator',
+  metric: 'metric',
+  bucket: 'metric_bucket',
+  role: 'metric_role',
+  series: 'metric_series',
+} as const
+
+/**
+ * Write one selection's identity into a search-params object in place.
+ *
+ * Encoding the open metric in route state keeps refresh and browser Back
+ * truthful, which the issue requires for every drillable metric.
+ *
+ * @param params - Search params to mutate.
+ * @param selection - The selection being opened.
+ */
+export function writeDrilldownParams(params: URLSearchParams, selection: MetricSelection): void {
+  params.set(DRILLDOWN_PARAM_KEYS.metric, selection.metric)
+  params.set(DRILLDOWN_PARAM_KEYS.creator, selection.creatorKey)
+  if (selection.bucket) {
+    params.set(DRILLDOWN_PARAM_KEYS.bucket, selection.bucket)
+  } else {
+    params.delete(DRILLDOWN_PARAM_KEYS.bucket)
+  }
+  if (selection.role) {
+    params.set(DRILLDOWN_PARAM_KEYS.role, selection.role)
+  } else {
+    params.delete(DRILLDOWN_PARAM_KEYS.role)
+  }
+  if (selection.series) {
+    params.set(DRILLDOWN_PARAM_KEYS.series, selection.series)
+  } else {
+    params.delete(DRILLDOWN_PARAM_KEYS.series)
+  }
+}
+
+/**
+ * Remove every drilldown query parameter, leaving other page state intact.
+ *
+ * @param params - Search params to mutate.
+ */
+export function clearDrilldownParams(params: URLSearchParams): void {
+  params.delete(DRILLDOWN_PARAM_KEYS.metric)
+  params.delete(DRILLDOWN_PARAM_KEYS.creator)
+  params.delete(DRILLDOWN_PARAM_KEYS.bucket)
+  params.delete(DRILLDOWN_PARAM_KEYS.role)
+  params.delete(DRILLDOWN_PARAM_KEYS.series)
+}
+
+/**
+ * Rehydrate an open selection from route state, e.g. after a refresh or Back.
+ *
+ * Scoped metrics that lost their scope in the URL are rejected rather than
+ * opened with an undefined bucket/role/series, which the backend would reject.
+ *
+ * @param params - Current search params.
+ * @param seriesTitleFor - Resolves a canonical series key to its display title
+ *   so a restored selection keeps the same heading a click would have produced.
+ * @returns The decoded selection, or `null` when no valid metric is open.
+ */
+export function readDrilldownParams(
+  params: URLSearchParams,
+  seriesTitleFor: (seriesKey: string) => string | undefined = () => undefined,
+): MetricSelection | null {
+  const metric = params.get(DRILLDOWN_PARAM_KEYS.metric)
+  const creatorKey = params.get(DRILLDOWN_PARAM_KEYS.creator)
+  if (!isDrilldownMetricParam(metric) || !creatorKey) return null
+
+  const bucket = params.get(DRILLDOWN_PARAM_KEYS.bucket) ?? undefined
+  const role = params.get(DRILLDOWN_PARAM_KEYS.role) ?? undefined
+  const series = params.get(DRILLDOWN_PARAM_KEYS.series) ?? undefined
+  if (metric === 'distribution' && !bucket) return null
+  if (metric === 'role-average' && !role) return null
+  if (metric === 'series-average' && !series) return null
+
+  return drilldownSelection(creatorKey, metric, {
+    bucket,
+    role,
+    series,
+    seriesTitle: series ? seriesTitleFor(series) : undefined,
+  })
+}
+
 /**
  * Human-readable title for one drilled metric selection.
  *
@@ -85,6 +206,44 @@ export interface MetricSelection {
   role?: string
   series?: string
   title: string
+}
+
+interface MetricDrilldownTriggerProps {
+  selection: MetricSelection
+  onOpen: (selection: MetricSelection) => void
+  /** Class applied to the button; callers own the layout/typography role. */
+  className?: string
+  /** Accessible label overriding the button's own text content. */
+  label?: string
+  children: ReactNode
+}
+
+/**
+ * Interactive readout for one comparison metric (issue #3176).
+ *
+ * Every meaningful derived value on the comparison page is a real button so it
+ * is reachable by keyboard and announced as a control, while the visible
+ * treatment stays a plain numeric readout rather than a sea of links. The
+ * affordance is the shared dotted underline plus the canonical focus ring.
+ */
+export function MetricDrilldownTrigger({
+  selection,
+  onOpen,
+  className = '',
+  label,
+  children,
+}: MetricDrilldownTriggerProps) {
+  return (
+    <button
+      type="button"
+      data-testid="drilldown-trigger"
+      aria-label={label}
+      onClick={() => onOpen(selection)}
+      className={`min-h-11 min-w-0 cursor-pointer rounded-lg px-1 text-left underline decoration-dotted underline-offset-4 transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${className}`}
+    >
+      {children}
+    </button>
+  )
 }
 
 interface CreatorComparisonDrilldownModalProps {

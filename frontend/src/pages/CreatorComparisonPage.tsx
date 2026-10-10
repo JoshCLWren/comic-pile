@@ -4,6 +4,15 @@ import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
 import type { CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
 import Breadcrumbs from '../components/Breadcrumbs'
+import {
+  CreatorComparisonDrilldownModal,
+  MetricDrilldownTrigger,
+  clearDrilldownParams,
+  drilldownSelection,
+  readDrilldownParams,
+  writeDrilldownParams,
+  type MetricSelection,
+} from '../components/CreatorComparisonDrilldown'
 
 function RatingValue({ value, label }: { value: number; label: string }) {
   return (
@@ -28,25 +37,58 @@ function InsufficientDataBadge() {
   )
 }
 
-function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate }) {
+function SeriesLink({
+  aggregate,
+  creatorKey,
+  onOpenMetric,
+}: {
+  aggregate: CreatorComparisonSeriesAggregate
+  creatorKey: string
+  onOpenMetric: (selection: MetricSelection) => void
+}) {
+  const seriesKey = `thread:${aggregate.thread_id}`
   return (
-    <Link
-      to={`/thread/${aggregate.thread_id}`}
-      className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-    >
-      <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
-        {aggregate.thread_title}
-      </span>
-      <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-        <span>{aggregate.issue_count} {aggregate.issue_count === 1 ? 'issue' : 'issues'}</span>
-        <span>{aggregate.rated_issue_count} rated</span>
-        <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} />
-      </span>
-    </Link>
+    <div className="min-w-0">
+      <Link
+        to={`/thread/${aggregate.thread_id}`}
+        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+      >
+        <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+          {aggregate.thread_title}
+        </span>
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          <span>{aggregate.issue_count} {aggregate.issue_count === 1 ? 'issue' : 'issues'}</span>
+          <span>{aggregate.rated_issue_count} rated</span>
+          <RatingValue value={aggregate.average_rating} label={`Average ${aggregate.average_rating} out of 5`} />
+        </span>
+      </Link>
+      {/* The series count and average are their own evidence surface, so the
+          drill trigger sits beside the navigation link rather than inside it:
+          nesting a link inside a button would be unreachable by keyboard. */}
+      <MetricDrilldownTrigger
+        selection={drilldownSelection(creatorKey, 'series-average', {
+          series: seriesKey,
+          seriesTitle: aggregate.thread_title,
+        })}
+        onOpen={onOpenMetric}
+        label={`Explain ${aggregate.thread_title}: ${aggregate.issue_count} attributed, ${aggregate.rated_issue_count} rated, average ${aggregate.average_rating} out of 5`}
+        className="mt-1 text-xs font-bold"
+      >
+        Explain this series
+      </MetricDrilldownTrigger>
+    </div>
   )
 }
 
-function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
+function RoleStatRow({
+  stat,
+  creatorKey,
+  onOpenMetric,
+}: {
+  stat: CreatorComparisonRoleStat
+  creatorKey: string
+  onOpenMetric: (selection: MetricSelection) => void
+}) {
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <p className="truncate text-sm font-bold" title={stat.role} style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
@@ -59,11 +101,29 @@ function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
           ' · unrated'
         )}
       </p>
+      <MetricDrilldownTrigger
+        selection={drilldownSelection(creatorKey, 'role-average', { role: stat.role })}
+        onOpen={onOpenMetric}
+        label={`Explain ${stat.role} count and average: ${stat.issue_count} credited, ${stat.rated_issue_count} rated`}
+        className="mt-1 text-xs font-bold"
+      >
+        Explain this role
+      </MetricDrilldownTrigger>
     </li>
   )
 }
 
-function RatingDistributionBar({ distribution, totalCount }: { distribution: Record<string, number>; totalCount: number }) {
+function RatingDistributionBar({
+  distribution,
+  totalCount,
+  creatorKey,
+  onOpenMetric,
+}: {
+  distribution: Record<string, number>
+  totalCount: number
+  creatorKey: string
+  onOpenMetric: (selection: MetricSelection) => void
+}) {
   // ComicPile rates on a 1-5 scale with 0.5 increments; every bucket the API
   // can emit gets a row so half-star ratings are never silently dropped.
   //
@@ -117,6 +177,16 @@ function RatingDistributionBar({ distribution, totalCount }: { distribution: Rec
                 {`${count} · ${percentage.toFixed(1)}%`}
               </span>
             )}
+            {/* Every bucket is drillable, including an empty one: "why is this
+                bucket empty" is answerable from the same evidence contract. */}
+            <MetricDrilldownTrigger
+              selection={drilldownSelection(creatorKey, 'distribution', { bucket: rating })}
+              onOpen={onOpenMetric}
+              label={`Explain the ${rating}★ bucket: ${count} of ${total} rated issues`}
+              className="shrink-0 text-xs font-bold"
+            >
+              {isEmpty ? 'Why?' : 'Explain'}
+            </MetricDrilldownTrigger>
           </div>
         )
       })}
@@ -124,7 +194,13 @@ function RatingDistributionBar({ distribution, totalCount }: { distribution: Rec
   )
 }
 
-function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
+function ComparisonCard({
+  item,
+  onOpenMetric,
+}: {
+  item: CreatorComparisonItem
+  onOpenMetric: (selection: MetricSelection) => void
+}) {
   const totalRatings = item.ratings_count
   const hasRatings = totalRatings > 0
   const isValidKey = parseCreatorKey(item.canonical_creator_key) != null
@@ -164,9 +240,16 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
             Average rating
           </p>
           {hasRatings ? (
-<p className="text-3xl font-black leading-tight" style={{ color: 'var(--theme-personal-accent)' }} aria-label={`Average rating ${item.average_rating} out of 5 from ${item.ratings_count} ${item.ratings_count === 1 ? 'rating' : 'ratings'}`}>
-<RatingValue value={item.average_rating!} label={`Average ${item.average_rating} out of 5 from ${item.ratings_count} ${item.ratings_count === 1 ? 'rating' : 'ratings'}`} />
-            </p>
+            <MetricDrilldownTrigger
+              selection={drilldownSelection(item.canonical_creator_key, 'average')}
+              onOpen={onOpenMetric}
+              label={`Explain average rating ${item.average_rating} out of 5 from ${item.ratings_count} ratings`}
+              className="block w-full text-3xl font-black leading-tight"
+            >
+              <span style={{ color: 'var(--theme-personal-accent)' }}>
+                <RatingValue value={item.average_rating!} label={`Average ${item.average_rating} out of 5 from ${item.ratings_count} ${item.ratings_count === 1 ? 'rating' : 'ratings'}`} />
+              </span>
+            </MetricDrilldownTrigger>
           ) : (
             <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>No ratings yet</p>
           )}
@@ -177,9 +260,16 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
             Median rating
           </p>
           {item.median_rating != null ? (
-            <p className="text-3xl font-black leading-tight" style={{ color: 'var(--theme-personal-accent)' }} aria-label={`Median rating ${item.median_rating} out of 5`}>
-              <RatingValue value={item.median_rating} label={`Median ${item.median_rating} out of 5`} />
-            </p>
+            <MetricDrilldownTrigger
+              selection={drilldownSelection(item.canonical_creator_key, 'median')}
+              onOpen={onOpenMetric}
+              label={`Explain median rating ${item.median_rating} out of 5`}
+              className="block w-full text-3xl font-black leading-tight"
+            >
+              <span style={{ color: 'var(--theme-personal-accent)' }}>
+                <RatingValue value={item.median_rating} label={`Median ${item.median_rating} out of 5`} />
+              </span>
+            </MetricDrilldownTrigger>
           ) : (
             <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>{hasRatings ? 'N/A' : 'No ratings yet'}</p>
           )}
@@ -189,34 +279,60 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Rated issues
           </p>
-          <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.ratings_count}</p>
+          <MetricDrilldownTrigger
+            selection={drilldownSelection(item.canonical_creator_key, 'rated-count')}
+            onOpen={onOpenMetric}
+            label={`Explain the rated issue count: ${item.ratings_count}`}
+            className="text-lg font-bold"
+          >
+            <span style={{ color: 'var(--theme-text-primary)' }}>{item.ratings_count}</span>
+          </MetricDrilldownTrigger>
         </div>
 
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             5★ rate
           </p>
-          {item.top_rating_rate != null ? (
-            <p className="text-lg font-bold" style={{ color: 'var(--theme-personal-accent)' }}>
-              {(item.top_rating_rate * 100).toFixed(1)}%
-            </p>
-          ) : (
-            <p className="text-lg font-bold" style={{ color: 'var(--theme-text-muted)' }}>{hasRatings ? '0%' : 'N/A'}</p>
-          )}
+          <MetricDrilldownTrigger
+            selection={drilldownSelection(item.canonical_creator_key, '5-star-rate')}
+            onOpen={onOpenMetric}
+            label={`Explain the 5 star rate${item.top_rating_rate != null ? ` of ${(item.top_rating_rate * 100).toFixed(1)}%` : ''}`}
+            className="text-lg font-bold"
+          >
+            <span style={{ color: item.top_rating_rate != null ? 'var(--theme-personal-accent)' : 'var(--theme-text-muted)' }}>
+              {item.top_rating_rate != null
+                ? `${(item.top_rating_rate * 100).toFixed(1)}%`
+                : hasRatings
+                  ? '0%'
+                  : 'N/A'}
+            </span>
+          </MetricDrilldownTrigger>
         </div>
 
         <div className="sm:col-span-2">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Rating distribution
           </p>
-          <RatingDistributionBar distribution={item.rating_distribution} totalCount={totalRatings} />
+          <RatingDistributionBar
+            distribution={item.rating_distribution}
+            totalCount={totalRatings}
+            creatorKey={item.canonical_creator_key}
+            onOpenMetric={onOpenMetric}
+          />
         </div>
 
         <div className="sm:col-span-2">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Upcoming in ComicPile
           </p>
-          <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.unread_upcoming_count}</p>
+          <MetricDrilldownTrigger
+            selection={drilldownSelection(item.canonical_creator_key, 'unread')}
+            onOpen={onOpenMetric}
+            label={`Explain the unread attributed count: ${item.unread_upcoming_count}`}
+            className="text-lg font-bold"
+          >
+            <span style={{ color: 'var(--theme-text-primary)' }}>{item.unread_upcoming_count}</span>
+          </MetricDrilldownTrigger>
         </div>
 
         {item.read_unrated_count > 0 && (
@@ -224,7 +340,14 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
             <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
               Read, not rated
             </p>
-            <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.read_unrated_count}</p>
+            <MetricDrilldownTrigger
+              selection={drilldownSelection(item.canonical_creator_key, 'read-without-rating')}
+              onOpen={onOpenMetric}
+              label={`Explain the ${item.read_unrated_count} read issues with no stored rating`}
+              className="text-lg font-bold"
+            >
+              <span style={{ color: 'var(--theme-text-primary)' }}>{item.read_unrated_count}</span>
+            </MetricDrilldownTrigger>
           </div>
         )}
       </div>
@@ -239,7 +362,12 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
           </p>
           <ul className="mt-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
             {item.role_stats.map((stat) => (
-              <RoleStatRow key={stat.role} stat={stat} />
+              <RoleStatRow
+                key={stat.role}
+                stat={stat}
+                creatorKey={item.canonical_creator_key}
+                onOpenMetric={onOpenMetric}
+              />
             ))}
           </ul>
         </div>
@@ -253,7 +381,11 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
           <ul className="mt-2 space-y-2">
             {item.strongest_series.map((aggregate) => (
               <li key={aggregate.thread_id}>
-                <SeriesLink aggregate={aggregate} />
+                <SeriesLink
+                  aggregate={aggregate}
+                  creatorKey={item.canonical_creator_key}
+                  onOpenMetric={onOpenMetric}
+                />
               </li>
             ))}
           </ul>
