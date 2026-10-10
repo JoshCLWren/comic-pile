@@ -31,6 +31,7 @@ Coverage semantics:
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -164,41 +165,47 @@ async def get_creator_summaries(
         for credit in credits:
             creator_issues[credit.external_id].add(issue_id)
             creator_names.setdefault(credit.external_id, credit.display_name)
-            for role in credit.roles:
-                creator_roles[credit.external_id].add(role)
+            creator_roles[credit.external_id].update(credit.roles)
             if any(role in HEADLINE_ROLES for role in credit.roles):
                 creator_headline_issues[credit.external_id].add(issue_id)
+
+    # Precompute per-creator statistics to avoid repeated large loops
+    creator_stats: dict[int, dict[str, Any]] = {
+        creator_id: {}
+        for creator_id in creator_issues
+    }
+    for creator_id, issue_ids in creator_issues.items():
+        headline_ratings = [
+            inputs.effective_ratings[issue_id]
+            for issue_id in issue_ids
+            if issue_id in creator_headline_issues[creator_id]
+            and issue_id in inputs.effective_ratings
+        ]
+        creator_stats[creator_id] = {
+            "ratings": headline_ratings,
+            "read_unrated": sum(1 for issue_id in issue_ids if issue_id in read_unrated_issue_ids),
+            "upcoming": sum(1 for issue_id in issue_ids if issue_id in unread_issue_ids),
+            "display_name": creator_names[creator_id],
+            "roles": sorted(creator_roles[creator_id]),
+        }
 
     summaries: dict[str, CreatorSummaryItem] = {}
     for key in requested_keys:
         creator_id = parse_creator_key(key)
-        if creator_id is None or creator_id not in creator_issues:
+        if creator_id is None or creator_id not in creator_stats:
             continue
-
-        headline_rated = [
-            inputs.effective_ratings[issue_id]
-            for issue_id in creator_issues[creator_id]
-            if issue_id in creator_headline_issues[creator_id]
-            and issue_id in inputs.effective_ratings
-        ]
-        ratings_count = len(headline_rated)
-        average_rating = (
-            round(sum(headline_rated) / ratings_count, 2) if ratings_count else None
-        )
-        read_unrated_count = sum(
-            1 for issue_id in creator_issues[creator_id] if issue_id in read_unrated_issue_ids
-        )
-        upcoming_count = sum(
-            1 for issue_id in creator_issues[creator_id] if issue_id in unread_issue_ids
-        )
+        data = creator_stats[creator_id]
+        ratings = data["ratings"]
+        ratings_count = len(ratings)
+        average_rating = round(sum(ratings) / ratings_count, 2) if ratings_count else None
         summaries[key] = CreatorSummaryItem(
             canonical_creator_key=key,
-            display_name=creator_names[creator_id],
-            normalized_roles=sorted(creator_roles[creator_id]),
+            display_name=data["display_name"],
+            normalized_roles=data["roles"],
             average_rating=average_rating,
             ratings_count=ratings_count,
-            read_unrated_count=read_unrated_count,
-            upcoming_count=upcoming_count,
+            read_unrated_count=data["read_unrated"],
+            upcoming_count=data["upcoming"],
         )
 
     return CreatorSummariesResponse(summaries=summaries, coverage=coverage)
