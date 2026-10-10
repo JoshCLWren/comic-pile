@@ -22,6 +22,9 @@ shift
 [[ "${1:-}" == --paginate ]] && shift || true
 [[ "${1:-}" == --slurp ]] && shift || true
 endpoint="$1"
+if [[ -n "${FACTORY_ENDPOINT_LOG:-}" ]]; then
+  printf '%s\\n' "$endpoint" >> "$FACTORY_ENDPOINT_LOG"
+fi
 case "$endpoint" in
   *'/issues?'*)
     printf '%s\\n' '[[{"number":10,"title":"Issue","body":"body","state":"open","created_at":"2026-08-16T00:00:00Z","updated_at":"2026-08-16T01:00:00Z","labels":[{"name":"factory:13"},{"name":"bug"}]},{"number":11,"title":"PR row","body":"body","state":"open","pull_request":{},"created_at":"2026-08-16T00:00:00Z","updated_at":"2026-08-16T01:00:00Z","labels":[{"name":"factory:13"}]}]]'
@@ -50,6 +53,7 @@ def _run(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
         {
             "FACTORY_REAL_GH": str(_fake_gh(tmp_path)),
             "GITHUB_REPOSITORY": "JoshCLWren/comic-pile",
+            "FACTORY_ENDPOINT_LOG": str(tmp_path / "factory-requests.txt"),
         }
     )
     return subprocess.run(
@@ -138,6 +142,31 @@ def test_rest_shim_lists_only_matching_issues(tmp_path: Path) -> None:
         "number",
     )
     assert [item["number"] for item in json.loads(result.stdout)] == [10]
+
+
+def test_issue_label_queries_use_server_side_rest_filtering(tmp_path: Path) -> None:
+    """Worker lease lookups must not page across the entire issue backlog."""
+    _run(
+        tmp_path,
+        "issue",
+        "list",
+        "--state",
+        "open",
+        "--label",
+        "factory:13",
+        "--label",
+        "bug",
+        "--json",
+        "number",
+    )
+    requested = (tmp_path / "factory-requests.txt").read_text()
+    assert "issues?state=open&per_page=100&labels=factory%3A13%2Cbug" in requested
+
+    (tmp_path / "factory-requests.txt").unlink()
+    _run(tmp_path, "issue", "list", "--state", "open", "--json", "number")
+    requested = (tmp_path / "factory-requests.txt").read_text()
+    assert "issues?state=open&per_page=100" in requested
+    assert "&labels=" not in requested
 
 
 def test_rest_shim_normalizes_pr_list_and_view(tmp_path: Path) -> None:
