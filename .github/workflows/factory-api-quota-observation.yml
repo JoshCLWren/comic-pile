@@ -29,7 +29,7 @@ jobs:
       - name: Preserve private observation
         uses: actions/upload-artifact@v4
         with:
-          name: factory-api-quota-${{ github.run_id }}
+          name: factory-api-quota
           path: factory-quota-observation.json
           retention-days: 2
           if-no-files-found: error
