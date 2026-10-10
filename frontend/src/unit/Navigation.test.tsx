@@ -334,12 +334,12 @@ test('hides Identity Inbox from mobile More menu when total is 0', async () => {
   })
 })
 
-test('keeps Identity Inbox visible on status query error', async () => {
+test('hides Identity Inbox on status query error', async () => {
   mockIdentityInboxList.mockRejectedValueOnce(new Error('network error'))
   renderWithAuth()
 
   await waitFor(() => {
     const desktopNav = screen.getByRole('navigation', { name: /desktop navigation/i })
-    expect(within(desktopNav).getByRole('link', { name: /identity inbox page/i })).toBeInTheDocument()
+    expect(within(desktopNav).queryByRole('link', { name: /identity inbox page/i })).not.toBeInTheDocument()
   })
 })
