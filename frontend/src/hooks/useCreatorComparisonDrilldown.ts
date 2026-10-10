@@ -78,10 +78,12 @@ export function useCreatorComparisonDrilldown(
       : ['creators', 'drilldown', 'closed'],
     queryFn: ({ pageParam }: { pageParam?: string | null }) => {
       if (!selection) throw new Error('No drilldown selection')
+      // SAFETY: useInfiniteQuery starts at the null initialPageParam and only
+      // advances with page tokens, so the first page is always a null cursor.
       const params = {
         creator: selection.creatorKey,
         limit: DRILLDOWN_PAGE_SIZE,
-        cursor: pageParam,
+        cursor: pageParam ?? null,
       }
       switch (selection.metric) {
         case 'average':
@@ -105,6 +107,8 @@ export function useCreatorComparisonDrilldown(
           return api.getUnreadDrilldown(params)
       }
     },
+    // SAFETY: null is the intentional first pageParam; useInfiniteQuery types it
+    // as string after the first page, so the null literal is asserted here.
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: CreatorDrilldownData) => lastPage.next_cursor,
     enabled,

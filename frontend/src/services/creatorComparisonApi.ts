@@ -36,8 +36,15 @@ export interface CreatorSeriesAverageDrilldownParams extends CreatorDrilldownPar
   series: string
 }
 
-function drilldownQueryParams(params: CreatorDrilldownParams): Record<string, string | number> {
-  const queryParams: Record<string, string | number> = { creator: params.creator }
+/** Typed query-string contract for one paginated drilldown evidence page. */
+export interface CreatorDrilldownQueryParams {
+  creator: string
+  limit?: number
+  cursor?: string | null
+}
+
+function drilldownQueryParams(params: CreatorDrilldownParams): CreatorDrilldownQueryParams {
+  const queryParams: CreatorDrilldownQueryParams = { creator: params.creator }
   if (params.limit !== undefined) {
     queryParams.limit = params.limit
   }

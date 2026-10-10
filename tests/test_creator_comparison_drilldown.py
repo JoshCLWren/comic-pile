@@ -10,6 +10,7 @@ opaque cursor.
 """
 
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest
 from httpx import AsyncClient
@@ -150,11 +151,16 @@ async def _summary(
     auth_client: AsyncClient,
     *,
     keys: str = "creator:1,creator:2",
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Fetch the batch comparison summary for reconciliation assertions."""
     response = await auth_client.get(f"/api/v1/creators/compare?keys={keys}")
     assert response.status_code == 200
     return response.json()
+
+
+def _json(response: object) -> dict[str, Any]:
+    """Coerce an API response body to a typed dict for subscripted assertions."""
+    return cast("dict[str, Any]", response)
 
 
 @pytest.mark.asyncio
@@ -170,7 +176,7 @@ async def test_average_drilldown_reconciles_with_summary(
     response = await auth_client.get("/api/v1/creators/compare/average?creator=creator:1")
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["metric"] == "average"
     assert body["creator_key"] == "creator:1"
     assert body["total_rated"] == summary["comparisons"]["creator:1"]["ratings_count"] == 3
@@ -201,7 +207,7 @@ async def test_median_drilldown_reconciles_with_summary_and_flags_middle_observa
     response = await auth_client.get("/api/v1/creators/compare/median?creator=creator:1")
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["metric"] == "median"
     assert body["ratings_count"] == 3
     assert body["median_rating"] == summary["comparisons"]["creator:1"]["median_rating"] == 4.0
@@ -238,7 +244,7 @@ async def test_median_drilldown_even_sample_names_both_middle_observations(
     response = await auth_client.get("/api/v1/creators/compare/median?creator=creator:1")
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["ratings_count"] == 4
     assert body["median_rating"] == pytest.approx(3.0)
     assert [row["rating"] for row in body["sorted_ratings"]] == [5.0, 4.0, 2.0, 1.0]
@@ -260,7 +266,7 @@ async def test_five_star_rate_drilldown_reconciles_with_summary(
     response = await auth_client.get("/api/v1/creators/compare/5-star-rate?creator=creator:1")
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["metric"] == "5-star-rate"
     assert body["top_count"] == 1
     assert body["rated_count"] == 3
@@ -291,7 +297,7 @@ async def test_distribution_bucket_drilldown_reconciles_with_summary(
     )
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["metric"] == "distribution"
     assert body["bucket"] == "4"
     summary_distribution = summary["comparisons"]["creator:1"]["rating_distribution"]
@@ -320,7 +326,7 @@ async def test_read_without_rating_drilldown_reconciles_with_summary(
     )
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["metric"] == "read-without-rating"
     assert body["count"] == summary["comparisons"]["creator:1"]["read_unrated_count"] == 1
     assert body["total_count"] == 1
@@ -348,7 +354,7 @@ async def test_unread_drilldown_reconciles_with_summary(
     response = await auth_client.get("/api/v1/creators/compare/unread?creator=creator:1")
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["metric"] == "unread"
     assert (
         body["count"]
@@ -389,7 +395,7 @@ async def test_role_average_drilldown_reconciles_with_summary(
     )
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["metric"] == "role-average"
     assert body["role"] == "colorist"
     summary_role = next(
@@ -425,7 +431,7 @@ async def test_series_average_drilldown_reconciles_with_summary(
     )
 
     assert response.status_code == 200
-    body = response.json()
+    body = _json(response)
     assert body["metric"] == "series-average"
     assert body["thread_id"] == thread_a.id
     assert body["thread_title"] == "Team Book"

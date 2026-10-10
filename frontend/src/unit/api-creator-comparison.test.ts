@@ -35,7 +35,17 @@ describe('creatorComparisonApi', () => {
     })
   })
 
-  it('exposes a single read method so comparison cannot persist', () => {
-    expect(Object.keys(comparisonApi)).toEqual(['getComparison'])
+  it('exposes only read methods so comparison cannot persist', () => {
+    expect(Object.keys(comparisonApi)).toEqual([
+      'getComparison',
+      'getAverageDrilldown',
+      'getMedianDrilldown',
+      'getDistributionDrilldown',
+      'getFiveStarRateDrilldown',
+      'getRoleAverageDrilldown',
+      'getSeriesAverageDrilldown',
+      'getReadWithoutRatingDrilldown',
+      'getUnreadDrilldown',
+    ])
   })
 })
