@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useState } from 'react'
 import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
@@ -6,6 +7,10 @@ import { CrossoverTags } from '../../components/CrossoverTags'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
+import QueueMappingHealthIndicator from './QueueMappingHealthIndicator'
+import ComicVineSearchDialog from '../../components/ComicVineSearchDialog'
+import { queryClient } from '../../query/queryClient'
+import { queryKeys } from '../../query/queryKeys'
 
 interface QueueThreadCardProps {
   thread: ThreadListItem
@@ -101,8 +106,17 @@ export default function QueueThreadCard({
     onCardClick()
   }
 
+  const [repairOpen, setRepairOpen] = useState(false)
+
+  const handleRepairConfirmed = () => {
+    setRepairOpen(false)
+    // Invalidate queue so mapping indicator updates without hard reload
+    queryClient.invalidateQueries({ queryKey: queryKeys.queue.list() })
+  }
+
   return (
-    <div
+    <>
+      <div
       data-testid="queue-thread-item"
       className={`queue-thread-card group relative flex flex-col gap-3 px-3 py-3 @2xl:flex-row @2xl:items-center @2xl:gap-4 @2xl:px-4 @2xl:py-3.5 cursor-pointer transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset`}
       role="link"
@@ -160,22 +174,10 @@ export default function QueueThreadCard({
               {thread.format}
             </span>
             {thread.comicvine_mapping != null && (
-              <span
-                data-testid="queue-thread-mapping-status"
-                className="ml-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-stone-800/50 border border-stone-400/30 text-stone-300"
-              >
-                {thread.comicvine_mapping.confirmed_issue_count > 0 ? (
-                  <>
-                    <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    Linked
-                  </>
-                ) : (
-                  <>
-                    <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-stone-400" />
-                    Not linked
-                  </>
-                )}
-              </span>
+              <QueueMappingHealthIndicator
+                mapping={thread.comicvine_mapping}
+                onMapSeries={() => setRepairOpen(true)}
+              />
             )}
             {thread.issues_remaining !== null && (
               <span className="text-sm font-medium text-[var(--theme-text-muted)]">
@@ -261,5 +263,15 @@ export default function QueueThreadCard({
         />
       </div>
     </div>
+    <ComicVineSearchDialog
+        isOpen={repairOpen}
+        issueId={null}
+        threadTitle={thread.title}
+        issueNumber={null}
+        mode="replace"
+        onClose={() => setRepairOpen(false)}
+        onConfirmed={handleRepairConfirmed}
+      />
+    </>
   )
 }
