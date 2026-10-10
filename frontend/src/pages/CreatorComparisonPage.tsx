@@ -64,16 +64,34 @@ function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
 }
 
 function RatingDistributionBar({ distribution, totalCount }: { distribution: Record<string, number>; totalCount: number }) {
-  // ComicPile rates on a 1-5 scale with 0.5 increments; every bucket the API
-  // can emit gets a row so half-star ratings are never silently dropped.
+  // ComicPile rates on a 1-5 scale with 0.5 increments. Only buckets with at
+  // least one rating render (issue #3329): zero-count steps are noise that
+  // buries the actual distribution on low-data cards. Buckets sort
+  // numerically descending so the strongest ratings read first.
   //
   // Bar length uses a shared 0-100% scale: bucket_count / total_ratings.
   // This makes bars directly comparable across creators with very different
-  // sample sizes. Each non-empty bucket exposes both raw count and
+  // sample sizes. Each rendered bucket exposes both raw count and
   // percentage, while screen readers receive bucket, count, percentage and
   // the region communicates the creator's sample size.
-  const ratings = ['5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1']
   const total = totalCount > 0 ? totalCount : 0
+  const buckets = Object.entries(distribution)
+    .map(([rating, count]) => ({ rating, count }))
+    .filter(({ rating, count }) => count > 0 && Number.isFinite(Number(rating)))
+    .sort((a, b) => Number(b.rating) - Number(a.rating))
+
+  if (total === 0 || buckets.length === 0) {
+    return (
+      <p
+        data-testid="rating-distribution"
+        aria-label={`Rating distribution across ${total} rated issue${total === 1 ? '' : 's'}`}
+        className="text-xs"
+        style={{ color: 'var(--theme-text-muted)' }}
+      >
+        No ratings yet
+      </p>
+    )
+  }
 
   return (
     <div
@@ -82,21 +100,15 @@ function RatingDistributionBar({ distribution, totalCount }: { distribution: Rec
       data-testid="rating-distribution"
       className="space-y-1"
     >
-      {ratings.map((rating) => {
-        const count = distribution[rating] ?? 0
+      {buckets.map(({ rating, count }) => {
         const percentage = total > 0 ? (count / total) * 100 : 0
-        const isEmpty = count === 0
         return (
           <div
             key={rating}
             role="listitem"
             className="flex items-center gap-2 text-xs"
             style={{ color: 'var(--theme-text-muted)' }}
-            aria-label={
-              isEmpty
-                ? `${rating}★: 0 ratings (0.0%)`
-                : `${rating}★: ${count} rating${count === 1 ? '' : 's'}, ${percentage.toFixed(1)}%`
-            }
+            aria-label={`${rating}★: ${count} rating${count === 1 ? '' : 's'}, ${percentage.toFixed(1)}%`}
           >
             <span className="w-6 text-right font-medium">{rating}★</span>
             <div className="flex-1 h-2 rounded bg-[var(--theme-border)] overflow-hidden">
@@ -109,14 +121,12 @@ function RatingDistributionBar({ distribution, totalCount }: { distribution: Rec
                 }}
               />
             </div>
-            {!isEmpty && (
-              <span
-                className="w-20 text-right"
-                aria-hidden="true"
-              >
-                {`${count} · ${percentage.toFixed(1)}%`}
-              </span>
-            )}
+            <span
+              className="w-20 text-right"
+              aria-hidden="true"
+            >
+              {`${count} · ${percentage.toFixed(1)}%`}
+            </span>
           </div>
         )
       })}
