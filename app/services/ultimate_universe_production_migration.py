@@ -35,7 +35,7 @@ from app.schemas.continuity_plan import (
     ConvergenceGateTarget,
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
-from app.services.continuity_graph import issue_readiness, load_snapshot
+from app.services.continuity_graph import load_snapshot
 from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
@@ -90,8 +90,6 @@ PRODUCTION_ULTIMATE_UNIVERSE_SPEC = UltimateUniverseDryRunSpec(
 )
 
 
-
-
 def _resolved_entries(report_entries: tuple[dict[str, object], ...]) -> list[dict[str, object]]:
     return sorted(
         [
@@ -136,7 +134,7 @@ def _build_plan(
     source_path: str,
     bridges: list[dict[str, int]],
 ) -> tuple[list[ContinuityPlanLane], list[ContinuityPlanNode]]:
-    """Build the exact strict plan payload proposed by the dry-run."""
+    """Build the informational source-order payload proposed by the dry-run."""
     bridge_source_by_target = {
         bridge["target_issue_id"]: bridge["source_issue_id"] for bridge in bridges
     }
@@ -200,14 +198,10 @@ def _planned_rules(
                 "target_type": "issue",
                 "target_id": bridge["target_issue_id"],
                 "satisfaction_type": "converged",
-                "convergence_targets": [
-                    {"type": "issue", "id": bridge["source_issue_id"]}
-                ],
+                "convergence_targets": [{"type": "issue", "id": bridge["source_issue_id"]}],
             }
         )
     return rules
-
-
 
 
 async def _factual_snapshot(
@@ -309,8 +303,7 @@ async def _factual_snapshot(
                 select(IssueExternalIdentityMapping, ExternalIdentity)
                 .join(
                     ExternalIdentity,
-                    ExternalIdentity.id
-                    == IssueExternalIdentityMapping.external_identity_id,
+                    ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
                 )
                 .where(IssueExternalIdentityMapping.issue_id.in_(ordered_issue_ids))
             )
@@ -387,9 +380,7 @@ async def build_ultimate_universe_dry_run(
         .all()
     )
     membership_issue_ids = {
-        membership.issue_id
-        for membership in memberships
-        if membership.issue_id is not None
+        membership.issue_id for membership in memberships if membership.issue_id is not None
     }
     ordered_memberships = [
         membership.id for membership in memberships if membership.sequence_order is not None
@@ -419,24 +410,16 @@ async def build_ultimate_universe_dry_run(
             "source reconciliation is not clean: "
             f"unresolved={report.unresolved_count}, ambiguous={report.ambiguous_count}"
         )
-    resolved_issue_ids = [
-        coerce_int(entry["resolved_issue_id"]) for entry in entries
-    ]
+    resolved_issue_ids = [coerce_int(entry["resolved_issue_id"]) for entry in entries]
     if len(resolved_issue_ids) != len(set(resolved_issue_ids)):
         errors.append("source positions do not resolve one-to-one to canonical issues")
     if set(resolved_issue_ids) != membership_issue_ids:
-        errors.append(
-            "dependency-group issue membership differs from reconciled source issue set"
-        )
+        errors.append("dependency-group issue membership differs from reconciled source issue set")
 
     overlapping_plans: list[dict[str, object]] = []
     issue_id_set = set(resolved_issue_ids)
     user_plans = list(
-        (
-            await db.execute(
-                select(ContinuityPlan).where(ContinuityPlan.user_id == spec.user_id)
-            )
-        )
+        (await db.execute(select(ContinuityPlan).where(ContinuityPlan.user_id == spec.user_id)))
         .scalars()
         .all()
     )
@@ -463,9 +446,7 @@ async def build_ultimate_universe_dry_run(
     source_dependencies = list(
         (
             await db.execute(
-                select(Dependency)
-                .where(Dependency.note.like(f"{prefix}%"))
-                .order_by(Dependency.id)
+                select(Dependency).where(Dependency.note.like(f"{prefix}%")).order_by(Dependency.id)
             )
         )
         .scalars()
@@ -538,16 +519,14 @@ async def build_ultimate_universe_dry_run(
     )
     temporary_rule_ids = {rule.id for rule in temporary_rules}
 
-    bridges = _derive_gap_bridges(entries)
+    # Historical CBL source order has no hard authoring authority after #2553.
+    # Import this completed legacy template as presentation, retaining genuine
+    # standalone prerequisites instead of inventing read-gap blockers.
+    bridges: list[dict[str, int]] = []
     source_path = report.source_path or source_list.source_path
     lanes, nodes = _build_plan(entries, source_path=source_path, bridges=bridges)
-    planned_rules = _planned_rules(nodes, bridges)
+    planned_rules: list[dict[str, Any]] = []
 
-    adjacency_edges = {
-        (int(rule["source_id"]), int(rule["target_id"]))
-        for rule in planned_rules
-        if rule["kind"] == "adjacent"
-    }
     existing_edge_rules = list(
         (
             await db.execute(
@@ -566,7 +545,7 @@ async def build_ultimate_universe_dry_run(
     reusable_rules: list[ContinuityRule] = []
     conflicting_rules: list[ContinuityRule] = []
     for rule in existing_edge_rules:
-        if (rule.source_id, rule.target_id) not in adjacency_edges:
+        if rule.source_id not in issue_id_set or rule.target_id not in issue_id_set:
             continue
         if rule.id in temporary_rule_ids:
             continue
@@ -659,6 +638,7 @@ async def build_ultimate_universe_dry_run(
             dep.id
             for dep in raw_rows
             if dep.id in source_dependency_ids
+            and not (dep.note or "").startswith("cbl-order:")
             and graph.issues.get(dep.source_issue_id) is not None
             and graph.issues[dep.source_issue_id].status != "read"
         ]
@@ -666,28 +646,21 @@ async def build_ultimate_universe_dry_run(
             dep.id
             for dep in raw_rows
             if dep.id not in source_dependency_ids
+            and not (dep.note or "").startswith("cbl-order:")
             and dep.id not in temporary_dependency_ids
             and graph.issues.get(dep.source_issue_id) is not None
             and graph.issues[dep.source_issue_id].status != "read"
         ]
-        remaining_continuity_blockers = [
-            blocker
-            for blocker in issue_readiness(next_issue_id, graph)
-            if blocker.rule_id not in temporary_rule_ids
-        ]
         planned_blockers = [
             source_id
             for source_id in planned_sources_by_target.get(next_issue_id, [])
-            if graph.issues.get(source_id) is not None
-            and graph.issues[source_id].status != "read"
+            if graph.issues.get(source_id) is not None and graph.issues[source_id].status != "read"
         ]
         if source_raw_blockers:
             source_protected_targets.add(next_issue_id)
         if planned_blockers:
             planned_direct_targets.add(next_issue_id)
-        future_blocked = bool(
-            other_raw_blockers or remaining_continuity_blockers or planned_blockers
-        )
+        future_blocked = bool(other_raw_blockers or planned_blockers)
         if future_blocked:
             future_blocked_ids.add(thread.id)
         if source_raw_blockers and not future_blocked:
@@ -700,9 +673,7 @@ async def build_ultimate_universe_dry_run(
                 "currently_blocked": thread.id in current_blocked_ids,
                 "current_source_dependency_blocker_ids": source_raw_blockers,
                 "future_other_dependency_blocker_ids": other_raw_blockers,
-                "future_existing_continuity_blocker_rule_ids": [
-                    blocker.rule_id for blocker in remaining_continuity_blockers
-                ],
+                "future_existing_continuity_blocker_rule_ids": [],
                 "future_planned_blocker_source_issue_ids": planned_blockers,
                 "simulated_future_blocked": future_blocked,
             }
@@ -722,7 +693,7 @@ async def build_ultimate_universe_dry_run(
 
     plan_payload = {
         "name": spec.plan_name,
-        "ordering_mode": "strict_sequential",
+        "ordering_mode": "informational",
         "lanes": [lane.model_dump() for lane in lanes],
         "nodes": [node.model_dump() for node in nodes],
     }
@@ -761,9 +732,7 @@ async def build_ultimate_universe_dry_run(
             }
             for dep in source_dependencies
         ],
-        "source_linked_continuity_rules": [
-            _rule_snapshot(rule) for rule in linked_source_rules
-        ],
+        "source_linked_continuity_rules": [_rule_snapshot(rule) for rule in linked_source_rules],
         "temporary_repair_dependencies": [
             {
                 "id": dep.id,
@@ -785,12 +754,10 @@ async def build_ultimate_universe_dry_run(
         "planned": {
             "plan": plan_payload,
             "rules": planned_rules,
-            "adjacent_rule_count": len(nodes) - 1 if nodes else 0,
+            "adjacent_rule_count": 0,
             "gap_bridge_count": len(bridges),
             "reused_standalone_rule_count": len(reusable_rules),
-            "expected_new_plan_rule_count": (
-                max(len(nodes) - 1, 0) - len(reusable_rules) + len(bridges)
-            ),
+            "expected_new_plan_rule_count": (0),
         },
         "runtime_behavior": {
             "affected_thread_ids": sorted(affected_thread_ids),
@@ -821,10 +788,7 @@ def _parse_datetime(value: object) -> datetime:
 
 def _achieve_node_issue_ids(snapshot: dict[str, Any]) -> list[int]:
     """Return the reviewed source-ordered canonical issue IDs for the cutover."""
-    return [
-        coerce_int(node["ref_id"])
-        for node in snapshot["planned"]["plan"]["nodes"]
-    ]
+    return [coerce_int(node["ref_id"]) for node in snapshot["planned"]["plan"]["nodes"]]
 
 
 def _snapshot_reusable_edges(snapshot: dict[str, Any]) -> set[tuple[int, int]]:
@@ -850,8 +814,7 @@ async def apply_ultimate_universe_migration(
     current = await build_ultimate_universe_dry_run(db, spec)
     if current["snapshot_token"] != snapshot["snapshot_token"]:
         raise MigrationInvariantError(
-            "live Ultimate Universe state changed since dry-run; "
-            "generate a new reviewed snapshot"
+            "live Ultimate Universe state changed since dry-run; generate a new reviewed snapshot"
         )
     if current["ok"] is not True:
         raise MigrationInvariantError(f"preflight failed: {current['errors']!r}")
@@ -860,9 +823,7 @@ async def apply_ultimate_universe_migration(
     issue_id_set = set(issue_ids)
 
     source_ids = [coerce_int(row["id"]) for row in snapshot["source_legacy_dependencies"]]
-    temporary_ids = [
-        coerce_int(row["id"]) for row in snapshot["temporary_repair_dependencies"]
-    ]
+    temporary_ids = [coerce_int(row["id"]) for row in snapshot["temporary_repair_dependencies"]]
 
     if source_ids:
         result = await db.execute(delete(Dependency).where(Dependency.id.in_(source_ids)))
@@ -875,6 +836,11 @@ async def apply_ultimate_universe_migration(
     await db.flush()
 
     if temporary_ids:
+        # Delete through the ORM before FK cascade so loaded authoring objects
+        # are marked deleted rather than surviving as stale identity-map entries.
+        await db.execute(
+            delete(ContinuityRule).where(ContinuityRule.legacy_dependency_id.in_(temporary_ids))
+        )
         result = await db.execute(delete(Dependency).where(Dependency.id.in_(temporary_ids)))
         deleted_count = getattr(result, "rowcount", None)
         if deleted_count != len(temporary_ids):
@@ -902,7 +868,9 @@ async def apply_ultimate_universe_migration(
                 f"{surviving_temporary_rules}"
             )
         for row in snapshot.get("temporary_repair_rules", []):
-            rule = await db.get(ContinuityRule, coerce_int(row["id"]))
+            rule = await db.scalar(
+                select(ContinuityRule).where(ContinuityRule.id == coerce_int(row["id"]))
+            )
             if rule is not None:
                 await db.delete(rule)
         await db.flush()
@@ -916,7 +884,7 @@ async def apply_ultimate_universe_migration(
     plan = ContinuityPlan(
         user_id=spec.user_id,
         name=str(plan_payload["name"]),
-        ordering_mode="strict_sequential",
+        ordering_mode="informational",
         lanes_json=[lane.model_dump() for lane in lanes],
         nodes_json=[node.model_dump() for node in nodes],
     )
@@ -928,7 +896,7 @@ async def apply_ultimate_universe_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential",
+        ordering_mode="informational",
     )
     await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
@@ -965,9 +933,7 @@ async def apply_ultimate_universe_migration(
         not in reusable_edges
     ]
     expected_keys = {
-        json.dumps(
-            descriptor, sort_keys=True, separators=(",", ":"), default=_json_value
-        )
+        json.dumps(descriptor, sort_keys=True, separators=(",", ":"), default=_json_value)
         for descriptor in expected_descriptors
     }
     actual_keys = {
@@ -977,9 +943,7 @@ async def apply_ultimate_universe_migration(
         for rule in plan_rules
     }
     if expected_keys != actual_keys:
-        raise MigrationInvariantError(
-            "compiled rule set diverges from the reviewed snapshot"
-        )
+        raise MigrationInvariantError("compiled rule set diverges from the reviewed snapshot")
     if len(plan_rules) != len(expected_descriptors):
         raise MigrationInvariantError(
             "plan-owned rule count diverges from the reviewed snapshot semantics"
@@ -1001,9 +965,7 @@ async def apply_ultimate_universe_migration(
         .limit(1)
     )
     if ordered_membership_count is not None:
-        raise MigrationInvariantError(
-            "dependency group gained ordered memberships during cutover"
-        )
+        raise MigrationInvariantError("dependency group gained ordered memberships during cutover")
 
     for row in snapshot["reused_standalone_rules"]:
         rule = await db.get(ContinuityRule, coerce_int(row["id"]))
@@ -1016,8 +978,7 @@ async def apply_ultimate_universe_migration(
     remaining_authority = list(
         (
             await db.execute(
-                select(Dependency.id)
-                .where(
+                select(Dependency.id).where(
                     or_(
                         Dependency.note.like(f"{prefix}%"),
                         Dependency.note == TEMPORARY_REPAIR_NOTE,
@@ -1040,19 +1001,14 @@ async def apply_ultimate_universe_migration(
     before_factual = snapshot["factual"]
     for key in ("issue_state_hash", "thread_state_hash", "event_state_hash", "identity_state_hash"):
         if factual[key] != before_factual[key]:
-            raise MigrationInvariantError(
-                f"cutover changed protected factual state: {key}"
-            )
+            raise MigrationInvariantError(f"cutover changed protected factual state: {key}")
 
     affected_thread_ids = {
-        coerce_int(thread_id)
-        for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
+        coerce_int(thread_id) for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
     }
     roll_ids = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
     affected_eligible = sorted(roll_ids & affected_thread_ids)
-    preflight_eligible = snapshot["runtime_behavior"][
-        "current_affected_roll_eligible_thread_ids"
-    ]
+    preflight_eligible = snapshot["runtime_behavior"]["current_affected_roll_eligible_thread_ids"]
     if affected_eligible != preflight_eligible:
         raise MigrationInvariantError(
             "affected Roll-eligible thread set changed after cutover: "
@@ -1113,13 +1069,10 @@ async def rollback_ultimate_universe_migration(
         )
     ).scalar_one_or_none()
     if plan is None:
-        raise MigrationInvariantError(
-            f"migrated Reading Plan {plan_id} no longer exists"
-        )
+        raise MigrationInvariantError(f"migrated Reading Plan {plan_id} no longer exists")
     if _plan_fingerprint(plan) != expected_fingerprint:
         raise MigrationInvariantError(
-            "migrated Reading Plan was edited after cutover; "
-            "refusing automatic rollback"
+            "migrated Reading Plan was edited after cutover; refusing automatic rollback"
         )
 
     marker = f"continuity-plan:{plan.id}"
@@ -1139,13 +1092,11 @@ async def rollback_ultimate_universe_migration(
     )
     if len(plan_rules) != expected_rule_count:
         raise MigrationInvariantError(
-            "plan-owned compiled rule set changed after cutover; "
-            "refusing automatic rollback"
+            "plan-owned compiled rule set changed after cutover; refusing automatic rollback"
         )
     if _rules_fingerprint(plan_rules) != expected_rule_fingerprint:
         raise MigrationInvariantError(
-            "plan-owned compiled rule set changed after cutover; "
-            "refusing automatic rollback"
+            "plan-owned compiled rule set changed after cutover; refusing automatic rollback"
         )
 
     for row in snapshot.get("reused_standalone_rules", []):
@@ -1165,6 +1116,25 @@ async def rollback_ultimate_universe_migration(
                 "refusing automatic rollback"
             )
 
+    from app.repositories.canonical_constraint_repository import legacy_restore_conflicts
+
+    restore_rows = [
+        *snapshot.get("source_legacy_dependencies", []),
+        *snapshot.get("temporary_repair_dependencies", []),
+    ]
+    conflicts = await legacy_restore_conflicts(
+        db,
+        plan.id,
+        [
+            (coerce_int(row["source_issue_id"]), coerce_int(row["target_issue_id"]))
+            for row in restore_rows
+        ],
+    )
+    if conflicts:
+        raise MigrationInvariantError(
+            "legacy dependency IDs/edges are no longer free; refusing automatic rollback"
+        )
+
     for rule in plan_rules:
         await db.delete(rule)
     await db.flush()
@@ -1182,12 +1152,14 @@ async def rollback_ultimate_universe_migration(
     )
     if remaining_plan_rule_ids:
         raise MigrationInvariantError(
-            "plan-owned rules survived rollback removal: "
-            f"{remaining_plan_rule_ids}"
+            f"plan-owned rules survived rollback removal: {remaining_plan_rule_ids}"
         )
 
     await db.delete(plan)
     await db.flush()
+    from app.services.canonical_constraints import synchronize_canonical_constraints
+
+    await synchronize_canonical_constraints(db, spec.user_id)
 
     source_rows = snapshot.get("source_legacy_dependencies")
     temporary_rows = snapshot.get("temporary_repair_dependencies")
@@ -1209,9 +1181,7 @@ async def rollback_ultimate_universe_migration(
     conflicting_dependencies = list(
         (
             await db.execute(
-                select(Dependency).where(
-                    or_(Dependency.id.in_(dependency_ids), *edge_filters)
-                )
+                select(Dependency).where(or_(Dependency.id.in_(dependency_ids), *edge_filters))
             )
         )
         .scalars()
@@ -1219,8 +1189,7 @@ async def rollback_ultimate_universe_migration(
     )
     if conflicting_dependencies:
         raise MigrationInvariantError(
-            "legacy dependency IDs/edges are no longer free; "
-            "refusing automatic rollback"
+            "legacy dependency IDs/edges are no longer free; refusing automatic rollback"
         )
 
     for row in source_rows:
@@ -1399,18 +1368,13 @@ async def rollback_ultimate_universe_migration(
     await db.flush()
 
     restored_dependency_ids = set(
-        (
-            await db.execute(
-                select(Dependency.id).where(Dependency.id.in_(dependency_ids))
-            )
-        )
+        (await db.execute(select(Dependency.id).where(Dependency.id.in_(dependency_ids))))
         .scalars()
         .all()
     )
     if restored_dependency_ids != dependency_ids:
         raise MigrationInvariantError(
-            "rollback failed to restore legacy dependencies: "
-            f"{sorted(restored_dependency_ids)}"
+            f"rollback failed to restore legacy dependencies: {sorted(restored_dependency_ids)}"
         )
 
     ordered_membership_count = await db.scalar(
@@ -1422,28 +1386,21 @@ async def rollback_ultimate_universe_migration(
         .limit(1)
     )
     if ordered_membership_count is not None:
-        raise MigrationInvariantError(
-            "dependency group gained ordered memberships during rollback"
-        )
+        raise MigrationInvariantError("dependency group gained ordered memberships during rollback")
 
     issue_ids = _achieve_node_issue_ids(snapshot)
     factual = await _factual_snapshot(db, spec=spec, ordered_issue_ids=issue_ids)
     before_factual = snapshot["factual"]
     for key in ("issue_state_hash", "thread_state_hash", "event_state_hash", "identity_state_hash"):
         if factual[key] != before_factual[key]:
-            raise MigrationInvariantError(
-                f"rollback changed protected factual state: {key}"
-            )
+            raise MigrationInvariantError(f"rollback changed protected factual state: {key}")
 
     affected_thread_ids = {
-        coerce_int(thread_id)
-        for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
+        coerce_int(thread_id) for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
     }
     roll_ids = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
     affected_eligible = sorted(roll_ids & affected_thread_ids)
-    preflight_eligible = snapshot["runtime_behavior"][
-        "current_affected_roll_eligible_thread_ids"
-    ]
+    preflight_eligible = snapshot["runtime_behavior"]["current_affected_roll_eligible_thread_ids"]
     if affected_eligible != preflight_eligible:
         raise MigrationInvariantError(
             "affected Roll-eligible thread set was not restored exactly: "

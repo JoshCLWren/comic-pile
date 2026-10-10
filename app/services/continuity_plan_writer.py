@@ -171,13 +171,11 @@ def _is_equivalent_reusable_item_read_rule(
 
     Equivalent standalone ``item_read`` rules may satisfy the same hard edge
     without being re-owned by the Reading Plan. Rules owned by another Reading
-    Plan remain conflicts so two plans cannot silently share execution ownership.
+    Plan may share the same canonical edge through separate normalized links.
     """
-    note = rule.note or ""
     return (
         requested_satisfaction_type == "item_read"
         and rule.satisfaction_type == "item_read"
-        and not note.startswith("continuity-plan:")
         and rule.checkpoint_issue_id is None
         and not rule.convergence_targets
     )
@@ -205,7 +203,8 @@ async def replace_compiled_rules(
     referenced upstream nodes are read.
 
     An equivalent non-plan-owned ``item_read`` rule may satisfy a strict edge
-    without changing that standalone rule's ownership or provenance.
+    without changing its authoring provenance. Equivalent constraints may be
+    shared by multiple plans through canonical plan-to-Dependency links.
 
     Args:
         db: Async database session.
@@ -218,6 +217,9 @@ async def replace_compiled_rules(
     Returns:
         True when all rules compiled without cycle conflicts.
     """
+    from app.repositories.continuity_repository import lock_continuity_graph
+
+    await lock_continuity_graph(db, user_id)
     # Normalized membership/provenance always reflects the latest nodes in the
     # same transaction: informational plans with no compiled edges still own
     # relational membership, and a later rule-compilation failure rolls the
@@ -301,6 +303,9 @@ async def replace_compiled_rules(
         ))
 
     if not edges_to_add:
+        from app.services.canonical_constraints import synchronize_canonical_constraints
+
+        await synchronize_canonical_constraints(db, user_id)
         return True
 
     # Check for plan-level cycles using in-memory graph
@@ -407,6 +412,9 @@ async def replace_compiled_rules(
             rule_kwargs["convergence_targets"] = extra
         db.add(ContinuityRule(**rule_kwargs))
         await db.flush()
+    from app.services.canonical_constraints import synchronize_canonical_constraints
+
+    await synchronize_canonical_constraints(db, user_id)
     return True
 
 

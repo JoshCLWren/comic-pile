@@ -1,168 +1,74 @@
 #!/usr/bin/env python3
-"""Persist the 942 canonical Dependency edges from ContinuityRules.
+"""Rehearse or apply canonical constraint compilation on an authorized database.
 
-This script reads ContinuityRule data and inserts the missing Dependency rows
-required for the Roll cutover to canonical Dependency-only authority.
-
-From the runtime audit (section 4.3):
-  - 807 rule-native item_read rules need one Dependency row each
-  - 130 converged rules expand to 135 Dependency edges (5 rules have 2 targets)
-
-The new rows have ``note = NULL`` so they are part of the canonical set
-(note IS NULL OR note NOT LIKE 'cbl-order:%') and exclude historical CBL
-materialization rows.
+The deployment migration performs the initial cutover. This repair tool uses
+exactly the authoring compiler used by plan/rule writes, with no fixed edge
+counts, no historical CBL inference, and no implicit commit. Rehearsal is the
+default; --apply is required to persist results.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
-import logging
+from pathlib import Path
+import sys
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.continuity_rule import ContinuityRule
-from app.models.dependency import Dependency
 
-logger = logging.getLogger(__name__)
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
-async def persist_rule_native_item_read_edges(db: AsyncSession) -> int:
-    """Persist rule-native item_read rules as canonical Dependency rows.
-
-    These are ContinuityRules with satisfaction_type = 'item_read',
-    source_type = 'issue', and no existing Dependency row (legacy_dependency_id is NULL).
+async def persist_canonical_constraints(db: AsyncSession) -> int:
+    """Compile all users' proven constraints without committing the transaction.
 
     Args:
-        db: Database session to use.
+        db: Authorized asynchronous database session.
 
     Returns:
-        Number of Dependency rows inserted.
+        Number of missing canonical edges inserted. Existing standalone edges,
+        read state and frontiers are preserved; historical rows remain inert
+        unless independent hard intent explicitly promotes the same pair.
     """
-    # Find all rule-native item_read rules (source_type = 'issue', no legacy_dependency_id)
-    result = await db.execute(
-        select(ContinuityRule)
-        .where(
-            ContinuityRule.satisfaction_type == "item_read",
-            ContinuityRule.source_type == "issue",
-            ContinuityRule.legacy_dependency_id.is_(None),
-        )
-    )
-    rules = result.scalars().all()
+    from app.models.user import User
+    from app.services.canonical_constraints import synchronize_canonical_constraints
 
-    logger.info(f"Found {len(rules)} rule-native item_read ContinuityRules")
-
+    user_ids = list((await db.scalars(select(User.id).order_by(User.id))).all())
     inserted = 0
-    for rule in rules:
-        # Check if a Dependency row already exists for this edge
-        existing = await db.execute(
-            select(Dependency).where(
-                Dependency.source_issue_id == rule.source_id,
-                Dependency.target_issue_id == rule.target_id,
-            )
-        )
-        if existing.scalar_one_or_none() is not None:
-            # Dependency row already exists; skip
-            continue
-
-        # Insert new Dependency row with note = NULL (canonical set)
-        new_dep = Dependency(
-            source_issue_id=rule.source_id,
-            target_issue_id=rule.target_id,
-            # note stays NULL by default
-        )
-        db.add(new_dep)
-        inserted += 1
-
-    if inserted > 0:
-        await db.commit()
-    logger.info(f"Inserted {inserted} rule-native item_read Dependency rows")
+    for user_id in user_ids:
+        inserted += await synchronize_canonical_constraints(db, user_id)
     return inserted
 
 
-async def persist_converged_edges(db: AsyncSession) -> int:
-    """Persist converged rule prerequisites as canonical Dependency rows.
+async def main(*, apply: bool = False) -> None:
+    """Compile constraints and commit only when explicitly invoked with --apply."""
+    from importlib import import_module
 
-    Converged rules block the target while any convergence_target is unread.
-    Each convergence target becomes a separate Dependency edge.
-
-    Args:
-        db: Database session to use.
-
-    Returns:
-        Number of Dependency rows inserted.
-    """
-    # Find all converged rules
-    result = await db.execute(
-        select(ContinuityRule)
-        .where(ContinuityRule.satisfaction_type == "converged")
-    )
-    rules = result.scalars().all()
-
-    logger.info(f"Found {len(rules)} converged ContinuityRules")
-
-    inserted = 0
-    for rule in rules:
-        # Each converged rule has convergence_targets JSON
-        # Example: [{"type": "issue", "id": 52322}, {"type": "issue", "id": 52323}]
-        targets = rule.convergence_targets or []
-        for target_info in targets:
-            target_id = int(target_info["id"])
-            target_type = str(target_info["type"])
-
-            if target_type != "issue":
-                # Only issue targets become Dependency edges;
-                # crossover targets are handled separately
-                continue
-
-            # A converged rule blocks its own target while any convergence
-            # target is unread, so each prerequisite is an incoming edge:
-            # Dependency(prerequisite, rule.target_id). Production converged
-            # rules are self-referential (source_id == target_id) and the
-            # source_id is decorative, so it must not be used as the edge
-            # source. See docs/READING_GRAPH_RUNTIME_AUDIT.md section 4.2.
-            existing = await db.execute(
-                select(Dependency).where(
-                    Dependency.source_issue_id == target_id,
-                    Dependency.target_issue_id == rule.target_id,
-                )
-            )
-            if existing.scalar_one_or_none() is not None:
-                # Dependency row already exists; skip
-                continue
-
-            # Insert new Dependency row with note = NULL (canonical set)
-            new_dep = Dependency(
-                source_issue_id=target_id,
-                target_issue_id=rule.target_id,
-                # note stays NULL by default
-            )
-            db.add(new_dep)
-            inserted += 1
-
-    if inserted > 0:
-        await db.commit()
-    logger.info(f"Inserted {inserted} converged Dependency rows")
-    return inserted
-
-
-async def _get_db_session() -> AsyncSession:
-    """Get an async database session."""
+    # Register the User relationship target in a fresh operator process, where
+    # importing auth routers has not already initialized this model.
+    import_module("app.models.password_reset_token")
     from app.database import async_engine
-    return AsyncSession(async_engine)
+    from app.models.user import User
+    from comic_pile.dependencies import refresh_user_blocked_status
 
-
-async def main() -> None:
-    """Run the persistence script."""
-    db = await _get_db_session()
-    try:
-        item_read_inserted = await persist_rule_native_item_read_edges(db)
-        converged_inserted = await persist_converged_edges(db)
-        total = item_read_inserted + converged_inserted
-        logger.info(f"Total canonical Dependency rows persisted: {total}")
-    finally:
-        await db.close()
+    async with AsyncSession(async_engine) as db:
+        inserted = await persist_canonical_constraints(db)
+        user_ids = list((await db.scalars(select(User.id))).all())
+        for user_id in user_ids:
+            await refresh_user_blocked_status(user_id, db)
+        if apply:
+            await db.commit()
+        else:
+            await db.rollback()
+        print(
+            f"{'Applied' if apply else 'Rehearsed (rolled back)'}: {inserted} missing canonical edges"
+        )
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--apply", action="store_true")
+    asyncio.run(main(apply=parser.parse_args().apply))

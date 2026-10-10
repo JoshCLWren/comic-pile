@@ -515,15 +515,13 @@ async def test_source_already_migrated_requires_legacy_debt_cleared(
     await async_db.commit()
     assert await _source_legacy_debt_cleared(async_db, spec) is True
 
-    # Reintroduce legacy debt while leaving the canonical plan in place.
-    async_db.add(
-        Dependency(
-            source_issue_id=issues[0].id,
-            target_issue_id=issues[1].id,
-            note=f"cbl-order:source:{source_list.content_hash}:1->2",
-            created_at=datetime.now(UTC),
-        )
-    )
+    # Reclassify the existing unique canonical pair as historical debt.
+    dependency = await async_db.scalar(select(Dependency).where(
+        Dependency.source_issue_id == issues[0].id,
+        Dependency.target_issue_id == issues[1].id,
+    ))
+    assert dependency is not None
+    dependency.note = f"cbl-order:source:{source_list.content_hash}:1->2"
     await async_db.commit()
     assert await _source_legacy_debt_cleared(async_db, spec) is False
 

@@ -50,6 +50,7 @@ async function createDependency(
   const response = await page.request.post('/api/v1/dependencies/', {
     data: {
       source_type: 'issue',
+      target_type: 'issue',
       source_id: sourceIssue.id,
       target_id: targetIssue.id,
     },
@@ -185,6 +186,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     const depResponse = await page.request.post('/api/v1/dependencies/', {
       data: {
         source_type: 'issue',
+        target_type: 'issue',
         source_id: issuesA[0].id,
         target_id: issuesB[0].id,
       },

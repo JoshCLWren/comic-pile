@@ -186,8 +186,6 @@ PRODUCTION_BPRD_SPEC = BPRDMigrationSpec(
 )
 
 
-
-
 def _plan_nodes(spec: BPRDMigrationSpec) -> list[ContinuityPlanNode]:
     return [
         ContinuityPlanNode(
@@ -204,8 +202,6 @@ def _plan_nodes(spec: BPRDMigrationSpec) -> list[ContinuityPlanNode]:
 
 def _plan_lanes() -> list[ContinuityPlanLane]:
     return [ContinuityPlanLane(id="main", name="Reading order", order=0)]
-
-
 
 
 def _planned_edges(spec: BPRDMigrationSpec) -> list[tuple[int, int]]:
@@ -280,8 +276,8 @@ async def _factual_snapshot(
         )
 
     thread_rows = (
-        await db.execute(select(Thread).where(Thread.id.in_(spec.thread_ids)))
-    ).scalars().all()
+        (await db.execute(select(Thread).where(Thread.id.in_(spec.thread_ids)))).scalars().all()
+    )
     threads = [
         {
             "id": thread.id,
@@ -298,16 +294,20 @@ async def _factual_snapshot(
     ]
 
     event_rows = (
-        await db.execute(
-            select(Event).where(
-                or_(
-                    Event.issue_id.in_(spec.issue_ids),
-                    Event.thread_id.in_(spec.thread_ids),
-                    Event.selected_thread_id.in_(spec.thread_ids),
+        (
+            await db.execute(
+                select(Event).where(
+                    or_(
+                        Event.issue_id.in_(spec.issue_ids),
+                        Event.thread_id.in_(spec.thread_ids),
+                        Event.selected_thread_id.in_(spec.thread_ids),
+                    )
                 )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     events = [
         {
             "id": event.id,
@@ -329,8 +329,7 @@ async def _factual_snapshot(
             select(IssueExternalIdentityMapping, ExternalIdentity)
             .join(
                 ExternalIdentity,
-                ExternalIdentity.id
-                == IssueExternalIdentityMapping.external_identity_id,
+                ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
             )
             .where(IssueExternalIdentityMapping.issue_id.in_(spec.issue_ids))
         )
@@ -420,10 +419,10 @@ async def build_bprd_dry_run(
             )
 
     user_plans = (
-        await db.execute(
-            select(ContinuityPlan).where(ContinuityPlan.user_id == spec.user_id)
-        )
-    ).scalars().all()
+        (await db.execute(select(ContinuityPlan).where(ContinuityPlan.user_id == spec.user_id)))
+        .scalars()
+        .all()
+    )
     overlapping_plans = []
     expected_issue_ids = set(spec.issue_ids)
     for plan in user_plans:
@@ -441,14 +440,14 @@ async def build_bprd_dry_run(
                 }
             )
     if overlapping_plans:
-        errors.append(
-            f"B.P.R.D. Reading Plan already exists/overlaps: {overlapping_plans!r}"
-        )
+        errors.append(f"B.P.R.D. Reading Plan already exists/overlaps: {overlapping_plans!r}")
 
     dependency_ids = tuple(edge.dependency_id for edge in spec.legacy_edges)
     dependencies = (
-        await db.execute(select(Dependency).where(Dependency.id.in_(dependency_ids)))
-    ).scalars().all()
+        (await db.execute(select(Dependency).where(Dependency.id.in_(dependency_ids))))
+        .scalars()
+        .all()
+    )
     dependencies_by_id = {row.id: row for row in dependencies}
     legacy_dependencies = []
     for expected in spec.legacy_edges:
@@ -482,22 +481,22 @@ async def build_bprd_dry_run(
         )
 
     legacy_rule_rows = (
-        await db.execute(
-            select(ContinuityRule).where(
-                ContinuityRule.legacy_dependency_id.in_(dependency_ids)
+        (
+            await db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.legacy_dependency_id.in_(dependency_ids)
+                )
             )
         )
-    ).scalars().all()
-    legacy_rules_by_dependency = {
-        row.legacy_dependency_id: row for row in legacy_rule_rows
-    }
+        .scalars()
+        .all()
+    )
+    legacy_rules_by_dependency = {row.legacy_dependency_id: row for row in legacy_rule_rows}
     legacy_rules = []
     for expected in spec.legacy_edges:
         rule = legacy_rules_by_dependency.get(expected.dependency_id)
         if rule is None:
-            errors.append(
-                f"missing linked continuity rule for dependency {expected.dependency_id}"
-            )
+            errors.append(f"missing linked continuity rule for dependency {expected.dependency_id}")
             continue
         actual_shape = (
             rule.id,
@@ -553,15 +552,17 @@ async def build_bprd_dry_run(
         errors.append(f"missing dependency group {spec.dependency_group_id}")
     else:
         memberships = (
-            await db.execute(
-                select(DependencyGroupMembership).where(
-                    DependencyGroupMembership.group_id == group.id
+            (
+                await db.execute(
+                    select(DependencyGroupMembership).where(
+                        DependencyGroupMembership.group_id == group.id
+                    )
                 )
             )
-        ).scalars().all()
-        membership_issue_ids = {
-            row.issue_id for row in memberships if row.issue_id is not None
-        }
+            .scalars()
+            .all()
+        )
+        membership_issue_ids = {row.issue_id for row in memberships if row.issue_id is not None}
         ordered_count = sum(row.sequence_order is not None for row in memberships)
         if membership_issue_ids != expected_issue_ids:
             errors.append(
@@ -571,8 +572,7 @@ async def build_bprd_dry_run(
             )
         if ordered_count:
             errors.append(
-                f"dependency group {group.id} unexpectedly has "
-                f"{ordered_count} ordered memberships"
+                f"dependency group {group.id} unexpectedly has {ordered_count} ordered memberships"
             )
         group_snapshot = {
             "id": group.id,
@@ -583,10 +583,10 @@ async def build_bprd_dry_run(
         }
 
     all_rules = (
-        await db.execute(
-            select(ContinuityRule).where(ContinuityRule.user_id == spec.user_id)
-        )
-    ).scalars().all()
+        (await db.execute(select(ContinuityRule).where(ContinuityRule.user_id == spec.user_id)))
+        .scalars()
+        .all()
+    )
     intended_edges = _planned_edges(spec)
     intended_edge_set = set(intended_edges)
     removable_rule_ids = {edge.rule_id for edge in spec.legacy_edges}
@@ -609,8 +609,7 @@ async def build_bprd_dry_run(
     )
     if cycle_edge is not None:
         errors.append(
-            "canonical plan would create continuity cycle at edge "
-            f"{cycle_edge[0]}->{cycle_edge[1]}"
+            f"canonical plan would create continuity cycle at edge {cycle_edge[0]}->{cycle_edge[1]}"
         )
 
     bprd_list_ids = set(
@@ -626,7 +625,9 @@ async def build_bprd_dry_run(
                     ),
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     bprd_list_ids.update(
         (
@@ -646,7 +647,9 @@ async def build_bprd_dry_run(
                 )
                 .distinct()
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
     nodes = _plan_nodes(spec)
@@ -678,8 +681,6 @@ async def build_bprd_dry_run(
     }
 
 
-
-
 async def apply_bprd_migration(
     db: AsyncSession,
     *,
@@ -697,14 +698,11 @@ async def apply_bprd_migration(
         raise MigrationInvariantError(f"preflight failed: {current['errors']!r}")
 
     dependency_ids = tuple(edge.dependency_id for edge in spec.legacy_edges)
-    result = await db.execute(
-        delete(Dependency).where(Dependency.id.in_(dependency_ids))
-    )
+    result = await db.execute(delete(Dependency).where(Dependency.id.in_(dependency_ids)))
     deleted_count = getattr(result, "rowcount", None)
     if deleted_count != len(dependency_ids):
         raise MigrationInvariantError(
-            f"expected to remove {len(dependency_ids)} legacy dependencies, "
-            f"removed {deleted_count}"
+            f"expected to remove {len(dependency_ids)} legacy dependencies, removed {deleted_count}"
         )
     await db.flush()
 
@@ -732,38 +730,37 @@ async def apply_bprd_migration(
 
     marker = f"continuity-plan:{plan.id}"
     plan_rules = (
-        await db.execute(
-            select(ContinuityRule)
-            .where(
-                ContinuityRule.user_id == spec.user_id,
-                ContinuityRule.note == marker,
+        (
+            await db.execute(
+                select(ContinuityRule)
+                .where(
+                    ContinuityRule.user_id == spec.user_id,
+                    ContinuityRule.note == marker,
+                )
+                .order_by(ContinuityRule.id)
             )
-            .order_by(ContinuityRule.id)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if len(plan_rules) != len(spec.issue_ids) - 1:
         raise MigrationInvariantError(
-            f"expected {len(spec.issue_ids) - 1} plan-owned rules, "
-            f"found {len(plan_rules)}"
+            f"expected {len(spec.issue_ids) - 1} plan-owned rules, found {len(plan_rules)}"
         )
 
     remaining_legacy = (
-        await db.execute(
-            select(Dependency.id).where(Dependency.id.in_(dependency_ids))
-        )
-    ).scalars().all()
+        (await db.execute(select(Dependency.id).where(Dependency.id.in_(dependency_ids))))
+        .scalars()
+        .all()
+    )
     if remaining_legacy:
-        raise MigrationInvariantError(
-            f"legacy dependencies survived migration: {remaining_legacy}"
-        )
+        raise MigrationInvariantError(f"legacy dependencies survived migration: {remaining_legacy}")
 
     factual = await _factual_snapshot(db, spec)
     before_factual = snapshot["factual"]
     for key in ("issue_state_hash", "event_state_hash", "identity_state_hash"):
         if factual[key] != before_factual[key]:
-            raise MigrationInvariantError(
-                f"migration changed protected factual state: {key}"
-            )
+            raise MigrationInvariantError(f"migration changed protected factual state: {key}")
 
     return {
         "plan_id": plan.id,
@@ -807,24 +804,25 @@ async def rollback_bprd_migration(
         )
     ).scalar_one_or_none()
     if plan is None:
-        raise MigrationInvariantError(
-            f"migrated Reading Plan {plan_id} no longer exists"
-        )
+        raise MigrationInvariantError(f"migrated Reading Plan {plan_id} no longer exists")
     if _plan_fingerprint(plan) != expected_fingerprint:
         raise MigrationInvariantError(
-            "migrated Reading Plan was edited after cutover; "
-            "refusing automatic rollback"
+            "migrated Reading Plan was edited after cutover; refusing automatic rollback"
         )
 
     marker = f"continuity-plan:{plan.id}"
     plan_rules = (
-        await db.execute(
-            select(ContinuityRule).where(
-                ContinuityRule.user_id == spec.user_id,
-                ContinuityRule.note == marker,
+        (
+            await db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == spec.user_id,
+                    ContinuityRule.note == marker,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if len(plan_rules) != len(spec.issue_ids) - 1:
         raise MigrationInvariantError(
             "plan-owned rule set changed after cutover; refusing automatic rollback"
@@ -837,17 +835,37 @@ async def rollback_bprd_migration(
         for edge in spec.legacy_edges
     ]
     conflicting_dependencies = (
-        await db.execute(
-            select(Dependency).where(
-                or_(Dependency.id.in_(dependency_ids), *edge_filters)
+        (
+            await db.execute(
+                select(Dependency).where(or_(Dependency.id.in_(dependency_ids), *edge_filters))
             )
         )
-    ).scalars().all()
-    if conflicting_dependencies:
-        raise MigrationInvariantError(
-            "legacy dependency IDs/edges are no longer free; "
-            "refusing automatic rollback"
+        .scalars()
+        .all()
+    )
+    from app.repositories.canonical_constraint_repository import (
+        COMPILED_NOTE,
+        legacy_restore_conflicts,
+    )
+    from app.models.reading_plan_membership import ReadingPlanDependency
+
+    if await legacy_restore_conflicts(
+        db, plan.id, [(edge.source_issue_id, edge.target_issue_id) for edge in spec.legacy_edges]
+    ):
+        raise MigrationInvariantError("rollback would erase independent canonical hard intent")
+    for dependency in conflicting_dependencies:
+        other_plan = await db.scalar(
+            select(ReadingPlanDependency.plan_id)
+            .where(
+                ReadingPlanDependency.dependency_id == dependency.id,
+                ReadingPlanDependency.plan_id != plan.id,
+            )
+            .limit(1)
         )
+        if dependency.note != COMPILED_NOTE or other_plan is not None:
+            raise MigrationInvariantError(
+                "legacy dependency IDs/edges are no longer free; refusing automatic rollback"
+            )
 
     # Delete the exact rule objects we fingerprinted above. Production still has
     # the legacy dependency compatibility trigger, so leaving even one plan edge
@@ -856,21 +874,27 @@ async def rollback_bprd_migration(
         await db.delete(rule)
     await db.flush()
     remaining_plan_rule_ids = (
-        await db.execute(
-            select(ContinuityRule.id).where(
-                ContinuityRule.user_id == spec.user_id,
-                ContinuityRule.note == marker,
+        (
+            await db.execute(
+                select(ContinuityRule.id).where(
+                    ContinuityRule.user_id == spec.user_id,
+                    ContinuityRule.note == marker,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if remaining_plan_rule_ids:
         raise MigrationInvariantError(
-            "plan-owned rules survived rollback removal: "
-            f"{remaining_plan_rule_ids}"
+            f"plan-owned rules survived rollback removal: {remaining_plan_rule_ids}"
         )
 
     await db.delete(plan)
     await db.flush()
+    from app.services.canonical_constraints import synchronize_canonical_constraints
+
+    await synchronize_canonical_constraints(db, spec.user_id)
 
     legacy_dependencies = snapshot.get("legacy_dependencies")
     legacy_rules = snapshot.get("legacy_rules")
@@ -899,9 +923,7 @@ async def rollback_bprd_migration(
     restored_rule_ids: set[int] = set()
     for row in legacy_rules:
         if not isinstance(row, dict):
-            raise MigrationInvariantError(
-                "invalid continuity-rule row in dry-run snapshot"
-            )
+            raise MigrationInvariantError("invalid continuity-rule row in dry-run snapshot")
         legacy_dependency_id = int(row["legacy_dependency_id"])
         rule = (
             await db.execute(
@@ -964,7 +986,9 @@ async def rollback_bprd_migration(
                     ContinuityRule.legacy_dependency_id.in_(dependency_ids)
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     if actual_restored_rule_ids != restored_rule_ids:
         raise MigrationInvariantError(
@@ -975,16 +999,13 @@ async def rollback_bprd_migration(
     await db.flush()
 
     restored_ids = set(
-        (
-            await db.execute(
-                select(Dependency.id).where(Dependency.id.in_(dependency_ids))
-            )
-        ).scalars().all()
+        (await db.execute(select(Dependency.id).where(Dependency.id.in_(dependency_ids))))
+        .scalars()
+        .all()
     )
     if restored_ids != dependency_ids:
         raise MigrationInvariantError(
-            "rollback failed to restore legacy dependencies: "
-            f"{sorted(restored_ids)}"
+            f"rollback failed to restore legacy dependencies: {sorted(restored_ids)}"
         )
 
     return {

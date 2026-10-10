@@ -17,6 +17,9 @@ async def _refresh_blocked_state(
     user_id: int, db: AsyncSession
 ) -> None:
     """Persist the unified Queue/Roll blocked projection after graph mutations."""
+    from app.services.canonical_constraints import synchronize_canonical_constraints
+
+    await synchronize_canonical_constraints(db, user_id)
     await refresh_user_blocked_status(user_id, db)
     await db.commit()
 

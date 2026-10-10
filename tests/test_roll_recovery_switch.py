@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, ReadingSession, Thread
-from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
 from app.schemas.roll_recovery_switch import RollPrerequisiteSwitchRequest
 from tests.conftest import get_or_create_user_async
 
@@ -57,25 +57,9 @@ async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> I
     return issue
 
 
-def _item_rule(*, user_id: int, source_id: int, target_id: int) -> ContinuityRule:
-    """Create one issue-to-issue item-read continuity rule.
-
-    Args:
-        user_id: Owner of the continuity rule.
-        source_id: Prerequisite issue identifier.
-        target_id: Blocked issue identifier.
-
-    Returns:
-        The unpersisted continuity rule.
-    """
-    return ContinuityRule(
-        user_id=user_id,
-        source_type="issue",
-        source_id=source_id,
-        target_type="issue",
-        target_id=target_id,
-        satisfaction_type="item_read",
-    )
+def _hard_dependency(*, source_id: int, target_id: int) -> Dependency:
+    """Create one explicit canonical prerequisite for the recovery contract."""
+    return Dependency(source_issue_id=source_id, target_issue_id=target_id)
 
 
 async def _set_pending_roll(auth_client: AsyncClient, thread_id: int) -> None:
@@ -109,9 +93,7 @@ async def test_switches_blocked_roll_to_direct_readable_prerequisite(
     user = await get_or_create_user_async(async_db)
     blocked = await _make_issue(async_db, user_id=user.id, suffix="blocked")
     prerequisite = await _make_issue(async_db, user_id=user.id, suffix="prerequisite")
-    async_db.add(
-        _item_rule(user_id=user.id, source_id=prerequisite.id, target_id=blocked.id)
-    )
+    async_db.add(_hard_dependency(source_id=prerequisite.id, target_id=blocked.id))
     await async_db.commit()
     await _set_pending_roll(auth_client, blocked.thread_id)
 
@@ -127,7 +109,9 @@ async def test_switches_blocked_roll_to_direct_readable_prerequisite(
     assert payload["target_issue_id"] == prerequisite.id
     assert payload["changed"] is True
 
-    session_result = await async_db.execute(select(ReadingSession).where(ReadingSession.user_id == user.id))
+    session_result = await async_db.execute(
+        select(ReadingSession).where(ReadingSession.user_id == user.id)
+    )
     session = session_result.scalars().first()
     assert session is not None
     await async_db.refresh(session)
@@ -167,8 +151,8 @@ async def test_switches_to_transitive_readable_leaf(
     leaf = await _make_issue(async_db, user_id=user.id, suffix="transitive-c")
     async_db.add_all(
         [
-            _item_rule(user_id=user.id, source_id=middle.id, target_id=blocked.id),
-            _item_rule(user_id=user.id, source_id=leaf.id, target_id=middle.id),
+            _hard_dependency(source_id=middle.id, target_id=blocked.id),
+            _hard_dependency(source_id=leaf.id, target_id=middle.id),
         ]
     )
     await async_db.commit()
@@ -201,9 +185,7 @@ async def test_duplicate_switch_is_idempotent(
     user = await get_or_create_user_async(async_db)
     blocked = await _make_issue(async_db, user_id=user.id, suffix="duplicate-blocked")
     prerequisite = await _make_issue(async_db, user_id=user.id, suffix="duplicate-prerequisite")
-    async_db.add(
-        _item_rule(user_id=user.id, source_id=prerequisite.id, target_id=blocked.id)
-    )
+    async_db.add(_hard_dependency(source_id=prerequisite.id, target_id=blocked.id))
     await async_db.commit()
     await _set_pending_roll(auth_client, blocked.thread_id)
 
@@ -221,7 +203,9 @@ async def test_duplicate_switch_is_idempotent(
     assert second.status_code == 200
     assert second.json()["changed"] is False
 
-    session_result = await async_db.execute(select(ReadingSession.id).where(ReadingSession.user_id == user.id))
+    session_result = await async_db.execute(
+        select(ReadingSession.id).where(ReadingSession.user_id == user.id)
+    )
     session_id = session_result.scalars().first()
     event_count_result = await async_db.execute(
         select(func.count())
@@ -249,9 +233,7 @@ async def test_rejects_stale_recommendation_after_prerequisite_becomes_read(
     user = await get_or_create_user_async(async_db)
     blocked = await _make_issue(async_db, user_id=user.id, suffix="stale-blocked")
     prerequisite = await _make_issue(async_db, user_id=user.id, suffix="stale-prerequisite")
-    async_db.add(
-        _item_rule(user_id=user.id, source_id=prerequisite.id, target_id=blocked.id)
-    )
+    async_db.add(_hard_dependency(source_id=prerequisite.id, target_id=blocked.id))
     await async_db.commit()
     await _set_pending_roll(auth_client, blocked.thread_id)
 
@@ -285,9 +267,7 @@ async def test_rejects_issue_that_was_not_recommended(
     blocked = await _make_issue(async_db, user_id=user.id, suffix="unrelated-blocked")
     prerequisite = await _make_issue(async_db, user_id=user.id, suffix="unrelated-prerequisite")
     unrelated = await _make_issue(async_db, user_id=user.id, suffix="unrelated-other")
-    async_db.add(
-        _item_rule(user_id=user.id, source_id=prerequisite.id, target_id=blocked.id)
-    )
+    async_db.add(_hard_dependency(source_id=prerequisite.id, target_id=blocked.id))
     await async_db.commit()
     await _set_pending_roll(auth_client, blocked.thread_id)
 

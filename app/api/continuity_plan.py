@@ -289,6 +289,5 @@ async def delete_continuity_plan(
     # Tag assignments point at polymorphic target ids with no foreign key.
     await purge_target_assignments(db, TagTargetType.CONTINUITY_PLAN.value, [plan.id])
     await db.delete(plan)
-    await db.commit()
     await _refresh_blocked_state(current_user.id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

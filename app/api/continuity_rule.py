@@ -206,7 +206,7 @@ async def create_continuity_rule(
     )
     db.add(rule)
     try:
-        await db.commit()
+        await _refresh_blocked_state(current_user.id, db)
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
@@ -214,7 +214,6 @@ async def create_continuity_rule(
             detail={"code": "continuity_rule_exists"},
         ) from exc
     await db.refresh(rule)
-    await _refresh_blocked_state(current_user.id, db)
     return _to_response(await _get_owned_rule(db, current_user.id, rule.id))
 
 
@@ -283,14 +282,13 @@ async def update_continuity_rule(
         for issue_id in payload.selected_member_issue_ids
     ]
     try:
-        await db.commit()
+        await _refresh_blocked_state(current_user.id, db)
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "continuity_rule_exists"},
         ) from exc
-    await _refresh_blocked_state(current_user.id, db)
     return _to_response(await _get_owned_rule(db, current_user.id, rule_id))
 
 
@@ -321,6 +319,5 @@ async def delete_continuity_rule(
     await lock_continuity_graph(db, user_id=user_id)
     rule = await _get_owned_rule(db, user_id, rule_id)
     await db.delete(rule)
-    await db.commit()
     await _refresh_blocked_state(user_id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

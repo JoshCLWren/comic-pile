@@ -193,17 +193,26 @@ async def classify_crossover_group(
         "position_count": len(ordered),
     }
     if not ordered:
-        return {**detail, "classification": "not_reader_order",
-                "reason": "no ordered issue memberships"}
+        return {
+            **detail,
+            "classification": "not_reader_order",
+            "reason": "no ordered issue memberships",
+        }
     sequence_orders = [seq for _, _, seq in ordered]
     if len(set(sequence_orders)) != len(sequence_orders):
         duplicates = sorted({s for s in sequence_orders if sequence_orders.count(s) > 1})
-        return {**detail, "classification": "ambiguous",
-                "reason": f"duplicate sequence_order values: {duplicates}"}
+        return {
+            **detail,
+            "classification": "ambiguous",
+            "reason": f"duplicate sequence_order values: {duplicates}",
+        }
     if thread_members or unordered_issue_members:
-        return {**detail, "classification": "ambiguous",
-                "reason": "thread-level or unordered issue members cannot be "
-                          "ordered without human disposition"}
+        return {
+            **detail,
+            "classification": "ambiguous",
+            "reason": "thread-level or unordered issue members cannot be "
+            "ordered without human disposition",
+        }
     issue_ids = [iid for _, iid, _ in ordered]
     owned = set(
         (
@@ -218,8 +227,11 @@ async def classify_crossover_group(
     )
     unowned = sorted(set(issue_ids) - owned)
     if unowned:
-        return {**detail, "classification": "ambiguous",
-                "reason": f"issues not owned by user: {unowned}"}
+        return {
+            **detail,
+            "classification": "ambiguous",
+            "reason": f"issues not owned by user: {unowned}",
+        }
 
     overlaps: list[dict[str, Any]] = []
     represented_by: dict[str, Any] | None = None
@@ -243,14 +255,23 @@ async def classify_crossover_group(
             represented_by = entry
     detail["overlapping_plans"] = overlaps
     if represented_by is not None:
-        return {**detail, "classification": "already_represented",
-                "reason": f"strict plan #{represented_by['id']} holds the same order",
-                "represented_by_plan_id": represented_by["id"]}
+        return {
+            **detail,
+            "classification": "already_represented",
+            "reason": f"strict plan #{represented_by['id']} holds the same order",
+            "represented_by_plan_id": represented_by["id"],
+        }
     if overlaps:
-        return {**detail, "classification": "merge_needed",
-                "reason": "existing Reading Plan(s) overlap; reconcile before migrating"}
-    return {**detail, "classification": "safely_migratable",
-            "reason": "clean ordered data with no overlapping plan"}
+        return {
+            **detail,
+            "classification": "merge_needed",
+            "reason": "existing Reading Plan(s) overlap; reconcile before migrating",
+        }
+    return {
+        **detail,
+        "classification": "safely_migratable",
+        "reason": "clean ordered data with no overlapping plan",
+    }
 
 
 async def inventory_crossover_reader_orders(
@@ -269,8 +290,7 @@ async def inventory_crossover_reader_orders(
         .all()
     )
     return [
-        await classify_crossover_group(db, user_id=user_id, group_id=group.id)
-        for group in groups
+        await classify_crossover_group(db, user_id=user_id, group_id=group.id) for group in groups
     ]
 
 
@@ -321,7 +341,7 @@ async def _factual_snapshot(
     user_id: int,
     ordered_issue_ids: list[int],
 ) -> dict[str, Any]:
-    """Capture reader facts the migration must not change."""
+    """Capture immutable reader facts, excluding the derived blocked projection."""
     issue_rows = list(
         (
             await db.execute(
@@ -350,7 +370,6 @@ async def _factual_snapshot(
         {
             "id": thread.id,
             "status": thread.status,
-            "is_blocked": thread.is_blocked,
             "queue_position": thread.queue_position,
             "next_unread_issue_id": thread.next_unread_issue_id,
             "issues_remaining": thread.issues_remaining,
@@ -358,9 +377,7 @@ async def _factual_snapshot(
         for thread in sorted(
             (
                 await db.execute(
-                    select(Thread).where(
-                        Thread.user_id == user_id, Thread.id.in_(thread_ids)
-                    )
+                    select(Thread).where(Thread.user_id == user_id, Thread.id.in_(thread_ids))
                 )
             )
             .scalars()
@@ -370,8 +387,14 @@ async def _factual_snapshot(
     ]
     events = sorted(
         {
-            (event.id, event.type, json_value(event.timestamp), event.thread_id,
-             event.issue_id, event.rating)
+            (
+                event.id,
+                event.type,
+                json_value(event.timestamp),
+                event.thread_id,
+                event.issue_id,
+                event.rating,
+            )
             for event in (
                 await db.execute(
                     select(Event).where(
@@ -447,14 +470,17 @@ async def build_crossover_reading_order_dry_run(
         }
         ContinuityPlanWrite.model_validate(planned_payload)
 
-    factual = await _factual_snapshot(
-        db, user_id=spec.user_id, ordered_issue_ids=issue_ids
-    ) if issue_ids else {
-        "issues": [], "threads": [],
-        "issue_state_hash": stable_hash([]),
-        "thread_state_hash": stable_hash([]),
-        "event_state_hash": stable_hash([]),
-    }
+    factual = (
+        await _factual_snapshot(db, user_id=spec.user_id, ordered_issue_ids=issue_ids)
+        if issue_ids
+        else {
+            "issues": [],
+            "threads": [],
+            "issue_state_hash": stable_hash([]),
+            "thread_state_hash": stable_hash([]),
+            "event_state_hash": stable_hash([]),
+        }
+    )
 
     affected_thread_ids: set[int] = set()
     if issue_ids:
@@ -476,22 +502,16 @@ async def build_crossover_reading_order_dry_run(
     current_roll = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
     current_eligible = sorted((current_roll & affected_thread_ids) - current_blocked)
 
-    # Simulate canonical plan authority: an affected thread is blocked while any
-    # earlier ordered issue is unread. This mirrors crossover_order_blockers so
-    # the transfer is behavior-preserving; the delta is reported, not an error,
-    # because moving authority to the plan is the migration's purpose.
-    read_issue_ids = {
-        row["id"] for row in factual["issues"] if row["status"] == "read"
-    }
+    # The reviewed apply explicitly creates a strict plan. Predict its direct
+    # hard pairs plus existing canonical blockers; display order itself is inert.
+    read_issue_ids = {row["id"] for row in factual["issues"] if row["status"] == "read"}
     position_of = {issue_id: pos for pos, (_, issue_id, _) in enumerate(ordered)}
-    simulated_blocked: set[int] = set()
+    simulated_blocked: set[int] = current_blocked & affected_thread_ids
     if issue_ids:
         thread_next = {
             thread.id: thread.next_unread_issue_id
             for thread in (
-                await db.execute(
-                    select(Thread).where(Thread.id.in_(affected_thread_ids))
-                )
+                await db.execute(select(Thread).where(Thread.id.in_(affected_thread_ids)))
             )
             .scalars()
             .all()
@@ -501,7 +521,7 @@ async def build_crossover_reading_order_dry_run(
                 continue
             if any(
                 issue_id not in read_issue_ids
-                for issue_id in issue_ids[: position_of[next_id]]
+                for issue_id in issue_ids[max(0, position_of[next_id] - 1) : position_of[next_id]]
             ):
                 simulated_blocked.add(thread_id)
     simulated_eligible = sorted(affected_thread_ids - simulated_blocked)
@@ -526,7 +546,9 @@ async def build_crossover_reading_order_dry_run(
             "position_count": classification["position_count"],
         },
         "overlapping_plans": classification.get("overlapping_plans", []),
-        "planned": None if planned_payload is None else {
+        "planned": None
+        if planned_payload is None
+        else {
             "plan": planned_payload,
             "rules": planned_rules,
             "adjacent_rule_count": max(len(issue_ids) - 1, 0),
@@ -599,25 +621,21 @@ async def apply_crossover_reading_order_migration(
     """Apply one reviewed snapshot inside the caller-owned transaction."""
     require_clean_snapshot(snapshot)
     current = await build_crossover_reading_order_dry_run(db, spec)
-    if (
-        current.get("snapshot_token") != snapshot["snapshot_token"]
-        or current.get("ok") is not True
-    ):
+    if current.get("snapshot_token") != snapshot["snapshot_token"] or current.get("ok") is not True:
         raise MigrationInvariantError("live state changed since dry-run")
 
     classification = str(snapshot["classification"])
-    issue_ids = [
-        coerce_int(row["issue_id"]) for row in snapshot["group"]["ordered_positions"]
-    ]
+    issue_ids = [coerce_int(row["issue_id"]) for row in snapshot["group"]["ordered_positions"]]
     if classification == "already_represented":
         plan = await _find_migrated_plan(
-            db, user_id=spec.user_id,
-            group_id=spec.dependency_group_id, issue_ids=issue_ids,
+            db,
+            user_id=spec.user_id,
+            group_id=spec.dependency_group_id,
+            issue_ids=issue_ids,
         )
         if plan is None:
             raise MigrationInvariantError(
-                "group already represented by a non-migration plan; "
-                "no migration needed"
+                "group already represented by a non-migration plan; no migration needed"
             )
         return {
             "already_applied": True,
@@ -626,9 +644,7 @@ async def apply_crossover_reading_order_migration(
             "source_snapshot_token": snapshot["snapshot_token"],
         }
     if classification != "safely_migratable":
-        raise MigrationInvariantError(
-            f"cannot apply classification {classification!r}"
-        )
+        raise MigrationInvariantError(f"cannot apply classification {classification!r}")
 
     planned = snapshot["planned"]
     if not isinstance(planned, dict):
@@ -675,12 +691,8 @@ async def apply_crossover_reading_order_migration(
     )
     expected_count = max(len(nodes) - 1, 0)
     if len(rules) != expected_count:
-        raise MigrationInvariantError(
-            f"expected {expected_count} plan rules, found {len(rules)}"
-        )
-    expected_rules = {
-        stable_hash(planned_rule_descriptor(rule)) for rule in planned["rules"]
-    }
+        raise MigrationInvariantError(f"expected {expected_count} plan rules, found {len(rules)}")
+    expected_rules = {stable_hash(planned_rule_descriptor(rule)) for rule in planned["rules"]}
     actual_rules = {
         stable_hash(
             {
@@ -696,28 +708,26 @@ async def apply_crossover_reading_order_migration(
         for rule in rules
     }
     if expected_rules != actual_rules:
-        raise MigrationInvariantError(
-            "compiled rule semantics diverge from reviewed snapshot"
-        )
+        raise MigrationInvariantError("compiled rule semantics diverge from reviewed snapshot")
     if plan_fingerprint(plan) != plan_fingerprint_from_payload(payload):
-        raise MigrationInvariantError(
-            "persisted Reading Plan diverges from reviewed snapshot"
-        )
+        raise MigrationInvariantError("persisted Reading Plan diverges from reviewed snapshot")
 
-    factual = await _factual_snapshot(
-        db, user_id=spec.user_id, ordered_issue_ids=issue_ids
-    )
+    factual = await _factual_snapshot(db, user_id=spec.user_id, ordered_issue_ids=issue_ids)
     for key in ("issue_state_hash", "thread_state_hash", "event_state_hash"):
         if factual[key] != snapshot["factual"][key]:
             raise MigrationInvariantError(f"protected reader state changed: {key}")
 
     affected_ids = {
-        coerce_int(thread_id)
-        for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
+        coerce_int(thread_id) for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
     }
     current_blocked = await _get_blocked_thread_ids_uncached(spec.user_id, db)
     current_roll = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
     eligible = sorted((current_roll & affected_ids) - current_blocked)
+
+    if eligible != snapshot["runtime_behavior"]["simulated_canonical_eligible_thread_ids"]:
+        raise MigrationInvariantError(
+            "canonical eligibility diverges from reviewed hard constraints"
+        )
 
     return {
         "already_applied": False,

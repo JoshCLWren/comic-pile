@@ -14,9 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
+from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories.canonical_constraint_repository import canonical_dependencies
 from app.schemas.continuity_blocking import ContinuityBlocker, UnreadIssueDetail
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ MAX_GRAPH_GROUPS = 5_000
 MAX_GRAPH_MEMBERSHIPS = 10_000
 MAX_GRAPH_RULES = 5_000
 MAX_GRAPH_SELECTED_MEMBERS = 10_000
+MAX_GRAPH_DEPENDENCIES = 10_000
 
 SNAPSHOT_SESSION_KEY = "continuity_graph_snapshot"
 
@@ -58,6 +61,7 @@ class GraphSnapshot:
     selected_member_issue_ids: dict[int, tuple[int, ...]]
     crossover_ordered_issue_ids: dict[int, tuple[int, ...]]
     issue_crossover_positions: dict[int, tuple[tuple[int, int], ...]]
+    canonical_dependencies: tuple[Dependency, ...] = ()
     query_count: int = 0
     rows_loaded: int = 0
 
@@ -261,6 +265,11 @@ async def load_snapshot(db: AsyncSession, user_id: int) -> GraphSnapshot:
         for issue_id, groups in issue_crossover_positions.items()
     }
 
+    canonical_rows = await canonical_dependencies(db, user_id, limit=MAX_GRAPH_DEPENDENCIES + 1)
+    if len(canonical_rows) > MAX_GRAPH_DEPENDENCIES:
+        raise _too_large(MAX_GRAPH_DEPENDENCIES)
+    query_count += 1
+    rows_loaded += len(canonical_rows)
     snapshot = GraphSnapshot(
         threads=threads,
         issues=issues,
@@ -272,6 +281,7 @@ async def load_snapshot(db: AsyncSession, user_id: int) -> GraphSnapshot:
         selected_member_issue_ids=selected_member_issue_ids,
         crossover_ordered_issue_ids=crossover_ordered_issue_ids,
         issue_crossover_positions=normalized_positions,
+        canonical_dependencies=tuple(canonical_rows),
         query_count=query_count,
         rows_loaded=rows_loaded,
     )
@@ -490,19 +500,30 @@ def crossover_order_blockers(issue_id: int, snapshot: GraphSnapshot) -> list[Con
 
 
 def issue_readiness(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
-    """Return direct blockers for one issue, including crossover ordering.
+    """Return canonical Dependency blockers for one issue.
 
     Args:
         issue_id: Issue identifier.
         snapshot: Loaded continuity graph snapshot.
 
     Returns:
-        Direct continuity-rule blockers plus any crossover ordering blockers that
-        prevent the issue from being read before earlier ordered entries.
+        Unread canonical prerequisites, matching Roll and Queue explanations.
     """
-    return _direct_blockers("issue", issue_id, snapshot) + crossover_order_blockers(
-        issue_id, snapshot
-    )
+    blockers: list[ContinuityBlocker] = []
+    for dependency in snapshot.canonical_dependencies:
+        if dependency.target_issue_id != issue_id:
+            continue
+        source = snapshot.issues.get(dependency.source_issue_id)
+        if source is None or source.status == "read":
+            continue
+        detail = _issue_detail(source.id, snapshot)
+        blockers.append(ContinuityBlocker(
+            source_type="issue", source_id=source.id, source_label=detail.label,
+            satisfaction_type="item_read", blocker_type="item_unread",
+            causing_issue_ids=[source.id], unread_issue_details=[detail], note=dependency.note,
+        ))
+    return blockers
+
 
 
 def issue_rule_readiness(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:

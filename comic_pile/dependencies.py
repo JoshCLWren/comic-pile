@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories.canonical_constraint_repository import canonical_frontier_blockers
 from app.services.continuity_graph import SNAPSHOT_SESSION_KEY
 
 
@@ -27,33 +28,7 @@ async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> se
     """
     _invalidate_continuity_snapshot(user_id, db)
 
-    source_issue = Issue.__table__.alias("source_issue")
-    next_unread_issue = Issue.__table__.alias("next_unread_issue")
-    target_thread = Thread.__table__.alias("target_thread")
-    source = Thread.__table__.alias("source_thread")
-
-    issue_result = await db.execute(
-        select(target_thread.c.id)
-        .join(
-            next_unread_issue,
-            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
-        )
-        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
-        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .join(source, source_issue.c.thread_id == source.c.id)
-        .where(target_thread.c.user_id == user_id)
-        .where(source.c.user_id == user_id)
-        .where(source_issue.c.status != "read")
-        .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .where(
-            or_(
-                Dependency.note.is_(None),
-                ~Dependency.note.like("cbl-order:%"),
-            )
-        )
-        .distinct()
-    )
-    return {row[0] for row in issue_result.all()}
+    return {row[0] for row in await canonical_frontier_blockers(db, user_id)}
 
 
 async def _get_legacy_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
@@ -120,22 +95,6 @@ def format_blocking_reason(dependency: BlockingDependency) -> str:
     return build_blocking_explanation(dependency.issue_number, dependency.thread_title)
 
 
-def _merge_blocking_explanations(
-    *groups: list[BlockingDependency],
-) -> list[BlockingDependency]:
-    """Deduplicate blocker rows while preserving first-seen order."""
-    merged: list[BlockingDependency] = []
-    seen: set[tuple[int, str]] = set()
-    for group in groups:
-        for dependency in group:
-            key = (dependency.thread_id, dependency.issue_number)
-            if key in seen:
-                continue
-            seen.add(key)
-            merged.append(dependency)
-    return merged
-
-
 async def _canonical_blocking_explanations(
     thread_id: int,
     user_id: int,
@@ -146,60 +105,16 @@ async def _canonical_blocking_explanations(
     Reads only Dependencies where ``note IS NULL OR note NOT LIKE 'cbl-order:%'``
     so historical CBL materialization cannot affect reader-facing explanations.
     """
-    source_issue = Issue.__table__.alias("source_issue")
-    next_unread_issue = Issue.__table__.alias("next_unread_issue")
-    target_thread = Thread.__table__.alias("target_thread")
-    source_thread = Thread.__table__.alias("source_thread")
-
-    issue_result = await db.execute(
-        select(
-            source_thread.c.id,
-            source_thread.c.title,
-            source_issue.c.id,
-            source_issue.c.issue_number,
-        )
-        .select_from(target_thread)
-        .join(
-            next_unread_issue,
-            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
-        )
-        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
-        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
-        .where(target_thread.c.id == thread_id)
-        .where(target_thread.c.user_id == user_id)
-        .where(source_thread.c.user_id == user_id)
-        .where(source_issue.c.status != "read")
-        .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .where(
-            or_(
-                Dependency.note.is_(None),
-                ~Dependency.note.like("cbl-order:%"),
-            )
-        )
-        .distinct()
-    )
-    reasons: list[BlockingDependency] = []
-    seen: set[tuple[int, str]] = set()
-    for src_thread_id, src_thread_title, _src_iid, src_issue_num in issue_result.all():
-        key = (src_thread_id, str(src_issue_num))
-        if key in seen:
-            continue
-        seen.add(key)
-        reasons.append(
-            BlockingDependency(
-                thread_id=src_thread_id,
-                thread_title=src_thread_title,
-                issue_number=str(src_issue_num),
-            )
-        )
-    return reasons
+    rows = await canonical_frontier_blockers(db, user_id, [thread_id])
+    return [
+        BlockingDependency(thread_id=source, thread_title=title, issue_number=number)
+        for _target, source, title, _issue, number in rows
+    ]
 
 
-
-
-
-async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
+async def get_blocking_explanations(
+    thread_id: int, user_id: int, db: AsyncSession
+) -> list[BlockingDependency]:
     """Human-readable reasons a thread is blocked.
 
     Reads only canonical Dependency rows — those where ``note IS NULL`` or
@@ -220,53 +135,13 @@ async def get_blocking_explanations_batch(
     ``note NOT LIKE 'cbl-order:%'`` — so reader-facing copy always agrees with
     the eligibility authority that Roll uses.
     """
-    if not thread_ids:
-        return {}
-
-    source_issue = Issue.__table__.alias("source_issue")
-    next_unread_issue = Issue.__table__.alias("next_unread_issue")
-    source_thread = Thread.__table__.alias("source_thread")
-    target_thread = Thread.__table__.alias("target_thread")
-
-    result = await db.execute(
-        select(
-            target_thread.c.id,
-            source_thread.c.id,
-            source_thread.c.title,
-            source_issue.c.id,
-            source_issue.c.issue_number,
+    rows = await canonical_frontier_blockers(db, user_id, thread_ids)
+    reasons: dict[int, list[BlockingDependency]] = {thread_id: [] for thread_id in thread_ids}
+    for target, source, title, _issue, number in rows:
+        reasons[target].append(
+            BlockingDependency(thread_id=source, thread_title=title, issue_number=number)
         )
-        .join(
-            next_unread_issue,
-            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
-        )
-        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
-        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
-        .where(target_thread.c.id.in_(thread_ids))
-        .where(target_thread.c.user_id == user_id)
-        .where(source_thread.c.user_id == user_id)
-        .where(source_issue.c.status != "read")
-        .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .where(
-            or_(
-                Dependency.note.is_(None),
-                ~Dependency.note.like("cbl-order:%"),
-            )
-        )
-        .distinct()
-    )
-
-    reasons_map: dict[int, list[BlockingDependency]] = {}
-    for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
-        reasons_map.setdefault(target_tid, []).append(
-            BlockingDependency(
-                thread_id=src_tid,
-                thread_title=src_title,
-                issue_number=str(src_issue_num),
-            )
-        )
-    return reasons_map
+    return {thread_id: deps for thread_id, deps in reasons.items() if deps}
 
 
 async def validate_position_dependency_consistency(

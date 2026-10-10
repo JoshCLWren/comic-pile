@@ -224,6 +224,9 @@ async def current_roll_eligible(
 
 async def refresh_blocked_status(user_id: int, db: AsyncSession) -> None:
     """Refresh persisted blocked status and flush."""
+    from app.services.canonical_constraints import synchronize_canonical_constraints
+
+    await synchronize_canonical_constraints(db, user_id)
     await refresh_user_blocked_status(user_id, db)
     await db.flush()
 

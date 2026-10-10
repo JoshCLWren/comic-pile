@@ -253,12 +253,11 @@ async def _step23b_fixture(
 
 
 @pytest.mark.asyncio
-async def test_step23a_dry_run_bridges_historical_read_gap_without_writes(
+async def test_step23a_dry_run_keeps_historical_read_gap_informational_without_writes(
     async_db: AsyncSession,
 ) -> None:
     """Dry-run preserves Roll eligibility across an out-of-order historical read gap."""
     spec, issues, threads, _legacy = await _production_shaped_fixture(async_db)
-    issue_ids = [issue.id for issue in issues]
     thread_ids = [thread.id for thread in threads]
     await async_db.commit()
 
@@ -281,21 +280,15 @@ async def test_step23a_dry_run_bridges_historical_read_gap_without_writes(
     assert report["dependency_group"]["ordered_membership_count"] == 0
     assert len(report["source_legacy_dependencies"]) == 1
     assert report["source_linked_continuity_rules"] == []
-    assert report["historical_gap_bridges"] == [
-        {
-            "source_position": 1,
-            "source_issue_id": issue_ids[0],
-            "target_position": 4,
-            "target_issue_id": issue_ids[3],
-        }
-    ]
-    assert report["planned"]["adjacent_rule_count"] == 3
-    assert report["planned"]["gap_bridge_count"] == 1
+    # Historical CBL order is presentation. A read gap is not hard intent.
+    assert report["historical_gap_bridges"] == []
+    assert report["planned"]["adjacent_rule_count"] == 0
+    assert report["planned"]["gap_bridge_count"] == 0
     assert report["runtime_behavior"]["current_affected_roll_eligible_thread_ids"] == [
-        thread_ids[0]
+        thread_ids[0], thread_ids[3]
     ]
     assert report["runtime_behavior"]["simulated_future_eligible_thread_ids"] == [
-        thread_ids[0]
+        thread_ids[0], thread_ids[3]
     ]
     assert report["runtime_behavior"]["planned_extra_direct_blockers"] == []
     assert isinstance(report["snapshot_token"], str)
@@ -343,12 +336,11 @@ async def _eligible_of(
 async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
     async_db: AsyncSession,
 ) -> None:
-    """Apply builds the strict plan + gap bridge while preserving Roll eligibility.
+    """Apply preserves source display order without inferring hard gap bridges.
 
-    This covers the issue contract: the strict plan and derived convergence gate
-    appear, source and temporary authority are removed, equivalent standalone
-    ``item_read`` edges survive un-owned, temporary rules disappear, and the
-    protected reader facts and affected Roll-eligible set stay byte-for-byte same.
+    Historical source order becomes informational. Genuine standalone hard
+    prerequisites survive, temporary repair artifacts disappear, and protected
+    reader facts and affected Roll eligibility remain unchanged.
     """
     spec, issues, threads, legacy, standalone, temp_dep, temp_rule = (
         await _step23b_fixture(async_db)
@@ -362,7 +354,7 @@ async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
     preflight_eligible = snapshot["runtime_behavior"][
         "current_affected_roll_eligible_thread_ids"
     ]
-    assert preflight_eligible == [threads[0].id]
+    assert preflight_eligible == [threads[0].id, threads[3].id]
 
     receipt = await apply_ultimate_universe_migration(
         async_db,
@@ -371,8 +363,8 @@ async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
     )
     await async_db.commit()
 
-    assert receipt["plan_rule_count"] == 3
-    assert receipt["expected_new_plan_rule_count"] == 3
+    assert receipt["plan_rule_count"] == 0
+    assert receipt["expected_new_plan_rule_count"] == 0
     assert receipt["removed_source_dependency_count"] == 1
     assert receipt["removed_temporary_dependency_count"] == 1
     assert receipt["reused_standalone_rule_count"] == 1
@@ -380,11 +372,9 @@ async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
 
     plan = await async_db.get(ContinuityPlan, receipt["plan_id"])
     assert plan is not None
-    assert plan.ordering_mode == "strict_sequential"
+    assert plan.ordering_mode == "informational"
     assert [node["ref_id"] for node in plan.nodes_json] == issue_ids
-    assert plan.nodes_json[-1]["convergence_gate"] == [
-        {"node_type": "issue", "node_id": f"issue-{issue_ids[0]}"}
-    ]
+    assert plan.nodes_json[-1]["convergence_gate"] == []
 
     assert await async_db.get(Dependency, legacy.id) is None
     assert await async_db.get(Dependency, temp_dep.id) is None
@@ -700,7 +690,7 @@ async def test_step23b_rollback_cooperates_with_legacy_dependency_sync_trigger(
 
 
 @pytest.mark.asyncio
-async def test_step23b_rollback_repairs_standalone_rule_claimed_by_sync_trigger(
+async def test_step23b_rollback_refuses_demoting_independent_canonical_prerequisite(
     async_db: AsyncSession,
 ) -> None:
     """Restore a standalone rule whose edge a restored source dependency claims.
@@ -788,7 +778,7 @@ async def test_step23b_rollback_repairs_standalone_rule_claimed_by_sync_trigger(
         preflight_eligible = snapshot["runtime_behavior"][
             "current_affected_roll_eligible_thread_ids"
         ]
-        assert preflight_eligible == [threads[0].id]
+        assert preflight_eligible == [threads[0].id, threads[3].id]
 
         receipt = await apply_ultimate_universe_migration(
             async_db,
@@ -806,34 +796,23 @@ async def test_step23b_rollback_repairs_standalone_rule_claimed_by_sync_trigger(
         assert survivor.note == "standalone prerequisite"
         assert survivor.legacy_dependency_id is None
 
-        result = await rollback_ultimate_universe_migration(
-            async_db,
-            snapshot=snapshot,
-            receipt=receipt,
-            spec=spec,
-        )
-        await async_db.commit()
-
-        assert result["restored_dependency_ids"] == sorted(
-            [legacy.id, overlap.id, temp_dep.id]
-        )
-        assert result["restored_source_dependency_count"] == 2
-        assert result["restored_temporary_rule_ids"] == [temp_rule.id]
-        assert result["affected_roll_eligible_thread_ids"] == preflight_eligible
-        assert await async_db.get(ContinuityPlan, receipt["plan_id"]) is None
-
-        assert await async_db.get(Dependency, overlap.id) is not None
-        assert await async_db.get(Dependency, legacy.id) is not None
-        assert await async_db.get(Dependency, temp_dep.id) is not None
-        restored_temp_rule = await async_db.get(ContinuityRule, temp_rule.id)
-        assert restored_temp_rule is not None
-        assert restored_temp_rule.legacy_dependency_id == temp_dep.id
-
-        restored_standalone = await async_db.get(ContinuityRule, standalone.id)
-        assert restored_standalone is not None
-        assert restored_standalone.legacy_dependency_id is None
-        assert restored_standalone.note == "standalone prerequisite"
-        assert restored_standalone.satisfaction_type == "item_read"
+        with pytest.raises(MigrationInvariantError, match="legacy dependency IDs/edges"):
+            await rollback_ultimate_universe_migration(
+                async_db, snapshot=snapshot, receipt=receipt, spec=spec,
+            )
+        # The refusal happens before deleting the plan or changing the canonical
+        # prerequisite. Exact historical note restoration would demote hard intent.
+        assert await async_db.get(ContinuityPlan, receipt["plan_id"]) is not None
+        canonical = await async_db.scalar(select(Dependency).where(
+            Dependency.source_issue_id == _issues[2].id,
+            Dependency.target_issue_id == _issues[3].id,
+        ))
+        assert canonical is not None
+        assert not (canonical.note or "").startswith("cbl-order:")
+        preserved = await async_db.get(ContinuityRule, standalone.id)
+        assert preserved is not None
+        assert preserved.note == "standalone prerequisite"
+        assert preserved.legacy_dependency_id is None
         assert await _eligible_of(spec.user_id, async_db, thread_ids) == preflight_eligible
     finally:
         await async_db.rollback()

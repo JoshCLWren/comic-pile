@@ -44,7 +44,10 @@ async def _would_create_cycle(
         return True
 
     def _owned_conditions(row) -> list:
-        conditions = [row.c.user_id == user_id]
+        conditions = [
+            row.c.user_id == user_id,
+            or_(row.c.note.is_(None), ~row.c.note.like("cbl-order:%")),
+        ]
         if exclude_rule_id is not None:
             conditions.append(row.c.id != exclude_rule_id)
         return conditions
@@ -53,30 +56,31 @@ async def _would_create_cycle(
         return select(
             rules.c.target_type.label("node_type"),
             rules.c.target_id.label("node_id"),
-        ).join(seed, or_(
-            and_(
-                rules.c.source_type == seed.c.node_type,
-                rules.c.source_id == seed.c.node_id,
-            ),
-            func.cast(rules.c.convergence_targets, JSONB).contains(
-                func.jsonb_build_array(
-                    func.jsonb_build_object(
-                        "type",
-                        seed.c.node_type,
-                        "id",
-                        seed.c.node_id,
+        ).join(
+            seed,
+            or_(
+                and_(
+                    rules.c.source_type == seed.c.node_type,
+                    rules.c.source_id == seed.c.node_id,
+                ),
+                func.cast(rules.c.convergence_targets, JSONB).contains(
+                    func.jsonb_build_array(
+                        func.jsonb_build_object(
+                            "type",
+                            seed.c.node_type,
+                            "id",
+                            seed.c.node_id,
+                        )
                     )
-                )
+                ),
             ),
-        ))
+        )
 
     edge = ContinuityRule.__table__.alias("continuity_edge")
-    target_seed = (
-        select(
-            literal(target_type).label("node_type"),
-            literal(target_id).label("node_id"),
-        ).cte("target_seed_node", recursive=False)
-    )
+    target_seed = select(
+        literal(target_type).label("node_type"),
+        literal(target_id).label("node_id"),
+    ).cte("target_seed_node", recursive=False)
     initial_targets = _targets_of(edge, target_seed).where(*_owned_conditions(edge))
 
     reachable = initial_targets.cte("reachable_continuity_nodes", recursive=True)
@@ -192,4 +196,6 @@ async def ensure_owned_continuity_rule_references(
         owned_group_ids = set(group_result.scalars())
         missing_group_ids = sorted(referenced_group_ids - owned_group_ids)
         if missing_group_ids:
-            raise HTTPException(status_code=404, detail=f"Crossover {missing_group_ids[0]} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Crossover {missing_group_ids[0]} not found"
+            )

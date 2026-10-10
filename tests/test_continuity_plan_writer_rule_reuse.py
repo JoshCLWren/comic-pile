@@ -140,37 +140,36 @@ async def test_equivalent_standalone_item_read_rule_is_reused_without_reownershi
 
 
 @pytest.mark.asyncio
-async def test_rule_owned_by_another_reading_plan_still_conflicts(
+async def test_two_plans_share_one_canonical_edge(
     async_db: AsyncSession,
 ) -> None:
-    """Equivalent edges owned by another Reading Plan retain the stable conflict."""
+    """Equivalent hard intent shares one edge with independent plan provenance."""
+    from app.models.dependency import Dependency
+    from app.models.reading_plan_membership import ReadingPlanDependency
+    from app.repositories.continuity_repository import delete_continuity_plan_rules_for_marker
+    from app.services.canonical_constraints import synchronize_canonical_constraints
+
     user = await get_or_create_user_async(async_db)
-    source = await _make_issue(async_db, user_id=user.id, suffix="plan-a-source")
-    target = await _make_issue(async_db, user_id=user.id, suffix="plan-a-target")
+    source = await _make_issue(async_db, user_id=user.id, suffix="shared-source")
+    target = await _make_issue(async_db, user_id=user.id, suffix="shared-target")
     nodes = _nodes(source, target)
-
-    first = await _plan(async_db, user_id=user.id, name="First plan")
-    await replace_compiled_rules(
-        async_db,
-        user_id=user.id,
-        plan=first,
-        nodes=nodes,
-        ordering_mode="strict_sequential",
-    )
-    await async_db.flush()
-
-    second = await _plan(async_db, user_id=user.id, name="Second plan")
-    with pytest.raises(HTTPException) as captured:
-        await replace_compiled_rules(
-            async_db,
-            user_id=user.id,
-            plan=second,
-            nodes=nodes,
-            ordering_mode="strict_sequential",
-        )
-
-    assert captured.value.status_code == 409
-    assert captured.value.detail["code"] == "plan_rule_conflict"
+    plans = []
+    for name in ("First", "Second"):
+        plan = await _plan(async_db, user_id=user.id, name=name)
+        plan.nodes_json = [node.model_dump() for node in nodes]
+        plan.ordering_mode = "strict_sequential"
+        await replace_compiled_rules(async_db, user_id=user.id, plan=plan, nodes=nodes, ordering_mode="strict_sequential")
+        plans.append(plan)
+    edges = list((await async_db.scalars(select(Dependency))).all())
+    assert len(edges) == 1
+    links = list((await async_db.scalars(select(ReadingPlanDependency))).all())
+    assert {link.plan_id for link in links} == {plan.id for plan in plans}
+    await delete_continuity_plan_rules_for_marker(async_db, user_id=user.id, marker=f"continuity-plan:{plans[0].id}")
+    await async_db.delete(plans[0])
+    await synchronize_canonical_constraints(async_db, user.id)
+    assert await async_db.get(Dependency, edges[0].id) is not None
+    surviving_links = list((await async_db.scalars(select(ReadingPlanDependency))).all())
+    assert [link.plan_id for link in surviving_links] == [plans[1].id]
 
 
 @pytest.mark.asyncio

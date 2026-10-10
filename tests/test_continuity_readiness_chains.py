@@ -9,6 +9,7 @@ import app.continuity_chains as chains
 from app.continuity_chains import resolve_continuity_chains
 from app.services.continuity_graph import SNAPSHOT_SESSION_KEY, load_snapshot as _load_snapshot
 from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from tests.conftest import get_or_create_user_async
@@ -36,16 +37,9 @@ async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> I
     return issue
 
 
-def _item_rule(*, user_id: int, source_id: int, target_id: int) -> ContinuityRule:
+def _item_rule(*, user_id: int, source_id: int, target_id: int) -> Dependency:
     """Create one issue-to-issue item-read rule."""
-    return ContinuityRule(
-        user_id=user_id,
-        source_type="issue",
-        source_id=source_id,
-        target_type="issue",
-        target_id=target_id,
-        satisfaction_type="item_read",
-    )
+    return Dependency(source_issue_id=source_id, target_issue_id=target_id)
 
 
 @pytest.mark.asyncio
@@ -237,20 +231,13 @@ async def test_snapshot_caching_prevents_duplicate_loads(async_db: AsyncSession)
     issue_a = await _make_issue(async_db, user_id=user.id, suffix="cache-a")
     issue_b = await _make_issue(async_db, user_id=user.id, suffix="cache-b")
     async_db.add(
-        ContinuityRule(
-            user_id=user.id,
-            source_type="issue",
-            source_id=issue_b.id,
-            target_type="issue",
-            target_id=issue_a.id,
-            satisfaction_type="item_read",
-        )
+        Dependency(source_issue_id=issue_b.id, target_issue_id=issue_a.id)
     )
     await async_db.commit()
 
     # First call loads the snapshot and writes it to the session cache
     snapshot1 = await _load_snapshot(async_db, user.id)
-    assert snapshot1.query_count == 6  # 6 bounded queries
+    assert snapshot1.query_count == 7  # 7 bounded queries including canonical Dependencies
     assert snapshot1.rows_loaded > 0
 
     # Verify the snapshot was cached in the session's info dict
@@ -296,7 +283,7 @@ async def test_snapshot_query_count_matches_bounded_queries(async_db: AsyncSessi
 
     snapshot = await _load_snapshot(async_db, user.id)
     # 6 queries: threads, issues, groups, memberships, rules, selected_members
-    assert snapshot.query_count == 6
+    assert snapshot.query_count == 7
     # At minimum we loaded the two threads, two issues, and one rule
     assert snapshot.rows_loaded >= 5
 
@@ -347,7 +334,7 @@ async def test_large_graph_query_count_does_not_grow_with_node_count(
     await async_db.commit()
 
     snapshot = await _load_snapshot(async_db, user.id)
-    # Query count should remain 6 even with 50 prerequisite issues
-    assert snapshot.query_count == 6
+    # Query count should remain 7 even with 50 prerequisite issues
+    assert snapshot.query_count == 7
     # Rows loaded grows with data but query count is bounded
     assert snapshot.rows_loaded >= 52  # 50 issues + target + at least 1 thread

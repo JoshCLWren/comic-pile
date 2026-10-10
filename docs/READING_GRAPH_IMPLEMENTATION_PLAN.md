@@ -194,3 +194,24 @@ This architecture simplification is complete when all of the following are true:
 - The primary reader workflow no longer exposes competing Reading Plan / Reading Order / Crossover execution concepts.
 
 Historical cleanup can follow after this state is proven. Deleting every old compatibility row is not part of the critical path.
+
+## Canonical Roll deployment boundary (#2553)
+
+Revision `f25530000001` compiles proven Issue-level hard rules into canonical
+Dependencies before the canonical-only runtime starts, and removes the reverse
+Dependency-to-ContinuityRule trigger. Unsupported generalized hard mappings fail
+the migration for review rather than silently discarding reader intent. Historical
+`cbl-order:%` mirrors remain inert; only independent hard authoring evidence can
+promote a colliding pair. Natural forward Thread progression creates no edge.
+
+Plan and rule mutations compile constraints in the write transaction. Shared
+constraints use one Dependency and multiple `reading_plan_dependencies` links.
+Roll, Queue explanations, and Issue readiness consume canonical Dependencies.
+Compatibility Rule records remain authoring provenance, without runtime authority.
+
+For a rehearsal, run `uv run python scripts/persist_canonical_dependencies.py`;
+it rolls back by default. `--apply` explicitly commits the backfill and blocked
+projection. The schema migration is the deployment gate, so production does not
+depend on manually running this script. Downgrade preserves canonical intent and
+refuses shared constraints that the legacy single-owner bridge cannot represent.
+Historical migration rollback also refuses to demote an independent hard edge.

@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
+from app.models.dependency import Dependency
+from app.models.reading_plan_membership import ReadingPlanDependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -82,9 +84,7 @@ async def _crossover_group(
             )
         )
     for thread_id in thread_member_ids or []:
-        db.add(
-            DependencyGroupMembership(group_id=group.id, thread_id=thread_id)
-        )
+        db.add(DependencyGroupMembership(group_id=group.id, thread_id=thread_id))
     await db.flush()
     return group
 
@@ -147,8 +147,12 @@ async def test_classify_duplicate_sequence_order_is_ambiguous(
     group = DependencyGroup(user_id=user.id, name="Dup")
     async_db.add(group)
     await async_db.flush()
-    async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue_a.id, sequence_order=1))
-    async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue_b.id, sequence_order=1))
+    async_db.add(
+        DependencyGroupMembership(group_id=group.id, issue_id=issue_a.id, sequence_order=1)
+    )
+    async_db.add(
+        DependencyGroupMembership(group_id=group.id, issue_id=issue_b.id, sequence_order=1)
+    )
     await async_db.flush()
 
     result = await classify_crossover_group(async_db, user_id=user.id, group_id=group.id)
@@ -194,10 +198,20 @@ async def test_classify_matching_plan_is_already_represented(
         ordering_mode="strict_sequential",
         lanes_json=[{"id": "main", "name": "Reading order", "order": 0}],
         nodes_json=[
-            {"id": f"issue-{issue_a.id}", "node_type": "issue", "ref_id": issue_a.id,
-             "lane_id": "main", "position": 0},
-            {"id": f"issue-{issue_b.id}", "node_type": "issue", "ref_id": issue_b.id,
-             "lane_id": "main", "position": 1},
+            {
+                "id": f"issue-{issue_a.id}",
+                "node_type": "issue",
+                "ref_id": issue_a.id,
+                "lane_id": "main",
+                "position": 0,
+            },
+            {
+                "id": f"issue-{issue_b.id}",
+                "node_type": "issue",
+                "ref_id": issue_b.id,
+                "lane_id": "main",
+                "position": 1,
+            },
         ],
     )
     async_db.add(plan)
@@ -228,10 +242,20 @@ async def test_classify_overlapping_plan_needs_merge(
             ordering_mode="strict_sequential",
             lanes_json=[{"id": "main", "name": "Reading order", "order": 0}],
             nodes_json=[
-                {"id": f"issue-{issue_b.id}", "node_type": "issue", "ref_id": issue_b.id,
-                 "lane_id": "main", "position": 0},
-                {"id": f"issue-{issue_c.id}", "node_type": "issue", "ref_id": issue_c.id,
-                 "lane_id": "main", "position": 1},
+                {
+                    "id": f"issue-{issue_b.id}",
+                    "node_type": "issue",
+                    "ref_id": issue_b.id,
+                    "lane_id": "main",
+                    "position": 0,
+                },
+                {
+                    "id": f"issue-{issue_c.id}",
+                    "node_type": "issue",
+                    "ref_id": issue_c.id,
+                    "lane_id": "main",
+                    "position": 1,
+                },
             ],
         )
     )
@@ -339,9 +363,7 @@ async def test_apply_creates_plan_rules_and_receipt(
     snapshot = await build_crossover_reading_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True
 
-    receipt = await apply_crossover_reading_order_migration(
-        async_db, snapshot=snapshot, spec=spec
-    )
+    receipt = await apply_crossover_reading_order_migration(async_db, snapshot=snapshot, spec=spec)
     await async_db.flush()
 
     assert receipt["already_applied"] is False
@@ -349,10 +371,23 @@ async def test_apply_creates_plan_rules_and_receipt(
     assert plan is not None
     assert plan.name == "Migrated Plan"
     assert plan.ordering_mode == "strict_sequential"
-    refs = [int(node["ref_id"]) for node in sorted(plan.nodes_json, key=lambda n: int(n["position"]))]
+    refs = [
+        int(node["ref_id"]) for node in sorted(plan.nodes_json, key=lambda n: int(n["position"]))
+    ]
     assert refs == [issue_a.id, issue_b.id, issue_c.id]
     assert receipt["plan_rule_count"] == 2
-    # Reader state untouched: group and its order authority survive.
+    dependencies = list((await async_db.scalars(select(Dependency))).all())
+    assert {(dep.source_issue_id, dep.target_issue_id) for dep in dependencies} == {
+        (issue_a.id, issue_b.id),
+        (issue_b.id, issue_c.id),
+    }
+    links = list((await async_db.scalars(select(ReadingPlanDependency))).all())
+    assert {(link.plan_id, link.dependency_id) for link in links} == {
+        (plan.id, dep.id) for dep in dependencies
+    }
+    assert receipt["affected_roll_eligible_thread_ids"] == [issue_a.thread_id]
+    assert [issue_a.status, issue_b.status, issue_c.status] == ["unread"] * 3
+    # Reader facts and legacy display memberships survive; blocking is derived.
     fresh_group = await async_db.get(DependencyGroup, group.id)
     assert fresh_group is not None
     memberships = list(
@@ -384,16 +419,14 @@ async def test_apply_is_idempotent(async_db: AsyncSession) -> None:
     await async_db.commit()
     spec = _spec(user.id, group, [issue_a.id, issue_b.id])
     snapshot = await build_crossover_reading_order_dry_run(async_db, spec)
-    first = await apply_crossover_reading_order_migration(
-        async_db, snapshot=snapshot, spec=spec
-    )
+    first = await apply_crossover_reading_order_migration(async_db, snapshot=snapshot, spec=spec)
     await async_db.flush()
 
+    before_ids = list((await async_db.scalars(select(Dependency.id))).all())
+    assert len(before_ids) == 1
     rerun = await build_crossover_reading_order_dry_run(async_db, spec)
     assert rerun["classification"] == "already_represented"
-    second = await apply_crossover_reading_order_migration(
-        async_db, snapshot=rerun, spec=spec
-    )
+    second = await apply_crossover_reading_order_migration(async_db, snapshot=rerun, spec=spec)
 
     assert second["already_applied"] is True
     assert second["plan_id"] == first["plan_id"]
@@ -403,6 +436,15 @@ async def test_apply_is_idempotent(async_db: AsyncSession) -> None:
         .all()
     )
     assert len(plans) == 1
+    deps = list((await async_db.scalars(select(Dependency))).all())
+    assert [dep.id for dep in deps] == before_ids
+    assert [(dep.source_issue_id, dep.target_issue_id) for dep in deps] == [
+        (issue_a.id, issue_b.id)
+    ]
+    links = list((await async_db.scalars(select(ReadingPlanDependency))).all())
+    assert [(link.plan_id, link.dependency_id) for link in links] == [
+        (first["plan_id"], before_ids[0])
+    ]
 
 
 @pytest.mark.asyncio
@@ -424,6 +466,4 @@ async def test_apply_refuses_drifted_snapshot(async_db: AsyncSession) -> None:
     await async_db.flush()
 
     with pytest.raises(MigrationInvariantError, match="live state changed"):
-        await apply_crossover_reading_order_migration(
-            async_db, snapshot=snapshot, spec=spec
-        )
+        await apply_crossover_reading_order_migration(async_db, snapshot=snapshot, spec=spec)
