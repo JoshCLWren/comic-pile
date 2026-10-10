@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '../hooks/useSession'
 import { useUndo } from '../hooks/useUndo'
-import { formatDateTime } from '../utils/dateFormat'
+import { formatDateTime, formatDateTimeWithSeconds } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Modal from '../components/Modal'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -76,7 +76,7 @@ function EventRecord({ event }: { event: DisplayEvent }) {
     <article className="min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-          {formatDateTime(event.timestamp)}
+          {formatDateTimeWithSeconds(event.timestamp)}
         </span>
         <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
           {eventLabel(event.type)}
@@ -94,11 +94,19 @@ function EventRecord({ event }: { event: DisplayEvent }) {
             <li key={item} className="break-words">{item}</li>
           ))}
         </ul>
-      ) : event.description ? (
-        <p className="mt-1 text-xs text-stone-400 break-words">{event.description}</p>
-      ) : (
-        <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
-      )}
+      ) : (() => {
+        const label = eventLabel(event.type)
+        // Suppress description for undo/restore events when it starts with the label
+        // to avoid visual duplication (label "Restored" + description "Restored Saga")
+        const shouldSuppressDescription =
+          (event.type === 'undo' || event.type === 'restore') &&
+          event.description != null &&
+          event.description.startsWith(`${label} `)
+        if (shouldSuppressDescription || !event.description) {
+          return <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
+        }
+        return <p className="mt-1 text-xs text-stone-400 break-words">{event.description}</p>
+      })()}
       {event.queue_move && (
         <p className="mt-1 break-words text-xs text-stone-500">Queue move: {event.queue_move}</p>
       )}

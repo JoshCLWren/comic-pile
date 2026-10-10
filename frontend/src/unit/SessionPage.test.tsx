@@ -377,6 +377,7 @@ it('renders reader-language event descriptions instead of the placeholder', () =
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
 
   expect(screen.getByText('Snoozed Wolverine')).toBeInTheDocument()
-  expect(screen.getByText('Restored thread')).toBeInTheDocument()
-  expect(screen.queryByText('No additional event details recorded.')).not.toBeInTheDocument()
+  // Undo/restore descriptions that start with the label are suppressed to avoid
+  // visual duplication (label "Restored" + description "Restored thread")
+  expect(screen.getByText('No additional event details recorded.')).toBeInTheDocument()
 })

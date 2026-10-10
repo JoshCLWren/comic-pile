@@ -50,3 +50,18 @@ export function formatTime24(value: DateInput): string {
     hour12: false,
   })
 }
+
+/**
+ * Formats a date string or Date object to include date and time with seconds.
+ * Used for timeline events to distinguish events within the same minute.
+ */
+export function formatDateTimeWithSeconds(value: DateInput): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  })}`
+}
