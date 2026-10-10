@@ -1,7 +1,7 @@
 """Add queryable snapshot kind/schema-version metadata for delta lookup.
 
 Revision ID: f2a3b4c5d6e7
-Revises: c86100000001
+Revises: e913be4e091d
 Create Date: 2026-10-10
 
 Issue #3218: ``get_latest_delta_snapshot`` loads every snapshot payload and
@@ -23,7 +23,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "f2a3b4c5d6e7"
-down_revision = "c86100000001"
+down_revision = "e913be4e091d"
 branch_labels: str | None = None
 depends_on: str | None = None
 

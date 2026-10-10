@@ -47,7 +47,7 @@ def _migration_backfill_sql() -> str:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    backfill_sql: str = getattr(module, "BACKFILL_SQL")
+    backfill_sql: str = module.BACKFILL_SQL
     return backfill_sql
 
 
@@ -297,7 +297,8 @@ async def test_latest_delta_lookup_is_bounded_on_large_stack(
             str(index["name"]) for index in inspect(sync_conn).get_indexes("snapshots")
         ]
 
-    index_names = await async_db.run_sync(_read_indexes)
+    async with db_engine.connect() as connection:
+        index_names = await connection.run_sync(_read_indexes)
     assert "ix_snapshot_session_delta_lookup" in index_names
 
 
@@ -395,7 +396,7 @@ def test_classify_snapshot_contract_cases() -> None:
 
 @pytest.mark.asyncio
 async def test_snapshot_kind_backfill_handles_mixed_payloads(
-    async_db: AsyncSession, db_engine: AsyncEngine
+    async_db: AsyncSession, db_engine: AsyncEngine, default_user: User
 ) -> None:
     """Migration backfill classifies without dropping NULL/malformed rows."""
     _requires_postgres(db_engine)
