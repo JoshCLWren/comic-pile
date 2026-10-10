@@ -55,6 +55,10 @@ function seriesMetaParts(series: ComicVineSeriesResult): string[] {
   ].filter((part): part is string => part !== null)
 }
 
+function stripParenthesizedYears(title: string): string {
+  return title.replace(/\((\d{4}(-\d{4})?)\)/g, '').trim()
+}
+
 function seriesMetaText(series: ComicVineSeriesResult): string {
   return seriesMetaParts(series).join(' · ')
 }
@@ -137,7 +141,7 @@ export default function ComicVineSearchDialog({
 
   useEffect(() => {
     if (isOpen && threadTitle) {
-      setQuery(threadTitle)
+      setQuery(stripParenthesizedYears(threadTitle))
     }
     if (isOpen) {
       setStep('search')
@@ -279,7 +283,7 @@ export default function ComicVineSearchDialog({
   useEffect(() => {
     if (isOpen && threadTitle.trim() && !hasAutoSearchedRef.current) {
       hasAutoSearchedRef.current = true
-      handleSearch(threadTitle)
+      handleSearch(stripParenthesizedYears(threadTitle))
     }
     if (!isOpen) {
       hasAutoSearchedRef.current = false

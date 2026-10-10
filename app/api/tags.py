@@ -17,6 +17,7 @@ from app.models import Tag, TagAssignment
 from app.models.user import User
 from app.schemas import tags as tag_schemas
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.tag_inheritance_service import EffectiveTagsResult, TagInheritanceService
 from app.services.tag_service import TagService
 
 router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
@@ -58,6 +59,100 @@ async def list_tags(
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return tag_schemas.TagListResponse(tags=[tag_to_response(tag) for tag in tags])
+
+
+@router.get("/effective/issue/{issue_id}/", response_model=tag_schemas.EffectiveTagsResponse)
+async def get_issue_effective_tags(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> tag_schemas.EffectiveTagsResponse:
+    """Return direct and effective tags for one owned issue.
+
+    Effective tags union the issue's direct tags, its thread's tags, and the
+    tags of every Reading Plan owned by the viewer that contains the issue. A
+    tag contributed through several paths appears once with every source
+    retained so the UI can navigate to each source object.
+
+    Args:
+        issue_id: Primary key of the issue.
+        current_user: The authenticated user; must own the issue's thread.
+        db: Database session.
+
+    Returns:
+        Direct and effective tags for the issue.
+
+    Raises:
+        HTTPException 404: When the issue does not exist or is not owned.
+    """
+    service = TagInheritanceService(db)
+    try:
+        result = await service.get_issue_effective_tags(current_user, issue_id)
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
+    return effective_tags_to_response(result)
+
+
+@router.get(
+    "/effective/thread/{thread_id}/", response_model=tag_schemas.EffectiveTagsResponse
+)
+async def get_thread_effective_tags(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> tag_schemas.EffectiveTagsResponse:
+    """Return direct and effective tags for one owned thread.
+
+    Threads have no parents in v1, so effective tags are exactly the directly
+    assigned visible tags.
+
+    Args:
+        thread_id: Primary key of the thread.
+        current_user: The authenticated user; must own the thread.
+        db: Database session.
+
+    Returns:
+        Direct and effective tags for the thread.
+
+    Raises:
+        HTTPException 404: When the thread does not exist or is not owned.
+    """
+    service = TagInheritanceService(db)
+    try:
+        result = await service.get_thread_effective_tags(current_user, thread_id)
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
+    return effective_tags_to_response(result)
+
+
+@router.get("/effective/plan/{plan_id}/", response_model=tag_schemas.EffectiveTagsResponse)
+async def get_plan_effective_tags(
+    plan_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> tag_schemas.EffectiveTagsResponse:
+    """Return direct and effective tags for one owned Reading Plan.
+
+    Reading Plans have no parents in v1, so effective tags are exactly the
+    directly assigned visible tags.
+
+    Args:
+        plan_id: Primary key of the plan.
+        current_user: The authenticated user; must own the plan.
+        db: Database session.
+
+    Returns:
+        Direct and effective tags for the plan.
+
+    Raises:
+        HTTPException 404: When the plan does not exist or is not owned.
+    """
+    service = TagInheritanceService(db)
+    try:
+        result = await service.get_plan_effective_tags(current_user, plan_id)
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
+    return effective_tags_to_response(result)
 
 
 @router.get("/{tag_id}/", response_model=tag_schemas.TagResponse)
@@ -350,4 +445,30 @@ def tag_assignment_to_response(assignment: TagAssignment) -> tag_schemas.TagAssi
         target_type=assignment.target_type,
         target_id=assignment.target_id,
         created_at=assignment.created_at,
+    )
+
+
+def effective_tags_to_response(
+    result: EffectiveTagsResult,
+) -> tag_schemas.EffectiveTagsResponse:
+    """Convert an inheritance service result to its API response model."""
+    return tag_schemas.EffectiveTagsResponse(
+        target_type=result.target_type,
+        target_id=result.target_id,
+        direct_tags=[tag_to_response(tag) for tag in result.direct_tags],
+        effective_tags=[
+            tag_schemas.EffectiveTagResponse(
+                tag=tag_to_response(entry.tag),
+                direct=entry.direct,
+                sources=[
+                    tag_schemas.InheritanceSourceResponse(
+                        target_type=source.target_type,
+                        target_id=source.target_id,
+                        display_name=source.display_name,
+                    )
+                    for source in entry.sources
+                ],
+            )
+            for entry in result.effective_tags
+        ],
     )

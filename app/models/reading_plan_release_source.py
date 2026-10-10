@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.continuity_plan import ContinuityPlan
+    from app.models.external_identity import ExternalIdentity
+    from app.models.thread import Thread
 
 
 class ReadingPlanReleaseSource(Base):
@@ -42,6 +48,14 @@ class ReadingPlanReleaseSource(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
+    )
+
+    reading_plan: Mapped[ContinuityPlan] = relationship(
+        "ContinuityPlan", back_populates="release_sources", lazy="raise"
+    )
+    thread: Mapped[Thread] = relationship("Thread", lazy="raise")
+    external_identity: Mapped[ExternalIdentity] = relationship(
+        "ExternalIdentity", lazy="raise"
     )
 
     __table_args__ = (

@@ -4,6 +4,7 @@ import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
+import AddSeriesFromComicVineDialog from '../../components/AddSeriesFromComicVineDialog'
 import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
 import type { Thread, ThreadListItem } from '../../types'
@@ -189,7 +190,7 @@ function CreatorInput({
 }
 
 interface QueueModalsProps {
-  openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | null
+  openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'addSeriesComicVine' | null
   createForm: QueueFormState
   editForm: QueueFormState
   setCreateForm: (next: QueueFormState) => void
@@ -236,6 +237,7 @@ interface QueueModalsProps {
   showRollNudge: boolean
   onDismissRollNudge: () => void
   onRollNudgeNavigate: () => void
+  onCloseAddSeriesComicVine?: () => void
 }
 
 /**
@@ -288,12 +290,20 @@ export function QueueModals({
   showRollNudge,
   onDismissRollNudge,
   onRollNudgeNavigate,
+  onCloseAddSeriesComicVine,
 }: QueueModalsProps) {
   // Ref for the Edit dialog's deferred issue list: flush queued issue
   // mutations when Save is clicked; closing without saving discards them.
   const editIssueListRef = useRef<IssueToggleListHandle>(null)
 
   const handleEditSubmit = async (event: FormEvent) => {
+    // Cancel the native submit synchronously. The form's default action is a
+    // full-page reload, and the browser performs it as soon as this handler
+    // yields at its first `await` — so a preventDefault() reached through
+    // `onEditSubmit` after the flush arrives too late. That reload aborted the
+    // queued issue creates in flight, so every pending chip after the first was
+    // silently dropped (#3309).
+    event.preventDefault()
     // Flush deferred issue mutations first so the dialog's Save commits
     // everything atomically from the user's perspective.
     await editIssueListRef.current?.flush()
@@ -702,6 +712,16 @@ export function QueueModals({
             </div>
           </div>
         </Modal>
+      )}
+
+      {openModal === 'addSeriesComicVine' && (
+        <AddSeriesFromComicVineDialog
+          isOpen={true}
+          onClose={onCloseAddSeriesComicVine ?? (() => {})}
+          onAdded={() => {
+            // The dialog's onAdded callback handles cache invalidation internally
+          }}
+        />
       )}
     </>
   )

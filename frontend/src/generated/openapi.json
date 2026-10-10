@@ -1446,6 +1446,59 @@
         "title": "ComicVineIssueIntelligence",
         "type": "object"
       },
+      "ComicVineMappingHealth": {
+        "description": "Compact ComicVine mapping health projection for a queue thread.\n\nDerived from stored canonical issue mappings only. No live provider calls.\nCounts are scoped to the issues represented by the Queue thread.",
+        "properties": {
+          "confirmed_issue_count": {
+            "description": "Issues with confirmed ComicVine mappings",
+            "minimum": 0,
+            "title": "Confirmed Issue Count",
+            "type": "integer"
+          },
+          "needs_mapping_count": {
+            "description": "Issues with no confirmed mapping (unresolved/candidate)",
+            "minimum": 0,
+            "title": "Needs Mapping Count",
+            "type": "integer"
+          },
+          "needs_review_count": {
+            "description": "Issues with conflicting/ambiguous mappings",
+            "minimum": 0,
+            "title": "Needs Review Count",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComicVineMappingStatus"
+          },
+          "tracked_issue_count": {
+            "description": "Total issues in this thread's scope",
+            "minimum": 0,
+            "title": "Tracked Issue Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "confirmed_issue_count",
+          "needs_mapping_count",
+          "needs_review_count",
+          "status",
+          "tracked_issue_count"
+        ],
+        "title": "ComicVineMappingHealth",
+        "type": "object"
+      },
+      "ComicVineMappingStatus": {
+        "description": "ComicVine mapping health status for a thread.\n\n- ``not_applicable``: Thread does not use issue tracking (legacy counter-based).\n- ``fully_mapped``: All in-scope issues have confirmed ComicVine mappings.\n- ``partial``: Some issues confirmed, some unresolved/unmapped.\n- ``unresolved``: Issues exist but none have confirmed mappings.\n- ``needs_review``: Conflicting/ambiguous mappings requiring human review.",
+        "enum": [
+          "not_applicable",
+          "fully_mapped",
+          "partial",
+          "unresolved",
+          "needs_review"
+        ],
+        "title": "ComicVineMappingStatus",
+        "type": "string"
+      },
       "ComicVineRelatedIssue": {
         "description": "One external issue related through explicit story-arc membership.",
         "properties": {
@@ -6648,6 +6701,16 @@
             },
             "title": "Blocking Reasons",
             "type": "array"
+          },
+          "comicvine_mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "format": "date-time",

@@ -254,6 +254,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import rate
     from app.api import reading_mode
     from app.api import reading_orders
+    from app.api import reading_plan_sync
     from app.api import recommendation_diagnostics
     from app.api import roll
     from app.api import session
@@ -300,6 +301,9 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
     app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
     app.include_router(reading_orders.router, tags=["reading-orders"])
+    app.include_router(
+        reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"]
+    )
     app.include_router(
         recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
     )

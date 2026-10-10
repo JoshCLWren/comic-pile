@@ -2,7 +2,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
-import type { CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
+import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 function RatingValue({ value, label }: { value: number; label: string }) {
@@ -49,9 +49,10 @@ function SeriesLink({ aggregate }: { aggregate: CreatorComparisonSeriesAggregate
 function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
-      <p className="break-words text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
+      <p className="truncate text-sm font-bold" title={stat.role} style={{ color: 'var(--theme-text-primary)' }}>{stat.role}</p>
       <p className="mt-0.5 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
         {stat.issue_count} {stat.issue_count === 1 ? 'issue' : 'issues'}
+        <> · {stat.rated_issue_count} rated</>
         {stat.average_rating != null ? (
           <> · <RatingValue value={stat.average_rating} label={`Average ${stat.average_rating} out of 5 as ${stat.role}`} /></>
         ) : (
@@ -62,17 +63,53 @@ function RoleStatRow({ stat }: { stat: CreatorComparisonRoleStat }) {
   )
 }
 
-function RatingDistributionBar({ distribution, maxCount }: { distribution: Record<string, number>; maxCount: number }) {
-  // ComicPile rates on a 1-5 scale with 0.5 increments; every bucket the API
-  // can emit gets a row so half-star ratings are never silently dropped.
-  const ratings = ['5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1']
+function RatingDistributionBar({ distribution, totalCount }: { distribution: Record<string, number>; totalCount: number }) {
+  // ComicPile rates on a 1-5 scale with 0.5 increments. Only buckets with at
+  // least one rating render (issue #3329): zero-count steps are noise that
+  // buries the actual distribution on low-data cards. Buckets sort
+  // numerically descending so the strongest ratings read first.
+  //
+  // Bar length uses a shared 0-100% scale: bucket_count / total_ratings.
+  // This makes bars directly comparable across creators with very different
+  // sample sizes. Each rendered bucket exposes both raw count and
+  // percentage, while screen readers receive bucket, count, percentage and
+  // the region communicates the creator's sample size.
+  const total = totalCount > 0 ? totalCount : 0
+  const buckets = Object.entries(distribution)
+    .map(([rating, count]) => ({ rating, count }))
+    .filter(({ rating, count }) => count > 0 && Number.isFinite(Number(rating)))
+    .sort((a, b) => Number(b.rating) - Number(a.rating))
+
+  if (total === 0 || buckets.length === 0) {
+    return (
+      <p
+        data-testid="rating-distribution"
+        aria-label={`Rating distribution across ${total} rated issue${total === 1 ? '' : 's'}`}
+        className="text-xs"
+        style={{ color: 'var(--theme-text-muted)' }}
+      >
+        No ratings yet
+      </p>
+    )
+  }
+
   return (
-    <div className="space-y-1" role="img" aria-label="Rating distribution">
-      {ratings.map((rating) => {
-        const count = distribution[rating] || 0
-        const percentage = maxCount > 0 ? (count / maxCount) * 100 : 0
+    <div
+      role="list"
+      aria-label={`Rating distribution across ${total} rated issue${total === 1 ? '' : 's'}`}
+      data-testid="rating-distribution"
+      className="space-y-1"
+    >
+      {buckets.map(({ rating, count }) => {
+        const percentage = total > 0 ? (count / total) * 100 : 0
         return (
-          <div key={rating} className="flex items-center gap-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          <div
+            key={rating}
+            role="listitem"
+            className="flex items-center gap-2 text-xs"
+            style={{ color: 'var(--theme-text-muted)' }}
+            aria-label={`${rating}★: ${count} rating${count === 1 ? '' : 's'}, ${percentage.toFixed(1)}%`}
+          >
             <span className="w-6 text-right font-medium">{rating}★</span>
             <div className="flex-1 h-2 rounded bg-[var(--theme-border)] overflow-hidden">
               <div
@@ -84,7 +121,12 @@ function RatingDistributionBar({ distribution, maxCount }: { distribution: Recor
                 }}
               />
             </div>
-            <span className="w-10 text-right">{count > 0 ? count : ''}</span>
+            <span
+              className="w-20 text-right"
+              aria-hidden="true"
+            >
+              {`${count} · ${percentage.toFixed(1)}%`}
+            </span>
           </div>
         )
       })}
@@ -92,9 +134,63 @@ function RatingDistributionBar({ distribution, maxCount }: { distribution: Recor
   )
 }
 
+function IssueDrilldown({
+  refs,
+  totalCount,
+  maxRefs,
+  detailPath,
+  groupLabel,
+}: {
+  refs: CreatorComparisonIssueRef[]
+  totalCount: number
+  maxRefs: number
+  detailPath: string | null
+  groupLabel: string
+}) {
+  // Bounded drilldown (issue #3174): surprising counts link back to the actual
+  // supporting issues instead of standing alone as bare numbers. The sample is
+  // truncated at maxRefs while the headline count stays the full total.
+  if (refs.length === 0) {
+    return null
+  }
+  return (
+    <div className="mt-2">
+      <ul className="space-y-1" aria-label={groupLabel}>
+        {refs.map((ref) => (
+          <li key={ref.issue_id} className="min-w-0">
+            <Link
+              to={`/thread/${ref.thread_id}`}
+              className="block min-w-0 truncate rounded text-sm font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-primary)' }}
+            >
+              {ref.thread_title} #{ref.issue_number}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {totalCount > refs.length && (
+        <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          Showing {refs.length} of {totalCount} (first {maxRefs}).
+          {detailPath ? (
+            <>
+              {' '}
+              <Link
+                to={detailPath}
+                className="font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              >
+                See the full list on creator detail.
+              </Link>
+            </>
+          ) : null}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
-  const maxDistributionCount = Math.max(...Object.values(item.rating_distribution), 0)
-  const hasRatings = item.ratings_count > 0
+  const totalRatings = item.ratings_count
+  const hasRatings = totalRatings > 0
   const isValidKey = parseCreatorKey(item.canonical_creator_key) != null
   const detailPath = isValidKey ? creatorRoutePath(item.canonical_creator_key) : null
 
@@ -177,22 +273,42 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Rating distribution
           </p>
-          <RatingDistributionBar distribution={item.rating_distribution} maxCount={maxDistributionCount} />
+          <RatingDistributionBar distribution={item.rating_distribution} totalCount={totalRatings} />
         </div>
 
         <div className="sm:col-span-2">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Upcoming in ComicPile
+            Unread in your library
           </p>
           <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.unread_upcoming_count}</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Unread issues by this creator already in your library — not queue order or roll eligibility.
+          </p>
+          <IssueDrilldown
+            refs={item.unread_issue_refs}
+            totalCount={item.unread_upcoming_count}
+            maxRefs={item.max_issue_refs_per_group}
+            detailPath={detailPath}
+            groupLabel={`Unread issues by ${item.display_name}`}
+          />
         </div>
 
         {item.read_unrated_count > 0 && (
           <div className="sm:col-span-2">
             <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-              Read, not rated
+              Read with no stored rating
             </p>
             <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.read_unrated_count}</p>
+            <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+              Read issues by this creator with no stored rating.
+            </p>
+            <IssueDrilldown
+              refs={item.read_unrated_issue_refs}
+              totalCount={item.read_unrated_count}
+              maxRefs={item.max_issue_refs_per_group}
+              detailPath={detailPath}
+              groupLabel={`Read issues by ${item.display_name} with no stored rating`}
+            />
           </div>
         )}
       </div>
@@ -201,6 +317,9 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
         <div className="mt-6">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
             Role breakdown
+          </p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Issues may appear under multiple roles. The average rating uses only the rated subset.
           </p>
           <ul className="mt-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
             {item.role_stats.map((stat) => (
@@ -336,10 +455,22 @@ export default function CreatorComparisonPage() {
         </div>
       )}
 
-      {data.coverage && !data.coverage.ratings_complete && (
-        <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
-          Partial data: some rated issues are still missing creator metadata. Counts shown are lower bounds.
-        </p>
+      {data.coverage && (!data.coverage.ratings_complete || !data.coverage.read_unrated_complete || !data.coverage.upcoming_complete) && (
+        <div className="mt-2" role="note">
+          <p className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Partial creator metadata: {data.coverage.rated_issues_with_creator_metadata} of{' '}
+            {data.coverage.rated_issues_total} rated issues,{' '}
+            {data.coverage.read_unrated_issues_with_creator_metadata} of{' '}
+            {data.coverage.read_unrated_issues_total} read issues with no stored rating, and{' '}
+            {data.coverage.unread_issues_with_creator_metadata} of{' '}
+            {data.coverage.unread_issues_total} unread issues have creator metadata.
+            Counts shown are lower bounds.
+          </p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Issues without creator metadata cannot be attributed to any creator, so a
+            creator&apos;s totals may be incomplete rather than proof of less work.
+          </p>
+        </div>
       )}
 
       <div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>

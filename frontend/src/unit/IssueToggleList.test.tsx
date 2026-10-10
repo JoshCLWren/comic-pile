@@ -1030,5 +1030,139 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     })
     expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(1)
   })
+
+  it('queues multiple creates and flushes all of them', async () => {
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+
+    // Add first issue range
+    fireEvent.change(input, { target: { value: '7' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    expect(screen.getByTestId('pending-creates')).toHaveTextContent('7')
+
+    // Add second issue range
+    fireEvent.change(input, { target: { value: 'Annual 2' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    expect(screen.getByTestId('pending-creates')).toHaveTextContent('Annual 2')
+
+    // Add third issue range
+    fireEvent.change(input, { target: { value: '10-12' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    expect(screen.getByTestId('pending-creates')).toHaveTextContent('10-12')
+
+    // Verify all three are queued
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+    expect(ref.current?.hasPendingMutations()).toBe(true)
+
+    // Flush all
+    await act(async () => {
+      await ref.current?.flush()
+    })
+
+    // Verify all three create calls were made
+    expect(mockedIssuesApi.create).toHaveBeenCalledTimes(3)
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(3, 99, '10-12')
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+  })
+
+  it('handles server errors for subsequent creates in a batch', async () => {
+    // Simulate server accepting first create but rejecting subsequent ones
+    mockedIssuesApi.create
+      .mockResolvedValueOnce(buildListResponse([{ id: 10, thread_id: 99, issue_number: '7', status: 'unread', read_at: null, created_at: '2026-03-08T00:00:00Z' }]))
+      .mockRejectedValueOnce(new Error('Issue number already exists'))
+      .mockRejectedValueOnce(new Error('Issue number already exists'))
+
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+
+    fireEvent.change(input, { target: { value: '7' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    fireEvent.change(input, { target: { value: 'Annual 2' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    fireEvent.change(input, { target: { value: '10-12' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+
+    // All three create calls should be attempted
+    expect(mockedIssuesApi.create).toHaveBeenCalledTimes(3)
+    // Error should be surfaced for the failed ones
+    expect(screen.getByText('Issue number already exists')).toBeInTheDocument()
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+  })
+
+  it('re-reads server order after a create so the base list is not appended blindly', async () => {
+    // The server inserts an ordinary numeric issue at its natural position
+    // rather than appending it, so a mid-series create must not be assumed to
+    // land at the end of the list.
+    mockedIssuesApi.create.mockResolvedValue(
+      buildListResponse([
+        {
+          id: 4,
+          thread_id: 99,
+          issue_number: '2',
+          status: 'unread',
+          read_at: null,
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ]),
+    )
+    mockedIssuesApi.list
+      .mockResolvedValueOnce(buildListResponse())
+      .mockResolvedValue(
+        buildListResponse([
+          {
+            id: 2,
+            thread_id: 99,
+            issue_number: '2',
+            status: 'unread',
+            read_at: null,
+            created_at: '2026-03-08T00:00:00Z',
+          },
+          {
+            id: 4,
+            thread_id: 99,
+            issue_number: '2b',
+            status: 'unread',
+            read_at: null,
+            created_at: '2026-03-08T00:00:00Z',
+          },
+          {
+            id: 1,
+            thread_id: 99,
+            issue_number: '1',
+            status: 'unread',
+            read_at: null,
+            created_at: '2026-03-08T00:00:00Z',
+          },
+          {
+            id: 3,
+            thread_id: 99,
+            issue_number: '3',
+            status: 'read',
+            read_at: null,
+            created_at: '2026-03-08T00:00:00Z',
+          },
+        ]),
+      )
+
+    const ref = await renderDeferred()
+    const input = screen.getByTestId('issue-add-input')
+    fireEvent.change(input, { target: { value: '2b' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+
+    // The re-read happened rather than trusting the create response position.
+    expect(mockedIssuesApi.list).toHaveBeenCalledTimes(2)
+    // Server order wins: #2b sits after #2, not at the end of the list.
+    expect(getIssueOrder()).toEqual(['2', '2b', '1', '3'])
+  })
 })
 })

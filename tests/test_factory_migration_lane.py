@@ -331,3 +331,42 @@ def test_release_restores_review_state_for_pr_and_linked_issue(
         "ralph-status:in-review",
         "ralph-task",
     }
+
+
+def test_closed_lane_holder_immediately_releases_oldest_waiter(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Simulate the close event removing the holder from the open-PR snapshot."""
+    module = load_lane()
+    holder = migration_pr(
+        module, 3200, "factory:review", created_at="2026-10-07T10:00:00Z"
+    )
+    waiter = migration_pr(
+        module, 3201, "factory:blocked",
+        created_at="2026-10-07T11:00:00Z", waiting=True
+    )
+    snapshots = iter([[holder, waiter], [waiter]])
+    released: list[int] = []
+    monkeypatch.setattr(module, "ensure_wait_label", lambda: None)
+    monkeypatch.setattr(module, "current_migration_prs", lambda: next(snapshots))
+    monkeypatch.setattr(module, "release_pr", lambda pr: released.append(pr.number))
+    monkeypatch.setattr(module, "park_pr", lambda pr: pytest.fail("must not park a waiter"))
+
+    assert module.reconcile()["holder"] == 3200
+    result = module.reconcile()
+    assert result["holder"] == 3201
+    assert result["released"] == 3201
+    assert released == [3201]
+
+
+def test_closed_factory_pr_triggers_trusted_migration_reconciliation() -> None:
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github/workflows/factory-migration-lane-release.yml"
+    ).read_text()
+    assert "pull_request_target:" in workflow
+    assert "types: [closed, converted_to_draft, labeled, unlabeled]" in workflow
+    assert "ref: main" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "python3 .github/scripts/factory_migration_lane.py reconcile" in workflow
+    assert "group: fixed-model-factory-dispatch" in workflow

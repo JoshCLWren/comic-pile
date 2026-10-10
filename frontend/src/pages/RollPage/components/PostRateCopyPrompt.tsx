@@ -11,6 +11,11 @@ export interface PostRateReference {
 interface PostRateCopyPromptProps {
   reference: PostRateReference | null
   onDismiss: () => void
+  /** Reverses the rating behind this notice. Owned by the page, not this prompt. */
+  onUndo?: () => void
+  /** Pending state of the page-owned undo mutation. */
+  undoPending?: boolean
+  canUndo?: boolean
 }
 
 /**
@@ -19,8 +24,19 @@ interface PostRateCopyPromptProps {
  * surfaces the exact series title + issue string the pre-rate Copy title
  * control would have offered before Mark Read & Save. It never blocks the
  * next roll and follows the pre-rate clipboard feedback pattern.
+ *
+ * The optional undo action is what keeps a mis-tap from being buried three
+ * screens deep in History → session → snapshots (#3194); the page owns the
+ * mutation and passes its pending state down so the notice stays the single
+ * source of truth for both actions.
  */
-export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptProps) {
+export function PostRateCopyPrompt({
+  reference,
+  onDismiss,
+  onUndo,
+  undoPending = false,
+  canUndo = false,
+}: PostRateCopyPromptProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   useEffect(() => {
@@ -78,6 +94,17 @@ export function PostRateCopyPrompt({ reference, onDismiss }: PostRateCopyPromptP
           </svg>
           {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title and issue'}
         </button>
+        {canUndo && onUndo && (
+          <button
+            type="button"
+            onClick={onUndo}
+            disabled={undoPending}
+            className={`min-h-11 ${rollUtilityActionClass()}`}
+            aria-label="Undo this rating"
+          >
+            {undoPending ? 'Undoing...' : 'Undo rating'}
+          </button>
+        )}
         <p className="text-[10px] font-medium text-[var(--theme-text-dim)]">
           Copies “{title} {issueNumber}”
         </p>

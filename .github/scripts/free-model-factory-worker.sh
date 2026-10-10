@@ -165,6 +165,7 @@ stage_trusted_review_controller() {
   trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
   cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
   cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+  cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
   chmod +x "$trusted_dir/factory-review-controller.py"
   TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
   export TRUSTED_REVIEW_CONTROLLER
@@ -239,7 +240,10 @@ select_controller_assignment() {
       log "controller-leased PR #${pr} returned an empty branch"
       return 3
     fi
-    linked_issue="$(linked_issue_from_branch "$branch")"
+    if ! linked_issue="$(linked_issue_from_pr "$pr")"; then
+      log "unable to resolve linked issue for controller-leased PR #${pr}"
+      return 3
+    fi
     pr_stage="$(jq -r --argjson pr "$pr" '.[] | select(.number == $pr) | [.labels[].name | select(. == "factory:building" or . == "factory:review" or . == "factory:changes-requested" or . == "factory:conflict" or . == "factory:ci")] | first // empty' <<< "$pr_json")"
     if [[ -z "$pr_stage" ]]; then
       log "controller-leased PR #${pr} has no supported completion stage"
@@ -475,16 +479,17 @@ fi
 review_log="/tmp/opencode-factory-${WORKER}.log"
 sanitized_review_log="/tmp/opencode-factory-${WORKER}.sanitized.log"
 factory_sanitize_review_log "$review_log" "$sanitized_review_log"
-# Append authoritative PR diff evidence after sanitize so the review controller
-# can attest inspection even when the model used file reads instead of `gh pr
-# diff`. review_excerpt keeps only the last 7000 chars, so the marker and the
-# `gh pr diff` command line MUST come after the dumped hunks — putting them
-# first caused every honest approve to soft-fail as diff-inspection-required
-# once the dump exceeded the excerpt window (incident #2309 follow-up).
+# Read the authoritative diff and record a compact proof, never its body.
+# Appended source previously evicted semantic findings from the controller's
+# bounded excerpt, turning legitimate REPAIR verdicts into useless handoffs.
+# A failed diff read must not masquerade as inspection evidence.
+if ! gh pr diff "$NUMBER" >/dev/null; then
+  log "control_plane_failure: authoritative diff read failed for PR #${NUMBER}"
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'authoritative-diff-read-failed'
+  record_terminal_outcome control_plane_failure "PR #${NUMBER} diff inspection unavailable"
+  exit 2
+fi
 {
-  printf '\n# comic-pile-factory-authoritative-diff-evidence\n'
-  printf 'gh pr diff %s\n' "$NUMBER"
-  gh pr diff "$NUMBER" 2>/dev/null | head -n 4000 || true
   printf '\n# comic-pile-factory-authoritative-diff-evidence\n'
   printf 'gh pr diff %s\n' "$NUMBER"
 } >> "$sanitized_review_log"

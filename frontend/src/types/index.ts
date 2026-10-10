@@ -620,6 +620,7 @@ export interface ReaderContextEdge {
 export interface CreatorComparisonRoleStat {
   role: string
   issue_count: number
+  rated_issue_count: number
   average_rating: number | null
 }
 
@@ -629,6 +630,14 @@ export interface CreatorComparisonSeriesAggregate {
   issue_count: number
   rated_issue_count: number
   average_rating: number
+}
+
+export interface CreatorComparisonIssueRef {
+  issue_id: number
+  thread_id: number
+  thread_title: string
+  issue_number: string
+  status: string
 }
 
 export interface CreatorComparisonItem {
@@ -645,6 +654,9 @@ export interface CreatorComparisonItem {
   min_rated_issues_per_series: number
   unread_upcoming_count: number
   read_unrated_count: number
+  unread_issue_refs: CreatorComparisonIssueRef[]
+  read_unrated_issue_refs: CreatorComparisonIssueRef[]
+  max_issue_refs_per_group: number
   insufficient_data: boolean
 }
 

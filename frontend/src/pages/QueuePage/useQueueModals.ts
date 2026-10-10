@@ -9,7 +9,7 @@ import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 import type { ParsedIssueRangeDetail } from '../../utils/issueParser'
 
-type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
+type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'addSeriesComicVine'
 
 interface QueueModalsParams {
   threads: ThreadListItem[] | null | undefined
@@ -75,6 +75,8 @@ interface UseQueueModalsResult {
   showRollNudge: boolean
   dismissRollNudge: () => void
   rollNudgeNavigate: () => void
+  showAddSeriesComicVineModal: () => void
+  closeAddSeriesComicVineModal: () => void
 }
 
 /**
@@ -212,6 +214,19 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     setShowMigrationDialog(false)
     setThreadToMigrate(null)
   }, [])
+
+  const showAddSeriesComicVineModal = useCallback(() => {
+    setOpenModal('addSeriesComicVine')
+    setRestoreAction(() => {
+      setOpenModal('addSeriesComicVine')
+    })
+  }, [setRestoreAction])
+
+  const closeAddSeriesComicVineModal = useCallback(() => {
+    setOpenModal(null)
+    clearRestoreAction()
+    clearQueueModalState()
+  }, [clearQueueModalState, clearRestoreAction])
 
   const dismissRollNudge = useCallback(() => {
     params.onDismissRollNudge()
@@ -439,6 +454,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     closeDependenciesModal,
     openMigrationDialog,
     closeMigrationDialog,
+    showAddSeriesComicVineModal,
+    closeAddSeriesComicVineModal,
     handleCreateSubmit,
     handleEditSubmit,
     handleReactivateSubmit,

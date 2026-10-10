@@ -93,6 +93,7 @@ function Harness() {
       onMigrationSkip={vi.fn()}
       onCloseMigration={vi.fn()}
       onOpenMigrationDialog={vi.fn()}
+      onCloseAddSeriesComicVine={vi.fn()}
       isPendingCreate={false}
       isPendingEdit={false}
       isPendingReactivate={false}

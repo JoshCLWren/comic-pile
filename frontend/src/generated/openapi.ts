@@ -4874,6 +4874,51 @@ export interface components {
             story_arcs?: components["schemas"]["ComicVineStoryArc"][];
         };
         /**
+         * ComicVineMappingHealth
+         * @description Compact ComicVine mapping health projection for a queue thread.
+         *
+         *     Derived from stored canonical issue mappings only. No live provider calls.
+         *     Counts are scoped to the issues represented by the Queue thread.
+         */
+        ComicVineMappingHealth: {
+            /**
+             * Confirmed Issue Count
+             * @description Issues with confirmed ComicVine mappings
+             */
+            confirmed_issue_count: number;
+            /**
+             * Needs Mapping Count
+             * @description Issues with no confirmed mapping (unresolved/candidate)
+             */
+            needs_mapping_count: number;
+            /**
+             * Needs Review Count
+             * @description Issues with conflicting/ambiguous mappings
+             */
+            needs_review_count: number;
+            /**
+             * Status
+             */
+            status: components["schemas"]["ComicVineMappingStatus"];
+            /**
+             * Tracked Issue Count
+             * @description Total issues in this thread's scope
+             */
+            tracked_issue_count: number;
+        };
+        /**
+         * ComicVineMappingStatus
+         * @description ComicVine mapping health status for a thread.
+         *
+         *     - ``not_applicable``: Thread does not use issue tracking (legacy counter-based).
+         *     - ``fully_mapped``: All in-scope issues have confirmed ComicVine mappings.
+         *     - ``partial``: Some issues confirmed, some unresolved/unmapped.
+         *     - ``unresolved``: Issues exist but none have confirmed mappings.
+         *     - ``needs_review``: Conflicting/ambiguous mappings requiring human review.
+         * @enum {string}
+         */
+        ComicVineMappingStatus: "not_applicable" | "fully_mapped" | "partial" | "unresolved" | "needs_review";
+        /**
          * ComicVineRelatedIssue
          * @description One external issue related through explicit story-arc membership.
          */
@@ -7226,6 +7271,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            comicvine_mapping?: components["schemas"]["ComicVineMappingHealth"] | null;
             /** Format */
             format: string;
             /** Id */

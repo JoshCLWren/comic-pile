@@ -20,6 +20,7 @@ from __future__ import annotations
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.continuity_plan import ContinuityPlan
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.reading_plan_membership import (
@@ -277,6 +278,38 @@ async def plans_containing_issue(
         .where(ReadingPlanIssue.issue_id == issue_id)
         .distinct()
         .order_by(ReadingPlanIssue.plan_id)
+    )
+    return list(result.scalars().all())
+
+
+async def plans_containing_issue_for_user(
+    db: AsyncSession, *, issue_id: int, user_id: int
+) -> list[ContinuityPlan]:
+    """Return the viewer's own plans whose membership includes one Issue.
+
+    Only plans owned by ``user_id`` are returned: tag inheritance must never
+    reveal another user's plan existence through an inheritance source, and a
+    global assignment is visible only to users authorized to view its target
+    (#3030). The ``uq_reading_plan_issue_once_per_plan`` invariant (#3037)
+    guarantees at most one membership row per plan, so each plan contributes
+    its tags at most once and no occurrence-level deduplication is needed.
+
+    Args:
+        db: Database session.
+        issue_id: Canonical Issue to inspect.
+        user_id: Owner whose plans are included.
+
+    Returns:
+        Owned containing plans in ascending plan ID order.
+    """
+    result = await db.execute(
+        select(ContinuityPlan)
+        .join(ReadingPlanIssue, ReadingPlanIssue.plan_id == ContinuityPlan.id)
+        .where(
+            ReadingPlanIssue.issue_id == issue_id,
+            ContinuityPlan.user_id == user_id,
+        )
+        .order_by(ContinuityPlan.id)
     )
     return list(result.scalars().all())
 

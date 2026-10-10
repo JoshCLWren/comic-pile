@@ -64,13 +64,16 @@ function comparisonItem(
     ratings_count: 4,
     rating_distribution: { '5': 2, '4': 2 },
     top_rating_rate: 0.5,
-    role_stats: [{ role: 'writer', issue_count: 4, average_rating: 4.5 }],
+    role_stats: [{ role: 'writer', issue_count: 4, rated_issue_count: 4, average_rating: 4.5 }],
     strongest_series: [
       { thread_id: 1, thread_title: 'Saga', issue_count: 4, rated_issue_count: 3, average_rating: 4.7 },
     ],
     min_rated_issues_per_series: 3,
     unread_upcoming_count: 2,
     read_unrated_count: 1,
+    unread_issue_refs: [],
+    read_unrated_issue_refs: [],
+    max_issue_refs_per_group: 5,
     insufficient_data: false,
     ...overrides,
   }
@@ -201,6 +204,80 @@ test.describe('Issue #3091: creator comparison', () => {
     await expect(page.getByText(/less reliable/)).toBeVisible()
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
     await expect(page.getByText('Steve McNiven')).toBeVisible()
+
+    await expectNoHorizontalOverflow(page)
+  })
+
+  test('distribution bars use a shared 0-100% scale across unequal samples', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    await installCreatorsList(page)
+    await installCreatorComparison(page, {
+      'creator:small': comparisonItem('creator:small', 'Few Ratings Creator', {
+        average_rating: 5,
+        median_rating: 5,
+        ratings_count: 4,
+        top_rating_rate: 1,
+        rating_distribution: { '5': 4 },
+        insufficient_data: false,
+      }),
+      'creator:large': comparisonItem('creator:large', 'Many Ratings Creator', {
+        average_rating: 4.5,
+        median_rating: 4,
+        ratings_count: 100,
+        top_rating_rate: 0.04,
+        rating_distribution: {
+          '5': 4,
+          '4.5': 1,
+          '4': 1,
+          '3.5': 1,
+          '3': 1,
+          '2.5': 1,
+          '2': 1,
+          '1.5': 1,
+          '1': 1,
+        },
+        insufficient_data: false,
+      }),
+    })
+
+    await page.goto('/creators/compare?keys=creator:small,creator:large', {
+      waitUntil: 'domcontentloaded',
+    })
+
+    await expect(page.getByRole('heading', { name: 'Creator Comparison' })).toBeVisible({
+      timeout: 20000,
+    })
+    await expect(page.getByText('Comparing 2 creators')).toBeVisible()
+
+    // Small creator's four 5★ ratings equal 100.0% of 4 rated issues; the
+    // large creator's four 5★ ratings equal 4.0% of 100 rated issues. Both
+    // use the same 0-100% scale.
+    const fiveStarBars = page.getByRole('listitem', { name: /5★/ })
+    await expect(fiveStarBars.nth(0)).toHaveAttribute(
+      'aria-label',
+      '5★: 4 ratings, 100.0%',
+    )
+    await expect(fiveStarBars.nth(1)).toHaveAttribute(
+      'aria-label',
+      '5★: 4 ratings, 4.0%',
+    )
+
+    // Bar lengths differ: the small creator's 5★ bar is full-width while the
+    // large creator's is narrow. Bars use the same 0-100% scale, so the
+    // visual gap reflects the real difference in rating density rather than
+    // each creator's local maximum.
+    const [smallBar, largeBar] = await Promise.all([
+      fiveStarBars.nth(0)
+        .locator('div[style*="var(--theme-personal-accent)"]')
+        .evaluate((el) => el.getBoundingClientRect().width),
+      fiveStarBars.nth(1)
+        .locator('div[style*="var(--theme-personal-accent)"]')
+        .evaluate((el) => el.getBoundingClientRect().width),
+    ])
+    expect(smallBar).toBeGreaterThan(largeBar)
 
     await expectNoHorizontalOverflow(page)
   })

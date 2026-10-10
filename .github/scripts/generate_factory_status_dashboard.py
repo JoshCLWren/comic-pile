@@ -390,6 +390,11 @@ def collect_opencode_free_roster() -> dict[str, Any]:
         }
 
 
+def load_expected_roster() -> dict[str, object]:
+    """Read the active-worker authority rather than infer liveness from old comments."""
+    return json.loads((SCRIPTS.parent / "factory-expected-workers.json").read_text())
+
+
 def collect_snapshot() -> dict[str, Any]:
     completion = load_module(
         "factory_completion_controller_dashboard",
@@ -403,7 +408,12 @@ def collect_snapshot() -> dict[str, Any]:
     issues = work.list_issues()
     prs = work.list_prs()
     demand, capacity = full.current_demand(completion)
-    manifest_rows = load_manifest_rows(MANIFEST)
+    heartbeat_monitor = load_module("factory_heartbeat_health", SCRIPTS / "factory_heartbeat_health.py")
+    roster = load_expected_roster()
+    active_workers = {str(worker) for worker in roster["expected_workers"]} - {
+        str(worker) for worker in [*roster.get("retired_workers", []), *roster.get("paused_workers", [])]
+    }
+    manifest_rows = [row for row in load_manifest_rows(MANIFEST) if row["worker"] in active_workers]
     workers = [row["worker"] for row in manifest_rows]
     owned = completion.owned_worker_ids([*issues, *prs])
     slot_health = capacity.get("slot_health_counts") or {}
@@ -420,6 +430,7 @@ def collect_snapshot() -> dict[str, Any]:
     policy = completion.load_policy()
     trusted = [comment for comment in comments if policy.comment_is_trusted(comment)]
     attempts, heartbeats = latest_worker_records(trusted)
+    heartbeat_report = heartbeat_monitor.heartbeat_health(trusted, roster, now=datetime.now(timezone.utc))
     credits = merge_credit(recently_merged_prs(completion))
     worker_rows = build_worker_rows(
         manifest_rows,
@@ -430,7 +441,12 @@ def collect_snapshot() -> dict[str, Any]:
         credits=credits,
     )
 
+    observations = {row["worker"]: row for row in heartbeat_report["workers"]}
+    for row in worker_rows:
+        row["heartbeat"] = observations.get(row["worker"], {})
+
     return {
+        "heartbeat_health": heartbeat_report,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "open_prs": github_search_total(completion, "is:pr is:open"),
         "open_issues": github_search_total(completion, "is:issue is:open"),
@@ -502,6 +518,20 @@ def render_work(work: Iterable[Mapping[str, Any]]) -> str:
     return "<br>".join(links)
 
 
+def render_heartbeat_summary(snapshot: Mapping[str, Any]) -> str:
+    """Expose every stale/missing expected worker even if absent from the TSV."""
+    report = snapshot.get("heartbeat_health") or {}
+    affected = [row for row in report.get("workers", []) if row["freshness"] != "fresh"]
+    if not affected:
+        return ""
+    detail = "; ".join(
+        f'#{row["worker"]}: {row["freshness"]}, last heartbeat {row["updated"] or "missing"}, '
+        f'run {row["run"] or row["attempt_run"] or "unknown"}, {row["runtime_status"]}'
+        for row in affected
+    )
+    return f'<div class="sub">Heartbeat visibility: {len(affected)} active workers need observation. {esc(detail)}</div>'
+
+
 def render_worker_rows(snapshot: Mapping[str, Any]) -> str:
     now = parse_iso(str(snapshot["generated_at"])) or datetime.now(timezone.utc)
     rendered: list[str] = []
@@ -520,6 +550,19 @@ def render_worker_rows(snapshot: Mapping[str, Any]) -> str:
             else esc(attempt_label)
         )
         detail = str(row.get("attempt_detail") or "")
+        observation = row.get("heartbeat") or {}
+        heartbeat_html = ""
+        if observation:
+            freshness = str(observation["freshness"])
+            heartbeat_run = str(observation.get("run") or observation.get("attempt_run") or "")
+            run_html = (
+                f'<a href="{REPO_URL}/actions/runs/{esc(heartbeat_run)}">run {esc(heartbeat_run)} ↗</a>'
+                if heartbeat_run.isdigit() else "run unknown"
+            )
+            heartbeat_html = (
+                f'<small>Heartbeat: {esc(freshness)} · {esc(observation.get("updated") or "missing")}</small>'
+                f'<small>{run_html} · {esc(observation.get("runtime_status") or "unknown")}</small>'
+            )
         search = " ".join(
             [
                 str(row.get("worker") or ""),
@@ -543,7 +586,7 @@ def render_worker_rows(snapshot: Mapping[str, Any]) -> str:
             f'<td class="num">{esc(row.get("merged_day") or 0)}</td>'
             f'<td class="num">{esc(row.get("merged_week") or 0)}</td>'
             f'<td>{render_work(row.get("work") or [])}</td>'
-            f'<td>{esc(age_text(str(row.get("updated") or ""), now=now))}</td></tr>'
+            f'<td>{esc(age_text(str(row.get("updated") or ""), now=now))}{heartbeat_html}</td></tr>'
         )
     return "".join(rendered)
 
@@ -709,8 +752,8 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 <div class="panel"><h2>Control plane</h2><a class="row" href="{REPO_URL}/issues/1093"><span>Heartbeat + allocator registry</span><strong>#1093 ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/factory-completion-drain.yml"><span>Completion drain</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"><span>Main dispatcher</span><strong>workflow ↗</strong></a></div>
 </section>
 {render_roster_section(snapshot)}
-<section class="panel scoreboard"><div class="score-head"><div><h2>Fleet scoreboard</h2><div class="sub">Current health, current work, latest classified attempt, and retained merge credit.</div></div><div class="filters"><input id="factory-search" type="search" placeholder="Factory, model, provider…" aria-label="Search factories"><select id="factory-filter" aria-label="Filter factories"><option value="">All factories</option><option value="working">Working now</option><option value="healthy">Healthy</option><option value="watch">Needs attention</option><option value="blocked">Blocked</option></select></div></div>
-<div class="table-wrap"><table><thead><tr><th>Verdict</th><th>Factory</th><th>Health</th><th>Latest runtime</th><th>Latest attempt</th><th>24h merges</th><th>7d merges</th><th>Current work</th><th>Seen</th></tr></thead><tbody id="factory-rows">{render_worker_rows(snapshot)}</tbody></table></div>
+<section class="panel scoreboard"><div class="score-head"><div><h2>Fleet scoreboard</h2><div class="sub">Current health, current work, latest classified attempt, and retained merge credit. Heartbeat freshness is observation age; quota-limited workers are not classified as crashed.</div></div><div class="filters"><input id="factory-search" type="search" placeholder="Factory, model, provider…" aria-label="Search factories"><select id="factory-filter" aria-label="Filter factories"><option value="">All factories</option><option value="working">Working now</option><option value="healthy">Healthy</option><option value="watch">Needs attention</option><option value="blocked">Blocked</option></select></div></div>
+{render_heartbeat_summary(snapshot)}<div class="table-wrap"><table><thead><tr><th>Verdict</th><th>Factory</th><th>Health</th><th>Latest runtime</th><th>Latest attempt</th><th>24h merges</th><th>7d merges</th><th>Current work</th><th>Seen</th></tr></thead><tbody id="factory-rows">{render_worker_rows(snapshot)}</tbody></table></div>
 <div class="notes">7d merge credit uses the factory owner label retained on merged PRs. The registry currently overwrites each factory’s latest attempt, so this dashboard does not pretend that one latest outcome is a historical success rate.</div></section>
 <footer>Read-only projection of GitHub factory state. GitHub labels, leases, workflow state, and allocator policy remain authoritative.</footer>
 <script>(()=>{{const q=document.getElementById('factory-search'),f=document.getElementById('factory-filter'),rows=[...document.querySelectorAll('#factory-rows tr')];const apply=()=>{{const s=q.value.trim().toLowerCase(),v=f.value;rows.forEach(r=>{{let ok=!s||(r.dataset.search||'').toLowerCase().includes(s);if(v==='working')ok=ok&&r.dataset.activity==='working';if(v==='healthy')ok=ok&&r.dataset.health==='healthy';if(v==='watch')ok=ok&&r.dataset.tier==='watch';if(v==='blocked')ok=ok&&r.dataset.tier==='blocked';r.hidden=!ok}})}};q.addEventListener('input',apply);f.addEventListener('change',apply)}})();</script>

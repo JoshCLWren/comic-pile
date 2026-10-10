@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
@@ -35,6 +36,9 @@ import { useRollViewport } from './useRollViewport'
 import { useRatingView } from './useRatingView'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
+import { useSnapshots, useUndo } from '../../hooks/useUndo'
+import { useToast } from '../../contexts/useToast'
+import { invalidateAfterUndo } from '../../query/cacheEffects'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
@@ -58,6 +62,7 @@ import CorrectionSheet from '../../components/CorrectionSheet'
 export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const {
     data: bootstrap,
@@ -129,6 +134,8 @@ export default function RollPage() {
   const rateMutation = useRate()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
+  const { showToast } = useToast()
+  const undo = useUndo()
 
   useRollBootstrapSync({
     state,
@@ -149,6 +156,17 @@ export default function RollPage() {
     dismissPendingMutation,
     refetchBootstrap,
   })
+
+  // Undoing a rating restores the snapshot the rating itself wrote, which is the
+  // newest one while nothing else has been rated since (#3194). The list stays
+  // disabled until a just-rated notice is on screen so Roll costs nothing at
+  // rest, and the click path re-reads it before acting so a second rating inside
+  // the snapshot query's stale window cannot undo two ratings at once.
+  const undoSessionId = rating.lastRated ? bootstrap?.session_id ?? null : null
+  const { data: undoSnapshots, refetch: refetchUndoSnapshots } = useSnapshots(undoSessionId)
+  const latestUndoSnapshot = undoSnapshots?.snapshots[0]
+  const canUndoLastRating =
+    latestUndoSnapshot != null && latestUndoSnapshot.description !== 'Session start'
 
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
@@ -249,6 +267,32 @@ export default function RollPage() {
     }
   }
 
+  const handleUndoRating = async () => {
+    const rated = rating.lastRated
+    const sessionId = bootstrap?.session_id
+    if (!rated || sessionId == null) return
+
+    try {
+      const freshSnapshots = await refetchUndoSnapshots()
+      const snapshot = freshSnapshots.data?.snapshots[0]
+      if (!snapshot || snapshot.description === 'Session start') {
+        showToast('No undo point is recorded for this rating.', 'error')
+        return
+      }
+
+      await undo.mutate({ sessionId, snapshotId: snapshot.id })
+      showToast(`Rating for "${rated.title} ${rated.issueNumber}" has been undone`, 'success')
+      // Drop the notice before the refresh lands: the restored state is the
+      // one the reader asked for, and keeping a "you just rated" prompt up
+      // over a state where the rating no longer exists is the stale read #3194.
+      rating.clearLastRated()
+      await invalidateAfterUndo(queryClient)
+    } catch (error) {
+      console.error('Undo failed:', error)
+      showToast('Failed to undo rating. Please try again.', 'error')
+    }
+  }
+
   const handleSkip = useCallback(async () => {
     try {
       const response = await skipMutation.mutate()
@@ -303,6 +347,7 @@ export default function RollPage() {
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const skippedThreads = bootstrap?.skipped_threads ?? []
   const blockedThreads = bootstrap?.blocked_threads ?? []
+  const inactiveThreads = bootstrap?.inactive_threads ?? []
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -425,6 +470,9 @@ export default function RollPage() {
               <PostRateCopyPrompt
                 reference={rating.lastRated}
                 onDismiss={rating.clearLastRated}
+                onUndo={handleUndoRating}
+                undoPending={undo.isPending}
+                canUndo={canUndoLastRating}
               />
             )}
 
@@ -451,6 +499,8 @@ export default function RollPage() {
               skippedThreads={skippedThreads}
               skippedExpanded={state.skippedExpanded}
               staleExpanded={state.staleExpanded}
+              inactiveExpanded={state.inactiveExpanded}
+              inactiveThreads={inactiveThreads}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
               onUnskip={skip.handleUnskip}
@@ -459,6 +509,7 @@ export default function RollPage() {
               onToggleSkipped={() => state.setSkippedExpanded(!state.skippedExpanded)}
               onToggleStale={() => state.setStaleExpanded(!state.staleExpanded)}
               onToggleBlocked={dependencies.handleToggleBlocked}
+              onToggleInactive={() => state.setInactiveExpanded(!state.inactiveExpanded)}
               onShuffle={actions.handleShufflePool}
               unsnoozeIsPending={unsnoozeMutation.isPending}
               unskipIsPending={unskipMutation.isPending}

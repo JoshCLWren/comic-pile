@@ -196,4 +196,55 @@ class MetadataCorrectionRevertRequest(BaseModel):
     correction_id: int = Field(..., description="ID of the correction to revert")
 
 
+class ImportSeriesRequest(BaseModel):
+    """Request to import a ComicVine series/volume as a new thread with all issues.
+
+    Creates a thread with the series title and adopts all issues from the
+    confirmed ComicVine volume using the shared provider-issue adoption
+    primitive. Optional reading progress indicates how many issues from
+    the start of the series have already been read.
+    """
+
+    comicvine_volume_id: int = Field(..., gt=0, description="ComicVine volume ID to import")
+    reading_order_id: int | None = Field(default=None, gt=0, description="Optional reading order to add the thread to")
+    anchor_before_thread_id: int | None = Field(default=None, gt=0)
+    anchor_after_thread_id: int | None = Field(default=None, gt=0)
+    already_read_count: int = Field(default=0, ge=0, description="Number of issues already read from the start of the series")
+
+
+class ImportSeriesIssueResult(BaseModel):
+    """Result of adopting one issue during series import."""
+
+    comicvine_issue_id: int
+    issue_number: str | None = None
+    issue_id: int | None = None
+    outcome: str
+    hydration: str
+    conflict_detail: str | None = None
+
+
+class ImportSeriesResponse(BaseModel):
+    """Result of a ComicVine series import."""
+
+    thread_id: int
+    series_name: str
+    comicvine_volume_id: int
+    total_issues_in_series: int
+    issues_adopted: int
+    issues_skipped: int
+    issues_conflict: int
+    issue_results: list[ImportSeriesIssueResult]
+    reading_order_id: int | None = None
+    position: int | None = None
+    total_items: int | None = None
+    thread_created: bool = Field(
+        ...,
+        description=(
+            "True when this call created the local series thread. False when an "
+            "existing thread already tracked this ComicVine volume, so a retry "
+            "adopted into the original series instead of duplicating it."
+        ),
+    )
+
+
 

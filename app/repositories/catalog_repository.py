@@ -272,6 +272,52 @@ async def get_series_with_issues(
     return series_info, issues_with_mappings
 
 
+async def find_owned_thread_for_provider_series(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    provider: str,
+    series_external_id: str,
+) -> int | None:
+    """Find an owned thread already confirmed against one provider series.
+
+    Source-driven series imports retry after partial provider failures, so the
+    import path needs to recognize a thread it already created for the same
+    provider volume instead of creating a second copy of the same series.
+
+    Args:
+        db: Async database session.
+        user_id: Owner whose threads are eligible for reuse.
+        provider: Provider name (e.g. ``comicvine``).
+        series_external_id: Stable provider series/volume identifier.
+
+    Returns:
+        The owned thread ID carrying a confirmed mapping to that series, or
+        ``None`` when no such thread exists.
+    """
+    from app.models.external_identity import ThreadExternalSeriesMapping
+    from app.models.thread import Thread
+
+    thread_id = await db.scalar(
+        select(ThreadExternalSeriesMapping.thread_id)
+        .join(Thread, Thread.id == ThreadExternalSeriesMapping.thread_id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .where(
+            Thread.user_id == user_id,
+            ThreadExternalSeriesMapping.status == "confirmed",
+            ExternalIdentity.entity_type == "series",
+            ExternalIdentity.provider == provider.strip().lower(),
+            ExternalIdentity.external_id == series_external_id.strip(),
+        )
+        .order_by(ThreadExternalSeriesMapping.id)
+        .limit(1)
+    )
+    return thread_id
+
+
 async def has_confirmed_series_mapping_for_origin(
     db: AsyncSession,
     *,

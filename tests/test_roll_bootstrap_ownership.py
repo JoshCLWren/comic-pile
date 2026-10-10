@@ -122,14 +122,16 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),
-        _Result(rows=[owned_snoozed]),
-        _Result(scalar_value=0),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
+        _Result(rows=[]),           # pool
+        _Result(rows=[owned_snoozed]),  # snoozed threads
+        _Result(scalar_value=0),   # blocked count
+        _Result(rows=[]),          # blocked threads
+        _Result(scalar_value=0),   # stale count
+        _Result(rows=[]),          # all active
+        _Result(rows=[]),          # completed
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     snoozed_statement = db.execute.await_args_list[1].args[0]
     compiled = str(snoozed_statement)
@@ -197,14 +199,15 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=pool_rows),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
+        _Result(rows=pool_rows),   # pool
+        _Result(scalar_value=0),   # blocked count
+        _Result(rows=[]),          # blocked threads
+        _Result(scalar_value=0),   # stale count
+        _Result(rows=[]),          # all active
+        _Result(rows=[]),          # completed
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     pool_statement = db.execute.await_args_list[0].args[0]
     compiled = str(pool_statement.compile(compile_kwargs={"literal_binds": True}))
@@ -243,6 +246,9 @@ def test_bootstrap_schema_bounds_summary_lists_without_losing_counts():
         blocked_threads=summaries,
         stale_thread_count=0,
         stale_thread=None,
+        total_threads=len(summaries),
+        available_threads=len(summaries),
+        excluded_count=0,
     )
 
     assert len(response.roll_pool) == 25
@@ -502,14 +508,15 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
+        _Result(rows=[]),           # pool
+        _Result(scalar_value=0),   # blocked count
+        _Result(rows=[]),          # blocked threads
+        _Result(scalar_value=0),   # stale count
+        _Result(rows=[]),          # all active
+        _Result(rows=[]),          # completed
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     mode = response.session_mode
     assert mode.active_bandwidth is None
@@ -570,14 +577,15 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
+        _Result(rows=[]),           # pool
+        _Result(scalar_value=0),   # blocked count
+        _Result(rows=[]),          # blocked threads
+        _Result(scalar_value=0),   # stale count
+        _Result(rows=[]),          # all active
+        _Result(rows=[]),          # completed
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     mode = response.session_mode
     assert mode.active_bandwidth == "light"
@@ -640,14 +648,15 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
+        _Result(rows=[]),           # pool
+        _Result(scalar_value=0),   # blocked count
+        _Result(rows=[]),          # blocked threads
+        _Result(scalar_value=0),   # stale count
+        _Result(rows=[]),          # all active
+        _Result(rows=[]),          # completed
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     assert response.session_mode.session_mode_correction_guidance == guidance
 
@@ -739,10 +748,10 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),
-        _Result(scalar_value=0),
-        _Result(rows=[]),
-        _Result(scalar_value=3),
+        _Result(rows=[]),           # pool
+        _Result(scalar_value=0),   # blocked count
+        _Result(rows=[]),          # blocked threads
+        _Result(scalar_value=3),   # stale count
         _Result(rows=[(10,), (20,), (30,)]),
         _Result(
             rows=[
@@ -754,9 +763,11 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
                 )
             ]
         ),
+        _Result(rows=[]),
+        _Result(rows=[]),
     ]
 
-    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     assert stale_ids_captured == [10, 20, 30]
     assert response.stale_thread_count == 3

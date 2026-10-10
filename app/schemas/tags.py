@@ -185,3 +185,55 @@ class TagDeleteResponse(BaseModel):
     tag_id: int
     assignments_removed: int
     references_removed_by_consumers: dict[str, int] = {}
+
+
+class InheritanceSourceResponse(BaseModel):
+    """One object responsible for an effective tag.
+
+    Attributes:
+        target_type: Polymorphic target type (``"Issue"``, ``"Thread"``, or
+            ``"ContinuityPlan"``).
+        target_id: Primary key of the source object.
+        display_name: Human-readable label for navigation (thread title, plan
+            name, or issue number).
+    """
+
+    target_type: str
+    target_id: int
+    display_name: str
+
+
+class EffectiveTagResponse(BaseModel):
+    """One deduplicated effective tag with every contributing source.
+
+    Attributes:
+        tag: The tag itself.
+        direct: ``True`` when the tag is directly assigned to the queried
+            object (it may additionally be inherited through parent paths).
+        sources: Every object whose direct assignment contributes this tag,
+            including the queried object itself for direct assignments. A tag
+            inherited through several paths appears once with all of its
+            sources retained.
+    """
+
+    tag: TagResponse
+    direct: bool
+    sources: list[InheritanceSourceResponse]
+
+
+class EffectiveTagsResponse(BaseModel):
+    """Direct and effective tags for one object.
+
+    Attributes:
+        target_type: Polymorphic target type of the queried object.
+        target_id: Primary key of the queried object.
+        direct_tags: Tags directly assigned to the object and visible to the
+            viewer.
+        effective_tags: Union of direct and inherited visible tags,
+            deduplicated by tag with all contributing sources retained.
+    """
+
+    target_type: str
+    target_id: int
+    direct_tags: list[TagResponse]
+    effective_tags: list[EffectiveTagResponse]

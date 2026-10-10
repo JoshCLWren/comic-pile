@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Tag, TagAssignment
@@ -153,6 +153,48 @@ async def list_global_tags(db: AsyncSession) -> list[Tag]:
         select(Tag).where(Tag.scope == "global").order_by(Tag.normalized_name)
     )
     return list(result.scalars().all())
+
+
+async def list_visible_assignments_for_targets(
+    db: AsyncSession,
+    viewer_user_id: int,
+    targets: list[tuple[str, int]],
+) -> list[tuple[Tag, TagAssignment]]:
+    """Return visible tag assignments for a set of polymorphic targets.
+
+    Each requested ``(target_type, target_id)`` pair contributes the tags
+    directly assigned to it, filtered to the vocabulary visible to the viewer:
+    every global tag plus the viewer's own private tags. Private tags owned by
+    anyone else are never returned, so inherited or direct private vocabulary
+    cannot leak across users.
+
+    Args:
+        db: Database session.
+        viewer_user_id: Viewer whose private vocabulary is included.
+        targets: Polymorphic ``(target_type, target_id)`` pairs to inspect.
+
+    Returns:
+        ``(Tag, TagAssignment)`` pairs ordered by tag scope then normalized
+        name. Empty when ``targets`` is empty.
+    """
+    if not targets:
+        return []
+
+    conditions = [
+        (TagAssignment.target_type == target_type)
+        & (TagAssignment.target_id == target_id)
+        for target_type, target_id in targets
+    ]
+    result = await db.execute(
+        select(Tag, TagAssignment)
+        .join(Tag, Tag.id == TagAssignment.tag_id)
+        .where(
+            or_(*conditions),
+            (Tag.scope == "global") | (Tag.owner_user_id == viewer_user_id),
+        )
+        .order_by(Tag.scope.desc(), Tag.normalized_name, TagAssignment.target_type)
+    )
+    return [(tag, assignment) for tag, assignment in result.all()]
 
 
 async def count_assignments_for_tag(db: AsyncSession, tag_id: int) -> int:
