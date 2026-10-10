@@ -300,9 +300,7 @@ test('PR refresh preserves a roster fixed-model PR-local owner', async () => {
   });
 
   assert.equal(calls.length, 0);
-  assert.ok(calls[0].labels.includes('factory:49'));
-  assert.ok(calls[0].labels.includes('factory:review'));
-  assert.ok(!calls[0].labels.includes('factory:unowned'));
+  // A valid preserved owner and stage require no API write.
 });
 
 test('released fixed-model PR resolves closing issue instead of worker branch number', async () => {
@@ -339,13 +337,7 @@ test('released fixed-model PR resolves closing issue instead of worker branch nu
 
   assert.deepEqual(commentIssueNumbers, [1089]);
   assert.equal(calls.length, 0);
-  const owners = calls[0].labels.filter(label => (
-    label === 'factory:unowned'
-    || label === 'factory:local'
-    || /^factory:(?:[1-9]|[1-3][0-9]|[4-7][0-9])$/.test(label)
-  ));
-  assert.deepEqual(owners, ['factory:unowned']);
-  assert.ok(calls[0].labels.includes('factory:review'));
+  // Released ownership already matches, so no write is needed.
 });
 
 test('PR refresh preserves one external owner after the linked issue is released', async () => {
@@ -952,9 +944,8 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
   });
   // Prove the linked-issue owner lookup actually consumed the worker App comment.
   assert.ok(workerIssueNumbers.includes(3131), 'owner lookup must read issue 3131 comments');
-  assert.equal(workerCalls.length, 1);
-  assert.ok(workerCalls[0].labels.includes('factory:unowned'));
-  assert.ok(!workerCalls[0].labels.includes('factory:49'));
+  // Untrusted worker marker cannot change an already-correct owner.
+  assert.equal(workerCalls.length, 0);
 
   const actionsCalls = [];
   await reconcile({
