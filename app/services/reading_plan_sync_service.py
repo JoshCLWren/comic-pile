@@ -326,7 +326,7 @@ async def sync_released_issues(
     for volume_id, sources in volume_groups.items():
         try:
             roster = await resolved_client.fetch_volume_issues(volume_id, refresh=refresh)
-        except Exception as error:  # noqa: BLE001 - one volume must not abort the run
+        except Exception as error:  # one volume must not abort the run
             logger.warning(
                 "reading_plan_sync_volume_failed volume_id=%s error=%s",
                 volume_id,
@@ -356,7 +356,7 @@ async def sync_released_issues(
                     boundary=boundary,
                     client=resolved_client,
                 )
-            except Exception as error:  # noqa: BLE001 - one source must not abort the run
+            except Exception as error:  # one source must not abort the run
                 logger.warning(
                     "reading_plan_sync_source_failed source_id=%s error=%s",
                     source.id,
@@ -378,7 +378,7 @@ async def sync_released_issues(
     for source_id in synced_source_ids:
         try:
             await repo.mark_synced(db, source_id=source_id, synced_at=synced_at)
-        except Exception as error:  # noqa: BLE001 - bookkeeping must not abort the run
+        except Exception as error:  # bookkeeping must not abort the run
             logger.warning(
                 "reading_plan_sync_last_synced_update_failed source_id=%s error=%s",
                 source_id,
@@ -572,7 +572,7 @@ async def _sync_source(
                 metadata=_issue_metadata(row),
                 comicvine_client=client,
             )
-        except Exception as error:  # noqa: BLE001 - one issue must not abort the source
+        except Exception as error:  # one issue must not abort the source
             issue_failures += 1
             logger.warning(
                 "reading_plan_sync_issue_failed source_id=%s issue_id=%s error=%s",

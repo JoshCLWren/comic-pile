@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from sqlalchemy import select
 
@@ -244,13 +244,19 @@ async def test_status_endpoint_reports_persisted_state(
 @pytest.mark.asyncio
 async def test_sync_endpoint_persists_adopted_issue(
     async_db_committed: AsyncSession,
-    default_user: User,
+    db_engine: AsyncEngine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The endpoint commits its writes instead of rolling them back.
 
-    The request runs against a real-committing session and a fresh connection
-    reads the result back, so a flush-only implementation fails this test.
+    The request runs against a real-committing session and a fresh
+    connection reads the result back, so a flush-only implementation
+    fails this test.
+
+    The user is created through the committed session: pairing the
+    committed session with the rollback-isolated ``async_db`` fixture
+    would hold ``TRUNCATE ... CASCADE`` locks on ``threads`` and
+    ``users`` while the request queries them, deadlocking the run.
     """
     from httpx import ASGITransport
 
@@ -261,7 +267,7 @@ async def test_sync_endpoint_persists_adopted_issue(
     from tests.conftest import _create_async_db_override
 
     db = async_db_committed
-    user = default_user
+    user = await get_or_create_user_async(db, "sync_persist_committed@test.com")
     thread = await _seed_source(db, user_id=user.id, volume_id=6601)
     provider = _FakeProvider({6601: [_released_row(66011, "1")]})
     _use_provider(monkeypatch, provider)
@@ -284,9 +290,11 @@ async def test_sync_endpoint_persists_adopted_issue(
     assert response.status_code == 200, response.text
     assert response.json()["result"]["created_issues"] == 1
 
-    stored = await db.scalar(
-        select(Issue.issue_number).where(Issue.thread_id == thread.id)
-    )
+    verifier = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+    async with verifier() as fresh:
+        stored = await fresh.scalar(
+            select(Issue.issue_number).where(Issue.thread_id == thread.id)
+        )
     assert stored == "1"
 
 

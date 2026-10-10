@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy import update as sa_update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.models import Issue, Thread, User
 from app.models.continuity_plan import ContinuityPlan
@@ -626,6 +626,7 @@ async def test_single_bad_issue_does_not_fail_the_source(
 @pytest.mark.asyncio
 async def test_sync_writes_survive_a_real_commit(
     async_db_committed: AsyncSession,
+    db_engine: AsyncEngine,
 ) -> None:
     """Adopted issues and last_synced_at persist beyond the sync session.
 
@@ -645,16 +646,17 @@ async def test_sync_writes_survive_a_real_commit(
 
     assert report.created_issues == 1
 
-    verifier = await db.scalar(
-        select(Issue.issue_number).where(Issue.thread_id == thread.id)
-    )
-    assert verifier == "1"
-
-    persisted = await db.scalar(
-        select(ReadingPlanReleaseSource.last_synced_at).where(
-            ReadingPlanReleaseSource.id == source.id
+    verifier = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+    async with verifier() as fresh:
+        issue_number = await fresh.scalar(
+            select(Issue.issue_number).where(Issue.thread_id == thread.id)
         )
-    )
+        persisted = await fresh.scalar(
+            select(ReadingPlanReleaseSource.last_synced_at).where(
+                ReadingPlanReleaseSource.id == source.id
+            )
+        )
+    assert issue_number == "1"
     assert persisted is not None
     assert persisted.tzinfo is not None
 
