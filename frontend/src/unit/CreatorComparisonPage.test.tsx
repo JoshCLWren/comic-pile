@@ -174,7 +174,8 @@ describe('CreatorComparisonPage', () => {
     const distributions = screen.getAllByTestId('rating-distribution')
     expect(distributions).toHaveLength(2)
     const vaughanBars = within(distributions[0]).getAllByRole('listitem')
-    expect(vaughanBars).toHaveLength(9)
+    // Only buckets with at least one rating render (#3329): { '5': 2, '4.5': 1, '4': 1 }.
+    expect(vaughanBars).toHaveLength(3)
     expect(vaughanBars).toContainEqual(expect.objectContaining({ ariaLabel: '4★: 1 rating, 25.0%' }))
   })
 
@@ -398,8 +399,10 @@ describe('CreatorComparisonPage', () => {
     const distributions = screen.getAllByTestId('rating-distribution')
     const smallDistribution = distributions[0]
     expect(smallDistribution).toHaveTextContent('4 · 100.0%')
-    // Screen-reader label for the full 5★ bucket row.
+    // Screen-reader label for the full 5★ bucket row. Only the rated step
+    // renders (#3329).
     const smallRows = within(smallDistribution).getAllByRole('listitem')
+    expect(smallRows).toHaveLength(1)
     expect(smallRows[0]).toHaveAttribute('aria-label', '5★: 4 ratings, 100.0%')
   })
 
@@ -505,14 +508,10 @@ describe('CreatorComparisonPage', () => {
 
     const distributions = screen.getAllByTestId('rating-distribution')
     const noneDistribution = distributions[0]
-    expect(noneDistribution).not.toHaveTextContent(' ·')
-    // Every emitted bucket row is present and quiet (no count text for empty buckets).
-    expect(noneDistribution).toHaveTextContent('5★')
-    expect(noneDistribution).toHaveTextContent('1★')
-    // Empty buckets expose 0 / 0.0% only via screen-reader labels, never visually.
-    const noneRows = within(noneDistribution).getAllByRole('listitem')
-    expect(noneRows.length).toBe(9)
-    expect(noneRows[1]).toHaveAttribute('aria-label', '4.5★: 0 ratings (0.0%)')
+    // Zero-count steps collapse (#3329): with no ratings the section says so
+    // instead of rendering empty bar rows.
+    expect(noneDistribution).toHaveTextContent('No ratings yet')
+    expect(within(noneDistribution).queryByRole('listitem')).not.toBeInTheDocument()
   })
 
   it('keeps half-star buckets intact and computes their percentages from the headline sample', () => {
@@ -539,12 +538,14 @@ describe('CreatorComparisonPage', () => {
     expect(distribution).toHaveTextContent('4.5★')
     expect(distribution).toHaveTextContent('3.5★')
     expect(distribution).toHaveTextContent('3★')
-    // Each is 1 of 4 = 25.0% of the headline rated sample.
+    // Each is 1 of 4 = 25.0% of the headline rated sample. Only non-empty
+    // buckets render, sorted descending (#3329).
     const rows = within(distribution).getAllByRole('listitem')
+    expect(rows).toHaveLength(4)
     expect(rows[0]).toHaveAttribute('aria-label', '5★: 1 rating, 25.0%')
     expect(rows[1]).toHaveAttribute('aria-label', '4.5★: 1 rating, 25.0%')
-    expect(rows[3]).toHaveAttribute('aria-label', '3.5★: 1 rating, 25.0%')
-    expect(rows[4]).toHaveAttribute('aria-label', '3★: 1 rating, 25.0%')
+    expect(rows[2]).toHaveAttribute('aria-label', '3.5★: 1 rating, 25.0%')
+    expect(rows[3]).toHaveAttribute('aria-label', '3★: 1 rating, 25.0%')
   })
 
   it('labels distribution rows with bucket, count, percentage and the region the sample size', () => {
@@ -576,9 +577,77 @@ describe('CreatorComparisonPage', () => {
       'Rating distribution across 8 rated issues',
     )
     const rows = within(distributions[0]).getAllByRole('listitem')
-    expect(rows).toHaveLength(9)
-    expect(rows[1]).toHaveAttribute('aria-label', '4.5★: 0 ratings (0.0%)')
-    expect(rows[2]).toHaveAttribute('aria-label', '4★: 4 ratings, 50.0%')
+    // Only non-empty buckets render, sorted descending (#3329).
+    expect(rows).toHaveLength(2)
     expect(rows[0]).toHaveAttribute('aria-label', '5★: 4 ratings, 50.0%')
+    expect(rows[1]).toHaveAttribute('aria-label', '4★: 4 ratings, 50.0%')
+  })
+
+  it('renders only rated steps on a low-data card instead of empty rows (#3329)', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:thin': makeItem({
+              canonical_creator_key: 'creator:thin',
+              display_name: 'Thin Sample Creator',
+              average_rating: 3,
+              median_rating: 3,
+              ratings_count: 1,
+              rating_distribution: { '3': 1 },
+              top_rating_rate: 0,
+              insufficient_data: true,
+            }),
+            'creator:other': makeItem({
+              canonical_creator_key: 'creator:other',
+              display_name: 'Other Creator',
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:thin,creator:other')
+
+    const distributions = screen.getAllByTestId('rating-distribution')
+    const thinDistribution = distributions[0]
+    // One rated issue at 3 stars: exactly one row, no empty 5/4.5/4/... rows.
+    const rows = within(thinDistribution).getAllByRole('listitem')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveAttribute('aria-label', '3★: 1 rating, 100.0%')
+    expect(thinDistribution).toHaveTextContent('1 · 100.0%')
+    expect(thinDistribution).not.toHaveTextContent('5★')
+  })
+
+  it('renders the 0.5 bucket when it holds ratings instead of dropping it (#3329)', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:low': makeItem({
+              canonical_creator_key: 'creator:low',
+              display_name: 'Low Ratings Creator',
+              average_rating: 2.75,
+              median_rating: 2.75,
+              ratings_count: 2,
+              rating_distribution: { '5': 1, '0.5': 1 },
+              top_rating_rate: 0.5,
+            }),
+            'creator:other': makeItem({
+              canonical_creator_key: 'creator:other',
+              display_name: 'Other Creator',
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:low,creator:other')
+
+    const distributions = screen.getAllByTestId('rating-distribution')
+    const rows = within(distributions[0]).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveAttribute('aria-label', '5★: 1 rating, 50.0%')
+    expect(rows[1]).toHaveAttribute('aria-label', '0.5★: 1 rating, 50.0%')
   })
 })
