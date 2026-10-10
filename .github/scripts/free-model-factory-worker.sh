@@ -165,6 +165,7 @@ stage_trusted_review_controller() {
   trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
   cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
   cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+  cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
   chmod +x "$trusted_dir/factory-review-controller.py"
   TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
   export TRUSTED_REVIEW_CONTROLLER
@@ -239,7 +240,10 @@ select_controller_assignment() {
       log "controller-leased PR #${pr} returned an empty branch"
       return 3
     fi
-    linked_issue="$(linked_issue_from_branch "$branch")"
+    if ! linked_issue="$(linked_issue_from_pr "$pr")"; then
+      log "unable to resolve linked issue for controller-leased PR #${pr}"
+      return 3
+    fi
     pr_stage="$(jq -r --argjson pr "$pr" '.[] | select(.number == $pr) | [.labels[].name | select(. == "factory:building" or . == "factory:review" or . == "factory:changes-requested" or . == "factory:conflict" or . == "factory:ci")] | first // empty' <<< "$pr_json")"
     if [[ -z "$pr_stage" ]]; then
       log "controller-leased PR #${pr} has no supported completion stage"

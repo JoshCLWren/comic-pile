@@ -150,6 +150,21 @@ linked_issue_from_branch() {
   sed -nE 's#^factory/[0-9]+-([0-9]+)-.*$#\1#p' <<< "$1"
 }
 
+# Use the same trusted linkage policy as the controller, including local PRs.
+# The policy is staged from main before switching to the assigned branch.
+linked_issue_from_pr() {
+  local pr_json
+  pr_json="$(gh pr view "$1" --json headRefName,body,title)" || return 3
+  printf '%s' "$pr_json" | python3 -c '
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]).parent))
+from factory_work_policy import linked_issue_from_pr
+issue = linked_issue_from_pr(json.load(sys.stdin))
+print(issue if issue is not None else "")
+' "$TRUSTED_REVIEW_CONTROLLER"
+}
+
 issue_has_open_factory_pr() {
   local issue="$1"
   gh pr list --state open --limit 300 --json headRefName,body | jq -e --arg issue "$issue" '
@@ -163,7 +178,7 @@ issue_has_open_factory_pr() {
 release_pr_and_issue() {
   local pr="$1" branch="$2" stage="$3" reason="$4" issue state
   release_target "$pr" "$stage" "$reason" 'pr'
-  issue="$(linked_issue_from_branch "$branch")"
+  issue="$(linked_issue_from_pr "$pr")" || return 3
   if [[ -n "$issue" ]]; then
     state="$(gh issue view "$issue" --json state --jq .state 2>/dev/null || true)"
     if [[ "$state" == 'OPEN' ]] && current_owner_is_self "$issue"; then
@@ -398,7 +413,7 @@ target_scope_text() {
   fi
   title="$(gh pr view "$number" --json title --jq .title)"
   body="$(gh pr view "$number" --json body --jq .body)"
-  issue="$(linked_issue_from_branch "$(gh pr view "$number" --json headRefName --jq .headRefName)")"
+  issue="$(linked_issue_from_pr "$number")" || return 3
   if [[ -n "$issue" ]]; then
     title="$(gh issue view "$issue" --json title --jq .title)"
     body="$(gh issue view "$issue" --json body --jq .body)"
@@ -853,7 +868,7 @@ while (( $(remaining) > 480 )); do
     machine_merge_gates_pass "$NUMBER" "$current"; then
     log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
     gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
-    issue_number="$(linked_issue_from_branch "$BRANCH")"
+    issue_number="$(linked_issue_from_pr "$NUMBER")" || return 3
     if [[ -n "$issue_number" ]]; then
       state="$(gh issue view "$issue_number" --json state --jq .state 2>/dev/null || true)"
       if [[ "$state" == 'OPEN' ]]; then
