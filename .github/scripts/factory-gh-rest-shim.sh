@@ -56,7 +56,14 @@ if [[ "$command_group" == issue && "$command_name" == list ]]; then
   if ! parse_list_args repo state limit jq_expr labels "$@"; then
     exec "$REAL_GH" "${original[@]}"
   fi
-  pages="$("$REAL_GH" api --paginate --slurp "repos/${repo}/issues?state=${state}&per_page=100")"
+  # Let GitHub narrow worker-owned issue queries server-side. Otherwise each
+  # worker re-fetches every page of the entire issue backlog to find one lease.
+  endpoint="repos/${repo}/issues?state=${state}&per_page=100"
+  if (( ${#labels[@]} > 0 )); then
+    label_list="$(IFS=,; printf '%s' "${labels[*]}")"
+    endpoint+="&labels=$(jq -rn --arg labels "$label_list" '$labels | @uri')"
+  fi
+  pages="$("$REAL_GH" api --paginate --slurp "$endpoint")"
   labels_json="$(printf '%s\n' "${labels[@]:-}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
   payload="$(jq -c --argjson labels "$labels_json" --argjson limit "$limit" '
     [
