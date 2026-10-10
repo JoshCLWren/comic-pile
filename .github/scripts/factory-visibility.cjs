@@ -188,6 +188,10 @@ async function reconcileLabels(github, context, number, { owner, stage }) {
   if (owner) next.push(owner);
   if (stage) next.push(stage);
 
+  // A no-op label replacement still consumes API quota and emits a labels event.
+  // Compare sets, since GitHub does not promise stable label ordering.
+  if (current.size === next.length && next.every(label => current.has(label))) return;
+
   await withRetry(() => github.rest.issues.setLabels({
     owner: context.repo.owner,
     repo: context.repo.repo,
