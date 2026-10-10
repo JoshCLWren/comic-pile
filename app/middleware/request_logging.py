@@ -376,6 +376,28 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                     },
                 )
 
+            # Auto-file actionable GitHub issues from performance violations
+            # (issue #3245). Evaluation is synchronous and filing is bounded
+            # background work, so a GitHub outage never delays or fails the
+            # production request that triggered the telemetry.
+            if process_time_ms >= slow_request_threshold:
+                try:
+                    from app.services import performance_issue_service as perf_issues
+
+                    perf_issues.handle_request_telemetry(
+                        method=request.method,
+                        route_template=resolve_route_template(request.scope),
+                        duration_ms=process_time_ms,
+                        cold=startup.cold,
+                        db_queries=diagnostics.database_queries,
+                        db_time_ms=diagnostics.database_time_ms,
+                        request_id=request_id,
+                        deployment_id=startup.deployment_id,
+                        server_timing=response.headers.get("Server-Timing"),
+                    )
+                except Exception as exc:
+                    logger.debug("Performance issue evaluation skipped: %s", exc)
+
             # Error and slow request logging
             if status_code >= 500:
                 logger.error(
