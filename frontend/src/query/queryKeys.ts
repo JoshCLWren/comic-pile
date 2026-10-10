@@ -305,7 +305,7 @@ export const queryKeys = {
         pageSize?: number
       }
     ) => {
-      const normalizedParams = params ? { ...params } : {}
+      const normalizedParams: Record<string, string | number | undefined> = params ? { ...params } : {}
       // Remove undefined values to keep the key canonical
       Object.keys(normalizedParams).forEach(key => {
         if (normalizedParams[key] === undefined) {
@@ -322,7 +322,7 @@ export const queryKeys = {
       ratingValue: string,
       params?: { page?: number; pageSize?: number }
     ) => {
-      const normalizedParams = params ? { ...params } : {}
+      const normalizedParams: Record<string, number | undefined> = params ? { ...params } : {}
       Object.keys(normalizedParams).forEach(key => {
         if (normalizedParams[key] === undefined) {
           delete normalizedParams[key]
@@ -338,7 +338,7 @@ export const queryKeys = {
       role: string,
       params?: { page?: number; pageSize?: number }
     ) => {
-      const normalizedParams = params ? { ...params } : {}
+      const normalizedParams: Record<string, number | undefined> = params ? { ...params } : {}
       Object.keys(normalizedParams).forEach(key => {
         if (normalizedParams[key] === undefined) {
           delete normalizedParams[key]
@@ -354,7 +354,7 @@ export const queryKeys = {
       seriesKey: string,
       params?: { page?: number; pageSize?: number }
     ) => {
-      const normalizedParams = params ? { ...params } : {}
+      const normalizedParams: Record<string, number | undefined> = params ? { ...params } : {}
       Object.keys(normalizedParams).forEach(key => {
         if (normalizedParams[key] === undefined) {
           delete normalizedParams[key]

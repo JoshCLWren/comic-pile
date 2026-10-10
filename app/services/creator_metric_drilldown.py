@@ -13,16 +13,8 @@ to ensure consistency between summary and drilldown views.
 from __future__ import annotations
 
 import math
-from typing import Any
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import joinedload
-
-from app.database import get_db
-from app.models.issue import Issue
-from app.models.rating import Rating
-from app.models.thread import Thread
-from app.models.user import User
 from app.schemas.creator_comparison import (
     CreatorMetricCalculation,
     CreatorMetricDrilldown,
@@ -35,7 +27,7 @@ from app.services.creator_detail import get_creator_issues_with_metadata
 
 
 async def get_creator_metric_drilldown(
-    db: Any,
+    db: AsyncSession,
     user_id: int,
     creator_key: str,
     metric_type: str,
@@ -427,13 +419,13 @@ async def _calculate_rating_distribution_drilldown(
     # Parse rating value (e.g., "5.0", "4.5")
     try:
         target_rating = float(rating_value)
-    except ValueError:
-        raise ValueError(f"Invalid rating value: {rating_value}")
+    except ValueError as err:
+        raise ValueError(f"Invalid rating value: {rating_value}") from err
 
     # Filter issues with the specific rating
     bucket_issues = [issue for issue in rated_issues if issue["effective_rating"] == target_rating]
     bucket_count = len(bucket_issues)
-    bucket_percentage = total_ratings > 0 (bucket_count / total_ratings * 100) else 0
+    bucket_percentage = (bucket_count / total_ratings * 100) if total_ratings > 0 else 0
 
     calculation = CreatorMetricCalculation(
         formula=f"{bucket_count} of {total_ratings} rated issues are exactly {rating_value}★ = {bucket_percentage:.1f}%",
@@ -670,8 +662,8 @@ async def _calculate_series_stats_drilldown(
         if not series_key.startswith("thread:"):
             raise ValueError(f"Invalid series key format: {series_key}")
         thread_id = int(series_key.split(":")[1])
-    except (ValueError, IndexError):
-        raise ValueError(f"Invalid series key: {series_key}")
+    except (ValueError, IndexError) as err:
+        raise ValueError(f"Invalid series key: {series_key}") from err
 
     # Filter issues for this specific series/thread
     series_issues = [

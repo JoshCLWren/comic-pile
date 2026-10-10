@@ -6,7 +6,7 @@ import type {
   CreatorRoleDrilldown,
   CreatorSeriesDrilldown,
 } from '../types/index'
-import { queryKeys } from './queryKeys'
+import { queryKeys } from '../query/queryKeys'
 import { useMatchMedia } from '../utils/responsive'
 
 export function useCreatorMetricDrilldown(
