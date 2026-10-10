@@ -135,6 +135,19 @@ test('label reconciliation replaces both groups with one atomic call', async () 
   );
 });
 
+test('unchanged label reconciliation avoids a write regardless of label order', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory:review', 'bug', 'factory:local', 'factory'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcileLabels(github, contextFor('workflow_dispatch', {}), 12, {
+    owner: 'factory:local',
+    stage: 'factory:review',
+  });
+  assert.deepEqual(calls, []);
+});
+
 test('transient GitHub failures are retried', async () => {
   let attempts = 0;
   const result = await withRetry(async () => {
