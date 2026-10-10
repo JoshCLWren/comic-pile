@@ -1,4 +1,4 @@
-"""Bounded personal creator summary, discovery, and comparison APIs (issues #2028, #2775, #3091).
+"""Bounded personal creator summary, discovery, and comparison APIs (issues #2028, #2775, #3091, #3176).
 
 Endpoints:
 
@@ -8,6 +8,9 @@ Endpoints:
   authenticated user's library statistics per canonical creator key.
 - ``GET /api/v1/creators/compare`` — bounded side-by-side comparison of 2-4
   canonical creators using shared personal analytics semantics (issue #3091).
+- ``GET /api/v1/creators/compare/<metric>`` — bounded evidence pages that
+  explain one comparison metric: its exact calculation and the paginated
+  issue set behind it (issue #3176).
 - ``GET /api/v1/creators/{creator_key}`` — bounded personal creator detail,
   including series/run-level aggregates (issues #2037, #3088).
 - ``GET /api/v1/creators/{creator_key}/series/{series_key}/issues`` — bounded
@@ -27,19 +30,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.creator_comparison import CreatorComparisonResponse
+from app.schemas.creator_comparison import (
+    CreatorAverageDrilldownResponse,
+    CreatorComparisonResponse,
+    CreatorDistributionDrilldownResponse,
+    CreatorFiveStarRateDrilldownResponse,
+    CreatorMedianDrilldownResponse,
+    CreatorReadWithoutRatingDrilldownResponse,
+    CreatorRoleAverageDrilldownResponse,
+    CreatorSeriesAverageDrilldownResponse,
+    CreatorUnreadDrilldownResponse,
+)
 from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
 from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
 from app.services.creator_comparison import (
-    get_creator_comparison,
+    DRILLDOWN_PAGE_SIZE_MAX,
+    get_5_star_rate_drilldown,
     get_average_drilldown,
+    get_creator_comparison,
     get_median_drilldown,
     get_rating_distribution_drilldown,
-    get_5_star_rate_drilldown,
+    get_read_without_rating_drilldown,
     get_role_average_drilldown,
     get_series_average_drilldown,
-    get_read_without_rating_drilldown,
+    get_unread_drilldown,
 )
 from app.services.creator_detail import get_creator_detail, get_creator_series_issues
 from app.services.creator_list import get_creator_list
@@ -326,61 +341,73 @@ async def compare_creators_endpoint(
         ) from e
 
 
-@router.get("/compare/average", response_model=dict[str, object])
+def _drilldown_error(creator: str, error: Exception) -> HTTPException:
+    """Map drilldown service errors onto their HTTP contract.
+
+    Args:
+        creator: The requested canonical creator key, for the not-found body.
+        error: The service error (``ValueError`` for malformed keys, buckets,
+            or cursors; ``KeyError`` for a creator or series absent from the
+            user's library).
+
+    Returns:
+        The mapped HTTP error; the caller must still raise it.
+    """
+    if isinstance(error, KeyError):
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Creator {creator} not found in your library",
+        )
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
+
+
+@router.get("/compare/average", response_model=CreatorAverageDrilldownResponse)
 async def get_average_drilldown_endpoint(
     current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
     ),
+    limit: int = Query(50, ge=1, le=DRILLDOWN_PAGE_SIZE_MAX),
+    cursor: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
-    """Return average rating drilldown for one creator (issue #3176).
+) -> CreatorAverageDrilldownResponse:
+    """Return the average rating evidence page for one creator (issue #3176).
 
-    The calculation and issue set use the exact same shared aggregation semantics
-    as the comparison summary, so the summary value and drilldown always reconcile.
+    The calculation and issue set use the exact shared aggregation semantics
+    as the comparison summary, so the summary value and drilldown always
+    reconcile. The same page also serves the rated-issue-count metric: its
+    evidence set is the complete rated headline sample.
     """
-    creator_id = parse_creator_key(creator)
-    if creator_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid creator key: {creator}",
-        )
     try:
-        return await get_average_drilldown(db, current_user.id, creator_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        ) from e
+        return await get_average_drilldown(
+            db, current_user.id, creator, limit=limit, cursor=cursor
+        )
+    except (ValueError, KeyError) as e:
+        raise _drilldown_error(creator, e) from e
 
 
-@router.get("/compare/median", response_model=dict[str, object])
+@router.get("/compare/median", response_model=CreatorMedianDrilldownResponse)
 async def get_median_drilldown_endpoint(
     current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
     ),
+    limit: int = Query(50, ge=1, le=DRILLDOWN_PAGE_SIZE_MAX),
+    cursor: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
-    """Return median rating drilldown for one creator (issue #3176)."""
-    creator_id = parse_creator_key(creator)
-    if creator_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid creator key: {creator}",
-        )
+) -> CreatorMedianDrilldownResponse:
+    """Return the median rating evidence page for one creator (issue #3176)."""
     try:
-        return await get_median_drilldown(db, current_user.id, creator_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        ) from e
+        return await get_median_drilldown(
+            db, current_user.id, creator, limit=limit, cursor=cursor
+        )
+    except (ValueError, KeyError) as e:
+        raise _drilldown_error(creator, e) from e
 
 
-@router.get("/compare/distribution", response_model=dict[str, object])
+@router.get("/compare/distribution", response_model=CreatorDistributionDrilldownResponse)
 async def get_rating_distribution_drilldown_endpoint(
     current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
@@ -389,52 +416,42 @@ async def get_rating_distribution_drilldown_endpoint(
     ),
     bucket: str = Query(
         ...,
-        description="Rating bucket (``5``, ``4.5``, ``4``, ``3.5``, ``3``, ``2.5``, ``2``, ``1.5``, ``1``)",
+        description="Rating bucket key (one of ``5``, ``4.5``, ``4``, ``3.5``, ``3``, ``2.5``, ``2``, ``1.5``, ``1``)",
     ),
+    limit: int = Query(50, ge=1, le=DRILLDOWN_PAGE_SIZE_MAX),
+    cursor: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
-    """Return rating distribution bucket drilldown for one creator (issue #3176)."""
-    creator_id = parse_creator_key(creator)
-    if creator_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid creator key: {creator}",
-        )
+) -> CreatorDistributionDrilldownResponse:
+    """Return one rating-distribution bucket evidence page (issue #3176)."""
     try:
-        return await get_rating_distribution_drilldown(db, current_user.id, creator_id, bucket)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        ) from e
+        return await get_rating_distribution_drilldown(
+            db, current_user.id, creator, bucket, limit=limit, cursor=cursor
+        )
+    except (ValueError, KeyError) as e:
+        raise _drilldown_error(creator, e) from e
 
 
-@router.get("/compare/5-star-rate", response_model=dict[str, object])
+@router.get("/compare/5-star-rate", response_model=CreatorFiveStarRateDrilldownResponse)
 async def get_5_star_rate_drilldown_endpoint(
     current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
     ),
+    limit: int = Query(50, ge=1, le=DRILLDOWN_PAGE_SIZE_MAX),
+    cursor: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
-    """Return 5★ rate drilldown for one creator (issue #3176)."""
-    creator_id = parse_creator_key(creator)
-    if creator_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid creator key: {creator}",
-        )
+) -> CreatorFiveStarRateDrilldownResponse:
+    """Return the 5-star rate evidence page for one creator (issue #3176)."""
     try:
-        return await get_5_star_rate_drilldown(db, current_user.id, creator_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        ) from e
+        return await get_5_star_rate_drilldown(
+            db, current_user.id, creator, limit=limit, cursor=cursor
+        )
+    except (ValueError, KeyError) as e:
+        raise _drilldown_error(creator, e) from e
 
 
-@router.get("/compare/role-average", response_model=dict[str, object])
+@router.get("/compare/role-average", response_model=CreatorRoleAverageDrilldownResponse)
 async def get_role_average_drilldown_endpoint(
     current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
@@ -445,25 +462,20 @@ async def get_role_average_drilldown_endpoint(
         ...,
         description="Role name (e.g. ``writer``, ``artist``, ``penciler``, ``inker``, ``colorist``, ``letterer``)",
     ),
+    limit: int = Query(50, ge=1, le=DRILLDOWN_PAGE_SIZE_MAX),
+    cursor: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
-    """Return role-specific average rating drilldown for one creator (issue #3176)."""
-    creator_id = parse_creator_key(creator)
-    if creator_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid creator key: {creator}",
-        )
+) -> CreatorRoleAverageDrilldownResponse:
+    """Return one role's credited-issue and average evidence page (issue #3176)."""
     try:
-        return await get_role_average_drilldown(db, current_user.id, creator_id, role)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        ) from e
+        return await get_role_average_drilldown(
+            db, current_user.id, creator, role, limit=limit, cursor=cursor
+        )
+    except (ValueError, KeyError) as e:
+        raise _drilldown_error(creator, e) from e
 
 
-@router.get("/compare/series-average", response_model=dict[str, object])
+@router.get("/compare/series-average", response_model=CreatorSeriesAverageDrilldownResponse)
 async def get_series_average_drilldown_endpoint(
     current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
@@ -474,47 +486,59 @@ async def get_series_average_drilldown_endpoint(
         ...,
         description="Canonical series key (e.g. ``thread:123``)",
     ),
+    limit: int = Query(50, ge=1, le=DRILLDOWN_PAGE_SIZE_MAX),
+    cursor: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
-    """Return series average drilldown for one creator and series (issue #3176)."""
-    creator_id = parse_creator_key(creator)
-    if creator_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid creator key: {creator}",
-        )
+) -> CreatorSeriesAverageDrilldownResponse:
+    """Return one series' attributed-issue and average evidence page (issue #3176)."""
     try:
-        return await get_series_average_drilldown(db, current_user.id, creator_id, series)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        ) from e
+        return await get_series_average_drilldown(
+            db, current_user.id, creator, series, limit=limit, cursor=cursor
+        )
+    except (ValueError, KeyError) as e:
+        raise _drilldown_error(creator, e) from e
 
 
-@router.get("/compare/read-without-rating", response_model=dict[str, object])
+@router.get(
+    "/compare/read-without-rating", response_model=CreatorReadWithoutRatingDrilldownResponse
+)
 async def get_read_without_rating_drilldown_endpoint(
     current_user: Annotated[User, Depends(get_current_user)],
     creator: str = Query(
         ...,
         description="Canonical creator key (e.g. ``creator:12345``)",
     ),
+    limit: int = Query(50, ge=1, le=DRILLDOWN_PAGE_SIZE_MAX),
+    cursor: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
-    """Return read-without-rating drilldown for one creator (issue #3176)."""
-    creator_id = parse_creator_key(creator)
-    if creator_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid creator key: {creator}",
-        )
+) -> CreatorReadWithoutRatingDrilldownResponse:
+    """Return the read-without-rating evidence page for one creator (issue #3176)."""
     try:
-        return await get_read_without_rating_drilldown(db, current_user.id, creator_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        ) from e
+        return await get_read_without_rating_drilldown(
+            db, current_user.id, creator, limit=limit, cursor=cursor
+        )
+    except (ValueError, KeyError) as e:
+        raise _drilldown_error(creator, e) from e
+
+
+@router.get("/compare/unread", response_model=CreatorUnreadDrilldownResponse)
+async def get_unread_drilldown_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    creator: str = Query(
+        ...,
+        description="Canonical creator key (e.g. ``creator:12345``)",
+    ),
+    limit: int = Query(50, ge=1, le=DRILLDOWN_PAGE_SIZE_MAX),
+    cursor: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorUnreadDrilldownResponse:
+    """Return the unread/attributed-unread evidence page for one creator (issue #3176)."""
+    try:
+        return await get_unread_drilldown(
+            db, current_user.id, creator, limit=limit, cursor=cursor
+        )
+    except (ValueError, KeyError) as e:
+        raise _drilldown_error(creator, e) from e
 
 
 @router.get("/{creator_key}/series/{series_key}/issues", response_model=CreatorSeriesIssueListResponse)
