@@ -166,6 +166,9 @@ stage_trusted_review_controller() {
   cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
   cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
   cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
+  # The staged policy imports canonical eligibility rules; pin this dependency
+  # from trusted main too, never from an untrusted PR checkout or /scripts.
+  cp scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
   chmod +x "$trusted_dir/factory-review-controller.py"
   TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
   export TRUSTED_REVIEW_CONTROLLER
