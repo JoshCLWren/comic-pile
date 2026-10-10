@@ -182,3 +182,40 @@ def test_private_rotisserie_secret_has_safe_ssh_preflight():
     assert "git+ssh://" not in install
     assert "StrictHostKeyChecking=yes" in install
     assert 'trap \'rm -rf "$ssh_dir"\' EXIT' in install
+
+
+def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unreadable():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    gate = workflow.split("Gate factory dispatch on Actions REST quota", 1)[1].split(
+        "Reconcile serialized migration finalization lane", 1
+    )[0]
+    assert "gh api rate_limit" in gate
+    assert "GH_TOKEN: ${{ github.token }}" in gate
+    assert "remaining < 1200" in gate
+    assert 'echo "allow=false" >> "$GITHUB_OUTPUT"' in gate
+    assert 'echo "allow=true" >> "$GITHUB_OUTPUT"' in gate
+
+    for step in (
+        "Reconcile serialized migration finalization lane",
+        "Check main health (block merges onto red main)",
+        "Reconcile unowned factory CI PRs",
+        "Trigger merge drain on dispatcher cadence",
+        "Expire stale factory PR attempts",
+        "Resolve and dispatch fixed workers",
+    ):
+        section = workflow.split("- name: " + step, 1)[1].split("run: |", 1)[0]
+        assert "if: steps.api_budget.outputs.allow == 'true'" in section
+
+
+def test_dispatch_batch_checks_live_quota_and_stops_roster_chain_at_reserve():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    batch = workflow.split("Dispatching workers through centralized assignment:", 1)[1].split(
+        "Self-perpetuate roster cadence", 1
+    )[0]
+    assert "gh api rate_limit --jq '.resources.core.remaining'" in batch
+    assert "remaining_core < 450" in batch
+    assert "budget_deferred=true" in batch
+    assert 'echo "budget_deferred=${budget_deferred}" >> "$GITHUB_OUTPUT"' in batch
+    chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[0]
+    assert "steps.api_budget.outputs.allow == 'true'" in chain
+    assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" in chain
