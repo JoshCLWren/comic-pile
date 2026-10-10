@@ -88,6 +88,8 @@ class Event(Base):
     )
     # Denormalized issue_number preserved for historical display even if Issue is deleted
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Denormalized thread_title preserved for historical display even if Thread is deleted
+    thread_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Links rate/snooze events back to the originating roll event in the same session.
     # NULL for historical events and roll events themselves.
     source_roll_event_id: Mapped[int | None] = mapped_column(

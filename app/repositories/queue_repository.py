@@ -40,9 +40,11 @@ async def add_reorder_event(db: AsyncSession, thread_id: int) -> None:
         db: Database session.
         thread_id: Thread whose queue position changed.
     """
+    thread = await db.get(Thread, thread_id)
     reorder_event = Event(
         type="reorder",
         timestamp=datetime.now(UTC),
         thread_id=thread_id,
+        thread_title=thread.title if thread else None,
     )
     db.add(reorder_event)

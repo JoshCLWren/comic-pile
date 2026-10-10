@@ -282,6 +282,7 @@ async def create_issues(
         type="issues_created",
         timestamp=datetime.now(UTC),
         thread_id=thread.id,
+        thread_title=thread.title,
     )
     db.add(event)
 
@@ -425,6 +426,7 @@ async def delete_issue(
         timestamp=datetime.now(UTC),
         thread_id=thread.id,
         issue_number=deleted_issue_number,
+        thread_title=thread.title,
     )
     db.add(event)
 
@@ -539,6 +541,7 @@ async def mark_issue_read(
         thread_id=thread.id,
         issue_id=issue_id,
         issue_number=issue.issue_number,
+        thread_title=thread.title,
     )
     db.add(event)
 
@@ -588,6 +591,7 @@ async def mark_issue_unread(
         thread_id=thread.id,
         issue_id=issue_id,
         issue_number=issue.issue_number,
+        thread_title=thread.title,
     )
     db.add(event)
 
@@ -642,12 +646,15 @@ async def bulk_mark_issue_read(
 
     # Create events for each issue
     for issue in issues:
+        # Get thread for title - already fetched in thread_ids loop
+        thread = await get_owned_thread_or_404(db, current_user_id, issue.thread_id)
         event = Event(
             type="issue_read",
             timestamp=datetime.now(UTC),
             thread_id=issue.thread_id,
             issue_id=issue.id,
             issue_number=issue.issue_number,
+            thread_title=thread.title,
         )
         db.add(event)
 
@@ -698,12 +705,14 @@ async def bulk_mark_issue_unread(
                 thread.status = "active"
 
     for issue in issues:
+        thread = await get_owned_thread_or_404(db, current_user_id, issue.thread_id)
         event = Event(
             type="issue_unread",
             timestamp=datetime.now(UTC),
             thread_id=issue.thread_id,
             issue_id=issue.id,
             issue_number=issue.issue_number,
+            thread_title=thread.title,
         )
         db.add(event)
 

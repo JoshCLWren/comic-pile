@@ -541,10 +541,12 @@ async def unskip_thread(
     skipped_ids.remove(thread_id)
     current_session.skipped_thread_ids = skipped_ids
 
+    thread = await db.get(Thread, thread_id)
     event = Event(
         type="unskip",
         session_id=current_session.id,
         thread_id=thread_id,
+        thread_title=thread.title if thread else None,
     )
     db.add(event)
 
@@ -785,6 +787,7 @@ async def override_roll(
         recommendation_context=recommendation_context,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
+        thread_title=override_thread_title,
         rolling_recommendation_context=_build_rolling_recommendation_context(
             die_size=current_die,
             selected_queue_position=override_thread_queue_position,

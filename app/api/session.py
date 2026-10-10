@@ -769,32 +769,11 @@ async def get_session_details(
     )
     events = events_result.scalars().all()
 
-    thread_ids = set()
-    for event in events:
-        if event.type == "roll":
-            thread_id = event.selected_thread_id
-        else:
-            thread_id = event.thread_id
-        if thread_id:
-            thread_ids.add(thread_id)
-
-    threads_dict = {}
-    if thread_ids:
-        threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
-        threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
-
     formatted_events = []
     for event in events:
-        thread_title = None
-        if event.type == "roll":
-            thread_id = event.selected_thread_id
-        else:
-            thread_id = event.thread_id
-
-        if thread_id:
-            thread = threads_dict.get(thread_id)
-            if thread:
-                thread_title = thread.title
+        # Use denormalized thread_title from event for historical accuracy
+        # (thread may have been deleted since event was recorded)
+        thread_title = event.thread_title
 
         event_data = EventDetail(
             id=event.id,
@@ -852,6 +831,8 @@ async def get_session_details(
             if event.issue_number:
                 desc_parts.append(f"#{event.issue_number}")
             event_data.description = " · ".join(desc_parts)
+        elif event.type == "delete":
+            event_data.description = f"Deleted {thread_title or 'thread'}"
 
         formatted_events.append(event_data)
 
