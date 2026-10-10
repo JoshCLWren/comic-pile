@@ -311,8 +311,29 @@ def redact_review_text(text: str) -> str:
     return API_KEY_RE.sub("[REDACTED_API_KEY]", text)
 
 
+AUTHORITATIVE_DIFF_EVIDENCE = "# comic-pile-factory-authoritative-diff-evidence"
+
+
+def semantic_review_excerpt(text: str) -> str:
+    """Keep semantic findings ahead of appended inspection proof or raw diff.
+
+    The inspection command is evidence for APPROVE, but its diff body is never
+    itself a REPAIR diagnosis. Preserve the last 7000 chars of semantic output
+    rather than letting thousands of changed lines evict the model's findings.
+    """
+    semantic, marker, evidence = text.partition(AUTHORITATIVE_DIFF_EVIDENCE)
+    # Older worker logs sometimes contain a diff without a delimiting marker.
+    semantic = re.split(r"(?m)^diff --git ", semantic, maxsplit=1)[0]
+    excerpt = redact_review_text(semantic[-7000:])
+    if marker:
+        command = re.search(r"(?m)^gh pr diff [0-9]+\s*$", evidence)
+        if command:
+            excerpt += f"\n{AUTHORITATIVE_DIFF_EVIDENCE}\n{command.group(0).strip()}"
+    return excerpt
+
+
 def review_excerpt(path: str | None, *, worker: str) -> str:
-    """Read only an expected worker log and return a redacted bounded tail."""
+    """Read only an expected worker log and return bounded semantic findings."""
     if not path:
         return ""
     expected = {
@@ -329,11 +350,13 @@ def review_excerpt(path: str | None, *, worker: str) -> str:
             text = stream.read()
     except OSError:
         return ""
-    return redact_review_text(text[-7000:])
+    return semantic_review_excerpt(text)
 
 
 def has_actionable_review_findings(excerpt: str) -> bool:
-    """Reject empty findings, terminal verdict tokens, and handoff boilerplate."""
+    """Require a prose finding, not diff/source material or terminal boilerplate."""
+    semantic = excerpt.partition(AUTHORITATIVE_DIFF_EVIDENCE)[0]
+    semantic = re.split(r"(?m)^diff --git ", semantic, maxsplit=1)[0]
     boilerplate = {
         "semantic blockers remain",
         "the pr is returning to repair",
@@ -344,11 +367,31 @@ def has_actionable_review_findings(excerpt: str) -> bool:
         "factory_gate_ready",
         "factory_gate_reject",
     }
-    return any(
-        line.strip().strip("*` .").casefold() not in boilerplate
-        for line in excerpt.splitlines()
-        if line.strip().strip("*` .")
-    )
+    in_code = False
+    for raw in semantic.splitlines():
+        line = raw.strip()
+        if line.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code or not line:
+            continue
+        if line.startswith(("diff --git ", "index ", "--- ", "+++ ", "@@ ", "#", "//", "/*", "{", "}")):
+            continue
+        # Unified diff additions/deletions and standalone source expressions
+        # are not a model diagnosis, even when they contain English words.
+        if re.match(r"^[+-](?:[^ ]| {2,})", line):
+            continue
+        line = re.sub(r"^[-*]\s+", "", line).strip().strip("*` .")
+        if line.casefold() in boilerplate or not line:
+            continue
+        if re.match(
+            r"^(?:import|from|const|let|var|def|class|function|export|return|raise|assert|await|async|if|for|while)\b",
+            line,
+        ):
+            continue
+        if len(re.findall(r"[A-Za-z]{2,}", line)) >= 2:
+            return True
+    return False
 
 
 def post_review_comment(
@@ -1015,6 +1058,24 @@ def handle_review(
                 head=reviewed_head,
                 producer=producer,
             )
+
+    if verdict in {"repair", "reject"} and not has_actionable_review_findings(excerpt):
+        return return_to_review(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            reviewer=worker,
+            verdict="not-ready",
+            excerpt="",
+            note=(
+                "Semantic REPAIR/REJECT did not include an actionable prose diagnosis. "
+                "Raw diffs, source code, inspection proof and terminal markers are not "
+                "durable repair findings; a fresh independent review is required."
+            ),
+            status="insufficient-review-findings",
+            head=reviewed_head,
+            producer=producer,
+        )
 
     marker = review_marker(
         pr=pr_number,

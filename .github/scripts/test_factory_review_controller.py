@@ -435,13 +435,12 @@ def test_semantic_repair_rejects_non_actionable_findings(monkeypatch):
         lambda **kwargs: transitions.append(kwargs),
     )
 
-    with pytest.raises(
-        RuntimeError, match="repair handoff requires durable actionable review findings"
-    ):
-        controller.handle_review(**arguments)
+    result = controller.handle_review(**arguments)
 
-    assert comments == []
-    assert transitions == []
+    assert result["status"] == "insufficient-review-findings"
+    assert comments[0]["verdict"] == "not-ready"
+    assert comments[0]["marker"] is None
+    assert transitions[0]["pr_stage"] == "factory:review"
 
 
 def test_reconcile_ci_returns_changed_head_to_review(monkeypatch):
@@ -752,18 +751,67 @@ def test_unified_diff_hunk_counts_as_diff_inspection_evidence(monkeypatch):
     assert transitions[0]["pr_stage"] == "factory:ready"
 
 
-def test_authoritative_diff_evidence_marker_survives_long_dump_tail():
-    """Worker must keep the evidence marker inside review_excerpt's last 7000 chars."""
+def test_authoritative_diff_is_read_but_never_dumped_into_review_log():
     worker = Path(__file__).with_name("free-model-factory-worker.sh").read_text(encoding="utf-8")
-    assert "review_excerpt keeps only the last 7000 chars" in worker
-    # The closing marker pair must appear after the `gh pr diff` dump.
-    append_block_start = worker.index("comic-pile-factory-authoritative-diff-evidence")
-    dump = worker.index('gh pr diff "$NUMBER"', append_block_start)
-    closing_marker = worker.index(
-        "comic-pile-factory-authoritative-diff-evidence",
-        dump,
+    assert 'if ! gh pr diff "$NUMBER" >/dev/null; then' in worker
+    assert 'gh pr diff "$NUMBER" 2>/dev/null | head -n 4000' not in worker
+    assert 'printf \'gh pr diff %s\\n\' "$NUMBER"' in worker
+
+
+def test_thousands_of_appended_diff_lines_cannot_evict_semantic_repair_finding():
+    controller = load_controller()
+    finding = "Changing the auth guard permits unauthorized requests to bypass token validation."
+    diff = "diff --git a/app.py b/app.py\n" + "+    return unsafe_code()\n" * 4000
+    log = (
+        finding
+        + "\nFACTORY_GATE_BLOCKED\n"
+        + controller.AUTHORITATIVE_DIFF_EVIDENCE
+        + "\ngh pr diff 3200\n"
+        + diff
     )
-    assert closing_marker > dump
+    excerpt = controller.semantic_review_excerpt(log)
+    assert finding in excerpt
+    assert "gh pr diff 3200" in excerpt
+    assert "+    return unsafe_code()" not in excerpt
+    assert controller.has_actionable_review_findings(excerpt)
+
+
+@pytest.mark.parametrize(
+    "unusable",
+    [
+        "FACTORY_GATE_BLOCKED",
+        "# comic-pile-factory-authoritative-diff-evidence\ngh pr diff 3200",
+        "diff --git a/app.py b/app.py\n+++ b/app.py\n+const result = unsafe();",
+        "```python\ndef broken():\n    return unsafe()\n```",
+        "semantic blockers remain\nthe pr is returning to repair",
+    ],
+)
+def test_diff_source_and_terminal_markers_are_not_actionable(unusable):
+    controller = load_controller()
+    assert not controller.has_actionable_review_findings(unusable)
+
+
+@pytest.mark.parametrize("verdict", ["repair", "reject"])
+def test_diff_only_semantic_verdict_returns_to_review(monkeypatch, verdict):
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller, verdict=verdict)
+    monkeypatch.setattr(
+        controller,
+        "review_excerpt",
+        lambda _path, worker: "diff --git a/app.py b/app.py\n+const value = true;\nFACTORY_GATE_BLOCKED",
+    )
+    comments = []
+    transitions = []
+    monkeypatch.setattr(controller, "post_review_comment", lambda **kw: comments.append(kw))
+    monkeypatch.setattr(
+        controller, "transition_pr_and_linked_issue", lambda **kw: transitions.append(kw)
+    )
+
+    result = controller.handle_review(**arguments)
+
+    assert result["status"] == "insufficient-review-findings"
+    assert comments[0]["verdict"] == "not-ready"
+    assert transitions[0]["pr_stage"] == "factory:review"
 
 
 def test_fixed_model_factory_schedules_are_active():

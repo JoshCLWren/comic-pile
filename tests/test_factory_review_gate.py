@@ -514,17 +514,21 @@ def test_controller_refuses_repair_without_actionable_findings(
     transitions, posted, _commands = wire_controller(monkeypatch, module, [payload])
     monkeypatch.setattr(module, "review_excerpt", lambda _path, **_kwargs: findings)
 
-    with pytest.raises(RuntimeError, match="durable actionable review findings"):
-        module.handle_review(
-            worker="17",
-            pr_number=1390,
-            verdict="repair",
-            reviewed_head=REVIEWED_HEAD,
-            review_log="/tmp/opencode-factory-17.sanitized.log",
-        )
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="repair",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/opencode-factory-17.sanitized.log",
+    )
 
-    assert posted == []
-    assert transitions == []
+    assert result["status"] == "insufficient-review-findings"
+    assert len(posted) == 1
+    assert posted[0]["verdict"] == "not-ready"
+    assert posted[0]["marker"] is None
+    assert posted[0]["excerpt"] == ""
+    assert len(transitions) == 1
+    assert transitions[0]["pr_stage"] == "factory:review"
 
 
 def test_controller_refuses_repair_when_findings_cannot_be_persisted(
@@ -588,17 +592,21 @@ def test_controller_refuses_rejection_without_actionable_findings(
     transitions, posted, commands = wire_controller(monkeypatch, module, [payload])
     monkeypatch.setattr(module, "review_excerpt", lambda _path, **_kwargs: "")
 
-    with pytest.raises(RuntimeError, match="durable actionable review findings"):
-        module.handle_review(
-            worker="17",
-            pr_number=1390,
-            verdict="reject",
-            reviewed_head=REVIEWED_HEAD,
-            review_log=None,
-        )
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="reject",
+        reviewed_head=REVIEWED_HEAD,
+        review_log=None,
+    )
 
-    assert posted == []
-    assert transitions == []
+    assert result["status"] == "insufficient-review-findings"
+    assert len(posted) == 1
+    assert posted[0]["verdict"] == "not-ready"
+    assert posted[0]["marker"] is None
+    assert posted[0]["excerpt"] == ""
+    assert len(transitions) == 1
+    assert transitions[0]["pr_stage"] == "factory:review"
     assert not any("close" in command for command in commands)
 
 

@@ -475,16 +475,17 @@ fi
 review_log="/tmp/opencode-factory-${WORKER}.log"
 sanitized_review_log="/tmp/opencode-factory-${WORKER}.sanitized.log"
 factory_sanitize_review_log "$review_log" "$sanitized_review_log"
-# Append authoritative PR diff evidence after sanitize so the review controller
-# can attest inspection even when the model used file reads instead of `gh pr
-# diff`. review_excerpt keeps only the last 7000 chars, so the marker and the
-# `gh pr diff` command line MUST come after the dumped hunks — putting them
-# first caused every honest approve to soft-fail as diff-inspection-required
-# once the dump exceeded the excerpt window (incident #2309 follow-up).
+# Read the authoritative diff and record a compact proof, never its body.
+# Appended source previously evicted semantic findings from the controller's
+# bounded excerpt, turning legitimate REPAIR verdicts into useless handoffs.
+# A failed diff read must not masquerade as inspection evidence.
+if ! gh pr diff "$NUMBER" >/dev/null; then
+  log "control_plane_failure: authoritative diff read failed for PR #${NUMBER}"
+  release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'authoritative-diff-read-failed'
+  record_terminal_outcome control_plane_failure "PR #${NUMBER} diff inspection unavailable"
+  exit 2
+fi
 {
-  printf '\n# comic-pile-factory-authoritative-diff-evidence\n'
-  printf 'gh pr diff %s\n' "$NUMBER"
-  gh pr diff "$NUMBER" 2>/dev/null | head -n 4000 || true
   printf '\n# comic-pile-factory-authoritative-diff-evidence\n'
   printf 'gh pr diff %s\n' "$NUMBER"
 } >> "$sanitized_review_log"
