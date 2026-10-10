@@ -41,21 +41,29 @@ jobs:
             exit 1
           fi
 
-      - name: Mint short-lived installation token
+      - name: Mint private artifact reader token
         uses: actions/create-github-app-token@v2
-        id: app
+        id: reader
         with:
           app-id: ${{ secrets.FACTORY_OBSERVABILITY_APP_ID }}
           private-key: ${{ secrets.FACTORY_OBSERVABILITY_APP_PRIVATE_KEY }}
           owner: JoshCLWren
-          repositories: |
-            comic-pile
-            JoshCLWren.github.io
+          repositories: comic-pile
           permission-actions: read
+
+      - name: Mint public JSON writer token
+        uses: actions/create-github-app-token@v2
+        id: writer
+        with:
+          app-id: ${{ secrets.FACTORY_OBSERVABILITY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_OBSERVABILITY_APP_PRIVATE_KEY }}
+          owner: JoshCLWren
+          repositories: JoshCLWren.github.io
           permission-contents: write
 
       - name: Aggregate private observations and publish allowlisted JSON
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          FACTORY_SOURCE_TOKEN: ${{ steps.reader.outputs.token }}
+          FACTORY_PUBLISH_TOKEN: ${{ steps.writer.outputs.token }}
           PYTHONPATH: ${{ github.workspace }}/rotisserie
         run: python3 -m scripts.sync_factory_quota
