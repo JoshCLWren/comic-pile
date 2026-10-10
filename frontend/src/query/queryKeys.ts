@@ -207,6 +207,12 @@ export const queryKeys = {
         'seriesMappingPreview',
         { originIssueId, provider, providerSeriesExternalId },
       ] as const,
+    /**
+     * Canonical key for the anchor issue a thread-level Map series repair (issue
+     * #2773) derives from the thread's own issues. It is read only while the
+     * repair dialog is open, so Queue rendering never pays per-card issue fetches.
+     */
+    queueSeriesOrigin: (threadId: number) => ['comicVine', 'queueSeriesOrigin', threadId] as const,
   },
   readerContext: {
     all: ['readerContext'] as const,
