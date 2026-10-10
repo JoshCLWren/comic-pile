@@ -890,16 +890,31 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
             ready_snapshot = startup_event_snapshot()
             readiness_ms = max(startup_duration, ready_snapshot.process_age_ms)
-            enforce_startup_budget(
-                readiness_ms,
-                environment=app_settings.environment,
-                operation="startup.readiness",
-                context={
-                    "deployment_id": ready_snapshot.deployment_id,
-                    "heavy_initialized": is_heavy_initialized(),
-                    "invocation": ready_snapshot.invocation,
-                },
-            )
+            try:
+                enforce_startup_budget(
+                    readiness_ms,
+                    environment=app_settings.environment,
+                    operation="startup.readiness",
+                    context={
+                        "deployment_id": ready_snapshot.deployment_id,
+                        "heavy_initialized": is_heavy_initialized(),
+                        "invocation": ready_snapshot.invocation,
+                    },
+                )
+            finally:
+                # Auto-file startup performance incidents (issue #3245) whether
+                # or not the hard budget fails initialization. Evaluation is
+                # synchronous and filing is bounded background work.
+                try:
+                    from app.services import performance_issue_service as perf_issues
+
+                    perf_issues.handle_startup_telemetry(
+                        duration_ms=readiness_ms,
+                        operation="startup.readiness",
+                        deployment_id=ready_snapshot.deployment_id,
+                    )
+                except Exception as exc:
+                    logger.debug("Startup performance issue evaluation skipped: %s", exc)
             logger.warning(
                 "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
                 readiness_ms,
