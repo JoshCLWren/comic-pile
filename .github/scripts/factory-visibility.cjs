@@ -424,6 +424,7 @@ module.exports._test = {
   isOwnerLabel,
   reconcileLabels,
   withRetry,
+  rateLimitDelay,
   workerFrom,
   trusted,
   performedViaUntrustedApp,
