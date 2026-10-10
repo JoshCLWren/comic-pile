@@ -182,7 +182,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     () => getAppliedTheme() ?? readStoredThemePreference() ?? DEFAULT_THEME,
   )
   const { data: inboxTotal, isError: inboxStatusError } = useIdentityInboxStatus(authState.status === 'authenticated')
-  const showIdentityInbox = inboxTotal === undefined || inboxStatusError || inboxTotal > 0
+  const showIdentityInbox = inboxTotal !== undefined && !inboxStatusError && inboxTotal > 0
   const visibleSecondaryNavItems = showIdentityInbox
     ? SECONDARY_NAV_ITEMS
     : SECONDARY_NAV_ITEMS.filter((item) => item.path !== '/identity-inbox')
