@@ -629,6 +629,47 @@ def test_cbl_adoption_selection_precedence_defaults_missing_included() -> None:
     assert included.entries[1]["adoption_decision"] == "would_create_missing"
 
 
+def test_cbl_adoption_unresolved_entry_can_be_skipped() -> None:
+    """An explicit per-entry skip defers one ambiguous entry.
+
+    The skip unblocks adoption of the rest of the source.
+    """
+    entries = [
+        {
+            "cbl_position": 1,
+            "cbl_entry_id": 10,
+            "series_name": "Known",
+            "issue_number": "1",
+            "series_group_id": "known-key",
+            "resolution_status": "resolved_via_comicvine_canonical",
+            "resolved_issue_id": 8,
+        },
+        {
+            "cbl_position": 2,
+            "cbl_entry_id": 20,
+            "series_name": "Mystery",
+            "issue_number": "?",
+            "series_group_id": "mystery-key",
+            "resolution_status": "ambiguous_no_comicvine_id",
+            "resolved_issue_id": None,
+        },
+    ]
+    blocked = calculate_cbl_adoption_plan(entries)
+    assert blocked.unresolved_count == 1
+    assert blocked.entries[1]["adoption_decision"] == "unresolved"
+
+    skipped = calculate_cbl_adoption_plan(entries, entry_decisions={"20": False})
+    assert skipped.unresolved_count == 0
+    assert skipped.entries[1]["adoption_decision"] == "excluded"
+    assert skipped.excluded_count == 1
+    assert skipped.final_adopted_order == (1,)
+
+    # An explicit True does not skip; the entry still needs attention.
+    unskipped = calculate_cbl_adoption_plan(entries, entry_decisions={"20": True})
+    assert unskipped.unresolved_count == 1
+    assert unskipped.entries[1]["adoption_decision"] == "unresolved"
+
+
 @pytest.mark.asyncio
 async def test_cbl_adoption_endpoint_returns_typed_fingerprinted_contract(
     auth_client: AsyncClient,

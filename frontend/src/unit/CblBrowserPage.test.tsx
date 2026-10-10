@@ -442,8 +442,7 @@ describe('CblBrowserPage', () => {
     })
   })
 
-  it('a new search resets the selection and decisions', async () => {
-    const user = userEvent.setup()
+  it('a new search resets the selection and decisions', async () => {    const user = userEvent.setup()
     mockPlan.mockResolvedValue(preview())
     renderPage()
     await searchFor(user)
@@ -466,5 +465,81 @@ describe('CblBrowserPage', () => {
     expect(
       screen.queryByRole('heading', { name: 'Series choices' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('skipping an unresolved entry unblocks the add', async () => {
+    const user = userEvent.setup()
+    const unresolvedEntry = entry({
+      cbl_position: 2,
+      cbl_entry_id: 102,
+      issue_number: '2',
+      adoption_class: 'ambiguous_unresolved',
+      adoption_decision: 'unresolved',
+      adopted: false,
+      resolved_issue_id: null,
+      canonical_issue_id: null,
+      resolution_status: 'ambiguous_no_comicvine_id',
+    })
+    const initialPreview = preview({
+      entries: [entry({}), unresolvedEntry],
+      summary: {
+        reused_existing_count: 1,
+        missing_would_create_count: 0,
+        excluded_count: 0,
+        unresolved_count: 1,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 1,
+        final_adopted_order: [1],
+        reused_existing_positions: [1],
+        missing_would_create_positions: [],
+        excluded_positions: [],
+        unresolved_positions: [2],
+        awaiting_opt_in_positions: [],
+      },
+    })
+    const skippedPreview = preview({
+      entries: [
+        entry({}),
+        { ...unresolvedEntry, adoption_decision: 'excluded', adopted: false },
+      ],
+      summary: {
+        reused_existing_count: 1,
+        missing_would_create_count: 0,
+        excluded_count: 1,
+        unresolved_count: 0,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 1,
+        final_adopted_order: [1],
+        reused_existing_positions: [1],
+        missing_would_create_positions: [],
+        excluded_positions: [2],
+        unresolved_positions: [],
+        awaiting_opt_in_positions: [],
+      },
+    })
+    mockPlan.mockResolvedValue(skippedPreview)
+    renderPage()
+    await searchFor(user)
+    await selectSource(user, initialPreview)
+    expect(
+      screen.getByRole('button', { name: 'Add this reading order' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByText(/You can skip individual entries under Customize/),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+    await waitFor(() => {
+      expect(mockPlan).toHaveBeenCalledWith(7, {
+        series_decisions: {},
+        entry_decisions: { '102': false },
+      })
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Skipped')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Add this reading order' }),
+      ).not.toBeDisabled()
+    })
   })
 })

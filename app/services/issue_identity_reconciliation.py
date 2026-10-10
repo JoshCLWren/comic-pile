@@ -548,6 +548,40 @@ def _normalize_title_number(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip().casefold())
 
 
+async def _confirmed_comicvine_ids_for_issues(
+    db: AsyncSession,
+    *,
+    issue_ids: list[int],
+) -> dict[int, set[str]]:
+    """Return confirmed ComicVine issue IDs per owned issue ID, batched.
+
+    Used by the title+number fallback to reject candidates that already carry
+    a conflicting confirmed ComicVine identity.
+    """
+    if not issue_ids:
+        return {}
+    result = await db.execute(
+        select(
+            IssueExternalIdentityMapping.issue_id,
+            ExternalIdentity.external_id,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
+            IssueExternalIdentityMapping.issue_id.in_(issue_ids),
+            IssueExternalIdentityMapping.status == _CONFIRMED_STATUS,
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == _COMICVINE_ISSUE_ENTITY,
+        )
+    )
+    by_issue: dict[int, set[str]] = {}
+    for row in result.all():
+        by_issue.setdefault(int(row[0]), set()).add(str(row[1]))
+    return by_issue
+
+
 async def _owned_issues_by_title_number(
     db: AsyncSession,
     *,
@@ -595,7 +629,9 @@ async def resolve_cbl_entries_to_canonical(
     disagrees. When ComicVine evidence is absent (no owned mapping for the
     entry's ComicVine ID), a single exact title + issue number match against
     user-owned issues is reused instead of declaring the entry missing;
-    multiple matches are reported ambiguous rather than merged.
+    candidates that already carry a different confirmed ComicVine ID are
+    rejected as conflicting, and multiple remaining matches are reported
+    ambiguous rather than merged.
 
     Args:
         db: Async database session.
@@ -657,6 +693,21 @@ async def resolve_cbl_entries_to_canonical(
                     ),
                     [],
                 )
+                # Reject candidates that already carry a confirmed ComicVine
+                # identity: if the entry's ComicVine ID had an owned mapping,
+                # resolution would have succeeded above, so any confirmed
+                # mapping on a fallback candidate conflicts with this entry
+                # (e.g. two editions/volumes sharing a title and number).
+                if fallback_matches:
+                    confirmed = await _confirmed_comicvine_ids_for_issues(
+                        db,
+                        issue_ids=[int(m["id"]) for m in fallback_matches],
+                    )
+                    fallback_matches = [
+                        m
+                        for m in fallback_matches
+                        if not confirmed.get(int(m["id"]))
+                    ]
                 if len(fallback_matches) == 1:
                     match = fallback_matches[0]
                     match_read_at = match["read_at"]

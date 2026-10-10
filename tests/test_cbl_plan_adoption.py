@@ -472,14 +472,49 @@ async def test_approved_missing_issue_materialized_and_node_added() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unapproved_missing_issue_not_materialized() -> None:
-    """A missing entry without an explicit INCLUDE decision is not materialized."""
+async def test_missing_issue_defaults_to_included_without_explicit_decision() -> None:
+    """Missing importable entries default to included without explicit decisions.
+
+    Per the #2128 one-decision contract, this matches the preview default.
+    """
     entry = _FakeEntry(id=30, position=0, series_name="Z")
     fact = _make_fact(
         resolved_issue_id=None,
         resolution_status="no_owned_issue_for_comicvine_id",
         position=0,
         cbl_entry_id=30,
+    )
+    fake_issue = MagicMock()
+    fake_issue.id = 300
+
+    with patch(
+        "app.services.cbl_plan_adoption._ensure_missing_issue_created",
+        new_callable=AsyncMock,
+        return_value=fake_issue,
+    ) as mock_create:
+        result = await _adopt(
+            _FakeDB(),
+            entries=[entry],
+            facts=[fact],
+            entry_decisions={},
+        )
+    mock_create.assert_called_once()
+    plan = result.plan
+    assert len(plan.nodes_json) == 1
+    assert plan.nodes_json[0]["ref_id"] == 300
+    assert result.created_positions == [0]
+    assert result.excluded_positions == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_exclude_still_drops_missing_issue() -> None:
+    """An explicit EXCLUDE decision keeps a missing importable entry out."""
+    entry = _FakeEntry(id=31, position=0, series_name="Z")
+    fact = _make_fact(
+        resolved_issue_id=None,
+        resolution_status="no_owned_issue_for_comicvine_id",
+        position=0,
+        cbl_entry_id=31,
     )
     with patch(
         "app.services.cbl_plan_adoption._ensure_missing_issue_created",
@@ -489,12 +524,60 @@ async def test_unapproved_missing_issue_not_materialized() -> None:
             _FakeDB(),
             entries=[entry],
             facts=[fact],
-            entry_decisions={},
+            entry_decisions={0: SourceBackedDecision.EXCLUDE},
         )
     mock_create.assert_not_called()
-    plan = result.plan
-    assert len(plan.nodes_json) == 0
+    assert result.plan.nodes_json == []
     assert result.excluded_positions == [0]
+
+
+@pytest.mark.asyncio
+async def test_zero_override_commit_creates_missing_and_retains_source_positions() -> None:
+    """Zero-override commits create missing comics and retain source positions.
+
+    This is the one-click happy path: the commit must deliver what the
+    preview promised.
+    """
+    existing_entry = _FakeEntry(id=40, position=1, series_name="A")
+    missing_entry = _FakeEntry(id=41, position=2, series_name="B")
+    existing_fact = _make_fact(
+        resolved_issue_id=500,
+        resolution_status="resolved_via_comicvine_canonical",
+        position=1,
+        cbl_entry_id=40,
+    )
+    missing_fact = _make_fact(
+        resolved_issue_id=None,
+        resolution_status="no_owned_issue_for_comicvine_id",
+        position=2,
+        cbl_entry_id=41,
+    )
+    fake_issue = MagicMock()
+    fake_issue.id = 501
+
+    with patch(
+        "app.services.cbl_plan_adoption._ensure_missing_issue_created",
+        new_callable=AsyncMock,
+        return_value=fake_issue,
+    ):
+        result = await _adopt(
+            _FakeDB(),
+            entries=[existing_entry, missing_entry],
+            facts=[existing_fact, missing_fact],
+            entry_decisions={},
+            series_decisions={},
+        )
+
+    assert result.created_positions == [2]
+    assert result.reused_positions == [1]
+    assert result.excluded_positions == []
+    assert result.unresolved_positions == []
+    nodes = {node["id"]: node for node in result.plan.nodes_json}
+    assert nodes["cbl-40"]["ref_id"] == 500
+    assert nodes["cbl-41"]["ref_id"] == 501
+    # Source positions are retained on the placement provenance.
+    placements = nodes["cbl-41"]["source_cbl_placements"]
+    assert placements == [{"source_path": "/x.xml", "position": 2}]
 
 
 @pytest.mark.asyncio

@@ -495,9 +495,10 @@ async def _merge_adopted_nodes(
         if decision == SourceBackedDecision.EXCLUDE:
             excluded_positions.append(entry.position)
             continue
-        if importable and decision != SourceBackedDecision.INCLUDE:
-            excluded_positions.append(entry.position)
-            continue
+        # #2128 one-decision contract: safely importable missing entries
+        # default to included, matching the preview. Only an explicit
+        # EXCLUDE (or an unresolvable identity, handled above) keeps an
+        # entry out of the committed plan.
 
         created_now = False
         if existing_issue_id is None:

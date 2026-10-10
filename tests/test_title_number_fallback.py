@@ -143,6 +143,40 @@ async def test_fallback_no_match_stays_missing(async_db) -> None:
 
 
 @pytest.mark.asyncio
+async def test_fallback_rejects_candidate_with_conflicting_comicvine_id(async_db) -> None:
+    """A title+number match with a different confirmed ComicVine ID is rejected.
+
+    Not reused — e.g. two volumes sharing title and number.
+    """
+    user = await _user(async_db, username="fallback_conflict_user")
+    thread = await _thread(async_db, user.id, "My Series")
+    issues = await _issues(async_db, thread.id, ["1"])
+    # The owned issue is confirmed as a DIFFERENT ComicVine issue (other volume).
+    identity = await upsert_external_identity(
+        async_db, provider="comicvine", entity_type="issue", external_id="11111"
+    )
+    await link_issue_external_identity(
+        async_db,
+        user_id=user.id,
+        issue_id=issues[0].id,
+        external_identity_id=identity.id,
+        status="confirmed",
+        evidence_source="test",
+        confidence=1.0,
+    )
+    await async_db.flush()
+    # The CBL entry's ComicVine ID exists but has no owned mapping.
+    await _comicvine_identity(async_db, "99999")
+
+    entries = [
+        {"position": 1, "series_name": "My Series", "issue_number": "1", "comicvine_issue_id": "99999"},
+    ]
+    resolved = await resolve_cbl_entries_to_canonical(async_db, user_id=user.id, cbl_entries=entries)
+    assert resolved[0].resolution_status == "no_owned_issue_for_comicvine_id"
+    assert resolved[0].resolved_issue_id is None
+
+
+@pytest.mark.asyncio
 async def test_fallback_does_not_override_comicvine_evidence(async_db) -> None:
     """ComicVine-mapped entries still resolve via ComicVine, not the fallback."""
     user = await _user(async_db, username="fallback_cv_user")

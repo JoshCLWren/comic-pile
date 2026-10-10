@@ -152,8 +152,14 @@ def calculate_cbl_adoption_plan(
             else "ambiguous_unresolved"
         )
         if not selectable:
-            decision = "unresolved"
-            unresolved += 1
+            # An explicit per-entry skip lets the reader defer one ambiguous
+            # entry without blocking adoption of the whole source.
+            if entry_key in entry_choices and entry_choices[entry_key] is False:
+                decision = "excluded"
+                excluded += 1
+            else:
+                decision = "unresolved"
+                unresolved += 1
         else:
             # #2128: safely creatable missing entries default to included. The
             # reader's single Add confirmation is the explicit approval for the

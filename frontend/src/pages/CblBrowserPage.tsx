@@ -23,7 +23,7 @@ function statusLabel(entry: CBLAdoptionPreviewEntry): string {
     case 'awaiting_opt_in':
       return 'Missing · choose whether to add'
     case 'excluded':
-      return 'Excluded'
+      return entry.adoption_class === 'ambiguous_unresolved' ? 'Skipped' : 'Excluded'
     case 'unresolved':
       return 'Needs identity resolution'
   }
@@ -365,7 +365,10 @@ export default function CblBrowserPage() {
                 ? 'Some entries need identity resolution before this source can be added. '
                 : ''}
               {summary?.awaiting_opt_in_count
-                ? 'Choose whether to include each missing comic below before adding.'
+                ? 'Choose whether to include each missing comic below before adding. '
+                : ''}
+              {summary?.unresolved_count
+                ? 'You can skip individual entries under Customize to adopt the rest.'
                 : ''}
             </p>
           )}
@@ -488,6 +491,18 @@ export default function CblBrowserPage() {
                         />
                         Include
                       </label>
+                    )}
+                    {entry.adoption_class === 'ambiguous_unresolved' && (
+                      <button
+                        type="button"
+                        disabled={isPreviewing || isCommitting}
+                        onClick={() =>
+                          chooseEntry(entry, entry.adoption_decision === 'excluded')
+                        }
+                        className="min-h-9 shrink-0 rounded-lg border border-[var(--theme-border)] px-2 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50"
+                      >
+                        {entry.adoption_decision === 'excluded' ? 'Unskip' : 'Skip'}
+                      </button>
                     )}
                   </li>
                 ))}
