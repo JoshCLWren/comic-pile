@@ -62,6 +62,31 @@ function rollLabel(event: DisplayEvent): string | null {
   return selectionLabel(event) ?? 'Selected without rolling'
 }
 
+/**
+ * Reader-facing detail line for an event card, or `null` when the description
+ * only repeats what the card already prints.
+ *
+ * `app/api/session.py` composes descriptions as `<label> <thread>` followed by
+ * optional ` · `-separated extras, so an undo/restore card showed the word
+ * "Restored" in the eyebrow and again in its description while the title line
+ * already carried the thread name. Two cards that differed only in that
+ * repeated word read as duplicates (#3300). Only the redundant leading segment
+ * is dropped; trailing extras such as `#12` stay visible.
+ */
+function eventDetail(event: DisplayEvent): string | null {
+  const description = event.description?.trim()
+  if (!description) return null
+
+  if (event.type === 'undo' || event.type === 'restore') {
+    const [head, ...extras] = description.split(' · ')
+    if (head.startsWith(`${eventLabel(event.type)} `)) {
+      return extras.join(' · ') || null
+    }
+  }
+
+  return description
+}
+
 function EventRecord({ event }: { event: DisplayEvent }) {
   const metadata = [
     event.issues_read != null ? `${event.issues_read} ${event.issues_read === 1 ? 'issue' : 'issues'} read` : null,
@@ -71,6 +96,11 @@ function EventRecord({ event }: { event: DisplayEvent }) {
     event.rating != null ? `Rating ${event.rating}` : null,
     event.result == null || event.result > 0 ? selectionLabel(event) : null,
   ].filter((value): value is string => value !== null)
+
+  // A redundant description is dropped silently; the placeholder below is
+  // reserved for events that genuinely recorded nothing extra.
+  const detail = eventDetail(event)
+  const hasRecordedDescription = Boolean(event.description?.trim())
 
   return (
     <article className="min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
@@ -94,19 +124,11 @@ function EventRecord({ event }: { event: DisplayEvent }) {
             <li key={item} className="break-words">{item}</li>
           ))}
         </ul>
-      ) : (() => {
-        const label = eventLabel(event.type)
-        // Suppress description for undo/restore events when it starts with the label
-        // to avoid visual duplication (label "Restored" + description "Restored Saga")
-        const shouldSuppressDescription =
-          (event.type === 'undo' || event.type === 'restore') &&
-          event.description != null &&
-          event.description.startsWith(`${label} `)
-        if (shouldSuppressDescription || !event.description) {
-          return <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
-        }
-        return <p className="mt-1 text-xs text-stone-400 break-words">{event.description}</p>
-      })()}
+      ) : detail ? (
+        <p className="mt-1 text-xs text-stone-400 break-words">{detail}</p>
+      ) : !hasRecordedDescription ? (
+        <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
+      ) : null}
       {event.queue_move && (
         <p className="mt-1 break-words text-xs text-stone-500">Queue move: {event.queue_move}</p>
       )}
