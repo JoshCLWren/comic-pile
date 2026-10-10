@@ -49,6 +49,7 @@ from app.schemas import (
     SessionModeResponse,
     SessionModeUpdateRequest,
     SessionResponse,
+    ThreadExclusionReason,
 )
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
@@ -69,6 +70,7 @@ from comic_pile.recommendation_version import (
     recommendation_algorithm_version,
 )
 from comic_pile.reading_session import get_current_die_for_session, get_or_create
+from comic_pile.dependencies import get_blocking_explanations_batch
 
 router = APIRouter(tags=["roll"])
 v2_router = APIRouter(tags=["roll"])
@@ -1212,6 +1214,7 @@ async def roll_bootstrap(
         .order_by(Thread.queue_position)
         .limit(20)
     )
+
     blocked_threads = [
         RollBootstrapThread(
             id=row.id, title=row.title, format=normalize_format_value(row.format)
@@ -1271,6 +1274,131 @@ async def roll_bootstrap(
                     last_activity_at=stale_last_activity,
                 )
 
+    # Exclusion transparency for issue #3125: enumerate every series
+    # not in the roll pool and explain why, so the user can see what
+    # vanished and why. The pool query above is capped at the die size
+    # and only drives the face mapping, so availability is decided by
+    # the pool filters themselves: a rollable series beyond the die
+    # window is still available and must never be reported as excluded.
+    all_active_result = await db.execute(
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.queue_position,
+            Thread.is_blocked,
+        )
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .order_by(Thread.queue_position)
+    )
+    all_active_rows = all_active_result.all()
+
+    available_ids: set[int] = set()
+    excluded: dict[int, ThreadExclusionReason] = {}
+    inactive: list[ThreadExclusionReason] = []
+    blocked_ids: list[int] = []
+
+    for row in all_active_rows:
+        tid = row.id
+        title = row.title
+        fmt = normalize_format_value(row.format)
+        queue_pos = row.queue_position
+        # Mirrors pool_query's WHERE clause exactly: active (already
+        # filtered above), queued, unblocked, and not snoozed or
+        # skipped in any scope.
+        is_blocked = row.is_blocked
+        is_rollable = (
+            queue_pos >= 1
+            and not is_blocked
+            and tid not in effective_snoozed_ids
+            and tid not in skipped_ids
+        )
+        if is_rollable:
+            available_ids.add(tid)
+            continue
+        if is_blocked:
+            blocked_ids.append(tid)
+            exc = ThreadExclusionReason(
+                thread_id=tid, title=title, format=fmt, reason="blocked",
+            )
+        elif tid in snoozed_ids:
+            exc = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="snoozed",
+                detail="Snoozed in current session",
+            )
+        elif tid in derived_snoozed_ids:
+            exc = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="snoozed",
+                detail="Snoozed by cross-session backoff",
+            )
+        elif tid in skipped_ids:
+            exc = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="skipped",
+                detail="Skipped in current session",
+            )
+        else:
+            exc = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="not_in_queue",
+                detail="Not in the active queue",
+            )
+            inactive.append(exc)
+        excluded[tid] = exc
+
+    # Completed series sit outside the active status and never reach the
+    # pool query, so they vanish silently unless explained here.
+    completed_result = await db.execute(
+        select(Thread.id, Thread.title, Thread.format)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "completed")
+        .order_by(Thread.queue_position)
+    )
+    completed_rows = completed_result.all()
+    for row in completed_rows:
+        tid = row.id
+        title = row.title
+        fmt = normalize_format_value(row.format)
+        exc = ThreadExclusionReason(
+            thread_id=tid,
+            title=title,
+            format=fmt,
+            reason="completed",
+            detail="Read the full series",
+        )
+        excluded[tid] = exc
+        inactive.append(exc)
+
+    # Attach human-readable blocking detail where it exists, then
+    # materialize the bounded exclusion lists for the response. Every
+    # active row is either available or excluded and every completed
+    # row is excluded, so total - available always equals the union of
+    # all exclusion reasons.
+    if blocked_ids:
+        blocking_map = await get_blocking_explanations_batch(
+            sorted(blocked_ids), user_id, db
+        )
+        for tid, explanations in blocking_map.items():
+            if tid in excluded and explanations:
+                excluded[tid].detail = explanations[0].label
+
+    total_threads = len(all_active_rows) + len(completed_rows)
+    available_threads = len(available_ids)
+    excluded_list = list(excluded.values())
+    excluded_count = len(excluded_list)
+    inactive_count = len(inactive)
+
     return RollBootstrapResponse(
         current_die=die_size,
         manual_die=manual_die,
@@ -1292,6 +1420,14 @@ async def roll_bootstrap(
         session_id=current_session_id,
         user_id=user_id,
         timezone=current_session.timezone,
+
+        # Issue #3125: exclusion transparency.
+        total_threads=total_threads,
+        available_threads=available_threads,
+        excluded_count=excluded_count,
+        excluded_threads=excluded_list,
+        inactive_count=inactive_count,
+        inactive_threads=inactive,
     )
 
 

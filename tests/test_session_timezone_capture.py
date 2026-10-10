@@ -79,11 +79,12 @@ def _patch_bootstrap(monkeypatch, current_session):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
-        _Result(rows=[]),
-        _Result(scalar_value=0),
+        _Result(rows=[]),          # pool
+        _Result(scalar_value=0),  # blocked count
+        _Result(rows=[]),          # blocked threads
+        _Result(scalar_value=0),  # stale count
+        _Result(rows=[]),          # all active
+        _Result(rows=[]),          # completed
     ]
     return db
 

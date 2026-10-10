@@ -361,8 +361,11 @@ async def get_creator_comparison(
             role_stats.append(
                 CreatorComparisonRoleStat(
                     role=role,
-                    issue_count=len(role_issue_id_list),
-                    average_rating=_average_or_none(role_ratings),
+                    issue_count=len(role_issue_ids),
+                    rated_issue_count=len(role_ratings),
+                    average_rating=(
+                        round(sum(role_ratings) / len(role_ratings), 2) if role_ratings else None
+                    ),
                 )
             )
 

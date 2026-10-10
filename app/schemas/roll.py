@@ -160,6 +160,16 @@ class RollRecoveryInfo(BaseModel):
     diagnostics: list[RollRecoveryDiagnostic] = Field(default_factory=list)
 
 
+class ThreadExclusionReason(BaseModel):
+    """One series excluded from the roll pool, with the reason the user can understand."""
+
+    thread_id: int
+    title: str
+    format: str
+    reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue"]
+    detail: str | None = None
+
+
 class RollBootstrapResponse(BaseModel):
     """Bounded bootstrap payload for the Roll initial render.
 
@@ -190,6 +200,15 @@ class RollBootstrapResponse(BaseModel):
     stale_thread: RollBootstrapThread | None
     timezone: str | None = None
 
+    # Exclusion transparency for issue #3125: every series not in the roll pool
+    # is explained with a reason so the user can see why options vanish.
+    total_threads: int
+    available_threads: int
+    excluded_count: int
+    excluded_threads: list[ThreadExclusionReason] = Field(default_factory=list)
+    inactive_count: int = 0
+    inactive_threads: list[ThreadExclusionReason] = Field(default_factory=list)
+
     @model_validator(mode="before")
     @classmethod
     def bound_summary_lists(cls, data: object) -> object:
@@ -197,7 +216,7 @@ class RollBootstrapResponse(BaseModel):
         if not isinstance(data, dict):
             return data
 
-        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads"):
+        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads", "excluded_threads", "inactive_threads"):
             values = data.get(field_name)
             if isinstance(values, list):
                 data[field_name] = values[: cls.summary_limit]
