@@ -22,7 +22,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.repositories.issue_identity_repository import (
@@ -594,7 +594,14 @@ async def _owned_issues_by_title_number(
     collapse) happens in Python because SQL lower() does neither reliably.
     """
     result = await db.execute(
-        select(Issue.id, Issue.status, Issue.read_at, Thread.title, Issue.issue_number)
+        select(
+            Issue.id,
+            Issue.status,
+            Issue.read_at,
+            Thread.title,
+            Issue.issue_number,
+            Issue.thread_id,
+        )
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
@@ -607,9 +614,49 @@ async def _owned_issues_by_title_number(
         if not key[0] or not key[1]:
             continue
         index.setdefault(key, []).append(
-            {"id": int(row[0]), "status": row[1], "read_at": row[2]}
+            {
+                "id": int(row[0]),
+                "status": row[1],
+                "read_at": row[2],
+                "thread_id": int(row[5]),
+            }
         )
     return index
+
+
+async def _confirmed_series_ids_for_threads(
+    db: AsyncSession,
+    *,
+    thread_ids: list[int],
+) -> dict[int, set[str]]:
+    """Return confirmed ComicVine series IDs per thread ID, batched.
+
+    Used by the title+number fallback to verify a candidate's thread is
+    plausibly the same series (volume) as the CBL entry claims.
+    """
+    if not thread_ids:
+        return {}
+    result = await db.execute(
+        select(
+            ThreadExternalSeriesMapping.thread_id,
+            ExternalIdentity.external_id,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id
+            == ThreadExternalSeriesMapping.external_identity_id,
+        )
+        .where(
+            ThreadExternalSeriesMapping.thread_id.in_(thread_ids),
+            ThreadExternalSeriesMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "series",
+        )
+    )
+    by_thread: dict[int, set[str]] = {}
+    for row in result.all():
+        by_thread.setdefault(int(row[0]), set()).add(str(row[1]))
+    return by_thread
 
 
 async def resolve_cbl_entries_to_canonical(
@@ -631,7 +678,11 @@ async def resolve_cbl_entries_to_canonical(
     user-owned issues is reused instead of declaring the entry missing;
     candidates that already carry a different confirmed ComicVine ID are
     rejected as conflicting, and multiple remaining matches are reported
-    ambiguous rather than merged.
+    ambiguous rather than merged. When the CBL entry names a ComicVine
+    series, the candidate's thread must be confirmed as that same series;
+    candidates from a different confirmed series are rejected, and
+    candidates whose series cannot be verified are ambiguous rather than
+    reused.
 
     Args:
         db: Async database session.
@@ -643,8 +694,13 @@ async def resolve_cbl_entries_to_canonical(
     """
     results: list[CBLCanonicalEntry] = []
     # Lazily built on first fallback need: index of owned issues by
-    # normalized (series title, issue number).
+    # normalized (series title, issue number), plus the confirmed ComicVine
+    # identities for all indexed issues and the confirmed ComicVine series
+    # IDs for their threads, each in one batched query (avoids N+1 lookups
+    # per fallback entry).
     title_number_index: dict[tuple[str, str], list[dict[str, object]]] | None = None
+    confirmed_identities: dict[int, set[str]] = {}
+    confirmed_series: dict[int, set[str]] = {}
     for entry in cbl_entries:
         position = int(entry.get("position") or 0)
         series_name = str(entry.get("series_name") or "")
@@ -686,6 +742,24 @@ async def resolve_cbl_entries_to_canonical(
                     title_number_index = await _owned_issues_by_title_number(
                         db, user_id=user_id
                     )
+                    confirmed_identities = await _confirmed_comicvine_ids_for_issues(
+                        db,
+                        issue_ids=[
+                            int(m["id"])
+                            for matches in title_number_index.values()
+                            for m in matches
+                        ],
+                    )
+                    confirmed_series = await _confirmed_series_ids_for_threads(
+                        db,
+                        thread_ids=list(
+                            {
+                                int(m["thread_id"])
+                                for matches in title_number_index.values()
+                                for m in matches
+                            }
+                        ),
+                    )
                 fallback_matches = title_number_index.get(
                     (
                         _normalize_title_number(series_name),
@@ -698,16 +772,58 @@ async def resolve_cbl_entries_to_canonical(
                 # resolution would have succeeded above, so any confirmed
                 # mapping on a fallback candidate conflicts with this entry
                 # (e.g. two editions/volumes sharing a title and number).
+                # The confirmed map was fetched once with the index above.
                 if fallback_matches:
-                    confirmed = await _confirmed_comicvine_ids_for_issues(
-                        db,
-                        issue_ids=[int(m["id"]) for m in fallback_matches],
-                    )
                     fallback_matches = [
                         m
                         for m in fallback_matches
-                        if not confirmed.get(int(m["id"]))
+                        if not confirmed_identities.get(int(m["id"]))
                     ]
+                # When the CBL entry names a specific ComicVine series, use
+                # it as volume evidence. Candidates are partitioned:
+                # - thread confirmed as the SAME series -> verified, reusable
+                # - thread confirmed as a DIFFERENT series -> rejected (wrong
+                #   volume)
+                # - thread with no confirmed series mapping -> unverifiable;
+                #   the entry is ambiguous rather than silently reused or
+                #   duplicated (the wrong read history must not be attached,
+                #   and a duplicate comic must not be created).
+                cbl_series_id = entry.get("series_external_id")
+                cbl_series_str = (
+                    str(cbl_series_id).strip()
+                    if cbl_series_id is not None
+                    else None
+                )
+                if cbl_series_str and fallback_matches:
+                    verified: list[dict[str, object]] = []
+                    unverifiable: list[dict[str, object]] = []
+                    for m in fallback_matches:
+                        thread_series = confirmed_series.get(
+                            int(m["thread_id"]), set()
+                        )
+                        if not thread_series:
+                            unverifiable.append(m)
+                        elif cbl_series_str in thread_series:
+                            verified.append(m)
+                        # else: confirmed different series -> reject
+                    if unverifiable:
+                        # Cannot verify the volume: ambiguous, not reused.
+                        results.append(
+                            CBLCanonicalEntry(
+                                cbl_position=position,
+                                cbl_series_name=series_name,
+                                cbl_issue_number=issue_number,
+                                comicvine_issue_id=cvid_str,
+                                resolved_issue_id=None,
+                                canonical_issue_id=None,
+                                resolution_status="ambiguous_title_number_unverifiable_series",
+                                is_duplicate_identity=False,
+                                read_status=None,
+                                read_at=None,
+                            )
+                        )
+                        continue
+                    fallback_matches = verified
                 if len(fallback_matches) == 1:
                     match = fallback_matches[0]
                     match_read_at = match["read_at"]

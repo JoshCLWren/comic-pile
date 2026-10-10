@@ -471,6 +471,20 @@ async def _merge_adopted_nodes(
 
     for entry in entries:
         fact = facts_by_entry_id.get(entry.id)
+
+        # An explicit exclusion is honored and reported as excluded even for
+        # unresolvable entries: the reader's skip decision stands and the
+        # commit report must reflect it, matching the preview.
+        early_decision = _resolve_decision(
+            entry,
+            entry_decisions,
+            series_overrides,
+            series_decisions,
+        )
+        if early_decision == SourceBackedDecision.EXCLUDE:
+            excluded_positions.append(entry.position)
+            continue
+
         if fact is None:
             unresolved_positions.append(entry.position)
             continue
@@ -486,15 +500,6 @@ async def _merge_adopted_nodes(
             unresolved_positions.append(entry.position)
             continue
 
-        decision = _resolve_decision(
-            entry,
-            entry_decisions,
-            series_overrides,
-            series_decisions,
-        )
-        if decision == SourceBackedDecision.EXCLUDE:
-            excluded_positions.append(entry.position)
-            continue
         # #2128 one-decision contract: safely importable missing entries
         # default to included, matching the preview. Only an explicit
         # EXCLUDE (or an unresolvable identity, handled above) keeps an

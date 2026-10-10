@@ -219,3 +219,92 @@ async def test_fallback_scoped_to_owner(async_db) -> None:
     resolved = await resolve_cbl_entries_to_canonical(async_db, user_id=owner.id, cbl_entries=entries)
     assert resolved[0].resolution_status == "no_owned_issue_for_comicvine_id"
     assert resolved[0].resolved_issue_id is None
+
+
+async def _link_thread_series(
+    async_db, user_id: int, thread_id: int, series_external_id: str
+) -> None:
+    """Attach a confirmed ComicVine series identity to a thread."""
+    from app.external_identities import link_thread_external_series
+
+    identity = await upsert_external_identity(
+        async_db, provider="comicvine", entity_type="series", external_id=series_external_id
+    )
+    await link_thread_external_series(
+        async_db,
+        user_id=user_id,
+        thread_id=thread_id,
+        external_identity_id=identity.id,
+        status="confirmed",
+        evidence_source="test",
+        confidence=1.0,
+    )
+    await async_db.flush()
+
+
+@pytest.mark.asyncio
+async def test_fallback_reuses_when_series_verified(async_db) -> None:
+    """A title+number match is reused when the series is verified."""
+    user = await _user(async_db, username="fallback_series_ok_user")
+    thread = await _thread(async_db, user.id, "Volume Series")
+    issues = await _issues(async_db, thread.id, ["1"])
+    await _link_thread_series(async_db, user.id, thread.id, "77777")
+    await _comicvine_identity(async_db, "88888")
+
+    entries = [
+        {
+            "position": 1,
+            "series_name": "Volume Series",
+            "issue_number": "1",
+            "comicvine_issue_id": "88888",
+            "series_external_id": "77777",
+        },
+    ]
+    resolved = await resolve_cbl_entries_to_canonical(async_db, user_id=user.id, cbl_entries=entries)
+    assert resolved[0].resolution_status == "resolved_via_title_number_fallback"
+    assert resolved[0].resolved_issue_id == issues[0].id
+
+
+@pytest.mark.asyncio
+async def test_fallback_rejects_different_confirmed_series(async_db) -> None:
+    """A title+number match is rejected for a different confirmed series."""
+    user = await _user(async_db, username="fallback_series_diff_user")
+    thread = await _thread(async_db, user.id, "Volume Series")
+    await _issues(async_db, thread.id, ["1"])
+    await _link_thread_series(async_db, user.id, thread.id, "11111")
+    await _comicvine_identity(async_db, "88888")
+
+    entries = [
+        {
+            "position": 1,
+            "series_name": "Volume Series",
+            "issue_number": "1",
+            "comicvine_issue_id": "88888",
+            "series_external_id": "77777",
+        },
+    ]
+    resolved = await resolve_cbl_entries_to_canonical(async_db, user_id=user.id, cbl_entries=entries)
+    assert resolved[0].resolution_status == "no_owned_issue_for_comicvine_id"
+    assert resolved[0].resolved_issue_id is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_ambiguous_when_series_unverifiable(async_db) -> None:
+    """A title+number match is ambiguous when the series is unverifiable."""
+    user = await _user(async_db, username="fallback_series_unver_user")
+    thread = await _thread(async_db, user.id, "Volume Series")
+    await _issues(async_db, thread.id, ["1"])
+    await _comicvine_identity(async_db, "88888")
+
+    entries = [
+        {
+            "position": 1,
+            "series_name": "Volume Series",
+            "issue_number": "1",
+            "comicvine_issue_id": "88888",
+            "series_external_id": "77777",
+        },
+    ]
+    resolved = await resolve_cbl_entries_to_canonical(async_db, user_id=user.id, cbl_entries=entries)
+    assert resolved[0].resolution_status == "ambiguous_title_number_unverifiable_series"
+    assert resolved[0].resolved_issue_id is None

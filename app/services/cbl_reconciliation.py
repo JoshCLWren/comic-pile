@@ -374,6 +374,7 @@ async def reconcile_cbl_source_list(
         if canon.resolution_status in (
             "ambiguous_no_comicvine_id",
             "ambiguous_title_number_multiple_matches",
+            "ambiguous_title_number_unverifiable_series",
             "comicvine_identity_not_known",
             "resolved_via_comicvine_canonical_ambiguous",
         ):
@@ -423,6 +424,7 @@ async def reconcile_cbl_source_list(
         pos = cast(int, entry["cbl_position"])
         if status in (
             "ambiguous_no_comicvine_id",
+            "ambiguous_title_number_unverifiable_series",
             "comicvine_identity_not_known",
             "resolved_via_comicvine_canonical_ambiguous",
         ):

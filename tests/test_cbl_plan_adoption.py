@@ -607,6 +607,38 @@ async def test_unresolved_entry_skipped_and_reported() -> None:
 
 
 @pytest.mark.asyncio
+async def test_explicitly_excluded_unresolved_entry_reported_excluded() -> None:
+    """An explicit EXCLUDE on an unresolvable entry is reported as excluded.
+
+    The preview moves a skipped unresolved entry from unresolved to
+    excluded; the commit report must match instead of reclassifying it
+    as unresolved.
+    """
+    entry = _FakeEntry(id=40, position=0, series_name="U")
+    fact = _make_fact(
+        resolved_issue_id=None,
+        resolution_status="ambiguous_unresolved",
+        position=0,
+        cbl_entry_id=40,
+    )
+    with patch(
+        "app.services.cbl_plan_adoption._ensure_missing_issue_created",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        result = await _adopt(
+            _FakeDB(),
+            entries=[entry],
+            facts=[fact],
+            entry_decisions={0: SourceBackedDecision.EXCLUDE},
+        )
+    mock_create.assert_not_called()
+    plan = result.plan
+    assert len(plan.nodes_json) == 0
+    assert result.excluded_positions == [0]
+    assert result.unresolved_positions == []
+
+
+@pytest.mark.asyncio
 async def test_excluded_existing_entry_creates_no_node() -> None:
     """An explicitly excluded existing entry should not appear in the plan."""
     entry = _FakeEntry(id=50, position=0, series_name="E")
