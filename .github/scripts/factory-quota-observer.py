@@ -5,7 +5,6 @@ The output is a private artifact, not a public Pages payload.
 """
 import json
 import os
-import sys
 from datetime import datetime, timezone
 from urllib.request import Request, urlopen
 
