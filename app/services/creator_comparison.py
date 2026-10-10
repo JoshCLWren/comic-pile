@@ -895,7 +895,7 @@ async def get_role_average_drilldown(
         average_display = round(total_points / rated_issue_count, 2)
         calculation = (
             f"{role}: {_plural(issue_count, 'credited issue')}, "
-            f"{_plural(rated_issue_count, 'with effective ratings')}; "
+            f"{_plural(rated_issue_count, 'with effective rating')}; "
             f"{_format_points(total_points)} rating points ÷ "
             f"{_plural(rated_issue_count, 'rated issue')} = {average_display:.2f}★"
         )
@@ -994,7 +994,7 @@ async def get_series_average_drilldown(
         average_display = round(total_points / rated_issue_count, 2)
         calculation = (
             f"{thread_title}: {_plural(issue_count, 'attributed issue')}, "
-            f"{_plural(rated_issue_count, 'with effective ratings')}; "
+            f"{_plural(rated_issue_count, 'with effective rating')}; "
             f"{_format_points(total_points)} rating points ÷ "
             f"{_plural(rated_issue_count, 'rated issue')} = {average_display:.2f}★"
         )

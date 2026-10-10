@@ -24,7 +24,7 @@ D3 = datetime(2026, 3, 3, tzinfo=UTC)
 D4 = datetime(2026, 3, 4, tzinfo=UTC)
 D5 = datetime(2026, 3, 5, tzinfo=UTC)
 
-_idENTITY_SERIAL = 0
+_identity_serial = 0
 
 
 async def _make_thread(
@@ -69,12 +69,12 @@ async def _confirm_identity(
     creators: list[dict[str, object]] | None = None,
 ) -> None:
     """Create a confirmed external issue identity mapping."""
-    global _IDENTITY_SERIAL
-    _IDENTITY_SERIAL += 1
+    global _identity_serial
+    _identity_serial += 1
     identity = ExternalIdentity(
         provider="comicvine",
         entity_type="issue",
-        external_id=f"drill-{_IDENTITY_SERIAL}",
+        external_id=f"drill-{_identity_serial}",
         metadata_json={"creator_credits": creators or []},
     )
     db.add(identity)
