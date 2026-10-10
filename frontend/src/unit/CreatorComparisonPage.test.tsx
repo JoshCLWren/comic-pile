@@ -249,7 +249,8 @@ describe('CreatorComparisonPage', () => {
     renderAt('creator:7,mystery')
 
     expect(screen.getByRole('heading', { name: 'Mystery Writer' })).toBeInTheDocument()
-    expect(screen.getAllByText('No ratings yet')).toHaveLength(2)
+    // "No ratings yet" appears in average, median, and distribution (3 places)
+    expect(screen.getAllByText('No ratings yet')).toHaveLength(3)
     expect(screen.getByText('N/A')).toBeInTheDocument()
     expect(screen.getByText(/unrated/)).toBeInTheDocument()
     expect(screen.queryByText('Read, not rated')).not.toBeInTheDocument()
