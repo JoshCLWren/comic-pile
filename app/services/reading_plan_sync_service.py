@@ -589,6 +589,27 @@ async def _sync_source(
         else:
             conflicts += 1
 
+        # #3118: extend every plan following this source with the adopted issue.
+        if adoption.outcome in ("created", "reused") and adoption.issue_id:
+            from app.services.reading_plan_release_extension import (
+                extend_plans_with_issue,
+            )
+
+            try:
+                await extend_plans_with_issue(
+                    db,
+                    issue_id=adoption.issue_id,
+                    source_id=source.id,
+                    store_date=store_date,
+                )
+            except Exception as error:
+                logger.warning(
+                    "reading_plan_sync_extend_failed source_id=%s issue_id=%s error=%s",
+                    source.id,
+                    adoption.issue_id,
+                    error,
+                )
+
     return SourceSyncResult(
         source_id=source.id,
         plan_id=source.plan_id,
