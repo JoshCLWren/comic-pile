@@ -40,6 +40,7 @@ export const DRILLDOWN_METRICS = [
 export function isDrilldownMetricParam(
   value: string | null | undefined,
 ): value is DrilldownMetricParam {
+  // SAFETY: DRILLDOWN_METRICS is a const array with literal string types, so casting to readonly string[] preserves type safety
   return value != null && (DRILLDOWN_METRICS as readonly string[]).includes(value)
 }
 
