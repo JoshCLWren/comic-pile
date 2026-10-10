@@ -1,5 +1,6 @@
 """Undo snapshot repository for database operations."""
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
@@ -8,7 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Issue, Snapshot, Thread
 from app.models.reading_session import ReadingSession
 from app.models.thread import normalize_format_value
-from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
+from app.services.snapshot_contract import (
+    LEGACY_DELTA_FALLBACK_SCAN_LIMIT,
+    SNAPSHOT_KIND_DELTA,
+    SNAPSHOT_VERSION,
+    SNAPSHOT_VERSION_KEY,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class UndoSnapshotRepository:
@@ -61,6 +69,12 @@ class UndoSnapshotRepository:
     async def get_latest_delta_snapshot(self, session_id: int) -> Snapshot | None:
         """Get the latest unconsumed delta snapshot for a session.
 
+        The indexed path filters on the queryable kind/version metadata and
+        fetches at most one payload with deterministic created_at/id ordering.
+        Rows written before classification carry a NULL kind, so when the
+        indexed path misses, a bounded fallback scans only those unclassified
+        rows newest-first for the supported delta contract.
+
         Args:
             session_id: Session ID to get snapshot for.
 
@@ -70,16 +84,54 @@ class UndoSnapshotRepository:
         result = await self.db.execute(
             select(Snapshot)
             .where(Snapshot.session_id == session_id)
+            .where(Snapshot.snapshot_kind == SNAPSHOT_KIND_DELTA)
+            .where(Snapshot.schema_version == SNAPSHOT_VERSION)
             .order_by(Snapshot.created_at.desc(), Snapshot.id.desc())
+            .limit(1)
         )
-        snapshots = result.scalars().all()
-        
-        # Return the first snapshot that is a delta snapshot
-        for snapshot in snapshots:
-            thread_states = snapshot.thread_states or {}
-            if thread_states.get(SNAPSHOT_VERSION_KEY) == SNAPSHOT_VERSION:
+        snapshot = result.scalar_one_or_none()
+        if snapshot is not None:
+            return snapshot
+        return await self._get_latest_unclassified_delta_snapshot(session_id)
+
+    async def _get_latest_unclassified_delta_snapshot(
+        self, session_id: int
+    ) -> Snapshot | None:
+        """Scan NULL-kind rows for a supported delta without loading the stack.
+
+        Only rows predating the #3218 classification (writers or backfill) can
+        be unclassified, so this fallback is bounded to
+        ``LEGACY_DELTA_FALLBACK_SCAN_LIMIT`` payloads. Supported deltas are
+        never skipped silently: classified rows are covered by the indexed
+        path, and truncation beyond the bound emits a warning.
+
+        Args:
+            session_id: Session ID to scan.
+
+        Returns:
+            Newest supported unclassified delta snapshot or None.
+        """
+        result = await self.db.execute(
+            select(Snapshot)
+            .where(Snapshot.session_id == session_id)
+            .where(Snapshot.snapshot_kind.is_(None))
+            .order_by(Snapshot.created_at.desc(), Snapshot.id.desc())
+            .limit(LEGACY_DELTA_FALLBACK_SCAN_LIMIT + 1)
+        )
+        rows = list(result.scalars().all())
+        if len(rows) > LEGACY_DELTA_FALLBACK_SCAN_LIMIT:
+            logger.warning(
+                "Unclassified snapshot fallback truncated for session %s: "
+                "more than %s unclassified rows",
+                session_id,
+                LEGACY_DELTA_FALLBACK_SCAN_LIMIT,
+            )
+        for snapshot in rows[:LEGACY_DELTA_FALLBACK_SCAN_LIMIT]:
+            thread_states = snapshot.thread_states
+            if isinstance(thread_states, dict) and (
+                thread_states.get(SNAPSHOT_VERSION_KEY) == SNAPSHOT_VERSION
+            ):
                 return snapshot
-        
         return None
 
     async def get_user_session(

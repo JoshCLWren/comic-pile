@@ -50,6 +50,7 @@ from app.models import (
     Thread,
     User,
 )
+from app.services.snapshot_contract import classify_snapshot
 from scripts.database_target_safety import require_local_database_url
 
 
@@ -195,6 +196,8 @@ class ExportSnapshotRecord(TypedDict, total=False):
     session_state: dict[str, JsonValue] | None
     created_at: str | None
     description: str | None
+    snapshot_kind: str | None
+    schema_version: int | None
 
 
 class ExportDocument(TypedDict):
@@ -370,6 +373,8 @@ def _export_snapshot(snapshot: Snapshot) -> ExportSnapshotRecord:
         "session_state": cast(dict[str, JsonValue] | None, snapshot.session_state),
         "created_at": _datetime_to_iso(snapshot.created_at),
         "description": snapshot.description,
+        "snapshot_kind": snapshot.snapshot_kind,
+        "schema_version": snapshot.schema_version,
     })
 
 
@@ -784,10 +789,19 @@ async def _import_document(
                     await db.flush()
                     event_map[record["id"]] = item.id
                 for record in export["snapshots"]:
+                    snapshot_kind = record.get("snapshot_kind")
+                    schema_version = record.get("schema_version")
+                    if snapshot_kind is None:
+                        snapshot_kind, schema_version = classify_snapshot(
+                            record.get("thread_states", {}),
+                            description=record.get("description"),
+                            event_id=_remap(record.get("event_id"), event_map),
+                        )
                     db.add(Snapshot(
                         session_id=session_map[record["session_id"]], event_id=_remap(record.get("event_id"), event_map),
                         thread_states=record.get("thread_states", {}), session_state=record.get("session_state"),
                         created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC), description=record.get("description"),
+                        snapshot_kind=snapshot_kind, schema_version=schema_version,
                     ))
                 await db.flush()
 

@@ -37,6 +37,7 @@ from app.services.snapshot_contract import (
     SNAPSHOT_VERSION,
     SNAPSHOT_VERSION_KEY,
     USES_ISSUE_TRACKING_KEY,
+    classify_snapshot,
 )
 from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
@@ -210,6 +211,9 @@ async def snapshot_thread_states(
                 for thread_id, old_value in blocked_changes.items()
             }
 
+        delta_kind, delta_version = classify_snapshot(
+            thread_states, description="After rating", event_id=event_id
+        )
         db.add(
             Snapshot(
                 session_id=session_id,
@@ -217,6 +221,8 @@ async def snapshot_thread_states(
                 thread_states=thread_states,
                 session_state=pre_session_state,
                 description="After rating",
+                snapshot_kind=delta_kind,
+                schema_version=delta_version,
             )
         )
         if commit:
@@ -234,6 +240,9 @@ async def snapshot_thread_states(
             "manual_die": session.manual_die,
         }
 
+    legacy_kind, legacy_version = classify_snapshot(
+        thread_states, description="After rating", event_id=event_id
+    )
     db.add(
         Snapshot(
             session_id=session_id,
@@ -241,6 +250,8 @@ async def snapshot_thread_states(
             thread_states=thread_states,
             session_state=session_state,
             description="After rating",
+            snapshot_kind=legacy_kind,
+            schema_version=legacy_version,
         )
     )
     if commit:
