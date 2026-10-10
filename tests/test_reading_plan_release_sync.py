@@ -237,3 +237,37 @@ async def test_updates_last_synced_at(async_db: AsyncSession) -> None:
         )
     ).scalar_one()
     assert source.last_synced_at is not None
+
+
+@pytest.mark.asyncio
+async def test_adopts_issue_on_as_of_boundary(async_db: AsyncSession) -> None:
+    """An issue with store_date exactly equal to as_of is adopted."""
+    user_id, _, _ = await _setup(async_db, username="sync8")
+    as_of = datetime(2024, 6, 1, tzinfo=UTC)
+    provider = _provider([_row("1", store_date="2024-06-01")])
+    result = await sync_release_sources(async_db, user_id=user_id, as_of=as_of, provider=provider)
+    assert result.total_adopted == 1
+    assert result.sources[0].adopted == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_volume_does_not_stamp_last_synced_at(async_db: AsyncSession) -> None:
+    """A source whose volume fetch failed is not marked as successfully synced."""
+    user_id, plan_id, _ = await _setup(async_db, username="sync9", volume_id="999")
+    as_of = datetime(2024, 6, 1, tzinfo=UTC)
+
+    async def fake_fetch(volume_id: int, *, refresh: bool = False) -> list[dict[str, object]]:
+        raise RuntimeError("provider exploded")
+
+    provider = AsyncMock()
+    provider.fetch_volume_issues.side_effect = fake_fetch
+    result = await sync_release_sources(async_db, user_id=user_id, as_of=as_of, provider=provider)
+    assert len(result.volume_fetch_failures) == 1
+    assert result.total_adopted == 0
+    from sqlalchemy import select as sa_select
+    source = (
+        await async_db.execute(
+            sa_select(ReadingPlanReleaseSource).where(ReadingPlanReleaseSource.plan_id == plan_id)
+        )
+    ).scalar_one()
+    assert source.last_synced_at is None

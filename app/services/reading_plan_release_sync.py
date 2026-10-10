@@ -17,6 +17,7 @@ from app.models.external_identity import ExternalIdentity, IssueExternalIdentity
 from app.models.issue import Issue
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.models.thread import Thread
+from app.services.provider_issue_adoption import adopt_comicvine_issue
 from comic_pile.comicvine_provider import ComicVineClient
 
 
@@ -33,6 +34,7 @@ class SyncSourceResult:
     skipped_future: int = 0
     skipped_unknown_date: int = 0
     skipped_already_adopted: int = 0
+    conflicts: list[str] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
 
 
@@ -51,9 +53,10 @@ class SyncRunResult:
 
     @property
     def total_failures(self) -> int:
-        """Total per-source failures plus volume fetch failures."""
-        return sum(len(s.failures) for s in self.sources) + len(
-            self.volume_fetch_failures
+        """Total per-source conflicts and failures plus volume fetch failures."""
+        return (
+            sum(len(s.conflicts) + len(s.failures) for s in self.sources)
+            + len(self.volume_fetch_failures)
         )
 
 
@@ -188,15 +191,28 @@ async def sync_release_sources(
                     if store_date > as_of:
                         src_result.skipped_future += 1
                         continue
-                    # Adopt the issue.
+                    # Adopt the issue through the canonical adoption service.
                     try:
-                        await _adopt_issue(
+                        adoption = await adopt_comicvine_issue(
                             db,
                             user_id=user_id,
                             thread_id=source.thread_id,
-                            provider_issue_id=pid,
-                            row=row,
+                            comicvine_issue_id=int(pid),
+                            issue_number=(
+                                str(row["issue_number"])
+                                if row.get("issue_number") is not None
+                                else pid
+                            ),
+                            external_url=(
+                                row["site_detail_url"]
+                                if isinstance(row.get("site_detail_url"), str)
+                                else None
+                            ),
+                            metadata=_row_metadata(row),
                         )
+                        if adoption.outcome == "conflict":
+                            src_result.conflicts.append(f"issue {pid}: {adoption.conflict_detail}")
+                            continue
                         src_result.adopted += 1
                         adopted_ids.add(pid)
                     except Exception as exc:
@@ -212,102 +228,10 @@ async def sync_release_sources(
     return result
 
 
-async def _adopt_issue(
-    db: AsyncSession,
-    *,
-    user_id: int,
-    thread_id: int,
-    provider_issue_id: str,
-    row: dict[str, object],
-) -> Issue:
-    """Idempotently create a canonical Issue from a provider row.
-
-    Reuses the existing Issue when the ComicVine issue identity already maps
-    to one; otherwise creates it using natural-order positioning.
-    """
-    # Check for existing canonical issue.
-    stmt = (
-        select(Issue)
-        .join(
-            IssueExternalIdentityMapping,
-            IssueExternalIdentityMapping.issue_id == Issue.id,
-        )
-        .join(
-            ExternalIdentity,
-            ExternalIdentity.id
-            == IssueExternalIdentityMapping.external_identity_id,
-        )
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(
-            ExternalIdentity.provider == "comicvine",
-            ExternalIdentity.entity_type == "issue",
-            ExternalIdentity.external_id == provider_issue_id,
-            IssueExternalIdentityMapping.status == "confirmed",
-            Thread.user_id == user_id,
-        )
-    )
-    existing = (await db.execute(stmt)).scalar_one_or_none()
-    if existing is not None:
-        return existing
-
-    # Load thread for ownership check and positioning.
-    thread = (await db.execute(select(Thread).where(Thread.id == thread_id))).scalar_one_or_none()
-    if thread is None or thread.user_id != user_id:
-        raise ValueError(f"Thread {thread_id} not found or not owned")
-
-    # Create the issue with natural-order positioning (append at end).
-    max_pos = (
-        await db.execute(
-            select(Issue.position).where(Issue.thread_id == thread_id).order_by(Issue.position.desc()).limit(1)
-        )
-    ).scalar_one_or_none()
-    next_position = (max_pos or 0) + 1
-
-    issue_number = row.get("issue_number")
-    issue = Issue(
-        thread_id=thread_id,
-        issue_number=str(issue_number) if issue_number is not None else provider_issue_id,
-        position=next_position,
-        status="unread",
-    )
-    db.add(issue)
-    await db.flush()
-
-    # Create or reuse the ExternalIdentity.
-    identity_stmt = select(ExternalIdentity).where(
-        ExternalIdentity.provider == "comicvine",
-        ExternalIdentity.entity_type == "issue",
-        ExternalIdentity.external_id == provider_issue_id,
-    )
-    identity = (await db.execute(identity_stmt)).scalar_one_or_none()
-    if identity is None:
-        metadata: dict[str, object] = {}
-        for key in ("name", "title", "cover_date", "store_date", "site_detail_url"):
-            if row.get(key) is not None:
-                metadata[key] = row[key]  # type: ignore[literal-required]
-        identity = ExternalIdentity(
-            provider="comicvine",
-            entity_type="issue",
-            external_id=provider_issue_id,
-            metadata_json=metadata,
-        )
-        db.add(identity)
-        await db.flush()
-
-    mapping = IssueExternalIdentityMapping(
-        issue_id=issue.id,
-        external_identity_id=identity.id,
-        status="confirmed",
-        evidence_source="release-sync",
-    )
-    db.add(mapping)
-    await db.flush()
-
-    # Update thread counts.
-    thread.total_issues = (thread.total_issues or 0) + 1
-    thread.issues_remaining = (thread.issues_remaining or 0) + 1
-    if thread.status == "completed":
-        thread.status = "active"
-    await db.flush()
-
-    return issue
+def _row_metadata(row: dict[str, object]) -> dict[str, object]:
+    """Extract trusted provider facts from a roster row for identity metadata."""
+    metadata: dict[str, object] = {}
+    for key in ("name", "title", "cover_date", "store_date", "site_detail_url"):
+        if row.get(key) is not None:
+            metadata[key] = row[key]
+    return metadata
