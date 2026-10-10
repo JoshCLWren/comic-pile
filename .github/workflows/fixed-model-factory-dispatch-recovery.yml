@@ -8,6 +8,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/fixed-model-factory-dispatch-recovery.yml'
+      - '.github/scripts/factory_heartbeat_health.py'
+      - '.github/factory-expected-workers.json'
 
 permissions:
   actions: write
@@ -23,6 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
       - name: Recover stale fixed-model dispatcher
         shell: bash
         env:
@@ -30,33 +37,20 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          now_epoch="$(date -u +%s)"
-          newest_epoch=0
-          newest_timestamp=''
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            > /tmp/factory-registry-comments.json
+          python3 .github/scripts/factory_heartbeat_health.py \
+            --comments /tmp/factory-registry-comments.json \
+            --output /tmp/factory-heartbeat-health.json \
+            --summary "$GITHUB_STEP_SUMMARY"
 
-          while IFS= read -r timestamp; do
-            [[ -n "$timestamp" ]] || continue
-            epoch="$(date -u -d "$timestamp" +%s 2>/dev/null || echo 0)"
-            if (( epoch > newest_epoch )); then
-              newest_epoch="$epoch"
-              newest_timestamp="$timestamp"
-            fi
-          done < <(
-            gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              --jq '.[] | select(.body | contains("<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-")) | .body' \
-              | sed -n 's/^Updated: //p'
-          )
-
-          if (( newest_epoch == 0 )); then
-            echo 'No fixed-model heartbeat timestamp found; forcing dispatcher recovery.'
-          else
-            age_seconds=$((now_epoch - newest_epoch))
-            echo "Newest fixed-model heartbeat: ${newest_timestamp} (${age_seconds}s old)"
-            if (( age_seconds < 1200 )); then
-              echo 'Factory heartbeat is fresh; no recovery needed.'
-              exit 0
-            fi
+          # Per-worker freshness is diagnostic only. Preserve the existing
+          # fleet-wide recovery gate; never launch a worker for its stale age.
+          newest_age="$(jq -r '.newest_active_age_seconds // "missing"' /tmp/factory-heartbeat-health.json)"
+          if [[ "$newest_age" != missing ]] && (( newest_age < 1200 )); then
+            echo 'An active factory heartbeat is fresh; no dispatcher recovery needed.'
+            exit 0
           fi
 
           echo 'Fixed-model heartbeats are stale; dispatching recovery run.'
@@ -65,3 +59,11 @@ jobs:
             --ref main \
             -f mode=roster
           echo 'Recovery dispatcher requested.'
+
+      - name: Preserve per-worker heartbeat diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: factory-heartbeat-health
+          path: /tmp/factory-heartbeat-health.json
+          if-no-files-found: warn
