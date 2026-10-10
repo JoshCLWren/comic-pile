@@ -66,13 +66,25 @@ function comparisonPayload() {
   }
 }
 
-test('creator compare banner shows full affected names and wraps', async ({ page }: { page: Page }) => {
-  await page.setViewportSize(DESKTOP)
-  await page.route('/api/v1/creators/compare', async (route: Route) => {
-    await route.fulfill({ json: comparisonPayload() })
-  })
+async function installComparisonRoute(page: Page) {
+  await page.route(
+    (url) => url.pathname === '/api/v1/creators/compare',
+    async (route: Route) => {
+      await route.fulfill({ json: comparisonPayload() })
+    },
+  )
+}
 
-  await page.goto('http://localhost:5173/creators/compare?keys=creator:1672,creator:40468')
+test('creator compare banner shows full affected names and wraps', async ({
+  authenticatedPage,
+}) => {
+  const page = authenticatedPage
+  await page.setViewportSize(DESKTOP)
+  await installComparisonRoute(page)
+
+  await page.goto('/creators/compare?keys=creator:1672,creator:40468', {
+    waitUntil: 'domcontentloaded',
+  })
 
   const banner = page.locator('div.rounded-xl.border.px-4.py-3')
   await expect(banner).toBeVisible()

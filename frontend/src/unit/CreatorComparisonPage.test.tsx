@@ -205,7 +205,15 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getByText('Comparing 1 creator')).toBeInTheDocument()
     expect(screen.getByText('Insufficient data')).toBeInTheDocument()
     expect(screen.getByText(/less reliable/)).toBeInTheDocument()
-    expect(screen.getByText(/Affected: Steve McNiven/)).toBeInTheDocument()
+    expect(screen.getByText('Brian K. Vaughan')).toBeInTheDocument()
+    expect(screen.getByText('Steve McNiven')).toBeInTheDocument()
+
+    // The affected-creator line lives in its own paragraph (issue #3328) and
+    // must render the full name without ellipsis.
+    const affectedParagraph = screen.getByText(/Affected:/).closest('p')!
+    expect(affectedParagraph).toHaveTextContent('Steve McNiven')
+    expect(affectedParagraph.textContent).not.toContain('...')
+
     expect(screen.getByRole('note')).toHaveTextContent('Counts shown are lower bounds.')
   })
 
@@ -356,7 +364,10 @@ describe('CreatorComparisonPage', () => {
 
     renderAt('creator:404,creator:405')
 
-    expect(screen.getByText(/Affected: creator:404/)).toBeInTheDocument()
+    // The affected-creator line lives in its own paragraph (issue #3328) and
+    // must render the unresolved canonical key instead of dropping it.
+    const affectedParagraph = screen.getByText(/Affected:/).closest('p')!
+    expect(affectedParagraph).toHaveTextContent('creator:404')
   })
 
   it('renders unrated and keyless creators without manufacturing equivalence', () => {
