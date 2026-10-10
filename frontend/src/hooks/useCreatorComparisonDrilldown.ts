@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import type { CreatorComparisonItem } from '../types/index'
 
 function normalizeKey(key: string | null): string {
   if (!key) return ''
@@ -90,45 +89,45 @@ export function useCreatorComparisonDrilldown(
       if (!creatorKey) throw new Error('No creator key')
 
       let url = ''
-      let params: Record<string, string> = {}
+      const search = new URLSearchParams()
 
       switch (metricType) {
         case 'average':
           url = '/api/v1/creators/compare/average'
-          params = { creator: creatorKey }
+          search.set('creator', creatorKey)
           break
         case 'median':
           url = '/api/v1/creators/compare/median'
-          params = { creator: creatorKey }
+          search.set('creator', creatorKey)
           break
         case 'distribution':
           if (!bucket) throw new Error('Bucket is required for distribution drilldown')
           url = '/api/v1/creators/compare/distribution'
-          params = { creator: creatorKey, bucket }
+          search.set('creator', creatorKey)
+          search.set('bucket', bucket)
           break
         case '5-star-rate':
           url = '/api/v1/creators/compare/5-star-rate'
-          params = { creator: creatorKey }
+          search.set('creator', creatorKey)
           break
         case 'role-average':
           if (!role) throw new Error('Role is required for role-average drilldown')
           url = '/api/v1/creators/compare/role-average'
-          params = { creator: creatorKey, role }
+          search.set('creator', creatorKey)
+          search.set('role', role)
           break
         case 'series-average':
           url = '/api/v1/creators/compare/series-average'
-          params = { creator: creatorKey }
+          search.set('creator', creatorKey)
           break
         case 'read-without-rating':
           url = '/api/v1/creators/compare/read-without-rating'
-          params = { creator: creatorKey }
+          search.set('creator', creatorKey)
           break
       }
 
       const urlWithParams = new URL(url, window.location.origin)
-      if (Object.keys(params).length > 0) {
-        urlWithParams.search = new URLSearchParams(params).toString()
-      }
+      urlWithParams.search = search.toString()
       const response = await fetch(urlWithParams.toString(), {
         method: 'GET',
         headers: { Accept: 'application/json' },
