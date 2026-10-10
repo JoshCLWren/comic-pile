@@ -148,3 +148,45 @@ describe('cblSourcesApi.commit', () => {
     )
   })
 })
+
+describe('cblSourcesApi.commitNew', () => {
+  beforeEach(() => {
+    client.post.mockReset()
+    client.post.mockResolvedValue({
+      id: 78,
+      name: 'Dark Horse/BPRD/Plague of Frogs.cbl',
+      reused_positions: [1],
+      created_positions: [2],
+      excluded_positions: [3],
+      unresolved_positions: [4],
+    })
+  })
+
+  it('posts to the plan-creating adoption route with the same override payload', async () => {
+    const result = await cblSourcesApi.commitNew(42, reviewedPreview, {
+      series_decisions: { bprd: false },
+      entry_decisions: { '102': true },
+    })
+
+    expect(result).toEqual({
+      id: 78,
+      name: 'Dark Horse/BPRD/Plague of Frogs.cbl',
+      reused_positions: [1],
+      created_positions: [2],
+      excluded_positions: [3],
+      unresolved_positions: [4],
+    })
+    expect(client.post).toHaveBeenCalledWith('/v1/cbl/42/adoption-commit', {
+      entry_decisions: {},
+      series_decisions: [],
+      series_overrides: [
+        { cbl_position: 1, decision: 'exclude' },
+        { cbl_position: 2, decision: 'include' },
+        { cbl_position: 3, decision: 'exclude' },
+        { cbl_position: 4, decision: 'exclude' },
+      ],
+      content_hash: 'hash-42',
+      revision_sha: 'abcdef1234567890',
+    })
+  })
+})

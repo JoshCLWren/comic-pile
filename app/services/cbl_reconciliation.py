@@ -152,10 +152,20 @@ def calculate_cbl_adoption_plan(
             else "ambiguous_unresolved"
         )
         if not selectable:
-            decision = "unresolved"
-            unresolved += 1
+            # An explicit per-entry skip lets the reader defer one ambiguous
+            # entry without blocking adoption of the whole source.
+            if entry_key in entry_choices and entry_choices[entry_key] is False:
+                decision = "excluded"
+                excluded += 1
+            else:
+                decision = "unresolved"
+                unresolved += 1
         else:
-            default_selected = resolved
+            # #2128: safely creatable missing entries default to included. The
+            # reader's single Add confirmation is the explicit approval for the
+            # missing comics shown in the reviewed summary; only ambiguous or
+            # unresolvable identities interrupt the happy path.
+            default_selected = resolved or importable
             selected = entry_choices.get(
                 entry_key,
                 series_choices.get(series_group_id, default_selected),
@@ -363,6 +373,8 @@ async def reconcile_cbl_source_list(
             unresolved_count += 1
         if canon.resolution_status in (
             "ambiguous_no_comicvine_id",
+            "ambiguous_title_number_multiple_matches",
+            "ambiguous_title_number_unverifiable_series",
             "comicvine_identity_not_known",
             "resolved_via_comicvine_canonical_ambiguous",
         ):
@@ -412,6 +424,7 @@ async def reconcile_cbl_source_list(
         pos = cast(int, entry["cbl_position"])
         if status in (
             "ambiguous_no_comicvine_id",
+            "ambiguous_title_number_unverifiable_series",
             "comicvine_identity_not_known",
             "resolved_via_comicvine_canonical_ambiguous",
         ):

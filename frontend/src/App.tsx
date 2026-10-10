@@ -60,6 +60,7 @@ const CrossoversPage = lazyRoute('crossovers')
 const CrossoverDetailPage = lazyRoute('crossoverDetail')
 const ContinuityPlannerPage = lazyRoute('continuityPlanner')
 const ContinuityPlansIndexPage = lazyRoute('continuityPlansIndex')
+const CblBrowserPage = lazyRoute('cblBrowser')
 const HelpPage = lazyRoute('glossary')
 const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
@@ -650,6 +651,15 @@ function AppRoutes() {
             <ServiceUnavailableWrapper>
               <AuthenticatedLayout onBugReportSubmit={submit}>
                 <ContinuityPlannerPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/cbl-sources" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <CblBrowserPage />
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>

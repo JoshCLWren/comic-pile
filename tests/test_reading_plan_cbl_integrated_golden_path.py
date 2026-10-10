@@ -257,3 +257,156 @@ async def test_cbl_adoption_materializes_missing_replays_and_preserves_roll_boun
         select(func.count()).select_from(DependencyGroup).where(DependencyGroup.user_id == user.id)
     )
     assert groups_after == groups_before
+
+
+@pytest.mark.asyncio
+async def test_cbl_browser_one_decision_adoption_creates_plan_from_source(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """#2128: the CBL browser one-decision flow creates the Reading Plan itself.
+
+    Preview is non-mutating, the compact summary drives a single Add action,
+    the new plan carries the source list name, provenance is retained per node,
+    and no legacy dependency closure is created.
+    """
+    user = await get_or_create_user_async(async_db)
+    owned = await _make_thread(
+        async_db,
+        user_id=user.id,
+        title="Browser Owned Series",
+        queue_position=1,
+    )
+    owned_issue = await _add_issue(
+        async_db,
+        thread=owned,
+        issue_number="1",
+        position=1,
+        read=True,
+    )
+    await async_db.commit()
+
+    source = CBLSource(
+        repository="JoshCLWren/CBL-ReadingLists-browser",
+        revision_sha="browser-rev",
+        synced_at=datetime.now(UTC),
+    )
+    async_db.add(source)
+    await async_db.flush()
+    source_list = CBLSourceList(
+        source_id=source.id,
+        source_path="Fixtures/Browser One Decision.cbl",
+        name="Browser One Decision List",
+        declared_issue_count=2,
+        content_hash="browser-content",
+        revision_sha="browser-rev",
+        active=True,
+    )
+    async_db.add(source_list)
+    await async_db.flush()
+
+    owned_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-browser-owned",
+        metadata_json={},
+    )
+    missing_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="4000-browser-missing",
+        metadata_json={"volume": {"name": "Browser Missing Series", "start_year": 2003}},
+    )
+    async_db.add_all([owned_identity, missing_identity])
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=owned_issue.id,
+            external_identity_id=owned_identity.id,
+            status="confirmed",
+            evidence_source="browser-path",
+        )
+    )
+    async_db.add(
+        CBLSourceEntry(
+            list_id=source_list.id,
+            position=1,
+            series_name="Browser Owned Series",
+            issue_number="1",
+            external_issue_identity_id=owned_identity.id,
+        )
+    )
+    async_db.add(
+        CBLSourceEntry(
+            list_id=source_list.id,
+            position=2,
+            series_name="Browser Missing Series",
+            issue_number="1",
+            volume_year=2003,
+            external_issue_identity_id=missing_identity.id,
+        )
+    )
+    await async_db.commit()
+
+    issues_before = await async_db.scalar(select(func.count()).select_from(Issue))
+    groups_before = await async_db.scalar(
+        select(func.count()).select_from(DependencyGroup).where(DependencyGroup.user_id == user.id)
+    )
+
+    # Browse/discover the source.
+    discovery = await auth_client.get("/api/v1/issue-identity/cbl-sources?q=Browser%20One")
+    assert discovery.status_code == 200, discovery.text
+    assert source_list.id in [item["id"] for item in discovery.json()]
+
+    # Preview must not mutate anything.
+    preview_response = await auth_client.get(
+        f"/api/v1/issue-identity/cbl/{source_list.id}/adoption-preview"
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["entries"][0]["adoption_class"] == "existing"
+    assert preview["entries"][1]["adoption_class"] == "missing_importable"
+    assert await async_db.scalar(select(func.count()).select_from(Issue)) == issues_before
+
+    # One decision: adopt the source; the plan is created from the source.
+    commit = await auth_client.post(
+        f"/api/v1/cbl/{source_list.id}/adoption-commit",
+        json={
+            "entry_decisions": {},
+            "series_decisions": [
+                {"series_name": "Browser Missing Series", "decision": "include"},
+            ],
+            "series_overrides": [],
+            "content_hash": preview["source"]["content_hash"],
+            "revision_sha": preview["source"]["revision_sha"],
+        },
+    )
+    assert commit.status_code == 201, commit.text
+    committed = commit.json()
+    assert committed["name"] == "Browser One Decision List"
+    assert committed["reused_positions"] == [1]
+    assert committed["created_positions"] == [2]
+    assert committed["unresolved_positions"] == []
+
+    # Exactly one issue was created; read state of the reused issue is intact.
+    assert await async_db.scalar(select(func.count()).select_from(Issue)) == (issues_before or 0) + 1
+    reloaded_issue = await async_db.get(Issue, owned_issue.id)
+    assert reloaded_issue is not None
+    assert reloaded_issue.status == "read"
+
+    # Reload preserves membership and per-node CBL provenance.
+    plan_id = committed["id"]
+    reloaded = (await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")).json()
+    assert len(reloaded["nodes"]) == 2
+    assert reloaded["nodes"][0]["ref_id"] == owned_issue.id
+    assert [
+        placement["source_path"]
+        for node in reloaded["nodes"]
+        for placement in node.get("source_cbl_placements", [])
+    ] == ["Fixtures/Browser One Decision.cbl"] * 2
+
+    # No legacy dependency closure was created for the adoption.
+    groups_after = await async_db.scalar(
+        select(func.count()).select_from(DependencyGroup).where(DependencyGroup.user_id == user.id)
+    )
+    assert groups_after == groups_before

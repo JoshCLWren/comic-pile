@@ -147,11 +147,15 @@ test.describe('Reading Plan CBL golden path', () => {
     await page.getByRole('button', { name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click()
 
     await expect(page.getByText('Already in ComicPile')).toHaveCount(2)
-    await expect(page.getByText(/Missing · choose whether to add/i)).toBeVisible()
+    // #2128: safely creatable missing entries default to included — no opt-in needed.
+    await expect(page.getByText('Missing · selected to add')).toBeVisible()
 
+    // Exception path: exclude the whole missing series, then re-include it.
     const missingSeriesChoice = page.getByRole('group', {
       name: 'Golden Path Missing Series series choice',
     })
+    await missingSeriesChoice.getByRole('button', { name: 'Exclude' }).click()
+    await expect(page.getByText('Missing · selected to add')).not.toBeVisible()
     await missingSeriesChoice.getByRole('button', { name: 'Include' }).click()
     await expect(page.getByText('Missing · selected to add')).toBeVisible()
 

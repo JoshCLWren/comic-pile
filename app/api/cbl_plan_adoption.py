@@ -102,13 +102,23 @@ async def api_targeted_cbl_adoption_commit(
     return _response(commit)
 
 
+@router.post(
+    "/cbl/{list_id}/adoption-commit",
+    response_model=CBLAdoptionCommitResponse,
+    status_code=status.HTTP_201_CREATED,
+    description=(
+        "Adopt a CBL source into a Reading Plan in one decision. Creates the "
+        "plan from the source when this source has no adopted plan yet, or "
+        "merges into the existing source-backed plan otherwise."
+    ),
+)
 async def api_cbl_adoption_commit(
     list_id: int,
     request: CBLAdoptionCommitRequest,
-    current_user: User,
-    db: AsyncSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CBLAdoptionCommitResponse:
-    """Compatibility shim for pre-targeting unit callers; this is not an HTTP route."""
+    """Adopt a CBL source list into a canonical Reading Plan (creating it)."""
     series_decisions, series_overrides = _decisions(request)
     try:
         commit = await adopt_cbl_material_into_reading_plan(

@@ -471,6 +471,20 @@ async def _merge_adopted_nodes(
 
     for entry in entries:
         fact = facts_by_entry_id.get(entry.id)
+
+        # An explicit exclusion is honored and reported as excluded even for
+        # unresolvable entries: the reader's skip decision stands and the
+        # commit report must reflect it, matching the preview.
+        early_decision = _resolve_decision(
+            entry,
+            entry_decisions,
+            series_overrides,
+            series_decisions,
+        )
+        if early_decision == SourceBackedDecision.EXCLUDE:
+            excluded_positions.append(entry.position)
+            continue
+
         if fact is None:
             unresolved_positions.append(entry.position)
             continue
@@ -486,18 +500,10 @@ async def _merge_adopted_nodes(
             unresolved_positions.append(entry.position)
             continue
 
-        decision = _resolve_decision(
-            entry,
-            entry_decisions,
-            series_overrides,
-            series_decisions,
-        )
-        if decision == SourceBackedDecision.EXCLUDE:
-            excluded_positions.append(entry.position)
-            continue
-        if importable and decision != SourceBackedDecision.INCLUDE:
-            excluded_positions.append(entry.position)
-            continue
+        # #2128 one-decision contract: safely importable missing entries
+        # default to included, matching the preview. Only an explicit
+        # EXCLUDE (or an unresolvable identity, handled above) keeps an
+        # entry out of the committed plan.
 
         created_now = False
         if existing_issue_id is None:
@@ -653,7 +659,7 @@ async def adopt_cbl_material_into_reading_plan(
     if existing_plan is None:
         plan = ContinuityPlan(
             user_id=user_id,
-            name=f"CBL adoption for {source_path}",
+            name=cbl_list.name or f"CBL adoption for {source_path}",
             ordering_mode="informational",
             lanes_json=_default_lane(),
             nodes_json=[],
