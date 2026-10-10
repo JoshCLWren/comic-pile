@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_session_settings
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
 from app.performance_diagnostics import get_request_diagnostics
-from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
+from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY, classify_snapshot
 from comic_pile.bandwidth import clear_ephemeral_bandwidth, initialize_session_bandwidth
 from comic_pile.intent import clear_ephemeral_intent
 
@@ -273,6 +273,9 @@ async def create_session_start_snapshot(db: AsyncSession, session: ReadingSessio
 
         thread_states[thread.id] = state
 
+    start_kind, start_version = classify_snapshot(
+        thread_states, description="Session start", event_id=None
+    )
     snapshot = Snapshot(
         session_id=session.id,
         event_id=None,
@@ -293,6 +296,8 @@ async def create_session_start_snapshot(db: AsyncSession, session: ReadingSessio
             "intent_version": session.intent_version,
         },
         description="Session start",
+        snapshot_kind=start_kind,
+        schema_version=start_version,
     )
     db.add(snapshot)
     await db.commit()

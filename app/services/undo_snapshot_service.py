@@ -36,7 +36,9 @@ class UndoSnapshotService:
     def _is_delta_snapshot(self, snapshot: Snapshot) -> bool:
         """Return whether a snapshot uses the version-two delta contract."""
         thread_states = snapshot.thread_states or {}
-        return thread_states.get(SNAPSHOT_VERSION_KEY) == SNAPSHOT_VERSION
+        return isinstance(thread_states, dict) and (
+            thread_states.get(SNAPSHOT_VERSION_KEY) == SNAPSHOT_VERSION
+        )
 
     async def list_session_snapshots(
         self, session_id: int, session_user_id: int

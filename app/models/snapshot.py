@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,11 +33,21 @@ class Snapshot(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    snapshot_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    schema_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         Index("ix_snapshot_session_id", "session_id"),
         Index("ix_snapshot_event_id", "event_id"),
         Index("ix_snapshot_created_at", "created_at"),
+        Index(
+            "ix_snapshot_session_delta_lookup",
+            "session_id",
+            "snapshot_kind",
+            "schema_version",
+            "created_at",
+            "id",
+        ),
     )
 
     session: Mapped[ReadingSession] = relationship("ReadingSession", back_populates="snapshots", lazy="raise")
