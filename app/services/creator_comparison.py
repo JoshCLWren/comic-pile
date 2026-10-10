@@ -28,7 +28,6 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from statistics import median
-from typing import TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -82,8 +81,6 @@ RatedEvidenceRow = tuple[int, float, str | None]
 
 #: One evidence row whose rating may legitimately be absent.
 EvidenceRow = tuple[int, float | None, str | None]
-
-_EvidenceRowT = TypeVar("_EvidenceRowT", RatedEvidenceRow, EvidenceRow)
 
 
 def _rating_bucket_key(rating: float) -> str:
@@ -361,7 +358,7 @@ async def get_creator_comparison(
             role_stats.append(
                 CreatorComparisonRoleStat(
                     role=role,
-                    issue_count=len(role_issue_ids),
+                    issue_count=len(role_issue_id_list),
                     rated_issue_count=len(role_ratings),
                     average_rating=(
                         round(sum(role_ratings) / len(role_ratings), 2) if role_ratings else None
@@ -472,11 +469,11 @@ def _parse_drilldown_cursor(cursor: str | None) -> int:
     return int(cursor)
 
 
-def _evidence_page(
-    rows: Sequence[_EvidenceRowT],
+def _evidence_page[EvidenceRowT: (RatedEvidenceRow, EvidenceRow)](
+    rows: Sequence[EvidenceRowT],
     limit: int,
     cursor: str | None,
-) -> tuple[list[_EvidenceRowT], str | None]:
+) -> tuple[list[EvidenceRowT], str | None]:
     """Slice one bounded evidence page out of the complete row set.
 
     Args:

@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import type { CreatorComparisonItem } from '../types/index'
 
-function normalizeKey(key: string): string {
+function normalizeKey(key: string | null): string {
+  if (!key) return ''
   const trimmed = key.trim()
   return trimmed
 }
@@ -88,7 +89,7 @@ export function useCreatorComparisonDrilldown(
       if (!creatorKey) throw new Error('No creator key')
 
       let url = ''
-      let params: Record<string, string> = {}
+      let params = {}
 
       switch (metricType) {
         case 'average':
@@ -137,6 +138,7 @@ export function useCreatorComparisonDrilldown(
         throw new Error(`HTTP ${response.status}: ${text}`)
       }
 
+      // SAFETY: Response shape matches DrilldownData union by API contract
       return response.json() as Promise<DrilldownData>
     },
     enabled,
