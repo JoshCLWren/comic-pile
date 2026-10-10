@@ -35,12 +35,18 @@ from app.repositories.creator_comparison import (
 )
 from app.schemas.creator_comparison import (
     CreatorComparisonCoverage,
+    CreatorComparisonIssueRef,
     CreatorComparisonItem,
     CreatorComparisonResponse,
     CreatorComparisonRoleStat,
     CreatorComparisonSeriesAggregate,
 )
 from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
+
+#: Bounded drilldown sample per unread/read-unrated group (issue #3174). The
+#: counts remain full totals; only the navigable sample is truncated, and the
+#: sample is derived from the already-loaded batch inputs (no extra query).
+MAX_COMPARISON_ISSUE_REFS = 5
 
 
 def _build_coverage(
@@ -91,6 +97,48 @@ def _compute_top_rating_rate(ratings: list[float]) -> float | None:
         return None
     top_ratings = sum(1 for r in ratings if r >= 5.0)
     return round(top_ratings / len(ratings), 3)
+
+
+def _build_issue_refs(
+    inputs: CreatorComparisonInputs,
+    issue_ids: set[int],
+) -> list[CreatorComparisonIssueRef]:
+    """Build a bounded, deterministic drilldown sample for one issue group.
+
+    Ordering is by case-insensitive thread title, then title, thread id, and
+    issue id so every page renders the same sample for the same library state.
+    Issues missing local thread identity sort last and are omitted from the
+    returned sample rather than manufactured.
+    """
+    def _ref_sort_key(issue_id: int) -> tuple[bool, str, str, int, int]:
+        owned_thread = inputs.owned_issue_threads.get(issue_id)
+        if owned_thread is None:
+            return (True, "", "", 0, issue_id)
+        return (
+            False,
+            owned_thread.thread_title.casefold(),
+            owned_thread.thread_title,
+            owned_thread.thread_id,
+            issue_id,
+        )
+
+    ordered = sorted(issue_ids, key=_ref_sort_key)
+    refs: list[CreatorComparisonIssueRef] = []
+    for issue_id in ordered[:MAX_COMPARISON_ISSUE_REFS]:
+        owned_thread = inputs.owned_issue_threads.get(issue_id)
+        if owned_thread is None:
+            continue
+        status = inputs.owned_issues.get(issue_id, "")
+        refs.append(
+            CreatorComparisonIssueRef(
+                issue_id=issue_id,
+                thread_id=owned_thread.thread_id,
+                thread_title=owned_thread.thread_title,
+                issue_number=owned_thread.issue_number,
+                status=status,
+            )
+        )
+    return refs
 
 
 async def get_creator_comparison(
@@ -245,15 +293,19 @@ async def get_creator_comparison(
             ) in series_aggregates
         ]
 
-        # Unread/upcoming and read-unrated counts
-        unread_upcoming_count = sum(
-            1 for issue_id in issue_ids if inputs.owned_issues.get(issue_id) == "unread"
-        )
-        read_unrated_count = sum(
-            1
+        # Unread attributed work and read work with no stored effective rating.
+        # ``unread`` here is strictly ``Issue.status == "unread"``: unread owned
+        # work already in the library, never queue position or roll eligibility.
+        unread_issue_ids = {
+            issue_id for issue_id in issue_ids if inputs.owned_issues.get(issue_id) == "unread"
+        }
+        read_unrated_issue_ids = {
+            issue_id
             for issue_id in issue_ids
             if inputs.owned_issues.get(issue_id) == "read" and issue_id not in inputs.effective_ratings
-        )
+        }
+        unread_upcoming_count = len(unread_issue_ids)
+        read_unrated_count = len(read_unrated_issue_ids)
 
         # Insufficient data flag
         insufficient_data = ratings_count < MIN_RATED_FOR_RELIABLE
@@ -275,6 +327,9 @@ async def get_creator_comparison(
             min_rated_issues_per_series=MIN_RATED_ISSUES_PER_SERIES,
             unread_upcoming_count=unread_upcoming_count,
             read_unrated_count=read_unrated_count,
+            unread_issue_refs=_build_issue_refs(inputs, unread_issue_ids),
+            read_unrated_issue_refs=_build_issue_refs(inputs, read_unrated_issue_ids),
+            max_issue_refs_per_group=MAX_COMPARISON_ISSUE_REFS,
             insufficient_data=insufficient_data,
         )
 

@@ -2,7 +2,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey, creatorRoutePath } from '../utils/creatorKey'
-import type { CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
+import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorComparisonRoleStat, CreatorComparisonSeriesAggregate } from '../types/index'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 function RatingValue({ value, label }: { value: number; label: string }) {
@@ -134,6 +134,60 @@ function RatingDistributionBar({ distribution, totalCount }: { distribution: Rec
   )
 }
 
+function IssueDrilldown({
+  refs,
+  totalCount,
+  maxRefs,
+  detailPath,
+  groupLabel,
+}: {
+  refs: CreatorComparisonIssueRef[]
+  totalCount: number
+  maxRefs: number
+  detailPath: string | null
+  groupLabel: string
+}) {
+  // Bounded drilldown (issue #3174): surprising counts link back to the actual
+  // supporting issues instead of standing alone as bare numbers. The sample is
+  // truncated at maxRefs while the headline count stays the full total.
+  if (refs.length === 0) {
+    return null
+  }
+  return (
+    <div className="mt-2">
+      <ul className="space-y-1" aria-label={groupLabel}>
+        {refs.map((ref) => (
+          <li key={ref.issue_id} className="min-w-0">
+            <Link
+              to={`/thread/${ref.thread_id}`}
+              className="block min-w-0 truncate rounded text-sm font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-primary)' }}
+            >
+              {ref.thread_title} #{ref.issue_number}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {totalCount > refs.length && (
+        <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          Showing {refs.length} of {totalCount} (first {maxRefs}).
+          {detailPath ? (
+            <>
+              {' '}
+              <Link
+                to={detailPath}
+                className="font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              >
+                See the full list on creator detail.
+              </Link>
+            </>
+          ) : null}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
   const totalRatings = item.ratings_count
   const hasRatings = totalRatings > 0
@@ -224,17 +278,37 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
 
         <div className="sm:col-span-2">
           <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-            Upcoming in ComicPile
+            Unread in your library
           </p>
           <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.unread_upcoming_count}</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Unread issues by this creator already in your library — not queue order or roll eligibility.
+          </p>
+          <IssueDrilldown
+            refs={item.unread_issue_refs}
+            totalCount={item.unread_upcoming_count}
+            maxRefs={item.max_issue_refs_per_group}
+            detailPath={detailPath}
+            groupLabel={`Unread issues by ${item.display_name}`}
+          />
         </div>
 
         {item.read_unrated_count > 0 && (
           <div className="sm:col-span-2">
             <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
-              Read, not rated
+              Read with no stored rating
             </p>
             <p className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>{item.read_unrated_count}</p>
+            <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+              Read issues by this creator with no stored rating.
+            </p>
+            <IssueDrilldown
+              refs={item.read_unrated_issue_refs}
+              totalCount={item.read_unrated_count}
+              maxRefs={item.max_issue_refs_per_group}
+              detailPath={detailPath}
+              groupLabel={`Read issues by ${item.display_name} with no stored rating`}
+            />
           </div>
         )}
       </div>
@@ -381,10 +455,22 @@ export default function CreatorComparisonPage() {
         </div>
       )}
 
-      {data.coverage && !data.coverage.ratings_complete && (
-        <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
-          Partial data: some rated issues are still missing creator metadata. Counts shown are lower bounds.
-        </p>
+      {data.coverage && (!data.coverage.ratings_complete || !data.coverage.read_unrated_complete || !data.coverage.upcoming_complete) && (
+        <div className="mt-2" role="note">
+          <p className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Partial creator metadata: {data.coverage.rated_issues_with_creator_metadata} of{' '}
+            {data.coverage.rated_issues_total} rated issues,{' '}
+            {data.coverage.read_unrated_issues_with_creator_metadata} of{' '}
+            {data.coverage.read_unrated_issues_total} read issues with no stored rating, and{' '}
+            {data.coverage.unread_issues_with_creator_metadata} of{' '}
+            {data.coverage.unread_issues_total} unread issues have creator metadata.
+            Counts shown are lower bounds.
+          </p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+            Issues without creator metadata cannot be attributed to any creator, so a
+            creator&apos;s totals may be incomplete rather than proof of less work.
+          </p>
+        </div>
       )}
 
       <div className="mt-6 grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>

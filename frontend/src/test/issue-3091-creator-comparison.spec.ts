@@ -71,6 +71,9 @@ function comparisonItem(
     min_rated_issues_per_series: 3,
     unread_upcoming_count: 2,
     read_unrated_count: 1,
+    unread_issue_refs: [],
+    read_unrated_issue_refs: [],
+    max_issue_refs_per_group: 5,
     insufficient_data: false,
     ...overrides,
   }
