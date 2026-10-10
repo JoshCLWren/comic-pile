@@ -666,3 +666,122 @@ export interface CreatorComparisonResponse {
   coverage: CreatorComparisonCoverage
   insufficient_data_keys: string[]
 }
+
+/**
+ * Creator comparison drilldown types (issue #3176).
+ *
+ * Every summary metric opens into a bounded evidence page whose numerators,
+ * denominators, and percentages reconcile with the visible summary value.
+ */
+
+/** One issue contributing to a metric drilldown evidence page. */
+export interface CreatorDrilldownIssue {
+  issue_id: number
+  issue_number: string
+  rating: number | null
+  role: string | null
+  thread_id: number | null
+  thread_title: string | null
+}
+
+/** One ranked rating observation in the median drilldown evidence page. */
+export interface CreatorDrilldownRatingObservation {
+  issue_id: number
+  issue_number: string
+  rank: number
+  rating: number
+  determines_median: boolean
+  role: string | null
+  thread_id: number | null
+  thread_title: string | null
+}
+
+/** Shared bounded evidence envelope for every metric drilldown. */
+export interface CreatorDrilldownResponse {
+  metric: string
+  creator_key: string
+  calculation: string
+  total_count: number
+  next_cursor: string | null
+}
+
+/** Evidence page for the average rating metric (also serves rated-issue count). */
+export interface CreatorAverageDrilldownResponse extends CreatorDrilldownResponse {
+  metric: 'average'
+  total_rated: number
+  total_points: number
+  issues: CreatorDrilldownIssue[]
+}
+
+/** Evidence page for the median rating metric. */
+export interface CreatorMedianDrilldownResponse extends CreatorDrilldownResponse {
+  metric: 'median'
+  ratings_count: number
+  median_rating: number | null
+  sorted_ratings: CreatorDrilldownRatingObservation[]
+}
+
+/** Evidence page for one rating-distribution bucket. */
+export interface CreatorDistributionDrilldownResponse extends CreatorDrilldownResponse {
+  metric: 'distribution'
+  bucket: string
+  bucket_count: number
+  total_rated: number
+  issues: CreatorDrilldownIssue[]
+}
+
+/** Evidence page for the 5★ rate metric. */
+export interface CreatorFiveStarRateDrilldownResponse extends CreatorDrilldownResponse {
+  metric: '5-star-rate'
+  top_count: number
+  rated_count: number
+  issues: CreatorDrilldownIssue[]
+}
+
+/** Evidence page for one role's average rating. */
+export interface CreatorRoleAverageDrilldownResponse extends CreatorDrilldownResponse {
+  metric: 'role-average'
+  role: string
+  issue_count: number
+  rated_issue_count: number
+  average_rating: number | null
+  issues: CreatorDrilldownIssue[]
+}
+
+/** Evidence page for one series' average rating. */
+export interface CreatorSeriesAverageDrilldownResponse extends CreatorDrilldownResponse {
+  metric: 'series-average'
+  thread_id: number
+  thread_title: string
+  issue_count: number
+  rated_issue_count: number
+  average_rating: number | null
+  min_rated_issues_per_series: number
+  issues: CreatorDrilldownIssue[]
+}
+
+/** Evidence page for the read-without-rating count. */
+export interface CreatorReadWithoutRatingDrilldownResponse extends CreatorDrilldownResponse {
+  metric: 'read-without-rating'
+  count: number
+  classification_available: boolean
+  issues: CreatorDrilldownIssue[]
+}
+
+/** Evidence page for the unread/attributed-unread count. */
+export interface CreatorUnreadDrilldownResponse extends CreatorDrilldownResponse {
+  metric: 'unread'
+  count: number
+  issues: CreatorDrilldownIssue[]
+}
+
+/** Union of every drilldown evidence page. */
+export type CreatorDrilldownData =
+  | CreatorAverageDrilldownResponse
+  | CreatorMedianDrilldownResponse
+  | CreatorDistributionDrilldownResponse
+  | CreatorFiveStarRateDrilldownResponse
+  | CreatorRoleAverageDrilldownResponse
+  | CreatorSeriesAverageDrilldownResponse
+  | CreatorReadWithoutRatingDrilldownResponse
+  | CreatorUnreadDrilldownResponse

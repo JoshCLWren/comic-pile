@@ -1,150 +1,135 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
+import {
+  creatorComparisonApi,
+  DRILLDOWN_PAGE_SIZE,
+  type CreatorComparisonApi,
+} from '../services/creatorComparisonApi'
+import { queryKeys } from '../query/queryKeys'
+import type {
+  CreatorDrilldownData,
+  CreatorDrilldownIssue,
+  CreatorDrilldownRatingObservation,
+} from '../types/index'
 
-function normalizeKey(key: string | null): string {
-  if (!key) return ''
-  const trimmed = key.trim()
-  return trimmed
+/** Server-side creator-comparison drilldown metrics (issue #3176). */
+export type CreatorDrilldownMetric =
+  | 'average'
+  | 'median'
+  | 'distribution'
+  | '5-star-rate'
+  | 'role-average'
+  | 'series-average'
+  | 'read-without-rating'
+  | 'unread'
+
+/** One drilled metric selection: canonical creator key plus metric scoping. */
+export interface CreatorDrilldownSelection {
+  creatorKey: string
+  metric: CreatorDrilldownMetric
+  bucket?: string
+  role?: string
+  series?: string
 }
 
-type AverageDrilldown = {
-  calculation: string
-  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
-  total_rated: number
-  total_points: number
+export interface CreatorDrilldownState {
+  /** First evidence page carrying the canonical calculation and total count. */
+  data: CreatorDrilldownData | null
+  /** Issue evidence rows accumulated across every loaded page, in server order. */
+  issues: CreatorDrilldownIssue[]
+  /** Ranked rating observations accumulated across pages (median metric only). */
+  observations: CreatorDrilldownRatingObservation[]
+  isPending: boolean
+  isFetchingMore: boolean
+  isError: boolean
+  error: unknown
+  hasMore: boolean
+  loadMore: () => Promise<void>
 }
 
-type MedianDrilldown = {
-  calculation: string
-  sorted_ratings: Array<{ rank: number; rating: number; determines_median: boolean; issue_number: string; role: string | null; thread_id: number | null; thread_title: string | null }>
-  ratings_count: number
-}
-
-type DistributionDrilldown = {
-  calculation: string
-  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
-  bucket_count: number
-  total_rated: number
-}
-
-type FiveStarRateDrilldown = {
-  calculation: string
-  top_count: number
-  rated_count: number
-  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
-}
-
-type RoleAverageDrilldown = {
-  calculation: string
-  role: string
-  issue_count: number
-  rated_issue_count: number
-  average_rating: number | null
-  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
-}
-
-type SeriesAverageDrilldown = {
-  calculation: string
-  thread_id: number
-  thread_title: string
-  issue_count: number
-  rated_issue_count: number
-  average_rating: number | null
-  min_rated_issues_per_series: number
-  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
-}
-
-type ReadWithoutRatingDrilldown = {
-  calculation: string
-  issues: Array<{ issue_number: string; rating: number | null; role: string | null; thread_id: number | null; thread_title: string | null }>
-  count: number
-  classification_available: boolean
-}
-
-type DrilldownData =
-  | AverageDrilldown
-  | MedianDrilldown
-  | DistributionDrilldown
-  | FiveStarRateDrilldown
-  | RoleAverageDrilldown
-  | SeriesAverageDrilldown
-  | ReadWithoutRatingDrilldown
-
+/**
+ * Bounded creator-comparison metric drilldown loader (issue #3176).
+ *
+ * The first page carries the human-readable calculation and the total
+ * evidence-set size; later pages append through `loadMore` using the
+ * backend's opaque offset cursor, so large creators stay bounded and
+ * responsive. Summary and evidence share the backend's aggregation
+ * semantics, so the visible metric and the evidence page always reconcile.
+ *
+ * @param selection - The drilled metric selection, or `null` when closed.
+ * @param api - The creator comparison API used for requests.
+ * @returns The drilldown state for the current selection.
+ */
 export function useCreatorComparisonDrilldown(
-  creatorKey: string | null,
-  metricType: 'average' | 'median' | 'distribution' | '5-star-rate' | 'role-average' | 'series-average' | 'read-without-rating',
-  bucket?: string,
-  role?: string,
-) {
-  const enabled = creatorKey != null
+  selection: CreatorDrilldownSelection | null,
+  api: CreatorComparisonApi = creatorComparisonApi,
+): CreatorDrilldownState {
+  const enabled = selection != null && selection.creatorKey.trim() !== ''
 
-  const { data, isPending, isError, error } = useQuery<DrilldownData | null>({
-    queryKey: [
-      'creator-drilldown',
-      metricType,
-      normalizeKey(creatorKey),
-      bucket,
-      role,
-    ],
-    queryFn: async () => {
-      if (!creatorKey) throw new Error('No creator key')
-
-      let url = ''
-      const search = new URLSearchParams()
-
-      switch (metricType) {
+  const query = useInfiniteQuery({
+    queryKey: enabled
+      ? queryKeys.creators.drilldown({
+          creatorKey: selection.creatorKey,
+          metric: selection.metric,
+          bucket: selection.bucket,
+          role: selection.role,
+          series: selection.series,
+          limit: DRILLDOWN_PAGE_SIZE,
+        })
+      : ['creators', 'drilldown', 'closed'],
+    queryFn: ({ pageParam }: { pageParam?: string | null }) => {
+      if (!selection) throw new Error('No drilldown selection')
+      const params = {
+        creator: selection.creatorKey,
+        limit: DRILLDOWN_PAGE_SIZE,
+        cursor: pageParam,
+      }
+      switch (selection.metric) {
         case 'average':
-          url = '/api/v1/creators/compare/average'
-          search.set('creator', creatorKey)
-          break
+          return api.getAverageDrilldown(params)
         case 'median':
-          url = '/api/v1/creators/compare/median'
-          search.set('creator', creatorKey)
-          break
+          return api.getMedianDrilldown(params)
         case 'distribution':
-          if (!bucket) throw new Error('Bucket is required for distribution drilldown')
-          url = '/api/v1/creators/compare/distribution'
-          search.set('creator', creatorKey)
-          search.set('bucket', bucket)
-          break
+          if (!selection.bucket) throw new Error('Bucket is required for distribution drilldown')
+          return api.getDistributionDrilldown({ ...params, bucket: selection.bucket })
         case '5-star-rate':
-          url = '/api/v1/creators/compare/5-star-rate'
-          search.set('creator', creatorKey)
-          break
+          return api.getFiveStarRateDrilldown(params)
         case 'role-average':
-          if (!role) throw new Error('Role is required for role-average drilldown')
-          url = '/api/v1/creators/compare/role-average'
-          search.set('creator', creatorKey)
-          search.set('role', role)
-          break
+          if (!selection.role) throw new Error('Role is required for role-average drilldown')
+          return api.getRoleAverageDrilldown({ ...params, role: selection.role })
         case 'series-average':
-          url = '/api/v1/creators/compare/series-average'
-          search.set('creator', creatorKey)
-          break
+          if (!selection.series) throw new Error('Series is required for series-average drilldown')
+          return api.getSeriesAverageDrilldown({ ...params, series: selection.series })
         case 'read-without-rating':
-          url = '/api/v1/creators/compare/read-without-rating'
-          search.set('creator', creatorKey)
-          break
+          return api.getReadWithoutRatingDrilldown(params)
+        case 'unread':
+          return api.getUnreadDrilldown(params)
       }
-
-      const urlWithParams = new URL(url, window.location.origin)
-      urlWithParams.search = search.toString()
-      const response = await fetch(urlWithParams.toString(), {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`HTTP ${response.status}: ${text}`)
-      }
-
-      // SAFETY: Response shape matches DrilldownData union by API contract
-      return response.json() as Promise<DrilldownData>
     },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage: CreatorDrilldownData) => lastPage.next_cursor,
     enabled,
-    staleTime: 30000,
-    gcTime: 300000,
+    retry: false,
   })
 
-  return { data, isPending, isError, error }
+  const pages = query.data?.pages ?? []
+  const firstPage = pages[0] ?? null
+
+  return {
+    data: firstPage,
+    issues: pages.flatMap((page) => ('issues' in page ? page.issues : [])),
+    observations: pages.flatMap((page) =>
+      'sorted_ratings' in page ? page.sorted_ratings : [],
+    ),
+    isPending: query.isPending,
+    isFetchingMore: query.isFetchingNextPage,
+    isError: query.isError,
+    error: query.error,
+    hasMore: query.hasNextPage ?? false,
+    loadMore: () => {
+      if (!query.hasNextPage || query.isFetchingNextPage) {
+        return Promise.resolve()
+      }
+      return query.fetchNextPage().then(() => undefined)
+    },
+  }
 }

@@ -290,6 +290,33 @@ export const queryKeys = {
      */
     compare: (keys: string[]) =>
       ['creators', 'compare', [...keys].sort()] as const,
+    /**
+     * Canonical bounded creator-comparison metric drilldown key (issue #3176).
+     * The pagination cursor lives in `pageParam`, not in the key, so every
+     * page of one metric selection shares the stable prefix. `bucket`,
+     * `role`, and `series` are normalized to `undefined` when empty so the
+     * key stays canonical.
+     */
+    drilldown: (params: {
+      creatorKey: string
+      metric: string
+      bucket?: string
+      role?: string
+      series?: string
+      limit?: number
+    }) =>
+      [
+        'creators',
+        'drilldown',
+        {
+          creatorKey: params.creatorKey.trim(),
+          metric: params.metric,
+          bucket: params.bucket?.trim() ? params.bucket.trim() : undefined,
+          role: params.role?.trim() ? params.role.trim() : undefined,
+          series: params.series?.trim() ? params.series.trim() : undefined,
+          limit: params.limit ?? undefined,
+        },
+      ] as const,
   },
   continuityCorrection: {
     groups: () => ['continuityCorrection', 'groups'] as const,
