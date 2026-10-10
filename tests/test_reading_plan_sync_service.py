@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
@@ -24,7 +25,12 @@ from app.models.external_identity import (
 )
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.services.reading_plan_sync_service import parse_store_date, sync_released_issues
-from comic_pile.comicvine_provider import ComicVineClient, ComicVineError, ComicVineResponse
+from comic_pile.comicvine_provider import (
+    COLLECTION_PAGE_LIMIT,
+    ComicVineClient,
+    ComicVineError,
+    ComicVineResponse,
+)
 from tests.conftest import get_or_create_user_async
 
 FIXED_AS_OF = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
@@ -672,3 +678,121 @@ async def test_refresh_flag_reaches_the_provider(async_db: AsyncSession) -> None
     await _sync(async_db, user_id=user.id, provider=provider, refresh=False)
 
     assert provider.calls == [(12001, False)]
+
+
+# --------------------------------------------------------------------------
+# Pagination
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_paginated_roster_flows_through_sync(
+    async_db: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sync evaluates the complete multi-page roster, not just page one.
+
+    ``ComicVineClient.fetch_volume_issues`` pages at the documented 100-row
+    maximum, so rows past the first offset must still reach the release gate:
+    one released issue and one future solicitation that exist only after
+    offset 100 both have to appear in the run report.
+    """
+    user, thread, _ = await _single_source_fixture(
+        async_db, username="sync_pagination@test.com", volume_id=15001
+    )
+    client = ComicVineClient("secret", tmp_path)
+    offsets: list[int] = []
+
+    def _page(endpoint: str, params: object) -> dict[str, object]:
+        assert endpoint == "issues"
+        assert isinstance(params, dict)
+        offset = int(params["offset"])
+        offsets.append(offset)
+        count = COLLECTION_PAGE_LIMIT if offset == 0 else 5
+        rows: list[dict[str, object]] = []
+        for index in range(count):
+            position = offset + index
+            rows.append(
+                {
+                    "id": 150000 + position,
+                    "issue_number": str(position + 1),
+                    "store_date": (
+                        "2025-06-01"
+                        if position in (0, COLLECTION_PAGE_LIMIT)
+                        else "2026-01-01"
+                    ),
+                    "cover_date": "1999-01-01",
+                    "volume": {"id": 15001},
+                }
+            )
+        return {
+            "status_code": 1,
+            "number_of_total_results": 105,
+            "results": rows,
+        }
+
+    monkeypatch.setattr(client, "_request_sync", _page)
+
+    async def _no_hydration(issue_id: int, *, refresh: bool = False) -> ComicVineResponse:
+        raise ComicVineError(f"pagination coverage does not hydrate issue {issue_id}")
+
+    monkeypatch.setattr(client, "fetch_issue", _no_hydration)
+
+    report = await sync_released_issues(
+        async_db,
+        user_id=user.id,
+        as_of=FIXED_AS_OF,
+        refresh=True,
+        client=client,
+        now=lambda: FIXED_SYNCED_AT,
+    )
+
+    assert offsets == [0, COLLECTION_PAGE_LIMIT]
+    assert report.checked_sources == 1
+    assert report.issues_checked == 105
+    assert report.created_issues == 2
+    assert report.future_skips == 103
+    assert report.unknown_date_skips == 0
+    assert report.failed_sources == 0
+    assert report.issue_failures == 0
+    assert report.success is True
+    assert await _issue_numbers(async_db, thread_id=thread.id) == ["1", "101"]
+
+
+# --------------------------------------------------------------------------
+# Cross-thread identity conflicts
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_second_thread_on_one_volume_reports_conflict(
+    async_db: AsyncSession,
+) -> None:
+    """A second thread on the same volume conflicts instead of duplicating.
+
+    One reader owns one canonical Issue per ComicVine issue identity, so the
+    second subscription reports a conflict rather than creating a copy.
+    """
+    user = await get_or_create_user_async(async_db, "sync_conflict@test.com")
+    plan_a = await _make_plan(db := async_db, user_id=user.id, name="Conflict plan A")
+    plan_b = await _make_plan(db, user_id=user.id, name="Conflict plan B")
+    thread_a = await _make_thread(db, user_id=user.id, title="Conflict thread A")
+    thread_b = await _make_thread(db, user_id=user.id, title="Conflict thread B")
+    identity = await _make_volume(db, volume_id=3101)
+    await _confirm_mapping(db, thread_id=thread_a.id, identity_id=identity.id)
+    await _confirm_mapping(db, thread_id=thread_b.id, identity_id=identity.id)
+    await _subscribe(db, plan=plan_a, thread=thread_a, identity=identity)
+    await _subscribe(db, plan=plan_b, thread=thread_b, identity=identity)
+    await db.commit()
+
+    provider = _FakeProvider(rosters={3101: [_roster_row(611, "1", "2025-06-01")]})
+    report = await _sync(db, user_id=user.id, provider=provider)
+
+    assert report.successful_sources == 2
+    assert report.created_issues == 1
+    assert report.conflicts == 1
+    assert report.failed_sources == 0
+    numbers_a = await _issue_numbers(db, thread_id=thread_a.id)
+    numbers_b = await _issue_numbers(db, thread_id=thread_b.id)
+    assert numbers_a + numbers_b == ["1"]
