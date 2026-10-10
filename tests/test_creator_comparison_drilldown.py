@@ -10,10 +10,10 @@ opaque cursor.
 """
 
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread, User
@@ -147,6 +147,19 @@ async def _seed_comparison_library(
     return thread_a, issues_a, thread_b, issues_b
 
 
+def _json(response: Response) -> dict[str, Any]:
+    """Parse an API response body to a typed dict for subscripted assertions.
+
+    Args:
+        response: The completed HTTP response whose JSON body is asserted on.
+
+    Returns:
+        The decoded JSON body narrowed to a dict for subscripted assertions.
+    """
+    body: dict[str, Any] = response.json()
+    return body
+
+
 async def _summary(
     auth_client: AsyncClient,
     *,
@@ -155,12 +168,7 @@ async def _summary(
     """Fetch the batch comparison summary for reconciliation assertions."""
     response = await auth_client.get(f"/api/v1/creators/compare?keys={keys}")
     assert response.status_code == 200
-    return response.json()
-
-
-def _json(response: object) -> dict[str, Any]:
-    """Coerce an API response body to a typed dict for subscripted assertions."""
-    return cast("dict[str, Any]", response)
+    return _json(response)
 
 
 @pytest.mark.asyncio

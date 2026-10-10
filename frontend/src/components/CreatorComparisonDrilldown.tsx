@@ -18,6 +18,64 @@ export type DrilldownMetricParam =
   | 'role-average'
   | 'series-average'
 
+/** Every metric that may appear in the drilldown page/query state. */
+export const DRILLDOWN_METRICS = [
+  'average',
+  'rated-count',
+  'median',
+  'distribution',
+  '5-star-rate',
+  'unread',
+  'read-without-rating',
+  'role-average',
+  'series-average',
+] as const
+
+/**
+ * Narrow an untrusted query-state value onto the drilldown metric union.
+ *
+ * @param value - Raw `metric` query value, if any.
+ * @returns Whether `value` names a real drilldown metric.
+ */
+export function isDrilldownMetricParam(
+  value: string | null | undefined,
+): value is DrilldownMetricParam {
+  return value != null && (DRILLDOWN_METRICS as readonly string[]).includes(value)
+}
+
+/**
+ * Human-readable title for one drilled metric selection.
+ *
+ * @param metric - The drilled metric.
+ * @param labels - Optional bucket/role/series labels the metric needs to read.
+ * @returns The modal title fragment for that metric.
+ */
+export function drilldownMetricLabel(
+  metric: DrilldownMetricParam,
+  labels: { bucket?: string; role?: string; seriesTitle?: string } = {},
+): string {
+  switch (metric) {
+    case 'average':
+      return 'Average rating'
+    case 'rated-count':
+      return 'Rated issue count'
+    case 'median':
+      return 'Median rating'
+    case 'distribution':
+      return `${labels.bucket ?? ''}★ rating bucket`
+    case '5-star-rate':
+      return '5★ rate'
+    case 'unread':
+      return 'Upcoming in ComicPile'
+    case 'read-without-rating':
+      return 'Read, not rated'
+    case 'role-average':
+      return `${labels.role ?? 'Role'} average`
+    case 'series-average':
+      return `${labels.seriesTitle ?? 'Series'} average`
+  }
+}
+
 /** One drilled metric selection: canonical creator key, metric scoping, and modal title. */
 export interface MetricSelection {
   creatorKey: string
@@ -120,7 +178,9 @@ function ObservationRow({ observation }: { observation: CreatorDrilldownRatingOb
           {observation.thread_title}
         </span>
       )}
-      <span style={{ color: 'var(--theme-personal-accent)' }}>{observation.rating}\u2605</span>
+      <span style={{ color: 'var(--theme-personal-accent)' }}>
+        {observation.rating}★
+      </span>
       {observation.role && (
         <span className="text-xs" style={{ color: 'var(--theme-text-dim)' }}>
           {observation.role}
@@ -165,7 +225,7 @@ export function CreatorComparisonDrilldownModal({
     >
       {isPending && (
         <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          Loading evidence\u2026
+          Loading evidence…
         </p>
       )}
       {isError && (
@@ -219,7 +279,7 @@ export function CreatorComparisonDrilldownModal({
                 className="min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-60"
                 style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
               >
-                {isFetchingMore ? 'Loading\u2026' : 'Load more'}
+                {isFetchingMore ? 'Loading…' : 'Load more'}
               </button>
             )}
           </div>
