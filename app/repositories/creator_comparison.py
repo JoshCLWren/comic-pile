@@ -45,11 +45,13 @@ class OwnedIssueThread:
 
     One thread is one series or one creator run in the reader's own library
     (``#3088``). The title is carried for display only and is never a grouping
-    identity.
+    identity. ``issue_number`` is carried so bounded drilldown references
+    (``#3174``) can label each issue without a further query.
     """
 
     thread_id: int
     thread_title: str
+    issue_number: str = ""
 
 
 @dataclass(frozen=True)
@@ -139,18 +141,19 @@ async def load_creator_comparison_inputs(
     """
     # 1. Owned issues, statuses, and stable local series identity.
     issue_result = await db.execute(
-        select(Issue.id, Issue.status, Issue.thread_id, Thread.title)
+        select(Issue.id, Issue.status, Issue.thread_id, Thread.title, Issue.issue_number)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
     owned_issues: dict[int, str] = {}
     owned_issue_threads: dict[int, OwnedIssueThread] = {}
-    for issue_id, status, thread_id, thread_title in issue_result.all():
+    for issue_id, status, thread_id, thread_title, issue_number in issue_result.all():
         owned_issue_id = int(issue_id)
         owned_issues[owned_issue_id] = str(status)
         owned_issue_threads[owned_issue_id] = OwnedIssueThread(
             thread_id=int(thread_id),
             thread_title=str(thread_title),
+            issue_number=str(issue_number),
         )
 
     # 2. Confirmed creator credits per owned issue.

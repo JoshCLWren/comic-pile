@@ -569,6 +569,154 @@ async def test_series_average_uses_latest_effective_rating(
 
 
 @pytest.mark.asyncio
+async def test_comparison_drilldown_refs_are_bounded_and_navigable(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Unread/read-unrated counts ship a bounded navigable sample (issue #3174)."""
+    _thread_zebra, issues_zebra = await _make_thread(
+        async_db, default_user, title="Zebra Tales", issue_count=1, queue_position=2, read_through=0
+    )
+    _thread_alpha, issues_alpha = await _make_thread(
+        async_db, default_user, title="Alpha Tales", issue_count=1, queue_position=1, read_through=0
+    )
+    for issue in (*issues_zebra, *issues_alpha):
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+        )
+    _thread_other, issues_other = await _make_thread(
+        async_db, default_user, title="Other", issue_count=1, queue_position=3, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues_other[0], creators=[{"id": 2, "name": "Artist Two", "role": "artist"}]
+    )
+    await _rate(async_db, issues_other[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
+
+    assert response.status_code == 200
+    writer = response.json()["comparisons"]["creator:1"]
+    assert writer["unread_upcoming_count"] == 2
+    refs = writer["unread_issue_refs"]
+    assert len(refs) == 2
+    # Deterministic display order: case-insensitive thread title first.
+    assert [ref["thread_title"] for ref in refs] == ["Alpha Tales", "Zebra Tales"]
+    for ref in refs:
+        assert ref["status"] == "unread"
+        assert ref["thread_id"] in (_thread_alpha.id, _thread_zebra.id)
+        assert ref["issue_number"] in ("1",)
+    assert writer["max_issue_refs_per_group"] == 5
+    assert writer["read_unrated_issue_refs"] == []
+    assert writer["read_unrated_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_comparison_reports_partial_unread_coverage_as_lower_bound(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """An unread issue without metadata is missing attribution, not a zero (issue #3174)."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Patchy", issue_count=2, queue_position=1, read_through=0
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+    )
+    await _confirm_identity(async_db, issues[1], metadata={"creator_credits": []})
+
+    _thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Other", issue_count=1, queue_position=2, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues_b[0], creators=[{"id": 2, "name": "Artist Two", "role": "artist"}]
+    )
+    await _rate(async_db, issues_b[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
+
+    assert response.status_code == 200
+    body = response.json()
+    coverage = body["coverage"]
+    assert coverage["unread_issues_total"] == 2
+    assert coverage["unread_issues_with_creator_metadata"] == 1
+    assert coverage["upcoming_complete"] is False
+    # The unattributed issue is not silently counted against any creator.
+    assert body["comparisons"]["creator:1"]["unread_upcoming_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_comparison_reports_partial_read_unrated_coverage(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Read issues with no stored rating report their own coverage split (issue #3174)."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Patchy Reads", issue_count=2, queue_position=1, read_through=2
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+    )
+    await _confirm_identity(async_db, issues[1], metadata={"creator_credits": []})
+
+    _thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Other", issue_count=1, queue_position=2, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues_b[0], creators=[{"id": 2, "name": "Artist Two", "role": "artist"}]
+    )
+    await _rate(async_db, issues_b[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
+
+    assert response.status_code == 200
+    body = response.json()
+    coverage = body["coverage"]
+    assert coverage["read_unrated_issues_total"] == 2
+    assert coverage["read_unrated_issues_with_creator_metadata"] == 1
+    assert coverage["read_unrated_complete"] is False
+    writer = body["comparisons"]["creator:1"]
+    assert writer["read_unrated_count"] == 1
+    assert len(writer["read_unrated_issue_refs"]) == 1
+    assert writer["read_unrated_issue_refs"][0]["status"] == "read"
+
+
+@pytest.mark.asyncio
+async def test_comparison_truncates_large_read_unrated_drilldown(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A creator with many read-unrated issues keeps the full count, bounded refs (issue #3174)."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Prolific Run", issue_count=8, queue_position=1, read_through=8
+    )
+    for issue in issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+        )
+
+    _thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Other", issue_count=1, queue_position=2, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues_b[0], creators=[{"id": 2, "name": "Artist Two", "role": "artist"}]
+    )
+    await _rate(async_db, issues_b[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
+
+    assert response.status_code == 200
+    writer = response.json()["comparisons"]["creator:1"]
+    assert writer["read_unrated_count"] == 8
+    assert writer["max_issue_refs_per_group"] == 5
+    assert len(writer["read_unrated_issue_refs"]) == 5
+    assert all(ref["status"] == "read" for ref in writer["read_unrated_issue_refs"])
+
+
+@pytest.mark.asyncio
 async def test_role_stats_includes_rated_issue_count(
     auth_client: AsyncClient,
     async_db: AsyncSession,

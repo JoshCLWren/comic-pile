@@ -48,6 +48,20 @@ class CreatorComparisonSeriesAggregate(BaseModel):
     )
 
 
+class CreatorComparisonIssueRef(BaseModel):
+    """Bounded navigable reference to one creator-attributed issue (issue #3174)."""
+
+    model_config = {"frozen": True}
+
+    issue_id: int = Field(..., description="Local ComicPile issue ID.")
+    thread_id: int = Field(..., description="Local ComicPile thread ID owning the issue.")
+    thread_title: str = Field(..., description="Title of the thread owning the issue.")
+    issue_number: str = Field(..., description="Display issue number within its thread.")
+    status: str = Field(
+        ..., description="Local issue status (``read`` or ``unread``) at aggregation time."
+    )
+
+
 class CreatorComparisonItem(BaseModel):
     """Comparison data for one creator identity."""
 
@@ -105,13 +119,34 @@ class CreatorComparisonItem(BaseModel):
     unread_upcoming_count: int = Field(
         default=0,
         ge=0,
-        description="Number of unread owned issues already in the user's ComicPile "
-        "attributed to this creator.",
+        description="Number of unread owned issues attributed to this creator "
+        "(``Issue.status == 'unread'``). This is unread attributed work already in "
+        "the user's library, not queue position, roll eligibility, or upcoming "
+        "scheduling.",
     )
     read_unrated_count: int = Field(
         default=0,
         ge=0,
-        description="Number of read-but-unrated owned issues attributed to this creator.",
+        description="Number of read owned issues attributed to this creator with no "
+        "stored effective rating.",
+    )
+    unread_issue_refs: list[CreatorComparisonIssueRef] = Field(
+        default_factory=list,
+        description="Bounded sample of the unread attributed issues behind "
+        "``unread_upcoming_count`` in stable display order. At most "
+        "``max_issue_refs_per_group`` entries; the count remains the full total.",
+    )
+    read_unrated_issue_refs: list[CreatorComparisonIssueRef] = Field(
+        default_factory=list,
+        description="Bounded sample of the read attributed issues behind "
+        "``read_unrated_count`` with no stored effective rating. At most "
+        "``max_issue_refs_per_group`` entries; the count remains the full total.",
+    )
+    max_issue_refs_per_group: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum issue references returned per drilldown group. "
+        "Exposed so the UI can explain a truncated list instead of silently hiding it.",
     )
     insufficient_data: bool = Field(
         default=False,
@@ -168,7 +203,9 @@ class CreatorComparisonCoverage(BaseModel):
     upcoming_complete: bool = Field(
         default=True,
         description="True only when every owned unread issue considered by the "
-        "library has confirmed usable creator metadata.",
+        "library has confirmed usable creator metadata. While false, per-creator "
+        "unread counts are lower bounds: an unread issue without creator metadata "
+        "cannot be attributed to any creator.",
     )
 
 
@@ -195,6 +232,7 @@ __all__ = [
     "CreatorComparisonResponse",
     "CreatorComparisonItem",
     "CreatorComparisonCoverage",
+    "CreatorComparisonIssueRef",
     "CreatorComparisonRoleStat",
     "CreatorComparisonSeriesAggregate",
 ]

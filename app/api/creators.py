@@ -286,8 +286,8 @@ async def compare_creators_endpoint(
     - 5★/top-rating rate (proportion of 5.0 ratings)
     - Role-specific averages and counts
     - Strongest series/thread aggregates
-    - Unread/upcoming attributed issue count
-    - Read-but-unrated attributed issue count
+    - Unread attributed issue count (Issue.status == "unread", not queue/upcoming semantics)
+    - Read-but-unrated attributed issue count (no stored effective rating)
     - Explicit "insufficient data" flag when rated sample < 3
 
     Only creator keys visible in the authenticated user's own confirmed issue

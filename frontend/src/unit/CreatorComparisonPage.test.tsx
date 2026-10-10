@@ -41,6 +41,9 @@ function makeItem(overrides: Partial<CreatorComparisonItem> & { canonical_creato
     min_rated_issues_per_series: 3,
     unread_upcoming_count: 2,
     read_unrated_count: 1,
+    unread_issue_refs: [],
+    read_unrated_issue_refs: [],
+    max_issue_refs_per_group: 5,
     insufficient_data: false,
     ...overrides,
   }
@@ -164,7 +167,7 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getByText('writer, editor')).toBeInTheDocument()
     expect(screen.getByText('50.0%')).toBeInTheDocument()
     expect(screen.getByText('20.0%')).toBeInTheDocument()
-    expect(screen.getByText('Read, not rated')).toBeInTheDocument()
+    expect(screen.getByText('Read with no stored rating')).toBeInTheDocument()
 
     const creatorLink = screen.getByRole('link', { name: 'Brian K. Vaughan' })
     expect(creatorLink).toHaveAttribute('href', '/creators/creator%3A7')
@@ -204,6 +207,141 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getByText(/less reliable/)).toBeInTheDocument()
     expect(screen.getByText(/Affected: Steve McNiven/)).toBeInTheDocument()
     expect(screen.getByRole('note')).toHaveTextContent('Counts shown are lower bounds.')
+  })
+
+  it('labels unread work truthfully and drills into the supporting issues', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({
+              canonical_creator_key: 'creator:7',
+              display_name: 'Brian K. Vaughan',
+              unread_upcoming_count: 2,
+              unread_issue_refs: [
+                { issue_id: 11, thread_id: 1, thread_title: 'Saga', issue_number: '1', status: 'unread' },
+                { issue_id: 12, thread_id: 1, thread_title: 'Saga', issue_number: '2', status: 'unread' },
+              ],
+              read_unrated_count: 1,
+              read_unrated_issue_refs: [
+                { issue_id: 21, thread_id: 2, thread_title: 'Y: The Last Man', issue_number: '5', status: 'read' },
+              ],
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:12')
+
+    // No label may imply queue/upcoming semantics for a plain unread count.
+    expect(screen.queryByText(/Upcoming in ComicPile/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/upcoming/i, { selector: 'p' })).not.toBeInTheDocument()
+    expect(screen.getByText('Unread in your library')).toBeInTheDocument()
+    expect(
+      screen.getByText(/not queue order or roll eligibility/),
+    ).toBeInTheDocument()
+
+    // The read-without-rating label states the stored-rating fact explicitly.
+    expect(screen.getByText('Read with no stored rating')).toBeInTheDocument()
+    expect(
+      screen.getByText('Read issues by this creator with no stored rating.'),
+    ).toBeInTheDocument()
+
+    // Both counts drill into the supporting creator-attributed issues.
+    const sagaLinks = screen.getAllByRole('link', { name: /Saga #/ })
+    expect(sagaLinks).toHaveLength(2)
+    expect(sagaLinks[0]).toHaveAttribute('href', '/thread/1')
+    expect(screen.getByRole('link', { name: 'Y: The Last Man #5' })).toHaveAttribute(
+      'href',
+      '/thread/2',
+    )
+  })
+
+  it('quantifies partial rated and unread coverage as lower bounds', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7' }),
+          },
+          coverage: {
+            ...COMPLETE_COVERAGE,
+            rated_issues_total: 9,
+            rated_issues_with_creator_metadata: 7,
+            ratings_complete: false,
+            unread_issues_total: 5,
+            unread_issues_with_creator_metadata: 4,
+            upcoming_complete: false,
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:12')
+
+    const note = screen.getByRole('note')
+    expect(note).toHaveTextContent('7 of 9 rated issues')
+    expect(note).toHaveTextContent('4 of 5 unread issues')
+    expect(note).toHaveTextContent('Counts shown are lower bounds.')
+    expect(note).toHaveTextContent(/cannot be attributed to any creator/)
+  })
+
+  it('quantifies partial read-without-rating coverage as a lower bound', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7' }),
+          },
+          coverage: {
+            ...COMPLETE_COVERAGE,
+            read_unrated_issues_total: 3,
+            read_unrated_issues_with_creator_metadata: 2,
+            read_unrated_complete: false,
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:12')
+
+    const note = screen.getByRole('note')
+    expect(note).toHaveTextContent('2 of 3 read issues with no stored rating')
+    expect(note).toHaveTextContent('Counts shown are lower bounds.')
+  })
+
+  it('truncates a large read-without-rating drilldown with a bounded sample', () => {
+    const refs = [1, 2, 3, 4, 5].map((n) => ({
+      issue_id: 100 + n,
+      thread_id: 9,
+      thread_title: 'Prolific Run',
+      issue_number: String(n),
+      status: 'read',
+    }))
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({
+              canonical_creator_key: 'creator:7',
+              display_name: 'Prolific Writer',
+              read_unrated_count: 8,
+              read_unrated_issue_refs: refs,
+            }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:12')
+
+    expect(screen.getByText('Read with no stored rating')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /Prolific Run #/ })).toHaveLength(5)
+    expect(screen.getByText(/Showing 5 of 8/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'See the full list on creator detail.' }),
+    ).toHaveAttribute('href', '/creators/creator%3A7')
   })
 
   it('names unresolved affected keys by their canonical key instead of dropping them', () => {
@@ -253,7 +391,7 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getAllByText('No ratings yet')).toHaveLength(3)
     expect(screen.getByText('N/A')).toBeInTheDocument()
     expect(screen.getByText(/unrated/)).toBeInTheDocument()
-    expect(screen.queryByText('Read, not rated')).not.toBeInTheDocument()
+    expect(screen.queryByText('Read with no stored rating')).not.toBeInTheDocument()
     // Below the minimum rated sample the section explains itself instead of
     // silently omitting ranked series.
     expect(screen.getByText(/No series has 3 rated issues yet/)).toBeInTheDocument()
