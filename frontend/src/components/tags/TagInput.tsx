@@ -1,33 +1,66 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import OverlayPortal from '../OverlayPortal'
 import { TagChip } from './TagChip'
-import type { Tag, TagSearchResult } from '../../types'
-import { useTagSearch, useTagNearMatches, useCheckTagNameAvailability, useCreateTag } from '../../hooks/useTags'
+import type { Tag } from '../../types'
+import { useTags, useCreateTag } from '../../hooks/useTags'
+import { DEFAULT_TAG_COLOR_NAME, resolveTagColorHex } from '../../utils/tagColors'
 
 interface TagInputProps {
   selectedTags: Tag[]
   onTagsChange: (tags: Tag[]) => void
-  onTagCreate?: (tag: Tag) => void
   placeholder?: string
   className?: string
   disabled?: boolean
   maxTags?: number
   showCreateOption?: boolean
+  /** Restricts new-tag creation to private tags; global creation is admin-only. */
   scope?: 'global' | 'private'
 }
 
-interface TagOption {
-  id: number
-  name: string
-  color: string
-  isGlobal: boolean
-  isPrivate: boolean
-  isNew?: boolean
+/** An existing tag the user can pick, or the inline "create this name" row. */
+type TagOption = { isNew: false; tag: Tag } | { isNew: true; name: string }
+
+/**
+ * Levenshtein distance, used only to surface likely global matches.
+ *
+ * Mirrors the server's near-match suggestion so the client preview agrees with
+ * what `create_tag` would return; the server remains authoritative.
+ *
+ * @param left - First string.
+ * @param right - Second string.
+ * @returns The edit distance between the two strings.
+ */
+function editDistance(left: string, right: string): number {
+  const rows = left.length + 1
+  const columns = right.length + 1
+  let previous = Array.from({ length: columns }, (_value, index) => index)
+
+  for (let row = 1; row < rows; row += 1) {
+    const current = [row]
+    for (let column = 1; column < columns; column += 1) {
+      const substitutionCost = left[row - 1] === right[column - 1] ? 0 : 1
+      current[column] = Math.min(
+        current[column - 1] + 1,
+        previous[column] + 1,
+        previous[column - 1] + substitutionCost,
+      )
+    }
+    previous = current
+  }
+
+  return previous[columns - 1]
 }
 
+/**
+ * A tag picker with inline private-tag creation.
+ *
+ * Options come from the viewer's visible tag list. Selecting a tag that is
+ * already assigned but not yet in `selectedTags` is prevented so the picker
+ * cannot produce duplicate assignments.
+ */
 export function TagInput({
   selectedTags,
   onTagsChange,
-  onTagCreate,
   placeholder = 'Add tags...',
   className = '',
   disabled = false,
@@ -36,331 +69,269 @@ export function TagInput({
   scope = 'private',
 }: TagInputProps) {
   const [query, setQuery] = useState('')
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
-  const [newTagName, setNewTagName] = useState('')
-  const [showNearMatches, setShowNearMatches] = useState(false)
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Search for existing tags
-  const { data: searchResults, isLoading: isSearching } = useTagSearch(query, 10)
-  
-  // Check for near matches when creating a new tag
-  const { data: nearMatches, isLoading: isLoadingNearMatches } = useTagNearMatches(
-    newTagName,
-    5
-  )
-  
-  // Check name availability
-  const { data: nameAvailability } = useCheckTagNameAvailability(
-    newTagName,
-    scope
-  )
-
-  // Create tag mutation
+  const { data: visibleTags = [] } = useTags()
   const createTagMutation = useCreateTag()
 
-  // Filter available options
-  const availableOptions = React.useMemo(() => {
-    const options: TagOption[] = []
+  const selectedIds = useMemo(
+    () => new Set(selectedTags.map((tag) => tag.id)),
+    [selectedTags],
+  )
 
-    // Add selected tags first
-    selectedTags.forEach(tag => {
-      options.push({
-        id: tag.id,
-        name: tag.name,
-        color: tag.color,
-        isGlobal: tag.scope === 'global',
-        isPrivate: tag.scope === 'private',
-      })
-    })
+  const atCapacity = Boolean(maxTags && selectedTags.length >= maxTags)
 
-    // Add search results (excluding already selected)
-    if (searchResults) {
-      searchResults.forEach(result => {
-        if (!selectedTags.some(tag => tag.id === result.id)) {
-          options.push({
-            id: result.id,
-            name: result.name,
-            color: result.color,
-            isGlobal: result.is_global,
-            isPrivate: result.is_private,
-          })
-        }
-      })
+  const nearMatches = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    if (!normalizedQuery) {
+      return []
     }
 
-    // Add near matches if creating a new tag
-    if (isCreating && nearMatches && newTagName) {
-      nearMatches.forEach(match => {
-        if (!options.some(opt => opt.id === match.tag.id)) {
-          options.push({
-            id: match.tag.id,
-            name: match.tag.name,
-            color: match.tag.color,
-            isGlobal: match.tag.scope === 'global',
-            isPrivate: match.tag.scope === 'private',
-          })
-        }
-      })
+    return visibleTags
+      .filter((tag) => tag.scope === 'global' && !selectedIds.has(tag.id))
+      .map((tag) => ({ tag, distance: editDistance(tag.normalized_name, normalizedQuery) }))
+      .filter(({ distance }) => distance > 0 && distance <= 2)
+      .sort((left, right) => left.distance - right.distance)
+      .slice(0, 3)
+  }, [query, visibleTags, selectedIds])
+
+  const matches = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    if (!normalizedQuery) {
+      return []
     }
 
-    // Add "Create new" option
-    if (showCreateOption && isCreating && newTagName && nameAvailability?.available) {
-      options.push({
-        id: Date.now(), // Temporary ID
-        name: newTagName,
-        color: '#DC2626', // Default red color
-        isGlobal: scope === 'global',
-        isPrivate: scope === 'private',
-        isNew: true,
-      })
+    const nearMatchIds = new Set(nearMatches.map(({ tag }) => tag.id))
+    return visibleTags
+      .filter(
+        (tag) =>
+          !selectedIds.has(tag.id) &&
+          !nearMatchIds.has(tag.id) &&
+          tag.normalized_name.includes(normalizedQuery),
+      )
+      .slice(0, 10)
+  }, [query, visibleTags, selectedIds, nearMatches])
+
+  /**
+   * An exact normalized name always reuses the existing visible tag, so a
+   * duplicate private tag is never offered or created.
+   */
+  const exactMatch = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    if (!normalizedQuery) {
+      return undefined
+    }
+    return visibleTags.find((tag) => tag.normalized_name === normalizedQuery)
+  }, [query, visibleTags])
+
+  const canCreateNewTag =
+    showCreateOption &&
+    Boolean(query.trim()) &&
+    !exactMatch &&
+    !atCapacity &&
+    !createTagMutation.isPending
+
+  const options: TagOption[] = useMemo(() => {
+    const rows: TagOption[] = [
+      ...nearMatches.map(({ tag }) => ({ isNew: false as const, tag })),
+      ...matches.map((tag) => ({ isNew: false as const, tag })),
+    ]
+
+    if (canCreateNewTag) {
+      rows.push({ isNew: true, name: query.trim() })
     }
 
-    // Remove duplicates by ID
-    const uniqueOptions = options.filter((option, index, self) => 
-      index === self.findIndex(opt => opt.id === option.id)
-    )
+    return rows
+  }, [nearMatches, matches, canCreateNewTag, query])
 
-    return uniqueOptions
-  }, [selectedTags, searchResults, nearMatches, isCreating, newTagName, nameAvailability, showCreateOption, scope])
+  const existingOptionCount = nearMatches.length + matches.length
 
-  // Handle input focus
-  const handleFocus = useCallback(() => {
-    setShowDropdown(true)
-  }, [])
+  const closeMenu = useCallback(() => setOpen(false), [])
 
-  // Handle input change
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setQuery(value)
-    setNewTagName(value)
-    
-    if (value.trim()) {
-      setIsCreating(true)
-      setShowNearMatches(true)
-    } else {
-      setIsCreating(false)
-      setShowNearMatches(false)
-    }
-  }
+  const handleSelect = useCallback(
+    (option: TagOption) => {
+      if (option.isNew) {
+        createTagMutation.mutate(
+          {
+            name: option.name,
+            scope,
+            color: DEFAULT_TAG_COLOR_NAME,
+            include_near_matches: true,
+          },
+          {
+            onSuccess: (created) => {
+              onTagsChange([...selectedTags, created])
+              setQuery('')
+              closeMenu()
+            },
+          },
+        )
+        return
+      }
 
-  // Handle option selection
-  const handleOptionSelect = (option: TagOption) => {
-    if (maxTags && selectedTags.length >= maxTags) {
+      if (atCapacity || selectedIds.has(option.tag.id)) {
+        return
+      }
+
+      onTagsChange([...selectedTags, option.tag])
+      setQuery('')
+      closeMenu()
+    },
+    [atCapacity, closeMenu, createTagMutation, onTagsChange, scope, selectedIds, selectedTags],
+  )
+
+  const handleRemove = useCallback(
+    (tagToRemove: Tag) => {
+      onTagsChange(selectedTags.filter((tag) => tag.id !== tagToRemove.id))
+    },
+    [onTagsChange, selectedTags],
+  )
+
+  useEffect(() => {
+    if (!open) {
       return
     }
 
-    if (option.isNew) {
-      // Create new tag
-      createTagMutation.mutate(
-        {
-          name: option.name,
-          scope: scope,
-          color: option.color,
-        },
-        {
-          onSuccess: (createdTag) => {
-            onTagsChange([...selectedTags, createdTag])
-            if (onTagCreate) {
-              onTagCreate(createdTag)
-            }
-            setQuery('')
-            setNewTagName('')
-            setIsCreating(false)
-            setShowDropdown(false)
-          },
-        }
-      )
-    } else {
-      // Select existing tag
-      const tag: Tag = {
-        id: option.id,
-        name: option.name,
-        normalized_name: option.name.toLowerCase().trim(),
-        scope: option.isGlobal ? 'global' : 'private',
-        owner_user_id: option.isPrivate ? 1 : null, // TODO: Get actual user ID
-        color: option.color,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
       }
-
-      if (!selectedTags.some(t => t.id === tag.id)) {
-        onTagsChange([...selectedTags, tag])
+      // The menu is portaled outside this container, so both roots count as "inside".
+      if (containerRef.current?.contains(target) || menuRef.current?.contains(target)) {
+        return
       }
-      setQuery('')
-      setNewTagName('')
-      setIsCreating(false)
-      setShowDropdown(false)
+      closeMenu()
     }
-  }
 
-  // Handle tag removal
-  const handleTagRemove = (tagToRemove: Tag) => {
-    onTagsChange(selectedTags.filter(tag => tag.id !== tagToRemove.id))
-  }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [closeMenu, open])
 
-  // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        // SAFETY: event.target is always an EventTarget, and in browser DOM it's a Node
-        !dropdownRef.current.contains(event.target as Node) &&
-        inputRef.current &&
-        // SAFETY: event.target is always an EventTarget, and in browser DOM it's a Node
-        !inputRef.current.contains(event.target as Node)
-      ) {
-        setShowDropdown(false)
-      }
+    if (atCapacity && query) {
+      closeMenu()
     }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // Focus input when dropdown opens
-  useEffect(() => {
-    if (showDropdown && inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [showDropdown])
+  }, [atCapacity, closeMenu, query])
 
   return (
-    <div className={`relative ${className}`}>
-      {/* Selected tags */}
+    <div ref={containerRef} className={`relative ${className}`}>
       {selectedTags.length > 0 && (
-        <div className="flex flex-wrap gap-1 p-2 border border-gray-300 rounded-t-lg">
+        <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1.5">
           {selectedTags.map((tag) => (
-            <div key={tag.id} className="relative">
+            <span key={tag.id} className="inline-flex items-center">
               <TagChip tag={tag} />
               <button
-                className="ml-1 text-gray-500 hover:text-gray-700"
-                onClick={() => handleTagRemove(tag)}
+                type="button"
+                aria-label={`Remove ${tag.name}`}
+                className="ml-1 text-stone-500 hover:text-stone-200 transition-colors"
+                onClick={() => handleRemove(tag)}
               >
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                   <path
                     fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293-4.293a1 1 0 01-1.414 1.414L10 11.414l4.293-4.293a1 1 0 010-1.414z"
                     clipRule="evenodd"
                   />
                 </svg>
               </button>
-            </div>
+            </span>
           ))}
         </div>
       )}
 
-      {/* Input */}
-      <div className="relative">
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={handleChange}
-          onFocus={handleFocus}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={`
-            w-full px-3 py-2 border ${
-              selectedTags.length > 0 ? 'border-t-0 border-b-0' : 'border'
-            } border-gray-300 rounded-b-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-            ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}
-          `}
-        />
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        aria-label={placeholder}
+        value={query}
+        disabled={disabled || atCapacity}
+        onChange={(event) => setQuery(event.target.value)}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        className={`form-control w-full rounded-lg px-3 py-2 text-sm ${
+          selectedTags.length > 0 ? 'rounded-t-none border-t-0' : ''
+        } ${disabled || atCapacity ? 'opacity-60 cursor-not-allowed' : ''}`}
+      />
 
-        {/* Dropdown */}
-        {showDropdown && query && (
-          <div
-            ref={dropdownRef}
-            className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-          >
-            {isSearching && (
-              <div className="px-3 py-2 text-sm text-gray-500">Searching...</div>
-            )}
-            
-            {!isSearching && availableOptions.length === 0 && (
-              <div className="px-3 py-2 text-sm text-gray-500">No tags found</div>
+      {open && query.trim() && !atCapacity && (
+        <OverlayPortal layer="menu">
+          <div ref={menuRef} className="fixed left-4 right-4 top-24 z-50 max-h-72 overflow-y-auto surface-panel shadow-xl">
+            {options.length === 0 && (
+              <p className="px-3 py-2 text-sm text-stone-400">No tags found</p>
             )}
 
-            {!isSearching && availableOptions.length > 0 && (
-              <div className="py-1">
-                {availableOptions.map((option) => (
-                  <button
-                    key={option.id}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-                    onClick={() => handleOptionSelect(option)}
-                  >
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: option.color }}
-                    />
-                    <span className="truncate">{option.name}</span>
-                    {option.isNew && (
-                      <span className="ml-auto text-xs text-green-600 font-medium">
-                        Create
-                      </span>
-                    )}
-                    {option.isGlobal && !option.isNew && (
-                      <span className="ml-auto text-xs text-gray-500">
-                        Global
-                      </span>
-                    )}
-                  </button>
+            {options.length > 0 && (
+              <>
+                {existingOptionCount === 0 && (
+                  <p className="px-3 py-2 text-sm text-stone-400">No existing tags match</p>
+                )}
+                <ul role="listbox" className="py-1">
+                  {options.map((option) => (
+                    <li key={option.isNew ? 'create' : option.tag.id}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-200 hover:bg-white/5 transition-colors"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => handleSelect(option)}
+                      >
+                        {option.isNew ? (
+                          <>
+                            <span
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{
+                                backgroundColor: resolveTagColorHex(DEFAULT_TAG_COLOR_NAME),
+                              }}
+                            />
+                            <span className="truncate">{`Create "${option.name}"`}</span>
+                            <span className="ml-auto text-xs font-semibold text-[var(--theme-comic-accent)]">
+                              New
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: resolveTagColorHex(option.tag.color) }}
+                          />
+                          <span className="truncate">{option.tag.name}</span>
+                          {option.tag.scope === 'global' && (
+                            <span className="ml-auto text-xs text-stone-500">Global</span>
+                          )}
+                        </>
+                      )}
+                    </button>
+                  </li>
                 ))}
-              </div>
+                </ul>
+              </>
             )}
 
-            {showNearMatches && isLoadingNearMatches && (
-              <div className="px-3 py-2 text-sm text-gray-500">Checking suggestions...</div>
+            {nearMatches.length > 0 && (
+              <p className="px-3 py-1.5 border-t border-[var(--theme-border)] text-xs text-stone-500">
+                Similar global tags exist. Pick one instead of creating a near-duplicate.
+              </p>
             )}
 
-            {showNearMatches && !isLoadingNearMatches && nearMatches && nearMatches.length > 0 && (
-              <div className="border-t border-gray-200 pt-2 mt-2">
-                <div className="px-3 py-2 text-xs font-medium text-gray-500 mb-1">
-                  Similar tags exist:
-                </div>
-                {nearMatches.map((match) => (
-                  <button
-                    key={match.tag.id}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-                    onClick={() => handleOptionSelect({
-                      id: match.tag.id,
-                      name: match.tag.name,
-                      color: match.tag.color,
-                      isGlobal: match.tag.scope === 'global',
-                      isPrivate: match.tag.scope === 'private',
-                    })}
-                  >
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: match.tag.color }}
-                    />
-                    <span className="truncate">{match.tag.name}</span>
-                    <span className="ml-auto text-xs text-gray-500">
-                      {match.distance === 0 ? 'Exact match' : `Similar`}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {nameAvailability && !nameAvailability.available && (
-              <div className="border-t border-gray-200 pt-2 mt-2">
-                <div className="px-3 py-2 text-xs text-red-600">
-                  A tag with this name already exists
-                </div>
-              </div>
+            {createTagMutation.isError && (
+              <p className="px-3 py-2 border-t border-[var(--theme-border)] text-xs text-[var(--theme-danger)]">
+                Could not create that tag.
+              </p>
             )}
           </div>
-        )}
-      </div>
+        </OverlayPortal>
+      )}
 
-      {maxTags && selectedTags.length >= maxTags && (
-        <div className="text-xs text-gray-500 mt-1">
-          Maximum {maxTags} tags allowed
-        </div>
+      {atCapacity && maxTags && (
+        <p className="mt-1 text-xs text-stone-500">Maximum {maxTags} tags allowed</p>
       )}
     </div>
   )

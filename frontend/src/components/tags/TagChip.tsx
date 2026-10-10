@@ -1,5 +1,6 @@
 import React from 'react'
 import type { Tag, TagInheritanceSource } from '../../types'
+import { TAG_COLOR_PALETTE } from '../../utils/tagColors'
 
 interface TagChipProps {
   tag: Tag
@@ -10,28 +11,14 @@ interface TagChipProps {
   className?: string
 }
 
-const TAG_COLORS = {
-  red: '#DC2626',
-  orange: '#EA580C',
-  amber: '#D97706',
-  yellow: '#CA8A04',
-  lime: '#65A30D',
-  green: '#16A34A',
-  emerald: '#059669',
-  teal: '#0891B2',
-  cyan: '#0891B2',
-  sky: '#0284C7',
-  blue: '#2563EB',
-  indigo: '#4F46E5',
-  violet: '#7C3AED',
-  purple: '#9333EA',
-  fuchsia: '#A21CAF',
-  pink: '#DB2777',
-  rose: '#E11D48',
-  // Add all 32 colors from the backend palette
-  // For now, using a subset for brevity
-}
-
+/**
+ * One tag pill.
+ *
+ * Direct and inherited tags are distinguishable without relying on color alone:
+ * an inherited chip renders at reduced opacity with a dashed outline. The chip
+ * background comes from the server-validated fixed palette, which is a genuine
+ * local data encoding rather than a semantic theme role.
+ */
 export function TagChip({
   tag,
   isInherited = false,
@@ -40,77 +27,108 @@ export function TagChip({
   onSourceClick,
   className = '',
 }: TagChipProps) {
-  const handleClick = () => {
-    if (onTagClick) {
-      onTagClick(tag)
-    }
-  }
+  const interactive = Boolean(onTagClick)
+  const backgroundColor = TAG_COLOR_PALETTE[tag.color] ?? tag.color
+  const textClass = tagNeedsDarkText(backgroundColor) ? 'text-stone-900' : 'text-white'
 
-  const handleSourceClick = (source: TagInheritanceSource) => {
-    if (onSourceClick) {
-      onSourceClick(source)
-    }
+  const handleActivate = () => {
+    onTagClick?.(tag)
   }
-
-  // SAFETY: tag.color comes from backend palette, TAG_COLORS covers all known colors
-  const backgroundColor = TAG_COLORS[tag.color as keyof typeof TAG_COLORS] || tag.color
-  const textColor = tag.color === 'yellow' || tag.color === 'lime' || tag.color === 'amber' 
-    ? 'text-gray-900' 
-    : 'text-white'
 
   return (
-    <div
-      className={`
-        inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-medium
-        cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-md
-        ${isInherited ? 'opacity-75 border border-gray-300' : ''}
-        ${textColor}
-        ${className}
-      `}
+    <span
+      className={[
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold',
+        interactive ? 'cursor-pointer hover:brightness-110 transition-[filter]' : '',
+        isInherited ? 'opacity-70 ring-1 ring-inset ring-current/40 border border-dashed' : '',
+        textClass,
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={{ backgroundColor }}
-      onClick={handleClick}
+      onClick={interactive ? handleActivate : undefined}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={
+        interactive
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                handleActivate()
+              }
+            }
+          : undefined
+      }
+      data-tag-id={tag.id}
+      data-inherited={isInherited ? 'true' : undefined}
     >
       <span className="truncate">{tag.name}</span>
-      
+
       {isInherited && inheritanceSources.length > 0 && (
-        <div className="relative group">
-          <svg 
-            className="w-3 h-3 ml-1 flex-shrink-0" 
-            fill="currentColor" 
+        <span className="relative group inline-flex">
+          <svg
+            className="w-3 h-3 flex-shrink-0"
+            fill="currentColor"
             viewBox="0 0 20 20"
+            aria-hidden="true"
           >
-            <path 
-              fillRule="evenodd" 
-              d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" 
-              clipRule="evenodd" 
+            <path
+              fillRule="evenodd"
+              d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+              clipRule="evenodd"
             />
           </svg>
-          
-          {/* Inheritance sources tooltip */}
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-            <div className="text-xs font-medium text-gray-700 mb-1">Inherited from:</div>
-            <div className="space-y-1">
-              {inheritanceSources.map((source, _index) => (
-                <button
-                  key={source.id}
-                  className="block w-full text-left text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleSourceClick(source)
-                  }}
-                >
-                  {source.type}: {source.name}
-                </button>
-              ))}
-            </div>
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-              <div className="w-2 h-2 bg-white border-r border-b border-gray-200 transform rotate-45"></div>
-            </div>
-          </div>
-        </div>
+
+          <span className="sr-only">Inherited from:</span>
+
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 surface-panel shadow-lg opacity-0 invisible group-hover:opacity-100 group-focus-within:opacity-100 group-hover:visible group-focus-within:visible transition-opacity z-10">
+            {inheritanceSources.map((source) => (
+              <button
+                key={`${source.target_type}-${source.target_id}`}
+                type="button"
+                className="block w-full text-left text-xs text-stone-300 hover:text-stone-100 hover:underline py-0.5"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onSourceClick?.(source)
+                }}
+              >
+                {source.display_name}
+              </button>
+            ))}
+          </span>
+        </span>
       )}
-    </div>
+    </span>
   )
+}
+
+/**
+ * Pick readable text for a palette background.
+ *
+ * The palette is fixed and server-validated, so the set of possible background
+ * colors is known. Luminance is measured against the actual hex so the decision
+ * stays correct if the palette gains a lighter entry later.
+ *
+ * @param backgroundColor - The chip background color.
+ * @returns Whether dark foreground text is required.
+ */
+function tagNeedsDarkText(backgroundColor: string): boolean {
+  const hex = backgroundColor.replace('#', '')
+  if (hex.length !== 6) {
+    return false
+  }
+
+  const red = parseInt(hex.slice(0, 2), 16)
+  const green = parseInt(hex.slice(2, 4), 16)
+  const blue = parseInt(hex.slice(4, 6), 16)
+
+  if (Number.isNaN(red) || Number.isNaN(green) || Number.isNaN(blue)) {
+    return false
+  }
+
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+  return luminance > 0.6
 }
 
 interface TagListProps {
@@ -123,6 +141,12 @@ interface TagListProps {
   maxTags?: number
 }
 
+/**
+ * A wrapping row of tag chips.
+ *
+ * Renders nothing at all for an empty list so optional tag UI leaves no empty
+ * flex track behind in the layout.
+ */
 export function TagList({
   tags,
   isInherited = false,
@@ -132,11 +156,15 @@ export function TagList({
   className = '',
   maxTags,
 }: TagListProps) {
+  if (tags.length === 0) {
+    return null
+  }
+
   const displayTags = maxTags ? tags.slice(0, maxTags) : tags
-  const remainingTags = maxTags && tags.length > maxTags ? tags.slice(maxTags) : []
+  const remainingCount = maxTags ? Math.max(0, tags.length - displayTags.length) : 0
 
   return (
-    <div className={`flex flex-wrap gap-1 ${className}`}>
+    <div className={`flex flex-wrap items-center gap-1 ${className}`}>
       {displayTags.map((tag) => (
         <TagChip
           key={tag.id}
@@ -147,11 +175,11 @@ export function TagList({
           onSourceClick={onSourceClick}
         />
       ))}
-      
-      {remainingTags.length > 0 && (
-        <div className="inline-flex items-center px-2 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600">
-          +{remainingTags.length} more
-        </div>
+
+      {remainingCount > 0 && (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-800 text-stone-300">
+          +{remainingCount} more
+        </span>
       )}
     </div>
   )

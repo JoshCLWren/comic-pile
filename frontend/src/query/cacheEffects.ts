@@ -5,7 +5,7 @@ import type { IssueListResponse } from '../services/api-issues'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
-import type { Tag, TagAssignment, EffectiveTag } from '../types'
+import type { Tag, EffectiveTags, TagInheritanceSource } from '../types'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 import { toTagTargetType, type TagCacheKeyType } from '../utils/tagTargetType'
@@ -662,7 +662,7 @@ export function optimisticallyUpdateTag(
 }
 
 /**
- * Apply a created tag to the cache and refresh the list view.
+ * Store a created tag in the detail cache and refresh the list view.
  */
 export async function applyCreatedTag(
   client: QueryClient,
@@ -673,7 +673,7 @@ export async function applyCreatedTag(
 }
 
 /**
- * Apply an updated tag to the cache and refresh dependent queries.
+ * Store an updated tag in the detail cache and refresh the list view.
  */
 export async function applyUpdatedTag(
   client: QueryClient,
@@ -681,11 +681,10 @@ export async function applyUpdatedTag(
 ): Promise<void> {
   client.setQueryData(queryKeys.tags.detail(tag.id), tag)
   await client.invalidateQueries({ queryKey: queryKeys.tags.list(), exact: true })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName(tag.name, tag.scope), exact: true })
 }
 
 /**
- * Remove a tag from the cache and refresh dependent queries.
+ * Drop a deleted tag from the cache and refresh the list view.
  */
 export async function applyDeletedTag(
   client: QueryClient,
@@ -693,52 +692,73 @@ export async function applyDeletedTag(
 ): Promise<void> {
   client.removeQueries({ queryKey: queryKeys.tags.detail(tagId), exact: true })
   await client.invalidateQueries({ queryKey: queryKeys.tags.list(), exact: true })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.nearMatches(''), exact: true })
 }
 
 /**
- * Optimistically add a tag assignment to a target.
+ * Optimistically record a direct tag assignment on a target.
+ *
+ * A tag that is not yet effective is inserted as a direct entry with the target
+ * itself as its source; a tag that is already effective only gains this target
+ * as a source and becomes direct. Nothing is invented when the target has no
+ * cached effective-tag entry, because the server owns the inheritance result.
  */
 export function optimisticallyAssignTag(
   client: QueryClient,
   tag: Tag,
   targetType: TagCacheKeyType,
   targetId: number,
+  targetLabel: string,
 ): TagCacheRollback {
   const effectiveKey = queryKeys.tags.effective(targetType, targetId)
-  const previousEffective = client.getQueryData<EffectiveTag[]>(effectiveKey)
+  const previous = client.getQueryData<EffectiveTags>(effectiveKey)
 
-  if (previousEffective) {
-    const newAssignment: TagAssignment = {
-      id: Date.now(), // Temporary ID for optimistic update
-      tag_id: tag.id,
-      target_type: toTagTargetType(targetType),
-      target_id: targetId,
-      created_at: new Date().toISOString(),
-    }
-
-    const updatedEffective = previousEffective.map(effective => {
-      if (effective.tag.id === tag.id) {
-        return {
-          ...effective,
-          assignments: [...effective.assignments, newAssignment],
-        }
-      }
-      return effective
-    })
-
-    client.setQueryData(effectiveKey, updatedEffective)
+  if (!previous) {
+    return () => {}
   }
 
+  const source: TagInheritanceSource = {
+    target_type: toTagTargetType(targetType),
+    target_id: targetId,
+    display_name: targetLabel,
+  }
+
+  const existing = previous.effective_tags.find((entry) => entry.tag.id === tag.id)
+  const effectiveTags = existing
+    ? previous.effective_tags.map((entry) =>
+        entry.tag.id === tag.id
+          ? {
+              ...entry,
+              direct: true,
+              sources: entry.sources.some(
+                (existingSource) =>
+                  existingSource.target_type === source.target_type &&
+                  existingSource.target_id === source.target_id,
+              )
+                ? entry.sources
+                : [...entry.sources, source],
+            }
+          : entry,
+      )
+    : [...previous.effective_tags, { tag, direct: true, sources: [source] }]
+
+  client.setQueryData<EffectiveTags>(effectiveKey, {
+    ...previous,
+    direct_tags: previous.direct_tags.some((entry) => entry.id === tag.id)
+      ? previous.direct_tags
+      : [...previous.direct_tags, tag],
+    effective_tags: effectiveTags,
+  })
+
   return () => {
-    if (previousEffective) {
-      client.setQueryData(effectiveKey, previousEffective)
-    }
+    client.setQueryData(effectiveKey, previous)
   }
 }
 
 /**
- * Optimistically remove a tag assignment from a target.
+ * Optimistically remove this target's direct assignment of a tag.
+ *
+ * When other sources still contribute the tag it stays effective; when the
+ * target was the only source the tag drops out of the effective set entirely.
  */
 export function optimisticallyUnassignTag(
   client: QueryClient,
@@ -747,43 +767,49 @@ export function optimisticallyUnassignTag(
   targetId: number,
 ): TagCacheRollback {
   const effectiveKey = queryKeys.tags.effective(targetType, targetId)
-  const previousEffective = client.getQueryData<EffectiveTag[]>(effectiveKey)
-  const targetTypeString = toTagTargetType(targetType)
+  const previous = client.getQueryData<EffectiveTags>(effectiveKey)
 
-  if (previousEffective) {
-    const updatedEffective = previousEffective.map(effective => {
-      if (effective.tag.id === tagId) {
-        return {
-          ...effective,
-          assignments: effective.assignments.filter(assignment =>
-            !(assignment.tag_id === tagId &&
-              assignment.target_type === targetTypeString &&
-              assignment.target_id === targetId)
-          ),
-        }
-      }
-      return effective
-    })
-
-    client.setQueryData(effectiveKey, updatedEffective)
+  if (!previous) {
+    return () => {}
   }
 
+  const wireTargetType = toTagTargetType(targetType)
+  const isThisTarget = (source: TagInheritanceSource) =>
+    source.target_type === wireTargetType && source.target_id === targetId
+
+  // The queried object only appears in `sources` while it holds the assignment,
+  // so dropping that source is exactly what clears `direct`.
+  const effectiveTags = previous.effective_tags
+    .filter((entry) => entry.tag.id !== tagId)
+    .concat(
+      previous.effective_tags
+        .filter((entry) => entry.tag.id === tagId)
+        .map((entry) => ({
+          ...entry,
+          direct: false,
+          sources: entry.sources.filter((source) => !isThisTarget(source)),
+        }))
+        .filter((entry) => entry.sources.length > 0),
+    )
+
+  client.setQueryData<EffectiveTags>(effectiveKey, {
+    ...previous,
+    direct_tags: previous.direct_tags.filter((tag) => tag.id !== tagId),
+    effective_tags: effectiveTags,
+  })
+
   return () => {
-    if (previousEffective) {
-      client.setQueryData(effectiveKey, previousEffective)
-    }
+    client.setQueryData(effectiveKey, previous)
   }
 }
 
 /**
- * Invalidate all tag-related queries after a bulk tag operation.
+ * Invalidate every tag query after a bulk add/remove.
  */
 export async function invalidateAfterBulkTagOperation(
   client: QueryClient,
 ): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.tags.all })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.search('') })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.nearMatches('') })
 }
 
 /**
@@ -791,29 +817,26 @@ export async function invalidateAfterBulkTagOperation(
  */
 export async function invalidateEffectiveTags(
   client: QueryClient,
-  targetType: 'issue' | 'thread' | 'plan',
+  targetType: TagCacheKeyType,
   targetId: number,
 ): Promise<void> {
-  await client.invalidateQueries({ 
+  await client.invalidateQueries({
     queryKey: queryKeys.tags.effective(targetType, targetId),
     exact: true,
   })
 }
 
 /**
- * Invalidate all tag queries after a tag is created.
+ * Invalidate tag queries after a tag is created.
  */
 export async function invalidateAfterTagCreate(
   client: QueryClient,
 ): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.tags.list() })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.nearMatches('') })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName('', 'private') })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName('', 'global') })
 }
 
 /**
- * Invalidate all tag queries after a tag is updated.
+ * Invalidate tag queries after a tag is updated.
  */
 export async function invalidateAfterTagUpdate(
   client: QueryClient,
@@ -821,32 +844,28 @@ export async function invalidateAfterTagUpdate(
 ): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.tags.detail(tag.id) })
   await client.invalidateQueries({ queryKey: queryKeys.tags.list() })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName(tag.name, tag.scope) })
 }
 
 /**
- * Invalidate all tag queries after a tag is deleted.
+ * Invalidate tag queries after a tag is deleted.
  */
 export async function invalidateAfterTagDelete(
   client: QueryClient,
   tagId: number,
 ): Promise<void> {
-  await client.removeQueries({ queryKey: queryKeys.tags.detail(tagId), exact: true })
+  client.removeQueries({ queryKey: queryKeys.tags.detail(tagId), exact: true })
   await client.invalidateQueries({ queryKey: queryKeys.tags.list() })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.nearMatches('') })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName('', 'private') })
-  await client.invalidateQueries({ queryKey: queryKeys.tags.checkName('', 'global') })
 }
 
 /**
- * Invalidate all tag queries after a tag assignment change.
+ * Invalidate tag queries after a single tag assignment change.
  */
 export async function invalidateAfterTagAssignment(
   client: QueryClient,
-  targetType: 'issue' | 'thread' | 'plan',
+  targetType: TagCacheKeyType,
   targetId: number,
 ): Promise<void> {
-  await client.invalidateQueries({ 
+  await client.invalidateQueries({
     queryKey: queryKeys.tags.effective(targetType, targetId),
     exact: true,
   })

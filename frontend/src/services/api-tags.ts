@@ -1,208 +1,117 @@
-// Import types from the main types file
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
   Tag,
   TagAssignment,
-  TagInheritanceSource,
-  EffectiveTag,
-  TagCreateRequest,
-  TagUpdateRequest,
   TagAssignmentRequest,
-  TagUsageInfo,
-  TagNearMatch,
-  TagSearchResult,
-  TagTargetType,
   TagBulkOperation,
+  TagCreateRequest,
+  TagCreateResponse,
+  TagDeleteResult,
+  TagListResponse,
+  TagTargetType,
+  TagUpdateRequest,
+  TagUsageInfo,
+  EffectiveTags,
 } from '../types'
 import { tagTargetTypeUrlSegment } from '../utils/tagTargetType'
 
-export type { TagBulkOperation }
+/** Every tag route lives under the v1 tag router and keeps its trailing slash. */
+const TAG_BASE_PATH = '/v1/tags'
 
 /**
- * API service for tag operations
+ * Build the tag service bound to an HTTP client.
+ *
+ * The endpoints here mirror `app/api/tags.py`. Near-match suggestions ride on
+ * tag creation (`include_near_matches`), and the client applies bulk operations
+ * as one assignment call per target so each request stays within the existing
+ * per-target contract.
+ *
+ * @param client - HTTP transport used for every tag request.
+ * @returns The tag API bound to `client`.
  */
+export function createTagsApi(client: HttpClient) {
+  return {
+    /** List every tag visible to the viewer (all global plus their own private). */
+    listTags: (): Promise<Tag[]> =>
+      client
+        .get<TagListResponse>(`${TAG_BASE_PATH}/`)
+        .then((response) => response.tags),
 
-export class TagsApi {
-  private baseUrl = '/api/v1/tags'
+    /** Fetch one tag, enforcing owner-only visibility for private tags. */
+    getTag: (tagId: number): Promise<Tag> => client.get<Tag>(`${TAG_BASE_PATH}/${tagId}/`),
 
-  /**
-   * List all visible tags (global + user's private)
-   */
-  async listTags(): Promise<Tag[]> {
-    const response = await fetch(this.baseUrl)
-    if (!response.ok) {
-      throw new Error(`Failed to list tags: ${response.statusText}`)
-    }
-    return response.json()
-  }
+    /**
+     * Create a tag.
+     *
+     * The response carries `redirected_to_global` when an exact normalized name
+     * matched a global tag, in which case `tag` is that global tag rather than a
+     * new private duplicate.
+     */
+    createTag: (request: TagCreateRequest): Promise<TagCreateResponse> =>
+      client.post<TagCreateResponse, TagCreateRequest>(`${TAG_BASE_PATH}/`, request),
 
-  /**
-   * Get specific tag by ID (with visibility enforcement)
-   */
-  async getTag(id: number): Promise<Tag> {
-    const response = await fetch(`${this.baseUrl}/${id}`)
-    if (!response.ok) {
-      throw new Error(`Failed to get tag ${id}: ${response.statusText}`)
-    }
-    return response.json()
-  }
+    /** Update a tag's name and/or color. */
+    updateTag: (tagId: number, request: TagUpdateRequest): Promise<Tag> =>
+      client.put<Tag, TagUpdateRequest>(`${TAG_BASE_PATH}/${tagId}/`, request),
 
-  /**
-   * Create a new tag
-   */
-  async createTag(request: TagCreateRequest): Promise<Tag> {
-    const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to create tag: ${response.statusText}`)
-    }
-    return response.json()
-  }
+    /** Delete a tag and cascade its assignments. */
+    deleteTag: (tagId: number): Promise<TagDeleteResult> =>
+      client.delete<TagDeleteResult>(`${TAG_BASE_PATH}/${tagId}/`),
 
-  /**
-   * Update an existing tag
-   */
-  async updateTag(id: number, request: TagUpdateRequest): Promise<Tag> {
-    const response = await fetch(`${this.baseUrl}/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to update tag ${id}: ${response.statusText}`)
-    }
-    return response.json()
-  }
+    /** Attach a tag to a target. Idempotent on the server. */
+    assignTag: (tagId: number, request: TagAssignmentRequest): Promise<TagAssignment> =>
+      client.post<TagAssignment, TagAssignmentRequest>(
+        `${TAG_BASE_PATH}/${tagId}/assign/`,
+        request,
+      ),
 
-  /**
-   * Delete a tag and cascade assignments
-   */
-  async deleteTag(id: number): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/${id}`, {
-      method: 'DELETE',
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to delete tag ${id}: ${response.statusText}`)
-    }
-  }
+    /** Remove a tag assignment from a target. */
+    unassignTag: (tagId: number, request: TagAssignmentRequest): Promise<TagAssignment> =>
+      client.delete<TagAssignment>(`${TAG_BASE_PATH}/${tagId}/unassign/`, {
+        data: request,
+      }),
 
-  /**
-   * Assign a tag to a target
-   */
-  async assignTag(id: number, request: TagAssignmentRequest): Promise<TagAssignment> {
-    const response = await fetch(`${this.baseUrl}/${id}/assign/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to assign tag ${id}: ${response.statusText}`)
-    }
-    return response.json()
-  }
+    /** Return assignment counts so the UI can confirm a deletion's blast radius. */
+    getTagUsage: (tagId: number): Promise<TagUsageInfo> =>
+      client.get<TagUsageInfo>(`${TAG_BASE_PATH}/${tagId}/usage/`),
 
-  /**
-   * Remove a tag assignment
-   */
-  async unassignTag(id: number, request: TagAssignmentRequest): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/${id}/unassign/`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to unassign tag ${id}: ${response.statusText}`)
-    }
-  }
+    /** Return direct plus inherited tags for one issue, thread, or Reading Plan. */
+    getEffectiveTags: (targetType: TagTargetType, targetId: number): Promise<EffectiveTags> =>
+      client.get<EffectiveTags>(
+        `${TAG_BASE_PATH}/effective/${tagTargetTypeUrlSegment(targetType)}/${targetId}/`,
+      ),
 
-  /**
-   * Get tag usage statistics
-   */
-  async getTagUsage(id: number): Promise<TagUsageInfo> {
-    const response = await fetch(`${this.baseUrl}/${id}/usage/`)
-    if (!response.ok) {
-      throw new Error(`Failed to get tag ${id} usage: ${response.statusText}`)
-    }
-    return response.json()
-  }
+    /**
+     * Apply bulk add/remove operations.
+     *
+     * The API has no bulk route, so each operation fans out to one assignment
+     * call per target. Adding or removing a single tag assignment never touches
+     * the issue's other tags, which is what the bulk contract requires.
+     */
+    async bulkTagOperations(operations: TagBulkOperation[]): Promise<void> {
+      const calls = operations.flatMap((operation) =>
+        operation.target_ids.map((targetId) => {
+          const request: TagAssignmentRequest = {
+            target_type: operation.target_type,
+            target_id: targetId,
+          }
+          return operation.action === 'add'
+            ? client.post<TagAssignment, TagAssignmentRequest>(
+                `${TAG_BASE_PATH}/${operation.tag_id}/assign/`,
+                request,
+              )
+            : client.delete<TagAssignment>(
+                `${TAG_BASE_PATH}/${operation.tag_id}/unassign/`,
+                { data: request },
+              )
+        }),
+      )
 
-  /**
-   * Get effective tags (direct + inherited) for a target
-   */
-  async getEffectiveTags(type: TagTargetType, id: number): Promise<EffectiveTag[]> {
-    const response = await fetch(`${this.baseUrl}/effective/${tagTargetTypeUrlSegment(type)}/${id}/`)
-    if (!response.ok) {
-      throw new Error(`Failed to get effective tags for ${type} ${id}: ${response.statusText}`)
-    }
-    return response.json()
-  }
-
-  /**
-   * Search for tags by name (for autocomplete)
-   */
-  async searchTags(query: string, limit: number = 10): Promise<TagSearchResult[]> {
-    const params = new URLSearchParams({ query, limit: String(limit) })
-    const response = await fetch(`${this.baseUrl}/search/?${params}`)
-    if (!response.ok) {
-      throw new Error(`Failed to search tags: ${response.statusText}`)
-    }
-    return response.json()
-  }
-
-  /**
-   * Get near-matches for tag creation (suggestions)
-   */
-  async getNearMatches(name: string, limit: number = 8): Promise<TagNearMatch[]> {
-    const params = new URLSearchParams({ name, limit: String(limit) })
-    const response = await fetch(`${this.baseUrl}/near-matches/?${params}`)
-    if (!response.ok) {
-      throw new Error(`Failed to get near matches: ${response.statusText}`)
-    }
-    return response.json()
-  }
-
-  /**
-   * Bulk assign/remove tags from multiple targets
-   */
-  async bulkTagOperations(operations: TagBulkOperation[]): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/bulk/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ operations }),
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to perform bulk tag operations: ${response.statusText}`)
-    }
-  }
-
-  /**
-   * Check if a tag name is available (normalized comparison)
-   */
-  async checkNameAvailability(name: string, scope: 'global' | 'private'): Promise<{
-    available: boolean
-    existing_tag?: Tag
-    near_matches?: TagNearMatch[]
-  }> {
-    const params = new URLSearchParams({ name, scope })
-    const response = await fetch(`${this.baseUrl}/check-name/?${params}`)
-    if (!response.ok) {
-      throw new Error(`Failed to check name availability: ${response.statusText}`)
-    }
-    return response.json()
+      await Promise.all(calls)
+    },
   }
 }
 
-// Export a singleton instance
-export const tagsApi = new TagsApi()
+export type TagsApi = ReturnType<typeof createTagsApi>
+
+export const tagsApi = createTagsApi(defaultHttpClient())

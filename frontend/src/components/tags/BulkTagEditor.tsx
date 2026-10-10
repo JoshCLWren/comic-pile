@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import Modal from '../Modal'
 import { TagInput } from './TagInput'
-import { TagList } from './TagChip'
 import type { Tag } from '../../types'
 import { useBulkTagOperations } from '../../hooks/useTags'
 import { toTagTargetType, type TagCacheKeyType } from '../../utils/tagTargetType'
@@ -9,7 +8,7 @@ import { toTagTargetType, type TagCacheKeyType } from '../../utils/tagTargetType
 interface BulkTagEditorProps {
   selectedItems: Array<{
     id: number
-    type: 'issue' | 'thread' | 'plan'
+    type: TagCacheKeyType
     name: string
   }>
   isOpen: boolean
@@ -17,18 +16,20 @@ interface BulkTagEditorProps {
   onOperationComplete?: () => void
 }
 
-interface BulkOperation {
-  tag_id: number
-  target_type: 'Issue' | 'Thread' | 'ContinuityPlan'
-  target_ids: number[]
-  action: 'add' | 'remove'
-}
+type BulkAction = 'add' | 'remove'
 
-const ACTION_LABELS = {
+const ACTION_LABELS: Record<BulkAction, string> = {
   add: 'Add',
   remove: 'Remove',
-} as const
+}
 
+/**
+ * Bulk add/remove of one or more tags across many selected targets.
+ *
+ * Only the chosen tag assignment changes: the API applies each operation as a
+ * single assignment or unassignment per target, so unrelated tags on those
+ * issues are preserved.
+ */
 export function BulkTagEditor({
   selectedItems,
   isOpen,
@@ -36,121 +37,104 @@ export function BulkTagEditor({
   onOperationComplete,
 }: BulkTagEditorProps) {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([])
-  const [action, setAction] = useState<'add' | 'remove'>('add')
+  const [action, setAction] = useState<BulkAction>('add')
   const [showConfirm, setShowConfirm] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Bulk operations mutation
   const bulkTagMutation = useBulkTagOperations()
 
-  // Generate bulk operations
-  const bulkOperations: BulkOperation[] = useMemo(() => {
-    if (!selectedTags.length) return []
+  const targetType = selectedItems.length > 0 ? toTagTargetType(selectedItems[0].type) : null
+  const summary = useMemo(
+    () => ({
+      itemCount: selectedItems.length,
+      tagCount: selectedTags.length,
+      actionText: action === 'add' ? 'adding' : 'removing',
+      totalOperations: selectedItems.length * selectedTags.length,
+    }),
+    [action, selectedItems.length, selectedTags.length],
+  )
 
-    // SAFETY: selectedItems is guaranteed non-empty by the parent component which only opens
-    // the BulkTagEditor when at least one item is selected. The type cast is safe because
-    // the component only accepts 'issue' | 'thread' | 'plan' which match TagCacheKeyType values.
-    const firstItemType = (selectedItems[0]?.type || 'issue') as TagCacheKeyType
-    const targetType = toTagTargetType(firstItemType)
-
-    return selectedTags.map(tag => ({
-      tag_id: tag.id,
-      target_type: targetType,
-      target_ids: selectedItems.map(item => item.id),
-      action,
-    }))
-  }, [selectedTags, selectedItems, action])
-
-  // Handle perform bulk operation
-  const handlePerformBulkOperation = async () => {
-    try {
-      await bulkTagMutation.mutateAsync(bulkOperations)
-      setShowConfirm(false)
-      setSelectedTags([])
-      setAction('add')
-      if (onOperationComplete) {
-        onOperationComplete()
-      }
-      onClose()
-    } catch (error) {
-      console.error('Failed to perform bulk operation:', error)
-    }
-  }
-
-  // Calculate summary
-  const summary = useMemo(() => {
-    const itemCount = selectedItems.length
-    const tagCount = selectedTags.length
-    const actionText = action === 'add' ? 'adding' : 'removing'
-
-    return {
-      itemCount,
-      tagCount,
-      actionText,
-      totalOperations: itemCount * tagCount,
-    }
-  }, [selectedItems, selectedTags, action])
-
-  // Reset state when modal closes
-  const handleClose = () => {
+  const resetState = () => {
     setSelectedTags([])
     setAction('add')
     setShowConfirm(false)
+    setError(null)
+  }
+
+  const handleClose = () => {
+    resetState()
     onClose()
   }
 
+  const handlePerformBulkOperation = async () => {
+    if (!targetType || selectedTags.length === 0) {
+      return
+    }
+
+    const operations = selectedTags.map((tag) => ({
+      tag_id: tag.id,
+      target_type: targetType,
+      target_ids: selectedItems.map((item) => item.id),
+      action,
+    }))
+
+    try {
+      await bulkTagMutation.mutateAsync(operations)
+      resetState()
+      onOperationComplete?.()
+      onClose()
+    } catch {
+      setError('Those tag changes could not be applied. Please try again.')
+    }
+  }
+
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={handleClose} 
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
       title={`Bulk Tag Editor (${selectedItems.length} items selected)`}
     >
-      <div className="p-6 space-y-6">
-        {/* Selected Items */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-gray-700">Selected Items</h3>
-          <div className="max-h-32 overflow-y-auto space-y-1">
+      <div className="space-y-4 md:space-y-6">
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-stone-400">Selected Items</h3>
+          <ul className="max-h-32 space-y-1 overflow-y-auto">
             {selectedItems.map((item, index) => (
-              <div key={item.id} className="text-sm text-gray-600 flex items-center gap-2">
-                <span className="text-gray-400">[{index + 1}]</span>
-                <span className="font-medium">{item.name}</span>
-                <span className="text-gray-400">({item.type})</span>
-              </div>
+              <li key={`${item.type}-${item.id}`} className="flex items-center gap-2 text-sm text-stone-300">
+                <span className="text-stone-500">[{index + 1}]</span>
+                <span className="font-semibold text-stone-100">{item.name}</span>
+                <span className="text-stone-500">({item.type})</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section role="radiogroup" aria-label="Bulk tag action">
+          <h3 className="mb-2 text-sm font-bold text-stone-400">Action</h3>
+          <div className="flex gap-2">
+            {(['add', 'remove'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={action === option}
+                onClick={() => {
+                  setAction(option)
+                  setError(null)
+                }}
+                className={`flex-1 rounded-lg border px-4 py-2 transition-colors ${
+                  action === option
+                    ? 'border-[var(--theme-primary-action)] bg-[var(--theme-primary-action)] text-white'
+                    : 'border-[var(--theme-border)] text-stone-300 hover:bg-white/5'
+                }`}
+              >
+                {ACTION_LABELS[option]} Tags
+              </button>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Action Selection */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-gray-700">Action</h3>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setAction('add')}
-              className={`flex-1 px-4 py-2 rounded-lg border ${
-                action === 'add' 
-                  ? 'border-blue-500 bg-blue-50 text-blue-700' 
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {ACTION_LABELS.add} Tags
-            </button>
-            <button
-              onClick={() => setAction('remove')}
-              className={`flex-1 px-4 py-2 rounded-lg border ${
-                action === 'remove' 
-                  ? 'border-red-500 bg-red-50 text-red-700' 
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {ACTION_LABELS.remove} Tags
-            </button>
-          </div>
-        </div>
-
-        {/* Tag Selection */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-gray-700">
-            {ACTION_LABELS[action]} Tags
-          </h3>
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-stone-400">{ACTION_LABELS[action]} Tags</h3>
           <TagInput
             selectedTags={selectedTags}
             onTagsChange={setSelectedTags}
@@ -158,70 +142,71 @@ export function BulkTagEditor({
             maxTags={10}
             className="w-full"
           />
-        </div>
+        </section>
 
-        {/* Summary */}
         {selectedTags.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-gray-700">Summary</h3>
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="text-sm text-gray-600 space-y-1">
-                <div>
-                  <span className="font-medium">{summary.itemCount}</span> items will be updated
-                </div>
-                <div>
-                  <span className="font-medium">{summary.tagCount}</span> tags will be {summary.actionText}
-                </div>
-                <div>
-                  <span className="font-medium">{summary.totalOperations}</span> total operations
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Confirm Dialog */}
-        {showConfirm && (
-          <div className="space-y-3">
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <h4 className="text-sm font-medium text-yellow-800 mb-2">Confirm Bulk Operation</h4>
-              <p className="text-sm text-yellow-700">
-                This will {action} {selectedTags.length} tag(s) from {selectedItems.length} selected item(s). 
-                This action cannot be undone.
+          <section>
+            <h3 className="mb-2 text-sm font-bold text-stone-400">Summary</h3>
+            <div className="surface-panel space-y-1 p-3 text-sm text-stone-300">
+              <p>{`${summary.itemCount} items will be updated`}</p>
+              <p>{`${summary.tagCount} tags will be ${summary.actionText}`}</p>
+              <p>{`${summary.totalOperations} total operations`}</p>
+              <p className="text-xs text-stone-500">
+                Other tags on these items are left unchanged.
               </p>
             </div>
-            
-            <div className="flex gap-2">
+          </section>
+        )}
+
+        {showConfirm && (
+          <section className="surface-panel p-4 border-[var(--theme-warning)]">
+            <h4 className="mb-1 text-sm font-bold text-stone-100">Confirm Bulk Operation</h4>
+            <p className="text-sm text-stone-300">
+              This will {action} {summary.tagCount}{' '}
+              {summary.tagCount === 1 ? 'tag' : 'tags'} across {summary.itemCount}{' '}
+              {summary.itemCount === 1 ? 'item' : 'items'}.
+            </p>
+
+            <div className="mt-3 flex gap-2">
               <button
+                type="button"
                 onClick={() => setShowConfirm(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="flex-1 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-stone-300 hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handlePerformBulkOperation}
                 disabled={bulkTagMutation.isPending}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-white hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {bulkTagMutation.isPending ? 'Processing...' : 'Confirm'}
               </button>
             </div>
-          </div>
+          </section>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-2 pt-4 border-t">
+        {error && (
+          <p className="text-sm text-[var(--theme-danger)]" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="flex gap-2 border-t border-[var(--theme-border)] pt-4">
           <button
+            type="button"
             onClick={handleClose}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+            className="flex-1 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-stone-300 hover:bg-white/5 transition-colors"
           >
             {selectedTags.length > 0 ? 'Cancel' : 'Close'}
           </button>
-          
+
           {selectedTags.length > 0 && !showConfirm && (
             <button
+              type="button"
               onClick={() => setShowConfirm(true)}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="flex-1 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-white hover:bg-[var(--theme-primary-action-hover)] transition-colors"
             >
               {ACTION_LABELS[action]} Tags
             </button>

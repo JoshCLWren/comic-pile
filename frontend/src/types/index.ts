@@ -693,23 +693,36 @@ export interface TagAssignment {
   created_at: string
 }
 
+/** One object whose direct assignment contributes a tag to an effective set. */
 export interface TagInheritanceSource {
-  id: number
-  type: TagTargetType
-  name: string
-  direct: boolean
+  target_type: TagTargetType
+  target_id: number
+  display_name: string
 }
 
+/** One deduplicated effective tag plus every contributing source. */
 export interface EffectiveTag {
   tag: Tag
-  assignments: TagAssignment[]
-  inheritance_sources: TagInheritanceSource[]
+  direct: boolean
+  sources: TagInheritanceSource[]
+}
+
+export interface EffectiveTags {
+  target_type: TagTargetType
+  target_id: number
+  direct_tags: Tag[]
+  effective_tags: EffectiveTag[]
+}
+
+export interface TagListResponse {
+  tags: Tag[]
 }
 
 export interface TagCreateRequest {
   name: string
   scope: TagScope
   color?: string
+  include_near_matches?: boolean
 }
 
 export interface TagUpdateRequest {
@@ -722,28 +735,37 @@ export interface TagAssignmentRequest {
   target_id: number
 }
 
-export interface TagUsageInfo {
-  assignment_count: number
-  filter_references: number
-}
-
 export interface TagNearMatch {
-  tag: Tag
-  distance: number
+  id: number
+  name: string
+  color: string
+  normalized_name: string
+  scope: TagScope
 }
 
+export interface TagCreateResponse {
+  tag: Tag
+  redirected_to_global: boolean
+  near_matches: TagNearMatch[]
+}
+
+export interface TagUsageInfo {
+  tag_id: number
+  total_assignments: number
+  assignments_by_target_type: Record<string, number>
+  references_removed_by_consumers: Record<string, number>
+}
+
+export interface TagDeleteResult {
+  tag_id: number
+  assignments_removed: number
+  references_removed_by_consumers: Record<string, number>
+}
+
+/** One bulk assignment change applied across many targets of one type. */
 export interface TagBulkOperation {
   tag_id: number
   target_type: TagTargetType
   target_ids: number[]
   action: 'add' | 'remove'
-}
-
-export interface TagSearchResult {
-  id: number
-  name: string
-  color: string
-  scope: TagScope
-  is_private: boolean
-  is_global: boolean
 }

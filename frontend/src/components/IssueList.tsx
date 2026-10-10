@@ -4,6 +4,7 @@ import { issueDependenciesApi } from '../services/api-dependencies'
 import type { ThreadIssueDependenciesResponse } from '../services/api-dependencies'
 import type { Issue, IssueDependenciesResponse, IssueListResponse, Thread } from '../types'
 import Tooltip from './Tooltip'
+import { BulkTagEditor } from './tags/BulkTagEditor'
 import { getDependencyTooltip } from '../utils/dependencyHelpers'
 
 /** The issue-API surface IssueList consumes, injectable for tests. */
@@ -38,6 +39,8 @@ export function IssueList({
 }: IssueListProps) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
+  const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set())
+  const [bulkEditorOpen, setBulkEditorOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
@@ -280,10 +283,35 @@ export function IssueList({
         </select>
       </div>
 
+      {selectedIssueIds.size > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-[var(--theme-border)] p-2">
+          <span className="text-xs text-[var(--theme-text-muted)]">
+            {selectedIssueIds.size} selected
+          </span>
+          <button
+            type="button"
+            className="text-xs font-semibold text-[var(--theme-comic-accent)] hover:underline"
+            onClick={() => {
+              setBulkEditorOpen(true)
+            }}
+          >
+            Bulk edit tags
+          </button>
+          <button
+            type="button"
+            className="text-xs text-[var(--theme-text-muted)] hover:underline"
+            onClick={() => setSelectedIssueIds(new Set())}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         {issues.map((issue) => {
           const hasDependencies = dependencies[issue.id] !== undefined
           const tooltipContent = getDependencyTooltip(dependencies[issue.id])
+          const isSelected = selectedIssueIds.has(issue.id)
 
           return (
             <div
@@ -295,6 +323,24 @@ export function IssueList({
               }`}
               onClick={() => toggleIssueStatus(issue)}
             >
+              <input
+                type="checkbox"
+                aria-label={`Select issue #${issue.issue_number}`}
+                checked={isSelected}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                  setSelectedIssueIds((previous) => {
+                    const next = new Set(previous)
+                    if (event.target.checked) {
+                      next.add(issue.id)
+                    } else {
+                      next.delete(issue.id)
+                    }
+                    return next
+                  })
+                }}
+                className="flex-shrink-0 accent-[var(--theme-comic-accent)]"
+              />
               <span className="text-lg">{getStatusIcon(issue)}</span>
               <span className="font-medium">#{issue.issue_number}</span>
               {hasDependencies && tooltipContent && (
@@ -347,6 +393,15 @@ export function IssueList({
           Read {readCount} of {totalCount} ({progressPercent}%)
         </div>
       </div>
+
+      <BulkTagEditor
+        selectedItems={issues
+          .filter((issue) => selectedIssueIds.has(issue.id))
+          .map((issue) => ({ id: issue.id, type: 'issue' as const, name: `#${issue.issue_number}` }))}
+        isOpen={bulkEditorOpen}
+        onClose={() => setBulkEditorOpen(false)}
+        onOperationComplete={() => setSelectedIssueIds(new Set())}
+      />
     </div>
   )
 }

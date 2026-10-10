@@ -1,6 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { Tag } from '../types'
 
 const { getTagMock, getTagUsageMock, updateTagMock, deleteTagMock } = vi.hoisted(() => ({
   getTagMock: vi.fn(),
@@ -20,15 +24,12 @@ vi.mock('../services/api-tags', () => ({
     unassignTag: vi.fn(),
     getTagUsage: getTagUsageMock,
     getEffectiveTags: vi.fn(),
-    searchTags: vi.fn(),
-    getNearMatches: vi.fn(),
     bulkTagOperations: vi.fn(),
-    checkNameAvailability: vi.fn(),
   },
 }))
 
 import { TagManagementDialog } from '../components/tags/TagManagementDialog'
-import type { Tag } from '../types'
+import { TAG_COLOR_NAMES } from '../utils/tagColors'
 
 const managedTag: Tag = {
   id: 7,
@@ -41,38 +42,50 @@ const managedTag: Tag = {
   updated_at: '2026-01-02T00:00:00Z',
 }
 
+function renderDialog(ui: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+}
+
 beforeEach(() => {
   getTagMock.mockReset().mockResolvedValue(managedTag)
-  getTagUsageMock.mockReset().mockResolvedValue({ assignment_count: 0, filter_references: 0 })
+  getTagUsageMock.mockReset().mockResolvedValue({
+    tag_id: 7,
+    total_assignments: 0,
+    assignments_by_target_type: {},
+    references_removed_by_consumers: {},
+  })
   updateTagMock.mockReset().mockResolvedValue(managedTag)
-  deleteTagMock.mockReset().mockResolvedValue(undefined)
+  deleteTagMock.mockReset().mockResolvedValue({
+    tag_id: 7,
+    assignments_removed: 0,
+    references_removed_by_consumers: {},
+  })
 })
 
 describe('TagManagementDialog', () => {
-  it('renders the tag details and usage information', async () => {
-    render(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
+  it('renders the tag scope and its assignment count', async () => {
+    renderDialog(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
 
     expect(await screen.findByText('Manage Tag - Horror')).toBeInTheDocument()
     expect(screen.getByText('private')).toBeInTheDocument()
-    expect(screen.getByText('7')).toBeInTheDocument()
-    expect(await screen.findByText('Assignments:')).toBeInTheDocument()
-    expect(screen.getByText('Filter references:')).toBeInTheDocument()
-    // Check both "0" values exist (for assignments and filter references)
-    const zeroElements = screen.getAllByText('0', { exact: true })
-    expect(zeroElements.length).toBeGreaterThanOrEqual(2)
+    expect(await screen.findByText('0')).toBeInTheDocument()
   })
 
-  it('shows the color palette with the current color selected', async () => {
-    render(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
+  it('offers the full fixed 32-color palette with the current color pressed', async () => {
+    renderDialog(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
 
     await screen.findByText('Manage Tag - Horror')
 
-    expect(screen.getByTitle('#DC2626')).toHaveClass('border-gray-900')
-    expect(screen.getByTitle('#EA580C')).toHaveClass('border-gray-300')
+    expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'red' })).toHaveAttribute('aria-pressed', 'true')
+    expect(TAG_COLOR_NAMES).toHaveLength(32)
   })
 
   it('disables save when the form is unchanged', async () => {
-    render(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
+    renderDialog(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
 
     await screen.findByText('Manage Tag - Horror')
 
@@ -83,7 +96,14 @@ describe('TagManagementDialog', () => {
     const onTagUpdate = vi.fn()
     updateTagMock.mockResolvedValue({ ...managedTag, name: 'Supernatural' })
 
-    render(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} onTagUpdate={onTagUpdate} />)
+    renderDialog(
+      <TagManagementDialog
+        tag={managedTag}
+        isOpen
+        onClose={vi.fn()}
+        onTagUpdate={onTagUpdate}
+      />,
+    )
 
     await screen.findByText('Manage Tag - Horror')
 
@@ -91,7 +111,7 @@ describe('TagManagementDialog', () => {
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Supernatural')
 
-    const saveButton = await screen.findByRole('button', { name: 'Save Changes' })
+    const saveButton = screen.getByRole('button', { name: 'Save Changes' })
     expect(saveButton).toBeEnabled()
     await userEvent.click(saveButton)
 
@@ -101,25 +121,36 @@ describe('TagManagementDialog', () => {
     expect(onTagUpdate).toHaveBeenCalledWith({ ...managedTag, name: 'Supernatural' })
   })
 
-  it('requires confirmation before deleting and shows usage counts', async () => {
-    getTagUsageMock.mockResolvedValue({ assignment_count: 3, filter_references: 1 })
-
-    render(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
+  it('enables save after only a color change', async () => {
+    renderDialog(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
 
     await screen.findByText('Manage Tag - Horror')
+    await userEvent.click(screen.getByRole('button', { name: 'violet' }))
 
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled()
+  })
+
+  it('requires confirmation and shows the usage count before deleting', async () => {
+    getTagUsageMock.mockResolvedValue({
+      tag_id: 7,
+      total_assignments: 3,
+      assignments_by_target_type: { Issue: 3 },
+      references_removed_by_consumers: {},
+    })
+
+    renderDialog(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
+
+    await screen.findByText('Manage Tag - Horror')
     await userEvent.click(screen.getByRole('button', { name: 'Delete Tag' }))
 
-    expect(
-      await screen.findByText(/This tag is currently used in 3 assignments and 1 filters/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/currently used by 3 items/)).toBeInTheDocument()
   })
 
   it('deletes the tag after confirmation', async () => {
     const onTagDelete = vi.fn()
     const onClose = vi.fn()
 
-    render(
+    renderDialog(
       <TagManagementDialog
         tag={managedTag}
         isOpen
@@ -141,22 +172,35 @@ describe('TagManagementDialog', () => {
   })
 
   it('cancels the delete confirmation without deleting', async () => {
-    render(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
+    renderDialog(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
 
     await screen.findByText('Manage Tag - Horror')
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete Tag' }))
-    // Click the Cancel button in the delete confirmation dialog (not the bottom one)
     const cancelButtons = screen.getAllByRole('button', { name: 'Cancel' })
     await userEvent.click(cancelButtons[0])
 
     expect(deleteTagMock).not.toHaveBeenCalled()
   })
 
+  it('reports a failed deletion instead of closing silently', async () => {
+    deleteTagMock.mockRejectedValue(new Error('nope'))
+    const onClose = vi.fn()
+
+    renderDialog(<TagManagementDialog tag={managedTag} isOpen onClose={onClose} />)
+
+    await screen.findByText('Manage Tag - Horror')
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Tag' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete Tag' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be deleted/i)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it('renders a not-found message when the tag fails to load', async () => {
     getTagMock.mockResolvedValue(null)
 
-    render(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
+    renderDialog(<TagManagementDialog tag={managedTag} isOpen onClose={vi.fn()} />)
 
     expect(await screen.findByText('Tag not found')).toBeInTheDocument()
   })

@@ -16,6 +16,12 @@ const baseTag: Tag = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
+const threadSource: TagInheritanceSource = {
+  target_type: 'Thread',
+  target_id: 10,
+  display_name: 'B.P.R.D.',
+}
+
 describe('TagChip', () => {
   it('renders the tag name', () => {
     render(<TagChip tag={baseTag} />)
@@ -23,64 +29,110 @@ describe('TagChip', () => {
     expect(screen.getByText('Horror')).toBeInTheDocument()
   })
 
+  it('renders the server-validated palette color as the chip background', () => {
+    const { container } = render(<TagChip tag={baseTag} />)
+
+    expect(container.querySelector('[data-tag-id="1"]')).toHaveStyle({
+      backgroundColor: 'rgb(220, 38, 38)',
+    })
+  })
+
   it('invokes onTagClick when clicked', async () => {
     const onTagClick = vi.fn()
     render(<TagChip tag={baseTag} onTagClick={onTagClick} />)
 
-    await userEvent.click(screen.getByText('Horror'))
+    await userEvent.click(screen.getByRole('button', { name: 'Horror' }))
 
     expect(onTagClick).toHaveBeenCalledWith(baseTag)
   })
 
-  it('renders inherited styling and a source tooltip when inherited with sources', () => {
-    const sources: TagInheritanceSource[] = [
-      { id: 10, type: 'Thread', name: 'B.P.R.D.', direct: true },
-    ]
+  it('is keyboard reachable when it is interactive', async () => {
+    const onTagClick = vi.fn()
+    render(<TagChip tag={baseTag} onTagClick={onTagClick} />)
 
-    render(<TagChip tag={baseTag} isInherited inheritanceSources={sources} />)
+    screen.getByRole('button', { name: 'Horror' }).focus()
+    await userEvent.keyboard('{Enter}')
 
-    expect(screen.getByText('Inherited from:')).toBeInTheDocument()
-    expect(screen.getByText('Thread: B.P.R.D.')).toBeInTheDocument()
+    expect(onTagClick).toHaveBeenCalledWith(baseTag)
   })
 
-  it('does not render the inherited tooltip without sources', () => {
+  it('marks inherited chips and lists every contributing source', () => {
+    render(
+      <TagChip
+        tag={baseTag}
+        isInherited
+        inheritanceSources={[
+          threadSource,
+          { target_type: 'ContinuityPlan', target_id: 42, display_name: 'Mignolaverse' },
+        ]}
+      />,
+    )
+
+    const chip = screen.getByText('Horror').closest('[data-tag-id]')
+    expect(chip).toHaveAttribute('data-inherited', 'true')
+    expect(screen.getByText('B.P.R.D.')).toBeInTheDocument()
+    expect(screen.getByText('Mignolaverse')).toBeInTheDocument()
+  })
+
+  it('does not render source navigation without sources', () => {
     render(<TagChip tag={baseTag} isInherited />)
 
     expect(screen.queryByText('Inherited from:')).not.toBeInTheDocument()
   })
 
-  it('invokes onSourceClick when a source is clicked', async () => {
+  it('invokes onSourceClick with the clicked source', async () => {
     const onSourceClick = vi.fn()
-    const sources: TagInheritanceSource[] = [
-      { id: 10, type: 'Thread', name: 'B.P.R.D.', direct: true },
-    ]
-
     render(
       <TagChip
         tag={baseTag}
         isInherited
-        inheritanceSources={sources}
+        inheritanceSources={[threadSource]}
         onSourceClick={onSourceClick}
       />,
     )
 
-    await userEvent.click(screen.getByText('Thread: B.P.R.D.'))
+    await userEvent.click(screen.getByRole('button', { name: 'B.P.R.D.' }))
 
-    expect(onSourceClick).toHaveBeenCalledWith(sources[0])
+    expect(onSourceClick).toHaveBeenCalledWith(threadSource)
+  })
+
+  it('does not fire the chip click when a source is clicked', async () => {
+    const onTagClick = vi.fn()
+    render(
+      <TagChip
+        tag={baseTag}
+        isInherited
+        inheritanceSources={[threadSource]}
+        onTagClick={onTagClick}
+        onSourceClick={vi.fn()}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'B.P.R.D.' }))
+
+    expect(onTagClick).not.toHaveBeenCalled()
   })
 
   it('uses dark text for light background colors', () => {
-    const yellowTag = { ...baseTag, color: '#CA8A04' }
+    const yellowTag = { ...baseTag, color: '#EAB308' }
 
-    render(<TagChip tag={yellowTag} />)
+    const { container } = render(<TagChip tag={yellowTag} />)
 
-    expect(screen.getByText('Horror')).toHaveClass('text-gray-900')
+    expect(container.querySelector('[data-tag-id]')).toHaveClass('text-stone-900')
   })
 
   it('uses white text for dark background colors', () => {
-    render(<TagChip tag={baseTag} />)
+    const { container } = render(<TagChip tag={baseTag} />)
 
-    expect(screen.getByText('Horror')).toHaveClass('text-white')
+    expect(container.querySelector('[data-tag-id]')).toHaveClass('text-white')
+  })
+
+  it('renders an unknown color as-is instead of remapping it', () => {
+    const { container } = render(<TagChip tag={{ ...baseTag, color: '#123456' }} />)
+
+    expect(container.querySelector('[data-tag-id]')).toHaveStyle({
+      backgroundColor: 'rgb(18, 52, 86)',
+    })
   })
 })
 
@@ -113,7 +165,7 @@ describe('TagList', () => {
     expect(screen.getByText('+1 more')).toBeInTheDocument()
   })
 
-  it('renders nothing for an empty tag list', () => {
+  it('renders nothing at all for an empty tag list', () => {
     const { container } = render(<TagList tags={[]} />)
 
     expect(container).toBeEmptyDOMElement()

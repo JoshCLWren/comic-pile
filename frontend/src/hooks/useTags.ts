@@ -2,15 +2,10 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { tagsApi } from '../services/api-tags'
 import type {
   Tag,
-  TagAssignment,
-  TagInheritanceSource,
-  EffectiveTag,
+  TagAssignmentRequest,
+  TagBulkOperation,
   TagCreateRequest,
   TagUpdateRequest,
-  TagAssignmentRequest,
-  TagUsageInfo,
-  TagNearMatch,
-  TagSearchResult,
 } from '../types'
 import { queryKeys } from '../query/queryKeys'
 import { queryClient } from '../query/queryClient'
@@ -26,36 +21,62 @@ import {
 import { fromTagTargetType, toTagTargetType, type TagCacheKeyType } from '../utils/tagTargetType'
 
 /**
- * Hook to list all visible tags (global + user's private)
+ * Variables for a single tag assignment change.
+ *
+ * `tag` is carried so the optimistic write can insert a tag that is not yet in
+ * the cached effective set, and `targetLabel` is carried so the optimistic
+ * source renders the real object name instead of a placeholder.
+ */
+export interface AssignTagVariables {
+  tag: Tag
+  request: TagAssignmentRequest
+  targetLabel: string
+}
+
+/** Variables for removing a single tag assignment. */
+export interface UnassignTagVariables {
+  tagId: number
+  request: TagAssignmentRequest
+}
+
+/**
+ * Hook to list every tag visible to the viewer (global plus their own private).
  */
 export function useTags() {
   return useQuery({
     queryKey: queryKeys.tags.list(),
     queryFn: () => tagsApi.listTags(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 }
 
 /**
- * Hook to get a specific tag by ID
+ * Hook to fetch a single tag by id.
  */
 export function useTag(id: number) {
   return useQuery({
     queryKey: queryKeys.tags.detail(id),
     queryFn: () => tagsApi.getTag(id),
     enabled: !!id,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 }
 
 /**
- * Hook to create a new tag
+ * Hook to create a tag.
+ *
+ * Resolves to the resulting tag so callers can select it immediately. When the
+ * server redirects an exact normalized name onto an existing global tag, that
+ * global tag is returned instead of a private duplicate.
  */
 export function useCreateTag() {
   return useMutation({
-    mutationFn: (request: TagCreateRequest) => tagsApi.createTag(request),
+    mutationFn: async (request: TagCreateRequest) => {
+      const response = await tagsApi.createTag(request)
+      return response.tag
+    },
     onSuccess: async () => {
       await invalidateAfterTagCreate(queryClient)
     },
@@ -63,21 +84,20 @@ export function useCreateTag() {
 }
 
 /**
- * Hook to update an existing tag
+ * Hook to update a tag's name and/or color.
  */
 export function useUpdateTag() {
   return useMutation({
     mutationFn: ({ id, request }: { id: number; request: TagUpdateRequest }) =>
       tagsApi.updateTag(id, request),
-    onSuccess: async (updatedTag, { id }) => {
-      const tag = await tagsApi.getTag(id)
-      await invalidateAfterTagUpdate(queryClient, tag)
+    onSuccess: async (updatedTag) => {
+      await invalidateAfterTagUpdate(queryClient, updatedTag)
     },
   })
 }
 
 /**
- * Hook to delete a tag
+ * Hook to delete a tag and cascade its assignments.
  */
 export function useDeleteTag() {
   return useMutation({
@@ -89,136 +109,111 @@ export function useDeleteTag() {
 }
 
 /**
- * Hook to assign a tag to a target
+ * Hook to attach a tag to an issue, thread, or Reading Plan.
+ *
+ * The optimistic write reshapes an already-cached effective-tag entry; the
+ * server still owns the inheritance result once the mutation settles.
  */
 export function useAssignTag() {
   return useMutation({
-    mutationFn: ({ tagId, request }: { tagId: number; request: TagAssignmentRequest }) =>
-      tagsApi.assignTag(tagId, request),
-    onMutate: async ({ tagId, request }) => {
-      const tag = await tagsApi.getTag(tagId)
+    mutationFn: ({ tag, request }: AssignTagVariables) =>
+      tagsApi.assignTag(tag.id, request),
+    onMutate: async ({ tag, request, targetLabel }) => {
+      const cacheType = fromTagTargetType(request.target_type)
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.tags.effective(cacheType, request.target_id),
+      })
+
       const rollback = optimisticallyAssignTag(
         queryClient,
         tag,
-        fromTagTargetType(request.target_type),
-        request.target_id
+        cacheType,
+        request.target_id,
+        targetLabel,
       )
+
       return { rollback }
     },
-    onError: (_err, _vars, ctx) => {
-      ctx?.rollback?.()
+    onError: (_error, _variables, context) => {
+      context?.rollback()
     },
-    onSuccess: async (_, { request }) => {
+    onSuccess: async (_data, { request }) => {
       await invalidateAfterTagAssignment(
         queryClient,
         fromTagTargetType(request.target_type),
-        request.target_id
+        request.target_id,
       )
     },
   })
 }
 
 /**
- * Hook to remove a tag assignment
+ * Hook to remove a tag assignment from an issue, thread, or Reading Plan.
  */
 export function useUnassignTag() {
   return useMutation({
-    mutationFn: ({ tagId, request }: { tagId: number; request: TagAssignmentRequest }) =>
+    mutationFn: ({ tagId, request }: UnassignTagVariables) =>
       tagsApi.unassignTag(tagId, request),
     onMutate: async ({ tagId, request }) => {
+      const cacheType = fromTagTargetType(request.target_type)
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.tags.effective(cacheType, request.target_id),
+      })
+
       const rollback = optimisticallyUnassignTag(
         queryClient,
         tagId,
-        fromTagTargetType(request.target_type),
-        request.target_id
+        cacheType,
+        request.target_id,
       )
+
       return { rollback }
     },
-    onError: (_err, _vars, ctx) => {
-      ctx?.rollback?.()
+    onError: (_error, _variables, context) => {
+      context?.rollback()
     },
-    onSuccess: async (_, { request }) => {
+    onSuccess: async (_data, { request }) => {
       await invalidateAfterTagAssignment(
         queryClient,
         fromTagTargetType(request.target_type),
-        request.target_id
+        request.target_id,
       )
     },
   })
 }
 
 /**
- * Hook to get tag usage statistics
+ * Hook to read assignment counts before a tag is deleted.
  */
 export function useTagUsage(id: number) {
   return useQuery({
     queryKey: queryKeys.tags.usage(id),
     queryFn: () => tagsApi.getTagUsage(id),
     enabled: !!id,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 }
 
 /**
- * Hook to get effective tags (direct + inherited) for a target
+ * Hook to read direct plus inherited tags for an issue, thread, or Reading Plan.
  */
 export function useEffectiveTags(type: TagCacheKeyType, id: number) {
   return useQuery({
     queryKey: queryKeys.tags.effective(type, id),
     queryFn: () => tagsApi.getEffectiveTags(toTagTargetType(type), id),
     enabled: !!id,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 }
 
 /**
- * Hook to search for tags by name (for autocomplete)
- */
-export function useTagSearch(query: string, limit: number = 10) {
-  return useQuery({
-    queryKey: queryKeys.tags.search(query),
-    queryFn: () => tagsApi.searchTags(query, limit),
-    enabled: query.length > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes,
-  })
-}
-
-/**
- * Hook to get near-matches for tag creation (suggestions)
- */
-export function useTagNearMatches(name: string, limit: number = 8) {
-  return useQuery({
-    queryKey: queryKeys.tags.nearMatches(name),
-    queryFn: () => tagsApi.getNearMatches(name, limit),
-    enabled: name.length > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes,
-  })
-}
-
-/**
- * Hook to check if a tag name is available
- */
-export function useCheckTagNameAvailability(name: string, scope: 'global' | 'private') {
-  return useQuery({
-    queryKey: queryKeys.tags.checkName(name, scope),
-    queryFn: () => tagsApi.checkNameAvailability(name, scope),
-    enabled: name.length > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes,
-  })
-}
-
-/**
- * Hook to perform bulk tag operations
+ * Hook to add or remove tags across many targets at once.
  */
 export function useBulkTagOperations() {
   return useMutation({
-    mutationFn: (operations: import('../services/api-tags').TagBulkOperation[]) =>
-      tagsApi.bulkTagOperations(operations),
+    mutationFn: (operations: TagBulkOperation[]) => tagsApi.bulkTagOperations(operations),
     onSuccess: async () => {
       await invalidateAfterBulkTagOperation(queryClient)
     },

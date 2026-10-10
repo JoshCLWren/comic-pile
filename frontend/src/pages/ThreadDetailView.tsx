@@ -23,6 +23,7 @@ import Breadcrumbs from '../components/Breadcrumbs'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
+import { TagEditor } from '../components/tags/TagEditor'
 
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -242,6 +243,10 @@ export default function ThreadDetailView() {
             <p className="text-sm text-stone-300 whitespace-pre-wrap">{thread.notes}</p>
           </div>
         )}
+
+        <div className="surface-panel p-3 md:p-4">
+          <TagEditor targetType="thread" targetId={thread.id} targetLabel={thread.title} />
+        </div>
 
         <div className="surface-panel p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">

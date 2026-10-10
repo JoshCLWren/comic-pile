@@ -1,18 +1,19 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { searchTagsMock, getNearMatchesMock, checkNameAvailabilityMock, createTagMock } =
-  vi.hoisted(() => ({
-    searchTagsMock: vi.fn(),
-    getNearMatchesMock: vi.fn(),
-    checkNameAvailabilityMock: vi.fn(),
-    createTagMock: vi.fn(),
-  }))
+import type { Tag } from '../types'
+
+const { createTagMock, listTagsMock } = vi.hoisted(() => ({
+  createTagMock: vi.fn(),
+  listTagsMock: vi.fn(),
+}))
 
 vi.mock('../services/api-tags', () => ({
   tagsApi: {
-    listTags: vi.fn(),
+    listTags: listTagsMock,
     getTag: vi.fn(),
     createTag: createTagMock,
     updateTag: vi.fn(),
@@ -21,17 +22,13 @@ vi.mock('../services/api-tags', () => ({
     unassignTag: vi.fn(),
     getTagUsage: vi.fn(),
     getEffectiveTags: vi.fn(),
-    searchTags: searchTagsMock,
-    getNearMatches: getNearMatchesMock,
     bulkTagOperations: vi.fn(),
-    checkNameAvailability: checkNameAvailabilityMock,
   },
 }))
 
 import { TagInput } from '../components/tags/TagInput'
-import type { Tag } from '../types'
 
-const existingTag: Tag = {
+const globalTag: Tag = {
   id: 10,
   name: 'Horror',
   normalized_name: 'horror',
@@ -42,154 +39,173 @@ const existingTag: Tag = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
-const searchResult = {
-  id: 10,
-  name: 'Horror',
-  color: '#DC2626',
-  scope: 'global',
-  is_private: false,
-  is_global: true,
+const privateTag: Tag = {
+  id: 11,
+  name: 'Cosmic',
+  normalized_name: 'cosmic',
+  scope: 'private',
+  owner_user_id: 4,
+  color: '#4F46E5',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}
+
+function renderInput(ui: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
+  )
+}
+
+async function typeQuery(value: string) {
+  const input = screen.getByPlaceholderText('Add tags...')
+  await userEvent.click(input)
+  await userEvent.type(input, value)
 }
 
 beforeEach(() => {
-  searchTagsMock.mockReset().mockResolvedValue([])
-  getNearMatchesMock.mockReset().mockResolvedValue([])
-  checkNameAvailabilityMock.mockReset().mockResolvedValue({ available: true })
+  listTagsMock.mockReset().mockResolvedValue([globalTag, privateTag])
   createTagMock.mockReset()
 })
 
 describe('TagInput', () => {
-  it('shows selected tags with remove buttons', async () => {
-    const onTagsChange = vi.fn()
+  it('renders the picker without opening a menu until the input is focused', () => {
+    renderInput(<TagInput selectedTags={[]} onTagsChange={vi.fn()} />)
 
-    render(<TagInput selectedTags={[existingTag]} onTagsChange={onTagsChange} />)
+    expect(screen.getByPlaceholderText('Add tags...')).toBeInTheDocument()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('shows a selected tag with a labelled remove control', async () => {
+    const onTagsChange = vi.fn()
+    renderInput(<TagInput selectedTags={[globalTag]} onTagsChange={onTagsChange} />)
 
     expect(screen.getByText('Horror')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: '' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Horror' }))
 
     expect(onTagsChange).toHaveBeenCalledWith([])
   })
 
-  it('selects an existing tag from search results', async () => {
+  it('selects an existing visible tag from the menu', async () => {
     const onTagsChange = vi.fn()
-    searchTagsMock.mockResolvedValue([searchResult])
+    renderInput(<TagInput selectedTags={[]} onTagsChange={onTagsChange} />)
 
-    render(<TagInput selectedTags={[]} onTagsChange={onTagsChange} />)
-
-    await userEvent.type(screen.getByPlaceholderText('Add tags...'), 'Hor')
-
-    const option = await screen.findByText('Horror')
-    await userEvent.click(option)
+    await typeQuery('hor')
+    await userEvent.click(await screen.findByRole('option', { name: /Horror/ }))
 
     await waitFor(() => {
-      expect(onTagsChange).toHaveBeenCalledWith([
-        expect.objectContaining({ id: 10, name: 'Horror' }),
-      ])
+      expect(onTagsChange).toHaveBeenCalledWith([globalTag])
     })
   })
 
-  it('creates a new private tag inline when the name is available', async () => {
+  it('offers inline private-tag creation when nothing matches', async () => {
     const onTagsChange = vi.fn()
-    const createdTag: Tag = {
-      id: 99,
-      name: 'Cosmic',
-      normalized_name: 'cosmic',
-      scope: 'private',
-      owner_user_id: 1,
-      color: '#DC2626',
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-    }
-    createTagMock.mockResolvedValue(createdTag)
+    const brandNewTag: Tag = { ...privateTag, id: 12, name: 'Weird', normalized_name: 'weird' }
+    createTagMock.mockResolvedValue({ tag: brandNewTag })
 
-    render(<TagInput selectedTags={[]} onTagsChange={onTagsChange} />)
+    renderInput(<TagInput selectedTags={[]} onTagsChange={onTagsChange} />)
 
-    await userEvent.type(screen.getByPlaceholderText('Add tags...'), 'Cosmic')
-
-    const createOption = await screen.findByText('Create')
-    await userEvent.click(createOption)
+    await typeQuery('Weird')
+    await userEvent.click(await screen.findByRole('option', { name: /Create "Weird"/ }))
 
     await waitFor(() => {
       expect(createTagMock).toHaveBeenCalledWith({
-        name: 'Cosmic',
+        name: 'Weird',
         scope: 'private',
-        color: '#DC2626',
+        color: 'red',
+        include_near_matches: true,
       })
     })
-
     await waitFor(() => {
-      expect(onTagsChange).toHaveBeenCalledWith([createdTag])
+      expect(onTagsChange).toHaveBeenCalledWith([brandNewTag])
     })
   })
 
-  it('shows near matches while creating a tag', async () => {
-    searchTagsMock.mockResolvedValue([])
-    getNearMatchesMock.mockResolvedValue([{ tag: existingTag, distance: 1 }])
+  it('surfaces a near-global match and explains why creating a duplicate is discouraged', async () => {
+    renderInput(<TagInput selectedTags={[]} onTagsChange={vi.fn()} />)
 
-    render(<TagInput selectedTags={[]} onTagsChange={vi.fn()} />)
+    await typeQuery('Horor')
 
-    await userEvent.type(screen.getByPlaceholderText('Add tags...'), 'Horor')
-
-    expect(await screen.findByText('Similar tags exist:')).toBeInTheDocument()
-    expect(screen.getByText('Horror')).toBeInTheDocument()
+    // One edit away from "horror", so it is offered as a near match...
+    expect(await screen.findByRole('option', { name: /Horror/ })).toBeInTheDocument()
+    // ...and the create row is still available because the user may override.
+    expect(screen.getByRole('option', { name: /Create "Horor"/ })).toBeInTheDocument()
+    expect(
+      screen.getByText(/Similar global tags exist/),
+    ).toBeInTheDocument()
   })
 
-  it('selects a near match instead of creating a duplicate', async () => {
-    const onTagsChange = vi.fn()
-    getNearMatchesMock.mockResolvedValue([{ tag: existingTag, distance: 0 }])
+  it('never offers to create a private duplicate for an exact normalized match', async () => {
+    renderInput(<TagInput selectedTags={[]} onTagsChange={vi.fn()} />)
 
-    render(<TagInput selectedTags={[]} onTagsChange={onTagsChange} />)
+    await typeQuery('HORROR')
 
-    await userEvent.type(screen.getByPlaceholderText('Add tags...'), 'Horor')
-
-    const match = await screen.findByText('Horror')
-    await userEvent.click(match)
-
-    await waitFor(() => {
-      expect(onTagsChange).toHaveBeenCalledWith([
-        expect.objectContaining({ id: 10, name: 'Horror' }),
-      ])
-    })
-    expect(createTagMock).not.toHaveBeenCalled()
+    expect(await screen.findByRole('option', { name: /Horror/ })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /Create/ })).not.toBeInTheDocument()
   })
 
-  it('hides the create option when the name is unavailable', async () => {
-    searchTagsMock.mockResolvedValue([])
-    checkNameAvailabilityMock.mockResolvedValue({ available: false })
+  it('says no existing tags match while still offering inline creation', async () => {
+    renderInput(<TagInput selectedTags={[]} onTagsChange={vi.fn()} />)
 
-    render(<TagInput selectedTags={[]} onTagsChange={vi.fn()} />)
+    await typeQuery('zzzznothing')
 
-    await userEvent.type(screen.getByPlaceholderText('Add tags...'), 'Horor')
-
-    expect(await screen.findByText('A tag with this name already exists')).toBeInTheDocument()
-    expect(screen.queryByText('Create')).not.toBeInTheDocument()
+    expect(await screen.findByText('No existing tags match')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Create "zzzznothing"/ })).toBeInTheDocument()
   })
 
-  it('shows a no-results message when search returns nothing', async () => {
-    searchTagsMock.mockResolvedValue([])
-    getNearMatchesMock.mockResolvedValue([])
+  it('does not offer an already-selected tag again', async () => {
+    renderInput(<TagInput selectedTags={[globalTag]} onTagsChange={vi.fn()} />)
 
-    render(<TagInput selectedTags={[]} onTagsChange={vi.fn()} />)
+    await typeQuery('hor')
 
-    await userEvent.type(screen.getByPlaceholderText('Add tags...'), 'zzzznothing')
+    expect(await screen.findByText('No existing tags match')).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /^Horror/ })).not.toBeInTheDocument()
+  })
+
+  it('offers no options at all when creation is disabled by the caller', async () => {
+    renderInput(
+      <TagInput selectedTags={[]} onTagsChange={vi.fn()} showCreateOption={false} />,
+    )
+
+    await typeQuery('zzzznothing')
 
     expect(await screen.findByText('No tags found')).toBeInTheDocument()
   })
 
   it('enforces the maximum number of selectable tags', async () => {
     const onTagsChange = vi.fn()
-    searchTagsMock.mockResolvedValue([searchResult])
-
-    render(<TagInput selectedTags={[existingTag]} onTagsChange={onTagsChange} maxTags={1} />)
+    renderInput(
+      <TagInput selectedTags={[globalTag]} onTagsChange={onTagsChange} maxTags={1} />,
+    )
 
     expect(screen.getByText('Maximum 1 tags allowed')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Add tags...')).toBeDisabled()
 
-    await userEvent.type(screen.getByPlaceholderText('Add tags...'), 'Other')
+    await typeQuery('cos')
 
-    const option = await screen.findByText('Other')
-    await userEvent.click(option)
-
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     expect(onTagsChange).not.toHaveBeenCalled()
+  })
+
+  it('disables the picker when the caller disables it', () => {
+    renderInput(<TagInput selectedTags={[]} onTagsChange={vi.fn()} disabled />)
+
+    expect(screen.getByPlaceholderText('Add tags...')).toBeDisabled()
+  })
+
+  it('closes the menu when the user clicks outside', async () => {
+    renderInput(<TagInput selectedTags={[]} onTagsChange={vi.fn()} />)
+
+    await typeQuery('hor')
+    expect(await screen.findByRole('listbox')).toBeInTheDocument()
+
+    await userEvent.click(document.body)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
   })
 })

@@ -1,215 +1,241 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { tagsApi } from '../services/api-tags'
+import { createTagsApi, type TagsApi } from '../services/api-tags'
+import type { Tag, TagBulkOperation } from '../types'
+import type { HttpClient } from '../services/httpClient'
 
-function jsonResponse(data: unknown, ok = true): Response {
-  // SAFETY: this stub implements every Response field the tagsApi methods read (ok, status, statusText, json); the cast asserts that invariant for the test double.
+function makeClient(): HttpClient & {
+  get: ReturnType<typeof vi.fn>
+  post: ReturnType<typeof vi.fn>
+  put: ReturnType<typeof vi.fn>
+  delete: ReturnType<typeof vi.fn>
+} {
   return {
-    ok,
-    status: ok ? 200 : 500,
-    statusText: ok ? 'OK' : 'Internal Server Error',
-    headers: new Headers(),
-    redirected: false,
-    type: 'default',
-    url: '',
-    clone: () => jsonResponse(data, ok),
-    body: null,
-    bodyUsed: false,
-    arrayBuffer: async () => new ArrayBuffer(0),
-    blob: async () => new Blob(),
-    formData: async () => new FormData(),
-    text: async () => JSON.stringify(data),
-    json: async () => data,
-    bytes: async () => new Uint8Array(),
-  } as Response
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+  } as unknown as HttpClient & {
+    get: ReturnType<typeof vi.fn>
+    post: ReturnType<typeof vi.fn>
+    put: ReturnType<typeof vi.fn>
+    delete: ReturnType<typeof vi.fn>
+  }
+}
+
+function tagFixture(overrides: Partial<Tag> = {}): Tag {
+  return {
+    id: 1,
+    name: 'Horror',
+    normalized_name: 'horror',
+    scope: 'global',
+    owner_user_id: null,
+    color: '#DC2626',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
 }
 
 describe('tagsApi', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn())
-  })
+  describe('listTags', () => {
+    it('unwraps the tag list envelope from the collection endpoint', async () => {
+      const client = makeClient()
+      const tag = tagFixture()
+      client.get.mockResolvedValue({ tags: [tag] })
+      const api: TagsApi = createTagsApi(client)
 
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('lists tags from the collection endpoint', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse([{ id: 1, name: 'Horror' }]))
-
-    const result = await tagsApi.listTags()
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags')
-    expect(result).toEqual([{ id: 1, name: 'Horror' }])
-  })
-
-  it('gets a tag by id', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 5, name: 'Physical' }))
-
-    const result = await tagsApi.getTag(5)
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/5')
-    expect(result).toEqual({ id: 5, name: 'Physical' })
-  })
-
-  it('creates a tag and returns the created representation', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 9, name: 'New', scope: 'private' }))
-
-    const result = await tagsApi.createTag({ name: 'New', scope: 'private' })
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'New', scope: 'private' }),
-    })
-    expect(result).toEqual({ id: 9, name: 'New', scope: 'private' })
-  })
-
-  it('updates a tag with a PUT request', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 9, name: 'Renamed' }))
-
-    const result = await tagsApi.updateTag(9, { name: 'Renamed' })
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/9', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Renamed' }),
-    })
-    expect(result).toEqual({ id: 9, name: 'Renamed' })
-  })
-
-  it('deletes a tag', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({}))
-
-    await tagsApi.deleteTag(9)
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/9', { method: 'DELETE' })
-  })
-
-  it('assigns a tag to a target', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 1, tag_id: 3 }))
-
-    const result = await tagsApi.assignTag(3, { target_type: 'ContinuityPlan', target_id: 42 })
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/3/assign/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target_type: 'ContinuityPlan', target_id: 42 }),
-    })
-    expect(result).toEqual({ id: 1, tag_id: 3 })
-  })
-
-  it('unassigns a tag from a target', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({}))
-
-    await tagsApi.unassignTag(3, { target_type: 'Issue', target_id: 7 })
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/3/unassign/', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target_type: 'Issue', target_id: 7 }),
+      await expect(api.listTags()).resolves.toEqual([tag])
+      expect(client.get).toHaveBeenCalledWith('/v1/tags/')
     })
   })
 
-  it('gets tag usage statistics', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ assignment_count: 4, filter_references: 1 }))
+  describe('getTag', () => {
+    it('requests a single tag by id', async () => {
+      const client = makeClient()
+      const tag = tagFixture({ id: 5, name: 'Physical' })
+      client.get.mockResolvedValue(tag)
+      const api: TagsApi = createTagsApi(client)
 
-    const result = await tagsApi.getTagUsage(3)
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/3/usage/')
-    expect(result).toEqual({ assignment_count: 4, filter_references: 1 })
-  })
-
-  it('fetches effective tags for an issue', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ effective_tags: [] }))
-
-    const result = await tagsApi.getEffectiveTags('Issue', 11)
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/effective/issue/11/')
-    expect(result).toEqual({ effective_tags: [] })
-  })
-
-  it('fetches effective tags for a thread', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ effective_tags: [] }))
-
-    await tagsApi.getEffectiveTags('Thread', 12)
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/effective/thread/12/')
-  })
-
-  it('fetches effective tags for a continuity plan via the plan URL segment', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ effective_tags: [] }))
-
-    await tagsApi.getEffectiveTags('ContinuityPlan', 13)
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/effective/plan/13/')
-  })
-
-  it('searches tags with query and limit', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse([{ id: 1, name: 'Horror' }]))
-
-    const result = await tagsApi.searchTags('hor', 5)
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/search/?query=hor&limit=5')
-    expect(result).toEqual([{ id: 1, name: 'Horror' }])
-  })
-
-  it('gets near matches for a candidate name', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse([{ tag: { id: 1 }, distance: 1 }]))
-
-    const result = await tagsApi.getNearMatches('Horor')
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/near-matches/?name=Horor&limit=8')
-    expect(result).toEqual([{ tag: { id: 1 }, distance: 1 }])
-  })
-
-  it('performs bulk tag operations', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({}))
-
-    await tagsApi.bulkTagOperations([
-      { tag_id: 1, target_type: 'Issue', target_ids: [1, 2], action: 'add' },
-      { tag_id: 2, target_type: 'Thread', target_ids: [3], action: 'remove' },
-    ])
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/bulk/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operations: [
-          { tag_id: 1, target_type: 'Issue', target_ids: [1, 2], action: 'add' },
-          { tag_id: 2, target_type: 'Thread', target_ids: [3], action: 'remove' },
-        ],
-      }),
+      await expect(api.getTag(5)).resolves.toEqual(tag)
+      expect(client.get).toHaveBeenCalledWith('/v1/tags/5/')
     })
   })
 
-  it('checks name availability for a scope', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ available: false, existing_tag: { id: 1 } }))
+  describe('createTag', () => {
+    it('returns the full creation envelope so callers can see a global redirect', async () => {
+      const client = makeClient()
+      const response = {
+        tag: tagFixture({ id: 9, name: 'Cosmic', scope: 'private' as const }),
+        redirected_to_global: false,
+        near_matches: [],
+      }
+      client.post.mockResolvedValue(response)
+      const api: TagsApi = createTagsApi(client)
 
-    const result = await tagsApi.checkNameAvailability('Horror', 'private')
+      await expect(
+        api.createTag({ name: 'Cosmic', scope: 'private', include_near_matches: true }),
+      ).resolves.toEqual(response)
+      expect(client.post).toHaveBeenCalledWith('/v1/tags/', {
+        name: 'Cosmic',
+        scope: 'private',
+        include_near_matches: true,
+      })
+    })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/tags/check-name/?name=Horror&scope=private')
-    expect(result).toEqual({ available: false, existing_tag: { id: 1 } })
+    it('surfaces an exact normalized match as a redirected global tag', async () => {
+      const client = makeClient()
+      const globalTag = tagFixture({ id: 2, name: 'Horror', scope: 'global' })
+      client.post.mockResolvedValue({
+        tag: globalTag,
+        redirected_to_global: true,
+        near_matches: [],
+      })
+      const api: TagsApi = createTagsApi(client)
+
+      const result = await api.createTag({ name: 'horror', scope: 'private' })
+
+      expect(result.redirected_to_global).toBe(true)
+      expect(result.tag).toEqual(globalTag)
+    })
   })
 
-  it('throws a descriptive error when the API responds with a failure', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse({}, false))
+  describe('updateTag', () => {
+    it('sends a PUT to the tag resource', async () => {
+      const client = makeClient()
+      const renamed = tagFixture({ id: 3, name: 'Supernatural', normalized_name: 'supernatural' })
+      client.put.mockResolvedValue(renamed)
+      const api: TagsApi = createTagsApi(client)
 
-    await expect(tagsApi.listTags()).rejects.toThrow('Failed to list tags: Internal Server Error')
+      await expect(api.updateTag(3, { name: 'Supernatural' })).resolves.toEqual(renamed)
+      expect(client.put).toHaveBeenCalledWith('/v1/tags/3/', { name: 'Supernatural' })
+    })
+  })
+
+  describe('deleteTag', () => {
+    it('returns the deletion summary including cascaded assignment counts', async () => {
+      const client = makeClient()
+      const result = { tag_id: 3, assignments_removed: 4, references_removed_by_consumers: {} }
+      client.delete.mockResolvedValue(result)
+      const api: TagsApi = createTagsApi(client)
+
+      await expect(api.deleteTag(3)).resolves.toEqual(result)
+      expect(client.delete).toHaveBeenCalledWith('/v1/tags/3/')
+    })
+  })
+
+  describe('assignTag and unassignTag', () => {
+    it('assigns a tag to a target', async () => {
+      const client = makeClient()
+      const request = { target_type: 'Issue' as const, target_id: 11 }
+      client.post.mockResolvedValue({ id: 1, tag_id: 3, ...request, created_at: '2026-01-01T00:00:00Z' })
+      const api: TagsApi = createTagsApi(client)
+
+      await api.assignTag(3, request)
+
+      expect(client.post).toHaveBeenCalledWith('/v1/tags/3/assign/', request)
+    })
+
+    it('unassigns a tag using a DELETE with a request body', async () => {
+      const client = makeClient()
+      const request = { target_type: 'ContinuityPlan' as const, target_id: 42 }
+      client.delete.mockResolvedValue({ id: 1, tag_id: 3, ...request, created_at: '2026-01-01T00:00:00Z' })
+      const api: TagsApi = createTagsApi(client)
+
+      await api.unassignTag(3, request)
+
+      expect(client.delete).toHaveBeenCalledWith('/v1/tags/3/unassign/', { data: request })
+    })
+  })
+
+  describe('getTagUsage', () => {
+    it('reads the usage counts used to confirm a deletion', async () => {
+      const client = makeClient()
+      const usage = {
+        tag_id: 3,
+        total_assignments: 7,
+        assignments_by_target_type: { Issue: 5, Thread: 2 },
+        references_removed_by_consumers: {},
+      }
+      client.get.mockResolvedValue(usage)
+      const api: TagsApi = createTagsApi(client)
+
+      await expect(api.getTagUsage(3)).resolves.toEqual(usage)
+      expect(client.get).toHaveBeenCalledWith('/v1/tags/3/usage/')
+    })
+  })
+
+  describe('getEffectiveTags', () => {
+    it.each([
+      ['Issue', '/v1/tags/effective/issue/11/'],
+      ['Thread', '/v1/tags/effective/thread/11/'],
+      ['ContinuityPlan', '/v1/tags/effective/plan/11/'],
+    ] as const)('uses the %s url segment for effective tags', async (targetType, expectedUrl) => {
+      const client = makeClient()
+      const effective = { target_type: targetType, target_id: 11, direct_tags: [], effective_tags: [] }
+      client.get.mockResolvedValue(effective)
+      const api: TagsApi = createTagsApi(client)
+
+      await api.getEffectiveTags(targetType, 11)
+
+      expect(client.get).toHaveBeenCalledWith(expectedUrl)
+    })
+  })
+
+  describe('bulkTagOperations', () => {
+    it('fans an add operation out to one assignment call per target', async () => {
+      const client = makeClient()
+      client.post.mockResolvedValue({})
+      const api: TagsApi = createTagsApi(client)
+      const operations: TagBulkOperation[] = [
+        { tag_id: 21, target_type: 'Issue', target_ids: [1, 2], action: 'add' },
+      ]
+
+      await api.bulkTagOperations(operations)
+
+      expect(client.post).toHaveBeenCalledTimes(2)
+      expect(client.post).toHaveBeenCalledWith('/v1/tags/21/assign/', {
+        target_type: 'Issue',
+        target_id: 1,
+      })
+      expect(client.post).toHaveBeenCalledWith('/v1/tags/21/assign/', {
+        target_type: 'Issue',
+        target_id: 2,
+      })
+    })
+
+    it('fans a remove operation out to one unassignment call per target', async () => {
+      const client = makeClient()
+      client.delete.mockResolvedValue({})
+      const api: TagsApi = createTagsApi(client)
+      const operations: TagBulkOperation[] = [
+        { tag_id: 21, target_type: 'ContinuityPlan', target_ids: [5], action: 'remove' },
+      ]
+
+      await api.bulkTagOperations(operations)
+
+      expect(client.delete).toHaveBeenCalledWith('/v1/tags/21/unassign/', {
+        data: { target_type: 'ContinuityPlan', target_id: 5 },
+      })
+      expect(client.post).not.toHaveBeenCalled()
+    })
+
+    it('only touches the requested tag assignment and leaves other tags alone', async () => {
+      const client = makeClient()
+      client.post.mockResolvedValue({})
+      const api: TagsApi = createTagsApi(client)
+      const operations: TagBulkOperation[] = [
+        { tag_id: 21, target_type: 'Issue', target_ids: [1, 2, 3], action: 'add' },
+      ]
+
+      await api.bulkTagOperations(operations)
+
+      const touchedTagIds = client.post.mock.calls.map(
+        ([url]) => (url as string).split('/')[3],
+      )
+      expect(new Set(touchedTagIds)).toEqual(new Set(['21']))
+      expect(client.post).toHaveBeenCalledTimes(3)
+    })
   })
 })
