@@ -117,6 +117,11 @@ jobs:
               + ["factory", "factory:unowned"]
               + (if $stage == "claimable" then [] else [$stage] end)
               | unique' <<< "$labels")"
+            # Avoid no-op writes and their downstream labeling events.
+            if [[ "$(jq -c 'sort' <<< "$labels")" == "$(jq -c 'sort' <<< "$target")" ]]; then
+              echo "Issue #${issue}: labels unchanged"
+              return 0
+            fi
             gh api --method PUT "repos/${GITHUB_REPOSITORY}/issues/${issue}/labels" \
               --input - <<< "{\"labels\":${target}}" >/dev/null
             echo "Issue #${issue} -> factory:unowned${stage:+ + ${stage}}"
@@ -124,8 +129,12 @@ jobs:
 
           reconcile_issue() {
             local issue="$1" pulls records stage
-            pulls="$(gh api --paginate --slurp \
-              "repos/${GITHUB_REPOSITORY}/pulls?state=all&per_page=100")"
+            # Scheduled sweeps reuse one PR snapshot for all issues.
+            pulls="${SWEEP_PULLS:-}"
+            if [[ -z "$pulls" ]]; then
+              pulls="$(gh api --paginate --slurp \
+                "repos/${GITHUB_REPOSITORY}/pulls?state=all&per_page=100")"
+            fi
             records='[]'
 
             while IFS=$'\t' read -r pr head_ref state merged_at; do
@@ -177,6 +186,9 @@ jobs:
           # Blank reconciliation is also issue-centric and uses the exact same
           # trusted-history calculation. Restrict the sweep to existing factory
           # issues so unrelated issues are never introduced by branch-shaped data.
+          # Do not refetch the same full PR list once per open factory issue.
+          SWEEP_PULLS="$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/pulls?state=all&per_page=100")"
           while IFS= read -r issue; do
             [[ -n "$issue" ]] || continue
             state="$(gh issue view "$issue" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)"

@@ -135,6 +135,19 @@ test('label reconciliation replaces both groups with one atomic call', async () 
   );
 });
 
+test('unchanged label reconciliation avoids a write regardless of label order', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory:review', 'bug', 'factory:local', 'factory'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcileLabels(github, contextFor('workflow_dispatch', {}), 12, {
+    owner: 'factory:local',
+    stage: 'factory:review',
+  });
+  assert.deepEqual(calls, []);
+});
+
 test('transient GitHub failures are retried', async () => {
   let attempts = 0;
   const result = await withRetry(async () => {
@@ -144,6 +157,35 @@ test('transient GitHub failures are retried', async () => {
   }, { delay: 0 });
   assert.equal(result, 'ok');
   assert.equal(attempts, 2);
+});
+
+test('primary installation quota exhaustion does not hot-loop before reset', async () => {
+  const { rateLimitDelay } = reconcile._test;
+  const error = Object.assign(new Error('API rate limit exceeded for installation'), {
+    status: 403,
+    response: { headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.ceil(Date.now() / 1000) + 3600) } },
+  });
+  assert.ok(rateLimitDelay(error) > 30000);
+  let attempts = 0;
+  await assert.rejects(withRetry(async () => {
+    attempts += 1;
+    throw error;
+  }, { maxRateLimitWait: 30000, sleep: () => { throw Error('must not sleep'); } }), /rate limit/);
+  assert.equal(attempts, 1);
+});
+
+test('429 Retry-After is honored for a bounded retry', async () => {
+  let attempts = 0;
+  const sleeps = [];
+  const result = await withRetry(async () => {
+    attempts += 1;
+    if (attempts === 1) throw Object.assign(new Error('secondary rate limit'), {
+      status: 429, response: { headers: { 'retry-after': '2' } },
+    });
+    return 'ok';
+  }, { sleep: async ms => { sleeps.push(ms); } });
+  assert.equal(result, 'ok');
+  assert.deepEqual(sleeps, [2000]);
 });
 
 test('PR progress comments preserve an advanced review stage and local owner', async () => {
@@ -257,10 +299,8 @@ test('PR refresh preserves a roster fixed-model PR-local owner', async () => {
     }),
   });
 
-  assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:49'));
-  assert.ok(calls[0].labels.includes('factory:review'));
-  assert.ok(!calls[0].labels.includes('factory:unowned'));
+  assert.equal(calls.length, 0);
+  // A valid preserved owner and stage require no API write.
 });
 
 test('released fixed-model PR resolves closing issue instead of worker branch number', async () => {
@@ -296,14 +336,8 @@ test('released fixed-model PR resolves closing issue instead of worker branch nu
   });
 
   assert.deepEqual(commentIssueNumbers, [1089]);
-  assert.equal(calls.length, 1);
-  const owners = calls[0].labels.filter(label => (
-    label === 'factory:unowned'
-    || label === 'factory:local'
-    || /^factory:(?:[1-9]|[1-3][0-9]|[4-7][0-9])$/.test(label)
-  ));
-  assert.deepEqual(owners, ['factory:unowned']);
-  assert.ok(calls[0].labels.includes('factory:review'));
+  assert.equal(calls.length, 0);
+  // Released ownership already matches, so no write is needed.
 });
 
 test('PR refresh preserves one external owner after the linked issue is released', async () => {
@@ -910,9 +944,8 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
   });
   // Prove the linked-issue owner lookup actually consumed the worker App comment.
   assert.ok(workerIssueNumbers.includes(3131), 'owner lookup must read issue 3131 comments');
-  assert.equal(workerCalls.length, 1);
-  assert.ok(workerCalls[0].labels.includes('factory:unowned'));
-  assert.ok(!workerCalls[0].labels.includes('factory:49'));
+  // Untrusted worker marker cannot change an already-correct owner.
+  assert.equal(workerCalls.length, 0);
 
   const actionsCalls = [];
   await reconcile({
