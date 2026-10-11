@@ -870,3 +870,117 @@ async def test_create_issues_preserves_manual_series_order(
     assert thread.total_issues == 4
     assert thread.issues_remaining == 4
     assert thread.next_unread_issue_id == issues[0].id
+
+
+async def test_create_issues_auto_maps_to_comicvine(
+    auth_client: AsyncClient, async_db: AsyncSession, mocker
+) -> None:
+    """POST /threads/{thread_id}/issues auto-maps new issues to ComicVine when thread has confirmed series mapping."""
+    from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
+    from app.services.provider_issue_adoption import ProviderIssueAdoptionResult
+    
+    user = await get_or_create_user_async(async_db)
+
+    # Create a thread with ComicVine series mapping
+    thread = Thread(
+        title="Starman",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    # Create a ComicVine series external identity
+    comicvine_series_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="series",
+        external_id="12345",  # ComicVine volume ID
+        metadata_json={"name": "Starman", "count_of_issues": 100},
+    )
+    async_db.add(comicvine_series_identity)
+    await async_db.flush()
+
+    # Link the thread to the ComicVine series
+    series_mapping = ThreadExternalSeriesMapping(
+        thread_id=thread.id,
+        external_identity_id=comicvine_series_identity.id,
+        status="confirmed",
+        evidence_source="user_series_confirmation",
+        confidence=1.0,
+    )
+    async_db.add(series_mapping)
+    await async_db.flush()
+
+    # Create existing issues in the thread
+    existing_issues = [
+        Issue(thread_id=thread.id, issue_number="1", position=1, status="read"),
+        Issue(thread_id=thread.id, issue_number="2", position=2, status="read"),
+        Issue(thread_id=thread.id, issue_number="3", position=3, status="unread"),
+    ]
+    async_db.add_all(existing_issues)
+    await async_db.flush()
+    thread.next_unread_issue_id = existing_issues[2].id
+    await async_db.commit()
+
+    # Mock the ComicVine client and adoption function
+    mock_comicvine_client = mocker.MagicMock()
+    mock_comicvine_client.fetch_volume_issues.return_value = [
+        {"id": 1001, "issue_number": 1, "name": "Issue 1"},
+        {"id": 1002, "issue_number": 2, "name": "Issue 2"},
+        {"id": 1003, "issue_number": 3, "name": "Issue 3"},
+        {"id": 1004, "issue_number": 4, "name": "Issue 4"},  # This should match our new issue
+    ]
+    
+    mock_adoption_result = ProviderIssueAdoptionResult(
+        outcome="created",
+        issue_id=0,  # Will be set by the actual function
+        thread_id=thread.id,
+        comicvine_issue_id=1004,
+        hydration="success",
+    )
+    
+    # Mock the adopt_comicvine_issue function
+    adopt_comicvine_issue_spy = mocker.patch(
+        "app.services.issue.adopt_comicvine_issue",
+        return_value=mock_adoption_result
+    )
+    mocker.patch("comic_pile.comicvine_provider.ComicVineClient", return_value=mock_comicvine_client)
+
+    # Add a new issue that should be auto-mapped to ComicVine
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "4"}
+    )
+    assert response.status_code == 201
+
+    data = response.json()
+    assert [issue["issue_number"] for issue in data["issues"]] == ["4"]
+    assert data["total_count"] == 4
+
+    # Verify that adopt_comicvine_issue was called for the new issue
+    adopt_comicvine_issue_spy.assert_called_once()
+    call_args = adopt_comicvine_issue_spy.call_args
+    assert call_args.kwargs["user_id"] == user.id
+    assert call_args.kwargs["thread_id"] == thread.id
+    assert call_args.kwargs["comicvine_issue_id"] == 1004
+    assert call_args.kwargs["issue_number"] == "4"
+
+    # Verify the new issue exists in the database
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).where(Issue.issue_number == "4")
+    )
+    new_issue = result.scalar_one()
+    assert new_issue is not None
+    assert new_issue.position == 4
+    assert new_issue.status == "unread"
+
+    # Verify thread state is updated correctly
+    await async_db.refresh(thread)
+    assert thread.total_issues == 4
+    assert thread.issues_remaining == 1  # Only issue #4 is unread
+    assert thread.reading_progress == "in_progress"
