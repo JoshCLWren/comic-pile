@@ -9,6 +9,7 @@ exactly one Reading Plan (or a specific 4xx), never a generic 500.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,6 +30,7 @@ from app.models.external_identity import (
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.schemas.cbl_adoption import CBLAdoptionCommitRequest
+from app.services.cbl_plan_adoption import _merge_adopted_nodes
 from tests.conftest import get_or_create_user_async
 
 
@@ -422,3 +424,107 @@ async def test_commit_endpoint_logs_unexpected_exceptions(
     assert "adoption exploded for logs" in caplog.text
     assert "list_id=42" in caplog.text
     assert "user_id=7" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_commit_endpoint_lets_database_outages_propagate() -> None:
+    """Database unavailability stays an OperationalError so get_db can return 503."""
+    from sqlalchemy.exc import OperationalError
+
+    request = CBLAdoptionCommitRequest(content_hash="hash", revision_sha="rev")
+    current_user = MagicMock()
+    current_user.id = 7
+    with patch(
+        "app.api.cbl_plan_adoption.adopt_cbl_material_into_reading_plan",
+        new_callable=AsyncMock,
+        side_effect=OperationalError("SELECT 1", {}, Exception("connection refused")),
+    ):
+        with pytest.raises(OperationalError):
+            await api_cbl_adoption_commit(
+                list_id=42,
+                request=request,
+                current_user=current_user,
+                db=cast(AsyncSession, MagicMock()),
+            )
+
+
+@pytest.mark.asyncio
+async def test_thread_number_reuse_refuses_conflicting_comicvine_identity(
+    async_db: AsyncSession,
+) -> None:
+    """Issue #32 confirmed as ComicVine A must not be relabeled as ComicVine B."""
+    user = await get_or_create_user_async(async_db, "cbl-identity-conflict-3368")
+    thread = await _thread(
+        async_db, user_id=user.id, title="Ultimate Spider-Man", queue_position=1
+    )
+    series = await _identity(async_db, entity_type="series", external_id="4050-conflict-usm")
+    async_db.add(
+        ThreadExternalSeriesMapping(
+            thread_id=thread.id,
+            external_identity_id=series.id,
+            status="confirmed",
+            evidence_source="test-3368",
+        )
+    )
+    issue = await _issue(async_db, thread=thread, issue_number="32", position=1)
+    identity_a = await _identity(async_db, entity_type="issue", external_id="4000-conflict-a")
+    identity_b = await _identity(async_db, entity_type="issue", external_id="4000-conflict-b")
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity_a.id,
+            status="confirmed",
+            evidence_source="test-3368",
+        )
+    )
+    await async_db.flush()
+
+    plan = cast(ContinuityPlan, SimpleNamespace(nodes_json=[], lanes_json=None))
+    entry = SimpleNamespace(
+        id=900,
+        position=32,
+        series_name="Ultimate Spider-Man",
+        volume_year=2024,
+    )
+    report = await _merge_adopted_nodes(
+        async_db,
+        plan,
+        user.id,
+        [cast(CBLSourceEntry, entry)],
+        {
+            900: {
+                "series_name": "Ultimate Spider-Man",
+                "issue_number": "32",
+                "comicvine_issue_id": "4000-conflict-b",
+                "external_series_identity_id": series.id,
+                "resolution_status": "no_owned_issue_for_comicvine_id",
+                "resolved_issue_id": None,
+            }
+        },
+        SOURCE_PATH,
+        {},
+        {},
+        {},
+    )
+
+    assert report.unresolved_positions == [32]
+    assert report.created_positions == []
+    assert report.reused_positions == []
+    assert plan.nodes_json == []
+    confirmed = (
+        await async_db.execute(
+            select(IssueExternalIdentityMapping.external_identity_id).where(
+                IssueExternalIdentityMapping.issue_id == issue.id,
+                IssueExternalIdentityMapping.status == "confirmed",
+            )
+        )
+    ).scalars().all()
+    assert confirmed == [identity_a.id]
+    b_mappings = (
+        await async_db.execute(
+            select(IssueExternalIdentityMapping.id).where(
+                IssueExternalIdentityMapping.external_identity_id == identity_b.id,
+            )
+        )
+    ).scalars().all()
+    assert b_mappings == []

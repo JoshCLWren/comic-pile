@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
+from typing import NamedTuple, cast
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -75,6 +75,21 @@ class StalePreviewError(AdoptionCommitError):
     """Raised when the reviewed preview fingerprint no longer matches the source."""
 
     code: str = "stale_preview"
+
+
+class ConflictingComicVineIdentityError(AdoptionCommitError):
+    """Owned issue number is already confirmed as a different ComicVine issue.
+
+    Reconciliation refuses to attach a CBL entry to that issue. Adoption must
+    not override that decision by confirming the new id on the same row.
+    """
+
+
+class MaterializedIssue(NamedTuple):
+    """An issue reused or inserted for one approved CBL entry."""
+
+    issue: Issue
+    created: bool
 
 
 @dataclass
@@ -256,13 +271,31 @@ async def _confirm_comicvine_issue_mapping(
     await db.flush()
 
 
+async def _confirmed_comicvine_issue_ids(db: AsyncSession, issue_id: int) -> set[str]:
+    """Return ComicVine issue ids already confirmed on one owned issue."""
+    result = await db.execute(
+        select(ExternalIdentity.external_id)
+        .join(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
+        )
+        .where(
+            IssueExternalIdentityMapping.issue_id == issue_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+        )
+    )
+    return {str(external_id) for external_id in result.scalars().all()}
+
+
 async def _ensure_missing_issue_created(
     db: AsyncSession,
     user_id: int,
     *,
     fact: dict[str, object],
     volume_year: int | None,
-) -> Issue:
+) -> MaterializedIssue:
     """Materialize a missing issue for an explicitly approved CBL entry.
 
     Reuses a just-created or already-owned issue when the same ComicVine
@@ -274,6 +307,10 @@ async def _ensure_missing_issue_created(
     available; a titled series fallback is disambiguated by volume year
     rather than guessed.
 
+    A thread+number match is refused when that issue is already confirmed
+    as a different ComicVine issue. Reconciliation rejects that candidate
+    for the same reason; adoption must not confirm the conflicting id.
+
     Args:
         db: Database session.
         user_id: User ID for ownership.
@@ -281,9 +318,10 @@ async def _ensure_missing_issue_created(
         volume_year: Volume year used to disambiguate the series thread title.
 
     Returns:
-        The reused or newly created Issue.
+        The reused or newly created issue, and whether a row was inserted.
 
     Raises:
+        ConflictingComicVineIdentityError: The number is already a different comic.
         AdoptionCommitError: If the entry cannot be materialized safely.
     """
     series_name = str(fact.get("series_name") or "")
@@ -299,7 +337,7 @@ async def _ensure_missing_issue_created(
             external_id=comicvine_id,
         )
         if existing is not None:
-            return existing
+            return MaterializedIssue(existing, False)
 
     thread = await _find_or_create_series_thread(
         db,
@@ -322,9 +360,22 @@ async def _ensure_missing_issue_created(
         None,
     )
     if existing_by_number is not None:
-        if comicvine_id is not None:
+        confirmed_ids = await _confirmed_comicvine_issue_ids(db, existing_by_number.id)
+        if comicvine_id is None:
+            if confirmed_ids:
+                raise ConflictingComicVineIdentityError(
+                    f"{series_name} #{issue_number} is already confirmed as a different "
+                    "ComicVine issue, so this entry was left unresolved."
+                )
+        elif comicvine_id not in confirmed_ids and confirmed_ids:
+            raise ConflictingComicVineIdentityError(
+                f"{series_name} #{issue_number} is already confirmed as ComicVine "
+                f"{', '.join(sorted(confirmed_ids))}, not {comicvine_id}, so this "
+                "entry was left unresolved."
+            )
+        elif comicvine_id not in confirmed_ids:
             await _confirm_comicvine_issue_mapping(db, existing_by_number, comicvine_id)
-        return existing_by_number
+        return MaterializedIssue(existing_by_number, False)
 
     issue_position = max((item.position for item in existing_issues), default=0) + 1
     issue = Issue(
@@ -348,7 +399,7 @@ async def _ensure_missing_issue_created(
     if comicvine_id is not None:
         await _confirm_comicvine_issue_mapping(db, issue, comicvine_id)
 
-    return issue
+    return MaterializedIssue(issue, True)
 
 
 async def _find_or_create_series_thread(
@@ -578,14 +629,19 @@ async def _merge_adopted_nodes(
 
         created_now = False
         if existing_issue_id is None:
-            issue = await _ensure_missing_issue_created(
-                db,
-                user_id,
-                fact=fact,
-                volume_year=entry.volume_year,
-            )
+            try:
+                materialized = await _ensure_missing_issue_created(
+                    db,
+                    user_id,
+                    fact=fact,
+                    volume_year=entry.volume_year,
+                )
+            except ConflictingComicVineIdentityError:
+                unresolved_positions.append(entry.position)
+                continue
+            issue, created = materialized
             existing_issue_id = issue.id
-            if existing_issue_id not in issues_by_id:
+            if created:
                 created_positions.append(entry.position)
                 created_now = True
 

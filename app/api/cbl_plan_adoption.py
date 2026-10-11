@@ -6,6 +6,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -24,6 +25,33 @@ from app.services.cbl_targeted_plan_adoption import adopt_cbl_into_existing_read
 
 router = APIRouter(prefix="/api/v1", tags=["cbl-adoption-commit"])
 logger = logging.getLogger(__name__)
+
+
+def _is_database_outage(error: BaseException) -> bool:
+    """Return whether ``get_db`` should classify this failure as unavailable.
+
+    Operational and connection failures must propagate so the database
+    dependency can answer 503. Integrity and programming errors stay in the
+    adoption handler.
+    """
+    if isinstance(
+        error,
+        (
+            TimeoutError,
+            sqlalchemy_exc.TimeoutError,
+            sqlalchemy_exc.OperationalError,
+            sqlalchemy_exc.InterfaceError,
+        ),
+    ):
+        return True
+    return isinstance(error, sqlalchemy_exc.DBAPIError) and not isinstance(
+        error,
+        (
+            sqlalchemy_exc.ProgrammingError,
+            sqlalchemy_exc.IntegrityError,
+            sqlalchemy_exc.DataError,
+        ),
+    )
 
 
 def _response(commit: AdoptionCommitResult) -> CBLAdoptionCommitResponse:
@@ -103,7 +131,9 @@ async def api_targeted_cbl_adoption_commit(
         ) from exc
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
+        if _is_database_outage(exc):
+            raise
         logger.exception(
             "Unexpected CBL adoption-commit failure list_id=%s plan_id=%s user_id=%s",
             list_id,
@@ -161,7 +191,9 @@ async def api_cbl_adoption_commit(
         ) from exc
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
+        if _is_database_outage(exc):
+            raise
         logger.exception(
             "Unexpected CBL adoption-commit failure list_id=%s user_id=%s",
             list_id,
