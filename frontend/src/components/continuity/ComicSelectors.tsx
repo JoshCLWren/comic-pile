@@ -182,6 +182,7 @@ export function ContinuityIssueSelector({
             onChange(next)
           }}
           disabled={disabled || isLoading || issues.length === 0}
+          aria-busy={isLoading}
           className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
         >
           <option value="">{isLoading ? 'Loading issues…' : issues.length === 0 ? emptyMessage : 'Select an issue'}</option>
@@ -190,6 +191,15 @@ export function ContinuityIssueSelector({
           ))}
         </select>
       </label>
+      {isLoading && (
+        <p role="status" className="flex items-center gap-2 text-xs text-[var(--theme-text-muted)]">
+          <span
+            className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[var(--theme-border)] border-t-[var(--theme-continuity-accent)]"
+            aria-hidden="true"
+          />
+          Fetching all issues…
+        </p>
+      )}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
     </div>
   )

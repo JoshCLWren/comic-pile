@@ -124,6 +124,11 @@ describe('continuity comic selectors', () => {
 
     rerender(<ContinuityIssueSelector issues={[]} value={null} onChange={onChange} isLoading />)
     expect(screen.getByText('Loading issues…')).toBeInTheDocument()
+    // Loading state is honest: select is disabled AND a visible progress
+    // indicator explains why (#3308 — previously looked like a broken control).
+    expect(screen.getByRole('combobox')).toBeDisabled()
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('status')).toHaveTextContent('Fetching all issues…')
 
     rerender(
       <ContinuityIssueSelector issues={[]} value={null} onChange={onChange} error="Issue load failed" />,
@@ -135,6 +140,8 @@ describe('continuity comic selectors', () => {
 
     rerender(<ContinuityIssueSelector issues={issues} value={null} onChange={onChange} disabled />)
     expect(screen.getByRole('combobox')).toBeDisabled()
+    // Disabled-but-not-loading shows no progress indicator.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
   it('builds ordered ranges from issue labels and rejects reversed order without exposing positions', () => {
