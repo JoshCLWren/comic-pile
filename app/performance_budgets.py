@@ -266,6 +266,26 @@ async def run_bounded[T](
             f"(deadline: {timeout_ms}ms)",
             extra={"performance_violation": violation.to_dict()},
         )
+        if budget_type == "startup":
+            # Readiness-critical coroutine hard timeout (issue #3245): file an
+            # actionable issue immediately. Evaluation is synchronous and
+            # filing is bounded background work, so this never blocks the
+            # caller; any failure is logged inside the handler.
+            try:
+                from app.services import performance_issue_service as perf_issues
+
+                raw_deployment = (context or {}).get("deployment_id")
+                perf_issues.handle_coroutine_timeout(
+                    operation=operation,
+                    elapsed_ms=elapsed_ms,
+                    deadline_ms=timeout_ms,
+                    exception_type="TimeoutError",
+                    deployment_id=raw_deployment
+                    if isinstance(raw_deployment, str)
+                    else None,
+                )
+            except Exception as exc:
+                logger.debug("Coroutine performance issue evaluation skipped: %s", exc)
         raise _budget_error(budget_type, operation, elapsed_ms, timeout_ms) from None
     finally:
         finished.set()
