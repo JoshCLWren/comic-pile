@@ -841,7 +841,7 @@ async def _calculate_series_stats_drilldown(
     # Calculate average rating for the series
     if rated_count > 0:
         total_rating_points = sum(issue["effective_rating"] for issue in series_rated_issues)
-        average_rating = total_rating_points / rated_count
+        average_rating = round(total_rating_points / rated_count, 2)
     else:
         average_rating = None
 

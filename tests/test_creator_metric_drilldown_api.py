@@ -326,22 +326,33 @@ async def test_series_drilldown_matches_strongest_series(
     default_user: User,
 ) -> None:
     """Series drilldown matches the strongest-series aggregate for the thread."""
-    writer_thread, _, _, _, _, _ = await _seed_drilldown_library(async_db, default_user)
+    # Build a series with enough rated issues to clear MIN_RATED_ISSUES_PER_SERIES
+    # (#3173 minimum-sample exclusion), so strongest_series is non-empty.
+    strong_thread, strong_issues = await _make_thread(
+        async_db, default_user, title="Strong Series", issue_count=3, queue_position=1, read_through=3
+    )
+    for issue in strong_issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+        )
+    await _rate(async_db, strong_issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, strong_issues[1], rating=5.0, timestamp=D2)
+    await _rate(async_db, strong_issues[2], rating=5.0, timestamp=D3)
 
     compare = await auth_client.get("/api/v1/creators/compare?keys=creator:1,creator:2")
     strongest = compare.json()["comparisons"]["creator:1"]["strongest_series"][0]
-    assert strongest["thread_id"] == writer_thread.id
-    assert strongest["rated_issue_count"] == 2
-    assert strongest["average_rating"] == pytest.approx(4.5)
+    assert strongest["thread_id"] == strong_thread.id
+    assert strongest["rated_issue_count"] == 3
+    assert strongest["average_rating"] == pytest.approx(round(14.0 / 3, 2))
 
     response = await auth_client.get(
-        f"/api/v1/creators/creator:1/metrics/series-stats/thread:{writer_thread.id}"
+        f"/api/v1/creators/creator:1/metrics/series-stats/thread:{strong_thread.id}"
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["series_issue_count"] == strongest["issue_count"] == 4
-    assert body["series_rated_issue_count"] == 2
-    assert body["series_average_rating"] == pytest.approx(4.5)
+    assert body["series_issue_count"] == strongest["issue_count"] == 3
+    assert body["series_rated_issue_count"] == 3
+    assert body["series_average_rating"] == pytest.approx(round(14.0 / 3, 2))
 
     unknown = await auth_client.get("/api/v1/creators/creator:1/metrics/series-stats/thread:999999")
     assert unknown.status_code == 404

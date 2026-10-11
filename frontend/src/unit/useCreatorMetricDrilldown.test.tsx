@@ -11,7 +11,12 @@ import {
   useDrilldownPresentation,
 } from '../hooks/useCreatorMetricDrilldown'
 import { creatorMetricDrilldownApi } from '../services/creatorMetricDrilldownApi'
-import type { CreatorMetricDrilldown } from '../types/index'
+import type {
+  CreatorMetricDrilldown,
+  CreatorRatingDistributionDrilldown,
+  CreatorRoleDrilldown,
+  CreatorSeriesDrilldown,
+} from '../types/index'
 
 vi.mock('../services/creatorMetricDrilldownApi', () => ({
   creatorMetricDrilldownApi: {
@@ -44,6 +49,39 @@ function makeResponse(): CreatorMetricDrilldown {
   }
 }
 
+function makeDistributionResponse(): CreatorRatingDistributionDrilldown {
+  return {
+    ...makeResponse(),
+    metric_type: 'rating-distribution',
+    rating_value: '5.0',
+    bucket_count: 1,
+    bucket_percentage: 100.0,
+  }
+}
+
+function makeRoleResponse(): CreatorRoleDrilldown {
+  return {
+    ...makeResponse(),
+    metric_type: 'role-stats',
+    role: 'writer',
+    role_issue_count: 1,
+    role_rated_issue_count: 1,
+    role_average_rating: 3.5,
+  }
+}
+
+function makeSeriesResponse(): CreatorSeriesDrilldown {
+  return {
+    ...makeResponse(),
+    metric_type: 'series-stats',
+    series_id: 7,
+    series_title: 'Series',
+    series_issue_count: 1,
+    series_rated_issue_count: 1,
+    series_average_rating: 3.5,
+  }
+}
+
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -54,9 +92,9 @@ function createWrapper() {
 beforeEach(() => {
   vi.clearAllMocks()
   mockedGetMetric.mockResolvedValue(makeResponse())
-  mockedGetDistribution.mockResolvedValue(makeResponse())
-  mockedGetRole.mockResolvedValue(makeResponse())
-  mockedGetSeries.mockResolvedValue(makeResponse())
+  mockedGetDistribution.mockResolvedValue(makeDistributionResponse())
+  mockedGetRole.mockResolvedValue(makeRoleResponse())
+  mockedGetSeries.mockResolvedValue(makeSeriesResponse())
 })
 
 describe('useCreatorMetricDrilldown', () => {
