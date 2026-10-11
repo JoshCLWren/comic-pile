@@ -59,9 +59,8 @@ class DatabaseCensusService:
         return census_data
 
     async def _set_read_only_mode(self) -> None:
-        """Set the database session to read-only mode."""
-        # This is a conceptual implementation - actual read-only mode
-        # would need to be handled at the connection level
+        """Set the database session to read-only transaction mode."""
+        await self.db.execute(text("SET TRANSACTION READ ONLY"))
         await self.db.execute(text("SET LOCAL lock_timeout = '1s'"))
 
     async def _get_postgresql_version(self) -> str:
@@ -464,7 +463,14 @@ class DatabaseCensusService:
         return plans
 
     async def _explain_query(self, query_text: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Get EXPLAIN ANALYZE for a query without executing it."""
+        """Get EXPLAIN ANALYZE for a query without executing it.
+
+        Rejects mutation queries to guarantee read-only behavior.
+        """
+        stripped = query_text.strip().upper()
+        for keyword in ("INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "TRUNCATE", "MERGE"):
+            if stripped.startswith(keyword) or (" " + keyword + " ") in stripped:
+                return {"error": f"Mutation query rejected by read-only census: {keyword}"}
         try:
             # Use EXPLAIN (BUFFERS, ANALYZE, FORMAT JSON) to get detailed plan
             explain_query = f"EXPLAIN (BUFFERS, ANALYZE, FORMAT JSON) {query_text}"
@@ -583,12 +589,41 @@ class DatabaseCensusService:
         return constraints
 
     def redact_sensitive_data(self, census_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Remove sensitive information from census data."""
-        redacted = census_data.copy()
+        """Remove sensitive information from census data.
 
-        # Remove any potentially sensitive information
-        # In a real implementation, this would be more sophisticated
-        if "metadata" in redacted:
-            redacted["metadata"] = redacted["metadata"].copy()
+        Redacts query parameters, strips literal identifiers from query plans,
+        and removes connection-level metadata to prevent leakage of user data,
+        titles, notes, or credentials.
+        """
+        import copy
+        redacted = copy.deepcopy(census_data)
+
+        # Redact metadata: never emit connection URLs or credentials
+        if isinstance(redacted.get("metadata"), dict):
+            meta = redacted["metadata"]
+            meta.pop("database_url", None)
+            meta.pop("connection_string", None)
+            meta.pop("credentials", None)
+
+        # Redact query plans: sanitize parameters and query text
+        if isinstance(redacted.get("queries"), dict):
+            for key, plan in redacted["queries"].items():
+                if isinstance(plan, dict):
+                    if isinstance(plan.get("parameters"), dict):
+                        plan["parameters"] = {k: "<REDACTED>" for k in plan["parameters"]}
+                    if isinstance(plan.get("query"), str):
+                        # Replace any quoted literal strings with placeholder
+                        # to prevent title/note leakage in query text
+                        plan["query"] = "<QUERY_REDACTED>"
+
+        # Remove any top-level storage of titles/notes/payloads if present
+        for section in ("snapshots", "tables", "indexes"):
+            if isinstance(redacted.get(section), dict):
+                for sub in redacted[section].values():
+                    if isinstance(sub, dict):
+                        sub.pop("title", None)
+                        sub.pop("notes", None)
+                        sub.pop("payload", None)
+                        sub.pop("user_data", None)
 
         return redacted
