@@ -815,3 +815,98 @@ async def test_rated_collection_matches_headline_when_roles_are_mixed(
     assert rated[0]["issue_id"] == issues[0].id
     assert rated[0]["effective_rating"] == pytest.approx(4.0)
     assert body["next_cursor"] is None
+
+
+@pytest.mark.asyncio
+async def test_creator_detail_performance(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Performance test for creator detail API with realistic data volume.
+    
+    This test measures the performance of the creator detail API with a realistic
+    volume of data to ensure optimizations meet the <500ms target for warm reads.
+    """
+    import time
+    from httpx import AsyncClient
+    
+    # Create a larger dataset to simulate production conditions
+    thread, issues = await _make_thread(
+        async_db, default_user, title="Performance Test", issue_count=50, queue_position=1, read_through=40
+    )
+    
+    # Add creator credits to all issues
+    for issue in issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 42, "name": "Test Creator", "role": "writer"}]
+        )
+    
+    # Add ratings to 30 issues to create a realistic workload
+    for i, issue in enumerate(issues[:30]):
+        rating = 3.0 + (i % 5) * 0.5  # Create varied ratings
+        timestamp = D1.replace(day=i + 1)  # Spread timestamps over time
+        await _rate(async_db, issue, rating=rating, timestamp=timestamp)
+    
+    # Measure response time
+    start_time = time.time()
+    response = await auth_client.get("/api/v1/creators/creator:42")
+    end_time = time.time()
+    
+    response_time_ms = (end_time - start_time) * 1000
+    
+    # Assert performance target is met
+    assert response.status_code == 200
+    assert response_time_ms < 500, f"Response time {response_time_ms:.2f}ms exceeds 500ms target"
+    
+    # Verify response data is correct
+    body = response.json()
+    assert body["summary"]["ratings_count"] == 30
+    assert len(body["rated_issues"]) <= 50  # Should be paginated
+    assert len(body["read_unrated_issues"]) <= 50
+    assert len(body["upcoming_issues"]) <= 50
+
+
+@pytest.mark.asyncio 
+async def test_creator_detail_performance_with_multiple_creators(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Performance test with multiple creators to test query optimization."""
+    import time
+    
+    # Create multiple threads with different creators
+    threads_and_issues = []
+    for thread_num in range(5):
+        thread, issues = await _make_thread(
+            async_db, default_user, 
+            title=f"Thread {thread_num}", 
+            issue_count=20, 
+            queue_position=thread_num + 1,
+            read_through=15
+        )
+        threads_and_issues.append((thread, issues))
+        
+        # Add creator credits
+        for issue in issues:
+            await _confirm_identity(
+                async_db, issue, creators=[{"id": 100 + thread_num, "name": f"Creator {thread_num}", "role": "writer"}]
+            )
+        
+        # Add ratings to some issues
+        for i, issue in enumerate(issues[:10]):
+            rating = 4.0 + (i % 3) * 0.5
+            timestamp = D1.replace(day=thread_num * 10 + i)
+            await _rate(async_db, issue, rating=rating, timestamp=timestamp)
+    
+    # Test performance for each creator
+    for thread_num in range(3):  # Test first 3 creators
+        creator_id = 100 + thread_num
+        start_time = time.time()
+        response = await auth_client.get(f"/api/v1/creators/creator:{creator_id}")
+        end_time = time.time()
+        
+        response_time_ms = (end_time - start_time) * 1000
+        assert response.status_code == 200
+        assert response_time_ms < 500, f"Creator {creator_id} response time {response_time_ms:.2f}ms exceeds target"

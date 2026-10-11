@@ -35,8 +35,11 @@ from app.repositories.creator_detail import (
     load_latest_rating_timestamps,
     load_recent_creator_issue_rows,
     load_upcoming_creator_issue_rows,
+    load_creator_detail_data_optimized,
+    RecentCreatorIssueRow,
+    UpcomingCreatorIssueRow,
 )
-from app.repositories.creator_summary import CreatorSummaryInputs, load_creator_summary_inputs
+from app.repositories.creator_summary import CreatorSummaryInputs, load_creator_summary_inputs, load_creator_summary_inputs_optimized
 from app.schemas.creator_detail import (
     CreatorDetailResponse,
     CreatorIssueRow,
@@ -57,6 +60,31 @@ from app.services.creator_series import (
     select_series_group,
 )
 from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
+
+
+async def _load_creator_detail_collection_optimized(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    creator_issue_ids: frozenset[int],
+    limit: int,
+    offset: int,
+    upcoming: bool = False,
+) -> tuple[list[RecentCreatorIssueRow] | list[UpcomingCreatorIssueRow], dict[int, datetime]]:
+    """Helper to load creator detail collection with optimized queries."""
+    if not creator_issue_ids:
+        return [], {}
+    
+    if upcoming:
+        rows, _, timestamps = await load_creator_detail_data_optimized(
+            db, user_id=user_id, creator_issue_ids=creator_issue_ids, limit=limit, offset=offset
+        )
+        return rows, timestamps
+    else:
+        rows, _, timestamps = await load_creator_detail_data_optimized(
+            db, user_id=user_id, creator_issue_ids=creator_issue_ids, limit=limit, offset=offset
+        )
+        return rows, timestamps
 
 
 def resolve_creator_issues(
@@ -164,10 +192,9 @@ async def get_creator_detail(
         raise ValueError("Invalid creator key format")
     page_offset = offset if offset is not None else 0
 
-    inputs = await load_creator_summary_inputs(db, user_id)
-
-    creator_id_set, creator_roles_all, display_name = resolve_creator_issues(
-        inputs, creator_id=creator_id
+    # Use optimized version that loads inputs and resolves creator issues in fewer queries
+    inputs, creator_id_set, creator_roles_all, display_name = await load_creator_summary_inputs_optimized(
+        db, user_id, creator_id=creator_id
     )
 
     # 1. Headline summary scoped to this creator, mirroring #2028 exactly:
@@ -255,26 +282,30 @@ async def get_creator_detail(
 
     # 3. Role-specific statistics. Every distinct role is preserved honestly,
     #    including pure cover/editorial and unknown roles.
+    # Optimized to reduce iterations over the data
     role_stats: list[CreatorRoleStat] = []
+    
+    # Pre-compute role mappings to avoid repeated iterations
+    role_to_issue_ids: dict[str, list[int]] = {}
+    issue_to_ratings: dict[int, float] = inputs.effective_ratings
+    
+    for issue_id in creator_id_set:
+        credits = inputs.issue_creator_credits.get(issue_id, [])
+        for credit in credits:
+            if credit.external_id == creator_id:
+                for role in credit.roles:
+                    if role not in role_to_issue_ids:
+                        role_to_issue_ids[role] = []
+                    role_to_issue_ids[role].append(issue_id)
+    
+    # Build role statistics in a single pass
     for role in sorted(creator_roles_all):
-        role_issue_ids = [
-            issue_id
-            for issue_id in creator_id_set
-            if any(
-                role in credit.roles
-                for credit in inputs.issue_creator_credits[issue_id]
-                if credit.external_id == creator_id
-            )
-        ]
+        role_issue_ids = role_to_issue_ids.get(role, [])
         role_rated_issue_ids = [
-            issue_id
-            for issue_id in role_issue_ids
-            if issue_id in inputs.effective_ratings
+            issue_id for issue_id in role_issue_ids if issue_id in issue_to_ratings
         ]
-        role_ratings = [
-            inputs.effective_ratings[issue_id]
-            for issue_id in role_rated_issue_ids
-        ]
+        role_ratings = [issue_to_ratings[issue_id] for issue_id in role_rated_issue_ids]
+        
         role_stats.append(
             CreatorRoleStat(
                 role=role,
@@ -287,37 +318,19 @@ async def get_creator_detail(
         )
 
     # 4. Bounded collections with the ordering contract from the issue.
-    rated_rows = await load_recent_creator_issue_rows(
-        db,
-        user_id=user_id,
-        creator_issue_ids=rated_ids,
-        limit=limit,
-        offset=page_offset,
+    # Use optimized version to reduce database round trips
+    rated_rows, rated_timestamps = await _load_creator_detail_collection_optimized(
+        db, user_id=user_id, creator_issue_ids=rated_ids, limit=limit, offset=page_offset
     )
-    read_unrated_rows = await load_recent_creator_issue_rows(
-        db,
-        user_id=user_id,
-        creator_issue_ids=read_unrated_ids,
-        limit=limit,
-        offset=page_offset,
+    read_unrated_rows, read_unrated_timestamps = await _load_creator_detail_collection_optimized(
+        db, user_id=user_id, creator_issue_ids=read_unrated_ids, limit=limit, offset=page_offset
     )
-    upcoming_rows = await load_upcoming_creator_issue_rows(
-        db,
-        user_id=user_id,
-        creator_issue_ids=upcoming_ids,
-        limit=limit,
-        offset=page_offset,
+    upcoming_rows, upcoming_timestamps = await _load_creator_detail_collection_optimized(
+        db, user_id=user_id, creator_issue_ids=upcoming_ids, limit=limit, offset=page_offset, upcoming=True
     )
-
-    fetched_issue_ids = sorted(
-        {row[0] for row in rated_rows}
-        | {row[0] for row in read_unrated_rows}
-        | {row[0] for row in upcoming_rows}
-    )
-    latest_rating_timestamps = await load_latest_rating_timestamps(
-        db,
-        issue_ids=fetched_issue_ids,
-    )
+    
+    # Combine timestamps from all collections
+    latest_rating_timestamps = {**rated_timestamps, **read_unrated_timestamps, **upcoming_timestamps}
 
     rated_issues = [
         _build_issue_row(

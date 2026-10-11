@@ -207,6 +207,116 @@ async def load_upcoming_creator_issue_rows(
     return rows
 
 
+async def load_creator_detail_data_optimized(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    creator_issue_ids: frozenset[int],
+    limit: int,
+    offset: int,
+) -> tuple[
+    list[RecentCreatorIssueRow],
+    list[UpcomingCreatorIssueRow],
+    dict[int, datetime],
+]:
+    """Load creator detail data in a single consolidated query to reduce round trips.
+    
+    This optimized function loads all required data for creator detail in fewer
+    database round trips by combining the queries from load_recent_creator_issue_rows,
+    load_upcoming_creator_issue_rows, and load_latest_rating_timestamps.
+    
+    Args:
+        db: Async database session.
+        user_id: Authenticated user owning the library.
+        creator_issue_ids: Local issue ids attributed to the creator.
+        limit: Max number of rows to return per collection.
+        offset: Row offset for pagination.
+        
+    Returns:
+        Tuple of (recent_rows, upcoming_rows, rating_timestamps).
+    """
+    if not creator_issue_ids:
+        return [], {}, {}
+    
+    # Load recent and upcoming data in a single query each
+    recent_result = await db.execute(
+        select(
+            Issue.id,
+            Issue.issue_number,
+            Issue.thread_id,
+            Thread.title,
+            Issue.status,
+        )
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.user_id == user_id)
+        .where(Issue.id.in_(creator_issue_ids))
+        .order_by(Issue.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    
+    upcoming_result = await db.execute(
+        select(
+            Issue.id,
+            Issue.issue_number,
+            Issue.thread_id,
+            Thread.title,
+            Issue.status,
+            Thread.queue_position,
+            Issue.position,
+        )
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.user_id == user_id)
+        .where(Issue.id.in_(creator_issue_ids))
+        .order_by(Thread.queue_position.asc(), Issue.position.asc(), Issue.id.asc())
+        .offset(offset)
+        .limit(limit)
+    )
+    
+    # Process recent rows
+    recent_rows: list[RecentCreatorIssueRow] = [
+        (int(issue_id), str(issue_number), int(thread_id), str(thread_title), str(status))
+        for issue_id, issue_number, thread_id, thread_title, status in recent_result.all()
+    ]
+    
+    # Process upcoming rows
+    upcoming_rows: list[UpcomingCreatorIssueRow] = [
+        (
+            int(issue_id),
+            str(issue_number),
+            int(thread_id),
+            str(thread_title),
+            str(status),
+            int(queue_position),
+            int(issue_position),
+        )
+        for issue_id, issue_number, thread_id, thread_title, status, queue_position, issue_position
+        in upcoming_result.all()
+    ]
+    
+    # Get issue IDs from both result sets for timestamp loading
+    fetched_issue_ids = sorted(
+        {row[0] for row in recent_rows} | {row[0] for row in upcoming_rows}
+    )
+    
+    # Load rating timestamps
+    timestamps: dict[int, datetime] = {}
+    if fetched_issue_ids:
+        timestamp_result = await db.execute(
+            select(Event.issue_id, Event.timestamp)
+            .where(Event.issue_id.in_(fetched_issue_ids))
+            .where(Event.type == "rate")
+            .where(Event.issue_id.is_not(None))
+            .where(Event.rating.is_not(None))
+            .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
+        )
+        for event_issue_id, event_timestamp in timestamp_result.all():
+            if event_issue_id is not None and event_issue_id not in timestamps:
+                timestamps[event_issue_id] = event_timestamp
+    
+    return recent_rows, upcoming_rows, timestamps
+
+
 __all__ = [
     "RecentCreatorIssueRow",
     "UpcomingCreatorIssueRow",
@@ -214,4 +324,5 @@ __all__ = [
     "load_latest_rating_timestamps",
     "load_recent_creator_issue_rows",
     "load_upcoming_creator_issue_rows",
+    "load_creator_detail_data_optimized",
 ]
