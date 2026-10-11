@@ -40,7 +40,7 @@ OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
 _VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
 PROTECTED_SOURCES = frozenset({"kilo-auto", "z-ai", "ollama-cloud", "vercel-ai-gateway", "mistral"})
-Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash"})
+Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash", "glm-4.7-flash"})
 OLLAMA_CLOUD_FREE_MODELS = frozenset({"nemotron-3-nano:30b", "gpt-oss:20b"})
 # Approved native Mistral lane pin. Not a catalog :free id; mistral-small
 # and every other Mistral id stay rejected.
@@ -138,13 +138,13 @@ def _bare_source_model(model: str, source: str) -> str:
 
 
 def z_ai_model_is_free(model: str) -> bool:
-    """Return whether a Z.AI lane pin is the permanently free GLM Flash id.
+    """Return whether a Z.AI lane pin is a permanently free GLM Flash id.
 
     Args:
         model: Bare or ``z-ai/``-prefixed Z.AI model id.
 
     Returns:
-        True only for ``glm-4.5-flash``. Paid GLMs are rejected.
+        True only for ``glm-4.5-flash`` or ``glm-4.7-flash``. Paid GLMs are rejected.
     """
     return _bare_source_model(model, "z-ai") in Z_AI_FREE_MODELS
 

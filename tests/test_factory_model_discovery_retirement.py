@@ -697,6 +697,24 @@ def test_opencode_free_display_name_matches_roster_style() -> None:
     )
 
 
+def _fixture_without_step5(tmp_path: Path) -> Path:
+    """Copy keep-present.json minus ``step-5-preview-free`` (Oct 11 worker 79 pin).
+
+    Synthetic rosters below model "every keep-present free OpenCode model is
+    pinned except the named hole"; the committed-TSV tests need worker 79's
+    model in the shared fixture, so these tests use this trimmed copy.
+    """
+    payload = json.loads((FIXTURES / "keep-present.json").read_text(encoding="utf-8"))
+    payload["providers"]["opencode"] = [
+        item
+        for item in payload["providers"]["opencode"]
+        if item["id"] != "step-5-preview-free"
+    ]
+    path = tmp_path / "keep-present-without-step5.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
 def test_surplus_big_pickle_converts_highest_worker_first() -> None:
     """Lowest-numbered big-pickle stays reserved; highest surplus converts."""
     rows = [
@@ -710,9 +728,9 @@ def test_surplus_big_pickle_converts_highest_worker_first() -> None:
     assert [row["worker"] for row in surplus] == ["59", "39"]
 
 
-def test_unused_free_converts_surplus_big_pickle_instead_of_growing() -> None:
+def test_unused_free_converts_surplus_big_pickle_instead_of_growing(tmp_path: Path) -> None:
     """Apply pins unused free models onto surplus big-pickle slots."""
-    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    catalogs = CATALOG.load_catalog_fixture(_fixture_without_step5(tmp_path))
     rows = [
         _row("23", "opencode-free", "big-pickle", minute="0"),
         _row("39", "opencode-free", "big-pickle", minute="5"),
@@ -783,9 +801,9 @@ def test_retired_lock_model_is_not_silently_re_pinned() -> None:
     assert "muse-spark-1.3-contributor-free" in added
 
 
-def test_mixed_retire_and_add_rebalances_in_one_plan() -> None:
+def test_mixed_retire_and_add_rebalances_in_one_plan(tmp_path: Path) -> None:
     """One apply can drop a dead pin and convert unused free onto surplus."""
-    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    catalogs = CATALOG.load_catalog_fixture(_fixture_without_step5(tmp_path))
     rows = [
         _row("23", "opencode-free", "big-pickle", minute="0"),
         _row("39", "opencode-free", "big-pickle", minute="5"),
@@ -858,14 +876,14 @@ def test_apply_grows_when_no_surplus_big_pickle_remains() -> None:
     assert "big-pickle" not in {item.model for item in grow}
 
 
-def test_apply_does_not_grow_first_big_pickle_when_absent() -> None:
+def test_apply_does_not_grow_first_big_pickle_when_absent(tmp_path: Path) -> None:
     """#2849: unused big-pickle is not grown onto a new worker id.
 
     Unique OpenCode frees already occupy the roster, so the only unused
     catalog-free id is ``big-pickle``. Discovery must not allocate worker
     72 (or any other new id) just to pin the first pickle.
     """
-    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    catalogs = CATALOG.load_catalog_fixture(_fixture_without_step5(tmp_path))
     rows = [
         _row("41", "opencode-free", "mimo-v2.6-flash-free", minute="5"),
         _row("42", "opencode-free", "nemotron-3-ultra-free", minute="10"),
@@ -980,7 +998,7 @@ def test_apply_grow_assigns_minutes_on_balanced_roster(tmp_path: Path) -> None:
     Reproduces discovery runs #35-#37: remaining scheduled rows already
     satisfy ±1, so a grown unused-free pin must not keep ``minute=""``.
     """
-    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    catalogs = CATALOG.load_catalog_fixture(_fixture_without_step5(tmp_path))
     rows = _balanced_grow_roster()
     assert ROSTER.schedule_is_balanced(rows)
     lock = ROSTER.RosterLock(
@@ -1011,7 +1029,7 @@ def test_apply_grow_assigns_minutes_on_balanced_roster(tmp_path: Path) -> None:
             "--lock",
             str(lock_path),
             "--catalog-json",
-            str(FIXTURES / "keep-present.json"),
+            str(_fixture_without_step5(tmp_path)),
         ]
     )
     remaining = ROSTER.load_roster_rows(roster)
@@ -1033,7 +1051,7 @@ def test_same_plan_retire_and_add_reuses_freed_worker(tmp_path: Path) -> None:
     The #37 mimo-v2.5-free → mimo-v2.6-flash-free case must keep worker 41
     and its minute even when the lock still lists 41 as expected.
     """
-    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    catalogs = CATALOG.load_catalog_fixture(_fixture_without_step5(tmp_path))
     rows = _balanced_mimo_upgrade_roster()
     assert ROSTER.schedule_is_balanced(rows)
     lock = ROSTER.RosterLock(
@@ -1066,7 +1084,7 @@ def test_same_plan_retire_and_add_reuses_freed_worker(tmp_path: Path) -> None:
             "--lock",
             str(lock_path),
             "--catalog-json",
-            str(FIXTURES / "keep-present.json"),
+            str(_fixture_without_step5(tmp_path)),
         ]
     )
     remaining = ROSTER.load_roster_rows(roster)
@@ -1316,6 +1334,38 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "minute": "45",
         "scheduler": "dispatcher",
         "display_name": "NVIDIA GLM 5.3",
+    }
+    assert by_worker["79"] == {
+        "worker": "79",
+        "source": "opencode-free",
+        "model": "step-5-preview-free",
+        "minute": "30",
+        "scheduler": "dispatcher",
+        "display_name": "OpenCode Step 5 Preview Free",
+    }
+    assert by_worker["80"] == {
+        "worker": "80",
+        "source": "nvidia",
+        "model": "z-ai/glm-5.3-flash",
+        "minute": "40",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA GLM 5.3 Flash",
+    }
+    assert by_worker["81"] == {
+        "worker": "81",
+        "source": "nvidia",
+        "model": "deepseek-ai/deepseek-v4.1-flash",
+        "minute": "50",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA DeepSeek V4.1 Flash",
+    }
+    assert by_worker["82"] == {
+        "worker": "82",
+        "source": "z-ai",
+        "model": "glm-4.7-flash",
+        "minute": "55",
+        "scheduler": "dispatcher",
+        "display_name": "Z.AI GLM 4.7 Flash",
     }
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in remaining}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in remaining}
