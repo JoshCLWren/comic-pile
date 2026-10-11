@@ -89,7 +89,7 @@ function EventRecord({ event }: { event: DisplayEvent }) {
             {event.issue_number && <span className="text-stone-400"> · #{event.issue_number}</span>}
           </>
         ) : (
-          <span className="text-stone-500">Thread (unavailable)</span>
+          <span className="text-[var(--theme-text-muted)]">Thread (unavailable)</span>
         )}
       </p>
       {metadata.length > 0 ? (

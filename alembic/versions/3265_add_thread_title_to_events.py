@@ -1,7 +1,7 @@
-"""Add thread_title to Event model for historical display of deleted threads.
+"""Add denormalized thread_title to events for deleted-thread history display.
 
 Revision ID: 3265_add_thread_title
-Revises: n6e300000001
+Revises: e913be4e091d
 Create Date: 2026-10-10 00:00:00.000000
 
 """
@@ -14,14 +14,27 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "3265_add_thread_title"
-down_revision: str | Sequence[str] | None = "n6e300000001"
+down_revision: str | Sequence[str] | None = "e913be4e091d"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Add thread_title column to events table for historical thread name display."""
+    """Add the thread_title column and backfill titles for events that still resolve."""
     op.add_column("events", sa.Column("thread_title", sa.String(200), nullable=True))
+    # Events recorded before this migration have no frozen title. Copy the current
+    # thread title in now so a later thread deletion still renders a real name
+    # instead of the unavailable placeholder. Roll events key off
+    # selected_thread_id; every other event type keys off thread_id.
+    op.execute(
+        """
+        UPDATE events AS e
+        SET thread_title = t.title
+        FROM threads AS t
+        WHERE e.thread_title IS NULL
+          AND t.id = COALESCE(e.selected_thread_id, e.thread_id)
+        """
+    )
 
 
 def downgrade() -> None:
