@@ -109,13 +109,24 @@ class ContinuityPlanNode(BaseModel):
     ]
 
 
-class ContinuityPlanWrite(BaseModel):
-    """Create/replace payload for a persisted continuity plan."""
+class ContinuityPlanRead(BaseModel):
+    """Read contract for a persisted continuity plan.
+
+    Fields shared by ``ContinuityPlanWrite`` and ``ContinuityPlanResponse``.
+    This class carries no validation: the read path must never re-run write
+    invariants, because legacy plans persisted before #3037 can contain
+    historical duplicate issue refs in ``nodes_json`` and must load
+    without raising (issue #3347).
+    """
 
     name: str = Field(min_length=1, max_length=200)
     ordering_mode: PlanOrderingMode = "informational"
     lanes: list[ContinuityPlanLane] = Field(min_length=0, max_length=100)
     nodes: list[ContinuityPlanNode] = Field(default_factory=list, max_length=1000)
+
+
+class ContinuityPlanWrite(ContinuityPlanRead):
+    """Create/replace payload for a persisted continuity plan."""
 
     @model_validator(mode="after")
     def validate_structure(self) -> ContinuityPlanWrite:
@@ -191,8 +202,14 @@ class ContinuityPlanWrite(BaseModel):
         return self
 
 
-class ContinuityPlanResponse(ContinuityPlanWrite):
-    """Persisted continuity plan response."""
+class ContinuityPlanResponse(ContinuityPlanRead):
+    """Persisted continuity plan response.
+
+    Read-only: never runs ``validate_structure`` write invariants. Legacy
+    plans whose ``nodes_json`` predates the #3037 unique constraint and
+    contains the same issue twice therefore load without a 500 (issue #3347);
+    writes remain gated by ``ContinuityPlanWrite.validate_structure``.
+    """
 
     id: int
     user_id: int
