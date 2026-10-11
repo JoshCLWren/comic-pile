@@ -1,21 +1,20 @@
-import { isNonNullObject, isString } from '../../utils/runtimeChecks'
+import type { AxiosError } from 'axios'
 
-/**
- * Extract a human-readable message from a failed tag mutation (issue #3032).
- *
- * The API reports failures through the standard `detail` field; anything else
- * falls back to a generic message so the editor never renders `[object Object]`.
- */
-export function tagErrorMessage(error: unknown, fallback: string): string {
-  if (isNonNullObject(error)) {
-    const response = error.response
-    if (isNonNullObject(response)) {
-      const data = response.data
-      if (isNonNullObject(data) && isString(data.detail) && data.detail.trim()) {
-        return data.detail
-      }
+export function tagErrorMessage(err: unknown, fallback: string): string {
+  // If the error is an Axios error with a response structure, prefer the server detail
+  if (err && typeof err === 'object' && 'response' in err) {
+    const resp = (err as { response?: any }).response
+    if (resp?.data?.detail && typeof resp.data.detail === 'string') {
+      return resp.data.detail
     }
-    if (isString(error.message) && error.message.trim()) return error.message
+  }
+  // If it's a plain Error, return its message
+  if (err instanceof Error) {
+    return err.message
+  }
+  // If the error is a string, return it
+  if (typeof err === 'string') {
+    return err
   }
   return fallback
 }
