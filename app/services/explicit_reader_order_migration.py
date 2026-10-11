@@ -1074,7 +1074,7 @@ async def apply_explicit_reader_order_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="informational",
+        ordering_mode="informational"
     )
     await refresh_blocked_status(spec.user_id, db)
     await db.flush()

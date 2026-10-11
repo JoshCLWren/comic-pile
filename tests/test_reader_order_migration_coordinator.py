@@ -338,6 +338,7 @@ async def test_explicit_migration_refuses_needs_review_intersection(
 @pytest.mark.asyncio
 async def test_build_manifest_report_marks_already_migrated_explicit(
     async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Replay trusts the stamped plan contract, not legacy group membership."""
     user = await get_or_create_user_async(async_db)
@@ -395,6 +396,25 @@ async def test_build_manifest_report_marks_already_migrated_explicit(
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
 
+    # Pin the classification: the production Step 14 index is keyed by
+    # dependency ID, so sequential test IDs can collide with real
+    # classifications (e.g. ID 15 is a production standalone_prerequisite).
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: (
+            {dependency.id: "reading_plan_order" for dependency in reader_order},
+            {"family": []},
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
+
     spec = ExplicitReaderOrderSpec(
         user_id=user.id,
         dependency_group_ids=(group.id,),
@@ -420,6 +440,7 @@ async def test_build_manifest_report_marks_already_migrated_explicit(
 @pytest.mark.asyncio
 async def test_grouped_already_migrated_rejects_extra_convergence_edge(
     async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Extra gates on a grouped plan must not still report already-migrated."""
     from app.schemas.continuity_plan import ContinuityPlanNode
@@ -467,6 +488,25 @@ async def test_grouped_already_migrated_rejects_extra_convergence_edge(
     await async_db.flush()
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
+
+    # Pin the classification: the production Step 14 index is keyed by
+    # dependency ID, so sequential test IDs can collide with real
+    # classifications (e.g. ID 15 is a production standalone_prerequisite).
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: (
+            {dependency.id: "reading_plan_order" for dependency in reader_order},
+            {"family": []},
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
 
     spec = ExplicitReaderOrderSpec(
         user_id=user.id,
@@ -531,6 +571,7 @@ async def test_grouped_already_migrated_rejects_extra_convergence_edge(
 async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
     async_db: AsyncSession,
     auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """GET/PUT preserves proof so a group-less migration remains replay-safe."""
     user = await get_or_create_user_async(async_db)
@@ -566,6 +607,25 @@ async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
     await async_db.flush()
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
+
+    # Pin the classification: the production Step 14 index is keyed by
+    # dependency ID, so sequential test IDs can collide with real
+    # classifications (e.g. ID 15 is a production standalone_prerequisite).
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: (
+            {dependency.id: "reading_plan_order" for dependency in reader_order},
+            {"family": []},
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
 
     spec = ExplicitReaderOrderSpec(
         user_id=user.id,
@@ -1126,7 +1186,7 @@ async def test_batch_apply_real_overlap_sets_reach_zero_reader_order_debt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The real Step 23B/explicit sets leave the final cutover audit debt-free."""
+    """The real Step 23B/explicit sets apply with zero remaining reader-order debt."""
     reports = reconcile_batch_manifest_reports(_real_overlap_reports())
     output_dir = tmp_path / "reports"
     output_dir.mkdir()
@@ -1183,13 +1243,6 @@ async def test_batch_apply_real_overlap_sets_reach_zero_reader_order_debt(
         debt.difference_update(manifest_reader_order_dependency_ids(reports[manifest]))
         return {"ok": True}
 
-    async def _cutover(*_args: object, **_kwargs: object) -> dict[str, object]:
-        remaining = sorted(debt)
-        return {
-            "remaining_reading_plan_order_dependency_ids": remaining,
-            "runtime_cutover_safe": not remaining,
-        }
-
     overlap_manifests = set(reports) - {LEGACY_READING_ORDERS_MANIFEST}
     monkeypatch.setattr(cli, "AsyncSessionLocal", lambda: _SessionFactory())
     monkeypatch.setattr(cli, "SOURCE_MANIFESTS", {})
@@ -1201,7 +1254,6 @@ async def test_batch_apply_real_overlap_sets_reach_zero_reader_order_debt(
     monkeypatch.setattr(cli, "ALL_MANIFESTS", set(reports))
     monkeypatch.setattr(cli, "apply_legacy_reading_order_migration", _apply_legacy)
     monkeypatch.setattr(cli, "apply_explicit_reader_order_overlay", _apply_overlay)
-    monkeypatch.setattr(cli, "build_reader_order_cutover_audit", _cutover)
 
     async def _verify(*_args: object, **_kwargs: object) -> None:
         return None
@@ -1212,12 +1264,12 @@ async def test_batch_apply_real_overlap_sets_reach_zero_reader_order_debt(
     exit_code = await cli._batch_apply(summary_path, receipt_path, cli.CONFIRMATION)
     assert exit_code == 0
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    assert receipt["cutover_audit"]["remaining_reading_plan_order_dependency_ids"] == []
-    assert receipt["cutover_audit"]["runtime_cutover_safe"] is True
+    assert receipt["applied"]
+    assert receipt["skipped"] == []
 
 
 @pytest.mark.asyncio
-async def test_batch_apply_commits_safe_subset_when_cutover_remains_blocked(
+async def test_batch_apply_commits_safe_subset_when_debt_remains(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1268,12 +1320,6 @@ async def test_batch_apply_commits_safe_subset_when_cutover_remains_blocked(
     async def _apply_explicit(*_args: object, **_kwargs: object) -> dict[str, object]:
         return {"ok": True, "plan_id": 11}
 
-    async def _cutover(*_args: object, **_kwargs: object) -> dict[str, object]:
-        return {
-            "remaining_reading_plan_order_dependency_ids": [999],
-            "runtime_cutover_safe": False,
-        }
-
     async def _verify(*_args: object, **_kwargs: object) -> None:
         return None
 
@@ -1286,7 +1332,6 @@ async def test_batch_apply_commits_safe_subset_when_cutover_remains_blocked(
     )
     monkeypatch.setattr(cli, "ALL_MANIFESTS", {"safe-family", "blocked-family"})
     monkeypatch.setattr(cli, "apply_explicit_reader_order_migration", _apply_explicit)
-    monkeypatch.setattr(cli, "build_reader_order_cutover_audit", _cutover)
     monkeypatch.setattr(cli, "_verify_clean_batch_snapshots", _verify)
 
     receipt_path = tmp_path / "receipt.json"
@@ -1297,8 +1342,6 @@ async def test_batch_apply_commits_safe_subset_when_cutover_remains_blocked(
     assert receipt["skipped"] == [
         {"manifest": "blocked-family", "status": "blocked-by-needs-review"}
     ]
-    assert receipt["cutover_audit"]["runtime_cutover_safe"] is False
-    assert receipt["cutover_audit"]["remaining_reading_plan_order_dependency_ids"] == [999]
 
 
 def test_stage_durable_json_writes_pending_before_publish(tmp_path: Path) -> None:

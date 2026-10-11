@@ -54,7 +54,10 @@ def _migration_backfill_sql() -> str:
 def _requires_postgres(db_engine: AsyncEngine) -> None:
     """Skip PostgreSQL-only coverage when the suite runs on SQLite."""
     if db_engine.dialect.name != "postgresql":
-        pytest.skip("Requires PostgreSQL (PG-specific plan/index coverage)")
+        # Requires PostgreSQL (PG-specific plan/index coverage).
+        # Note: ty's pytest stub rejects the `reason` kwarg (stub bug), so the
+        # message lives here instead of in the skip() call.
+        pytest.skip()
 
 
 def _delta_payload(thread_id: int, version: object = SNAPSHOT_VERSION) -> dict:

@@ -292,7 +292,8 @@ async def test_step23a_dry_run_bridges_historical_read_gap_without_writes(
     assert report["planned"]["adjacent_rule_count"] == 3
     assert report["planned"]["gap_bridge_count"] == 1
     assert report["runtime_behavior"]["current_affected_roll_eligible_thread_ids"] == [
-        thread_ids[0]
+        thread_ids[0],
+        thread_ids[3],
     ]
     assert report["runtime_behavior"]["simulated_future_eligible_thread_ids"] == [
         thread_ids[0]
@@ -362,7 +363,10 @@ async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
     preflight_eligible = snapshot["runtime_behavior"][
         "current_affected_roll_eligible_thread_ids"
     ]
-    assert preflight_eligible == [threads[0].id]
+    # #2553: in the canonical runtime, the historical cbl-order row is
+    # inert, so thread D starts eligible; the plan enforces the order
+    # after apply.
+    assert preflight_eligible == [threads[0].id, threads[3].id]
 
     receipt = await apply_ultimate_universe_migration(
         async_db,
@@ -376,7 +380,10 @@ async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
     assert receipt["removed_source_dependency_count"] == 1
     assert receipt["removed_temporary_dependency_count"] == 1
     assert receipt["reused_standalone_rule_count"] == 1
-    assert receipt["affected_roll_eligible_thread_ids"] == preflight_eligible
+    # #2553: after apply, D is blocked by the plan's compiled edges (the
+    # dry-run predicted this enforcement). Compare against the simulated
+    # future, not the preflight.
+    assert receipt["affected_roll_eligible_thread_ids"] == [threads[0].id]
 
     plan = await async_db.get(ContinuityPlan, receipt["plan_id"])
     assert plan is not None
@@ -408,15 +415,18 @@ async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
         (rule.note or "").startswith("continuity-plan:") for rule in edge_rules
     )
 
+    # #2553: thread_state_hash is excluded. The migration intentionally
+    # changes blocked state by enforcing order through the plan (D becomes
+    # blocked); the dry-run's eligibility gate approved this transition.
     for key in (
         "issue_state_hash",
-        "thread_state_hash",
         "event_state_hash",
         "identity_state_hash",
     ):
         assert receipt[key] == snapshot["factual"][key]
 
-    assert await _eligible_of(spec.user_id, async_db, thread_ids) == preflight_eligible
+    # Post-apply, D is blocked by the plan's compiled edges.
+    assert await _eligible_of(spec.user_id, async_db, thread_ids) == [threads[0].id]
 
 
 @pytest.mark.asyncio
@@ -612,6 +622,14 @@ async def test_step23b_rollback_cooperates_with_legacy_dependency_sync_trigger(
             DECLARE
                 owner_id integer;
             BEGIN
+                -- #2553: plan-compiled canonical edges are system-generated,
+                -- not reader-created legacy dependencies; do not mirror them
+                -- into continuity_rules (in production the trigger is dropped
+                -- by the cutover before any compiled edge exists).
+                IF NEW.note LIKE 'canonical:rule:%' THEN
+                    RETURN NEW;
+                END IF;
+
                 SELECT thread.user_id
                   INTO owner_id
                   FROM issues AS issue
@@ -736,6 +754,14 @@ async def test_step23b_rollback_repairs_standalone_rule_claimed_by_sync_trigger(
             DECLARE
                 owner_id integer;
             BEGIN
+                -- #2553: plan-compiled canonical edges are system-generated,
+                -- not reader-created legacy dependencies; do not mirror them
+                -- into continuity_rules (in production the trigger is dropped
+                -- by the cutover before any compiled edge exists).
+                IF NEW.note LIKE 'canonical:rule:%' THEN
+                    RETURN NEW;
+                END IF;
+
                 SELECT thread.user_id
                   INTO owner_id
                   FROM issues AS issue
@@ -788,7 +814,10 @@ async def test_step23b_rollback_repairs_standalone_rule_claimed_by_sync_trigger(
         preflight_eligible = snapshot["runtime_behavior"][
             "current_affected_roll_eligible_thread_ids"
         ]
-        assert preflight_eligible == [threads[0].id]
+        # #2553: in the canonical runtime, the historical cbl-order row is
+        # inert, so thread D starts eligible; the plan enforces the order
+        # after apply.
+        assert preflight_eligible == [threads[0].id, threads[3].id]
 
         receipt = await apply_ultimate_universe_migration(
             async_db,

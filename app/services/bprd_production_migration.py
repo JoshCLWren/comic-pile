@@ -35,6 +35,7 @@ from app.services.migration_shared import (
     plan_fingerprint as _plan_fingerprint,
     refresh_blocked_status as _refresh_blocked_status,
     require_snapshot_token as _require_snapshot,
+    retire_plan_compiled_edges as _retire_plan_compiled_edges,
     stable_hash as _stable_hash,
 )
 
@@ -725,7 +726,7 @@ async def apply_bprd_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential",
+        ordering_mode="strict_sequential"
     )
     await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
@@ -831,6 +832,10 @@ async def rollback_bprd_migration(
         )
 
     dependency_ids = {edge.dependency_id for edge in spec.legacy_edges}
+    # Retire this plan's compiled canonical edges before the freeness check:
+    # the #2553 cutover compiles plan rules into Dependencies, so the legacy
+    # pairs are legitimately occupied until the plan's rules are removed.
+    await _retire_plan_compiled_edges(db, rule_ids=[rule.id for rule in plan_rules])
     edge_filters = [
         (Dependency.source_issue_id == edge.source_issue_id)
         & (Dependency.target_issue_id == edge.target_issue_id)

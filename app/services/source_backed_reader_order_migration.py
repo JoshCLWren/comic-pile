@@ -804,7 +804,7 @@ async def apply_source_backed_reader_order_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential",
+        ordering_mode="strict_sequential"
     )
     await refresh_blocked_status(spec.user_id, db)
     await db.flush()
