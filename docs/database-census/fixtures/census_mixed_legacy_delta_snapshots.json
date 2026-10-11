@@ -1,0 +1,264 @@
+{
+  "constraints": {
+    "foreign_keys": [
+      {
+        "column": "session_id",
+        "is_deferrable": false,
+        "is_deferred": false,
+        "name": "snapshots_session_id_fkey",
+        "on_delete": "c",
+        "on_update": "a",
+        "references_column": "id",
+        "references_table": "sessions",
+        "table": "snapshots"
+      }
+    ],
+    "primary_keys": [
+      {
+        "is_deferrable": false,
+        "is_deferred": false,
+        "key_columns": [
+          "id"
+        ],
+        "name": "users_pkey",
+        "table": "users"
+      }
+    ],
+    "unique_constraints": [
+      {
+        "is_deferrable": false,
+        "is_deferred": false,
+        "key_columns": [
+          "username"
+        ],
+        "name": "users_username_key",
+        "table": "users"
+      }
+    ]
+  },
+  "indexes": {
+    "by_table": {},
+    "count": 4,
+    "potential_redundant_indexes": [
+      {
+        "classification": "potential_redundant",
+        "confirmed_safe_removal": false,
+        "covered_by": "ix_threads_user_status_queue_position",
+        "covering_key_columns": [
+          "user_id",
+          "status",
+          "queue_position"
+        ],
+        "index": "ix_threads_user_queue_position",
+        "key_columns": [
+          "user_id",
+          "queue_position"
+        ],
+        "predicate": null,
+        "reasons": [
+          "has_recorded_scans"
+        ],
+        "size_bytes": 0,
+        "table": "threads"
+      }
+    ]
+  },
+  "metadata": {
+    "collected_at": "2026-01-01T00:00:00+00:00",
+    "issues_per_thread": 6.0,
+    "postgresql_version": "synthetic",
+    "read_only_transaction": true,
+    "sample_limit": 10,
+    "scenario": "mixed_legacy_delta_snapshots",
+    "shared_provider_identity_count": 75,
+    "statement_timeout_seconds": 0,
+    "thread_count": 500,
+    "threads_per_user": 20.0,
+    "user_count": 25
+  },
+  "queries": {},
+  "report_version": "database-census/v1",
+  "snapshots": {
+    "by_version": [
+      {
+        "avg_payload_bytes": 8192,
+        "max_payload_bytes": 16384,
+        "measured_rows": 2500,
+        "min_payload_bytes": 4096,
+        "total_payload_bytes": 20480000,
+        "version": "1"
+      },
+      {
+        "avg_payload_bytes": 2048,
+        "max_payload_bytes": 4096,
+        "measured_rows": 1500,
+        "min_payload_bytes": 2048,
+        "total_payload_bytes": 3072000,
+        "version": "2"
+      }
+    ],
+    "session_state": {
+      "avg_session_state_bytes": 512,
+      "distinct_sessions": 25,
+      "measured_rows": 4000,
+      "rows_with_session_state": 4000,
+      "rows_without_session_state": 0
+    },
+    "workload_growth": {
+      "latest_undo": [
+        {
+          "event_type": "roll",
+          "sample_rank": 1,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 2,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 3,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 4,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 5,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 6,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 7,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 8,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 9,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        },
+        {
+          "event_type": "roll",
+          "sample_rank": 10,
+          "session_snapshot_rows": 2500,
+          "session_state_bytes": 512,
+          "thread_state_bytes": 8192
+        }
+      ],
+      "note": "Rows and payload bytes only. No hardware-specific latency pass/fail claim is made or implied.",
+      "reorder": {
+        "distinct_threads_moved": 20,
+        "queue_move_bytes": 400,
+        "reorder_event_rows": 25
+      },
+      "sampled_readers": 10
+    }
+  },
+  "storage": {
+    "tables": [
+      {
+        "index": "6.2 kB",
+        "index_bytes": 6400,
+        "name": "users",
+        "schema": "public",
+        "table": "12.5 kB",
+        "table_bytes": 12800,
+        "total": "18.8 kB",
+        "total_bytes": 19200
+      },
+      {
+        "index": "1000.0 kB",
+        "index_bytes": 1024000,
+        "name": "threads",
+        "schema": "public",
+        "table": "2000.0 kB",
+        "table_bytes": 2048000,
+        "total": "3000.0 kB",
+        "total_bytes": 3072000
+      },
+      {
+        "index": "1500.0 kB",
+        "index_bytes": 1536000,
+        "name": "issues",
+        "schema": "public",
+        "table": "3000.0 kB",
+        "table_bytes": 3072000,
+        "total": "4500.0 kB",
+        "total_bytes": 4608000
+      },
+      {
+        "index": "4000.0 kB",
+        "index_bytes": 4096000,
+        "name": "snapshots",
+        "schema": "public",
+        "table": "8000.0 kB",
+        "table_bytes": 8192000,
+        "total": "12000.0 kB",
+        "total_bytes": 12288000
+      }
+    ],
+    "toast": [
+      {
+        "schema": "public",
+        "table": "snapshots",
+        "toast": "20000.0 kB",
+        "toast_bytes": 20480000
+      }
+    ]
+  },
+  "synthetic": true,
+  "tables": {
+    "issues": {
+      "estimate_delta": 0,
+      "estimated_rows": 3000,
+      "measured_rows": 3000
+    },
+    "snapshots": {
+      "estimate_delta": 0,
+      "estimated_rows": 4000,
+      "measured_rows": 4000
+    },
+    "threads": {
+      "estimate_delta": 0,
+      "estimated_rows": 500,
+      "measured_rows": 500
+    },
+    "users": {
+      "estimate_delta": 0,
+      "estimated_rows": 25,
+      "measured_rows": 25
+    }
+  }
+}

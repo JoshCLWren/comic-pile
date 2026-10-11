@@ -1,366 +1,184 @@
-"""Tests for the database census CLI command."""
+"""Tests for the database census CLI command (issue #3217)."""
+
+from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
-from argparse import Namespace
 
 from scripts.database_census import (
-    run_census,
-    generate_sample_fixtures,
+    build_parser,
     main,
+    run_census,
+    synthetic_report,
+    write_report,
 )
+from app.services.database_census_service import CENSUS_REPORT_VERSION
 
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
-@pytest.fixture
-def mock_database_url():
-    """Mock database URL for testing."""
-    return "postgresql+asyncpg://user:pass@localhost/testdb"
-
-
-@pytest.fixture
-def sample_census_data():
-
-
-@pytest.fixture
-def sample_census_data():
-    """Sample census data for testing."""
+def _synthetic_scenarios() -> set[str]:
     return {
-        "metadata": {
-            "timestamp": "2026-10-10T12:00:00+00:00",
-            "postgresql_version": "PostgreSQL 16.2",
-            "timeout_seconds": 30,
-            "mode": "production",
-        },
-        "storage": {
-            "tables": [],
-            "indexes": [],
-            "toast": [],
-        },
-        "tables": {
-            "users": {
-                "actual_rows": 100,
-                "estimated_rows": 100,
-                "count_accuracy": "exact",
-            }
-        },
-        "indexes": {
-            "by_table": {},
-            "redundant_indexes": [],
-            "overlapping_indexes": [],
-        },
-        "snapshots": {
-            "by_version": [],
-            "session_state": {},
-            "top_users": [],
-        },
-        "queries": {
-            "queue_query": {
-                "query": "SELECT * FROM threads",
-                "parameters": {},
-                "plan": "sample_plan",
-                "plan_text": "sample_plan_text",
-            }
-        },
-        "constraints": {
-            "primary_keys": [],
-            "foreign_keys": [],
-            "unique_constraints": [],
-        },
+        "report_version",
+        "metadata",
+        "storage",
+        "tables",
+        "indexes",
+        "snapshots",
+        "queries",
+        "constraints",
     }
 
+class TestSyntheticDefault:
+    """Creating tooling must never authorize running it against production."""
 
-class TestRunCensus:
-    """Test cases for the run_census function."""
+    async def test_defaults_to_synthetic_without_a_database_url(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Defaults to synthetic without a database url."""
+        output = tmp_path / "census.json"
 
-    @pytest.mark.asyncio
-    async def test_run_census_success(self, mock_database_url, sample_census_data):
-        """Test successful census execution."""
-        with patch('scripts.database_census.create_async_engine') as mock_create_engine, \
-             patch('scripts.database_census.sessionmaker') as mock_sessionmaker, \
-             patch('app.services.database_census_service.DatabaseCensusService') as mock_census_service_class:
-            
-            # Mock the database session and service
-            mock_session = AsyncMock()
-            mock_sessionmaker.return_value = lambda: mock_session
-            
-            mock_census_service = AsyncMock()
-            mock_census_service.collect_census = AsyncMock(return_value=sample_census_data)
-            mock_census_service.redact_sensitive_data = AsyncMock(return_value=sample_census_data)
-            mock_census_service_class.return_value = mock_census_service
-            
-            # Run census
-            result = await run_census(mock_database_url)
-            
-            # Verify results
-            assert result == sample_census_data
-            mock_census_service.collect_census.assert_called_once()
-            mock_census_service.redact_sensitive_data.assert_called_once_with(sample_census_data)
+        exit_code = await main(["--output", str(output)])
 
-    @pytest.mark.asyncio
-    async def test_run_census_with_output_file(self, mock_database_url, sample_census_data):
-        """Test census execution with output file."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
-            output_path = temp_file.name
-        
-        try:
-            with patch('scripts.database_census.create_async_engine') as mock_create_engine, \
-                 patch('scripts.database_census.sessionmaker') as mock_sessionmaker, \
-                 patch('app.services.database_census_service.DatabaseCensusService') as mock_census_service_class:
-                
-                # Mock the database session and service
-                mock_session = AsyncMock()
-                mock_sessionmaker.return_value = lambda: mock_session
-                
-                mock_census_service = AsyncMock()
-                mock_census_service.collect_census = AsyncMock(return_value=sample_census_data)
-                mock_census_service.redact_sensitive_data = AsyncMock(return_value=sample_census_data)
-                mock_census_service_class.return_value = mock_census_service
-                
-                # Run census with output file
-                await run_census(mock_database_url, output_file=output_path)
-                
-                # Verify file was created and contains correct data
-                assert Path(output_path).exists()
-                
-                with open(output_path, 'r', encoding='utf-8') as f:
-                    file_data = json.load(f)
-                
-                assert file_data == sample_census_data
-        finally:
-            if Path(output_path).exists():
-                Path(output_path).unlink()
+        assert exit_code == 0
+        assert capsys.readouterr().out == ""
+        report = json.loads(output.read_text(encoding="utf-8"))
+        assert report["synthetic"] is True
+        assert report["metadata"]["postgresql_version"] == "synthetic"
 
-    @pytest.mark.asyncio
-    async def test_run_census_synthetic_mode(self, mock_database_url):
-        """Test census in synthetic mode."""
-        synthetic_data = generate_sample_fixtures()
-        
-        with patch('scripts.database_census.create_async_engine') as mock_create_engine, \
-             patch('scripts.database_census.sessionmaker') as mock_sessionmaker, \
-             patch('app.services.database_census_service.DatabaseCensusService') as mock_census_service_class:
-            
-            # Mock the database session and service
-            mock_session = AsyncMock()
-            mock_sessionmaker.return_value = lambda: mock_session
-            
-            mock_census_service = AsyncMock()
-            mock_census_service.collect_census = AsyncMock(return_value=synthetic_data)
-            mock_census_service.redact_sensitive_data = AsyncMock(return_value=synthetic_data)
-            mock_census_service_class.return_value = mock_census_service
-            
-            # Run census in synthetic mode
-            result = await run_census(mock_database_url, synthetic_data=True)
-            
-            # Verify synthetic metadata is added
-            assert result["metadata"]["mode"] == "synthetic"
+    async def test_synthetic_flag_wins_over_database_url(
+        self, tmp_path: Path
+    ) -> None:
+        """Synthetic flag wins over database url."""
+        output = tmp_path / "census.json"
 
-    @pytest.mark.asyncio
-    async def test_run_census_error_handling(self, mock_database_url):
-        """Test error handling in census execution."""
-        with patch('scripts.database_census.create_async_engine') as mock_create_engine, \
-             patch('scripts.database_census.sessionmaker') as mock_sessionmaker, \
-             patch('app.services.database_census_service.DatabaseCensusService') as mock_census_service_class:
-            
-            # Mock the database session and service
-            mock_session = AsyncMock()
-            mock_sessionmaker.return_value = lambda: mock_session
-            
-            mock_census_service = AsyncMock()
-            mock_census_service.collect_census = AsyncMock(side_effect=Exception("Database error"))
-            mock_census_service_class.return_value = mock_census_service
-            
-            # Run census and expect exception
-            with pytest.raises(Exception, match="Database error"):
-                await run_census(mock_database_url)
+        exit_code = await main(
+            ["--synthetic", "--database-url", "postgresql+asyncpg://nope/nope", "--output", str(output)]
+        )
 
+        assert exit_code == 0
+        assert json.loads(output.read_text(encoding="utf-8"))["synthetic"] is True
 
-class TestGenerateSampleFixtures:
-    """Test cases for generate_sample_fixtures function."""
+    async def test_writes_synthetic_report_to_stdout(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Writes synthetic report to stdout."""
+        exit_code = await main([])
 
-    def test_generate_sample_fixtures_structure(self):
-        """Test that sample fixtures have the expected structure."""
-        sample_data = generate_sample_fixtures()
-        
-        # Check required top-level keys
-        required_keys = [
-            "metadata", "storage", "tables", "indexes", 
-            "snapshots", "queries", "constraints"
-        ]
-        
-        for key in required_keys:
-            assert key in sample_data, f"Missing required key: {key}"
-        
-        # Check metadata structure
-        metadata = sample_data["metadata"]
-        assert "timestamp" in metadata
-        assert "postgresql_version" in metadata
-        assert "timeout_seconds" in metadata
-        assert "mode" in metadata
-        assert metadata["mode"] == "synthetic"
-        
-        # Check storage structure
-        storage = sample_data["storage"]
-        assert "tables" in storage
-        assert "indexes" in storage
-        assert "toast" in storage
-        
-        # Check tables structure
-        tables = sample_data["tables"]
-        assert "users" in tables
-        assert "threads" in tables
-        assert "issues" in tables
-        
-        # Check snapshot analysis structure
-        snapshots = sample_data["snapshots"]
-        assert "by_version" in snapshots
-        assert "session_state" in snapshots
-        assert "top_users" in snapshots
-        
-        # Check queries structure
-        queries = sample_data["queries"]
-        assert "queue_query" in queries
-        assert "roll_pool_query" in queries
-        assert "undo_query" in queries
-        assert "snapshot_query" in queries
-        
-        # Check constraints structure
-        constraints = sample_data["constraints"]
-        assert "primary_keys" in constraints
-        assert "foreign_keys" in constraints
-        assert "unique_constraints" in constraints
+        assert exit_code == 0
+        report = json.loads(capsys.readouterr().out)
+        assert report["report_version"] == CENSUS_REPORT_VERSION
 
-    def test_generate_sample_fixtures_data_types(self):
-        """Test that sample fixtures have correct data types."""
-        sample_data = generate_sample_fixtures()
-        
-        # Test metadata types
-        metadata = sample_data["metadata"]
-        assert isinstance(metadata["timestamp"], str)
-        assert isinstance(metadata["timeout_seconds"], int)
-        assert isinstance(metadata["mode"], str)
-        
-        # Test tables data types
-        tables = sample_data["tables"]
-        for table_name, table_stats in tables.items():
-            assert isinstance(table_stats["actual_rows"], int)
-            assert isinstance(table_stats["estimated_rows"], int)
-            assert isinstance(table_stats["count_accuracy"], str)
-        
-        # Test snapshots data types
-        snapshots = sample_data["snapshots"]
-        for version_data in snapshots["by_version"]:
-            assert isinstance(version_data["version"], str)
-            assert isinstance(version_data["count"], int)
-            assert isinstance(version_data["avg_size_chars"], (int, type(None)))
-            assert isinstance(version_data["max_size_chars"], (int, type(None)))
-            assert isinstance(version_data["min_size_chars"], (int, type(None)))
+    def test_synthetic_report_has_the_full_shape(self) -> None:
+        """Synthetic report has the full shape."""
+        assert _synthetic_scenarios() <= set(synthetic_report())
 
+    def test_synthetic_report_is_deterministic(self) -> None:
+        """Synthetic report is deterministic."""
+        assert synthetic_report() == synthetic_report()
 
-class TestMainFunction:
-    """Test cases for the main function."""
+class TestReportWriting:
+    """Reports must be reproducible bytes on disk."""
 
-    @patch('scripts.database_census.run_census')
-    @patch('scripts.database_census.get_settings')
-    @patch('sys.argv', ['database_census.py'])
-    def test_main_no_database_url(self, mock_get_settings, mock_run_census):
-        """Test main function without database URL."""
-        # Mock settings to provide database URL
-        mock_settings = MagicMock()
-        mock_settings.database_url = "test_url"
-        mock_get_settings.return_value = mock_settings
-        
-        # Mock run_census to not raise exception
-        mock_run_census.return_value = {}
-        
-        # This would normally exit, but we're testing the flow
-        with pytest.raises(SystemExit):
-            main()
+    def test_creates_missing_parent_directories(self, tmp_path: Path) -> None:
+        """Creates missing parent directories."""
+        destination = tmp_path / "nested" / "dir" / "census.json"
 
-    @patch('scripts.database_census.run_census')
-    @patch('sys.argv', ['database_census.py', '--database-url', 'test_url'])
-    def test_main_with_database_url(self, mock_run_census):
-        """Test main function with database URL."""
-        # Mock run_census to not raise exception
-        mock_run_census.return_value = {}
-        
-        # This would normally exit, but we're testing the flow
-        with pytest.raises(SystemExit):
-            main()
+        write_report(synthetic_report(), str(destination))
 
-    @patch('scripts.database_census.generate_sample_fixtures')
-    @patch('sys.argv', ['database_census.py', '--synthetic'])
-    def test_main_synthetic_mode(self, mock_generate_fixtures):
-        """Test main function in synthetic mode."""
-        # Mock generate_sample_fixtures
-        mock_generate_fixtures.return_value = {"metadata": {"mode": "synthetic"}}
-        
-        # This would normally exit, but we're testing the flow
-        with pytest.raises(SystemExit):
-            main()
+        assert destination.exists()
 
-    @patch('scripts.database_census.run_census')
-    @patch('sys.argv', ['database_census.py', '--database-url', 'test_url', '--no-redact'])
-    def test_main_no_redact(self, mock_run_census):
-        """Test main function with no redaction."""
-        # Mock run_census to not raise exception
-        mock_run_census.return_value = {}
-        
-        # This would normally exit, but we're testing the flow
-        with pytest.raises(SystemExit):
-            main()
+    def test_serialized_output_is_stable(self, tmp_path: Path) -> None:
+        """Serialized output is stable."""
+        first = tmp_path / "first.json"
+        second = tmp_path / "second.json"
 
+        write_report(synthetic_report(), str(first))
+        write_report(synthetic_report(), str(second))
+
+        assert first.read_bytes() == second.read_bytes()
+
+    def test_ends_with_a_trailing_newline(self, tmp_path: Path) -> None:
+        """Ends with a trailing newline."""
+        destination = tmp_path / "census.json"
+
+        write_report(synthetic_report(), str(destination))
+
+        assert destination.read_text(encoding="utf-8").endswith("}\n")
 
 class TestArgumentParsing:
-    """Test cases for argument parsing."""
+    """The CLI surface is part of the read-only contract."""
 
-    def test_parse_arguments_basic(self):
-        """Test basic argument parsing."""
-        with patch('sys.argv', ['database_census.py']):
-            parser = MagicMock()
-            parser.add_argument = MagicMock()
-            parser.parse_args = MagicMock(return_value=Namespace(
-                database_url=None,
-                output=None,
-                timeout=30,
-                sample_limit=None,
-                synthetic=False,
-                no_redact=False,
-            ))
-            
-            # Test that arguments are defined correctly
-            assert parser.add_argument.call_count >= 7  # Should have at least 7 arguments
+    def test_database_url_is_never_inferred(self) -> None:
+        """Database url is never inferred."""
+        args = build_parser().parse_args([])
 
-    def test_parse_arguments_with_options(self):
-        """Test argument parsing with options."""
-        with patch('sys.argv', [
-            'database_census.py',
-            '--database-url', 'test_url',
-            '--output', 'output.json',
-            '--timeout', '60',
-            '--sample-limit', '1000',
-            '--synthetic',
-            '--no-redact',
-        ]):
-            parser = MagicMock()
-            parser.add_argument = MagicMock()
-            parser.parse_args = MagicMock(return_value=Namespace(
-                database_url='test_url',
-                output='output.json',
-                timeout=60,
-                sample_limit=1000,
-                synthetic=True,
-                no_redact=True,
-            ))
-            
-            # Verify all options are parsed correctly
-            args = parser.parse_args.return_value
-            assert args.database_url == 'test_url'
-            assert args.output == 'output.json'
-            assert args.timeout == 60
-            assert args.sample_limit == 1000
-            assert args.synthetic is True
-            assert args.no_redact is True
+        assert args.database_url is None
+        assert args.synthetic is False
+
+    def test_accepts_bounded_collection_options(self) -> None:
+        """Accepts bounded collection options."""
+        args = build_parser().parse_args(
+            ["--timeout", "5", "--sample-limit", "2", "--database-url", "url"]
+        )
+
+        assert args.timeout == 5
+        assert args.sample_limit == 2
+        assert args.database_url == "url"
+
+    def test_defaults_are_bounded(self) -> None:
+        """Defaults are bounded."""
+        args = build_parser().parse_args([])
+
+        assert args.timeout > 0
+        assert args.sample_limit > 0
+
+class TestRunCensusAgainstASuppliedDatabase:
+    """An explicitly supplied URL is the only path that touches a database."""
+
+    async def test_runs_read_only_against_postgres(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Runs read only against postgres."""
+        from tests.conftest import get_test_database_url
+
+        report = await run_census(
+            database_url=get_test_database_url(),
+            timeout_seconds=60,
+            sample_limit=2,
+        )
+
+        assert report["report_version"] == CENSUS_REPORT_VERSION
+        assert report["metadata"]["read_only_transaction"] is True
+        assert report["metadata"]["postgresql_version"].startswith("PostgreSQL")
+        assert report["metadata"]["statement_timeout_seconds"] == 60
+        assert report["storage"]["tables"]
+
+    async def test_rejects_invalid_timeout_before_connecting(self) -> None:
+        """Rejects invalid timeout before connecting."""
+        with pytest.raises(ValueError, match="timeout_seconds"):
+            await run_census(database_url="postgresql+asyncpg://x/y", timeout_seconds=0)
+
+    async def test_writes_report_to_the_requested_file(self, tmp_path: Path) -> None:
+        """Writes report to the requested file."""
+        from tests.conftest import get_test_database_url
+
+        destination = tmp_path / "measured.json"
+        await run_census(
+            database_url=get_test_database_url(),
+            output_file=str(destination),
+            timeout_seconds=60,
+            sample_limit=2,
+        )
+
+        assert json.loads(destination.read_text(encoding="utf-8"))["storage"]["tables"]
+
+    async def test_reports_a_connection_failure_as_a_nonzero_exit(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Reports a connection failure as a nonzero exit."""
+        exit_code = await main(
+            ["--database-url", "postgresql+asyncpg://nobody@127.0.0.1:1/does_not_exist"]
+        )
+
+        assert exit_code == 1
+        assert "census failed" in capsys.readouterr().err

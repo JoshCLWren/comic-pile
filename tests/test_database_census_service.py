@@ -1,410 +1,602 @@
-"""Tests for database census service functionality."""
+"""Tests for the read-only database census service (issue #3217)."""
 
-import json
+from __future__ import annotations
+
 import pytest
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.database_census_service import DatabaseCensusService
+from app.models import Event, ReadingSession, Snapshot, Thread, User
+from app.repositories.database_census_repository import DatabaseCensusRepository
+from app.services.database_census_service import (
+    CENSUS_QUERIES,
+    CENSUS_REPORT_VERSION,
+    DatabaseCensusService,
+    contains_mutation,
+)
 
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+#: Recognisable values seeded by the fixture; none may appear in a report.
+CENSUS_FIXTURE_USERNAME = "census-reader"
+CENSUS_FIXTURE_EMAIL = "census-reader@example.invalid"
+CENSUS_FIXTURE_PASSWORD = "census-password-hash-should-never-appear"
+CENSUS_FIXTURE_TITLE = "Census Fixture Thread Title"
 
 @pytest.fixture
-def mock_db_session():
-    """Create a mock async database session."""
-    session = AsyncMock(spec=AsyncSession)
-    return session
+def census_service() -> DatabaseCensusService:
+    """Return a census service that never touches its session."""
+    return DatabaseCensusService(AsyncSession(), timeout_seconds=30, sample_limit=10)
 
+#: A structurally redundant narrow index and the wider index that covers it.
+INDEX_CATALOG_ROWS: list[dict[str, object]] = [
+    {
+        "schema_name": "public",
+        "table_name": "threads",
+        "index_name": "threads_pkey",
+        "is_unique": True,
+        "is_primary": True,
+        "is_partial": False,
+        "predicate": None,
+        "has_expressions": False,
+        "access_method": "btree",
+        "definition": "CREATE UNIQUE INDEX threads_pkey ON public.threads USING btree (id)",
+        "size_bytes": 16384,
+        "size_pretty": "16 kB",
+        "scans": 12,
+        "tuples_read": 120,
+        "tuples_fetched": 60,
+        "constraint_name": "threads_pkey",
+        "constraint_type": "p",
+        "constraint_deferrable": False,
+        "constraint_deferred": False,
+        "key_columns": ["id"],
+    },
+    {
+        "schema_name": "public",
+        "table_name": "threads",
+        "index_name": "ix_threads_user_id",
+        "is_unique": False,
+        "is_primary": False,
+        "is_partial": False,
+        "predicate": None,
+        "has_expressions": False,
+        "access_method": "btree",
+        "definition": "CREATE INDEX ix_threads_user_id ON public.threads USING btree (user_id)",
+        "size_bytes": 8192,
+        "size_pretty": "8192 bytes",
+        "scans": 0,
+        "tuples_read": 0,
+        "tuples_fetched": 0,
+        "constraint_name": None,
+        "constraint_type": None,
+        "constraint_deferrable": False,
+        "constraint_deferred": False,
+        "key_columns": ["user_id"],
+    },
+    {
+        "schema_name": "public",
+        "table_name": "threads",
+        "index_name": "ix_threads_user_status_queue",
+        "is_unique": False,
+        "is_primary": False,
+        "is_partial": False,
+        "predicate": None,
+        "has_expressions": False,
+        "access_method": "btree",
+        "definition": (
+            "CREATE INDEX ix_threads_user_status_queue "
+            "ON public.threads USING btree (user_id, status, queue_position)"
+        ),
+        "size_bytes": 16384,
+        "size_pretty": "16 kB",
+        "scans": 3,
+        "tuples_read": 30,
+        "tuples_fetched": 30,
+        "constraint_name": None,
+        "constraint_type": None,
+        "constraint_deferrable": False,
+        "constraint_deferred": False,
+        "key_columns": ["user_id", "status", "queue_position"],
+    },
+    {
+        "schema_name": "public",
+        "table_name": "threads",
+        "index_name": "ix_threads_status",
+        "is_unique": False,
+        "is_primary": False,
+        "is_partial": False,
+        "predicate": None,
+        "has_expressions": False,
+        "access_method": "btree",
+        "definition": "CREATE INDEX ix_threads_status ON public.threads USING btree (status)",
+        "size_bytes": 8192,
+        "size_pretty": "8192 bytes",
+        "scans": 0,
+        "tuples_read": 0,
+        "tuples_fetched": 0,
+        "constraint_name": None,
+        "constraint_type": None,
+        "constraint_deferrable": False,
+        "constraint_deferred": False,
+        "key_columns": ["status"],
+    },
+    {
+        "schema_name": "public",
+        "table_name": "threads",
+        "index_name": "ix_threads_open_partial",
+        "is_unique": False,
+        "is_primary": False,
+        "is_partial": True,
+        "predicate": "(status = 'active'::text)",
+        "has_expressions": False,
+        "access_method": "btree",
+        "definition": (
+            "CREATE INDEX ix_threads_open_partial ON public.threads "
+            "USING btree (user_id) WHERE status = 'active'::text"
+        ),
+        "size_bytes": 4096,
+        "size_pretty": "4096 bytes",
+        "scans": 0,
+        "tuples_read": 0,
+        "tuples_fetched": 0,
+        "constraint_name": None,
+        "constraint_type": None,
+        "constraint_deferrable": False,
+        "constraint_deferred": False,
+        "key_columns": ["user_id"],
+    },
+    {
+        "schema_name": "public",
+        "table_name": "threads",
+        "index_name": "ix_threads_active_queue",
+        "is_unique": False,
+        "is_primary": False,
+        "is_partial": False,
+        "predicate": None,
+        "has_expressions": False,
+        "access_method": "btree",
+        "definition": (
+            "CREATE INDEX ix_threads_active_queue "
+            "ON public.threads USING btree (status, queue_position)"
+        ),
+        "size_bytes": 8192,
+        "size_pretty": "8192 bytes",
+        "scans": 7,
+        "tuples_read": 70,
+        "tuples_fetched": 70,
+        "constraint_name": None,
+        "constraint_type": None,
+        "constraint_deferrable": False,
+        "constraint_deferred": False,
+        "key_columns": ["status", "queue_position"],
+    },
+    {
+        "schema_name": "public",
+        "table_name": "threads",
+        "index_name": "ix_threads_active_queue_created",
+        "is_unique": False,
+        "is_primary": False,
+        "is_partial": False,
+        "predicate": None,
+        "has_expressions": False,
+        "access_method": "btree",
+        "definition": (
+            "CREATE INDEX ix_threads_active_queue_created ON public.threads "
+            "USING btree (status, queue_position, created_at)"
+        ),
+        "size_bytes": 16384,
+        "size_pretty": "16 kB",
+        "scans": 0,
+        "tuples_read": 0,
+        "tuples_fetched": 0,
+        "constraint_name": None,
+        "constraint_type": None,
+        "constraint_deferrable": False,
+        "constraint_deferred": False,
+        "key_columns": ["status", "queue_position", "created_at"],
+    },
+    {
+        "schema_name": "public",
+        "table_name": "users",
+        "index_name": "users_pkey",
+        "is_unique": True,
+        "is_primary": True,
+        "is_partial": False,
+        "predicate": None,
+        "has_expressions": False,
+        "access_method": "btree",
+        "definition": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)",
+        "size_bytes": 16384,
+        "size_pretty": "16 kB",
+        "scans": 5,
+        "tuples_read": 50,
+        "tuples_fetched": 50,
+        "constraint_name": "users_pkey",
+        "constraint_type": "p",
+        "constraint_deferrable": False,
+        "constraint_deferred": False,
+        "key_columns": ["id"],
+    },
+]
 
-@pytest.fixture
-def census_service(mock_db_session):
-    """Create a database census service instance."""
-    return DatabaseCensusService(mock_db_session, timeout_seconds=30)
+class TestMutationGuard:
+    """The census must never plan a statement that could write."""
 
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "SELECT id FROM threads",
+            "WITH recent AS (SELECT id FROM events) SELECT * FROM recent",
+            "SELECT t.id FROM threads t WHERE t.created_at > now()",
+            "VALUES (1)",
+        ],
+    )
+    def test_read_statements_are_accepted(self, sql: str) -> None:
+        """Read statements are accepted."""
+        assert contains_mutation(sql) is False
 
-class TestDatabaseCensusService:
-    """Test cases for DatabaseCensusService."""
+    @pytest.mark.parametrize(
+        "sql",
+        [
+            "INSERT INTO threads (title) VALUES ('x')",
+            "UPDATE threads SET queue_position = 1",
+            "DELETE FROM snapshots",
+            "TRUNCATE TABLE users",
+            "CREATE INDEX ix_new ON threads (id)",
+            "DROP INDEX ix_threads_user_id",
+            "ALTER TABLE threads ADD COLUMN x integer",
+            "MERGE INTO threads USING events ON true",
+            "WITH stale AS (DELETE FROM events RETURNING id) SELECT * FROM stale",
+            "SELECT 1; VACUUM",
+            "SET statement_timeout = 0",
+            "-- harmless comment\n/* block */ UPDATE threads SET x = 1",
+            "SELECT 'please delete this row' AS note",
+        ],
+    )
+    def test_mutation_statements_are_rejected(self, sql: str) -> None:
+        """Mutation statements are rejected."""
+        assert contains_mutation(sql) is True
 
-    @pytest.mark.asyncio
-    async def test_set_read_only_mode(self, census_service, mock_db_session):
-        """Test setting read-only mode."""
-        await census_service._set_read_only_mode()
-        
-        # Verify that the execute method was called with the read-only command
-        mock_db_session.execute.assert_called_once()
-        call_args = mock_db_session.execute.call_args
-        assert "SET LOCAL lock_timeout = '1s'" in str(call_args)
+    def test_every_census_query_is_a_read(self) -> None:
+        """Every census query is a read."""
+        for name, (query, _parameters) in CENSUS_QUERIES.items():
+            assert contains_mutation(query) is False, name
 
-    @pytest.mark.asyncio
-    async def test_get_postgresql_version(self, census_service, mock_db_session):
-        """Test getting PostgreSQL version."""
-        # Mock the database response
-        mock_result = AsyncMock()
-        mock_result.scalar_one.return_value = "PostgreSQL 16.2"
-        mock_db_session.execute.return_value = mock_result
-        
-        version = await census_service._get_postgresql_version()
-        
-        assert version == "PostgreSQL 16.2"
-        mock_db_session.execute.assert_called_once()
+class TestServiceConstruction:
+    """Bounded collection parameters are required, not optional."""
 
-    @pytest.mark.asyncio
-    async def test_get_postgresql_version_unknown(self, census_service, mock_db_session):
-        """Test handling unknown PostgreSQL version."""
-        # Mock the database response returning None
-        mock_result = AsyncMock()
-        mock_result.scalar_one.return_value = None
-        mock_db_session.execute.return_value = mock_result
-        
-        version = await census_service._get_postgresql_version()
-        
-        assert version == "Unknown"
+    @pytest.mark.parametrize("timeout", [0, -1])
+    def test_rejects_non_positive_timeout(self, timeout: int) -> None:
+        """Rejects non positive timeout."""
+        with pytest.raises(ValueError, match="timeout_seconds"):
+            DatabaseCensusService(None, timeout_seconds=timeout)  # type: ignore[arg-type]
 
-    @pytest.mark.asyncio
-    async def test_collect_storage_stats(self, census_service, mock_db_session):
-        """Test collecting storage statistics."""
-        # Mock table size query results
-        mock_table_result = AsyncMock()
-        mock_table_result.fetchall.return_value = [
-            AsyncMock(
-                schemaname="public",
-                tablename="users",
-                total_size="16 kB",
-                table_size="8 kB",
-                index_size="8 kB",
-                total_bytes=16384,
-                table_bytes=8192,
-                index_bytes=8192,
-            )
-        ]
-        
-        # Mock index size query results
-        mock_index_result = AsyncMock()
-        mock_index_result.fetchall.return_value = [
-            AsyncMock(
-                schemaname="public",
-                tablename="users",
-                indexname="users_pkey",
-                index_size="8 kB",
-                index_bytes=8192,
-                idx_scan=100,
-                idx_tup_read=1000,
-                idx_tup_fetch=500,
-            )
-        ]
-        
-        # Mock toast query results
-        mock_toast_result = AsyncMock()
-        mock_toast_result.fetchall.return_value = []
-        
-        # Set up the execute method to return different results based on query
-        def mock_execute(query):
-            if "pg_tables" in str(query):
-                return mock_table_result
-            elif "pg_indexes" in str(query):
-                return mock_index_result
-            elif "pg_total_relation_size" in str(query) and "toast" in str(query):
-                return mock_toast_result
-            return AsyncMock()
-        
-        mock_db_session.execute.side_effect = mock_execute
-        
-        storage_stats = await census_service._collect_storage_stats()
-        
-        assert "tables" in storage_stats
-        assert "indexes" in storage_stats
-        assert "toast" in storage_stats
-        
-        assert len(storage_stats["tables"]) == 1
-        assert storage_stats["tables"][0]["tablename"] == "users"
-        assert storage_stats["tables"][0]["total_bytes"] == 16384
+    @pytest.mark.parametrize("sample_limit", [0, -5])
+    def test_rejects_non_positive_sample_limit(self, sample_limit: int) -> None:
+        """Rejects non positive sample limit."""
+        with pytest.raises(ValueError, match="sample_limit"):
+            DatabaseCensusService(None, sample_limit=sample_limit)  # type: ignore[arg-type]
 
-    @pytest.mark.asyncio
-    async def test_collect_table_stats(self, census_service, mock_db_session):
-        """Test collecting table statistics."""
-        from app.models import User, Thread
-        
-        # Mock count queries
-        mock_count_result = AsyncMock()
-        mock_count_result.scalar.return_value = 10
-        mock_db_session.execute.return_value = mock_count_result
-        
-        # Mock estimate query
-        mock_estimate_result = AsyncMock()
-        mock_estimate_result.scalar.return_value = 10
-        mock_db_session.execute.return_value = mock_estimate_result
-        
-        table_stats = await census_service._collect_table_stats()
-        
-        assert "users" in table_stats
-        assert "threads" in table_stats
-        
-        user_stats = table_stats["users"]
-        assert user_stats["actual_rows"] == 10
-        assert user_stats["estimated_rows"] == 10
-        assert user_stats["count_accuracy"] == "exact"
+    @pytest.mark.parametrize("timeout", [0, -3])
+    async def test_repository_rejects_non_positive_timeout(self, timeout: int) -> None:
+        """Repository rejects non positive timeout."""
+        repository = DatabaseCensusRepository(AsyncSession())
+        with pytest.raises(ValueError, match="positive integers"):
+            await repository.begin_read_only_transaction(timeout)
 
-    @pytest.mark.asyncio
-    async def test_collect_table_stats_error_handling(self, census_service, mock_db_session):
-        """Test error handling in table statistics collection."""
-        from app.models import User
-        
-        # Mock query that raises an exception
-        mock_db_session.execute.side_effect = Exception("Database error")
-        
-        table_stats = await census_service._collect_table_stats()
-        
-        user_stats = table_stats["users"]
-        assert user_stats["actual_rows"] == 0
-        assert user_stats["estimated_rows"] == 0
-        assert user_stats["count_accuracy"] == "error"
-        assert "error" in user_stats
+class TestIndexRedundancyAnalysis:
+    """Structural redundancy is a flag, never a removal verdict."""
 
-    @pytest.mark.asyncio
-    async def test_collect_index_analysis(self, census_service, mock_db_session):
-        """Test index analysis collection."""
-        # Mock index info query
-        mock_index_result = AsyncMock()
-        mock_index_result.fetchall.return_value = [
-            AsyncMock(
-                schemaname="public",
-                tablename="users",
-                indexname="users_pkey",
-                indexdef="CREATE UNIQUE INDEX users_pkey ON users (id)",
-                indisunique=True,
-                indisprimary=True,
-                indisclustered=False,
-                idx_scan=100,
-                idx_tup_read=1000,
-                idx_tup_fetch=500,
-                size="8 kB",
-            )
-        ]
-        
-        mock_db_session.execute.return_value = mock_index_result
-        
-        # Mock redundant and overlapping index methods
-        census_service._identify_redundant_indexes = AsyncMock(return_value=[])
-        census_service._identify_overlapping_indexes = AsyncMock(return_value=[])
-        
-        index_analysis = await census_service._collect_index_analysis()
-        
-        assert "by_table" in index_analysis
-        assert "redundant_indexes" in index_analysis
-        assert "overlapping_indexes" in index_analysis
-        
-        assert "public.users" in index_analysis["by_table"]
-        assert len(index_analysis["by_table"]["public.users"]) == 1
+    async def test_flags_narrow_index_covered_by_wider_index(
+        self, census_service: DatabaseCensusService
+    ) -> None:
+        """Flags narrow index covered by wider index."""
+        census_service.repository.index_catalog = _catalog_stub(INDEX_CATALOG_ROWS)  # type: ignore[method-assign]
+        analysis = await census_service._collect_indexes()
 
-    @pytest.mark.asyncio
-    async def test_collect_snapshot_analysis(self, census_service, mock_db_session):
-        """Test snapshot analysis collection."""
-        # Mock snapshot types query
-        mock_snapshot_result = AsyncMock()
-        mock_snapshot_result.fetchall.return_value = [
-            AsyncMock(
-                snapshot_version="1",
-                count=10,
-                avg_size=500,
-                max_size=1200,
-                min_size=200,
-            )
-        ]
-        
-        # Mock session state query
-        mock_session_result = AsyncMock()
-        mock_session_result.fetchone.return_value = AsyncMock(
-            total_snapshots=10,
-            unique_sessions=2,
-            has_session_state_ratio=0.5,
-        )
-        
-        # Mock user distribution query
-        mock_user_result = AsyncMock()
-        mock_user_result.fetchall.return_value = [
-            AsyncMock(
-                user_id=1,
-                snapshot_count=6,
-                session_count=1,
-            )
-        ]
-        
-        def mock_execute(query):
-            if "thread_states ->> 'version'" in str(query):
-                return mock_snapshot_result
-            elif "FROM snapshots" in str(query) and "COUNT(s.id)" not in str(query):
-                return mock_session_result
-            elif "rs.user_id" in str(query):
-                return mock_user_result
-            return AsyncMock()
-        
-        mock_db_session.execute.side_effect = mock_execute
-        
-        snapshot_analysis = await census_service._collect_snapshot_analysis()
-        
-        assert "by_version" in snapshot_analysis
-        assert "session_state" in snapshot_analysis
-        assert "top_users" in snapshot_analysis
-        
-        assert len(snapshot_analysis["by_version"]) == 1
-        assert snapshot_analysis["by_version"][0]["version"] == "1"
-        assert snapshot_analysis["session_state"]["total_snapshots"] == 10
-
-    @pytest.mark.asyncio
-    async def test_collect_query_plans(self, census_service, mock_db_session):
-        """Test query plan collection."""
-        # Mock explain query results
-        mock_plan_result = AsyncMock()
-        mock_plan_result.scalar_one.return_value = [{"Plan": "Sample plan"}]
-        
-        mock_db_session.execute.return_value = mock_plan_result
-        
-        query_plans = await census_service._collect_query_plans()
-        
-        assert "queue_query" in query_plans
-        assert "roll_pool_query" in query_plans
-        assert "undo_query" in query_plans
-        assert "snapshot_query" in query_plans
-        
-        # Verify each plan has the expected structure
-        for plan_name, plan in query_plans.items():
-            assert "query" in plan
-            assert "parameters" in plan
-            assert "plan" in plan
-            assert "plan_text" in plan
-
-    @pytest.mark.asyncio
-    async def test_explain_query_error_handling(self, census_service, mock_db_session):
-        """Test error handling in query explanation."""
-        # Mock query that raises an exception
-        mock_db_session.execute.side_effect = Exception("EXPLAIN error")
-        
-        plan = await census_service._explain_query("SELECT * FROM test", {})
-        
-        assert "error" in plan
-        assert plan["error"] == "EXPLAIN error"
-        assert plan["query"] == "SELECT * FROM test"
-        assert plan["plan"] is None
-
-    @pytest.mark.asyncio
-    async def test_collect_constraint_analysis(self, census_service, mock_db_session):
-        """Test constraint analysis collection."""
-        # Mock primary keys query
-        mock_pk_result = AsyncMock()
-        mock_pk_result.fetchall.return_value = [
-            AsyncMock(
-                table_name="users",
-                constraint_name="users_pkey",
-                column_name="id",
-                constraint_type="PRIMARY KEY",
-            )
-        ]
-        
-        # Mock foreign keys query
-        mock_fk_result = AsyncMock()
-        mock_fk_result.fetchall.return_value = []
-        
-        # Mock unique constraints query
-        mock_unique_result = AsyncMock()
-        mock_unique_result.fetchall.return_value = []
-        
-        def mock_execute(query):
-            if "PRIMARY KEY" in str(query):
-                return mock_pk_result
-            elif "FOREIGN KEY" in str(query):
-                return mock_fk_result
-            elif "UNIQUE" in str(query):
-                return mock_unique_result
-            return AsyncMock()
-        
-        mock_db_session.execute.side_effect = mock_execute
-        
-        constraint_analysis = await census_service._collect_constraint_analysis()
-        
-        assert "primary_keys" in constraint_analysis
-        assert "foreign_keys" in constraint_analysis
-        assert "unique_constraints" in constraint_analysis
-        
-        assert len(constraint_analysis["primary_keys"]) == 1
-        assert constraint_analysis["primary_keys"][0]["table"] == "users"
-
-    @pytest.mark.asyncio
-    async def test_collect_census(self, census_service, mock_db_session):
-        """Test complete census collection."""
-        # Mock all the sub-methods
-        census_service._set_read_only_mode = AsyncMock()
-        census_service._get_postgresql_version = AsyncMock(return_value="PostgreSQL 16.2")
-        census_service._collect_storage_stats = AsyncMock(return_value={"tables": []})
-        census_service._collect_table_stats = AsyncMock(return_value={"users": {}})
-        census_service._collect_index_analysis = AsyncMock(return_value={})
-        census_service._collect_snapshot_analysis = AsyncMock(return_value={})
-        census_service._collect_query_plans = AsyncMock(return_value={})
-        census_service._collect_constraint_analysis = AsyncMock(return_value={})
-        
-        census_data = await census_service.collect_census()
-        
-        assert "metadata" in census_data
-        assert "storage" in census_data
-        assert "tables" in census_data
-        assert "indexes" in census_data
-        assert "snapshots" in census_data
-        assert "queries" in census_data
-        assert "constraints" in census_data
-        
-        assert "timestamp" in census_data["metadata"]
-        assert "postgresql_version" in census_data["metadata"]
-        assert "timeout_seconds" in census_data["metadata"]
-
-    def test_redact_sensitive_data(self, census_service):
-        """Test data redaction."""
-        original_data = {
-            "metadata": {
-                "timestamp": "2026-10-10T12:00:00+00:00",
-                "postgresql_version": "PostgreSQL 16.2",
-                "sensitive_info": "secret",
-            },
-            "users": [
-                {
-                    "id": 1,
-                    "email": "user@example.com",
-                    "password_hash": "hashed_password",
-                }
-            ]
+        flagged = {
+            (entry["index"], entry["covered_by"])
+            for entry in analysis["potential_redundant_indexes"]
         }
-        
-        redacted_data = census_service.redact_sensitive_data(original_data)
-        
-        # Data should be copied, not modified in place
-        assert original_data is not redacted_data
-        
-        # Metadata should be copied
-        assert redacted_data["metadata"]["timestamp"] == original_data["metadata"]["timestamp"]
-        assert redacted_data["metadata"]["postgresql_version"] == original_data["metadata"]["postgresql_version"]
-        
-        # In a real implementation, sensitive data would be redacted
-        # For now, just ensure the structure is preserved
-        assert "users" in redacted_data
-        assert len(redacted_data["users"]) == 1
+        assert (
+            "ix_threads_user_id",
+            "ix_threads_user_status_queue",
+        ) in flagged
 
+    async def test_never_claims_confirmed_safe_removal(
+        self, census_service: DatabaseCensusService
+    ) -> None:
+        """Never claims confirmed safe removal."""
+        census_service.repository.index_catalog = _catalog_stub(INDEX_CATALOG_ROWS)  # type: ignore[method-assign]
+        analysis = await census_service._collect_indexes()
 
-class TestDatabaseCensusIntegration:
-    """Integration tests for database census service."""
+        assert analysis["potential_redundant_indexes"]
+        for entry in analysis["potential_redundant_indexes"]:
+            assert entry["classification"] == "potential_redundant"
+            assert entry["confirmed_safe_removal"] is False
 
-    @pytest.mark.asyncio
-    async def test_census_with_real_database(self, async_db):
-        """Test census with a real database (requires database setup)."""
-        # This test would require a properly set up test database
-        # For now, we'll just test that the service can be created
-        census_service = DatabaseCensusService(async_db, timeout_seconds=10)
-        
-        # Test that we can call the methods without errors
-        # (This would need proper database setup to actually work)
+    async def test_reports_constraint_backing_and_deferrability(
+        self, census_service: DatabaseCensusService
+    ) -> None:
+        """Reports constraint backing and deferrability."""
+        census_service.repository.index_catalog = _catalog_stub(INDEX_CATALOG_ROWS)  # type: ignore[method-assign]
+        analysis = await census_service._collect_indexes()
+
+        threads = {entry["name"]: entry for entry in analysis["by_table"]["threads"]}
+        assert threads["threads_pkey"]["constraint_type"] == "p"
+        assert threads["threads_pkey"]["constraint_deferrable"] is False
+        assert threads["ix_threads_user_id"]["constraint_name"] is None
+        assert threads["ix_threads_open_partial"]["predicate"] == "(status = 'active'::text)"
+        assert threads["ix_threads_open_partial"]["is_partial"] is True
+
+    async def test_does_not_flag_indexes_on_different_predicates(
+        self, census_service: DatabaseCensusService
+    ) -> None:
+        """Does not flag indexes on different predicates."""
+        census_service.repository.index_catalog = _catalog_stub(INDEX_CATALOG_ROWS)  # type: ignore[method-assign]
+        analysis = await census_service._collect_indexes()
+
+        flagged_names = {entry["index"] for entry in analysis["potential_redundant_indexes"]}
+        assert "ix_threads_open_partial" not in flagged_names
+
+    async def test_does_not_cross_tables(
+        self, census_service: DatabaseCensusService
+    ) -> None:
+        """Does not cross tables."""
+        census_service.repository.index_catalog = _catalog_stub(INDEX_CATALOG_ROWS)  # type: ignore[method-assign]
+        analysis = await census_service._collect_indexes()
+
+        for entry in analysis["potential_redundant_indexes"]:
+            assert entry["table"] == "threads"
+
+    async def test_reports_removal_blockers(
+        self, census_service: DatabaseCensusService
+    ) -> None:
+        """Reports removal blockers."""
+        census_service.repository.index_catalog = _catalog_stub(INDEX_CATALOG_ROWS)  # type: ignore[method-assign]
+        analysis = await census_service._collect_indexes()
+
+        entries = {
+            entry["index"]: entry for entry in analysis["potential_redundant_indexes"]
+        }
+        assert "has_recorded_scans" not in entries["ix_threads_user_id"]["reasons"]
+        assert "has_recorded_scans" in entries["ix_threads_active_queue"]["reasons"]
+
+class TestRedaction:
+    """No identifier-bearing value may survive redaction."""
+
+    def test_replaces_bind_parameter_values(self, census_service: DatabaseCensusService) -> None:
+        """Replaces bind parameter values."""
+        report = {
+            "queries": {
+                "queue_listing": {
+                    "query": "SELECT 1",
+                    "parameters": {"user_id": 42, "page_size": 25},
+                }
+            }
+        }
+        redacted = census_service.redact(report)
+
+        assert redacted["queries"]["queue_listing"]["parameters"] == {
+            "user_id": "<sample-value>",
+            "page_size": "<sample-value>",
+        }
+        assert report["queries"]["queue_listing"]["parameters"]["user_id"] == 42
+
+    def test_drops_connection_metadata(self, census_service: DatabaseCensusService) -> None:
+        """Drops connection metadata."""
+        report = {
+            "metadata": {
+                "database_url": "postgresql+asyncpg://user:pw@host/db",
+                "connection_string": "host=db",
+                "credentials": {"password": "pw"},
+                "postgresql_version": "PostgreSQL 16.2",
+            }
+        }
+        redacted = census_service.redact(report)
+
+        assert redacted["metadata"] == {"postgresql_version": "PostgreSQL 16.2"}
+
+    def test_does_not_mutate_the_input_report(
+        self, census_service: DatabaseCensusService
+    ) -> None:
+        """Does not mutate the input report."""
+        report = {"queries": {"q": {"parameters": {"user_id": 7}}}}
+        census_service.redact(report)
+
+        assert report["queries"]["q"]["parameters"]["user_id"] == 7
+
+class TestReadOnlyEnforcement:
+    """The census transaction must reject writes at the database."""
+
+    async def test_write_inside_census_transaction_is_rejected(
+        self, async_db_committed: AsyncSession
+    ) -> None:
+        """Write inside census transaction is rejected."""
+        repository = DatabaseCensusRepository(async_db_committed)
+        await repository.begin_read_only_transaction(30)
         try:
-            # These would fail in a test environment without proper setup
-            # but we can at least verify the methods exist and are callable
-            assert hasattr(census_service, 'collect_census')
-            assert hasattr(census_service, '_set_read_only_mode')
-            assert hasattr(census_service, '_get_postgresql_version')
-        except Exception:
-            # Expected in test environment without database
-            pass
+            with pytest.raises(Exception) as excinfo:
+                await async_db_committed.execute(
+                    text("INSERT INTO users (username, password_hash) VALUES ('x', 'y')")
+                )
+            assert "read-only" in str(excinfo.value).lower()
+        finally:
+            await repository.rollback()
+
+    async def test_statement_timeout_is_applied(
+        self, async_db_committed: AsyncSession
+    ) -> None:
+        """Statement timeout is applied."""
+        repository = DatabaseCensusRepository(async_db_committed)
+        await repository.begin_read_only_transaction(30)
+        try:
+            result = await async_db_committed.execute(text("SHOW statement_timeout"))
+            assert result.scalar() == "30s"
+            read_only = await async_db_committed.execute(text("SHOW transaction_read_only"))
+            assert read_only.scalar() == "on"
+        finally:
+            await repository.rollback()
+
+class TestCensusAgainstPostgres:
+    """End-to-end census against the PostgreSQL test database."""
+
+    async def test_reports_separate_bytes_and_estimates(
+        self, async_db_committed: AsyncSession
+    ) -> None:
+        """Reports separate bytes and estimates."""
+        report = await DatabaseCensusService(async_db_committed, timeout_seconds=60).collect_census()
+
+        assert report["report_version"] == CENSUS_REPORT_VERSION
+        assert report["metadata"]["read_only_transaction"] is True
+        assert report["metadata"]["postgresql_version"].startswith("PostgreSQL")
+        assert report["metadata"]["collected_at"]
+
+        assert report["storage"]["tables"]
+        first = report["storage"]["tables"][0]
+        assert first["total_bytes"] >= first["table_bytes"] >= 0
+        assert first["table_bytes"] == first["total_bytes"] - first["index_bytes"]
+
+        users = report["tables"]["users"]
+        assert isinstance(users["measured_rows"], int)
+        assert users["estimated_rows"] is None or isinstance(users["estimated_rows"], int)
+        assert "estimate_available" in users
+
+    async def test_indexes_and_constraints_are_inventoried(
+        self, async_db_committed: AsyncSession
+    ) -> None:
+        """Indexes and constraints are inventoried."""
+        report = await DatabaseCensusService(async_db_committed, timeout_seconds=60).collect_census()
+
+        assert report["indexes"]["count"] > 0
+        assert "threads" in report["indexes"]["by_table"]
+        assert report["constraints"]["primary_keys"]
+        assert report["constraints"]["foreign_keys"]
+        assert all(
+            "is_deferrable" in entry for entry in report["constraints"]["unique_constraints"]
+        )
+
+    async def test_query_plans_are_measured_and_parameters_redacted(
+        self, async_db_committed: AsyncSession
+    ) -> None:
+        """Query plans are measured and parameters redacted."""
+        report = await DatabaseCensusService(async_db_committed, timeout_seconds=60).collect_census()
+
+        assert set(report["queries"]) == set(CENSUS_QUERIES)
+        for name, plan in report["queries"].items():
+            assert plan["plan"] is not None, name
+            assert "error" not in plan, name
+            assert set(plan["parameters"].values()) == {"<sample-value>"}, name
+
+    async def test_report_never_contains_user_content(
+        self, async_db_committed: AsyncSession
+    ) -> None:
+        """Report never contains user content."""
+        await _seed_snapshot(async_db_committed)
+
+        report = await DatabaseCensusService(async_db_committed, timeout_seconds=60).collect_census()
+
+        rendered = repr(report)
+        for secret in (
+            CENSUS_FIXTURE_USERNAME,
+            CENSUS_FIXTURE_EMAIL,
+            CENSUS_FIXTURE_PASSWORD,
+            CENSUS_FIXTURE_TITLE,
+        ):
+            assert secret not in rendered, secret
+
+        def _keys(node: object) -> set[str]:
+            if isinstance(node, dict):
+                found = set(node)
+                for value in node.values():
+                    found |= _keys(value)
+                return found
+            if isinstance(node, list):
+                found = set()
+                for value in node:
+                    found |= _keys(value)
+                return found
+            return set()
+
+        # ``queries`` legitimately names columns in the plan text, so the
+        # identifier check covers the measured sections only.
+        measured = {key: value for key, value in report.items() if key != "queries"}
+        assert "user_id" not in _keys(measured)
+        assert "session_id" not in _keys(report["snapshots"])
+
+    async def test_snapshot_growth_is_reported_for_seeded_readers(
+        self, async_db_committed: AsyncSession
+    ) -> None:
+        """Snapshot growth is reported for seeded readers."""
+        await _seed_snapshot(async_db_committed)
+
+        report = await DatabaseCensusService(
+            async_db_committed, timeout_seconds=60
+        ).collect_census()
+
+        growth = report["snapshots"]["workload_growth"]
+        assert growth["sampled_readers"] >= 1
+        # The seeded reader wrote two snapshots into one reading session, so at
+        # least one bounded undo sample must report that session's full depth.
+        depths = [sample["session_snapshot_rows"] for sample in growth["latest_undo"]]
+        assert max(depths, default=0) >= 2
+        assert any(
+            sample["thread_state_bytes"] > 0 for sample in growth["latest_undo"]
+        )
+
+async def _seed_snapshot(session: AsyncSession) -> None:
+    """Insert a minimal reader/thread/session/snapshot/event graph via the ORM."""
+    user = User(
+        username=CENSUS_FIXTURE_USERNAME,
+        email=CENSUS_FIXTURE_EMAIL,
+        password_hash=CENSUS_FIXTURE_PASSWORD,
+    )
+    session.add(user)
+    await session.flush()
+
+    thread = Thread(
+        user_id=user.id,
+        title=CENSUS_FIXTURE_TITLE,
+        format="series",
+        issues_remaining=3,
+        total_issues=5,
+        queue_position=1,
+        status="active",
+    )
+    session.add(thread)
+    await session.flush()
+
+    reading_session = ReadingSession(user_id=user.id, start_die=6)
+    session.add(reading_session)
+    await session.flush()
+
+    event = Event(type="roll", die=4, thread_id=thread.id, session_id=reading_session.id)
+    session.add(event)
+    await session.flush()
+
+    session.add_all(
+        [
+            Snapshot(
+                session_id=reading_session.id,
+                event_id=event.id,
+                thread_states={"version": "1", "threads": {}},
+                session_state={"die": 4},
+            ),
+            Snapshot(
+                session_id=reading_session.id,
+                event_id=event.id,
+                thread_states={"version": "1", "threads": {"1": {}}},
+                session_state=None,
+            ),
+        ]
+    )
+    await session.commit()
+
+def _catalog_stub(rows: list[dict[str, object]]):
+    """Build an async stub returning fixed index catalog rows."""
+
+    async def _index_catalog() -> list[dict[str, object]]:
+        return list(rows)
+
+    return _index_catalog

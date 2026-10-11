@@ -1,288 +1,232 @@
 #!/usr/bin/env python3
-"""Database census command - read-only storage, index, and query analysis tool."""
+"""Read-only storage, index, and query census command (issue #3217).
+
+Defaults to synthetic data. Connecting to a real database requires an explicit
+``--database-url`` and is always read-only with a statement timeout.
+"""
+
+from __future__ import annotations
 
 import argparse
 import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.config import get_settings
-from app.services.database_census_service import DatabaseCensusService
+from app.services.database_census_service import (
+    CENSUS_REPORT_VERSION,
+    DEFAULT_SAMPLE_LIMIT,
+    DatabaseCensusService,
+)
 
 
-async def run_census(
-    database_url: str,
-    output_file: Optional[str] = None,
-    timeout_seconds: int = 30,
-    sample_limit: Optional[int] = None,
-    synthetic_data: bool = False,
-    redact_data: bool = True,
-) -> Dict[str, Any]:
-    """Run database census and return results.
-
-    Args:
-        database_url: Database connection URL.
-        output_file: Optional file to write results to.
-        timeout_seconds: Query timeout in seconds.
-        sample_limit: Limit for sampling operations.
-        synthetic_data: Use synthetic data mode.
-        redact_data: Whether to redact sensitive data.
+def build_parser() -> argparse.ArgumentParser:
+    """Build the census argument parser.
 
     Returns:
-        Census results dictionary.
+        Configured argument parser.
     """
-    # Create async engine
-    engine = create_async_engine(database_url)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    parser = argparse.ArgumentParser(
+        prog="database_census",
+        description=(
+            "Read-only storage, index, and query census. Defaults to synthetic "
+            "data; a real database requires an explicit --database-url."
+        ),
+    )
+    parser.add_argument(
+        "--database-url",
+        default=None,
+        help=(
+            "Explicitly supplied database URL. When omitted the command emits "
+            "synthetic data and never touches a database."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help="Write the JSON report to this path instead of stdout.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=30,
+        help="Per-statement timeout in seconds for a supplied database (default: 30).",
+    )
+    parser.add_argument(
+        "--sample-limit",
+        type=int,
+        default=DEFAULT_SAMPLE_LIMIT,
+        help=(
+            "Maximum rows pulled for any bounded workload sample "
+            f"(default: {DEFAULT_SAMPLE_LIMIT})."
+        ),
+    )
+    parser.add_argument(
+        "--synthetic",
+        action="store_true",
+        help="Force synthetic output even when --database-url is supplied.",
+    )
+    parser.add_argument(
+        "--report-version",
+        action="version",
+        version=CENSUS_REPORT_VERSION,
+    )
+    return parser
 
-    async with async_session() as db:
-        # Create census service
-        census_service = DatabaseCensusService(db, timeout_seconds=timeout_seconds)
 
-        try:
-            print("🔍 Collecting database census...")
-            census_data = await census_service.collect_census()
+def synthetic_report(sample_limit: int = DEFAULT_SAMPLE_LIMIT) -> dict[str, Any]:
+    """Return a deterministic synthetic report used when no database is supplied.
 
-            # Apply redaction if requested
-            if redact_data:
-                census_data = census_service.redact_sensitive_data(census_data)
+    Args:
+        sample_limit: Sample ceiling echoed into the synthetic metadata.
 
-            # Add synthetic data metadata
-            if synthetic_data:
-                census_data["metadata"]["mode"] = "synthetic"
-                census_data["metadata"]["sample_limit"] = sample_limit
-            else:
-                census_data["metadata"]["mode"] = "production"
-
-            print(f"✅ Census completed successfully")
-            print(f"   PostgreSQL version: {census_data['metadata']['postgresql_version']}")
-            print(f"   Timestamp: {census_data['metadata']['timestamp']}")
-            print(f"   Tables analyzed: {len(census_data.get('tables', {}))}")
-
-            # Write to output file if specified
-            if output_file:
-                output_path = Path(output_file)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    json.dump(census_data, f, indent=2, ensure_ascii=False)
-                
-                print(f"📄 Results written to: {output_path}")
-
-            return census_data
-
-        except Exception as e:
-            print(f"❌ Census failed: {e}")
-            raise
-
-
-def generate_sample_fixtures() -> Dict[str, Any]:
-    """Generate sample census data for testing."""
+    Returns:
+        A report with the same shape as a measured census.
+    """
     return {
+        "report_version": CENSUS_REPORT_VERSION,
+        "synthetic": True,
         "metadata": {
-            "timestamp": "2026-10-10T12:00:00+00:00",
-            "postgresql_version": "PostgreSQL 16.2 (Ubuntu 16.2-1.pgdg22.04+1)",
-            "timeout_seconds": 30,
-            "mode": "synthetic",
-            "sample_limit": 1000,
+            "collected_at": "2026-01-01T00:00:00+00:00",
+            "postgresql_version": "synthetic",
+            "statement_timeout_seconds": 0,
+            "sample_limit": sample_limit,
+            "read_only_transaction": True,
         },
         "storage": {
             "tables": [
                 {
                     "schema": "public",
                     "name": "users",
-                    "total_size": "16 kB",
-                    "table_size": "8 kB",
-                    "index_size": "8 kB",
                     "total_bytes": 16384,
                     "table_bytes": 8192,
                     "index_bytes": 8192,
+                    "total": "16 kB",
+                    "table": "8192 bytes",
+                    "index": "8192 bytes",
                 }
             ],
-            "indexes": [],
             "toast": [],
         },
-        "tables": {
-            "users": {
-                "actual_rows": 2,
-                "estimated_rows": 2,
-                "count_accuracy": "exact",
-            },
-            "threads": {
-                "actual_rows": 25,
-                "estimated_rows": 25,
-                "count_accuracy": "exact",
-            },
-            "issues": {
-                "actual_rows": 150,
-                "estimated_rows": 150,
-                "count_accuracy": "exact",
-            },
-        },
+        "tables": {"users": {"measured_rows": 0, "estimated_rows": 0, "estimate_delta": 0}},
         "indexes": {
+            "count": 0,
             "by_table": {},
-            "redundant_indexes": [],
-            "overlapping_indexes": [],
+            "potential_redundant_indexes": [],
         },
         "snapshots": {
-            "by_version": [
-                {
-                    "version": "1",
-                    "count": 10,
-                    "avg_size_chars": 500,
-                    "max_size_chars": 1200,
-                    "min_size_chars": 200,
-                }
-            ],
+            "by_version": [],
             "session_state": {
-                "total_snapshots": 10,
-                "unique_sessions": 2,
-                "has_session_state_ratio": 0.5,
+                "measured_rows": 0,
+                "distinct_sessions": 0,
+                "rows_with_session_state": 0,
+                "rows_without_session_state": 0,
+                "avg_session_state_bytes": 0,
             },
-            "top_users": [
-                {
-                    "user_id": 1,
-                    "snapshot_count": 6,
-                    "session_count": 1,
-                }
-            ],
-        },
-        "queries": {
-            "queue_query": {
-                "query": "SELECT t.id, t.title, t.queue_position, t.issues_remaining FROM threads t WHERE t.user_id = :user_id AND t.status = 'active' AND t.queue_position >= 1 ORDER BY t.queue_position, t.id LIMIT 10",
-                "parameters": {"user_id": 1},
-                "plan": "Sample plan JSON",
-                "plan_text": "Sample plan text",
-            },
-            "roll_pool_query": {
-                "query": "SELECT t.id, t.title, t.queue_position FROM threads t WHERE t.user_id = :user_id AND t.status = 'active' AND t.queue_position >= 1 AND t.is_blocked = false ORDER BY t.queue_position LIMIT :die_size",
-                "parameters": {"user_id": 1, "die_size": 6},
-                "plan": "Sample plan JSON",
-                "plan_text": "Sample plan text",
-            },
-            "undo_query": {
-                "query": "SELECT s.*, e.type as event_type, e.die, e.die_after FROM snapshots s JOIN events e ON s.event_id = e.id WHERE s.session_id = :session_id ORDER BY s.created_at DESC, s.id DESC LIMIT 5",
-                "parameters": {"session_id": 1},
-                "plan": "Sample plan JSON",
-                "plan_text": "Sample plan text",
-            },
-            "snapshot_query": {
-                "query": "SELECT s.id, s.session_id, s.thread_states, s.session_state, s.created_at FROM snapshots s WHERE s.session_id = :session_id ORDER BY s.created_at DESC LIMIT 1",
-                "parameters": {"session_id": 1},
-                "plan": "Sample plan JSON",
-                "plan_text": "Sample plan text",
+            "workload_growth": {
+                "sampled_readers": 0,
+                "latest_undo": [],
+                "reorder": {
+                    "reorder_event_rows": 0,
+                    "distinct_threads_moved": 0,
+                    "queue_move_bytes": 0,
+                },
+                "note": (
+                    "Rows and payload bytes only. No hardware-specific latency "
+                    "pass/fail claim is made or implied."
+                ),
             },
         },
+        "queries": {},
         "constraints": {
-            "primary_keys": [
-                {
-                    "table": "users",
-                    "name": "users_pkey",
-                    "column": "id",
-                    "type": "PRIMARY KEY",
-                }
-            ],
+            "primary_keys": [],
             "foreign_keys": [],
             "unique_constraints": [],
         },
     }
 
 
-async def main() -> None:
-    """Main entry point for the census command."""
-    parser = argparse.ArgumentParser(
-        description="Database census - read-only storage, index, and query analysis tool"
-    )
-    parser.add_argument(
-        "--database-url",
-        help="Database connection URL (defaults to DATABASE_URL from config)",
-        default=None,
-    )
-    parser.add_argument(
-        "--output", "-o",
-        help="Output file for JSON results",
-        default=None,
-    )
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=30,
-        help="Query timeout in seconds (default: 30)"
-    )
-    parser.add_argument(
-        "--sample-limit",
-        type=int,
-        help="Limit for sampling operations",
-        default=None,
-    )
-    parser.add_argument(
-        "--synthetic",
-        action="store_true",
-        help="Generate synthetic sample data instead of connecting to database"
-    )
-    parser.add_argument(
-        "--no-redact",
-        action="store_true",
-        help="Skip data redaction (use with caution)"
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version="Database Census Tool v1.0"
-    )
+def write_report(report: dict[str, Any], output_path: str | None) -> None:
+    """Serialize the report to a file or stdout.
 
-    args = parser.parse_args()
-
-    # Handle synthetic data mode
-    if args.synthetic:
-        print("🧪 Generating synthetic census data...")
-        sample_data = generate_sample_fixtures()
-        
-        if args.output:
-            output_path = Path(args.output)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(sample_data, f, indent=2, ensure_ascii=False)
-            print(f"📄 Synthetic data written to: {output_path}")
-        else:
-            print(json.dumps(sample_data, indent=2, ensure_ascii=False))
+    Args:
+        report: Census report.
+        output_path: Destination path, or ``None`` to write to stdout.
+    """
+    serialized = json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False)
+    if output_path is None:
+        print(serialized)
         return
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(serialized + "\n", encoding="utf-8")
 
-    # Get database URL
-    database_url = args.database_url
-    if not database_url:
-        try:
-            settings = get_settings()
-            database_url = settings.database_url
-        except Exception:
-            print("❌ Error: No database URL provided and unable to load config")
-            print("   Use --database-url or set DATABASE_URL environment variable")
-            sys.exit(1)
 
-    # Validate database URL
-    if not database_url:
-        print("❌ Error: Database URL is required")
-        sys.exit(1)
+async def run_census(
+    database_url: str,
+    output_file: str | None = None,
+    timeout_seconds: int = 30,
+    sample_limit: int = DEFAULT_SAMPLE_LIMIT,
+) -> dict[str, Any]:
+    """Run the read-only census against an explicitly supplied database.
+
+    Args:
+        database_url: Explicitly supplied database URL.
+        output_file: Optional destination path for the JSON report.
+        timeout_seconds: Per-statement timeout in seconds.
+        sample_limit: Maximum rows pulled for any bounded workload sample.
+
+    Returns:
+        The redacted census report.
+    """
+    engine = create_async_engine(database_url)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with session_factory() as session:
+            service = DatabaseCensusService(
+                session,
+                timeout_seconds=timeout_seconds,
+                sample_limit=sample_limit,
+            )
+            report = await service.collect_census()
+    finally:
+        await engine.dispose()
+    write_report(report, output_file)
+    return report
+
+
+async def main(argv: list[str] | None = None) -> int:
+    """Run the census command.
+
+    Args:
+        argv: Optional argument vector, defaulting to ``sys.argv[1:]``.
+
+    Returns:
+        Process exit status; zero means the report was produced.
+    """
+    args = build_parser().parse_args(argv)
+
+    if args.synthetic or not args.database_url:
+        report = synthetic_report(sample_limit=args.sample_limit)
+        write_report(report, args.output)
+        return 0
 
     try:
-        # Run census
         await run_census(
-            database_url=database_url,
+            database_url=args.database_url,
             output_file=args.output,
             timeout_seconds=args.timeout,
             sample_limit=args.sample_limit,
-            synthetic_data=False,
-            redact_data=not args.no_redact,
         )
-    except Exception as e:
-        print(f"❌ Census failed: {e}")
-        sys.exit(1)
+    except (ValueError, OSError, RuntimeError) as exc:
+        print(f"census failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    raise SystemExit(asyncio.run(main()))

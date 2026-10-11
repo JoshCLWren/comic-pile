@@ -30,6 +30,7 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [API documentation](API.md): REST API contracts and examples.
 - [React architecture](REACT_ARCHITECTURE.md): frontend architecture, TanStack Query server-state layer, and build structure.
 - [Database save/load](DATABASE_SAVE_LOAD.md): backup, import/export, and recovery procedures.
+- [Database census](database-census.md): read-only storage, index, and query inventory, its deterministic synthetic fixtures, and the reproducible baseline commands.
 - [Comic dependencies guide](COMIC_DEPENDENCIES_GUIDE.md): guide to the dependency model.
 - [Production-to-local clone workflow](prod-clone-workflow.md): production Neon export and safe local restore procedure.
 - [Git hooks](GIT_HOOKS.md): repository quality hooks.
