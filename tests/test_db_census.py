@@ -6,33 +6,36 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    import pytest
-except Exception:  # pragma: no cover
-    pytest = None  # type: ignore[assignment]
 from scripts.db_census import (
+    assemble_report,
     build_fixtures,
     measure_synthetic,
-    assemble_report,
 )
 
 
 class TestReadOnlyBehavior:
+    """Tests that the census script rejects mutation and read-only guards exist."""
+
     def test_mutation_flags_rejected(self):
-        # Direct flags that should cause non-zero exit if present in sys.argv
-        # We test the guard logic indirectly by inspecting the script behavior
-        assert True  # guard is present in script source; verified by code inspection
+        """Confirm mutation guard present in the script source."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "db_census.py")
+        with open(src_path) as f:
+            src = f.read()
+        for flag in ["--mutate", "--write", "--update", "--alter"]:
+            assert flag in src
+        assert "mutation mode rejected" in src
 
     def test_read_only_transaction_in_script_source(self):
+        """Confirm read-only transaction and readonly markers in script."""
         src_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "db_census.py")
-        with open(src_path, "r") as f:
+        with open(src_path) as f:
             src = f.read()
         assert "SET TRANSACTION READ ONLY" in src
         assert "mutation_modes_rejected" in src
         assert "explain_analyze_on_writes_rejected" in src
 
     def test_never_explains_writes_in_plan_list(self):
-        # The bounded query plans only use SELECT / EXPLAIN (FORMAT JSON) SELECT
+        """Confirm the bounded plans never EXPLAIN write statements."""
         src_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "db_census.py")
         with open(src_path) as f:
             src = f.read()
@@ -42,7 +45,10 @@ class TestReadOnlyBehavior:
 
 
 class TestRedaction:
+    """Tests that redaction flags and fields are applied."""
+
     def test_redacted_fields_listed(self):
+        """Verify report redaction metadata."""
         fixtures = build_fixtures()
         synth = measure_synthetic(fixtures)
         report = assemble_report(fixtures, synth, None)
@@ -54,12 +60,14 @@ class TestRedaction:
         assert report.get("redaction_applied") is True
 
     def test_fixture_redacted_flag_true(self):
+        """Verify every fixture carries synthetic and redacted flags."""
         fixtures = build_fixtures()
         for f in fixtures.values():
             assert f.get("redacted") is True
             assert f.get("synthetic") is True
 
     def test_no_credential_emission_in_synthetic(self):
+        """Verify no credentials appear in the synthetic baseline output."""
         fixtures = build_fixtures()
         synth = measure_synthetic(fixtures)
         for profile in synth.values():
@@ -73,15 +81,20 @@ class TestRedaction:
 
 
 class TestFixtures:
+    """Tests for fixture profiles."""
+
     def test_2_users_small_exists(self):
+        """Confirm a users=2 small-library fixture exists."""
         fixtures = build_fixtures()
         assert any("users=2" in k or "small" in k for k in fixtures)
 
     def test_100_users_large_exists(self):
+        """Confirm a users=100 large-library fixture exists."""
         fixtures = build_fixtures()
         assert any("users=100" in k or "large" in k for k in fixtures)
 
     def test_shared_provider_identities(self):
+        """Verify the fixtures carry shared-provider identities."""
         fixtures = build_fixtures()
         for f in fixtures.values():
             ids = f.get("shared_provider_identities", [])
@@ -89,6 +102,7 @@ class TestFixtures:
             assert len(ids) >= 1
 
     def test_snapshot_mix_legacy_delta(self):
+        """Verify the fixture snapshot mix includes legacy/delta mix."""
         fixtures = build_fixtures()
         for f in fixtures.values():
             mix = f.get("snapshot_mix", [])
@@ -96,7 +110,10 @@ class TestFixtures:
 
 
 class TestSyntheticBaseline:
+    """Tests for the synthetic measurement baseline."""
+
     def test_synthetic_has_bytes(self):
+        """Verify the synthetic baseline includes byte estimates."""
         fixtures = build_fixtures()
         synth = measure_synthetic(fixtures)
         for profile in synth.values():
@@ -105,6 +122,7 @@ class TestSyntheticBaseline:
             assert "simulated_total_bytes" in profile
 
     def test_total_is_non_negative(self):
+        """Verify simulated totals are non-negative."""
         fixtures = build_fixtures()
         synth = measure_synthetic(fixtures)
         for profile in synth.values():
@@ -112,7 +130,10 @@ class TestSyntheticBaseline:
 
 
 class TestArtifactGeneration:
+    """Tests for the census report artifact."""
+
     def test_output_json_valid(self, tmp_path):
+        """Verify the report round-trips through JSON."""
         out = tmp_path / "census.json"
         fixtures = build_fixtures()
         synth = measure_synthetic(fixtures)
@@ -127,12 +148,14 @@ class TestArtifactGeneration:
         assert loaded.get("redaction_applied") is True
 
     def test_real_measurement_omitted_when_none(self):
+        """Verify real_measurement is None when no real DB is measured."""
         fixtures = build_fixtures()
         synth = measure_synthetic(fixtures)
         report = assemble_report(fixtures, synth, None)
         assert report.get("real_measurement") is None
 
     def test_index_overview_flags_true(self):
+        """Verify index overview flags are set in the report."""
         fixtures = build_fixtures()
         synth = measure_synthetic(fixtures)
         report = assemble_report(fixtures, synth, None)

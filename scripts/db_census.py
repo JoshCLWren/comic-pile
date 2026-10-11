@@ -18,8 +18,11 @@ import json
 import os
 import sys
 import textwrap
-from datetime import UTC, datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import asyncpg
 
 # Read-only: do not import mutation-heavy app modules; import config only for URL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from app.config import get_app_settings
 except Exception:  # pragma: no cover
-    get_app_settings = None  # type: ignore[assignment]
+    get_app_settings = None
 
 # ------------------------------------------------------------------
 # Fixture definitions (deterministic, synthetic)
@@ -125,16 +128,19 @@ def _get_db_url() -> str | None:
     return os.environ.get("DATABASE_URL") or os.environ.get("TEST_DATABASE_URL")
 
 
-async def _try_async_connect(url: str) -> Any:
+async def _try_async_connect(url: str) -> asyncpg.Connection | None:
     try:
-        import asyncpg  # type: ignore[import-untyped]
-        conn = await asyncpg.connect(url, command_timeout=10)
+        import asyncpg
+    except ImportError:  # pragma: no cover
+        return None
+    try:
+        conn: asyncpg.Connection = await asyncpg.connect(url, command_timeout=10)
         return conn
     except Exception:
         return None
 
 
-async def measure_real_schema(conn: Any) -> dict[str, Any] | None:
+async def measure_real_schema(conn: asyncpg.Connection | None) -> dict[str, Any] | None:
     """Run bounded, read-only queries against existing schema; return None if unavailable."""
     if conn is None:
         return None
@@ -258,6 +264,7 @@ async def measure_real_schema(conn: Any) -> dict[str, Any] | None:
 # ------------------------------------------------------------------
 
 def measure_synthetic(fixtures: dict[str, Any]) -> dict[str, Any]:
+    """Produce deterministic synthetic storage estimates for each fixture profile."""
     results: dict[str, Any] = {}
     for key, f in fixtures.items():
         profile_key = f.get("profile")
@@ -299,11 +306,12 @@ def assemble_report(
     synthetic: dict[str, Any],
     real: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    """Assemble a redacted census report from synthetic (and optional real) measurements."""
     report: dict[str, Any] = {
         "report_version": "v1",
         "issue_ref": "#3217",
         "title": "DB scale 01 — read-only storage, index, and query census",
-        "measurement_timestamp_utc": datetime.now(UTC).isoformat(),
+            "measurement_timestamp_utc": datetime.now(UTC).isoformat(),
         "postgresql_version": real.get("postgresql_version") if real else None,
         "read_only_transaction": True,
         "mutation_modes_rejected": True,
@@ -337,6 +345,7 @@ def assemble_report(
 # ------------------------------------------------------------------
 
 async def main() -> int:
+    """Parse arguments, assemble, and write the census report."""
     parser = argparse.ArgumentParser(description="DB census for #3217")
     parser.add_argument("--output", default="docs/census-report-v1.json")
     parser.add_argument(
