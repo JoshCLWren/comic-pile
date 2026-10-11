@@ -25,7 +25,7 @@ export function useRollBootstrapSync({
   bootstrapError,
   navigate,
 }: UseRollBootstrapSyncParams): void {
-  const { setCurrentDie, setRolledResult, setStaleThread, setStaleThreadCount } = state
+  const { setCurrentDie, setRolledResult, setDiceState, setStaleThread, setStaleThreadCount } = state
 
   useEffect(() => {
     if (isBootstrapError && bootstrapError) {
@@ -38,8 +38,9 @@ export function useRollBootstrapSync({
     if (bootstrap?.current_die) setCurrentDie(bootstrap.current_die)
     if (bootstrap?.last_rolled_result !== undefined && bootstrap?.last_rolled_result !== null) {
       setRolledResult(bootstrap.last_rolled_result)
+      setDiceState('rolled')
     }
-  }, [bootstrap?.current_die, bootstrap?.last_rolled_result, setCurrentDie, setRolledResult])
+  }, [bootstrap?.current_die, bootstrap?.last_rolled_result, setCurrentDie, setRolledResult, setDiceState])
 
   useEffect(() => {
     const staleFromBootstrap = bootstrap?.stale_thread ?? null
