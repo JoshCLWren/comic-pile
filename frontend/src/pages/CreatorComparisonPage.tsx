@@ -450,7 +450,9 @@ export default function CreatorComparisonPage() {
         <div className="mt-4 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--theme-warning)', backgroundColor: 'var(--theme-warning)/10' }}>
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
             <strong>Note:</strong> Some creators have fewer than 3 rated issues, making their statistics less reliable.
-            <span className="ml-2">Affected: {affectedNames.join(', ')}</span>
+          </p>
+          <p className="text-sm mt-1 break-words" style={{ color: 'var(--theme-text-primary)' }}>
+            <strong>Affected:</strong> {affectedNames.join(', ')}
           </p>
         </div>
       )}
