@@ -224,7 +224,14 @@ async def create_continuity_rule(
     # Compile the authored hard constraint into canonical Dependency edges in
     # the same transaction (#2553). The edge is the Roll authority; the rule
     # remains the authoring record.
-    await compile_rule_edges(db, rule)
+    try:
+        await compile_rule_edges(db, rule)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "continuity_cbl_collision", "message": str(exc)},
+        ) from exc
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -303,6 +310,15 @@ async def update_continuity_rule(
         ContinuityRuleSelectedMember(issue_id=issue_id)
         for issue_id in payload.selected_member_issue_ids
     ]
+    # Reject non-compilable shapes before writing anything (#2553 P1):
+    # updating to an unsupported type would silently drop the blocking edge.
+    try:
+        validate_rule_compiles(rule)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "continuity_rule_not_compilable", "message": str(exc)},
+        ) from exc
     await db.flush()
     new_pairs = rule_edge_pairs(rule)
     # Retire edges the old shape compiled to (unless still intended), then
@@ -313,7 +329,14 @@ async def update_continuity_rule(
         pairs=[pair for pair in old_pairs if pair not in new_pairs],
         exclude_rule_id=rule.id,
     )
-    await compile_rule_edges(db, rule)
+    try:
+        await compile_rule_edges(db, rule)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "continuity_cbl_collision", "message": str(exc)},
+        ) from exc
     try:
         await db.commit()
     except IntegrityError as exc:

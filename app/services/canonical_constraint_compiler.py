@@ -49,12 +49,25 @@ def rule_edge_pairs(rule: ContinuityRule) -> list[tuple[int, int]]:
 
 
 def validate_rule_compiles(rule: ContinuityRule) -> None:
-    """Raise ValueError if a rule would not compile to any canonical edge.
+    """Raise ValueError if a rule would not fully compile to canonical edges.
 
     Crossover and member-based rules are accepted by the schema but the
     canonical compiler generates no edges for them; saving such a rule
     would silently create a constraint Roll never enforces (#2553 P1).
+
+    Also rejects converged rules with non-issue prerequisites: the compiler
+    silently skips those, losing part of the constraint.
     """
+    if rule.satisfaction_type == "converged":
+        non_issue = [
+            t for t in (rule.convergence_targets or [])
+            if isinstance(t, dict) and str(t.get("type")) != "issue"
+        ]
+        if non_issue:
+            raise ValueError(
+                f"Converged rule has {len(non_issue)} non-issue prerequisite(s); "
+                "all convergence targets must be issues to compile to canonical edges"
+            )
     if not rule_edge_pairs(rule):
         raise ValueError(
             f"Rule with satisfaction_type={rule.satisfaction_type}, "

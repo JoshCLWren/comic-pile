@@ -230,6 +230,12 @@ async def adopt_crossover_template(
             ordering_mode=payload.ordering_mode,
         )
         await db.commit()
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "continuity_cbl_collision", "message": str(exc)},
+        ) from exc
     except Exception:
         await db.rollback()
         raise
