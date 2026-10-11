@@ -294,6 +294,95 @@ async def test_get_session_details_endpoint(
 
 
 @pytest.mark.asyncio
+async def test_get_session_details_keeps_frozen_title_after_thread_deletion(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Deleted threads keep their last known title instead of going unavailable (#3265)."""
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Saga",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    # selected_thread_id has no foreign key, so the roll event outlives the thread.
+    async_db.add(
+        Event(
+            type="roll",
+            session_id=session.id,
+            selected_thread_id=thread.id,
+            die=6,
+            result=4,
+            selection_method="random",
+            thread_title=thread.title,
+        )
+    )
+    # An undo clears thread references, leaving a frozen title as the only name.
+    async_db.add(
+        Event(type="undo", session_id=session.id, thread_id=None, thread_title=thread.title)
+    )
+    await async_db.commit()
+
+    thread_title = thread.title
+    await async_db.delete(thread)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    events = response.json()["events"]
+    assert {event["thread_title"] for event in events} == {thread_title}
+    descriptions = {event["type"]: event["description"] for event in events}
+    assert descriptions["roll"] == f"Selected {thread_title}"
+    assert descriptions["undo"] == f"Restored {thread_title}"
+
+
+@pytest.mark.asyncio
+async def test_get_session_details_falls_back_to_live_thread_title(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Events predating the thread_title column still resolve the live thread name."""
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Flash",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    async_db.add(
+        Event(
+            type="roll",
+            session_id=session.id,
+            selected_thread_id=thread.id,
+            die=6,
+            result=4,
+            selection_method="random",
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    events = response.json()["events"]
+    assert [event["thread_title"] for event in events] == ["Flash"]
+
+
+@pytest.mark.asyncio
 async def test_get_session_details_describes_events_in_reader_language(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:

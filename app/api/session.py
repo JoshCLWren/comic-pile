@@ -769,32 +769,28 @@ async def get_session_details(
     )
     events = events_result.scalars().all()
 
+    # Events written before the thread_title column existed carry no frozen
+    # title, so resolve those from the live thread. Events recorded after the
+    # column was added keep their own title even when the thread is gone.
     thread_ids = set()
     for event in events:
-        if event.type == "roll":
-            thread_id = event.selected_thread_id
-        else:
-            thread_id = event.thread_id
+        thread_id = event.selected_thread_id if event.type == "roll" else event.thread_id
         if thread_id:
             thread_ids.add(thread_id)
 
-    threads_dict = {}
+    live_thread_titles: dict[int, str] = {}
     if thread_ids:
-        threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
-        threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
+        threads_result = await db.execute(
+            select(Thread.id, Thread.title).where(Thread.id.in_(thread_ids))
+        )
+        live_thread_titles = {row.id: row.title for row in threads_result.all()}
 
     formatted_events = []
     for event in events:
-        thread_title = None
-        if event.type == "roll":
-            thread_id = event.selected_thread_id
-        else:
-            thread_id = event.thread_id
-
-        if thread_id:
-            thread = threads_dict.get(thread_id)
-            if thread:
-                thread_title = thread.title
+        thread_title = event.thread_title
+        if thread_title is None:
+            thread_id = event.selected_thread_id if event.type == "roll" else event.thread_id
+            thread_title = live_thread_titles.get(thread_id) if thread_id else None
 
         event_data = EventDetail(
             id=event.id,
@@ -852,6 +848,8 @@ async def get_session_details(
             if event.issue_number:
                 desc_parts.append(f"#{event.issue_number}")
             event_data.description = " · ".join(desc_parts)
+        elif event.type == "delete":
+            event_data.description = f"Deleted {thread_title or 'thread'}"
 
         formatted_events.append(event_data)
 

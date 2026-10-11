@@ -276,6 +276,7 @@ class RollService:
             recommendation_context=recommendation_context,
             issue_id=selected_thread_issue_id,
             issue_number=selected_thread_issue_number,
+            thread_title=selected_thread.title,
             rolling_recommendation_context=self._build_rolling_recommendation_context(
                 die_size=current_die,
                 selected_queue_position=selected_thread.queue_position,

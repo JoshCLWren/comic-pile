@@ -158,7 +158,14 @@ async def _recalculate_thread_tracking(
             thread.queue_position = 1
         thread.status = "active"
 
-    db.add(Event(type="issues_created", timestamp=datetime.now(UTC), thread_id=thread.id))
+    db.add(
+        Event(
+            type="issues_created",
+            timestamp=datetime.now(UTC),
+            thread_id=thread.id,
+            thread_title=thread.title,
+        )
+    )
     await refresh_user_blocked_status(user_id, db)
 
 

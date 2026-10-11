@@ -182,6 +182,7 @@ async def switch_pending_roll_to_prerequisite(
             die=current_die,
             result=0,
             selection_method="dependency_recovery",
+            thread_title=target_thread_title,
         )
     )
     locked_session.pending_thread_id = target_thread_id
