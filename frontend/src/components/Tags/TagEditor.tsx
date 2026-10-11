@@ -34,7 +34,7 @@ export interface TagEditorProps {
   isAdmin?: boolean
 }
 
-function SectionTitle({ children }: { children: string }) {
+function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h3 className="text-sm font-bold text-[var(--theme-text-primary)]">{children}</h3>
   )
