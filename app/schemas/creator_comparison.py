@@ -271,6 +271,16 @@ class CreatorMetricIssue(BaseModel):
         default=None,
         description="Why this issue is excluded from the calculation (if applicable).",
     )
+    missing_rating_cause: str | None = Field(
+        default=None,
+        description=(
+            "Machine-readable cause for a read issue with no effective rating "
+            "(issue #3175 classification, e.g. 'no_source_rating', "
+            "'missing_rate_event', 'unresolved_mapping', 'edition_conflict', "
+            "'ambiguous_thread_rating'). None when the issue is rated, unread, "
+            "or the cause has not been classified."
+        ),
+    )
 
 
 class CreatorMetricDrilldown(BaseModel):

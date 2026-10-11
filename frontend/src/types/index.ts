@@ -701,6 +701,7 @@ export interface CreatorMetricIssue {
   effective_rating_timestamp: string | null
   creator_roles: string[]
   exclusion_reason: string | null
+  missing_rating_cause?: string | null
 }
 
 export interface CreatorMetricDrilldown {
