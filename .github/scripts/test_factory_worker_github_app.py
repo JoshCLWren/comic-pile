@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 REPO = SCRIPTS.parents[1]
@@ -37,6 +38,13 @@ def _load_fence():
     return module
 
 
+def _unconfigured_mapping() -> dict[str, object]:
+    mapping = json.loads((REPO / ".github/factory-worker-github-apps.json").read_text())
+    entry = mapping["workers"]["48"]
+    entry.update({"app_id": None, "app_login": None, "installation_id": None})
+    return mapping
+
+
 class BootstrapTest(unittest.TestCase):
     def test_worker_48_first_name_is_mark_cordova(self) -> None:
         self.assertEqual(app.bootstrap_display_name(48), "Mark Cordova")
@@ -51,9 +59,9 @@ class BootstrapTest(unittest.TestCase):
         entry = mapping["workers"]["48"]
         self.assertEqual(entry["display_name"], "Mark Cordova")
         self.assertEqual(entry["display_name"], app.bootstrap_display_name(48))
-        self.assertIsNone(entry["app_id"])
-        self.assertIsNone(entry["app_login"])
-        self.assertIsNone(entry["installation_id"])
+        self.assertEqual(entry["app_id"], 5275306)
+        self.assertEqual(entry["app_login"], "mark-cordova[bot]")
+        self.assertEqual(entry["installation_id"], 170306933)
         self.assertIn("Autonomous ComicPile Factory worker", entry["profile"])
         blob = json.dumps(mapping)
         self.assertNotIn('"46"', blob)
@@ -93,6 +101,7 @@ class SelectionTest(unittest.TestCase):
                 FACTORY_WORKER_48_INSTALLATION_ID="456",
                 FACTORY_WORKER_48_APP_PRIVATE_KEY=app.TEST_KEY_SENTINEL,
             ),
+            _unconfigured_mapping(),
         )
         self.assertEqual(decision["source"], "installation")
         self.assertEqual(decision["app_id"], "123")
@@ -260,11 +269,15 @@ class HandoffTest(unittest.TestCase):
             {},
         ):
             with self.subTest(missing=sorted(missing)):
-                decision = app.handoff_decision("48", self._env(FACTORY_WORKER="48", **missing))
-                self.assertEqual(decision["source"], "default")
-                source, token = app.resolve_handoff_credential(
-                    self._env(FACTORY_WORKER="48", **missing)
+                mapping = _unconfigured_mapping()
+                decision = app.handoff_decision(
+                    "48", self._env(FACTORY_WORKER="48", **missing), mapping
                 )
+                self.assertEqual(decision["source"], "default")
+                with mock.patch.object(app, "load_mapping", return_value=mapping):
+                    source, token = app.resolve_handoff_credential(
+                        self._env(FACTORY_WORKER="48", **missing)
+                    )
                 self.assertEqual((source, token), ("default", ""))
 
     def test_other_workers_never_use_app_token_for_handoffs(self) -> None:
