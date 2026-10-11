@@ -71,7 +71,7 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
             )
         elif source == 'z-ai':
             assert z_ai_model_is_free(model), (
-                f'worker {worker} z-ai pin must be glm-4.5-flash, got {model!r}'
+                f'worker {worker} z-ai pin must be glm-4.5-flash or glm-4.7-flash, got {model!r}'
             )
         elif source == 'ollama-cloud':
             assert ollama_cloud_model_is_free(model), (

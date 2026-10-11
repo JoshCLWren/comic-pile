@@ -12,6 +12,7 @@
       {"id": "ling-3.0-flash-fin-free", "cost": {"input": 0, "output": 0}},
       {"id": "longcat-2.5-preview-free", "cost": {"input": 0, "output": 0}},
       {"id": "ling-3.1-flash-free", "cost": {"input": 0, "output": 0}},
+      {"id": "step-5-preview-free", "cost": {"input": 0, "output": 0}},
       {"id": "fledge-alpha-free", "cost": {"input": 0, "output": 0}},
       {"id": "deepseek-v4-flash", "cost": {"input": 1.2, "output": 1.2}}
     ],
@@ -27,7 +28,9 @@
       {"id": "openai/gpt-oss-20b"},
       {"id": "google/gemma-4-31b-it"},
       {"id": "moonshotai/kimi-k3"},
-      {"id": "z-ai/glm-5.3"}
+      {"id": "z-ai/glm-5.3"},
+      {"id": "z-ai/glm-5.3-flash"},
+      {"id": "deepseek-ai/deepseek-v4.1-flash"}
     ],
     "openrouter": [
       {"id": "cohere/north-mini-code:free"},

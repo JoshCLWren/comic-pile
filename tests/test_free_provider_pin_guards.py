@@ -92,6 +92,9 @@ def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:
     """Paid GLMs and unpublished Ollama Cloud ids cannot occupy these lanes."""
     assert validate.z_ai_model_is_free('glm-4.5-flash')
     assert validate.z_ai_model_is_free('z-ai/glm-4.5-flash')
+    assert validate.z_ai_model_is_free('glm-4.7-flash')
+    assert validate.z_ai_model_is_free('z-ai/glm-4.7-flash')
+    assert not validate.z_ai_model_is_free('glm-4.7')
     assert not validate.z_ai_model_is_free('glm-5')
     assert not validate.z_ai_model_is_free('glm-4.6')
     assert validate.ollama_cloud_model_is_free('nemotron-3-nano:30b')
@@ -182,6 +185,31 @@ def test_new_slots_pin_nvidia_kimi_k3_and_glm_53(validate) -> None:
     assert by_worker["78"]["source"] == "nvidia"
     assert by_worker["78"]["model"] == "z-ai/glm-5.3"
     assert by_worker["78"]["minute"] == "45"
-    assert "z-ai/glm-5.3-flash" not in {row["model"] for row in rows}
-    assert "deepseek-ai/deepseek-v4.1-flash" not in {row["model"] for row in rows}
 
+
+def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
+    """Workers 79-82 are Oct 11 OpenCode smokes that returned model text (PONG)."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    by_worker = {row["worker"]: row for row in rows}
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["79"]["source"] == "opencode-free"
+    assert by_worker["79"]["model"] == "step-5-preview-free"
+    assert by_worker["79"]["minute"] == "30"
+    assert validate.opencode_model_is_free(by_worker["79"]["model"])
+    assert by_worker["80"]["source"] == "nvidia"
+    assert by_worker["80"]["model"] == "z-ai/glm-5.3-flash"
+    assert by_worker["80"]["minute"] == "40"
+    assert by_worker["81"]["source"] == "nvidia"
+    assert by_worker["81"]["model"] == "deepseek-ai/deepseek-v4.1-flash"
+    assert by_worker["81"]["minute"] == "50"
+    assert by_worker["82"]["source"] == "z-ai"
+    assert by_worker["82"]["model"] == "glm-4.7-flash"
+    assert by_worker["82"]["minute"] == "55"
+    assert validate.z_ai_model_is_free(by_worker["82"]["model"])
+    # big-pickle is never grown as a first pin when the roster has none.
+    assert "big-pickle" not in {row["model"] for row in rows}
+    assert not any(
+        row["source"] == "openrouter-free" and row["worker"] in {"79", "80", "81", "82"}
+        for row in rows
+    )
