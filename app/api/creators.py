@@ -506,7 +506,7 @@ async def get_creator_rating_distribution_drilldown_endpoint(
         HTTPException: When keys are malformed or data is not found.
     """
     try:
-        return await get_creator_metric_drilldown(
+        drilldown = await get_creator_metric_drilldown(
             db=db,
             user_id=current_user.id,
             creator_key=creator_key,
@@ -525,6 +525,12 @@ async def get_creator_rating_distribution_drilldown_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Rating distribution {rating_value} not available for creator {creator_key}",
         ) from None
+    if not isinstance(drilldown, CreatorRatingDistributionDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Rating distribution drilldown returned an unexpected shape",
+        )
+    return drilldown
 
 
 @router.get("/{creator_key}/metrics/role-stats/{role}", response_model=CreatorRoleDrilldown)
@@ -553,7 +559,7 @@ async def get_creator_role_drilldown_endpoint(
         HTTPException: When keys are malformed or data is not found.
     """
     try:
-        return await get_creator_metric_drilldown(
+        drilldown = await get_creator_metric_drilldown(
             db=db,
             user_id=current_user.id,
             creator_key=creator_key,
@@ -572,6 +578,12 @@ async def get_creator_role_drilldown_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Role {role} not available for creator {creator_key}",
         ) from None
+    if not isinstance(drilldown, CreatorRoleDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Role drilldown returned an unexpected shape",
+        )
+    return drilldown
 
 
 @router.get("/{creator_key}/metrics/series-stats/{series_key}", response_model=CreatorSeriesDrilldown)
@@ -600,7 +612,7 @@ async def get_creator_series_drilldown_endpoint(
         HTTPException: When keys are malformed or data is not found.
     """
     try:
-        return await get_creator_metric_drilldown(
+        drilldown = await get_creator_metric_drilldown(
             db=db,
             user_id=current_user.id,
             creator_key=creator_key,
@@ -619,6 +631,12 @@ async def get_creator_series_drilldown_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Series {series_key} not available for creator {creator_key}",
         ) from None
+    if not isinstance(drilldown, CreatorSeriesDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Series drilldown returned an unexpected shape",
+        )
+    return drilldown
 
 
 __all__ = [

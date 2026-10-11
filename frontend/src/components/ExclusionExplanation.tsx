@@ -13,7 +13,8 @@ export function ExclusionExplanation({ excludedIssues, totalExcluded }: Exclusio
     return null
   }
 
-  // Group excluded issues by reason
+  // Group excluded issues by reason.
+  // SAFETY: the accumulator starts as an empty object and only gains string keys mapped to CreatorMetricIssue arrays, so it is exactly Record<string, CreatorMetricIssue[]>.
   const exclusionGroups = excludedIssues.reduce((acc, issue) => {
     const reason = issue.exclusion_reason || 'No specific reason'
     if (!acc[reason]) {

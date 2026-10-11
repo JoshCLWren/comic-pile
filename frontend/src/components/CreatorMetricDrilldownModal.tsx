@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
 import { useDrilldownPresentation } from '../hooks/useCreatorMetricDrilldown'
@@ -9,19 +8,21 @@ import { CalculationDisplay } from './CalculationDisplay'
 import { ExclusionExplanation } from './ExclusionExplanation'
 import { queryKeys } from '../query/queryKeys'
 
+interface DrilldownParams {
+  role?: string
+  ratingValue?: string
+  seriesKey?: string
+  page?: number
+  pageSize?: number
+}
+
 interface CreatorMetricDrilldownModalProps {
   isOpen: boolean
   onClose: () => void
   creatorKey: string
   metricType: string
   metricLabel: string
-  initialParams?: {
-    role?: string
-    ratingValue?: string
-    seriesKey?: string
-    page?: number
-    pageSize?: number
-  }
+  initialParams?: DrilldownParams
 }
 
 export function CreatorMetricDrilldownModal({
@@ -35,7 +36,7 @@ export function CreatorMetricDrilldownModal({
   const queryClient = useQueryClient()
   useDrilldownPresentation()
   const [currentPage, setCurrentPage] = useState(initialParams?.page || 1)
-  const [currentParams, setCurrentParams] = useState(initialParams || {})
+  const [currentParams, setCurrentParams] = useState<DrilldownParams>(initialParams || {})
 
   // Get the drilldown data from cache or fetch it
   const drilldownData = queryClient.getQueryData<CreatorMetricDrilldown>(
@@ -82,6 +83,18 @@ export function CreatorMetricDrilldownModal({
   }
 
   const { calculation, included_issues, excluded_issues, pagination } = drilldownData
+
+  // SAFETY: the accumulator starts as an empty object and only counts numeric ratings, so it is exactly Record<string, number>.
+  const ratingBucketCounts: Record<string, number> = included_issues.reduce(
+    (acc: Record<string, number>, issue) => {
+      const rating = issue.effective_rating
+      if (rating) {
+        acc[rating] = (acc[rating] || 0) + 1
+      }
+      return acc
+    },
+    {},
+  )
 
   return (
     <Modal
@@ -134,15 +147,7 @@ export function CreatorMetricDrilldownModal({
             <span className="text-sm font-medium" style={{ color: 'var(--theme-text-muted)' }}>
               Rating buckets:
             </span>
-            {Object.entries(
-              drilldownData.included_issues?.reduce((acc, issue) => {
-                const rating = issue.effective_rating
-                if (rating) {
-                  acc[rating] = (acc[rating] || 0) + 1
-                }
-                return acc
-              }, {} as Record<string, number>) || {}
-            ).map(([rating, count]) => (
+            {Object.entries(ratingBucketCounts).map(([rating, count]) => (
               <button
                 key={rating}
                 onClick={() => handleRatingValueChange(rating)}
