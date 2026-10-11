@@ -6,7 +6,9 @@ lifecycle status are kept in sync with the issue set.
 """
 
 import logging
+import os
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select, update
@@ -16,6 +18,7 @@ from app.models import Event, Issue, Thread
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.repositories import issue_repository
 from app.schemas.tags import TagTargetType
+from app.services.issue_insertion import _insert_new_issues_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from app.services.provider_issue_adoption import adopt_comicvine_issue, ProviderIssueAdoptionResult
@@ -80,63 +83,6 @@ async def list_issues(
 
     return issues_to_return, total_count, next_token
 
-
-async def _insert_new_issues_in_natural_order(
-    db: AsyncSession,
-    thread_id: int,
-    new_issue_numbers: list[str],
-    natural_order: list[str],
-) -> list[Issue]:
-    """Create new issues at their natural position in the thread order.
-
-    Existing issues whose position changes are re-seated through the same
-    ``Issue.position`` column the thread reorder path writes, so no second
-    ordering field, dependency edge, or Reading Plan node is introduced. Only
-    ``position`` is assigned, which leaves read state, ratings, reading history,
-    ComicVine identities, dependencies, and plan membership untouched.
-
-    Args:
-        db: Database session.
-        thread_id: Thread receiving the new issues.
-        new_issue_numbers: Issue numbers to create.
-        natural_order: Every issue number of the resulting thread in ascending
-            natural order.
-
-    Returns:
-        The newly created issues, ordered by their persisted position.
-    """
-    target_positions = {
-        issue_number: position
-        for position, issue_number in enumerate(natural_order, start=1)
-    }
-
-    existing_issues = await issue_repository.locked_issues(db, thread_id)
-    shifted_issues = [
-        issue
-        for issue in existing_issues
-        if issue.issue_number in target_positions
-        and target_positions[issue.issue_number] != issue.position
-    ]
-
-    if shifted_issues:
-        await issue_repository.defer_position_unique_constraint(db)
-        for issue in shifted_issues:
-            issue.position = target_positions[issue.issue_number]
-
-    new_issues: list[Issue] = []
-    for issue_number in new_issue_numbers:
-        issue = Issue(
-            thread_id=thread_id,
-            issue_number=issue_number,
-            position=target_positions[issue_number],
-            status="unread",
-        )
-        await issue_repository.add_issue(db, issue)
-        new_issues.append(issue)
-
-    new_issues.sort(key=lambda created_issue: created_issue.position)
-
-    return new_issues
 
 
 async def create_issues(
@@ -265,8 +211,8 @@ async def create_issues(
     try:
         # Check if thread has a confirmed ComicVine series mapping
         mapping_result = await db.execute(
-            select(ThreadExternalSeriesMapping)
-            .join(ExternalIdentity, ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id)
+            select(ExternalIdentity.external_id)
+            .join(ThreadExternalSeriesMapping, ThreadExternalSeriesMapping.external_identity_id == ExternalIdentity.id)
             .where(
                 ThreadExternalSeriesMapping.thread_id == thread_id,
                 ThreadExternalSeriesMapping.status == "confirmed",
@@ -275,10 +221,10 @@ async def create_issues(
             )
             .limit(1)
         )
-        mapping = mapping_result.scalar_one_or_none()
-        if mapping:
+        external_id = mapping_result.scalar_one_or_none()
+        if external_id:
             # Extract ComicVine volume ID from the external identity
-            comicvine_volume_id = int(mapping.external_identity.external_id)
+            comicvine_volume_id = int(external_id)
     except Exception:
         # If there's any error checking for ComicVine mapping, continue without auto-mapping
         logger.warning("Failed to check for ComicVine series mapping on thread %d", thread_id, exc_info=True)
@@ -287,42 +233,47 @@ async def create_issues(
     if comicvine_volume_id and new_issues:
         try:
             # Create a ComicVine client for fetching volume issues
-            comicvine_client = ComicVineClient()
-            
-            # Fetch all issues for the ComicVine volume
-            volume_issues_response = await comicvine_client.fetch_volume_issues(comicvine_volume_id)
-            comicvine_issues = volume_issues_response or []
-            
-            # Create a mapping from issue number to ComicVine issue ID
-            comicvine_issue_map = {}
-            for issue_data in comicvine_issues:
-                issue_number = issue_data.get("issue_number")
-                if issue_number is not None:
-                    # Normalize issue number to string for consistent comparison
-                    comicvine_issue_map[str(issue_number)] = issue_data.get("id")
-            
-            # Try to adopt each new issue to its corresponding ComicVine issue
-            for issue in new_issues:
-                issue_number_str = str(issue.issue_number)
-                if issue_number_str in comicvine_issue_map:
-                    comicvine_issue_id = comicvine_issue_map[issue_number_str]
-                    try:
-                        adoption_result = await adopt_comicvine_issue(
-                            db=db,
-                            user_id=current_user_id,
-                            thread_id=thread_id,
-                            comicvine_issue_id=comicvine_issue_id,
-                            issue_number=issue_number_str,
-                            comicvine_client=comicvine_client,
-                        )
-                        if adoption_result.outcome == "created":
-                            logger.info("Auto-mapped issue %d to ComicVine issue %s", issue.id, comicvine_issue_id)
-                        elif adoption_result.outcome == "reused":
-                            logger.info("Reused existing ComicVine mapping for issue %d", issue.id)
-                        elif adoption_result.outcome == "conflict":
-                            logger.warning("ComicVine mapping conflict for issue %d: %s", issue.id, adoption_result.conflict_detail)
-                    except Exception as e:
-                        logger.warning("Failed to adopt ComicVine issue %s for issue %d: %s", comicvine_issue_id, issue.id, str(e))
+            api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
+            cache_dir = Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine"))
+            if not api_key:
+                logger.warning("COMICVINE_API_KEY not set, skipping auto-mapping")
+            else:
+                comicvine_client = ComicVineClient(api_key, cache_dir)
+                
+                # Fetch all issues for the ComicVine volume
+                volume_issues_response = await comicvine_client.fetch_volume_issues(comicvine_volume_id)
+                comicvine_issues = volume_issues_response or []
+                
+                # Create a mapping from issue number to ComicVine issue ID
+                comicvine_issue_map = {}
+                for issue_data in comicvine_issues:
+                    issue_number = issue_data.get("issue_number")
+                    if issue_number is not None:
+                        # Normalize issue number to string for consistent comparison
+                        comicvine_issue_map[str(issue_number)] = issue_data.get("id")
+                
+                # Try to adopt each new issue to its corresponding ComicVine issue
+                for issue in new_issues:
+                    issue_number_str = str(issue.issue_number)
+                    if issue_number_str in comicvine_issue_map:
+                        comicvine_issue_id = comicvine_issue_map[issue_number_str]
+                        try:
+                            adoption_result = await adopt_comicvine_issue(
+                                db=db,
+                                user_id=current_user_id,
+                                thread_id=thread_id,
+                                comicvine_issue_id=comicvine_issue_id,
+                                issue_number=issue_number_str,
+                                comicvine_client=comicvine_client,
+                            )
+                            if adoption_result.outcome == "created":
+                                logger.info("Auto-mapped issue %d to ComicVine issue %s", issue.id, comicvine_issue_id)
+                            elif adoption_result.outcome == "reused":
+                                logger.info("Reused existing ComicVine mapping for issue %d", issue.id)
+                            elif adoption_result.outcome == "conflict":
+                                logger.warning("ComicVine mapping conflict for issue %d: %s", issue.id, adoption_result.conflict_detail)
+                        except Exception as e:
+                            logger.warning("Failed to adopt ComicVine issue %s for issue %d: %s", comicvine_issue_id, issue.id, str(e))
         except Exception as e:
             logger.warning("Failed to auto-map new issues to ComicVine volume %d: %s", comicvine_volume_id, str(e))
 

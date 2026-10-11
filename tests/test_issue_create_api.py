@@ -950,7 +950,7 @@ async def test_create_issues_auto_maps_to_comicvine(
         "app.services.issue.adopt_comicvine_issue",
         return_value=mock_adoption_result
     )
-    mocker.patch("comic_pile.comicvine_provider.ComicVineClient", return_value=mock_comicvine_client)
+    mocker.patch("app.services.issue.ComicVineClient", return_value=mock_comicvine_client)
 
     # Add a new issue that should be auto-mapped to ComicVine
     response = await auth_client.post(
