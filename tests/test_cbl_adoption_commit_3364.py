@@ -360,11 +360,14 @@ async def test_adoption_commit_realistic_uu_list_returns_201_not_500(
     assert body["id"] > 0
     assert 130 in body["unresolved_positions"]
     assert body["unresolved_positions"] == [130]
-    assert len(body["reused_positions"]) == 111
+    # 111 already-owned positions include one repeated identity; the repeated
+    # missing identity reuses the first materialized issue instead of inserting
+    # a second row that would trip uq_issue_thread_number.
+    assert len(body["reused_positions"]) == 112
     assert len(body["created_positions"]) == 17
     issue_refs = [node["ref_id"] for node in body["nodes"] if node["node_type"] == "issue"]
     assert len(issue_refs) == len(set(issue_refs))
-    assert len(issue_refs) == 111 + 17
+    assert len(issue_refs) == 110 + 17
 
     plans_after = await async_db.scalar(
         select(func.count()).select_from(ContinuityPlan).where(ContinuityPlan.user_id == user.id)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,6 +23,7 @@ from app.services.cbl_plan_adoption import (
 from app.services.cbl_targeted_plan_adoption import adopt_cbl_into_existing_reading_plan
 
 router = APIRouter(prefix="/api/v1", tags=["cbl-adoption-commit"])
+logger = logging.getLogger(__name__)
 
 
 def _response(commit: AdoptionCommitResult) -> CBLAdoptionCommitResponse:
@@ -99,6 +101,22 @@ async def api_targeted_cbl_adoption_commit(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "adoption_error", "message": str(exc)},
         ) from exc
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "Unexpected CBL adoption-commit failure list_id=%s plan_id=%s user_id=%s",
+            list_id,
+            plan_id,
+            current_user.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "adoption_unexpected_error",
+                "message": "Adoption failed unexpectedly. The Reading Plan was not changed.",
+            },
+        ) from None
     return _response(commit)
 
 
@@ -141,4 +159,19 @@ async def api_cbl_adoption_commit(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "adoption_error", "message": str(exc)},
         ) from exc
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "Unexpected CBL adoption-commit failure list_id=%s user_id=%s",
+            list_id,
+            current_user.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "adoption_unexpected_error",
+                "message": "Adoption failed unexpectedly. The Reading Plan was not changed.",
+            },
+        ) from None
     return _response(commit)
