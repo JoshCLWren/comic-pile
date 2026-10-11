@@ -677,3 +677,62 @@ export interface CreatorComparisonResponse {
   coverage: CreatorComparisonCoverage
   insufficient_data_keys: string[]
 }
+
+/**
+ * Creator metric drilldown types (issue #3176)
+ */
+export interface CreatorMetricCalculation {
+  formula: string
+  numerator: string
+  denominator: string | null
+  percentage: string | null
+}
+
+export interface CreatorMetricIssue {
+  issue_id: number
+  thread_id: number
+  thread_title: string
+  issue_number: string
+  status: string
+  effective_rating: number | null
+  effective_rating_source: string | null
+  effective_rating_timestamp: string | null
+  creator_roles: string[]
+  exclusion_reason: string | null
+}
+
+export interface CreatorMetricDrilldown {
+  metric_type: string
+  creator_key: string
+  calculation: CreatorMetricCalculation
+  total_count: number
+  included_issues: CreatorMetricIssue[]
+  excluded_issues: CreatorMetricIssue[]
+  pagination: {
+    page: number
+    page_size: number
+    next_page_token: number | string | null
+    total_pages: number
+  }
+}
+
+export interface CreatorRatingDistributionDrilldown extends CreatorMetricDrilldown {
+  rating_value: string
+  bucket_count: number
+  bucket_percentage: number
+}
+
+export interface CreatorRoleDrilldown extends CreatorMetricDrilldown {
+  role: string
+  role_issue_count: number
+  role_rated_issue_count: number
+  role_average_rating: number | null
+}
+
+export interface CreatorSeriesDrilldown extends CreatorMetricDrilldown {
+  series_id: number
+  series_title: string
+  series_issue_count: number
+  series_rated_issue_count: number
+  series_average_rating: number | null
+}

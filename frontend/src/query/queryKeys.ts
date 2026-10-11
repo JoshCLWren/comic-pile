@@ -290,6 +290,78 @@ export const queryKeys = {
      */
     compare: (keys: string[]) =>
       ['creators', 'compare', [...keys].sort()] as const,
+    /**
+     * Canonical creator metric drilldown key (issue #3176).
+     * Supports different metric types with optional parameters for role, rating value, series, and pagination.
+     */
+    metric: (
+      creatorKey: string,
+      metricType: string,
+      params?: {
+        role?: string
+        ratingValue?: string
+        seriesKey?: string
+        page?: number
+        pageSize?: number
+      }
+    ) => {
+      const normalizedParams: Record<string, string | number | undefined> = params ? { ...params } : {}
+      // Remove undefined values to keep the key canonical
+      Object.keys(normalizedParams).forEach(key => {
+        if (normalizedParams[key] === undefined) {
+          delete normalizedParams[key]
+        }
+      })
+      return ['creators', 'metric', creatorKey, metricType, normalizedParams] as const
+    },
+    /**
+     * Canonical creator rating distribution drilldown key (issue #3176).
+     */
+    ratingDistribution: (
+      creatorKey: string,
+      ratingValue: string,
+      params?: { page?: number; pageSize?: number }
+    ) => {
+      const normalizedParams: Record<string, number | undefined> = params ? { ...params } : {}
+      Object.keys(normalizedParams).forEach(key => {
+        if (normalizedParams[key] === undefined) {
+          delete normalizedParams[key]
+        }
+      })
+      return ['creators', 'ratingDistribution', creatorKey, ratingValue, normalizedParams] as const
+    },
+    /**
+     * Canonical creator role drilldown key (issue #3176).
+     */
+    roleStats: (
+      creatorKey: string,
+      role: string,
+      params?: { page?: number; pageSize?: number }
+    ) => {
+      const normalizedParams: Record<string, number | undefined> = params ? { ...params } : {}
+      Object.keys(normalizedParams).forEach(key => {
+        if (normalizedParams[key] === undefined) {
+          delete normalizedParams[key]
+        }
+      })
+      return ['creators', 'roleStats', creatorKey, role, normalizedParams] as const
+    },
+    /**
+     * Canonical creator series drilldown key (issue #3176).
+     */
+    seriesStats: (
+      creatorKey: string,
+      seriesKey: string,
+      params?: { page?: number; pageSize?: number }
+    ) => {
+      const normalizedParams: Record<string, number | undefined> = params ? { ...params } : {}
+      Object.keys(normalizedParams).forEach(key => {
+        if (normalizedParams[key] === undefined) {
+          delete normalizedParams[key]
+        }
+      })
+      return ['creators', 'seriesStats', creatorKey, seriesKey, normalizedParams] as const
+    },
   },
   continuityCorrection: {
     groups: () => ['continuityCorrection', 'groups'] as const,

@@ -72,6 +72,49 @@ async def load_recent_creator_issue_rows(
     return rows
 
 
+async def load_all_creator_issue_rows(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    creator_issue_ids: frozenset[int],
+) -> list[RecentCreatorIssueRow]:
+    """Load every attributed issue row for a creator in stable issue-id order.
+
+    The metric drilldown service (issue #3176) aggregates over the creator's
+    complete attributed work so summary numbers and drilldown evidence always
+    reconcile; paging the drilldown response never changes the calculation.
+    Callers paginate the returned rows in Python after aggregating.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated user owning the library.
+        creator_issue_ids: Local issue ids attributed to the creator.
+
+    Returns:
+        All attributed issue rows ordered by ascending local issue id.
+    """
+    if not creator_issue_ids:
+        return []
+    result = await db.execute(
+        select(
+            Issue.id,
+            Issue.issue_number,
+            Issue.thread_id,
+            Thread.title,
+            Issue.status,
+        )
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.user_id == user_id)
+        .where(Issue.id.in_(creator_issue_ids))
+        .order_by(Issue.id.asc())
+    )
+    rows: list[RecentCreatorIssueRow] = [
+        (int(issue_id), str(issue_number), int(thread_id), str(thread_title), str(status))
+        for issue_id, issue_number, thread_id, thread_title, status in result.all()
+    ]
+    return rows
+
+
 async def load_latest_rating_timestamps(
     db: AsyncSession,
     *,
@@ -167,6 +210,7 @@ async def load_upcoming_creator_issue_rows(
 __all__ = [
     "RecentCreatorIssueRow",
     "UpcomingCreatorIssueRow",
+    "load_all_creator_issue_rows",
     "load_latest_rating_timestamps",
     "load_recent_creator_issue_rows",
     "load_upcoming_creator_issue_rows",

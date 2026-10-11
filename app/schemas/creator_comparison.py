@@ -228,6 +228,109 @@ class CreatorComparisonResponse(BaseModel):
     )
 
 
+class CreatorMetricCalculation(BaseModel):
+    """Human-readable calculation explaining how a metric was derived."""
+
+    model_config = {"frozen": True}
+
+    formula: str = Field(..., description="Human-readable formula showing the calculation.")
+    numerator: str = Field(..., description="Description of the numerator/upper value.")
+    denominator: str | None = Field(
+        default=None, description="Description of the denominator/lower value when applicable."
+    )
+    percentage: str | None = Field(
+        default=None, description="Formatted percentage when applicable."
+    )
+
+
+class CreatorMetricIssue(BaseModel):
+    """Single issue with context for a metric drilldown."""
+
+    model_config = {"frozen": True}
+
+    issue_id: int = Field(..., description="Local ComicPile issue ID.")
+    thread_id: int = Field(..., description="Local ComicPile thread ID owning the issue.")
+    thread_title: str = Field(..., description="Title of the thread owning the issue.")
+    issue_number: str = Field(..., description="Display issue number within its thread.")
+    status: str = Field(..., description="Local issue status (``read`` or ``unread``).")
+    effective_rating: float | None = Field(
+        default=None, description="Effective rating for this issue when applicable."
+    )
+    effective_rating_source: str | None = Field(
+        default=None,
+        description="Source of the effective rating (e.g., 'historical', 'manual', 'inferred').",
+    )
+    effective_rating_timestamp: str | None = Field(
+        default=None,
+        description="ISO 8601 timestamp when the effective rating was established.",
+    )
+    creator_roles: list[str] = Field(
+        default_factory=list, description="Roles this creator held on this issue."
+    )
+    exclusion_reason: str | None = Field(
+        default=None,
+        description="Why this issue is excluded from the calculation (if applicable).",
+    )
+
+
+class CreatorMetricDrilldown(BaseModel):
+    """Response for a creator metric drilldown."""
+
+    model_config = {"frozen": True}
+
+    metric_type: str = Field(..., description="Type of metric being drilled down.")
+    creator_key: str = Field(..., description="Canonical creator key.")
+    calculation: CreatorMetricCalculation = Field(..., description="Human-readable calculation.")
+    total_count: int = Field(..., ge=0, description="Total number of issues in the calculation.")
+    included_issues: list[CreatorMetricIssue] = Field(
+        default_factory=list, description="Issues included in the calculation."
+    )
+    excluded_issues: list[CreatorMetricIssue] = Field(
+        default_factory=list, description="Issues excluded from the calculation with reasons."
+    )
+    pagination: dict[str, int | str | None] = Field(
+        default_factory=dict,
+        description="Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).",
+    )
+
+
+class CreatorRatingDistributionDrilldown(CreatorMetricDrilldown):
+    """Specialized drilldown for rating distribution buckets."""
+
+    model_config = {"frozen": True}
+
+    rating_value: str = Field(..., description="The specific rating value (e.g., '5.0', '4.5').")
+    bucket_count: int = Field(..., ge=0, description="Number of issues in this rating bucket.")
+    bucket_percentage: float = Field(..., ge=0, le=100, description="Percentage of total rated issues.")
+
+
+class CreatorRoleDrilldown(CreatorMetricDrilldown):
+    """Specialized drilldown for role statistics."""
+
+    model_config = {"frozen": True}
+
+    role: str = Field(..., description="The specific role being drilled down.")
+    role_issue_count: int = Field(..., ge=0, description="Total issues with this role.")
+    role_rated_issue_count: int = Field(..., ge=0, description="Rated issues with this role.")
+    role_average_rating: float | None = Field(
+        default=None, description="Average rating for this role."
+    )
+
+
+class CreatorSeriesDrilldown(CreatorMetricDrilldown):
+    """Specialized drilldown for series statistics."""
+
+    model_config = {"frozen": True}
+
+    series_id: int = Field(..., description="Local thread ID for the series.")
+    series_title: str = Field(..., description="Title of the series.")
+    series_issue_count: int = Field(..., ge=0, description="Total issues in this series.")
+    series_rated_issue_count: int = Field(..., ge=0, description="Rated issues in this series.")
+    series_average_rating: float | None = Field(
+        default=None, description="Average rating for this series."
+    )
+
+
 __all__ = [
     "CreatorComparisonResponse",
     "CreatorComparisonItem",
@@ -235,4 +338,10 @@ __all__ = [
     "CreatorComparisonIssueRef",
     "CreatorComparisonRoleStat",
     "CreatorComparisonSeriesAggregate",
+    "CreatorMetricCalculation",
+    "CreatorMetricIssue",
+    "CreatorMetricDrilldown",
+    "CreatorRatingDistributionDrilldown",
+    "CreatorRoleDrilldown",
+    "CreatorSeriesDrilldown",
 ]

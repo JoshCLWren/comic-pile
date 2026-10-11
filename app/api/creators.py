@@ -27,7 +27,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.creator_comparison import CreatorComparisonResponse
+from app.schemas.creator_comparison import (
+    CreatorComparisonResponse,
+    CreatorMetricDrilldown,
+    CreatorRatingDistributionDrilldown,
+    CreatorRoleDrilldown,
+    CreatorSeriesDrilldown,
+)
 from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
 from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
@@ -35,6 +41,7 @@ from app.services.creator_comparison import get_creator_comparison
 from app.services.creator_detail import get_creator_detail, get_creator_series_issues
 from app.services.creator_list import get_creator_list
 from app.services.creator_summary import get_creator_summaries
+from app.services.creator_metric_drilldown import get_creator_metric_drilldown
 
 router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
 
@@ -411,6 +418,225 @@ async def get_creator_detail_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Creator {creator_key} not found in your library",
         ) from None
+
+
+@router.get("/{creator_key}/metrics/{metric_type}", response_model=CreatorMetricDrilldown)
+async def get_creator_metric_drilldown_endpoint(
+    creator_key: str,
+    metric_type: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    role: str | None = Query(None, description="Specific role for role-based metrics"),
+    rating_value: str | None = Query(None, description="Specific rating value for distribution metrics"),
+    series_key: str | None = Query(None, description="Specific series key for series metrics"),
+    page: int = Query(1, ge=1, description="Page number for paginated results"),
+    page_size: int = Query(50, ge=1, le=200, description="Number of items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorMetricDrilldown:
+    """Return detailed drilldown for a specific creator metric.
+
+    This endpoint provides the exact calculation, supporting issues, and exclusion
+    reasoning for any creator metric shown on comparison or detail pages.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        metric_type: Type of metric to drill down (``average-rating``, ``median-rating``,
+            ``rated-issue-count``, ``five-star-rate``, ``rating-distribution``,
+            ``unread-count``, ``read-unrated-count``, ``role-stats``, ``series-stats``).
+        current_user: Authenticated user owning the library.
+        role: Specific role for role-based metrics (required for ``role-stats``).
+        rating_value: Specific rating value for distribution metrics (e.g. ``5.0``, ``4.5``).
+        series_key: Specific series key for series metrics (e.g. ``thread:123``).
+        page: Page number for paginated issue lists.
+        page_size: Number of issues per page.
+        db: Async database session.
+
+    Returns:
+        Detailed drilldown with calculation, included issues, excluded issues, and pagination.
+
+    Raises:
+        HTTPException: When keys are malformed, metric type is invalid, or data is not found.
+    """
+    try:
+        return await get_creator_metric_drilldown(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            metric_type=metric_type,
+            role=role,
+            rating_value=rating_value,
+            series_key=series_key,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Metric {metric_type} not available for creator {creator_key}",
+        ) from None
+
+
+@router.get("/{creator_key}/metrics/rating-distribution/{rating_value}", response_model=CreatorRatingDistributionDrilldown)
+async def get_creator_rating_distribution_drilldown_endpoint(
+    creator_key: str,
+    rating_value: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    page: int = Query(1, ge=1, description="Page number for paginated results"),
+    page_size: int = Query(50, ge=1, le=200, description="Number of items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorRatingDistributionDrilldown:
+    """Return detailed drilldown for a specific rating distribution bucket.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        rating_value: Specific rating value (e.g. ``5.0``, ``4.5``).
+        current_user: Authenticated user owning the library.
+        page: Page number for paginated results.
+        page_size: Number of issues per page.
+        db: Async database session.
+
+    Returns:
+        Rating distribution drilldown for the specific bucket.
+
+    Raises:
+        HTTPException: When keys are malformed or data is not found.
+    """
+    try:
+        drilldown = await get_creator_metric_drilldown(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            metric_type="rating-distribution",
+            rating_value=rating_value,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Rating distribution {rating_value} not available for creator {creator_key}",
+        ) from None
+    if not isinstance(drilldown, CreatorRatingDistributionDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Rating distribution drilldown returned an unexpected shape",
+        )
+    return drilldown
+
+
+@router.get("/{creator_key}/metrics/role-stats/{role}", response_model=CreatorRoleDrilldown)
+async def get_creator_role_drilldown_endpoint(
+    creator_key: str,
+    role: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    page: int = Query(1, ge=1, description="Page number for paginated results"),
+    page_size: int = Query(50, ge=1, le=200, description="Number of items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorRoleDrilldown:
+    """Return detailed drilldown for a specific creator role.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        role: Specific role to drill down (e.g., ``Writer``, ``Artist``, ``Penciler``).
+        current_user: Authenticated user owning the library.
+        page: Page number for paginated results.
+        page_size: Number of issues per page.
+        db: Async database session.
+
+    Returns:
+        Role drilldown with calculation, included issues, and role-specific data.
+
+    Raises:
+        HTTPException: When keys are malformed or data is not found.
+    """
+    try:
+        drilldown = await get_creator_metric_drilldown(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            metric_type="role-stats",
+            role=role,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Role {role} not available for creator {creator_key}",
+        ) from None
+    if not isinstance(drilldown, CreatorRoleDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Role drilldown returned an unexpected shape",
+        )
+    return drilldown
+
+
+@router.get("/{creator_key}/metrics/series-stats/{series_key}", response_model=CreatorSeriesDrilldown)
+async def get_creator_series_drilldown_endpoint(
+    creator_key: str,
+    series_key: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    page: int = Query(1, ge=1, description="Page number for paginated results"),
+    page_size: int = Query(50, ge=1, le=200, description="Number of issues per page"),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorSeriesDrilldown:
+    """Return detailed drilldown for a specific creator series.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        series_key: Specific series key (e.g. ``thread:123``).
+        current_user: Authenticated user owning the library.
+        page: Page number for paginated results.
+        page_size: Number of issues per page.
+        db: Async database session.
+
+    Returns:
+        Series drilldown with calculation, included issues, and series-specific data.
+
+    Raises:
+        HTTPException: When keys are malformed or data is not found.
+    """
+    try:
+        drilldown = await get_creator_metric_drilldown(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            metric_type="series-stats",
+            series_key=series_key,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Series {series_key} not available for creator {creator_key}",
+        ) from None
+    if not isinstance(drilldown, CreatorSeriesDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Series drilldown returned an unexpected shape",
+        )
+    return drilldown
 
 
 __all__ = [
