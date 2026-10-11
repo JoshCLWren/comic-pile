@@ -456,15 +456,15 @@ async def replace_compiled_rules(
                 new_pairs.add(pair)
     if sync_canonical_edges:
         # Retire compiled edges the new rule set no longer intends, then
-        # compile newly intended pairs. Pairs present in both sets keep
-        # their existing rows untouched.
+        # (re)compile all intended pairs. The ON CONFLICT DO UPDATE in
+        # compile_rule_edges refreshes notes on unchanged pairs so they
+        # reference the new rule IDs (not the deleted ones).
         await retire_rule_edges(
             db, user_id=user_id, pairs=list(old_pairs - new_pairs), exclude_rule_id=-1
         )
         for created_rule in created_rules:
-            rule_pairs = set(rule_edge_pairs(created_rule))
-            if rule_pairs & (new_pairs - old_pairs):
-                await compile_rule_edges(db, created_rule)
+            if rule_edge_pairs(created_rule):
+                await compile_rule_edges(db, created_rule, plan_id=plan.id)
     return True
 
 

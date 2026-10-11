@@ -11,12 +11,13 @@ that inference needs the Wild Hunt exception decision (Phase B of #2553).
 
 from __future__ import annotations
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
+from app.models.reading_plan_membership import ReadingPlanDependency
 
 EDGE_NOTE_PREFIX = "canonical:rule:"
 
@@ -47,23 +48,103 @@ def rule_edge_pairs(rule: ContinuityRule) -> list[tuple[int, int]]:
     return []
 
 
-async def compile_rule_edges(db: AsyncSession, rule: ContinuityRule) -> None:
+def validate_rule_compiles(rule: ContinuityRule) -> None:
+    """Raise ValueError if a rule would not compile to any canonical edge.
+
+    Crossover and member-based rules are accepted by the schema but the
+    canonical compiler generates no edges for them; saving such a rule
+    would silently create a constraint Roll never enforces (#2553 P1).
+    """
+    if not rule_edge_pairs(rule):
+        raise ValueError(
+            f"Rule with satisfaction_type={rule.satisfaction_type}, "
+            f"source_type={rule.source_type}, target_type={rule.target_type} "
+            "does not compile to canonical edges and would never block Roll"
+        )
+
+
+async def compile_rule_edges(
+    db: AsyncSession, rule: ContinuityRule, *, plan_id: int | None = None
+) -> None:
     """Insert canonical Dependency edges for a rule.
 
     Must be called after the rule is flushed (so rule.id exists) and before
     the author's transaction commits. Existing edges are shared, never
-    duplicated.
+    duplicated; notes are refreshed to the compiling rule.
+
+    Raises ValueError if a historical cbl-order row occupies a pair the rule
+    must compile: ON CONFLICT DO UPDATE would silently leave the inert row,
+    and the hard constraint would never block Roll. (The migration aborts on
+    the same collision.)
+
+    When plan_id is given, also links each compiled edge through
+    reading_plan_dependencies for provenance (#2553 P2).
     """
-    for source_id, target_id in rule_edge_pairs(rule):
-        await db.execute(
+    pairs = rule_edge_pairs(rule)
+    if pairs:
+        # Check for cbl-order collisions before inserting.
+        cbl_occupants = (
+            (
+                await db.execute(
+                    select(Dependency.source_issue_id, Dependency.target_issue_id).where(
+                        tuple_(Dependency.source_issue_id, Dependency.target_issue_id).in_(
+                            pairs
+                        ),
+                        Dependency.note.like("cbl-order:%"),
+                    )
+                )
+            )
+            .all()
+        )
+        if cbl_occupants:
+            raise ValueError(
+                f"Rule {rule.id} collides with historical cbl-order rows on "
+                f"{len(cbl_occupants)} pair(s); resolve the overlap before saving"
+            )
+    for source_id, target_id in pairs:
+        result = await db.execute(
             pg_insert(Dependency)
             .values(
                 source_issue_id=source_id,
                 target_issue_id=target_id,
                 note=f"{EDGE_NOTE_PREFIX}{rule.id}",
             )
-            .on_conflict_do_nothing(index_elements=["source_issue_id", "target_issue_id"])
+            .on_conflict_do_update(
+                index_elements=["source_issue_id", "target_issue_id"],
+                set_={"note": f"{EDGE_NOTE_PREFIX}{rule.id}"},
+                # Never overwrite a standalone reader-created edge's note;
+                # only refresh notes on previously rule-compiled edges.
+                where=Dependency.note.like(f"{EDGE_NOTE_PREFIX}%"),
+            )
+            .returning(Dependency.id)
         )
+        # scalar_one_or_none: the WHERE clause may skip the update for
+        # standalone edges, in which case no row is returned. Fall back to
+        # a lookup so provenance linking still works.
+        dep_id = result.scalar_one_or_none()
+        if dep_id is None and plan_id is not None:
+            dep_id = (
+                await db.execute(
+                    select(Dependency.id).where(
+                        Dependency.source_issue_id == source_id,
+                        Dependency.target_issue_id == target_id,
+                    )
+                )
+            ).scalar_one_or_none()
+        if plan_id is not None and dep_id is not None:
+            # Link the edge to the plan for provenance. ON CONFLICT DO NOTHING
+            # keeps it idempotent across re-saves.
+            await db.execute(
+                pg_insert(ReadingPlanDependency)
+                .values(
+                    plan_id=plan_id,
+                    dependency_id=dep_id,
+                    explanation=f"{EDGE_NOTE_PREFIX}{rule.id}",
+                )
+                .on_conflict_do_nothing(
+                    index_elements=["plan_id", "dependency_id"]
+                )
+            )
 
 
 async def _pair_has_other_rule(

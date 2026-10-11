@@ -29,6 +29,7 @@ from app.services.canonical_constraint_compiler import (
     compile_rule_edges,
     retire_rule_edges,
     rule_edge_pairs,
+    validate_rule_compiles,
 )
 from app.services.continuity import _refresh_blocked_state, _to_response
 
@@ -209,6 +210,15 @@ async def create_continuity_rule(
             for issue_id in payload.selected_member_issue_ids
         ],
     )
+    # Reject rules that would not compile to canonical edges (#2553 P1):
+    # the user would save a constraint Roll never enforces.
+    try:
+        validate_rule_compiles(rule)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "continuity_rule_not_compilable", "message": str(exc)},
+        ) from exc
     db.add(rule)
     await db.flush()
     # Compile the authored hard constraint into canonical Dependency edges in
