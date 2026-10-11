@@ -14,7 +14,6 @@ from scripts.db_census import (
     build_fixtures,
     measure_synthetic,
     assemble_report,
-    main,
 )
 
 
@@ -114,11 +113,7 @@ class TestSyntheticBaseline:
 
 class TestArtifactGeneration:
     def test_output_json_valid(self, tmp_path):
-        import asyncio
         out = tmp_path / "census.json"
-        # Use synthetic only to avoid DB dependency
-        asyncio.run(main())  # uses default args; may try DB; okay if falls back
-        # Instead directly call build and write
         fixtures = build_fixtures()
         synth = measure_synthetic(fixtures)
         report = assemble_report(fixtures, synth, None)

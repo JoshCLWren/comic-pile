@@ -18,8 +18,7 @@ import json
 import os
 import sys
 import textwrap
-from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 # Read-only: do not import mutation-heavy app modules; import config only for URL
@@ -235,7 +234,7 @@ async def measure_real_schema(conn: Any) -> dict[str, Any] | None:
         return {
             "measured": True,
             "postgresql_version": None,  # could query with SHOW server_version
-            "measurement_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+"measurement_timestamp_utc": datetime.now(UTC).isoformat(),
             "table_row_estimates": table_rows,
             "storage_by_table_bytes": storage,
             "index_inventory": index_info[:30],
@@ -304,7 +303,7 @@ def assemble_report(
         "report_version": "v1",
         "issue_ref": "#3217",
         "title": "DB scale 01 — read-only storage, index, and query census",
-        "measurement_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "measurement_timestamp_utc": datetime.now(UTC).isoformat(),
         "postgresql_version": real.get("postgresql_version") if real else None,
         "read_only_transaction": True,
         "mutation_modes_rejected": True,
