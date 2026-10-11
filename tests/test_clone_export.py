@@ -17,11 +17,15 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.models import (
+    ContinuityPlan,
+    ContinuityRule,
+    ContinuityRuleSelectedMember,
     Dependency,
     Event,
     Issue,
     ReadingOrder,
     ReadingOrderItem,
+    ReadingPlanDependency,
     ReadingSession,
     Snapshot,
     Thread,
@@ -73,8 +77,17 @@ async def clean_clone_users(db_engine) -> AsyncIterator[None]:
         "DELETE FROM reading_order_items WHERE reading_order_id IN "
         f"(SELECT id FROM reading_orders WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders})))",
         f"DELETE FROM reading_orders WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))",
+        "DELETE FROM reading_plan_dependencies WHERE plan_id IN "
+        f"(SELECT id FROM continuity_plans WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders})))",
+        "DELETE FROM continuity_rule_selected_members WHERE rule_id IN "
+        f"(SELECT id FROM continuity_rules WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders})))",
+        f"DELETE FROM continuity_rules WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))",
+        f"DELETE FROM continuity_plans WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))",
         "DELETE FROM dependencies WHERE source_issue_id IN "
-        f"(SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))))",
+        f"(SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders})))"
+        ") OR target_issue_id IN "
+        f"(SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders})))"
+        ")",
         "DELETE FROM issues WHERE thread_id IN "
         f"(SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders})))",
         f"DELETE FROM threads WHERE user_id IN (SELECT id FROM users WHERE username IN ({placeholders}))",
@@ -154,7 +167,28 @@ async def export_data(db_engine, export_user: User) -> dict[str, object]:
             {"uid": export_user.id},
         )
         await session.execute(
+            text("DELETE FROM reading_plan_dependencies WHERE plan_id IN "
+                 "(SELECT id FROM continuity_plans WHERE user_id = :uid)"),
+            {"uid": export_user.id},
+        )
+        await session.execute(
+            text("DELETE FROM continuity_rule_selected_members WHERE rule_id IN "
+                 "(SELECT id FROM continuity_rules WHERE user_id = :uid)"),
+            {"uid": export_user.id},
+        )
+        await session.execute(
+            text("DELETE FROM continuity_rules WHERE user_id = :uid"),
+            {"uid": export_user.id},
+        )
+        await session.execute(
+            text("DELETE FROM continuity_plans WHERE user_id = :uid"),
+            {"uid": export_user.id},
+        )
+        await session.execute(
             text("DELETE FROM dependencies WHERE source_issue_id IN "
+                 "(SELECT id FROM issues WHERE thread_id IN "
+                 "(SELECT id FROM threads WHERE user_id = :uid)) "
+                 "OR target_issue_id IN "
                  "(SELECT id FROM issues WHERE thread_id IN "
                  "(SELECT id FROM threads WHERE user_id = :uid))"),
             {"uid": export_user.id},
@@ -259,6 +293,53 @@ async def export_data(db_engine, export_user: User) -> dict[str, object]:
             description="Before rating",
         )
         session.add(snapshot)
+
+        plan = ContinuityPlan(
+            name="Export Test Plan",
+            ordering_mode="informational",
+            nodes_json=[{"id": "n1", "type": "issue", "issue_id": issue1.id}],
+            lanes_json=[],
+            user_id=export_user.id,
+        )
+        session.add(plan)
+        await session.flush()
+
+        item_rule = ContinuityRule(
+            user_id=export_user.id,
+            legacy_dependency_id=dependency.id,
+            source_type="issue",
+            source_id=issue1.id,
+            target_type="issue",
+            target_id=issue2.id,
+            satisfaction_type="item_read",
+            note=f"continuity-plan:{plan.id}",
+        )
+        converged_rule = ContinuityRule(
+            user_id=export_user.id,
+            legacy_dependency_id=None,
+            source_type="issue",
+            source_id=issue2.id,
+            target_type="issue",
+            target_id=issue1.id,
+            satisfaction_type="converged",
+            convergence_targets=[{"id": str(issue2.id), "type": "issue"}],
+        )
+        session.add_all([item_rule, converged_rule])
+        await session.flush()
+
+        session.add(
+            ContinuityRuleSelectedMember(
+                rule_id=item_rule.id,
+                issue_id=issue1.id,
+            )
+        )
+        session.add(
+            ReadingPlanDependency(
+                plan_id=plan.id,
+                dependency_id=dependency.id,
+                explanation="plan link",
+            )
+        )
         await session.commit()
 
     return {
@@ -271,6 +352,9 @@ async def export_data(db_engine, export_user: User) -> dict[str, object]:
         "session_id": session_model.id,
         "event_id": event.id,
         "snapshot_id": snapshot.id,
+        "plan_id": plan.id,
+        "item_rule_id": item_rule.id,
+        "converged_rule_id": converged_rule.id,
     }
 
 
@@ -507,6 +591,10 @@ async def test_clone_round_trip_preserves_counts_and_relationships(
         "sessions": 1,
         "events": 1,
         "snapshots": 1,
+        "continuity_plans": 1,
+        "continuity_rules": 2,
+        "continuity_rule_selected_members": 1,
+        "reading_plan_dependencies": 1,
     }
 
     async_session = async_sessionmaker(
@@ -730,6 +818,10 @@ def test_validate_export_rejects_broken_foreign_key():
         "sessions": [],
         "events": [],
         "snapshots": [],
+        "continuity_plans": [],
+        "continuity_rules": [],
+        "continuity_rule_selected_members": [],
+        "reading_plan_dependencies": [],
     }
 
     with pytest.raises(ValueError, match="missing user id 999"):
@@ -743,3 +835,291 @@ def test_remap_preserves_null_and_maps_ids():
 
     assert _remap(12, {12: 42}) == 42
     assert _remap(None, {12: 42}) is None
+
+
+@pytest.mark.asyncio
+async def test_export_includes_continuity_tables(test_db_url, export_user, export_data):
+    """Export captures plans, rules, selected members, and plan links."""
+    from scripts.clone_prod_to_local import _export_via_db
+
+    export = await _export_via_db(test_db_url, "clone_export_test_user")
+
+    assert len(export["continuity_plans"]) == 1
+    plan = export["continuity_plans"][0]
+    assert plan["id"] == export_data["plan_id"]
+    assert plan["name"] == "Export Test Plan"
+    assert plan["nodes_json"] == [
+        {"id": "n1", "type": "issue", "issue_id": export_data["issue1_id"]}
+    ]
+
+    assert len(export["continuity_rules"]) == 2
+    item_rule = next(
+        rule for rule in export["continuity_rules"]
+        if rule["id"] == export_data["item_rule_id"]
+    )
+    assert item_rule["satisfaction_type"] == "item_read"
+    assert item_rule["source_id"] == export_data["issue1_id"]
+    assert item_rule["target_id"] == export_data["issue2_id"]
+    assert item_rule["legacy_dependency_id"] == export_data["dependency_id"]
+    assert item_rule["note"] == f"continuity-plan:{export_data['plan_id']}"
+
+    converged_rule = next(
+        rule for rule in export["continuity_rules"]
+        if rule["id"] == export_data["converged_rule_id"]
+    )
+    assert converged_rule["satisfaction_type"] == "converged"
+    assert converged_rule["convergence_targets"] == [
+        {"id": str(export_data["issue2_id"]), "type": "issue"}
+    ]
+
+    assert len(export["continuity_rule_selected_members"]) == 1
+    member = export["continuity_rule_selected_members"][0]
+    assert member["rule_id"] == export_data["item_rule_id"]
+    assert member["issue_id"] == export_data["issue1_id"]
+
+    assert len(export["reading_plan_dependencies"]) == 1
+    link = export["reading_plan_dependencies"][0]
+    assert link["plan_id"] == export_data["plan_id"]
+    assert link["dependency_id"] == export_data["dependency_id"]
+    assert link["explanation"] == "plan link"
+
+
+@pytest.mark.asyncio
+async def test_export_excludes_other_users_continuity_data(
+    test_db_url, db_engine, export_user, export_data,
+):
+    """Continuity tables are scoped to the exported user like every other table."""
+    from scripts.clone_prod_to_local import _export_via_db
+
+    async_session = async_sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False,
+    )
+    async with async_session() as session:
+        await session.execute(
+            text("DELETE FROM continuity_plans WHERE user_id IN "
+                 "(SELECT id FROM users WHERE username = :u)"),
+            {"u": "other_user_clone_test"},
+        )
+        await session.execute(
+            text("DELETE FROM threads WHERE user_id IN "
+                 "(SELECT id FROM users WHERE username = :u)"),
+            {"u": "other_user_clone_test"},
+        )
+        await session.execute(
+            text("DELETE FROM users WHERE username = :u"),
+            {"u": "other_user_clone_test"},
+        )
+        await session.commit()
+
+    async with async_session() as session:
+        other_user = User(
+            username="other_user_clone_test",
+            email="other@example.com",
+            password_hash="fakehash",
+        )
+        session.add(other_user)
+        await session.flush()
+        session.add(
+            ContinuityPlan(
+                name="Other User Plan",
+                ordering_mode="informational",
+                nodes_json=[],
+                lanes_json=[],
+                user_id=other_user.id,
+            )
+        )
+        await session.commit()
+
+    export = await _export_via_db(test_db_url, "clone_export_test_user")
+
+    plan_names = [plan["name"] for plan in export["continuity_plans"]]
+    assert "Other User Plan" not in plan_names
+    assert plan_names == ["Export Test Plan"]
+
+
+@pytest.mark.asyncio
+async def test_continuity_import_remaps_ids_and_rewrites_references(
+    test_db_url, db_engine, export_user, export_data, tmp_path,
+):
+    """Import remaps continuity references and rewrites plan notes to new plan ids."""
+    from scripts.clone_prod_to_local import _export_via_db, _import_document
+
+    export = await _export_via_db(test_db_url, "clone_export_test_user")
+    export["user"]["username"] = "clone_import_target"
+    export["user"]["email"] = "clone_import_target@example.com"
+    await _import_document(test_db_url, export, tmp_path / "backup.json", dry_run=False)
+
+    async_session = async_sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False,
+    )
+    async with async_session() as session:
+        target_id = (
+            await session.execute(
+                text("SELECT id FROM users WHERE username = 'clone_import_target'")
+            )
+        ).scalar_one()
+        new_plan_id = (
+            await session.execute(
+                text("SELECT id FROM continuity_plans WHERE name = 'Export Test Plan' "
+                     "AND user_id = :user_id"),
+                {"user_id": target_id},
+            )
+        ).scalar_one()
+        assert new_plan_id != export_data["plan_id"]
+
+        issue_rows = (
+            await session.execute(
+                text("SELECT id, issue_number FROM issues WHERE thread_id IN "
+                     "(SELECT id FROM threads WHERE user_id = :user_id) ORDER BY position"),
+                {"user_id": target_id},
+            )
+        ).all()
+        new_issue_ids = {row.issue_number: row.id for row in issue_rows}
+
+        rules = (
+            await session.execute(
+                text("SELECT id, source_id, target_id, satisfaction_type, note, "
+                     "legacy_dependency_id, convergence_targets FROM continuity_rules "
+                     "WHERE user_id = :user_id ORDER BY id"),
+                {"user_id": target_id},
+            )
+        ).all()
+        assert len(rules) == 2
+        item_rule = next(rule for rule in rules if rule.satisfaction_type == "item_read")
+        converged_rule = next(rule for rule in rules if rule.satisfaction_type == "converged")
+
+        new_dependency_id = (
+            await session.execute(
+                text("SELECT id FROM dependencies WHERE source_issue_id = :source "
+                     "AND target_issue_id = :target"),
+                {
+                    "source": new_issue_ids["1"],
+                    "target": new_issue_ids["2"],
+                },
+            )
+        ).scalar_one()
+
+        members = (
+            await session.execute(
+                text("SELECT rule_id, issue_id FROM continuity_rule_selected_members "
+                     "WHERE rule_id IN (SELECT id FROM continuity_rules WHERE user_id = :user_id)"),
+                {"user_id": target_id},
+            )
+        ).all()
+        links = (
+            await session.execute(
+                text("SELECT plan_id, dependency_id, explanation FROM reading_plan_dependencies "
+                     "WHERE plan_id IN (SELECT id FROM continuity_plans WHERE user_id = :user_id)"),
+                {"user_id": target_id},
+            )
+        ).all()
+
+    assert item_rule.source_id == new_issue_ids["1"]
+    assert item_rule.target_id == new_issue_ids["2"]
+    assert item_rule.note == f"continuity-plan:{new_plan_id}"
+    assert item_rule.legacy_dependency_id == new_dependency_id
+    assert converged_rule.source_id == new_issue_ids["2"]
+    assert converged_rule.target_id == new_issue_ids["1"]
+    assert converged_rule.convergence_targets == [
+        {"id": str(new_issue_ids["2"]), "type": "issue"}
+    ]
+    assert len(members) == 1
+    assert members[0].rule_id == item_rule.id
+    assert members[0].issue_id == new_issue_ids["1"]
+    assert len(links) == 1
+    assert links[0].plan_id == new_plan_id
+    assert links[0].dependency_id == new_dependency_id
+    assert links[0].explanation == "plan link"
+
+
+def test_validate_export_rejects_dangling_continuity_reference():
+    """Import validation rejects rules and links whose references are missing."""
+    from scripts.clone_prod_to_local import _validate_export
+
+    document = {
+        "schema_version": "1.0",
+        "user": {"id": 10, "username": "import-user"},
+        "threads": [{"id": 20, "user_id": 10, "title": "Thread"}],
+        "issues": [{"id": 30, "thread_id": 20, "issue_number": "1"}],
+        "dependencies": [{"id": 40, "source_issue_id": 30, "target_issue_id": 30}],
+        "reading_orders": [],
+        "reading_order_items": [],
+        "sessions": [],
+        "events": [],
+        "snapshots": [],
+        "continuity_plans": [{"id": 50, "user_id": 10, "name": "Plan"}],
+        "continuity_rules": [
+            {
+                "id": 60,
+                "user_id": 10,
+                "source_type": "issue",
+                "source_id": 30,
+                "target_type": "issue",
+                "target_id": 30,
+                "satisfaction_type": "item_read",
+                "checkpoint_issue_id": 999,
+            }
+        ],
+        "continuity_rule_selected_members": [],
+        "reading_plan_dependencies": [],
+    }
+
+    with pytest.raises(ValueError, match="references missing issues id 999"):
+        _validate_export(document)
+
+
+def test_validate_export_rejects_dangling_plan_link():
+    """Import validation rejects plan links pointing at missing plans or edges."""
+    from scripts.clone_prod_to_local import _validate_export
+
+    document = {
+        "schema_version": "1.0",
+        "user": {"id": 10, "username": "import-user"},
+        "threads": [],
+        "issues": [],
+        "dependencies": [],
+        "reading_orders": [],
+        "reading_order_items": [],
+        "sessions": [],
+        "events": [],
+        "snapshots": [],
+        "continuity_plans": [],
+        "continuity_rules": [],
+        "continuity_rule_selected_members": [],
+        "reading_plan_dependencies": [
+            {"plan_id": 50, "dependency_id": 40, "explanation": "stale link"}
+        ],
+    }
+
+    with pytest.raises(ValueError, match="references missing continuity_plans id 50"):
+        _validate_export(document)
+
+
+def test_remap_plan_note_rewrites_plan_references():
+    """Plan notes are rewritten to remapped plan ids; other notes pass through."""
+    from scripts.clone_prod_to_local import _remap_plan_note
+
+    assert _remap_plan_note("continuity-plan:7", {7: 42}) == "continuity-plan:42"
+    assert _remap_plan_note("read the first issue first", {7: 42}) == "read the first issue first"
+    assert _remap_plan_note("continuity-plan:7", {}) == "continuity-plan:7"
+    assert _remap_plan_note(None, {7: 42}) is None
+
+
+def test_remap_convergence_targets_remaps_issue_ids():
+    """Convergence-target issue ids are remapped, preserving the original id type."""
+    from scripts.clone_prod_to_local import _remap_convergence_targets
+
+    targets = [
+        {"id": "10", "type": "issue"},
+        {"id": 11, "type": "issue"},
+        {"id": "x", "type": "issue"},
+        {"id": "10", "type": "crossover"},
+    ]
+    remapped = _remap_convergence_targets(targets, {10: 100, 11: 110})
+
+    assert remapped is not None
+    assert remapped[0] == {"id": "100", "type": "issue"}
+    assert remapped[1] == {"id": 110, "type": "issue"}
+    assert remapped[2] == {"id": "x", "type": "issue"}
+    assert remapped[3] == {"id": "10", "type": "crossover"}
+    assert _remap_convergence_targets(None, {10: 100}) is None

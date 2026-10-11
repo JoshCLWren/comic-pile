@@ -140,7 +140,7 @@ async def adopt_cbl_into_existing_reading_plan(
             user_id=user_id,
             plan=plan,
             nodes=node_models,
-            ordering_mode=_plan_ordering_mode(plan),
+            ordering_mode=_plan_ordering_mode(plan)
         )
         await refresh_user_blocked_status(user_id, db)
         await db.commit()

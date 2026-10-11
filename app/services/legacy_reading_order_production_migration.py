@@ -726,7 +726,7 @@ async def apply_legacy_reading_order_migration(
             user_id=user_id,
             plan=plan,
             nodes=nodes,
-            ordering_mode="informational",
+            ordering_mode="informational"
         )
         if compiled is not True:
             raise MigrationInvariantError("canonical informational rule compile failed")

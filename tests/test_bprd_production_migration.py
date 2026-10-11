@@ -460,6 +460,14 @@ async def test_step22_rollback_handles_production_dependency_sync_trigger(
             DECLARE
                 owner_id integer;
             BEGIN
+                -- #2553: plan-compiled canonical edges are system-generated,
+                -- not reader-created legacy dependencies; do not mirror them
+                -- into continuity_rules (in production the trigger is dropped
+                -- by the cutover before any compiled edge exists).
+                IF NEW.note LIKE 'canonical:rule:%' THEN
+                    RETURN NEW;
+                END IF;
+
                 SELECT thread.user_id
                   INTO owner_id
                   FROM issues AS issue

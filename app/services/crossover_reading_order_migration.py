@@ -654,7 +654,7 @@ async def apply_crossover_reading_order_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential",
+        ordering_mode="strict_sequential"
     )
     await refresh_blocked_status(spec.user_id, db)
     await db.flush()
@@ -707,7 +707,11 @@ async def apply_crossover_reading_order_migration(
     factual = await _factual_snapshot(
         db, user_id=spec.user_id, ordered_issue_ids=issue_ids
     )
-    for key in ("issue_state_hash", "thread_state_hash", "event_state_hash"):
+    # #2553: thread_state_hash is intentionally excluded. The dry-run
+    # documents newly_blocked_by_plan_authority — the migration enforces
+    # order through the plan, which newly blocks threads in the canonical
+    # runtime (where historical rows are inert).
+    for key in ("issue_state_hash", "event_state_hash"):
         if factual[key] != snapshot["factual"][key]:
             raise MigrationInvariantError(f"protected reader state changed: {key}")
 
