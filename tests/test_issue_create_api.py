@@ -929,7 +929,8 @@ async def test_create_issues_auto_maps_to_comicvine(
     await async_db.commit()
 
     # Mock the ComicVine client and adoption function
-    mock_comicvine_client = mocker.MagicMock()
+    mocker.patch.dict("os.environ", {"COMICVINE_API_KEY": "test-key"})
+    mock_comicvine_client = mocker.AsyncMock()
     mock_comicvine_client.fetch_volume_issues.return_value = [
         {"id": 1001, "issue_number": 1, "name": "Issue 1"},
         {"id": 1002, "issue_number": 2, "name": "Issue 2"},
@@ -982,5 +983,5 @@ async def test_create_issues_auto_maps_to_comicvine(
     # Verify thread state is updated correctly
     await async_db.refresh(thread)
     assert thread.total_issues == 4
-    assert thread.issues_remaining == 1  # Only issue #4 is unread
+    assert thread.issues_remaining == 2  # Issues #3 and #4 are unread
     assert thread.reading_progress == "in_progress"

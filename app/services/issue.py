@@ -21,7 +21,7 @@ from app.schemas.tags import TagTargetType
 from app.services.issue_insertion import _insert_new_issues_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
-from app.services.provider_issue_adoption import adopt_comicvine_issue, ProviderIssueAdoptionResult
+from app.services.provider_issue_adoption import adopt_comicvine_issue
 from app.utils.issue_natural_order import natural_issue_order
 from app.services.tag_service import purge_target_assignments
 from app.utils.issue_parser import parse_issue_ranges
@@ -82,7 +82,6 @@ async def list_issues(
         next_token = f"{last.position},{last.id}"
 
     return issues_to_return, total_count, next_token
-
 
 
 async def create_issues(

@@ -38,7 +38,7 @@ from app.external_identities import (
     link_issue_external_identity,
     upsert_external_identity,
 )
-from app.models import Event, Issue, Thread
+from app.models import Event, Thread
 from app.models.external_identity import ExternalIdentity
 from app.repositories import issue_repository
 from app.services.issue_insertion import create_issue_in_natural_order
