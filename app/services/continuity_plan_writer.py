@@ -334,6 +334,12 @@ async def replace_compiled_rules(
         ))
 
     if not edges_to_add:
+        if sync_canonical_edges:
+            # The new rule set is empty: retire all previously compiled
+            # pairs so orphaned edges don't keep blocking Roll (#2553).
+            await retire_rule_edges(
+                db, user_id=user_id, pairs=list(old_pairs), exclude_rule_id=-1
+            )
         return True
 
     # Check for plan-level cycles using in-memory graph
@@ -501,3 +507,29 @@ async def list_continuity_plan_items(
         )
         for plan in ordered
     ]
+
+
+async def retire_plan_edges_for_deletion(
+    db: AsyncSession, *, user_id: int, plan_id: int
+) -> None:
+    """Retire canonical edges compiled by one plan before its rules are deleted.
+
+    After the Roll cutover (#2553) those Dependency rows are the only Roll
+    authority, so plan deletion must clean them up or orphaned rows keep
+    blocking. Lives in the service layer to keep routers free of queries.
+    """
+    from app.services.migration_shared import retire_plan_compiled_edges
+
+    marker = plan_rule_marker(plan_id)
+    plan_rule_ids = [
+        row[0]
+        for row in (
+            await db.execute(
+                select(ContinuityRule.id).where(
+                    ContinuityRule.user_id == user_id,
+                    ContinuityRule.note == marker,
+                )
+            )
+        ).all()
+    ]
+    await retire_plan_compiled_edges(db, rule_ids=plan_rule_ids)

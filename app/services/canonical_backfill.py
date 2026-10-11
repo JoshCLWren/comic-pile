@@ -14,7 +14,11 @@ import re
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
-EDGE_NOTE_PREFIX = "canonical:rule-backfill:"
+# Single source of truth for rule-compiled edge notes, shared with the
+# write-path compiler. Retirement, plan save, and migration rollbacks match
+# this prefix; the backfill must use it too, or orphaned rows survive.
+from app.services.canonical_constraint_compiler import EDGE_NOTE_PREFIX
+
 _PLAN_NOTE_RE = re.compile(r"^continuity-plan:(\d+)$")
 _MAX_REPORTED_IDS = 50
 
@@ -142,8 +146,68 @@ def drop_mirror_trigger(bind: Connection) -> None:
     bind.execute(sa.text("DROP FUNCTION IF EXISTS sync_legacy_dependency_to_continuity_rule()"))
 
 
+def _abort_on_cbl_collisions(bind: Connection, pairs_sql: str) -> None:
+    """Abort if a historical cbl-order row occupies a pair a rule must compile.
+
+    ON CONFLICT DO NOTHING would silently treat the inert historical row as
+    success, leaving the hard rule without a blocking edge. The September
+    audit measured zero collisions; any collision is a data problem to fix,
+    not to paper over.
+
+    pairs_sql filters continuity_rules r to the rules being compiled; the
+    pair join uses r.source_id/r.target_id (item_read shape).
+    """
+    collisions = [
+        row[0]
+        for row in bind.execute(
+            sa.text(
+                "SELECT DISTINCT r.id FROM continuity_rules r "
+                "JOIN dependencies d ON "
+                "d.source_issue_id = r.source_id AND d.target_issue_id = r.target_id "
+                f"WHERE {pairs_sql} AND d.note LIKE 'cbl-order:%'"
+            )
+        ).all()
+    ]
+    if collisions:
+        abort_with_rule_ids(
+            collisions,
+            "collide with historical cbl-order rows that would stay inert; "
+            "resolve the overlap before running the cutover",
+        )
+
+
+def _abort_on_converged_cbl_collisions(bind: Connection) -> None:
+    """Abort if a historical cbl-order row occupies a converged prerequisite pair."""
+    collisions = [
+        row[0]
+        for row in bind.execute(
+            sa.text(
+                "SELECT DISTINCT r.id FROM continuity_rules r "
+                "JOIN LATERAL json_array_elements(r.convergence_targets) AS elem ON true "
+                "JOIN dependencies d ON "
+                "d.source_issue_id = (elem->>'id')::int "
+                "AND d.target_issue_id = r.target_id "
+                "WHERE r.legacy_dependency_id IS NULL "
+                "AND r.satisfaction_type = 'converged' "
+                "AND (elem->>'id')::int <> r.target_id "
+                "AND d.note LIKE 'cbl-order:%'"
+            )
+        ).all()
+    ]
+    if collisions:
+        abort_with_rule_ids(
+            collisions,
+            "collide with historical cbl-order rows that would stay inert; "
+            "resolve the overlap before running the cutover",
+        )
+
+
 def backfill_item_read_edges(bind: Connection) -> tuple[int, int]:
     """Persist one edge per rule-native item_read rule. Returns (inserted, skipped_existing)."""
+    _abort_on_cbl_collisions(
+        bind,
+        "r.legacy_dependency_id IS NULL AND r.satisfaction_type = 'item_read'",
+    )
     before = bind.execute(sa.text("SELECT COUNT(*) FROM dependencies")).scalar_one()
     bind.execute(
         sa.text(
@@ -169,6 +233,7 @@ def backfill_item_read_edges(bind: Connection) -> tuple[int, int]:
 
 def backfill_converged_edges(bind: Connection) -> tuple[int, int, int]:
     """Expand converged rules into per-prerequisite edges. Returns (inserted, skipped_existing, skipped_self)."""
+    _abort_on_converged_cbl_collisions(bind)
     self_edges = bind.execute(
         sa.text(
             "SELECT COUNT(DISTINCT (elem->>'id')::int) FROM continuity_rules r, "

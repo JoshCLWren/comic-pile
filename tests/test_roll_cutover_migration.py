@@ -223,8 +223,8 @@ async def test_backfill_creates_edges_and_validated_plan_links(
             sa.select(Dependency.source_issue_id, Dependency.target_issue_id, Dependency.note)
         )
     }
-    assert (edges[(a1.id, b1.id)] or "").startswith("canonical:rule-backfill:")
-    assert (edges[(c1.id, c2.id)] or "").startswith("canonical:rule-backfill:")
+    assert (edges[(a1.id, b1.id)] or "").startswith("canonical:rule:")
+    assert (edges[(c1.id, c2.id)] or "").startswith("canonical:rule:")
     assert (b1.id, b1.id) not in edges  # self-edge never persisted
 
     links = {
@@ -418,3 +418,41 @@ async def test_backfill_scales_to_hundreds_of_rules(
 
     assert inserted == len(all_issues) - 1
     assert skipped == 0
+
+
+@pytest.mark.asyncio
+async def test_backfill_aborts_on_cbl_collision(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """A rule colliding with an inert cbl-order row aborts, not silently skips."""
+    db = _isolated_migration_data
+
+    user = await _user(db, "cutover-collision-user")
+    _, (a1,) = await _thread_with_issues(db, user.id, "Lambda", ["1"])
+    _, (b1,) = await _thread_with_issues(db, user.id, "Mu", ["1"])
+    # Historical CBL row occupies the pair the rule must compile.
+    db.add(
+        Dependency(
+            source_issue_id=a1.id,
+            target_issue_id=b1.id,
+            note="cbl-order:source:abc123:1->2",
+        )
+    )
+    db.add(
+        ContinuityRule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=a1.id,
+            target_type="issue",
+            target_id=b1.id,
+            satisfaction_type="item_read",
+        )
+    )
+    await db.commit()
+
+    conn = _sync_connection()
+    try:
+        with pytest.raises(RuntimeError, match="collide with historical cbl-order"):
+            mig.backfill_item_read_edges(conn)
+    finally:
+        conn.close()

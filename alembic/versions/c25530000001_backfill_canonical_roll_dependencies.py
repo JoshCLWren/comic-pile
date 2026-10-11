@@ -1,7 +1,7 @@
 """Backfill canonical issue Dependencies from ContinuityRules for the Roll cutover (#2553).
 
 Revision ID: c25530000001
-Revises: e913be4e091d
+Revises: f2a3b4c5d6e7
 Create Date: 2026-10-10
 
 Cutover data step for #2553 (frozen architecture: docs/READING_GRAPH_ADR.md,

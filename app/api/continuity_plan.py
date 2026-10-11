@@ -33,6 +33,7 @@ from app.services.continuity_plan_writer import (
     plan_rule_marker,
     preserve_server_lane_metadata,
     replace_compiled_rules,
+    retire_plan_edges_for_deletion,
     serialize_new_plan_lanes,
     validate_node_ownership,
 )
@@ -102,8 +103,9 @@ async def create_continuity_plan(
         await db.rollback()
         raise
     await db.refresh(plan)
-    if payload.ordering_mode == "strict_sequential":
-        await _refresh_blocked_state(current_user.id, db)
+    # Always refresh: informational plans with checkpoint/convergence gates
+    # also compile canonical edges via the write-path hook (#2553).
+    await _refresh_blocked_state(current_user.id, db)
     return _to_response(plan)
 
 
@@ -283,6 +285,11 @@ async def delete_continuity_plan(
 ) -> Response:
     """Delete one plan and only the hard rules compiled by that plan."""
     plan = await _get_owned_plan(db, current_user.id, plan_id)
+    # Retire the plan's compiled canonical edges before deleting its rules:
+    # after the cutover those Dependency rows are the only Roll authority.
+    await retire_plan_edges_for_deletion(
+        db, user_id=current_user.id, plan_id=plan.id
+    )
     await delete_continuity_plan_rules_for_marker(
         db, user_id=current_user.id, marker=_marker(plan.id)
     )
