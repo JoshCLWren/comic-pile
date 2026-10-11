@@ -45,7 +45,7 @@ from app.services.canonical_backfill import (
 
 # revision identifiers, used by Alembic.
 revision: str = "c25530000001"
-down_revision: str | Sequence[str] | None = "e913be4e091d"
+down_revision: str | Sequence[str] | None = "f2a3b4c5d6e7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
