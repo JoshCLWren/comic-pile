@@ -63,6 +63,25 @@ class TagUsageResult:
 
 
 @dataclass
+class BulkAssignmentResult:
+    """Result of a bulk tag assignment operation.
+
+    Attributes:
+        tag_id: Primary key of the tag.
+        target_type: Type of the targets.
+        requested_ids: Deduplicated target ids the request asked about.
+        affected_ids: Targets whose assignment state actually changed.
+        already_ids: Targets already in the desired state.
+    """
+
+    tag_id: int
+    target_type: str
+    requested_ids: list[int]
+    affected_ids: list[int] = field(default_factory=list)
+    already_ids: list[int] = field(default_factory=list)
+
+
+@dataclass
 class DeleteTagResult:
     """Result of a tag deletion.
 
@@ -303,6 +322,23 @@ class TagDeletionHook:
         del db, tag_id
         return 0
 
+    async def count_tag_references(self, db: AsyncSession, tag_id: int) -> int:
+        """Count references to a tag held by this consumer without removing them.
+
+        The tag usage endpoint uses this so the delete-confirmation dialog can
+        show whether the tag is referenced by roll filtering (or another
+        consumer) before the user confirms deletion.
+
+        Args:
+            db: Database session.
+            tag_id: Primary key of the tag.
+
+        Returns:
+            Number of references held. Defaults to 0.
+        """
+        del db, tag_id
+        return 0
+
 
 # Registry of tag deletion hook consumers.
 _tag_deletion_hooks: list[TagDeletionHook] = []
@@ -401,19 +437,21 @@ class TagService:
     # Listing and retrieval
     # ---------------------------------------------------------------------
 
-    async def list_tags(self, user: User) -> list[Tag]:
+    async def list_tags(self, user: User, *, search: str | None = None) -> list[Tag]:
         """Return all tags visible to a user.
 
         Global tags are visible to everyone; a user also sees their own
-        private tags.
+        private tags. Private tags owned by anyone else are never included.
 
         Args:
             user: The requesting user.
+            search: Optional case-insensitive substring filter on the tag
+                name, used by the inline tag picker.
 
         Returns:
             List of visible tags.
         """
-        return await tag_repository.list_tags_for_user(self._db, user.id)
+        return await tag_repository.list_tags_for_user(self._db, user.id, search=search)
 
     async def get_tag(self, user: User, tag_id: int) -> Tag:
         """Return a tag, enforcing visibility.
@@ -796,6 +834,151 @@ class TagService:
         await self._db.commit()
 
         return removed
+
+    async def bulk_assign_tag(
+        self,
+        user: User,
+        tag_id: int,
+        target_type: str,
+        target_ids: list[int],
+    ) -> BulkAssignmentResult:
+        """Assign one tag to many targets of one type.
+
+        Only the requested tag assignment is created; unrelated tags on the
+        selected targets are never replaced or removed. Every target is
+        validated before anything is written, so a missing or forbidden
+        target fails the whole request without partial changes. The operation
+        is idempotent: targets that already carry the tag are reported rather
+        than duplicated.
+
+        Args:
+            user: The requesting user.
+            tag_id: Primary key of the tag.
+            target_type: Type of the targets.
+            target_ids: Primary keys of the targets.
+
+        Returns:
+            The BulkAssignmentResult describing what changed.
+
+        Raises:
+            NotFoundError: When the tag or any target does not exist.
+            ForbiddenError: When the user lacks permission.
+            InvalidRequestError: When the target type is unsupported or no
+                target ids were provided.
+        """
+        requested_ids = list(dict.fromkeys(target_ids))
+        if not requested_ids:
+            raise InvalidRequestError("At least one target id is required")
+
+        tag = await tag_repository.get_tag_by_id(self._db, tag_id)
+        if tag is None:
+            raise NotFoundError(f"Tag {tag_id} does not exist")
+
+        is_global = tag.scope == TagScope.GLOBAL.value
+        if is_global:
+            self._require_global_scope_admin(user, "assign")
+        elif tag.owner_user_id != user.id:
+            raise ForbiddenError("You can only assign your own private tags")
+
+        _get_target_validator(target_type)
+        for target_id in requested_ids:
+            await _validate_target(
+                self._db, user, target_type, target_id, enforce_ownership=not is_global
+            )
+
+        try:
+            assigned, already = await tag_repository.bulk_assign_tag(
+                self._db, tag_id, target_type, requested_ids
+            )
+            await self._db.commit()
+        except IntegrityError as exc:
+            await self._db.rollback()
+            raise ConflictError(
+                "This tag is already assigned to one of those targets"
+            ) from exc
+        return BulkAssignmentResult(
+            tag_id=tag_id,
+            target_type=target_type,
+            requested_ids=requested_ids,
+            affected_ids=assigned,
+            already_ids=already,
+        )
+
+    async def bulk_unassign_tag(
+        self,
+        user: User,
+        tag_id: int,
+        target_type: str,
+        target_ids: list[int],
+    ) -> BulkAssignmentResult:
+        """Remove one tag from many targets of one type.
+
+        Only the requested tag assignment is removed; unrelated tags on the
+        selected targets are never touched. Targets without the assignment
+        are reported rather than treated as errors, so the operation is
+        idempotent. Tag visibility is enforced before anything is written.
+
+        Args:
+            user: The requesting user.
+            tag_id: Primary key of the tag.
+            target_type: Type of the targets.
+            target_ids: Primary keys of the targets.
+
+        Returns:
+            The BulkAssignmentResult describing what changed.
+
+        Raises:
+            NotFoundError: When the tag does not exist.
+            ForbiddenError: When the user lacks permission.
+            InvalidRequestError: When the target type is unsupported or no
+                target ids were provided.
+        """
+        requested_ids = list(dict.fromkeys(target_ids))
+        if not requested_ids:
+            raise InvalidRequestError("At least one target id is required")
+
+        tag = await tag_repository.get_tag_by_id(self._db, tag_id)
+        if tag is None:
+            raise NotFoundError(f"Tag {tag_id} does not exist")
+
+        if tag.scope == TagScope.GLOBAL.value:
+            self._require_global_scope_admin(user, "unassign")
+        elif tag.owner_user_id != user.id:
+            raise ForbiddenError("You can only unassign your own private tags")
+
+        _get_target_validator(target_type)
+
+        removed, already = await tag_repository.bulk_unassign_tag(
+            self._db, tag_id, target_type, requested_ids
+        )
+        await self._db.commit()
+        return BulkAssignmentResult(
+            tag_id=tag_id,
+            target_type=target_type,
+            requested_ids=requested_ids,
+            affected_ids=removed,
+            already_ids=already,
+        )
+
+    async def preview_consumer_references(self, tag_id: int) -> dict[str, int]:
+        """Count tag references held by deletion-hook consumers without removing them.
+
+        The delete-confirmation dialog uses this to show whether the tag is
+        referenced by roll filtering (or another consumer) before deletion.
+
+        Args:
+            tag_id: Primary key of the tag.
+
+        Returns:
+            Map from consumer name to held reference count. Consumers holding
+            no references are omitted.
+        """
+        references: dict[str, int] = {}
+        for hook in _tag_deletion_hooks:
+            count = await hook.count_tag_references(self._db, tag_id)
+            if count:
+                references[hook.consumer_name] = count
+        return references
 
     async def _get_assignment(
         self, tag_id: int, target_type: str, target_id: int

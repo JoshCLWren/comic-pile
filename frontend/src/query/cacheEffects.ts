@@ -650,3 +650,28 @@ export async function invalidateAfterSessionModeUpdate(
 ): Promise<void> {
   await invalidateAfterRollDieModeUpdate(client)
 }
+
+/**
+ * Refresh every surface a tag mutation rewrites (issue #3032).
+ *
+ * Tag creates/updates/deletes and (bulk) assignment changes rewrite the tag
+ * list, usage counts, and the effective tags of every touched target. The
+ * Roll screen renders the rolled issue's effective tags inline, so the roll
+ * bootstrap joins the refresh; the bootstrap refetch is what re-renders Roll
+ * without navigating away. Other entity caches (queue pages, thread detail)
+ * do not embed tags and stay untouched.
+ *
+ * TanStack Query refetches invalidated active queries — callers must not also
+ * call `refetch()` for a key this helper already refreshes.
+ */
+export async function invalidateAfterTagMutation(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.tags.all }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+  ])
+}

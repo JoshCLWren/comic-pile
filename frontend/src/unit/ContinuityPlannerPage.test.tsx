@@ -9,6 +9,7 @@ import { continuityPlansApi } from '../services/api-continuity-plans'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api-threads'
+import { tagsApi } from '../services/api-tags'
 import ContinuityPlannerPageImpl from '../pages/ContinuityPlannerPage'
 
 interface AddMaterialProbeProps {
@@ -40,6 +41,7 @@ const mocks = {
   getIssue: vi.fn(),
   listThreads: vi.fn(),
   getThread: vi.fn(),
+  getPlanTags: vi.fn(),
 }
 
 const _origCreate = continuityPlansApi.create
@@ -50,6 +52,7 @@ const _origGroupsList = dependencyGroupsApi.list
 const _origIssuesList = issuesApi.list
 const _origThreadsList = threadsApi.list
 const _origThreadsGet = threadsApi.get
+const _origTagsEffectiveForPlan = tagsApi.effectiveForPlan
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
 
@@ -129,6 +132,8 @@ beforeEach(() => {
   threadsApi.list = mocks.listThreads as never
   // SAFETY: the module mock replaces the API surface the component calls
   threadsApi.get = mocks.getThread as never
+  // SAFETY: the module mock replaces the API surface the component calls
+  tagsApi.effectiveForPlan = mocks.getPlanTags as never
   vi.clearAllMocks()
   mocks.create.mockReset()
   mocks.get.mockReset()
@@ -140,6 +145,12 @@ beforeEach(() => {
   mocks.getIssue.mockResolvedValue(issue)
   mocks.listThreads.mockResolvedValue({ threads: [thread, secondThread], next_page_token: null })
   mocks.getThread.mockResolvedValue(thread)
+  mocks.getPlanTags.mockResolvedValue({
+    target_type: 'ContinuityPlan',
+    target_id: 12,
+    direct_tags: [],
+    effective_tags: [],
+  })
   mocks.create.mockResolvedValue({
     id: 12,
     user_id: 1,
@@ -173,6 +184,7 @@ afterEach(() => {
   issuesApi.list = _origIssuesList
   threadsApi.list = _origThreadsList
   threadsApi.get = _origThreadsGet
+  tagsApi.effectiveForPlan = _origTagsEffectiveForPlan
 })
 
 describe('ContinuityPlannerPage', () => {

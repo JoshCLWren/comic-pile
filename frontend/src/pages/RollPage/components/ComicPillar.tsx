@@ -8,6 +8,7 @@ import type { IssueIdentityResponse } from '../../../services/api-comicvine'
 import { getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
 import { ComicIdentity } from './ComicIdentity'
+import { TagSection } from '../../../components/Tags/TagSection'
 import { queryClient } from '../../../query/queryClient'
 import {
   applyComicVineCorrectionOptimistically,
@@ -276,6 +277,23 @@ export function ComicPillar({
                   triggerTestId="comic-corrections-menu"
                 />
               )}
+            </div>
+          )}
+
+          {/* Inline tag editing for the currently rolled issue (issue #3032):
+              content-sized and wrapping so the controls never destabilize the
+              Roll layout at any viewport. */}
+          {issueId != null && activeRatingThread != null && (
+            <div className="min-w-0" data-testid="rolled-issue-tags">
+              <TagSection
+                targetType="Issue"
+                targetId={issueId}
+                targetLabel={
+                  issueNumber != null
+                    ? `${threadTitle} #${issueNumber}`
+                    : threadTitle
+                }
+              />
             </div>
           )}
         </div>

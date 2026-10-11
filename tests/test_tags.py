@@ -1327,3 +1327,336 @@ class TestSchemaRoundTrip:
         await TagService(async_db).create_tag(non_admin_user, "Hidden Usage")
         resp = await user_auth_client.get("/api/v1/tags/1/usage/")
         assert resp.status_code == 404
+
+
+async def _create_extra_issues(
+    db: AsyncSession, thread: Thread, numbers: list[str], start_id: int
+) -> list[Issue]:
+    """Add issues with explicit ids to a thread for bulk-operation tests."""
+    now = datetime.now(UTC)
+    issues: list[Issue] = []
+    for offset, number in enumerate(numbers):
+        issue = Issue(
+            id=start_id + offset,
+            thread_id=thread.id,
+            issue_number=number,
+            position=start_id + offset,
+            status="unread",
+            created_at=now,
+        )
+        db.add(issue)
+        issues.append(issue)
+    await db.commit()
+    for issue in issues:
+        await db.refresh(issue)
+    return issues
+
+
+class TestBulkTagAssignment:
+    """Tests for bulk add/remove of one tag across many targets (issue #3032).
+
+    Bulk operations change only the selected tag assignment and must never
+    replace unrelated tags on the selected issues.
+    """
+
+    async def test_bulk_assign_adds_tag_to_many_issues(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """One bulk-add attaches the tag to every selected issue."""
+        thread, first_issue, _plan = await _create_target_entities(
+            async_db, non_admin_user
+        )
+        extra = await _create_extra_issues(async_db, thread, ["2", "3"], 2)
+        service = TagService(async_db)
+        created = await service.create_tag(non_admin_user, "Bulk", color="red")
+        tag_id = created.tag.id
+        target_ids = [first_issue.id, *[issue.id for issue in extra]]
+
+        result = await service.bulk_assign_tag(
+            non_admin_user, tag_id, "Issue", target_ids
+        )
+
+        assert result.requested_ids == target_ids
+        assert result.affected_ids == target_ids
+        assert result.already_ids == []
+        count = await async_db.execute(
+            select(func.count()).select_from(TagAssignment).where(
+                TagAssignment.tag_id == tag_id
+            )
+        )
+        assert count.scalar_one() == 3
+
+    async def test_bulk_assign_preserves_unrelated_tags(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Bulk-add never replaces unrelated tags already on the issues."""
+        thread, first_issue, _plan = await _create_target_entities(
+            async_db, non_admin_user
+        )
+        extra = await _create_extra_issues(async_db, thread, ["2"], 2)
+        service = TagService(async_db)
+        bulk_tag = (await service.create_tag(non_admin_user, "Bulk", color="red")).tag
+        other_tag = (await service.create_tag(non_admin_user, "Other", color="blue")).tag
+        await service.assign_tag(non_admin_user, other_tag.id, "Issue", first_issue.id)
+
+        await service.bulk_assign_tag(
+            non_admin_user, bulk_tag.id, "Issue", [first_issue.id, extra[0].id]
+        )
+
+        remaining = await async_db.execute(
+            select(TagAssignment).where(TagAssignment.target_type == "Issue")
+        )
+        by_issue: dict[int, set[int]] = {}
+        for row in remaining.scalars().all():
+            by_issue.setdefault(row.target_id, set()).add(row.tag_id)
+        assert by_issue[first_issue.id] == {bulk_tag.id, other_tag.id}
+        assert by_issue[extra[0].id] == {bulk_tag.id}
+
+    async def test_bulk_assign_is_idempotent(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Targets that already carry the tag are reported, not duplicated."""
+        thread, first_issue, _plan = await _create_target_entities(
+            async_db, non_admin_user
+        )
+        extra = await _create_extra_issues(async_db, thread, ["2"], 2)
+        service = TagService(async_db)
+        tag_id = (await service.create_tag(non_admin_user, "Bulk", color="red")).tag.id
+        await service.assign_tag(non_admin_user, tag_id, "Issue", first_issue.id)
+
+        result = await service.bulk_assign_tag(
+            non_admin_user, tag_id, "Issue", [first_issue.id, extra[0].id]
+        )
+
+        assert result.affected_ids == [extra[0].id]
+        assert result.already_ids == [first_issue.id]
+        count = await async_db.execute(
+            select(func.count()).select_from(TagAssignment).where(
+                TagAssignment.tag_id == tag_id
+            )
+        )
+        assert count.scalar_one() == 2
+
+    async def test_bulk_assign_fails_without_partial_writes(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """A missing target aborts the whole bulk-add with nothing written."""
+        thread, first_issue, _plan = await _create_target_entities(
+            async_db, non_admin_user
+        )
+        service = TagService(async_db)
+        tag_id = (await service.create_tag(non_admin_user, "Bulk", color="red")).tag.id
+
+        with pytest.raises(NotFoundError):
+            await service.bulk_assign_tag(
+                non_admin_user, tag_id, "Issue", [first_issue.id, 99999]
+            )
+
+        count = await async_db.execute(
+            select(func.count()).select_from(TagAssignment).where(
+                TagAssignment.tag_id == tag_id
+            )
+        )
+        assert count.scalar_one() == 0
+
+    async def test_bulk_assign_rejects_other_users_targets(
+        self, admin_user: User, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Private-tag bulk-add cannot push vocabulary onto others' targets."""
+        _thread, issue, _plan = await _create_target_entities(async_db, admin_user)
+        service = TagService(async_db)
+        tag_id = (await service.create_tag(non_admin_user, "Mine", color="red")).tag.id
+        with pytest.raises(ForbiddenError):
+            await service.bulk_assign_tag(non_admin_user, tag_id, "Issue", [issue.id])
+
+    async def test_bulk_unassign_removes_only_the_requested_tag(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Bulk-remove detaches one tag while leaving unrelated tags alone."""
+        thread, first_issue, _plan = await _create_target_entities(
+            async_db, non_admin_user
+        )
+        extra = await _create_extra_issues(async_db, thread, ["2"], 2)
+        service = TagService(async_db)
+        bulk_tag = (await service.create_tag(non_admin_user, "Bulk", color="red")).tag
+        other_tag = (await service.create_tag(non_admin_user, "Other", color="blue")).tag
+        await service.bulk_assign_tag(
+            non_admin_user, bulk_tag.id, "Issue", [first_issue.id, extra[0].id]
+        )
+        await service.assign_tag(non_admin_user, other_tag.id, "Issue", first_issue.id)
+
+        result = await service.bulk_unassign_tag(
+            non_admin_user, bulk_tag.id, "Issue", [first_issue.id, extra[0].id, 99999]
+        )
+
+        assert result.affected_ids == [first_issue.id, extra[0].id]
+        assert result.already_ids == [99999]
+        remaining = await async_db.execute(
+            select(TagAssignment).where(TagAssignment.target_type == "Issue")
+        )
+        rows = remaining.scalars().all()
+        assert len(rows) == 1
+        assert rows[0].tag_id == other_tag.id
+        assert rows[0].target_id == first_issue.id
+
+    async def test_bulk_assign_via_api(
+        self,
+        user_auth_client: AsyncClient,
+        non_admin_user: User,
+        async_db: AsyncSession,
+    ) -> None:
+        """POST bulk-assign/bulk-unassign round-trips through the API."""
+        thread, first_issue, _plan = await _create_target_entities(
+            async_db, non_admin_user
+        )
+        extra = await _create_extra_issues(async_db, thread, ["2"], 2)
+        tag_resp = await user_auth_client.post(
+            "/api/v1/tags/", json={"name": "API Bulk"}
+        )
+        assert tag_resp.status_code == 200
+        tag_id = tag_resp.json()["tag"]["id"]
+        target_ids = [first_issue.id, extra[0].id]
+
+        assign_resp = await user_auth_client.post(
+            f"/api/v1/tags/{tag_id}/bulk-assign/",
+            json={"target_type": "Issue", "target_ids": target_ids},
+        )
+        assert assign_resp.status_code == 200
+        assert assign_resp.json()["affected_ids"] == target_ids
+
+        unassign_resp = await user_auth_client.post(
+            f"/api/v1/tags/{tag_id}/bulk-unassign/",
+            json={"target_type": "Issue", "target_ids": target_ids},
+        )
+        assert unassign_resp.status_code == 200
+        assert unassign_resp.json()["affected_ids"] == target_ids
+
+        count = await service_count(async_db, tag_id)
+        assert count == 0
+
+    async def test_bulk_assign_via_api_rejects_empty_selection(
+        self, user_auth_client: AsyncClient, async_db: AsyncSession
+    ) -> None:
+        """An empty bulk selection is refused by request validation."""
+        tag_resp = await user_auth_client.post(
+            "/api/v1/tags/", json={"name": "API Bulk Empty"}
+        )
+        tag_id = tag_resp.json()["tag"]["id"]
+        resp = await user_auth_client.post(
+            f"/api/v1/tags/{tag_id}/bulk-assign/",
+            json={"target_type": "Issue", "target_ids": []},
+        )
+        assert resp.status_code == 422
+
+
+async def service_count(db: AsyncSession, tag_id: int) -> int:
+    """Return the assignment count for a tag (bulk API test helper)."""
+    count = await db.execute(
+        select(func.count()).select_from(TagAssignment).where(
+            TagAssignment.tag_id == tag_id
+        )
+    )
+    return count.scalar_one()
+
+
+class TestTagSearch:
+    """Tests for the inline tag-picker search filter (issue #3032)."""
+
+    async def test_search_matches_case_insensitively(
+        self, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Search narrows visible tags without leaking other vocabularies."""
+        service = TagService(async_db)
+        await service.create_tag(non_admin_user, "Physical", color="red")
+        await service.create_tag(non_admin_user, "Horror", color="blue")
+
+        matches = await service.list_tags(non_admin_user, search="phys")
+        assert [tag.name for tag in matches] == ["Physical"]
+
+        matches = await service.list_tags(non_admin_user, search="HORROR")
+        assert [tag.name for tag in matches] == ["Horror"]
+
+    async def test_search_never_leaks_other_users_private_tags(
+        self, admin_user: User, non_admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Search results respect the same visibility boundary as listing."""
+        await TagService(async_db).create_tag(admin_user, "Secret Stash", color="red")
+
+        matches = await TagService(async_db).list_tags(non_admin_user, search="secret")
+        assert matches == []
+
+    async def test_search_via_api(
+        self,
+        user_auth_client: AsyncClient,
+        non_admin_user: User,
+        async_db: AsyncSession,
+    ) -> None:
+        """GET /api/v1/tags/?search= filters the visible tag list."""
+        await TagService(async_db).create_tag(non_admin_user, "Physical", color="red")
+        await TagService(async_db).create_tag(non_admin_user, "Horror", color="blue")
+
+        resp = await user_auth_client.get("/api/v1/tags/", params={"search": "phys"})
+        assert resp.status_code == 200
+        assert [tag["name"] for tag in resp.json()["tags"]] == ["Physical"]
+
+
+class TestUsageConsumerPreview:
+    """Tests for delete-confirmation consumer references (issue #3032)."""
+
+    class CountingHook(TagDeletionHook):
+        """A consumer hook that holds countable references without deleting."""
+
+        def __init__(self, name: str, counts: dict[int, int]) -> None:
+            """Initialize the hook with per-tag reference counts."""
+            self._name = name
+            self._counts = counts
+
+        @property
+        def consumer_name(self) -> str:
+            """Return the stable consumer name."""
+            return self._name
+
+        async def count_tag_references(
+            self, db: AsyncSession, tag_id: int
+        ) -> int:
+            """Return the stored reference count for a tag."""
+            return self._counts.get(tag_id, 0)
+
+        async def cleanup_tag_references(
+            self, db: AsyncSession, tag_id: int
+        ) -> int:
+            """Remove the stored references for a tag."""
+            return self._counts.pop(tag_id, 0)
+
+    async def test_default_hook_counts_zero(
+        self, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """The base hook previews zero references without side effects."""
+        hook = TagDeletionHook()
+        assert await hook.count_tag_references(async_db, 1) == 0
+
+    async def test_usage_reports_consumer_references_without_deleting(
+        self,
+        user_auth_client: AsyncClient,
+        non_admin_user: User,
+        async_db: AsyncSession,
+    ) -> None:
+        """The usage route shows consumer references while keeping the tag."""
+        _thread, issue, _plan = await _create_target_entities(async_db, non_admin_user)
+        service = TagService(async_db)
+        tag_id = (await service.create_tag(non_admin_user, "Filtered", color="red")).tag.id
+        await service.assign_tag(non_admin_user, tag_id, "Issue", issue.id)
+        hook = self.CountingHook("roll_filter", {tag_id: 2})
+        register_tag_deletion_hook(hook)
+        try:
+            resp = await user_auth_client.get(f"/api/v1/tags/{tag_id}/usage/")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["total_assignments"] == 1
+            assert data["references_removed_by_consumers"] == {"roll_filter": 2}
+            # The preview must not consume the references: deletion still
+            # reports and removes them.
+            result = await service.delete_tag(non_admin_user, tag_id)
+            assert result.references_removed_by_consumers == {"roll_filter": 2}
+        finally:
+            unregister_tag_deletion_hook(hook)

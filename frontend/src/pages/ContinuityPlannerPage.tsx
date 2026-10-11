@@ -16,6 +16,7 @@ import PlannerAddSteps from './continuity-planner/PlannerAddSteps'
 import PlannerLanes from './continuity-planner/PlannerLanes'
 import PlannerFooter from './continuity-planner/PlannerFooter'
 import Breadcrumbs from '../components/Breadcrumbs'
+import { TagSection } from '../components/Tags/TagSection'
 
 interface ContinuityPlannerPageProps {
   /** Injectable component used to render the "Add from CBL" material source; defaults to the production {@link ReadingPlanAddMaterial}. */
@@ -125,6 +126,19 @@ export default function ContinuityPlannerPage({
         planId={planId}
         onReopenLast={(lastId) => navigate(`/continuity-plans/${lastId}`)}
       />
+
+      {planId && (
+        <section
+          aria-label="Reading Plan tags"
+          className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4"
+        >
+          <TagSection
+            targetType="ContinuityPlan"
+            targetId={planId}
+            targetLabel={editor.savedName || editor.name || 'Reading Plan'}
+          />
+        </section>
+      )}
 
       {planId ? (
         <AddMaterialComponent

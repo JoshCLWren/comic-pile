@@ -40,22 +40,25 @@ def _map_error(exc: Exception) -> HTTPException:
 async def list_tags(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    search: str | None = None,
 ) -> tag_schemas.TagListResponse:
     """Return all tags visible to the current user.
 
     Global tags are visible to everyone; the user also sees their own private
-    tags.
+    tags. The optional ``search`` filter narrows to tags whose name contains
+    the given text (case-insensitive) for the inline tag picker.
 
     Args:
         current_user: The authenticated user.
         db: Database session.
+        search: Optional name filter.
 
     Returns:
         List of visible tags.
     """
     service = TagService(db)
     try:
-        tags = await service.list_tags(current_user)
+        tags = await service.list_tags(current_user, search=search)
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return tag_schemas.TagListResponse(tags=[tag_to_response(tag) for tag in tags])
@@ -380,6 +383,99 @@ async def unassign_tag(
     return tag_assignment_to_response(assignment)
 
 
+@router.post("/{tag_id}/bulk-assign/", response_model=tag_schemas.TagBulkAssignmentResponse)
+async def bulk_assign_tag(
+    tag_id: int,
+    request: tag_schemas.TagBulkAssignmentRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> tag_schemas.TagBulkAssignmentResponse:
+    """Attach one tag to many targets of one type.
+
+    Only the requested tag assignment is created; unrelated tags on the
+    selected targets are never replaced or removed. Every target is validated
+    first, so a missing or forbidden target fails the whole request without
+    partial changes.
+
+    Args:
+        tag_id: Primary key of the tag.
+        request: The bulk assignment request.
+        current_user: The authenticated user.
+        db: Database session.
+
+    Returns:
+        Which targets were newly assigned and which already carried the tag.
+
+    Raises:
+        HTTPException 403: When the user lacks permission.
+        HTTPException 404: When the tag or any target does not exist.
+    """
+    service = TagService(db)
+    try:
+        result = await service.bulk_assign_tag(
+            current_user,
+            tag_id,
+            request.target_type.value,
+            request.target_ids,
+        )
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
+    return tag_schemas.TagBulkAssignmentResponse(
+        tag_id=result.tag_id,
+        target_type=result.target_type,
+        requested_ids=result.requested_ids,
+        affected_ids=result.affected_ids,
+        already_ids=result.already_ids,
+    )
+
+
+@router.post(
+    "/{tag_id}/bulk-unassign/", response_model=tag_schemas.TagBulkAssignmentResponse
+)
+async def bulk_unassign_tag(
+    tag_id: int,
+    request: tag_schemas.TagBulkAssignmentRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> tag_schemas.TagBulkAssignmentResponse:
+    """Remove one tag from many targets of one type.
+
+    Only the requested tag assignment is removed; unrelated tags on the
+    selected targets are never touched. Targets without the assignment are
+    reported rather than treated as errors.
+
+    Args:
+        tag_id: Primary key of the tag.
+        request: The bulk unassignment request.
+        current_user: The authenticated user.
+        db: Database session.
+
+    Returns:
+        Which targets were unassigned and which already lacked the tag.
+
+    Raises:
+        HTTPException 403: When the user lacks permission.
+        HTTPException 404: When the tag does not exist.
+    """
+    service = TagService(db)
+    try:
+        result = await service.bulk_unassign_tag(
+            current_user,
+            tag_id,
+            request.target_type.value,
+            request.target_ids,
+        )
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
+    return tag_schemas.TagBulkAssignmentResponse(
+        tag_id=result.tag_id,
+        target_type=result.target_type,
+        requested_ids=result.requested_ids,
+        affected_ids=result.affected_ids,
+        already_ids=result.already_ids,
+    )
+
+
 @router.get("/{tag_id}/usage/", response_model=tag_schemas.TagUsageResponse)
 async def get_tag_usage(
     tag_id: int,
@@ -388,8 +484,9 @@ async def get_tag_usage(
 ) -> tag_schemas.TagUsageResponse:
     """Return assignment usage information for a tag.
 
-    Useful before deleting a private tag so the UI can confirm how many
-    objects reference it.
+    Powers the delete-confirmation dialog: total and per-target-type
+    assignment counts plus the tag references held by consumers such as roll
+    filtering, counted without removing anything.
 
     Args:
         tag_id: Primary key of the tag.
@@ -397,18 +494,19 @@ async def get_tag_usage(
         db: Database session.
 
     Returns:
-        Assignment counts by target type and total.
+        Assignment counts by target type and total, with consumer references.
     """
     service = TagService(db)
     try:
         usage = await service.get_tag_usage(current_user, tag_id)
+        consumer_references = await service.preview_consumer_references(tag_id)
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return tag_schemas.TagUsageResponse(
         tag_id=tag_id,
         total_assignments=usage.total_assignments,
         assignments_by_target_type=usage.assignments_by_target_type,
-        references_removed_by_consumers={},
+        references_removed_by_consumers=consumer_references,
     )
 
 

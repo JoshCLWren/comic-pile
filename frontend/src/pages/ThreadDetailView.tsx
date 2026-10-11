@@ -20,6 +20,9 @@ import { getManualCreatorCreditList } from '../types'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
 import Breadcrumbs from '../components/Breadcrumbs'
+import { TagEditor } from '../components/Tags/TagEditor'
+import { TagSection } from '../components/Tags/TagSection'
+import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
@@ -55,6 +58,15 @@ export default function ThreadDetailView() {
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [issuesExpanded, setIssuesExpanded] = useState(false)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
+  // Tag editing (issue #3032): one editor serves the thread and any single
+  // issue, while bulk-select mode enables multi-select bulk add/remove.
+  const [tagEditorIssue, setTagEditorIssue] = useState<{
+    id: number
+    issue_number: string
+  } | null>(null)
+  const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set())
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null)
 
   const issuesQuery = useThreadIssuePages(threadId, { enabled: issuesExpanded })
   const issues = issuesQuery.issues
@@ -68,8 +80,31 @@ export default function ThreadDetailView() {
     if (activeThreadIdRef.current !== threadId) {
       activeThreadIdRef.current = threadId
       setIssuesExpanded(false)
+      setBulkSelectMode(false)
+      setSelectedIssueIds(new Set())
+      setBulkNotice(null)
+      setTagEditorIssue(null)
     }
   }, [threadId])
+
+  function handleToggleBulkSelect() {
+    setBulkSelectMode((previous) => {
+      if (previous) setSelectedIssueIds(new Set())
+      return !previous
+    })
+  }
+
+  function handleToggleIssueSelection(issueId: number) {
+    setSelectedIssueIds((previous) => {
+      const next = new Set(previous)
+      if (next.has(issueId)) {
+        next.delete(issueId)
+      } else {
+        next.add(issueId)
+      }
+      return next
+    })
+  }
 
   useEffect(() => {
     if (location.state?.openEditModal !== true || editAutoOpenRef.current || !thread) return
@@ -352,19 +387,37 @@ export default function ThreadDetailView() {
           )}
         </div>
 
+        <div className="surface-panel p-3 md:p-4 space-y-2">
+          <TagSection
+            targetType="Thread"
+            targetId={thread.id}
+            targetLabel={thread.title}
+          />
+        </div>
+
         {isMigrated && (
           <div className="surface-panel p-3 md:p-4 space-y-3">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center gap-2">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
                 Issues ({issuesTotal > 0 ? issuesTotal : (thread.total_issues ?? issues.length)})
               </span>
-              <button
-                type="button"
-                onClick={handleToggleIssues}
-                className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
-              >
-                {issuesExpanded ? 'Collapse' : 'Expand'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleToggleBulkSelect}
+                  aria-pressed={bulkSelectMode}
+                  className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
+                >
+                  {bulkSelectMode ? 'Done' : 'Select'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleIssues}
+                  className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
+                >
+                  {issuesExpanded ? 'Collapse' : 'Expand'}
+                </button>
+              </div>
             </div>
 
             {!issuesExpanded && (
@@ -375,8 +428,20 @@ export default function ThreadDetailView() {
               </p>
             )}
 
-            {issuesExpanded && (
-              <div className="space-y-2 mt-3">
+              {issuesExpanded && (
+                <div className="space-y-2 mt-3">
+                {bulkNotice && (
+                  <p role="status" className="text-xs text-stone-400">
+                    {bulkNotice}
+                  </p>
+                )}
+                {bulkSelectMode && (
+                  <BulkTagToolbar
+                    selectedIds={[...selectedIssueIds]}
+                    onClearSelection={() => setSelectedIssueIds(new Set())}
+                    onDone={(summary) => setBulkNotice(summary)}
+                  />
+                )}
                 {issuesLoading && issues.length === 0 && (
                   <p className="text-xs text-stone-500">Loading issues...</p>
                 )}
@@ -411,10 +476,37 @@ export default function ThreadDetailView() {
                             : 'bg-white/5 border-white/10'
                         }`}
                       >
-                        <span className="text-sm font-medium text-stone-300">
-                          #{issue.issue_number}
+                        <span className="flex min-w-0 items-center gap-2">
+                          {bulkSelectMode && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIssueIds.has(issue.id)}
+                              onChange={() => handleToggleIssueSelection(issue.id)}
+                              aria-label={`Select issue #${issue.issue_number}`}
+                              className="h-4 w-4 shrink-0 accent-amber-400"
+                            />
+                          )}
+                          <span className="text-sm font-medium text-stone-300">
+                            #{issue.issue_number}
+                          </span>
                         </span>
                         <div className="flex items-center gap-3">
+                          {bulkSelectMode && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTagEditorIssue({
+                                  id: issue.id,
+                                  issue_number: issue.issue_number,
+                                })
+                              }
+                              aria-label={`Edit tags for issue #${issue.issue_number}`}
+                              title={`Edit tags for issue #${issue.issue_number}`}
+                              className="text-xs font-black uppercase tracking-widest text-stone-500 hover:text-amber-300"
+                            >
+                              Tags
+                            </button>
+                          )}
                           <span className="text-xs font-black uppercase tracking-widest">
                             {issue.status === 'read' ? (
                               <span className="text-green-400">Read</span>
@@ -574,6 +666,16 @@ export default function ThreadDetailView() {
           }
         }}
       />
+
+      {tagEditorIssue && (
+        <TagEditor
+          targetType="Issue"
+          targetId={tagEditorIssue.id}
+          targetLabel={`#${tagEditorIssue.issue_number}`}
+          isOpen={tagEditorIssue !== null}
+          onClose={() => setTagEditorIssue(null)}
+        />
+      )}
     </div>
   )
 }

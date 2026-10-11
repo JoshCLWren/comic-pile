@@ -40,6 +40,8 @@ export interface AuthUser {
   id?: number;
   username: string;
   email?: string;
+  /** Present when `/v1/auth/me` reports it; gates admin-only tag controls. */
+  is_admin?: boolean;
 }
 
 export interface AuthTokens {
