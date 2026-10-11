@@ -187,16 +187,9 @@ export function TagChips({
   onRetry,
   label = 'Tags',
 }: TagChipsProps) {
-  // Guard against query not enabled or data not yet available.
-  // When enabled: false, React Query returns isPending=false, isError=false, data=undefined.
-  if (!data && !isPending) {
-    return (
-      <section aria-label={label} className="min-w-0">
-        <p className="text-xs text-[var(--theme-text-dim)]">No tags yet.</p>
-      </section>
-    )
-  }
-
+  // A failed load is reported before the empty state: a query that errored with
+  // no cached data has not been shown to be tagless, and the viewer needs the
+  // retry affordance rather than a misleading "No tags yet."
   if (isPending) {
     return (
       <section aria-label={label} className="min-w-0">
@@ -205,7 +198,7 @@ export function TagChips({
     )
   }
 
-  if (isError || !data) {
+  if (isError) {
     return (
       <section aria-label={label} className="min-w-0">
         <p className="text-xs text-[var(--theme-text-muted)]">
@@ -220,6 +213,14 @@ export function TagChips({
             </button>
           )}
         </p>
+      </section>
+    )
+  }
+
+  if (!data) {
+    return (
+      <section aria-label={label} className="min-w-0">
+        <p className="text-xs text-[var(--theme-text-dim)]">No tags yet.</p>
       </section>
     )
   }
