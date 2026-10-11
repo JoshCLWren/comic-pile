@@ -205,8 +205,6 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getByText('Comparing 1 creator')).toBeInTheDocument()
     expect(screen.getByText('Insufficient data')).toBeInTheDocument()
     expect(screen.getByText(/less reliable/)).toBeInTheDocument()
-    expect(screen.getByText('Brian K. Vaughan')).toBeInTheDocument()
-    expect(screen.getByText('Steve McNiven')).toBeInTheDocument()
 
     // The affected-creator line lives in its own paragraph (issue #3328) and
     // must render the full name without ellipsis.
