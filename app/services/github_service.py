@@ -260,12 +260,19 @@ async def find_closed_issue_by_fingerprint(fingerprint: str) -> int | None:
         raise RuntimeError(f"Failed to search closed performance issues: {e.data}") from e
 
 
-async def add_performance_issue_comment(issue_number: int, comment: str) -> None:
+async def add_performance_issue_comment(issue_number: int, comment: str) -> str | None:
     """Append occurrence evidence to an existing performance issue.
 
     Args:
         issue_number: GitHub issue number to comment on.
         comment: Short recurrence note (not one comment per raw request).
+
+    Returns:
+        The issue state after commenting (``"open"`` or ``"closed"``), or
+        None when the issue could not be fetched or the comment could not
+        be posted. Callers use the state to detect an externally closed
+        issue so a regression files a new issue instead of silently
+        appending recurrence notes to closed historical work.
 
     Raises:
         RuntimeError: If the comment cannot be posted.
@@ -277,6 +284,7 @@ async def add_performance_issue_comment(issue_number: int, comment: str) -> None
     try:
         issue = repo.get_issue(number=issue_number)
         issue.create_comment(comment)
+        return issue.state
     except GithubException as e:
         raise RuntimeError(
             f"Failed to update performance issue #{issue_number}: {e.data}"

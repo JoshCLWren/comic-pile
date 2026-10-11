@@ -71,7 +71,7 @@ HIGH_PRIORITY_LABEL = "ralph-priority:high"
 
 _SENSITIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)(authorization\s*:\s*)(.+)"),
-    re.compile(r"(?i)(bearer\s+)(.+?)\b"),
+    re.compile(r"(?i)(bearer\s+)(\S+)"),
     re.compile(r"(?i)(cookie\s*:\s*)(.+)"),
     re.compile(r"(?i)(api[_-]?key\s*[:=]\s*)(.+)"),
     re.compile(r"(?i)(access[_-]?token\s*[:=]\s*)(.+)"),
@@ -858,16 +858,24 @@ async def _file_decision_background(
             known = _tracker.open_issue_for(decision.fingerprint)
             if known is not None:
                 try:
-                    await gh.add_performance_issue_comment(
+                    state = await gh.add_performance_issue_comment(
                         known,
                         f"Performance incident recurred ({decision.reason}).",
                     )
-                    return
                 except RuntimeError as exc:
                     logger.warning(
-                        "Performance occurrence update failed for #%s: %s", known, exc
+                        "Performance occurrence update failed for #%s; "
+                        "falling back to server-side dedupe: %s",
+                        known,
+                        exc,
                     )
+                    state = None
+                if state == "open":
                     return
+                # The known issue is closed (or unreachable): fall through
+                # to server-side dedupe so a regression opens a new issue
+                # referencing the prior one instead of silently appending
+                # recurrence notes to closed historical work.
         existing = await gh.find_open_issue_by_fingerprint(decision.fingerprint)
         if existing is not None:
             _tracker.mark_open(decision.fingerprint, existing)

@@ -511,6 +511,52 @@ class TestBackgroundFiling:
         mock_create.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_update_on_externally_closed_issue_files_regression(self) -> None:
+        """A recurrence against an externally closed issue files a new regression issue."""
+        tracker = perf_issues.get_tracker()
+        tracker.mark_open("fp-closed", 4242)
+        decision = perf_issues.FilingDecision(
+            action="update",
+            fingerprint="fp-closed",
+            canonical="request|GET|/a|warm|unknown|mixed",
+            high_priority=True,
+            reason="repeat violation",
+        )
+        with (
+            patch(
+                "app.services.github_service.add_performance_issue_comment",
+                new=AsyncMock(return_value="closed"),
+            ) as mock_comment,
+            patch(
+                "app.services.github_service.find_open_issue_by_fingerprint",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.services.github_service.find_closed_issue_by_fingerprint",
+                new=AsyncMock(return_value=4242),
+            ),
+            patch(
+                "app.services.github_service.create_performance_issue",
+                new=AsyncMock(
+                    return_value="https://github.com/o/r/issues/9001"
+                ),
+            ) as mock_create,
+        ):
+            await perf_issues._file_decision_background(
+                decision=decision,
+                title="t",
+                body="evidence\n\n<!-- performance-fingerprint:v1:fp-closed -->",
+                labels=perf_issues.build_labels(high_priority=True),
+            )
+
+        mock_comment.assert_awaited_once()
+        mock_create.assert_awaited_once()
+        created_body = mock_create.await_args.kwargs["body"]
+        assert "#4242" in created_body
+        assert "Regression" in created_body
+        assert tracker.open_issue_for("fp-closed") == 9001
+
+    @pytest.mark.asyncio
     async def test_github_failure_is_logged_not_raised(self) -> None:
         """GitHub failure is observable but never raises to the request path."""
         decision = perf_issues.FilingDecision(
