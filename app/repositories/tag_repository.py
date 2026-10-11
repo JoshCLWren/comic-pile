@@ -121,22 +121,27 @@ async def get_private_tag_for_owner(
     return result.scalar_one_or_none()
 
 
-async def list_tags_for_user(db: AsyncSession, user_id: int) -> list[Tag]:
+async def list_tags_for_user(
+    db: AsyncSession, user_id: int, *, search: str | None = None
+) -> list[Tag]:
     """Return global tags plus the private tags owned by a user.
 
     Args:
         db: Database session.
         user_id: Owner of private tags to include.
+        search: Optional case-insensitive substring filter applied to the
+            normalized name. Blank values are ignored.
 
     Returns:
         List of tags visible to the user.
     """
-    result = await db.execute(
-        select(Tag).where(
-            (Tag.scope == "global") | (Tag.owner_user_id == user_id),
-        )
-        .order_by(Tag.scope.desc(), Tag.normalized_name)
+    statement = select(Tag).where(
+        (Tag.scope == "global") | (Tag.owner_user_id == user_id),
     )
+    normalized_search = normalize_tag_name(search) if search else ""
+    if normalized_search:
+        statement = statement.where(Tag.normalized_name.contains(normalized_search))
+    result = await db.execute(statement.order_by(Tag.scope.desc(), Tag.normalized_name))
     return list(result.scalars().all())
 
 
@@ -318,6 +323,72 @@ async def assign_tag(db: AsyncSession, tag_id: int, target_type: str, target_id:
     await db.flush()
     await db.refresh(assignment)
     return assignment.id
+
+
+async def bulk_assign_tag(
+    db: AsyncSession, tag_id: int, target_type: str, target_ids: list[int]
+) -> tuple[list[int], list[int]]:
+    """Assign one tag to many targets of one type, preserving other tags.
+
+    Only rows for ``tag_id`` are inserted; assignments of unrelated tags on
+    the same targets are never touched. Existing assignments are skipped so
+    the operation is idempotent.
+
+    Args:
+        db: Database session.
+        tag_id: Primary key of the tag.
+        target_type: Type of the targets.
+        target_ids: Primary keys of the targets.
+
+    Returns:
+        ``(newly_assigned_ids, already_assigned_ids)`` in request order.
+    """
+    newly_assigned: list[int] = []
+    already_assigned: list[int] = []
+    for target_id in dict.fromkeys(target_ids):
+        existing = await has_assignment(db, tag_id, target_type, target_id)
+        if existing:
+            already_assigned.append(target_id)
+            continue
+        db.add(
+            TagAssignment(
+                tag_id=tag_id,
+                target_type=target_type,
+                target_id=target_id,
+            )
+        )
+        newly_assigned.append(target_id)
+    await db.flush()
+    return newly_assigned, already_assigned
+
+
+async def bulk_unassign_tag(
+    db: AsyncSession, tag_id: int, target_type: str, target_ids: list[int]
+) -> tuple[list[int], list[int]]:
+    """Remove one tag from many targets of one type, preserving other tags.
+
+    Only rows for ``tag_id`` are deleted; assignments of unrelated tags on
+    the same targets are never touched. Targets without the assignment are
+    reported as already-removed so the operation is idempotent.
+
+    Args:
+        db: Database session.
+        tag_id: Primary key of the tag.
+        target_type: Type of the targets.
+        target_ids: Primary keys of the targets.
+
+    Returns:
+        ``(removed_ids, already_removed_ids)`` in request order.
+    """
+    removed: list[int] = []
+    already_removed: list[int] = []
+    for target_id in dict.fromkeys(target_ids):
+        assignment = await unassign_tag(db, tag_id, target_type, target_id)
+        if assignment is None:
+            already_removed.append(target_id)
+        else:
+            removed.append(target_id)
+    return removed, already_removed
 
 
 async def unassign_tag(

@@ -244,6 +244,23 @@ export const queryKeys = {
     all: ['taste'] as const,
     discoveries: () => ['taste', 'discoveries'] as const,
   },
+  tags: {
+    all: ['tags'] as const,
+    /**
+     * Canonical tag list key. `search` is normalized to a trimmed value (or
+     * `null` when empty) so the inline picker always hashes one stable key.
+     */
+    list: (search?: string) => ['tags', 'list', normalizedSearch(search)] as const,
+    detail: (tagId: number) => ['tags', 'detail', tagId] as const,
+    usage: (tagId: number) => ['tags', 'usage', tagId] as const,
+    /**
+     * Canonical effective-tags key per target. Effective tags union direct
+     * assignments with every inherited parent path (issue #3031); the key is
+     * stable per target so assignment mutations can invalidate precisely.
+     */
+    effective: (targetType: string, targetId: number) =>
+      ['tags', 'effective', targetType, targetId] as const,
+  },
   identityInbox: {
     all: ['identityInbox'] as const,
     list: ({ offset, limit }: { offset: number; limit: number }) =>

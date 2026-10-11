@@ -43,6 +43,29 @@ vi.mock('../services/api', () => ({
 vi.mock('../services/api-issues', () => ({
   issuesApi: { list: vi.fn() },
 }))
+vi.mock('../services/api-tags', () => ({
+  tagsApi: {
+    list: vi.fn().mockResolvedValue({ tags: [] }),
+    effectiveForIssue: vi.fn().mockResolvedValue({
+      target_type: 'Issue',
+      target_id: 0,
+      direct_tags: [],
+      effective_tags: [],
+    }),
+    effectiveForThread: vi.fn().mockResolvedValue({
+      target_type: 'Thread',
+      target_id: 1,
+      direct_tags: [],
+      effective_tags: [],
+    }),
+    effectiveForPlan: vi.fn().mockResolvedValue({
+      target_type: 'ContinuityPlan',
+      target_id: 0,
+      direct_tags: [],
+      effective_tags: [],
+    }),
+  },
+}))
 
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)

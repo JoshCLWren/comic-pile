@@ -10,6 +10,29 @@ vi.mock('../components/Tooltip', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
+vi.mock('../services/api-tags', () => ({
+  tagsApi: {
+    list: vi.fn().mockResolvedValue({ tags: [] }),
+    effectiveForIssue: vi.fn().mockResolvedValue({
+      target_type: 'Issue',
+      target_id: 100,
+      direct_tags: [],
+      effective_tags: [],
+    }),
+    effectiveForThread: vi.fn().mockResolvedValue({
+      target_type: 'Thread',
+      target_id: 1,
+      direct_tags: [],
+      effective_tags: [],
+    }),
+    effectiveForPlan: vi.fn().mockResolvedValue({
+      target_type: 'ContinuityPlan',
+      target_id: 0,
+      direct_tags: [],
+      effective_tags: [],
+    }),
+  },
+}))
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))

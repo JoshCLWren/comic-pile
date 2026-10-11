@@ -153,6 +153,41 @@ class TagAssignmentResponse(BaseModel):
     created_at: datetime
 
 
+class TagBulkAssignmentRequest(BaseModel):
+    """Request to attach or detach one tag across many targets of one type.
+
+    Bulk operations touch only the requested tag assignment: unrelated tags on
+    the selected targets are never replaced or removed.
+
+    Attributes:
+        target_type: One of ``"Issue"``, ``"Thread"``, or ``"ContinuityPlan"``.
+        target_ids: Primary keys of the target rows. Duplicates are ignored.
+    """
+
+    target_type: TagTargetType
+    target_ids: list[int] = Field(..., min_length=1, max_length=500)
+
+
+class TagBulkAssignmentResponse(BaseModel):
+    """Result of a bulk tag assignment operation.
+
+    Attributes:
+        tag_id: Primary key of the tag.
+        target_type: Type of the targets.
+        requested_ids: Deduplicated target ids the request asked about.
+        affected_ids: Targets whose assignment state actually changed (newly
+            assigned for bulk-add, newly removed for bulk-remove).
+        already_ids: Targets already in the desired state (already assigned
+            for bulk-add, already unassigned for bulk-remove).
+    """
+
+    tag_id: int
+    target_type: str
+    requested_ids: list[int]
+    affected_ids: list[int]
+    already_ids: list[int]
+
+
 class TagUsageResponse(BaseModel):
     """Assignment usage information for a tag.
 

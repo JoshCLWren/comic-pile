@@ -46,3 +46,16 @@ export { useQueueBlockingInfo } from './useQueueBlockingInfo'
 export { useSessionMode } from './useSessionMode'
 export { useCorrectionSheetExamples, type CorrectionExamples } from './useCorrectionSheetExamples'
 export { useReleases, releasesQueryOptions, RELEASES_PAGE_SIZE } from './useReleases'
+export {
+  useTags,
+  useTag,
+  useEffectiveTags,
+  useTagUsage,
+  useCreateTag,
+  useUpdateTag,
+  useDeleteTag,
+  useAssignTag,
+  useUnassignTag,
+  useBulkAssignTag,
+  useBulkUnassignTag,
+} from './useTags'
