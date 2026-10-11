@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.continuity_rules import _would_create_cycle, ensure_owned_continuity_node
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
 from app.models.thread import Thread
 from app.schemas.continuity_plan import (
     ContinuityPlanLane,
@@ -516,20 +517,53 @@ async def retire_plan_edges_for_deletion(
 
     After the Roll cutover (#2553) those Dependency rows are the only Roll
     authority, so plan deletion must clean them up or orphaned rows keep
-    blocking. Lives in the service layer to keep routers free of queries.
+    blocking. A pair is kept when another surviving rule still compiles to
+    it (shared-pair semantics from retire_rule_edges). Lives in the service
+    layer to keep routers free of queries.
     """
-    from app.services.migration_shared import retire_plan_compiled_edges
+    from app.services.canonical_constraint_compiler import rule_edge_pairs
 
     marker = plan_rule_marker(plan_id)
-    plan_rule_ids = [
-        row[0]
-        for row in (
+    plan_rules = list(
+        (
             await db.execute(
-                select(ContinuityRule.id).where(
+                select(ContinuityRule).where(
                     ContinuityRule.user_id == user_id,
                     ContinuityRule.note == marker,
                 )
             )
-        ).all()
-    ]
-    await retire_plan_compiled_edges(db, rule_ids=plan_rule_ids)
+        )
+        .scalars()
+        .all()
+    )
+    if not plan_rules:
+        return
+    deleted_ids = {r.id for r in plan_rules}
+    pairs = {p for rule in plan_rules for p in rule_edge_pairs(rule)}
+    if not pairs:
+        return
+    # Survivor check: any rule outside the deleted set that compiles to the pair.
+    survivors = list(
+        (
+            await db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == user_id,
+                    ContinuityRule.id.not_in(deleted_ids),
+                    ContinuityRule.satisfaction_type.in_(
+                        ("item_read", "checkpoint", "converged")
+                    ),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    survivor_pairs = {p for r in survivors for p in rule_edge_pairs(r)}
+    for source_id, target_id in pairs - survivor_pairs:
+        await db.execute(
+            delete(Dependency).where(
+                Dependency.source_issue_id == source_id,
+                Dependency.target_issue_id == target_id,
+                Dependency.note.like("canonical:rule:%"),
+            )
+        )
