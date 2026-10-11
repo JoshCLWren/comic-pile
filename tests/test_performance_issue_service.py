@@ -551,6 +551,7 @@ class TestBackgroundFiling:
 
         mock_comment.assert_awaited_once()
         mock_create.assert_awaited_once()
+        assert mock_create.await_args is not None
         created_body = mock_create.await_args.kwargs["body"]
         assert "#4242" in created_body
         assert "Regression" in created_body
