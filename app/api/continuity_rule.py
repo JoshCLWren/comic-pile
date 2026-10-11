@@ -25,6 +25,11 @@ from app.schemas.continuity_rule import (
     ContinuityRuleResponse,
     ConvergenceTarget,
 )
+from app.services.canonical_constraint_compiler import (
+    compile_rule_edges,
+    retire_rule_edges,
+    rule_edge_pairs,
+)
 from app.services.continuity import _refresh_blocked_state, _to_response
 
 router = APIRouter(tags=["continuity"])
@@ -205,6 +210,11 @@ async def create_continuity_rule(
         ],
     )
     db.add(rule)
+    await db.flush()
+    # Compile the authored hard constraint into canonical Dependency edges in
+    # the same transaction (#2553). The edge is the Roll authority; the rule
+    # remains the authoring record.
+    await compile_rule_edges(db, rule)
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -246,6 +256,7 @@ async def update_continuity_rule(
     await lock_continuity_graph(db, user_id=current_user.id)
     rule = await _get_owned_rule(db, current_user.id, rule_id)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
+    old_pairs = rule_edge_pairs(rule)
     if await _would_create_cycle(
         db,
         user_id=current_user.id,
@@ -282,6 +293,17 @@ async def update_continuity_rule(
         ContinuityRuleSelectedMember(issue_id=issue_id)
         for issue_id in payload.selected_member_issue_ids
     ]
+    await db.flush()
+    new_pairs = rule_edge_pairs(rule)
+    # Retire edges the old shape compiled to (unless still intended), then
+    # compile the new shape (#2553).
+    await retire_rule_edges(
+        db,
+        user_id=current_user.id,
+        pairs=[pair for pair in old_pairs if pair not in new_pairs],
+        exclude_rule_id=rule.id,
+    )
+    await compile_rule_edges(db, rule)
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -320,7 +342,14 @@ async def delete_continuity_rule(
     user_id = current_user.id
     await lock_continuity_graph(db, user_id=user_id)
     rule = await _get_owned_rule(db, user_id, rule_id)
+    retired_pairs = rule_edge_pairs(rule)
     await db.delete(rule)
+    await db.flush()
+    # Retire the deleted rule's compiled edges unless another rule still
+    # intends them (#2553).
+    await retire_rule_edges(
+        db, user_id=user_id, pairs=retired_pairs, exclude_rule_id=rule_id
+    )
     await db.commit()
     await _refresh_blocked_state(user_id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

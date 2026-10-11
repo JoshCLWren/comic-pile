@@ -10,14 +10,15 @@ from datetime import datetime
 from hashlib import sha256
 import json
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
+from app.services.continuity_graph import invalidate_continuity_snapshot as _invalidate_continuity_snapshot
 from comic_pile.dependencies import (
     _get_blocked_thread_ids_uncached,
-    _invalidate_continuity_snapshot,
     refresh_user_blocked_status,
 )
 from comic_pile.queue import get_roll_pool
@@ -247,3 +248,20 @@ async def assert_roll_eligibility_parity(
 
 # Re-export for snapshot equivalence checks that need get_blocked directly
 get_blocked_thread_ids_uncached = _get_blocked_thread_ids_uncached
+
+
+async def retire_plan_compiled_edges(db: AsyncSession, *, rule_ids: list[int]) -> None:
+    """Delete canonical edges compiled from the given plan rule IDs (#2553).
+
+    Plan rollbacks must retire a plan's compiled edges before checking that
+    legacy dependency IDs/pairs are free: the cutover compiles plan rules
+    into Dependencies, so those pairs are legitimately occupied until the
+    plan's rules are removed. Only edges whose note identifies one of the
+    given rules are deleted; edges compiled from other rules (or standalone
+    reader-created dependencies) are left alone.
+    """
+    if not rule_ids:
+        return
+    notes = [f"canonical:rule:{rule_id}" for rule_id in rule_ids]
+    await db.execute(delete(Dependency).where(Dependency.note.in_(notes)))
+    await db.flush()

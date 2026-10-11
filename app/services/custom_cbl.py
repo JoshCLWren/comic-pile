@@ -415,7 +415,7 @@ async def apply_custom_cbl_to_plan(
         user_id=user_id,
         plan=plan,
         nodes=merged_nodes,
-        ordering_mode=cast(PlanOrderingMode, plan.ordering_mode),
+        ordering_mode=cast(PlanOrderingMode, plan.ordering_mode)
     )
     await db.flush()
 

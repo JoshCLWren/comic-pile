@@ -1,10 +1,9 @@
-"""Regression coverage for authoritative crossover reading-order enforcement.
+"""Crossover reading-order persistence coverage.
 
-Covers issue #2047: an issue-level crossover membership with a declared
-``sequence_order`` may not roll while an earlier ordered entry in the same
-crossover is unread. Read state is global, the earliest earlier unread entry is
-the blocker named to the user, per-series prerequisites compose, and multiple
-ordered crossovers AND-compose.
+Crossover ``sequence_order`` is presentation/provenance only (#2553): it is
+persisted and returned by the reading-order-group endpoints, but it is not a
+Roll blocking authority. Blocking comes solely from Thread frontiers plus
+canonical Dependency rows.
 """
 
 from datetime import UTC, datetime
@@ -13,8 +12,6 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.continuity_blocking import get_continuity_blocked_thread_ids
-from app.models.continuity_rule import ContinuityRule
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -56,264 +53,17 @@ async def _make_thread_with_issue(
     return thread, issue
 
 
-async def _make_ordered_crossover(
-    db: AsyncSession,
-    *,
-    user_id: int,
-    name: str,
-    entries: list[tuple[Issue, int]],
-) -> DependencyGroup:
-    """Create one crossover whose issue members carry an authoritative order."""
-    group = DependencyGroup(user_id=user_id, name=name)
-    db.add(group)
-    await db.flush()
-    for issue, sequence_order in entries:
-        db.add(
-            DependencyGroupMembership(
-                group_id=group.id,
-                issue_id=issue.id,
-                sequence_order=sequence_order,
-            )
-        )
-    await db.flush()
-    return group
-
-
 @pytest.mark.asyncio
-async def test_later_ordered_entry_is_blocked_while_earlier_is_unread(
-    async_db: AsyncSession,
-) -> None:
-    """An unread earlier ordered entry blocks every later ordered entry."""
-    user = await get_or_create_user_async(async_db)
-    first_thread, first_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Ultimates source", queue_position=701
-    )
-    second_thread, second_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Later crossover entry", queue_position=702
-    )
-    await _make_ordered_crossover(
-        async_db,
-        user_id=user.id,
-        name="The Ultimates Order",
-        entries=[(first_issue, 1), (second_issue, 2)],
-    )
-    await async_db.commit()
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert second_thread.id in blocked
-    assert first_thread.id not in blocked
-
-
-@pytest.mark.asyncio
-async def test_reading_earlier_entry_unblocks_later_entry_globally(
-    async_db: AsyncSession,
-) -> None:
-    """Read state is global: reading the earlier entry unblocks the later one."""
-    user = await get_or_create_user_async(async_db)
-    first_thread, first_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Sequence first", queue_position=703
-    )
-    second_thread, second_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Sequence second", queue_position=704
-    )
-    await _make_ordered_crossover(
-        async_db,
-        user_id=user.id,
-        name="Sequence",
-        entries=[(first_issue, 1), (second_issue, 2)],
-    )
-    await async_db.commit()
-
-    first_issue.status = "read"
-    await async_db.commit()
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert second_thread.id not in blocked
-    assert first_thread.id not in blocked
-
-
-@pytest.mark.asyncio
-async def test_sparse_order_blocks_all_later_unread_entries(
-    async_db: AsyncSession,
-) -> None:
-    """Every unread entry after the earliest unread entry is blocked."""
-    user = await get_or_create_user_async(async_db)
-    threads: list[Thread] = []
-    issues: list[Issue] = []
-    for index in range(4):
-        thread, issue = await _make_thread_with_issue(
-            async_db,
-            user_id=user.id,
-            title=f"Entry {index + 1}",
-            queue_position=710 + index,
-        )
-        threads.append(thread)
-        issues.append(issue)
-    await _make_ordered_crossover(
-        async_db,
-        user_id=user.id,
-        name="Quad",
-        entries=[(issue, index + 1) for index, issue in enumerate(issues)],
-    )
-    await async_db.commit()
-
-    issues[0].status = "read"
-    await async_db.commit()
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert blocked == {threads[2].id, threads[3].id}
-
-
-@pytest.mark.asyncio
-async def test_multiple_ordered_crossovers_and_compose(
-    async_db: AsyncSession,
-) -> None:
-    """An issue in several ordered crossovers must satisfy all of them."""
-    user = await get_or_create_user_async(async_db)
-    a_thread, a_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Crossover A first", queue_position=720
-    )
-    b_thread, b_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Crossover B first", queue_position=721
-    )
-    target_thread, target_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Shared later entry", queue_position=722
-    )
-    await _make_ordered_crossover(
-        async_db,
-        user_id=user.id,
-        name="Crossover A",
-        entries=[(a_issue, 1), (target_issue, 2)],
-    )
-    await _make_ordered_crossover(
-        async_db,
-        user_id=user.id,
-        name="Crossover B",
-        entries=[(b_issue, 1), (target_issue, 2)],
-    )
-    await async_db.commit()
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert target_thread.id in blocked
-
-    b_issue.status = "read"
-    await async_db.commit()
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert target_thread.id in blocked
-
-    a_issue.status = "read"
-    await async_db.commit()
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert target_thread.id not in blocked
-
-
-@pytest.mark.asyncio
-async def test_per_series_prerequisites_compose_with_crossover_order(
-    async_db: AsyncSession,
-) -> None:
-    """A per-series continuity rule and crossover order both gate readiness."""
-    user = await get_or_create_user_async(async_db)
-    source_thread, source_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Series prerequisite", queue_position=730
-    )
-    ordered_first_thread, ordered_first_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Crossover first", queue_position=731
-    )
-    target_thread, target_issue = await _make_thread_with_issue(
-        async_db, user_id=user.id, title="Composed target", queue_position=732
-    )
-    async_db.add(
-        ContinuityRule(
-            user_id=user.id,
-            source_type="issue",
-            source_id=source_issue.id,
-            target_type="issue",
-            target_id=target_issue.id,
-            satisfaction_type="item_read",
-        )
-    )
-    await _make_ordered_crossover(
-        async_db,
-        user_id=user.id,
-        name="Series order",
-        entries=[(ordered_first_issue, 1), (target_issue, 2)],
-    )
-    await async_db.commit()
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert target_thread.id in blocked
-
-    source_issue.status = "read"
-    ordered_first_issue.status = "read"
-    await async_db.commit()
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert target_thread.id not in blocked
-    assert source_thread.id not in blocked
-    assert ordered_first_thread.id not in blocked
-
-
-@pytest.mark.asyncio
-async def test_the_ultimates_18_cannot_roll_before_earlier_crossover_entry(
-    async_db: AsyncSession,
-) -> None:
-    """The issue scenario: The Ultimates #18 cannot roll while #16 is unread.
-
-    Mirrors the issue's motivating example (earlier crossover entry unread).
-    """
-    user = await get_or_create_user_async(async_db)
-    ultimates_thread, ultimates_16 = await _make_thread_with_issue(
-        async_db,
-        user_id=user.id,
-        title="The Ultimates",
-        queue_position=740,
-        issue_number="16",
-    )
-    ultimates_18_thread, ultimates_18 = await _make_thread_with_issue(
-        async_db,
-        user_id=user.id,
-        title="The Ultimates",
-        queue_position=741,
-        issue_number="18",
-    )
-    await _make_ordered_crossover(
-        async_db,
-        user_id=user.id,
-        name="The Ultimates Run",
-        entries=[(ultimates_16, 1), (ultimates_18, 2)],
-    )
-    await async_db.commit()
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert ultimates_18_thread.id in blocked
-    assert ultimates_thread.id not in blocked
-
-    ultimates_16.status = "read"
-    await async_db.commit()
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert ultimates_18_thread.id not in blocked
-
-
-@pytest.mark.asyncio
-async def test_reorder_endpoint_persists_and_enforces_reading_order(
+async def test_reorder_endpoint_persists_reading_order(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """PUT /{group_id}/order persists authoritative order and gates readiness.
-
-    Args:
-        auth_client: Authenticated API client fixture.
-        async_db: Async database session fixture.
-
-    Returns:
-        None.
-    """
+    """PUT /{group_id}/order persists the declared order for presentation."""
     user = await get_or_create_user_async(async_db)
-    first_thread, first_issue = await _make_thread_with_issue(
+    _first_thread, first_issue = await _make_thread_with_issue(
         async_db, user_id=user.id, title="Reorder first", queue_position=750
     )
-    second_thread, second_issue = await _make_thread_with_issue(
+    _second_thread, second_issue = await _make_thread_with_issue(
         async_db, user_id=user.id, title="Reorder second", queue_position=751
     )
     group = DependencyGroup(user_id=user.id, name="Reorder crossover")
@@ -338,10 +88,6 @@ async def test_reorder_endpoint_persists_and_enforces_reading_order(
     }
     assert members_by_issue[first_issue.id]["sequence_order"] == 1
     assert members_by_issue[second_issue.id]["sequence_order"] == 2
-
-    blocked = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert second_thread.id in blocked
-    assert first_thread.id not in blocked
 
 
 @pytest.mark.asyncio

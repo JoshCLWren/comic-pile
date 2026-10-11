@@ -689,7 +689,7 @@ async def adopt_cbl_material_into_reading_plan(
             user_id=user_id,
             plan=plan,
             nodes=node_models,
-            ordering_mode=_plan_ordering_mode(plan),
+            ordering_mode=_plan_ordering_mode(plan)
         )
         await db.commit()
     except Exception:
