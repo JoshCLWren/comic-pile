@@ -256,6 +256,9 @@ async def create_issues(
                     issue_number_str = str(issue.issue_number)
                     if issue_number_str in comicvine_issue_map:
                         comicvine_issue_id = comicvine_issue_map[issue_number_str]
+                        if comicvine_issue_id is None or not isinstance(comicvine_issue_id, int):
+                            logger.warning("Skipping adoption for issue %d: invalid ComicVine issue ID %r", issue.id, comicvine_issue_id)
+                            continue
                         try:
                             adoption_result = await adopt_comicvine_issue(
                                 db=db,
