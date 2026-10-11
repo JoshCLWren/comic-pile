@@ -6,7 +6,7 @@ Rotisserie supplies tested, portable aggregation and sanitization code.
 ## Data flow
 
 1. ComicPile's `factory-api-quota-observation.yml` queries `GET /rate_limit` using **that job's** `GITHUB_TOKEN` at minute 17 each hour and writes a private two-day Actions artifact named `factory-api-quota`. It does not measure operator `gh` credentials, PAT activity, or each worker App independently.
-2. ComicPile's `publish-factory-api-budgets.yml` runs at minute 37 **only after explicitly enabled**. It checks out a pinned Rotisserie commit with the existing private `ROTISSERIE_DEPLOY_KEY`.
+2. ComicPile's `publish-factory-api-budgets.yml` runs at minute 55 **only after explicitly enabled**. It checks out a pinned Rotisserie commit with the existing private `ROTISSERIE_DEPLOY_KEY`.
 3. The publisher uses a **source-only** short-lived App installation token to read `comic-pile` Actions artifacts, and a distinct **destination-only** token to update `JoshCLWren.github.io/factory-health/data.json`.
 4. The script downloads at most 26 recent observations, calculates 24-hour minimum remaining REST/GraphQL/search budgets, counts observed transitions to REST exhaustion, and refuses to publish when data is missing, invalid, or over two hours old.
 5. The static GitHub Pages frontend and the 5:30 AM daily report read only the sanitized public JSON. Neither polls the installation API.
