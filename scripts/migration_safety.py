@@ -25,9 +25,12 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    import psycopg
 
 RISK_UNIQUE_CONSTRAINT = "unique-constraint"
 RISK_DATA_MIGRATION = "data-migration"
@@ -375,7 +378,9 @@ def validate_migration_static(
     path = repo_root / manifest_path(PREFLIGHT_DIR, revision)
     if not risk.risks:
         if path.exists():
-            violations.extend(_validate_manifest(risk, load_manifest(path), label, revision))
+            violations.extend(
+                _validate_manifest(risk, load_manifest(path), label, revision, repo_root)
+            )
         return violations
     if not path.exists():
         return [
@@ -383,7 +388,7 @@ def validate_migration_static(
             f"preflight manifest at {manifest_path(PREFLIGHT_DIR, revision)}"
         ]
     manifest = load_manifest(path)
-    violations.extend(_validate_manifest(risk, manifest, label, revision))
+    violations.extend(_validate_manifest(risk, manifest, label, revision, repo_root))
     return violations
 
 
@@ -491,17 +496,19 @@ def to_psycopg_url(db_url: str) -> str:
     return url
 
 
-def _applied_revisions(fetch_scalar: Callable[[str], object]) -> set[str]:
+def _applied_revisions(conn: psycopg.Connection) -> set[str]:
     """Read the set of applied Alembic revisions from the target database.
 
     Args:
-        fetch_scalar: Callable returning rows for a query.
+        conn: Open connection to the target database.
 
     Returns:
         Applied revision ids, or empty when alembic_version does not exist.
     """
-    rows = fetch_scalar("select version_num from alembic_version")
-    if not isinstance(rows, list):
+    try:
+        rows = conn.execute("select version_num from alembic_version").fetchall()
+    except psycopg.errors.UndefinedTable:
+        conn.rollback()
         return set()
     return {str(row[0]) for row in rows}
 
@@ -530,7 +537,10 @@ def run_preflight(db_url: str, repo_root: Path, pending_only: bool = True) -> li
         return violations
 
     with psycopg.connect(to_psycopg_url(db_url), autocommit=False) as conn:
+        # Commit the read-only guard immediately: a later ROLLBACK (for example a
+        # missing alembic_version table) must never silently drop the protection.
         conn.execute("SET default_transaction_read_only = on")
+        conn.commit()
 
         def fetch_scalar(sql: str) -> float:
             row = conn.execute(sql).fetchone()
@@ -540,12 +550,7 @@ def run_preflight(db_url: str, repo_root: Path, pending_only: bool = True) -> li
 
         applied: set[str] = set()
         if pending_only:
-            try:
-                rows = conn.execute("select version_num from alembic_version").fetchall()
-                applied = {str(row[0]) for row in rows}
-            except psycopg.errors.UndefinedTable:
-                conn.rollback()
-                applied = set()
+            applied = _applied_revisions(conn)
 
         for manifest in manifests:
             if pending_only and manifest.revision in applied:
