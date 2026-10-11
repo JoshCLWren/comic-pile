@@ -38,13 +38,12 @@ from app.external_identities import (
     link_issue_external_identity,
     upsert_external_identity,
 )
-from app.models import Event, Issue, Thread
+from app.models import Event, Thread
 from app.models.external_identity import ExternalIdentity
 from app.repositories import issue_repository
-from app.services.issue import _insert_new_issues_in_natural_order
+from app.services.issue_insertion import create_issue_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership import get_owned_thread_or_404
-from app.utils.issue_natural_order import natural_issue_order
 from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
 from comic_pile.dependencies import refresh_user_blocked_status
 
@@ -81,47 +80,6 @@ class ProviderIssueAdoptionResult:
     comicvine_issue_id: int
     hydration: HydrationOutcome
     conflict_detail: str | None = None
-
-
-async def _create_issue_in_natural_order(
-    db: AsyncSession,
-    thread_id: int,
-    issue_number: str,
-) -> Issue:
-    """Create one unread issue through the existing natural-order path.
-
-    When automatic placement is ambiguous (irregular numbering or a
-    hand-reordered series), the issue is appended after the current last
-    position, mirroring the append-only fallback of the issue creation path.
-
-    Args:
-        db: Database session.
-        thread_id: Thread receiving the issue.
-        issue_number: ComicVine issue number, stored verbatim.
-
-    Returns:
-        The newly created issue.
-    """
-    existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
-    existing_issue_numbers = [row[1] for row in existing_rows]
-    natural_order = natural_issue_order(existing_issue_numbers, [issue_number])
-    if natural_order is not None:
-        created = await _insert_new_issues_in_natural_order(
-            db, thread_id, [issue_number], natural_order
-        )
-        await db.flush()
-        return created[0]
-
-    next_position = max((row[2] for row in existing_rows), default=0) + 1
-    issue = Issue(
-        thread_id=thread_id,
-        issue_number=issue_number,
-        position=next_position,
-        status="unread",
-    )
-    await issue_repository.add_issue(db, issue)
-    await db.flush()
-    return issue
 
 
 async def _recalculate_thread_tracking(
@@ -239,7 +197,7 @@ async def adopt_comicvine_issue(
 
         issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
         if issue is None:
-            issue = await _create_issue_in_natural_order(db, thread_id, issue_number)
+            issue = await create_issue_in_natural_order(db, thread_id, issue_number)
             outcome = "created"
         else:
             outcome = "reused"
