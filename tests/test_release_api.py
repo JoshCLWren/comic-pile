@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 from httpx import AsyncClient
 import pytest
+from sqlalchemy import event as sa_event
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 
 @pytest.mark.asyncio
@@ -633,3 +635,90 @@ async def test_release_publication_with_capability_claim_and_path(
     provenance = published["provenance_json"]
     assert isinstance(provenance, dict)
     assert provenance["reader_reachable_path"] == "Queue page at /queue"
+
+
+@pytest.mark.asyncio
+async def test_put_release_upsert_avoids_post_commit_reread(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    db_engine: AsyncEngine,
+) -> None:
+    """PUT /api/v1/releases must not re-select the release row after commit.
+
+    Issue #3394 budgeted PUT /api/v1/releases at 1000 ms. The upsert committed
+    and then re-selected the full row (including the large ``body`` column) just
+    to build a response the session already held: sessions run with
+    ``expire_on_commit=False``, the primary key arrives via INSERT ... RETURNING
+    at flush time, and the timestamps are Python-side flush defaults. That
+    post-commit re-read added a pooled round trip holding a size-2/no-overflow
+    production connection on every publish. Both the create and the
+    idempotent-retry branches are covered because the writer hits create once
+    per merged PR and retries on delivery uncertainty.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+        db_engine: Shared async test engine for statement capture.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    large_body = "More release detail with a large body " * 100
+    payload = _release_payload(pr_number=1224, merge_sha="4" * 40)
+    payload["body"] = large_body
+
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(" ".join(statement.split()).lower())
+
+    def release_selects() -> list[str]:
+        return [
+            statement
+            for statement in statements
+            if statement.startswith("select") and "from releases" in statement
+        ]
+
+    sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
+    try:
+        created = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+    finally:
+        sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
+
+    assert created.status_code == 200, created.text
+    created_json = created.json()
+    release_id = created_json["id"]
+    assert created_json["body"] == large_body
+    assert created_json["created_at"] is not None
+    assert created_json["updated_at"] is not None
+    assert len(release_selects()) == 1, (
+        f"Create must select the releases row once (identity lookup), "
+        f"got {len(release_selects())}: {release_selects()}"
+    )
+
+    payload["summary"] = "Updated release summary"
+    statements.clear()
+    sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
+    try:
+        retry = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+    finally:
+        sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
+
+    assert retry.status_code == 200, retry.text
+    retry_json = retry.json()
+    assert retry_json["id"] == release_id
+    assert retry_json["summary"] == "Updated release summary"
+    assert retry_json["body"] == large_body
+    assert len(release_selects()) == 1, (
+        f"Idempotent retry must select the releases row once (identity lookup) "
+        f"with no post-commit re-read, got {len(release_selects())}: {release_selects()}"
+    )

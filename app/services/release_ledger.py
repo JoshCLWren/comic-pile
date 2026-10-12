@@ -228,6 +228,15 @@ def _apply_payload(release: Release, payload: ReleaseUpsertRequest) -> None:
 async def upsert_release(db: AsyncSession, payload: ReleaseUpsertRequest) -> Release:
     """Create or update one GitHub-backed release idempotently, including concurrent retries.
 
+    The committed row is returned from the already-loaded in-memory state instead of
+    being re-selected after commit. Sessions run with ``expire_on_commit=False``, the
+    primary key arrives via INSERT ... RETURNING at flush time, and ``created_at`` /
+    ``updated_at`` are Python-side flush defaults, so nothing the response needs is
+    missing after commit. Skipping the post-commit ``refresh`` keeps the large ``body``
+    column from being transferred twice on every publish and removes one pooled round
+    trip per ``PUT /api/v1/releases`` call, which matters for the 1000 ms route budget
+    (issues #3394, #3417) on the size-2/no-overflow production pool.
+
     Args:
         db: Async database session.
         payload: Validated release publication payload.
@@ -268,7 +277,9 @@ async def upsert_release(db: AsyncSession, payload: ReleaseUpsertRequest) -> Rel
         _apply_payload(release, payload)
         await db.commit()
 
-    await db.refresh(release)
+    # No post-commit refresh: with expire_on_commit=False the attributes above stay
+    # loaded, so re-selecting would only re-transfer the large body column and hold
+    # a pooled connection for an extra round trip on every publish.
     return release
 
 
