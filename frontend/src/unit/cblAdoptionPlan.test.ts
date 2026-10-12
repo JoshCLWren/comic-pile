@@ -90,4 +90,61 @@ describe('applyCblAdoptionChoices', () => {
     expect(next.summary.missing_would_create_count).toBe(1)
     expect(next.summary.excluded_positions).toEqual([1])
   })
+
+  it('lets an unresolved entry be skipped without guessing identity', () => {
+    const unresolvedPreview: CBLAdoptionPreview = {
+      ...preview,
+      entries: [
+        entry({
+          adoption_class: 'ambiguous_unresolved',
+          adoption_decision: 'unresolved',
+          adopted: false,
+          resolved_issue_id: null,
+          canonical_issue_id: null,
+        }),
+      ],
+    }
+    const skipped = applyCblAdoptionChoices(unresolvedPreview, {}, { '101': false })
+    expect(skipped.entries[0]?.adoption_decision).toBe('excluded')
+    expect(skipped.summary.excluded_positions).toEqual([1])
+    const left = applyCblAdoptionChoices(unresolvedPreview, {}, {})
+    expect(left.entries[0]?.adoption_decision).toBe('unresolved')
+    expect(left.summary.unresolved_positions).toEqual([1])
+  })
+
+  it('treats missing issues with no explicit choice as awaiting opt-in', () => {
+    const awaitingPreview: CBLAdoptionPreview = {
+      ...preview,
+      entries: [
+        entry({
+          cbl_entry_id: 102,
+          adoption_class: 'missing_importable',
+          adoption_decision: 'awaiting_opt_in',
+          adopted: false,
+          resolved_issue_id: null,
+          canonical_issue_id: null,
+        }),
+      ],
+    }
+    const next = applyCblAdoptionChoices(awaitingPreview, {}, {})
+    expect(next.entries[0]?.adoption_decision).toBe('would_create_missing')
+    const none = applyCblAdoptionChoices(
+      {
+        ...awaitingPreview,
+        entries: [
+          entry({
+            cbl_entry_id: 102,
+            adoption_class: 'missing_importable',
+            adoption_decision: 'awaiting_opt_in',
+            adopted: false,
+            resolved_issue_id: null,
+            canonical_issue_id: null,
+          }),
+        ],
+      },
+      { 'group-1': false },
+      {},
+    )
+    expect(none.entries[0]?.adoption_decision).toBe('excluded')
+  })
 })

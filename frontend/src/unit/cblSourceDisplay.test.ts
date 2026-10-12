@@ -27,4 +27,21 @@ describe('cblSourceDisplay', () => {
   it('does not return a bare host directory as a source path', () => {
     expect(displayCblSourcePath('/mnt/bigdata/CBL-ReadingLists')).toBeNull()
   })
+
+  it('recognizes file URLs, relative mnt paths, and nested /mnt/ locations', () => {
+    expect(isFilesystemSourceLocation('file:/mnt/bigdata/CBL-ReadingLists')).toBe(true)
+    expect(isFilesystemSourceLocation('mnt/bigdata/CBL-ReadingLists')).toBe(true)
+    expect(isFilesystemSourceLocation('mirror/mnt/CBL-ReadingLists')).toBe(true)
+    expect(displayCblRepository('')).toBeNull()
+    expect(displayCblRepository('/var/lib/comicpile')).toBeNull()
+    expect(displayCblRepository('/data/CBL-ReadingLists/')).toBe('JoshCLWren/CBL-ReadingLists')
+  })
+
+  it('falls back to a filename for other filesystem paths and ignores blanks', () => {
+    expect(displayCblSourcePath('')).toBeNull()
+    expect(displayCblSourcePath('/tmp/lists/Ultimate.cbl')).toBe('Ultimate.cbl')
+    expect(displayCblSourcePath('/tmp/lists')).toBeNull()
+    expect(displayCblSourcePath('/mnt/bigdata/CBL-ReadingLists/')).toBeNull()
+  })
 })
+
