@@ -348,6 +348,7 @@ async def test_github_service_escapes_backticks_in_diagnostics(
     )
 
     captured_body = {}
+    captured_requests = []
 
     class MockAsyncClient:
         def __init__(self, *args, **kwargs):
@@ -361,9 +362,17 @@ async def test_github_service_escapes_backticks_in_diagnostics(
 
         async def post(self, url, headers, json):
             captured_body["body"] = json["body"]
+            captured_requests.append(("POST", url))
             mock_response = MagicMock()
             mock_response.raise_for_status = MagicMock()
             mock_response.json.return_value = {"html_url": mock_issue_url}
+            return mock_response
+
+        async def get(self, url, headers, params=None):
+            captured_requests.append(("GET", url))
+            mock_response = MagicMock()
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json.return_value = {}
             return mock_response
 
     with (
@@ -385,6 +394,11 @@ async def test_github_service_escapes_backticks_in_diagnostics(
 
     assert response.status_code == 201
     assert response.json()["issue_url"] == mock_issue_url
+    # Issue filing must stay on one GitHub round trip; a repository
+    # pre-resolution GET doubled the request-path latency for this route.
+    methods = [method for method, _url in captured_requests]
+    assert methods == ["POST"]
+    assert captured_requests[0][1].endswith("/issues")
     issue_body = captured_body["body"]
     # Unescaped backticks should NOT appear in diagnostic values
     assert "```injected```" not in issue_body

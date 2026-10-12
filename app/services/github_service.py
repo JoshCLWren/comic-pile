@@ -4,7 +4,7 @@ import logging
 
 import httpx
 
-from app.config import get_github_settings
+from app.config import GitHubSettings, get_github_settings
 from app.schemas.bug_report import BugReportDiagnostics, ReportType
 
 logger = logging.getLogger(__name__)
@@ -14,6 +14,8 @@ PERFORMANCE_ISSUE_SEARCH_LIMIT = 100
 
 GITHUB_API_BASE = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"
+GITHUB_REQUEST_TIMEOUT_SECONDS = 30.0
+GITHUB_ISSUE_SEARCH_PAGE_SIZE = 100
 
 
 def _escape_markdown_code(value: str) -> str:
@@ -28,7 +30,7 @@ def _labels_for_report_type(report_type: ReportType) -> list[str]:
     return ["bug", "user-reported"]
 
 
-def _github_headers(settings) -> dict[str, str]:
+def _github_headers(settings: GitHubSettings) -> dict[str, str]:
     """Build common GitHub API headers."""
     return {
         "Authorization": f"Bearer {settings.github_token}",
@@ -37,9 +39,24 @@ def _github_headers(settings) -> dict[str, str]:
     }
 
 
-def _repo_url(settings) -> str:
+def _repo_url(settings: GitHubSettings) -> str:
     """Build the repository API URL."""
     return f"{GITHUB_API_BASE}/repos/{settings.github_repo_owner}/{settings.github_repo_name}"
+
+
+def _configured_settings() -> GitHubSettings:
+    """Return GitHub settings after verifying the integration is configured.
+
+    Returns:
+        The cached GitHub settings for this process.
+
+    Raises:
+        RuntimeError: If GitHub integration is not configured.
+    """
+    settings = get_github_settings()
+    if not settings.is_configured:
+        raise RuntimeError("GitHub integration not configured")
+    return settings
 
 
 async def create_bug_report_issue(
@@ -64,9 +81,7 @@ async def create_bug_report_issue(
     Raises:
         RuntimeError: If GitHub integration is not configured or issue creation fails.
     """
-    settings = get_github_settings()
-    if not settings.is_configured:
-        raise RuntimeError("GitHub integration not configured")
+    settings = _configured_settings()
 
     report_label = "Feature request" if report_type == "feature" else "Bug report"
     body = (
@@ -162,9 +177,7 @@ async def create_performance_issue(
     if "user-reported" in labels:
         raise RuntimeError("Machine-generated performance issues must not use user-reported")
 
-    settings = get_github_settings()
-    if not settings.is_configured:
-        raise RuntimeError("GitHub integration not configured")
+    settings = _configured_settings()
 
     payload = {
         "title": title,
@@ -175,21 +188,41 @@ async def create_performance_issue(
     return await _post_issue(settings, payload)
 
 
-async def _post_issue(settings, payload: dict) -> str:
-    """Post an issue to GitHub and return the HTML URL."""
+async def _post_issue(settings: GitHubSettings, payload: dict[str, object]) -> str:
+    """Create one GitHub issue with a single API round trip.
+
+    The interactive bug-report route previously resolved the repository
+    before creating the issue, doubling the GitHub round trips on the
+    request path. The repository is implied by the configured owner/name
+    in the URL, so one POST is sufficient.
+
+    Args:
+        settings: Verified GitHub settings for the target repository.
+        payload: Issue creation payload (title, body, labels).
+
+    Returns:
+        The HTML URL of the newly created issue.
+
+    Raises:
+        RuntimeError: If the GitHub request fails or returns no issue URL.
+    """
     url = f"{_repo_url(settings)}/issues"
     headers = _github_headers(settings)
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=GITHUB_REQUEST_TIMEOUT_SECONDS) as client:
             response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()
-            data = response.json()
-            return data["html_url"]
+            data: object = response.json()
     except httpx.HTTPStatusError as e:
         raise RuntimeError(f"Failed to create GitHub issue: {e.response.text}") from e
-    except httpx.RequestError as e:
+    except (httpx.RequestError, ValueError) as e:
         raise RuntimeError(f"Failed to create GitHub issue: {e}") from e
+
+    html_url = data.get("html_url") if isinstance(data, dict) else None
+    if not isinstance(html_url, str) or not html_url:
+        raise RuntimeError("Failed to create GitHub issue: response contained no issue URL")
+    return html_url
 
 
 def _issue_matches_fingerprint(issue_body: str | None, fingerprint: str) -> bool:
@@ -208,35 +241,59 @@ def _issue_matches_fingerprint(issue_body: str | None, fingerprint: str) -> bool
 
 
 async def _search_issues(
-    settings,
+    settings: GitHubSettings,
     state: str,
     fingerprint: str,
 ) -> int | None:
-    """Search for issues matching a fingerprint."""
+    """Find the newest issue carrying a performance fingerprint marker.
+
+    Args:
+        settings: Verified GitHub settings for the target repository.
+        state: Issue state to search (``"open"`` or ``"closed"``).
+        fingerprint: Deterministic performance signature hash.
+
+    Returns:
+        The matching issue number, or None when no issue matches.
+
+    Raises:
+        RuntimeError: If the GitHub request fails or returns an unusable body.
+    """
     url = f"{_repo_url(settings)}/issues"
     headers = _github_headers(settings)
-    params = {"state": state, "labels": "performance", "per_page": 100}
+    params = {
+        "state": state,
+        "labels": "performance",
+        "per_page": GITHUB_ISSUE_SEARCH_PAGE_SIZE,
+    }
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=GITHUB_REQUEST_TIMEOUT_SECONDS) as client:
             response = await client.get(url, headers=headers, params=params)
             response.raise_for_status()
-            issues = response.json()
-
-            checked = 0
-            for issue in issues:
-                if checked >= PERFORMANCE_ISSUE_SEARCH_LIMIT:
-                    break
-                checked += 1
-                if issue.get("pull_request") is not None:
-                    continue
-                if _issue_matches_fingerprint(issue.get("body"), fingerprint):
-                    return issue["number"]
-            return None
+            issues: object = response.json()
     except httpx.HTTPStatusError as e:
         raise RuntimeError(f"Failed to search performance issues: {e.response.text}") from e
-    except httpx.RequestError as e:
+    except (httpx.RequestError, ValueError) as e:
         raise RuntimeError(f"Failed to search performance issues: {e}") from e
+
+    if not isinstance(issues, list):
+        raise RuntimeError("Failed to search performance issues: malformed response body")
+
+    checked = 0
+    for issue in issues:
+        if checked >= PERFORMANCE_ISSUE_SEARCH_LIMIT:
+            break
+        checked += 1
+        if not isinstance(issue, dict):
+            continue
+        if issue.get("pull_request") is not None:
+            continue
+        if not _issue_matches_fingerprint(issue.get("body"), fingerprint):
+            continue
+        number = issue.get("number")
+        if isinstance(number, int):
+            return number
+    return None
 
 
 async def find_open_issue_by_fingerprint(fingerprint: str) -> int | None:
@@ -251,9 +308,7 @@ async def find_open_issue_by_fingerprint(fingerprint: str) -> int | None:
     Raises:
         RuntimeError: If the GitHub lookup fails.
     """
-    settings = get_github_settings()
-    if not settings.is_configured:
-        raise RuntimeError("GitHub integration not configured")
+    settings = _configured_settings()
     return await _search_issues(settings, "open", fingerprint)
 
 
@@ -273,9 +328,7 @@ async def find_closed_issue_by_fingerprint(fingerprint: str) -> int | None:
     Raises:
         RuntimeError: If the GitHub lookup fails.
     """
-    settings = get_github_settings()
-    if not settings.is_configured:
-        raise RuntimeError("GitHub integration not configured")
+    settings = _configured_settings()
     return await _search_issues(settings, "closed", fingerprint)
 
 
@@ -288,38 +341,36 @@ async def add_performance_issue_comment(issue_number: int, comment: str) -> str 
 
     Returns:
         The issue state after commenting (``"open"`` or ``"closed"``), or
-        None when the issue could not be fetched or the comment could not
-        be posted. Callers use the state to detect an externally closed
-        issue so a regression files a new issue instead of silently
-        appending recurrence notes to closed historical work.
+        None when the issue state could not be determined. Callers use the
+        state to detect an externally closed issue so a regression files a
+        new issue instead of silently appending recurrence notes to closed
+        historical work.
 
     Raises:
         RuntimeError: If the comment cannot be posted.
     """
-    settings = get_github_settings()
-    if not settings.is_configured:
-        raise RuntimeError("GitHub integration not configured")
+    settings = _configured_settings()
 
-    url = f"{_repo_url(settings)}/issues/{issue_number}/comments"
+    comment_url = f"{_repo_url(settings)}/issues/{issue_number}/comments"
+    issue_url = f"{_repo_url(settings)}/issues/{issue_number}"
     headers = _github_headers(settings)
-    payload = {"body": comment}
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
+        async with httpx.AsyncClient(timeout=GITHUB_REQUEST_TIMEOUT_SECONDS) as client:
+            response = await client.post(comment_url, headers=headers, json={"body": comment})
             response.raise_for_status()
 
-            # Fetch the issue to get its state
-            issue_url = f"{_repo_url(settings)}/issues/{issue_number}"
             issue_response = await client.get(issue_url, headers=headers)
             issue_response.raise_for_status()
-            issue_data = issue_response.json()
-            return issue_data["state"]
+            issue_data: object = issue_response.json()
     except httpx.HTTPStatusError as e:
         raise RuntimeError(
             f"Failed to update performance issue #{issue_number}: {e.response.text}"
         ) from e
-    except httpx.RequestError as e:
+    except (httpx.RequestError, ValueError) as e:
         raise RuntimeError(
             f"Failed to update performance issue #{issue_number}: {e}"
         ) from e
+
+    state = issue_data.get("state") if isinstance(issue_data, dict) else None
+    return state if isinstance(state, str) else None

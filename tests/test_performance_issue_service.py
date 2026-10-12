@@ -1,11 +1,92 @@
 """Tests for automatic GitHub issue filing from performance violations."""
 
 import asyncio
+from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from app.services import performance_issue_service as perf_issues
+
+GitHubCall = tuple[str, dict, dict]
+GitHubHandler = Callable[[str, dict, dict], object]
+
+
+def _github_settings_double() -> MagicMock:
+    """Build configured GitHub settings pointing at the ``o/r`` repository."""
+    settings = MagicMock()
+    settings.is_configured = True
+    settings.github_token = "token"
+    settings.github_repo_owner = "o"
+    settings.github_repo_name = "r"
+    return settings
+
+
+def _json_response(payload: object, status_code: int = 200) -> MagicMock:
+    """Build an httpx response double that decodes to ``payload``."""
+    response = MagicMock()
+    response.status_code = status_code
+    response.text = f"status {status_code}"
+    response.json.return_value = payload
+    return response
+
+
+def _github_client_double(
+    *,
+    post_handler: GitHubHandler | None = None,
+    get_handler: GitHubHandler | None = None,
+) -> tuple[type, dict[str, list[GitHubCall]]]:
+    """Build an ``httpx.AsyncClient`` double and its recorded call log.
+
+    The GitHub client is exercised through the async HTTP transport rather
+    than a stubbed SDK object so the tests cover the real request shape,
+    headers, and round-trip count used by the production route.
+
+    Args:
+        post_handler: Callable answering ``POST`` requests.
+        get_handler: Callable answering ``GET`` requests.
+
+    Returns:
+        A tuple of the patchable client class and a ``{"post": [...],
+        "get": [...]}`` call log keyed by HTTP method.
+    """
+    calls: dict[str, list[GitHubCall]] = {"post": [], "get": []}
+
+    def _handle(
+        method: str,
+        handler: GitHubHandler | None,
+        url: str,
+        headers: dict,
+        payload: dict,
+    ) -> object:
+        """Record a call and delegate to the configured handler."""
+        calls[method].append((url, headers, payload))
+        if handler is None:
+            raise AssertionError(f"Unexpected {method.upper()} request to {url}")
+        return handler(url, headers, payload)
+
+    class _AsyncClientDouble:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            """Accept and discard transport options such as ``timeout``."""
+
+        async def __aenter__(self) -> _AsyncClientDouble:
+            """Enter the async context manager."""
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            """Exit the async context manager."""
+            return None
+
+        async def post(self, url: str, headers: dict, json: dict) -> object:
+            """Record and answer a ``POST`` request."""
+            return _handle("post", post_handler, url, headers, json)
+
+        async def get(self, url: str, headers: dict, params: dict | None = None) -> object:
+            """Record and answer a ``GET`` request."""
+            return _handle("get", get_handler, url, headers, params or {})
+
+    return _AsyncClientDouble, calls
 
 
 @pytest.fixture(autouse=True)
@@ -648,21 +729,20 @@ class TestPerformanceGithubClient:
         """Creation passes the executable label set to the GitHub API."""
         from app.services import github_service as gh
 
-        mock_repo = MagicMock()
-        mock_issue = MagicMock()
-        mock_issue.html_url = "https://github.com/o/r/issues/888"
-        mock_repo.create_issue.return_value = mock_issue
-        mock_github = MagicMock()
-        mock_github.return_value.get_repo.return_value = mock_repo
-        mock_settings = MagicMock()
-        mock_settings.is_configured = True
-        mock_settings.github_token = "token"
-        mock_settings.github_repo_owner = "o"
-        mock_settings.github_repo_name = "r"
+        recorded: dict[str, object] = {}
+
+        def _post(url: str, headers: dict, payload: dict) -> object:
+            """Record the creation payload and return a created issue."""
+            recorded.update(payload)
+            return _json_response({"html_url": "https://github.com/o/r/issues/888"})
+
+        client_double, calls = _github_client_double(post_handler=_post)
 
         with (
-            patch.object(gh, "Github", mock_github),
-            patch.object(gh, "get_github_settings", return_value=mock_settings),
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
         ):
             from app.services import performance_issue_service as svc
 
@@ -673,63 +753,210 @@ class TestPerformanceGithubClient:
             )
 
         assert url == "https://github.com/o/r/issues/888"
-        created_labels = mock_repo.create_issue.call_args.kwargs["labels"]
+        assert calls["post"] == [
+            (
+                "https://api.github.com/repos/o/r/issues",
+                {
+                    "Authorization": "Bearer token",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                {
+                    "title": "Performance: GET /a took 1500ms (budget 1000ms)",
+                    "body": "evidence",
+                    "labels": svc.build_labels(high_priority=True),
+                },
+            )
+        ]
+        assert calls["get"] == []
+        created_labels = recorded["labels"]
+        assert isinstance(created_labels, list)
         assert "user-reported" not in created_labels
         assert "factory" in created_labels
+
+    @pytest.mark.asyncio
+    async def test_create_performance_issue_uses_single_round_trip(self) -> None:
+        """Issue creation never pre-resolves the repository before posting."""
+        from app.services import github_service as gh
+
+        client_double, calls = _github_client_double(
+            post_handler=lambda url, headers, payload: _json_response(
+                {"html_url": "https://github.com/o/r/issues/1"}
+            )
+        )
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            url = await gh.create_performance_issue(
+                title="t", body="b", labels=["bug", "performance"]
+            )
+
+        assert url == "https://github.com/o/r/issues/1"
+        assert len(calls["post"]) == 1
+        assert calls["get"] == []
+
+    @pytest.mark.asyncio
+    async def test_create_performance_issue_requires_configured_github(self) -> None:
+        """An unconfigured GitHub integration fails before any HTTP request."""
+        from app.services import github_service as gh
+
+        settings = _github_settings_double()
+        settings.is_configured = False
+        client_double, calls = _github_client_double()
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(gh, "get_github_settings", return_value=settings),
+        ):
+            with pytest.raises(RuntimeError, match="not configured"):
+                await gh.create_performance_issue(title="t", body="b", labels=["bug"])
+
+        assert calls == {"post": [], "get": []}
 
     @pytest.mark.asyncio
     async def test_find_open_issue_matches_fingerprint_marker(self) -> None:
         """Dedupe matches the hidden fingerprint marker, not the URL."""
         from app.services import github_service as gh
 
-        match = MagicMock()
-        match.number = 42
-        match.body = "evidence\n\n<!-- performance-fingerprint:v1:deadbeef -->\n"
-        match.pull_request = None
-        other = MagicMock()
-        other.number = 43
-        other.body = "evidence\n\n<!-- performance-fingerprint:v1:other -->\n"
-        other.pull_request = None
-        mock_repo = MagicMock()
-        mock_repo.get_issues.return_value = [other, match]
-        mock_github = MagicMock()
-        mock_github.return_value.get_repo.return_value = mock_repo
-        mock_settings = MagicMock()
-        mock_settings.is_configured = True
-        mock_settings.github_token = "token"
-        mock_settings.github_repo_owner = "o"
-        mock_settings.github_repo_name = "r"
+        issues = [
+            {"number": 43, "body": "evidence\n\n<!-- performance-fingerprint:v1:other -->"},
+            {"number": 44, "body": None, "pull_request": {"url": "https://api/pulls/44"}},
+            {"number": 42, "body": "evidence\n\n<!-- performance-fingerprint:v1:deadbeef -->\n"},
+        ]
+        client_double, calls = _github_client_double(
+            get_handler=lambda url, headers, params: _json_response(issues)
+        )
 
         with (
-            patch.object(gh, "Github", mock_github),
-            patch.object(gh, "get_github_settings", return_value=mock_settings),
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
         ):
             assert await gh.find_open_issue_by_fingerprint("deadbeef") == 42
             assert await gh.find_open_issue_by_fingerprint("missing") is None
 
+        assert calls["get"][0][0] == "https://api.github.com/repos/o/r/issues"
+        assert calls["get"][0][2]["state"] == "open"
+        assert calls["get"][0][2]["labels"] == "performance"
+        assert calls["get"][1][2]["state"] == "open"
+
+    @pytest.mark.asyncio
+    async def test_find_closed_issue_searches_closed_state(self) -> None:
+        """Closed-issue dedupe searches the closed state for regressions."""
+        from app.services import github_service as gh
+
+        issues = [{"number": 7, "body": "<!-- performance-fingerprint:v1:abc -->"}]
+        client_double, calls = _github_client_double(
+            get_handler=lambda url, headers, params: _json_response(issues)
+        )
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            assert await gh.find_closed_issue_by_fingerprint("abc") == 7
+
+        assert calls["get"][0][2]["state"] == "closed"
+
     @pytest.mark.asyncio
     async def test_github_lookup_failure_raises_runtime_error(self) -> None:
         """GitHub API failures surface as RuntimeError for the caller to log."""
-        from github import GithubException
-
         from app.services import github_service as gh
 
-        mock_repo = MagicMock()
-        mock_repo.get_issues.side_effect = GithubException(500, "boom", {})
-        mock_github = MagicMock()
-        mock_github.return_value.get_repo.return_value = mock_repo
-        mock_settings = MagicMock()
-        mock_settings.is_configured = True
-        mock_settings.github_token = "token"
-        mock_settings.github_repo_owner = "o"
-        mock_settings.github_repo_name = "r"
+        request = httpx.Request("GET", "https://api.github.com/repos/o/r/issues")
+        response = httpx.Response(500, text="boom", request=request)
+
+        def _get(url: str, headers: dict, params: dict) -> object:
+            """Fail the search with a GitHub server error."""
+            raise httpx.HTTPStatusError("boom", request=request, response=response)
+
+        client_double, _ = _github_client_double(get_handler=_get)
 
         with (
-            patch.object(gh, "Github", mock_github),
-            patch.object(gh, "get_github_settings", return_value=mock_settings),
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
         ):
             with pytest.raises(RuntimeError, match="search"):
                 await gh.find_open_issue_by_fingerprint("deadbeef")
+
+    @pytest.mark.asyncio
+    async def test_github_transport_failure_raises_runtime_error(self) -> None:
+        """Network errors surface as RuntimeError instead of leaking httpx."""
+        from app.services import github_service as gh
+
+        request = httpx.Request("GET", "https://api.github.com/repos/o/r/issues")
+
+        def _get(url: str, headers: dict, params: dict) -> object:
+            """Fail the search with a transport error."""
+            raise httpx.ConnectError("no route", request=request)
+
+        client_double, _ = _github_client_double(get_handler=_get)
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="search"):
+                await gh.find_open_issue_by_fingerprint("deadbeef")
+
+    @pytest.mark.asyncio
+    async def test_add_comment_returns_post_comment_issue_state(self) -> None:
+        """Recurrence comments report the issue state so regressions re-file."""
+        from app.services import github_service as gh
+
+        def _post(url: str, headers: dict, payload: dict) -> object:
+            """Accept the recurrence comment."""
+            return _json_response({"id": 1}, status_code=201)
+
+        def _get(url: str, headers: dict, payload: dict) -> object:
+            """Return a closed issue state."""
+            return _json_response({"state": "closed"})
+
+        client_double, calls = _github_client_double(post_handler=_post, get_handler=_get)
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            state = await gh.add_performance_issue_comment(555, "recurred")
+
+        assert state == "closed"
+        assert calls["post"][0][0] == "https://api.github.com/repos/o/r/issues/555/comments"
+        assert calls["post"][0][2] == {"body": "recurred"}
+        assert calls["get"][0][0] == "https://api.github.com/repos/o/r/issues/555"
+
+    @pytest.mark.asyncio
+    async def test_issue_creation_failure_raises_runtime_error(self) -> None:
+        """A GitHub error response becomes RuntimeError, never a KeyError."""
+        from app.services import github_service as gh
+
+        def _post(url: str, headers: dict, payload: dict) -> object:
+            """Return a body without an issue URL."""
+            return _json_response({"message": "Validation Failed"}, status_code=422)
+
+        client_double, _ = _github_client_double(post_handler=_post)
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="issue"):
+                await gh.create_performance_issue(title="t", body="b", labels=["bug"])
 
 
 class TestMiddlewareIntegration:
