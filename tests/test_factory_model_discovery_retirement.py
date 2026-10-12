@@ -698,19 +698,17 @@ def test_opencode_free_display_name_matches_roster_style() -> None:
 
 
 def _fixture_without_step5(tmp_path: Path) -> Path:
-    """Copy keep-present.json minus ``step-5-preview-free`` (Oct 11 worker 79 pin).
+    """Copy keep-present.json plus the retired ``fledge-alpha-free`` Zen id.
 
-    Synthetic rosters below model "every keep-present free OpenCode model is
-    pinned except the named hole"; the committed-TSV tests need worker 79's
-    model in the shared fixture, so these tests use this trimmed copy.
+    Worker 76 was retired by discovery once ``fledge-alpha-free`` left
+    ``opencode models opencode``. Synthetic rosters below still use it as a
+    pinned unique free model, so they use this copy of the catalog.
     """
     payload = json.loads((FIXTURES / "keep-present.json").read_text(encoding="utf-8"))
-    payload["providers"]["opencode"] = [
-        item
-        for item in payload["providers"]["opencode"]
-        if item["id"] != "step-5-preview-free"
-    ]
-    path = tmp_path / "keep-present-without-step5.json"
+    payload["providers"]["opencode"].append(
+        {"id": "fledge-alpha-free", "cost": {"input": 0, "output": 0}}
+    )
+    path = tmp_path / "keep-present-with-fledge.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
@@ -1311,14 +1309,11 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "scheduler": "dispatcher",
         "display_name": "OpenCode Ling 3.1 Flash Free",
     }
-    assert by_worker["76"] == {
-        "worker": "76",
-        "source": "opencode-free",
-        "model": "fledge-alpha-free",
-        "minute": "0",
-        "scheduler": "dispatcher",
-        "display_name": "OpenCode Fledge Alpha Free",
-    }
+    assert "76" not in by_worker
+    assert 76 not in lock["expected_workers"]
+    assert 76 in lock["retired_workers"]
+    assert "fledge-alpha-free" in lock["retired_models"]
+    assert "fledge-alpha-free" not in {row["model"] for row in remaining}
     assert by_worker["77"] == {
         "worker": "77",
         "source": "nvidia",
@@ -1331,7 +1326,7 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "worker": "78",
         "source": "nvidia",
         "model": "z-ai/glm-5.3",
-        "minute": "45",
+        "minute": "0",
         "scheduler": "dispatcher",
         "display_name": "NVIDIA GLM 5.3",
     }
