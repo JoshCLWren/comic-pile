@@ -378,8 +378,30 @@ class ReleaseListResponse(BaseModel):
     offset: int
 
 
+class MinimalReleaseResponse(BaseModel):
+    """Minimal release data for reconciliation endpoints."""
+    
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source_repository: str
+    source_pr_number: int | None
+    source_merge_sha: str | None
+    merged_at: datetime | None
+    released_at: datetime
+    category: str
+    title: str
+    summary: str
+    visibility: ReleaseVisibility
+    status: ReleaseStatus
+    sort_order: int
+    provenance_json: dict[str, object]
+    created_at: datetime
+    updated_at: datetime
+
+
 class ReleaseSourceResponse(BaseModel):
     """Result of reconciling a GitHub source identity with the ledger."""
 
     exists: bool
-    release: ReleaseResponse | None = None
+    release: MinimalReleaseResponse | None = None

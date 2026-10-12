@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.release import (
+    MinimalReleaseResponse,
     PublicReleaseResponse,
     ReleaseListResponse,
     ReleaseResponse,
@@ -18,6 +19,7 @@ from app.schemas.release import (
 from app.services.release_ledger import (
     ReleaseSourceConflictError,
     find_release_by_source,
+    find_release_minimal_by_source,
     get_published_release,
     list_published_releases,
     upsert_release,
@@ -89,7 +91,7 @@ async def reconcile_release_source(
             detail="source_pr_number or source_merge_sha is required",
         )
     try:
-        release = await find_release_by_source(
+        release = await find_release_minimal_by_source(
             db,
             source_repository=source_repository,
             source_pr_number=source_pr_number,
@@ -97,7 +99,31 @@ async def reconcile_release_source(
         )
     except ReleaseSourceConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    return ReleaseSourceResponse(exists=release is not None, release=release)
+    # Convert tuple result to Release-like object for the response
+    if release is not None:
+        # Create a Release-like object from the tuple
+        release_data = {
+            "id": release.id,
+            "source_repository": release.source_repository,
+            "source_pr_number": release.source_pr_number,
+            "source_merge_sha": release.source_merge_sha,
+            "merged_at": release.merged_at,
+            "released_at": release.released_at,
+            "category": release.category,
+            "title": release.title,
+            "summary": release.summary,
+            "visibility": release.visibility,
+            "status": release.status,
+            "sort_order": release.sort_order,
+            "provenance_json": release.provenance_json,
+            "created_at": release.created_at,
+            "updated_at": release.updated_at,
+        }
+        release_obj = MinimalReleaseResponse(**release_data)
+    else:
+        release_obj = None
+    
+    return ReleaseSourceResponse(exists=release is not None, release=release_obj)
 
 
 @router.get(
