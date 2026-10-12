@@ -829,8 +829,7 @@ async def test_creator_detail_performance(
     volume of data to ensure optimizations meet the <500ms target for warm reads.
     """
     import time
-    from httpx import AsyncClient
-    
+
     # Create a larger dataset to simulate production conditions
     thread, issues = await _make_thread(
         async_db, default_user, title="Performance Test", issue_count=50, queue_position=1, read_through=40
