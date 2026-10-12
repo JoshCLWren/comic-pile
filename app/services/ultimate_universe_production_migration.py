@@ -1181,14 +1181,25 @@ async def rollback_ultimate_universe_migration(
                 "refusing automatic rollback"
             )
 
-    # #2553: retire the plan's compiled canonical edges before the freeness
-    # check. The cutover compiles plan rules into Dependencies, so the legacy
-    # pairs are legitimately occupied until the plan's rules are removed.
+    # #2553: retire cutover-compiled canonical edges before the freeness
+    # check. Plan-owned rules occupy the new sequential pairs; reused
+    # standalones also compile (Phase B links them for Roll) and must be
+    # un-compiled so a restored source cbl-order row can reclaim that pair.
+    # Live plan deletion keeps those shared edges; failed-cutover rollback
+    # restores the reviewed pre-apply Dependency graph instead.
     plan_rule_ids = [rule.id for rule in plan_rules]
+    reused_standalone_ids = [
+        coerce_int(row["id"])
+        for row in snapshot.get("reused_standalone_rules", [])
+        if isinstance(row, dict)
+    ]
     for rule in plan_rules:
         await db.delete(rule)
     await db.flush()
-    await _retire_plan_compiled_edges(db, rule_ids=plan_rule_ids)
+    await _retire_plan_compiled_edges(
+        db,
+        rule_ids=plan_rule_ids + reused_standalone_ids,
+    )
     remaining_plan_rule_ids = list(
         (
             await db.execute(

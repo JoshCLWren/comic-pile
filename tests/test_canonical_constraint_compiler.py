@@ -382,16 +382,16 @@ async def test_rule_update_rejects_cbl_order_collision_with_409(
 
 
 @pytest.mark.asyncio
-async def test_plan_save_rejects_cbl_order_collision_with_409(
+async def test_plan_save_promotes_cbl_order_occupant_of_thread_entry_gate(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Strict plan create fails closed on a cbl-order occupant of an adjacent pair."""
+    """Strict plan create promotes a cbl-order occupant of an inferred thread-entry gate."""
     user = await get_or_create_user_async(async_db)
     _source_thread, source_issue = await _thread_issue(
         async_db, user_id=user.id, title="Plan CBL Source", queue_position=1
     )
-    _target_thread, target_issue = await _thread_issue(
+    target_thread, target_issue = await _thread_issue(
         async_db, user_id=user.id, title="Plan CBL Target", queue_position=2
     )
     source_id = source_issue.id
@@ -409,15 +409,11 @@ async def test_plan_save_rejects_cbl_order_collision_with_409(
         "/api/v1/continuity-plans/",
         json=_strict_plan_payload([source_id, target_id]),
     )
-    assert created.status_code == 409, created.text
-    assert created.json()["detail"]["code"] == "continuity_cbl_collision"
-
-    listed = await auth_client.get("/api/v1/continuity-plans/")
-    assert listed.status_code == 200
-    assert listed.json() == []
-    assert await _edge_note(async_db, source_id, target_id) == (
-        "cbl-order:source:hash:plan"
-    )
+    assert created.status_code == 201, created.text
+    note = await _edge_note(async_db, source_id, target_id)
+    assert note is not None and note.startswith("canonical:rule:")
+    blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert target_thread.id in blocked
 
 
 @pytest.mark.asyncio

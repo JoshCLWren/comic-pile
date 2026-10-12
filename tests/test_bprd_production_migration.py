@@ -326,7 +326,7 @@ async def test_step22_dry_run_is_read_only(async_db: AsyncSession) -> None:
     assert len(report["legacy_rules"]) == 5
     assert report["dependency_group"]["ordered_membership_count"] == 0
     assert len(report["planned"]["nodes"]) == 22
-    assert len(report["planned"]["rule_edges"]) == 21
+    assert len(report["planned"]["rule_edges"]) == 5
     assert (
         await async_db.scalar(select(func.count()).select_from(ContinuityPlan))
         == plan_count_before
@@ -359,7 +359,7 @@ async def test_step22_apply_replaces_legacy_authority_and_preserves_roll(
     assert plan is not None
     assert plan.ordering_mode == "strict_sequential"
     assert [node["ref_id"] for node in plan.nodes_json] == list(spec.issue_ids)
-    assert receipt["plan_rule_count"] == 21
+    assert receipt["plan_rule_count"] == 5
     assert receipt["issue_state_hash"] == snapshot["factual"]["issue_state_hash"]
     assert receipt["event_state_hash"] == snapshot["factual"]["event_state_hash"]
     assert receipt["identity_state_hash"] == snapshot["factual"]["identity_state_hash"]

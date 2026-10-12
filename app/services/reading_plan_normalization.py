@@ -16,11 +16,17 @@ Scope notes (``docs/READING_GRAPH_PERSISTENCE_DESIGN.md``, Chunk 1):
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from fastapi import HTTPException
+from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLList
 from app.models.dependency import Dependency
+from app.models.issue import Issue
 from app.models.reading_plan_membership import (
     ReadingPlanIssue,
     ReadingPlanSource,
@@ -67,6 +73,104 @@ def ensure_plan_issue_uniqueness(nodes: list[ContinuityPlanNode]) -> None:
                 },
             )
         seen.add(node.ref_id)
+
+
+@dataclass(frozen=True, slots=True)
+class MembershipReconcileReport:
+    """Outcome of rebuilding membership from ``nodes_json`` without mutating it.
+
+    Production apply of this report is a separate authorization gate. The
+    function itself is the local/test repair primitive for plans whose JSON
+    nodes drifted away from ``reading_plan_issues`` (Absolute Universe 29-gap,
+    dangling test-copy nodes).
+    """
+
+    plan_id: int
+    membership_count: int
+    skipped_missing_issue_ids: tuple[int, ...]
+    skipped_non_issue_nodes: int
+    invalid_node_count: int
+
+
+def parse_plan_nodes_json(nodes_json: object) -> tuple[list[ContinuityPlanNode], int]:
+    """Parse persisted plan JSON nodes, counting rows that cannot validate.
+
+    Args:
+        nodes_json: Raw ``ContinuityPlan.nodes_json`` value.
+
+    Returns:
+        Validated nodes and the count of entries that could not be parsed.
+    """
+    if not isinstance(nodes_json, list):
+        return [], 0
+    nodes: list[ContinuityPlanNode] = []
+    invalid = 0
+    for raw in nodes_json:
+        try:
+            nodes.append(ContinuityPlanNode.model_validate(raw))
+        except ValidationError:
+            invalid += 1
+    return nodes, invalid
+
+
+async def reconcile_plan_membership_from_nodes(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+) -> MembershipReconcileReport:
+    """Rebuild one plan's membership from persisted nodes, skipping missing Issues.
+
+    ``nodes_json`` is not rewritten. Issue nodes whose ``ref_id`` does not
+    exist cannot become membership rows (the Issue FK would fail) and are
+    reported so an authorized production repair can drop or rematerialize
+    them separately.
+
+    Args:
+        db: Async database session.
+        plan: Persisted plan whose JSON membership may have drifted.
+
+    Returns:
+        Counts of rebuilt membership rows and skipped/dangling node refs.
+    """
+    nodes, invalid_node_count = parse_plan_nodes_json(plan.nodes_json)
+    skipped_non_issue = sum(1 for node in nodes if node.node_type != "issue")
+    issue_ids = sorted({node.ref_id for node in nodes if node.node_type == "issue"})
+    existing_ids: set[int] = set()
+    if issue_ids:
+        existing_ids = set(
+            (
+                await db.execute(select(Issue.id).where(Issue.id.in_(issue_ids)))
+            ).scalars().all()
+        )
+    skipped_missing = tuple(
+        issue_id for issue_id in issue_ids if issue_id not in existing_ids
+    )
+    valid_nodes = [
+        node
+        for node in nodes
+        if node.node_type != "issue" or node.ref_id in existing_ids
+    ]
+    # Duplicate issue refs in legacy JSON must not crash repair; keep the
+    # first occurrence so #3037 uniqueness still holds after rebuild.
+    deduped: list[ContinuityPlanNode] = []
+    seen_issue_ids: set[int] = set()
+    for node in valid_nodes:
+        if node.node_type == "issue":
+            if node.ref_id in seen_issue_ids:
+                continue
+            seen_issue_ids.add(node.ref_id)
+        deduped.append(node)
+    await rebuild_plan_membership(db, plan_id=plan.id, nodes=deduped)
+    membership_ids = await reading_plan_repository.distinct_plan_issue_ids(
+        db, plan_id=plan.id
+    )
+    return MembershipReconcileReport(
+        plan_id=plan.id,
+        membership_count=len(membership_ids),
+        skipped_missing_issue_ids=skipped_missing,
+        skipped_non_issue_nodes=skipped_non_issue,
+        invalid_node_count=invalid_node_count,
+    )
 
 
 def _source_metadata_for_node(node: ContinuityPlanNode) -> dict[str, object] | None:

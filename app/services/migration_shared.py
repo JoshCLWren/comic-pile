@@ -258,10 +258,10 @@ async def retire_plan_compiled_edges(db: AsyncSession, *, rule_ids: list[int]) -
     Plan rollbacks must retire a plan's compiled edges before checking that
     legacy dependency IDs/pairs are free: the cutover compiles plan rules
     into Dependencies, so those pairs are legitimately occupied until the
-    plan's rules are removed. A pair is kept when another surviving rule
-    still compiles to it (the same shared-pair check as plan deletion), so
-    a standalone rule whose note was refreshed onto the plan rule's id is
-    not stranded.
+    plan's rules are removed. Pass reused standalone rule IDs in ``rule_ids``
+    as well so their cutover-compiled edges are excluded from the keep check
+    and restored source ``cbl-order`` rows can reclaim those pairs. A pair is
+    still kept when a *non-excluded* surviving rule compiles to it.
     """
     if not rule_ids:
         return
