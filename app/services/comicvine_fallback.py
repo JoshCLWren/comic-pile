@@ -50,6 +50,8 @@ _REQUIRED_DEEP_RAW_FIELDS = frozenset(
     }
 )
 
+_pending_metadata_refreshes: dict[int, asyncio.Task[bool]] = {}
+
 
 def _normalized_timestamp(value: datetime) -> datetime:
     """Normalize a database timestamp to timezone-aware UTC."""
@@ -101,6 +103,11 @@ async def refresh_issue_metadata(identity_id: int) -> bool:
     stays in Postgres via ``pg_try_advisory_xact_lock``. Every database connection, advisory-lock,
     and provider failure is caught and logged here, so no exception can escape into an unhandled
     background task.
+
+    Note: interactive read paths must not await this helper. Awaiting it makes the
+    user request wait on live ComicVine network I/O (see issue #3248). Reads serve
+    trusted stored data immediately and use ``schedule_issue_metadata_refresh``
+    so hydration never blocks the response.
 
     Args:
         identity_id: ``external_identities.id`` for the confirmed ComicVine issue mapping.
@@ -258,3 +265,61 @@ async def _run_issue_hydration(identity_id: int) -> bool:
             type(exc).__name__,
         )
         return False
+
+
+def _drop_finished_refresh(task: asyncio.Task[bool], identity_id: int) -> None:
+    """Remove a finished refresh task and swallow its outcome.
+
+    ``refresh_issue_metadata`` already logs and converts every failure to a
+    ``False`` return, so this callback only guards against a never-retrieved
+    exception warning if the implementation ever raises in the future.
+    """
+    _pending_metadata_refreshes.pop(identity_id, None)
+    if task.cancelled():
+        return
+    try:
+        task.result()
+    except Exception:
+        logger.warning(
+            "comicvine_fallback_background_failed identity_id=%s",
+            identity_id,
+            exc_info=True,
+        )
+
+
+def schedule_issue_metadata_refresh(identity_id: int) -> bool:
+    """Schedule a non-blocking background metadata refresh for one identity.
+
+    Interactive reads call this instead of awaiting ``refresh_issue_metadata``,
+    so user requests serve trusted stored data immediately and never wait on
+    live ComicVine network I/O (issue #3248). The refresh runs on its own
+    database session; if the platform discards it after the response (for
+    example Vercel/serverless freeze), the next stale read simply schedules
+    again. At most one refresh per identity is ever in flight in this process;
+    cross-process deduplication stays in Postgres via the advisory lock inside
+    ``refresh_issue_metadata``.
+
+    Args:
+        identity_id: ``external_identities.id`` for the confirmed ComicVine issue mapping.
+
+    Returns:
+        True when a new background refresh was scheduled, False when one is
+        already pending or no running event loop could accept the task.
+    """
+    pending = _pending_metadata_refreshes.get(identity_id)
+    if pending is not None and not pending.done():
+        return False
+    try:
+        task = asyncio.create_task(
+            refresh_issue_metadata(identity_id),
+            name=f"comicvine-metadata-refresh-{identity_id}",
+        )
+    except RuntimeError:
+        logger.warning(
+            "comicvine_fallback_schedule_failed identity_id=%s reason=no_running_loop",
+            identity_id,
+        )
+        return False
+    _pending_metadata_refreshes[identity_id] = task
+    task.add_done_callback(lambda finished: _drop_finished_refresh(finished, identity_id))
+    return True
