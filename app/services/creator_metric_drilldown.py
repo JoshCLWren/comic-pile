@@ -27,8 +27,7 @@ from app.repositories.creator_detail import (
     load_all_creator_issue_rows,
     load_latest_rating_timestamps,
 )
-from app.repositories.creator_summary import load_creator_summary_inputs
-from app.services.creator_detail import resolve_creator_issues
+from app.repositories.creator_summary import load_creator_summary_inputs, resolve_creator_issues
 from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
 
 

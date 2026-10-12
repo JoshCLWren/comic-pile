@@ -34,8 +34,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.creator_detail import (
     load_recent_creator_issue_rows,
     load_upcoming_creator_issue_rows,
-    RecentCreatorIssueRow,
-    UpcomingCreatorIssueRow,
 )
 from app.repositories.creator_summary import CreatorSummaryInputs, load_creator_summary_inputs, load_creator_summary_inputs_optimized, resolve_creator_issues
 from app.schemas.creator_detail import (
