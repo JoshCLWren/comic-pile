@@ -67,9 +67,9 @@ class ReadWithoutRatingSignals:
             for that issue (subset of ``confirmed``/``candidate``/
             ``unresolved``/``rejected``). Issues with no mapping row are
             absent.
-        duplicate_issue_ids: Issue id to the sorted ids of other read issues
-            in the user's library sharing the same normalized issue number.
-            Issues with no cross-thread collision are absent.
+        duplicate_issue_ids: Issue id to the sorted ids of other owned read
+            issues confirmed against a shared external issue identity. Issues
+            with no conflict are absent.
     """
 
     thread_historical_ratings: dict[int, list[ThreadHistoricalRating]] = field(

@@ -932,3 +932,4 @@ def _create_metric_issue(issue_data: dict, exclusion_reason: str | None = None) 
         exclusion_reason=exclusion_reason,
         missing_rating_cause=issue_data.get("missing_rating_cause"),
     )
+

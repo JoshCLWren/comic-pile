@@ -603,3 +603,4 @@ async def test_classifier_prefers_edition_conflict_over_safe_match() -> None:
     assert cause.cause == CAUSE_EDITION_CONFLICT
     assert cause.repair_safe is False
     assert cause.source_rating is None
+
