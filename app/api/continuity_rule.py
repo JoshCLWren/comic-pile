@@ -47,6 +47,59 @@ async def _get_owned_rule(db: AsyncSession, user_id: int, rule_id: int) -> Conti
     return rule
 
 
+def _transient_rule_from_payload(user_id: int, payload: ContinuityRuleCreate) -> ContinuityRule:
+    """Build an unattached ContinuityRule for compile validation.
+
+    Args:
+        user_id: Owning user id.
+        payload: Incoming create/replace request.
+
+    Returns:
+        A transient ContinuityRule that is not added to the session.
+    """
+    return ContinuityRule(
+        user_id=user_id,
+        source_type=payload.source_type,
+        source_id=payload.source_id,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+        satisfaction_type=payload.satisfaction_type,
+        checkpoint_issue_id=payload.checkpoint_issue_id,
+        convergence_targets=[
+            {"type": target.type, "id": target.id}
+            for target in payload.convergence_targets
+        ]
+        or None,
+        note=payload.note,
+        selected_members=[
+            ContinuityRuleSelectedMember(issue_id=issue_id)
+            for issue_id in payload.selected_member_issue_ids
+        ],
+    )
+
+
+def _require_compilable_payload(user_id: int, payload: ContinuityRuleCreate) -> None:
+    """Reject a payload that would not compile to canonical Dependency edges.
+
+    Validation runs against a transient rule so a 400 cannot dirty a persisted
+    ORM instance (or its identity-mapped copy in the shared test session).
+
+    Args:
+        user_id: Owning user id.
+        payload: Incoming create/replace request.
+
+    Raises:
+        HTTPException: If the payload does not compile to canonical edges.
+    """
+    try:
+        validate_rule_compiles(_transient_rule_from_payload(user_id, payload))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "continuity_rule_not_compilable", "message": str(exc)},
+        ) from exc
+
+
 async def _would_create_convergence_cycle(
     db: AsyncSession,
     *,
@@ -191,34 +244,8 @@ async def create_continuity_rule(
     ):
         raise _cycle_conflict(payload)
 
-    rule = ContinuityRule(
-        user_id=current_user.id,
-        source_type=payload.source_type,
-        source_id=payload.source_id,
-        target_type=payload.target_type,
-        target_id=payload.target_id,
-        satisfaction_type=payload.satisfaction_type,
-        checkpoint_issue_id=payload.checkpoint_issue_id,
-        convergence_targets=[
-            {"type": target.type, "id": target.id}
-            for target in payload.convergence_targets
-        ]
-        or None,
-        note=payload.note,
-        selected_members=[
-            ContinuityRuleSelectedMember(issue_id=issue_id)
-            for issue_id in payload.selected_member_issue_ids
-        ],
-    )
-    # Reject rules that would not compile to canonical edges (#2553 P1):
-    # the user would save a constraint Roll never enforces.
-    try:
-        validate_rule_compiles(rule)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "continuity_rule_not_compilable", "message": str(exc)},
-        ) from exc
+    _require_compilable_payload(current_user.id, payload)
+    rule = _transient_rule_from_payload(current_user.id, payload)
     db.add(rule)
     await db.flush()
     # Compile the authored hard constraint into canonical Dependency edges in
@@ -295,6 +322,10 @@ async def update_continuity_rule(
     ):
         raise _cycle_conflict(payload)
 
+    # Validate the replacement shape before mutating the persisted rule so a
+    # non-compilable PUT cannot leak in-session writes into later reads (#2553).
+    _require_compilable_payload(current_user.id, payload)
+
     rule.source_type = payload.source_type
     rule.source_id = payload.source_id
     rule.target_type = payload.target_type
@@ -310,15 +341,6 @@ async def update_continuity_rule(
         ContinuityRuleSelectedMember(issue_id=issue_id)
         for issue_id in payload.selected_member_issue_ids
     ]
-    # Reject non-compilable shapes before writing anything (#2553 P1):
-    # updating to an unsupported type would silently drop the blocking edge.
-    try:
-        validate_rule_compiles(rule)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "continuity_rule_not_compilable", "message": str(exc)},
-        ) from exc
     await db.flush()
     new_pairs = rule_edge_pairs(rule)
     # Retire edges the old shape compiled to (unless still intended), then

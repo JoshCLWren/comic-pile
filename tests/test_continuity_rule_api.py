@@ -478,7 +478,14 @@ async def test_put_rejects_update_to_non_compilable_rule(
     assert bad.status_code == 400, bad.text
     assert bad.json()["detail"]["code"] == "continuity_rule_not_compilable"
 
-    # The original rule (and its edge) must be unchanged.
+    original_source_id = issue_a.id
+    original_target_id = issue_b.id
+    # Expire the shared test session so this assertion reads persisted state,
+    # not a dirty identity-mapped instance from the rejected PUT.
+    async_db.expire_all()
     fetched = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
     assert fetched.status_code == 200
-    assert fetched.json()["target_type"] == "issue"
+    body = fetched.json()
+    assert body["target_type"] == "issue"
+    assert body["target_id"] == original_target_id
+    assert body["source_id"] == original_source_id
