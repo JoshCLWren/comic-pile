@@ -371,7 +371,7 @@ def transcode_to_webp(payload: bytes, target_width: int) -> tuple[bytes, str] | 
             )
             converted = image.convert("RGBA" if has_alpha else "RGB")
             buffer = io.BytesIO()
-            # Use method=1 for fastest WebP encoding (significantly faster than default method=0)
+            # Use method=1 for fast WebP encoding (Pillow default method=4 is slower)
             converted.save(
                 buffer,
                 format="WEBP",
