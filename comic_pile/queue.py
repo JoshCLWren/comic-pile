@@ -281,6 +281,25 @@ async def move_to_position(
     if do_commit:
         await db.commit()
 
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Final queue state after operation:")
+        result = await db.execute(
+            select(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.status == "active")
+            .where(Thread.queue_position >= 1)
+            .order_by(Thread.queue_position, Thread.id)
+        )
+        final_queue = result.scalars().all()
+
+        for thread in final_queue:
+            logger.debug(
+                "  Position %d: Thread %d ('%s...')",
+                thread.queue_position,
+                thread.id,
+                thread.title[:50],
+            )
+
     logger.debug(
         "move_to_position SUCCESS: thread %d moved to position %d",
         thread_id,
