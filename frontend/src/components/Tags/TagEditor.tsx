@@ -64,6 +64,20 @@ export function TagEditor({
   const debouncedSearch = useDebounce(search, 250)
   const usable = useTags(debouncedSearch)
   const [newName, setNewName] = useState('')
+  const debouncedNewName = useDebounce(newName, 250)
+  // Usable-tag lookup for the name being typed so an exact normalized match
+  // blocks creation and offers reuse instead of a duplicate (issue #3423).
+  // An empty typed name reuses the unfiltered list key, so no extra request
+  // fires until the viewer actually types.
+  const nameLookup = useTags(debouncedNewName.trim() ? debouncedNewName : undefined)
+  const normalizedTypedName = newName.trim().toLowerCase()
+  const debouncedNormalizedName = debouncedNewName.trim().toLowerCase()
+  const exactDuplicate =
+    debouncedNormalizedName && debouncedNormalizedName === normalizedTypedName
+      ? ((nameLookup.data?.tags ?? []).find(
+          (tag) => tag.normalized_name === debouncedNormalizedName,
+        ) ?? null)
+      : null
   const [newColor, setNewColor] = useState<string>(DEFAULT_TAG_COLOR_NAME)
   const [pendingNearMatches, setPendingNearMatches] = useState<NearMatch[] | null>(null)
   const [managingTag, setManagingTag] = useState<Tag | null>(null)
@@ -100,6 +114,30 @@ export function TagEditor({
     }
   }
 
+  /**
+   * Reuse an existing usable tag whose normalized name exactly matches the
+   * typed name (issue #3423). Creation stays blocked while the match is
+   * shown; assigning the existing tag is the reuse path. A global match
+   * still needs an admin to assign it.
+   */
+  async function handleUseExisting(tag: Tag) {
+    clearFeedback()
+    try {
+      await assign.mutateAsync({ id: tag.id, data: payload })
+      setNotice(`Used existing tag “${tag.name}”.`)
+      setNewName('')
+      setPendingNearMatches(null)
+    } catch (error) {
+      if (tag.scope === 'global') {
+        setFailure(
+          `“${tag.name}” is a global tag, which only admins can assign. Ask an admin to add it.`,
+        )
+      } else {
+        setFailure(tagErrorMessage(error, `Could not add “${tag.name}”.`))
+      }
+    }
+  }
+
   async function handleAssignGlobal(match: NearMatch) {
     clearFeedback()
     try {
@@ -127,11 +165,13 @@ export function TagEditor({
   /**
    * Inline creation with near-global-name guidance.
    *
-   * The first pass asks for near matches. An exact normalized global match is
-   * redirected by the API to the global tag (reused, never duplicated). A
-   * merely similar global name pauses for an explicit choice: use the global
-   * match (admins assign it directly; other users are told why they cannot)
-   * or continue and create the private tag anyway.
+   * An exact normalized match against any usable tag blocks creation before
+   * the API is called and offers reuse instead (issue #3423). The first pass
+   * asks for near matches. An exact normalized global match is redirected by
+   * the API to the global tag (reused, never duplicated). A merely similar
+   * global name pauses for an explicit choice: use the global match (admins
+   * assign it directly; other users are told why they cannot) or continue
+   * and create the private tag anyway.
    */
   async function handleCreate(forcePrivate: boolean) {
     clearFeedback()
@@ -169,7 +209,14 @@ export function TagEditor({
       setNewColor(DEFAULT_TAG_COLOR_NAME)
       setPendingNearMatches(null)
     } catch (error) {
-      setFailure(tagErrorMessage(error, `Could not create “${name}”.`))
+      const message = tagErrorMessage(error, `Could not create “${name}”.`)
+      // A duplicate conflict means an exact usable tag already exists (the
+      // lookup raced creation): refresh the lookup so the reuse box appears
+      // instead of leaving a dead-end error.
+      if (message.toLowerCase().includes('already exists')) {
+        void nameLookup.refetch()
+      }
+      setFailure(message)
     }
   }
 
@@ -367,7 +414,27 @@ export function TagEditor({
                 />
               ))}
             </div>
-            {pendingNearMatches && pendingNearMatches.length > 0 ? (
+            {exactDuplicate ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-[var(--theme-border)] p-3"
+              >
+                <p className="text-sm text-[var(--theme-text-primary)]">
+                  A tag named “{exactDuplicate.name}” already exists. Use it instead of
+                  creating a duplicate.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleUseExisting(exactDuplicate)}
+                    disabled={assign.isPending}
+                    className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+                  >
+                    Use “{exactDuplicate.name}”
+                  </button>
+                </div>
+              </div>
+            ) : pendingNearMatches && pendingNearMatches.length > 0 ? (
               <div
                 role="alert"
                 className="rounded-lg border border-[var(--theme-border)] p-3"

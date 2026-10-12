@@ -378,6 +378,102 @@ describe('TagEditor (issue #3032)', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Created and added “Private 10”.')
   })
 
+  it('blocks creation and reuses an exact private-name duplicate (issue #3423)', async () => {
+    const user = userEvent.setup()
+    const physical = { ...makeTag(5), name: 'Physical', normalized_name: 'physical' }
+    mockedTagsApi.list.mockResolvedValue({ tags: [physical] })
+    mockedTagsApi.assign.mockResolvedValue(assignment(5))
+
+    renderEditor()
+
+    // Lowercase typing still matches the normalized stored name.
+    await user.type(screen.getByLabelText('New tag name'), 'physical')
+
+    const reuseButton = await screen.findByRole('button', { name: 'Use “Physical”' })
+    expect(screen.queryByRole('button', { name: 'Create and add' })).toBeNull()
+    expect(mockedTagsApi.create).not.toHaveBeenCalled()
+
+    await user.click(reuseButton)
+
+    expect(mockedTagsApi.assign).toHaveBeenCalledWith(5, {
+      target_type: 'Issue',
+      target_id: 11,
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Used existing tag “Physical”.',
+    )
+  })
+
+  it('blocks creation and reuses an exact global-name duplicate (issue #3423)', async () => {
+    const user = userEvent.setup()
+    const global = { ...makeTag(9, 'global'), name: 'Horror', normalized_name: 'horror' }
+    mockedTagsApi.list.mockResolvedValue({ tags: [global] })
+    mockedTagsApi.assign.mockResolvedValue(assignment(9))
+
+    renderEditor()
+
+    await user.type(screen.getByLabelText('New tag name'), 'horror')
+
+    await user.click(await screen.findByRole('button', { name: 'Use “Horror”' }))
+
+    expect(mockedTagsApi.create).not.toHaveBeenCalled()
+    expect(mockedTagsApi.assign).toHaveBeenCalledWith(9, {
+      target_type: 'Issue',
+      target_id: 11,
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Used existing tag “Horror”.',
+    )
+  })
+
+  it('explains that an exact global duplicate cannot be assigned by a non-admin (issue #3423)', async () => {
+    const user = userEvent.setup()
+    const global = { ...makeTag(9, 'global'), name: 'Horror', normalized_name: 'horror' }
+    mockedTagsApi.list.mockResolvedValue({ tags: [global] })
+    mockedTagsApi.assign.mockRejectedValue(new Error('forbidden'))
+
+    renderEditor()
+
+    await user.type(screen.getByLabelText('New tag name'), 'horror')
+    await user.click(await screen.findByRole('button', { name: 'Use “Horror”' }))
+
+    // Both the duplicate-reuse box and the refusal message carry role="alert".
+    expect(
+      (await screen.findAllByRole('alert')).some((node) =>
+        node.textContent?.includes('only admins can assign'),
+      ),
+    ).toBe(true)
+  })
+
+  it('offers reuse after a duplicate conflict races the lookup (issue #3423)', async () => {
+    const user = userEvent.setup()
+    const physical = { ...makeTag(5), name: 'Physical', normalized_name: 'physical' }
+    let duplicateExists = false
+    mockedTagsApi.list.mockImplementation(async () => ({
+      tags: duplicateExists ? [physical] : [],
+    }))
+    mockedTagsApi.create.mockImplementation(async () => {
+      duplicateExists = true
+      throw { response: { data: { detail: 'A tag with this name already exists' } } }
+    })
+    mockedTagsApi.assign.mockResolvedValue(assignment(5))
+
+    renderEditor()
+
+    await user.type(screen.getByLabelText('New tag name'), 'Physical')
+    await user.click(await screen.findByRole('button', { name: 'Create and add' }))
+
+    await user.click(await screen.findByRole('button', { name: 'Use “Physical”' }))
+
+    expect(mockedTagsApi.assign).toHaveBeenCalledWith(5, {
+      target_type: 'Issue',
+      target_id: 11,
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Used existing tag “Physical”.',
+    )
+  })
+
   it('reports a failed create using the server detail', async () => {
     const user = userEvent.setup()
     mockedTagsApi.create.mockRejectedValue({
