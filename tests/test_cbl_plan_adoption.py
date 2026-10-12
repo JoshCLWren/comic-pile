@@ -69,6 +69,16 @@ class _FakePlan:
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
+class _AsyncNullContext:
+    """No-op async context manager standing in for ``session.begin_nested()``."""
+
+    async def __aenter__(self) -> _AsyncNullContext:
+        return self
+
+    async def __aexit__(self, *_exc: object) -> bool:
+        return False
+
+
 class _Rows:
     """Fake SQLAlchemy result sequence for scalar/scalars()."""
 
@@ -80,6 +90,9 @@ class _Rows:
 
     def scalars(self) -> _Rows:
         return self
+
+    def first(self) -> object | None:
+        return self._rows[0] if self._rows else None
 
     def all(self) -> list[object]:
         return self._rows
@@ -101,11 +114,16 @@ class _FakeDB:
         self.rollback_count = 0
 
     async def execute(self, _query: object) -> _Rows:
+        if self._call_count >= len(self._execute_results):
+            return _Rows([])
         result = self._execute_results[self._call_count]
         self._call_count += 1
         return result
 
-    async def add(self, obj: object) -> None:
+    def begin_nested(self) -> _AsyncNullContext:
+        return _AsyncNullContext()
+
+    def add(self, obj: object) -> None:
         self.added.append(obj)
 
     async def flush(self) -> None:
@@ -128,6 +146,7 @@ def _make_fact(
     resolved_issue_id: int | None = None,
     resolution_status: str,
     series_name: str = "X",
+    issue_number: str | None = None,
     volume_year: int | None = None,
     comicvine_issue_id: str | None = None,
     external_series_identity_id: int | None = None,
@@ -136,7 +155,7 @@ def _make_fact(
     return {
         "cbl_position": position,
         "series_name": series_name,
-        "issue_number": f"#{position + 1}",
+        "issue_number": issue_number if issue_number is not None else str(position),
         "comicvine_issue_id": comicvine_issue_id,
         "external_series_identity_id": external_series_identity_id,
         "cbl_entry_id": position if cbl_entry_id is None else cbl_entry_id,
@@ -559,6 +578,52 @@ async def test_explicit_exclude_still_drops_missing_issue() -> None:
     mock_create.assert_not_called()
     assert result.plan.nodes_json == []
     assert result.excluded_positions == [0]
+
+
+@pytest.mark.asyncio
+async def test_adopted_issue_nodes_store_series_and_issue_labels() -> None:
+    """Adopted steps persist series + issue labels for the planner (#3481)."""
+    existing_entry = _FakeEntry(id=40, position=1, series_name="Ultimate Spider-Man")
+    missing_entry = _FakeEntry(id=41, position=2, series_name="Ultimate Spider-Man")
+    existing_fact = _make_fact(
+        resolved_issue_id=500,
+        resolution_status="resolved_via_comicvine_canonical",
+        position=1,
+        cbl_entry_id=40,
+        series_name="Ultimate Spider-Man",
+        issue_number="24",
+    )
+    missing_fact = _make_fact(
+        resolved_issue_id=None,
+        resolution_status="no_owned_issue_for_comicvine_id",
+        position=2,
+        cbl_entry_id=41,
+        series_name="Ultimate Spider-Man",
+        issue_number="1",
+    )
+    fake_issue = MagicMock()
+    fake_issue.id = 501
+
+    with patch(
+        "app.services.cbl_plan_adoption._ensure_missing_issue_created",
+        new_callable=AsyncMock,
+        return_value=(fake_issue, True),
+    ):
+        result = await _adopt(
+            _FakeDB(),
+            entries=[existing_entry, missing_entry],
+            facts=[existing_fact, missing_fact],
+            entry_decisions={},
+            series_decisions={},
+        )
+
+    nodes = {node["id"]: node for node in result.plan.nodes_json}
+    assert nodes["cbl-40"]["label"] == "Ultimate Spider-Man #24"
+    assert nodes["cbl-41"]["label"] == "Ultimate Spider-Man #1"
+    assert nodes["cbl-40"]["source_cbl_placements"] == [
+        {"source_path": "/x.xml", "position": 1},
+    ]
+    assert nodes["cbl-40"]["source_paths"] == ["/x.xml"]
 
 
 @pytest.mark.asyncio

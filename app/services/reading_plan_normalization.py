@@ -28,6 +28,7 @@ from app.models.reading_plan_membership import (
 )
 from app.repositories import continuity_repository, reading_plan_repository
 from app.schemas.continuity_plan import ContinuityPlanNode
+from app.services.cbl_source_public import public_cbl_repository, public_cbl_source_path
 from app.schemas.reading_plan_membership import (
     ReadingPlanDependencyLink,
     ReadingPlanMemberIssue,
@@ -363,9 +364,17 @@ async def get_plan_membership(
         sources=[
             ReadingPlanSourceSnapshot(
                 id=source.id,
-                raw_source_path=source.raw_source_path,
-                repository=source.repository,
-                source_path=source.source_path,
+                raw_source_path=public_cbl_source_path(source.raw_source_path),
+                repository=(
+                    public_cbl_repository(source.repository)
+                    if source.repository
+                    else None
+                ),
+                source_path=(
+                    public_cbl_source_path(source.source_path)
+                    if source.source_path
+                    else None
+                ),
                 revision_sha=source.revision_sha,
                 content_hash=source.content_hash,
                 adopted_at=source.adopted_at,

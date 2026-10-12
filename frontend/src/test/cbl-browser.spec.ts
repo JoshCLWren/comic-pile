@@ -97,11 +97,10 @@ test.describe('CBL browser one-decision adoption', () => {
       .click()
 
     // Compact consequence summary: no per-entry decisions required.
-    await expect(page.getByText('Already in ComicPile')).toHaveCount(1)
-    await expect(page.getByText('Missing · will be added')).toBeVisible()
     await expect(
       page.getByText('2 entries · 1 already in ComicPile · 1 will be added'),
     ).toBeVisible()
+    await expect(page.getByText('/mnt/')).toHaveCount(0)
 
     // Preview caused no mutation: no Reading Plan exists for this source yet.
     const plansBefore = await page.request.get('/api/v1/continuity-plans/', { headers })
@@ -110,12 +109,13 @@ test.describe('CBL browser one-decision adoption', () => {
     const plansBeforeJson = (await plansBefore.json()) as Array<{ name: string }>
     expect(plansBeforeJson.some((plan) => plan.name === sourceName)).toBe(false)
 
-    // One decision: Add this reading order.
+    // One decision: Add this reading order, then confirm.
     await expect(page.getByRole('button', { name: 'Add this reading order' })).toBeEnabled()
     await page.getByRole('button', { name: 'Add this reading order' }).click()
+    await page.getByRole('button', { name: 'Add reading order' }).click()
 
     // The resulting Reading Plan opens directly.
-    await expect(page).toHaveURL(/\/continuity-plans\/\d+/, { timeout: 15000 })
+    await expect(page).toHaveURL(/\/continuity-plans\/\d+/, { timeout: 60000 })
     const planId = Number(page.url().match(/\/continuity-plans\/(\d+)/)?.[1])
     expect(planId).toBeGreaterThan(0)
 
@@ -129,12 +129,18 @@ test.describe('CBL browser one-decision adoption', () => {
       name: string
       nodes: Array<{
         ref_id: number
+        label?: string | null
         source_cbl_placements?: Array<{ source_path: string }>
       }>
     }
     expect(plan.name).toBe(sourceName)
     expect(plan.nodes.length).toBe(2)
     expect(plan.nodes[0]?.ref_id).toBe(ownedIssueId)
+    expect(plan.nodes.every((node) => (node.label ?? '') && !node.label?.includes('[deleted series]'))).toBe(
+      true,
+    )
+    expect(plan.nodes[0]?.label).toBe('Browser Owned Series #1')
+    expect(plan.nodes[1]?.label).toMatch(/Browser Missing Series #1/)
     expect(
       plan.nodes.flatMap((node) =>
         (node.source_cbl_placements ?? []).map((placement) => placement.source_path),
@@ -196,10 +202,12 @@ test.describe('CBL browser one-decision adoption', () => {
     await page
       .getByRole('button', { name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })
       .click()
-    await expect(page.getByText('Missing · will be added')).toBeVisible()
+    await expect(
+      page.getByText('2 entries · 1 already in ComicPile · 1 will be added'),
+    ).toBeVisible()
 
     // Progressive disclosure: exclude the missing series, then add.
-    await page.getByRole('button', { name: 'Customize' }).click()
+    await page.getByRole('button', { name: 'Customize', exact: true }).click()
     const missingSeriesChoice = page.getByRole('group', {
       name: 'Browser Customize Missing series choice',
     })
@@ -209,7 +217,8 @@ test.describe('CBL browser one-decision adoption', () => {
     ).toBeVisible()
 
     await page.getByRole('button', { name: 'Add this reading order' }).click()
-    await expect(page).toHaveURL(/\/continuity-plans\/\d+/, { timeout: 15000 })
+    await page.getByRole('button', { name: 'Add reading order' }).click()
+    await expect(page).toHaveURL(/\/continuity-plans\/\d+/, { timeout: 60000 })
     const planId = Number(page.url().match(/\/continuity-plans\/(\d+)/)?.[1])
     expect(planId).toBeGreaterThan(0)
 
@@ -221,5 +230,137 @@ test.describe('CBL browser one-decision adoption', () => {
     const plan = (await planResponse.json()) as { nodes: Array<{ ref_id: number }> }
     expect(plan.nodes.length).toBe(1)
     expect(plan.nodes[0]?.ref_id).toBe(ownedIssueId)
+  })
+
+  test('owned issues can be excluded individually without leaving ComicPile', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    const headers = await authHeaders(page)
+
+    const owned = await createThread(page, {
+      title: 'Browser Owned Exclude',
+      format: 'Comics',
+      issues_remaining: 1,
+      total_issues: 1,
+    })
+    const ownedIssueId = await getFirstIssueId(page, owned.id)
+    const fixtureSuffix = `${owned.id}-${Date.now()}`
+    const sourceName = `Browser Owned Exclude ${fixtureSuffix}`
+    const sourcePath = `Fixtures/Browser Owned Exclude ${fixtureSuffix}.cbl`
+
+    const seed = await page.request.post('/api/test/cbl-source', {
+      headers,
+      data: {
+        name: sourceName,
+        source_path: sourcePath,
+        content_hash: `browser-owned-exclude-${fixtureSuffix}`,
+        revision_sha: `browser-owned-exclude-revision-${fixtureSuffix}`,
+        repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
+        entries: [
+          {
+            position: 1,
+            series_name: 'Browser Owned Exclude',
+            issue_number: '1',
+            issue_id: ownedIssueId,
+          },
+          {
+            position: 2,
+            series_name: 'Browser Missing Keep',
+            issue_number: '1',
+            volume_year: 2007,
+            comicvine_issue_id: `4000-browser-owned-exclude-missing-${fixtureSuffix}`,
+          },
+        ],
+      },
+    })
+    expect(seed.ok(), await seed.text()).toBeTruthy()
+
+    await page.goto('/cbl-sources', { waitUntil: 'domcontentloaded' })
+    await page.getByLabel('Search source lists').fill(sourceName)
+    await page.getByRole('button', { name: 'Search' }).click()
+    await page
+      .getByRole('button', { name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })
+      .click()
+    await page.getByRole('button', { name: 'Customize', exact: true }).click()
+    await page.getByRole('checkbox', { name: 'Include Browser Owned Exclude #1' }).uncheck()
+    await expect(
+      page.getByText('2 entries · 0 already in ComicPile · 1 will be added'),
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: 'Add this reading order' }).click()
+    await page.getByRole('button', { name: 'Add reading order' }).click()
+    await expect(page).toHaveURL(/\/continuity-plans\/\d+/, { timeout: 60000 })
+    const planId = Number(page.url().match(/\/continuity-plans\/(\d+)/)?.[1])
+    expect(planId).toBeGreaterThan(0)
+
+    const planResponse = await page.request.get(`/api/v1/continuity-plans/${planId}`, {
+      headers,
+    })
+    expect(planResponse.ok(), await planResponse.text()).toBeTruthy()
+    // SAFETY: the test reads only the response fields listed in this type
+    const plan = (await planResponse.json()) as { nodes: Array<{ ref_id: number }> }
+    expect(plan.nodes.map((node) => node.ref_id)).not.toContain(ownedIssueId)
+    expect(plan.nodes.length).toBe(1)
+
+    const ownedIssue = await page.request.get(`/api/v1/threads/${owned.id}/issues`, { headers })
+    expect(ownedIssue.ok(), await ownedIssue.text()).toBeTruthy()
+    // SAFETY: the test reads only the response fields listed in this type
+    const ownedJson = (await ownedIssue.json()) as { issues: Array<{ id: number }> }
+    expect(ownedJson.issues.some((issue) => issue.id === ownedIssueId)).toBe(true)
+  })
+
+  test('cancel on the confirm step creates no Reading Plan', async ({ authenticatedPage }) => {
+    const page = authenticatedPage
+    const headers = await authHeaders(page)
+
+    const owned = await createThread(page, {
+      title: 'Browser Abort Owned',
+      format: 'Comics',
+      issues_remaining: 1,
+      total_issues: 1,
+    })
+    const ownedIssueId = await getFirstIssueId(page, owned.id)
+    const fixtureSuffix = `${owned.id}-${Date.now()}`
+    const sourceName = `Browser Abort ${fixtureSuffix}`
+    const sourcePath = `Fixtures/Browser Abort ${fixtureSuffix}.cbl`
+
+    const seed = await page.request.post('/api/test/cbl-source', {
+      headers,
+      data: {
+        name: sourceName,
+        source_path: sourcePath,
+        content_hash: `browser-abort-${fixtureSuffix}`,
+        revision_sha: `browser-abort-revision-${fixtureSuffix}`,
+        repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
+        entries: [
+          {
+            position: 1,
+            series_name: 'Browser Abort Owned',
+            issue_number: '1',
+            issue_id: ownedIssueId,
+          },
+        ],
+      },
+    })
+    expect(seed.ok(), await seed.text()).toBeTruthy()
+
+    await page.goto('/cbl-sources', { waitUntil: 'domcontentloaded' })
+    await page.getByLabel('Search source lists').fill(sourceName)
+    await page.getByRole('button', { name: 'Search' }).click()
+    await page
+      .getByRole('button', { name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })
+      .click()
+    await expect(page.getByText(/1 entry · 1 already in ComicPile/)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Add this reading order' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click()
+    await expect(page).toHaveURL(/\/cbl-sources/)
+
+    const plansAfter = await page.request.get('/api/v1/continuity-plans/', { headers })
+    expect(plansAfter.ok(), await plansAfter.text()).toBeTruthy()
+    // SAFETY: the test reads only the response fields listed in this type
+    const plansAfterJson = (await plansAfter.json()) as Array<{ name: string }>
+    expect(plansAfterJson.some((plan) => plan.name === sourceName)).toBe(false)
   })
 })

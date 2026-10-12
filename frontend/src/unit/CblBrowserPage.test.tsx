@@ -6,6 +6,7 @@ import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CblBrowserPage from '../pages/CblBrowserPage'
 import { cblSourcesApi } from '../services/api-cbl-sources'
+import { continuityPlansApi } from '../services/api-continuity-plans'
 import type {
   CBLAdoptionPreview,
   CBLAdoptionPreviewEntry,
@@ -23,6 +24,13 @@ vi.mock('../services/api-cbl-sources', () => ({
   },
 }))
 
+vi.mock('../services/api-continuity-plans', () => ({
+  continuityPlansApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+  },
+}))
+
 vi.mock('../query/cacheEffects', () => ({
   applyCommittedReadingPlan: vi.fn(),
 }))
@@ -31,6 +39,8 @@ const mockDiscover = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.discover)
 const mockPreview = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.preview)
 const mockPlan = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.plan)
 const mockCommitNew = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commitNew)
+const mockListPlans = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
+const mockGetPlan = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.get)
 const mockApplyCommitted = cast<ReturnType<typeof vi.fn>>(applyCommittedReadingPlan)
 
 const queryClient = new QueryClient({
@@ -160,6 +170,11 @@ async function selectSource(user: ReturnType<typeof userEvent.setup>, p = previe
   })
 }
 
+async function confirmAdd(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
+  await user.click(screen.getByRole('button', { name: 'Add reading order' }))
+}
+
 describe('CblBrowserPage', () => {
   it('renders the search form before any search', () => {
     renderPage()
@@ -176,6 +191,25 @@ describe('CblBrowserPage', () => {
     expect(mockDiscover).toHaveBeenCalledWith('ultimate')
     expect(screen.getByText('Ultimate.cbl')).toBeInTheDocument()
     expect(screen.getByText(/JoshCLWren\/CBL-ReadingLists/)).toBeInTheDocument()
+  })
+
+  it('hides filesystem mirror paths from source cards (#3365)', async () => {
+    const user = userEvent.setup()
+    const leaked: CBLSourceListDiscoveryItem = {
+      ...source,
+      source_path: '/mnt/bigdata/CBL-ReadingLists/Marvel/Ultimate.cbl',
+      source_repository: '/mnt/bigdata/CBL-ReadingLists',
+    }
+    mockDiscover.mockResolvedValue([leaked])
+    renderPage()
+    await user.type(screen.getByLabelText('Search source lists'), 'ultimate')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Ultimate Universe/ })).toBeInTheDocument()
+    })
+    expect(screen.getByText('Marvel/Ultimate.cbl')).toBeInTheDocument()
+    expect(screen.getByText('JoshCLWren/CBL-ReadingLists · 4 issues')).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('/mnt/bigdata')
   })
 
   it('shows an empty state when no sources match', async () => {
@@ -211,6 +245,47 @@ describe('CblBrowserPage', () => {
         screen.getByText('2 entries · 1 already in ComicPile · 1 will be added'),
       ).toBeInTheDocument()
     })
+    expect(screen.queryByText('abcdef12')).not.toBeInTheDocument()
+    expect(screen.getByText('Source details')).toBeInTheDocument()
+  })
+
+  it('uses singular grammar for one entry that needs attention', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await searchFor(user)
+    await selectSource(
+      user,
+      preview({
+        entries: [
+          entry({
+            adoption_class: 'ambiguous_unresolved',
+            adoption_decision: 'unresolved',
+            adopted: false,
+            resolved_issue_id: null,
+            canonical_issue_id: null,
+            resolution_status: 'ambiguous_no_comicvine_id',
+          }),
+        ],
+        summary: {
+          reused_existing_count: 0,
+          missing_would_create_count: 0,
+          excluded_count: 0,
+          unresolved_count: 1,
+          awaiting_opt_in_count: 0,
+          final_adopted_count: 0,
+          final_adopted_order: [],
+          reused_existing_positions: [],
+          missing_would_create_positions: [],
+          excluded_positions: [],
+          unresolved_positions: [1],
+          awaiting_opt_in_positions: [],
+        },
+      }),
+    )
+    expect(screen.getByText(/1 entry · 0 already in ComicPile · 0 will be added · 1 needs attention/)).toBeInTheDocument()
+    expect(
+      screen.getByText('1 entry still needs attention before this source can be added.'),
+    ).toBeInTheDocument()
   })
 
   it('renders a status label for every adoption decision', async () => {
@@ -274,9 +349,14 @@ describe('CblBrowserPage', () => {
     expect(screen.getByText('Missing · choose whether to add')).toBeInTheDocument()
     expect(screen.getByText('Excluded')).toBeInTheDocument()
     expect(screen.getByText('Needs identity resolution')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'This entry has no ComicVine issue ID, so ComicPile cannot match it to an owned comic.',
+      ),
+    ).toBeInTheDocument()
   })
 
-  it('adds the reading order in one decision and opens the plan', async () => {
+  it('confirms before adding and opens the plan', async () => {
     const user = userEvent.setup()
     const committed = { id: 42, name: 'Ultimate Universe' }
     mockCommitNew.mockResolvedValue(committed)
@@ -285,6 +365,9 @@ describe('CblBrowserPage', () => {
     await searchFor(user)
     await selectSource(user)
     await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
+    expect(mockCommitNew).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Add this reading order?' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Add reading order' }))
     await waitFor(() => {
       expect(mockCommitNew).toHaveBeenCalledWith(
         7,
@@ -296,6 +379,17 @@ describe('CblBrowserPage', () => {
       expect(mockApplyCommitted).toHaveBeenCalled()
       expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/42')
     })
+  })
+
+  it('cancel on the confirm step creates nothing', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+    await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mockCommitNew).not.toHaveBeenCalled()
+    expect(screen.queryByRole('heading', { name: 'Add this reading order?' })).not.toBeInTheDocument()
   })
 
   it('blocks the add when entries need attention', async () => {
@@ -339,25 +433,8 @@ describe('CblBrowserPage', () => {
     expect(mockCommitNew).not.toHaveBeenCalled()
   })
 
-  it('customize reveals series choices and excluding a series re-plans', async () => {
+  it('customize excludes a series locally without re-planning (#3482)', async () => {
     const user = userEvent.setup()
-    const replanned = preview({
-      summary: {
-        reused_existing_count: 0,
-        missing_would_create_count: 0,
-        excluded_count: 2,
-        unresolved_count: 0,
-        awaiting_opt_in_count: 0,
-        final_adopted_count: 0,
-        final_adopted_order: [],
-        reused_existing_positions: [],
-        missing_would_create_positions: [],
-        excluded_positions: [1, 2],
-        unresolved_positions: [],
-        awaiting_opt_in_positions: [],
-      },
-    })
-    mockPlan.mockResolvedValue(replanned)
     renderPage()
     await searchFor(user)
     await selectSource(user)
@@ -365,59 +442,90 @@ describe('CblBrowserPage', () => {
     await user.click(screen.getByRole('button', { name: 'Customize' }))
     expect(screen.getByRole('heading', { name: 'Series choices' })).toBeInTheDocument()
     const group = screen.getByRole('group', { name: 'Ultimate Spider-Man series choice' })
-    await user.click(within(group).getByRole('button', { name: 'Exclude' }))
+    const exclude = within(group).getByRole('button', { name: 'Exclude' })
+    expect(exclude).toHaveAttribute('aria-pressed', 'false')
+    await user.click(exclude)
+    expect(mockPlan).not.toHaveBeenCalled()
+    expect(exclude).toHaveAttribute('aria-pressed', 'true')
     await waitFor(() => {
-      expect(mockPlan).toHaveBeenCalledWith(7, {
-        series_decisions: { 'group-1': false },
-        entry_decisions: {},
-      })
+      expect(
+        screen.getByText('2 entries · 0 already in ComicPile · 0 will be added'),
+      ).toBeInTheDocument()
     })
   })
 
-  it('include all and include none set every series decision', async () => {
+  it('include all and include none set every series decision locally', async () => {
     const user = userEvent.setup()
-    mockPlan.mockResolvedValue(preview())
     renderPage()
     await searchFor(user)
     await selectSource(user)
     await user.click(screen.getByRole('button', { name: 'Customize' }))
+    const group = screen.getByRole('group', { name: 'Ultimate Spider-Man series choice' })
     await user.click(screen.getByRole('button', { name: 'Include none' }))
-    await waitFor(() => {
-      expect(mockPlan).toHaveBeenCalledWith(7, {
-        series_decisions: { 'group-1': false },
-        entry_decisions: {},
-      })
-    })
+    expect(mockPlan).not.toHaveBeenCalled()
+    expect(within(group).getByRole('button', { name: 'Exclude' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     await user.click(screen.getByRole('button', { name: 'Include all' }))
-    await waitFor(() => {
-      expect(mockPlan).toHaveBeenCalledWith(7, {
-        series_decisions: { 'group-1': true },
-        entry_decisions: {},
-      })
-    })
+    expect(within(group).getByRole('button', { name: 'Include' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
-  it('per-entry include checkbox re-plans with an entry decision', async () => {
+  it('per-entry include checkbox uses a unique name and applies locally', async () => {
     const user = userEvent.setup()
-    mockPlan.mockResolvedValue(preview())
     renderPage()
     await searchFor(user)
     await selectSource(user)
     await user.click(screen.getByRole('button', { name: 'Customize' }))
-    const checkboxes = screen.getAllByRole('checkbox', { name: 'Include' })
-    expect(checkboxes).toHaveLength(2)
-    await user.click(checkboxes[1])
+    const owned = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #1' })
+    const missing = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #2' })
+    expect(owned).toBeChecked()
+    expect(missing).toBeChecked()
+    await user.click(missing)
+    expect(mockPlan).not.toHaveBeenCalled()
+    expect(missing).not.toBeChecked()
     await waitFor(() => {
-      expect(mockPlan).toHaveBeenCalledWith(7, {
-        series_decisions: {},
-        entry_decisions: { '102': false },
-      })
+      expect(
+        screen.getByText('2 entries · 1 already in ComicPile · 0 will be added'),
+      ).toBeInTheDocument()
     })
+  })
+
+  it('unchecking Include on an owned issue excludes it from the committed plan', async () => {
+    const user = userEvent.setup()
+    mockCommitNew.mockResolvedValue({
+      id: 88,
+      reused_positions: [],
+      created_positions: [2],
+      excluded_positions: [1],
+      unresolved_positions: [],
+    })
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    const owned = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #1' })
+    expect(owned).toBeChecked()
+    await user.click(owned)
+    expect(owned).not.toBeChecked()
+    await waitFor(() => {
+      expect(
+        screen.getByText('2 entries · 0 already in ComicPile · 1 will be added'),
+      ).toBeInTheDocument()
+    })
+    await confirmAdd(user)
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+    })
+    const [, , choices] = mockCommitNew.mock.calls[0]
+    expect(choices.entry_decisions).toEqual({ '101': false })
   })
 
   it('a 409 on commit surfaces the stale-review message and refresh recovers', async () => {
     const user = userEvent.setup()
-    // axios.isAxiosError checks the isAxiosError flag on the payload.
     const conflict = Object.assign(new Error('Conflict'), {
       isAxiosError: true,
       response: { status: 409, data: { detail: 'changed' } },
@@ -426,7 +534,7 @@ describe('CblBrowserPage', () => {
     renderPage()
     await searchFor(user)
     await selectSource(user)
-    await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
+    await confirmAdd(user)
     await waitFor(() => {
       expect(
         screen.getByText(/This source changed after you reviewed it/),
@@ -442,17 +550,46 @@ describe('CblBrowserPage', () => {
     })
   })
 
-  it('a new search resets the selection and decisions', async () => {    const user = userEvent.setup()
-    mockPlan.mockResolvedValue(preview())
+  it('recovers a timed-out commit by polling the created plan (#3364)', async () => {
+    const user = userEvent.setup()
+    const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
+      code: 'ECONNABORTED',
+    })
+    mockCommitNew.mockRejectedValue(timeout)
+    mockListPlans.mockResolvedValue([
+      {
+        id: 88,
+        name: 'Ultimate Universe',
+        ordering_mode: 'informational',
+        lane_count: 1,
+        step_count: 2,
+        source_paths: ['Ultimate.cbl'],
+        updated_at: '2026-10-12T00:00:00Z',
+      },
+    ])
+    const recovered = { id: 88, name: 'Ultimate Universe' }
+    mockGetPlan.mockResolvedValue(recovered)
+    mockApplyCommitted.mockResolvedValue(undefined)
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+    await confirmAdd(user)
+    await waitFor(() => {
+      expect(mockListPlans).toHaveBeenCalled()
+      expect(mockGetPlan).toHaveBeenCalledWith(88)
+      expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/88')
+    })
+    expect(screen.queryByText(/Network error/)).not.toBeInTheDocument()
+  })
+
+  it('a new search resets the selection and decisions', async () => {
+    const user = userEvent.setup()
     renderPage()
     await searchFor(user)
     await selectSource(user)
     await user.click(screen.getByRole('button', { name: 'Customize' }))
     const group = screen.getByRole('group', { name: 'Ultimate Spider-Man series choice' })
     await user.click(within(group).getByRole('button', { name: 'Exclude' }))
-    await waitFor(() => {
-      expect(mockPlan).toHaveBeenCalled()
-    })
     mockDiscover.mockResolvedValue([source])
     await user.clear(screen.getByLabelText('Search source lists'))
     await user.type(screen.getByLabelText('Search source lists'), 'other')
@@ -467,7 +604,7 @@ describe('CblBrowserPage', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('skipping an unresolved entry unblocks the add', async () => {
+  it('skipping an unresolved entry unblocks the add locally', async () => {
     const user = userEvent.setup()
     const unresolvedEntry = entry({
       cbl_position: 2,
@@ -497,27 +634,6 @@ describe('CblBrowserPage', () => {
         awaiting_opt_in_positions: [],
       },
     })
-    const skippedPreview = preview({
-      entries: [
-        entry({}),
-        { ...unresolvedEntry, adoption_decision: 'excluded', adopted: false },
-      ],
-      summary: {
-        reused_existing_count: 1,
-        missing_would_create_count: 0,
-        excluded_count: 1,
-        unresolved_count: 0,
-        awaiting_opt_in_count: 0,
-        final_adopted_count: 1,
-        final_adopted_order: [1],
-        reused_existing_positions: [1],
-        missing_would_create_positions: [],
-        excluded_positions: [2],
-        unresolved_positions: [],
-        awaiting_opt_in_positions: [],
-      },
-    })
-    mockPlan.mockResolvedValue(skippedPreview)
     renderPage()
     await searchFor(user)
     await selectSource(user, initialPreview)
@@ -529,12 +645,7 @@ describe('CblBrowserPage', () => {
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Customize' }))
     await user.click(screen.getByRole('button', { name: 'Skip' }))
-    await waitFor(() => {
-      expect(mockPlan).toHaveBeenCalledWith(7, {
-        series_decisions: {},
-        entry_decisions: { '102': false },
-      })
-    })
+    expect(mockPlan).not.toHaveBeenCalled()
     await waitFor(() => {
       expect(screen.getByText('Skipped')).toBeInTheDocument()
       expect(

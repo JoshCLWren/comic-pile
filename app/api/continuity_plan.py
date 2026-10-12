@@ -27,7 +27,8 @@ from app.schemas.reading_plan_membership import (
     ReadingPlanMembershipResponse,
 )
 from app.schemas.tags import TagTargetType
-from app.services.continuity import _refresh_blocked_state, _to_plan_response as _to_response
+from app.services.continuity import _refresh_blocked_state
+from app.services.continuity_plan_labels import plan_response_with_labels
 from app.services.continuity_plan_writer import (
     list_continuity_plan_items,
     plan_rule_marker,
@@ -112,7 +113,7 @@ async def create_continuity_plan(
     # Always refresh: informational plans with checkpoint/convergence gates
     # also compile canonical edges via the write-path hook (#2553).
     await _refresh_blocked_state(current_user.id, db)
-    return _to_response(plan)
+    return await plan_response_with_labels(db, plan)
 
 
 @router.get("/continuity-plans/{plan_id}", response_model=ContinuityPlanResponse)
@@ -122,7 +123,9 @@ async def get_continuity_plan(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityPlanResponse:
     """Return one owned continuity plan."""
-    return _to_response(await _get_owned_plan(db, current_user.id, plan_id))
+    return await plan_response_with_labels(
+        db, await _get_owned_plan(db, current_user.id, plan_id)
+    )
 
 
 @router.get(
@@ -250,7 +253,7 @@ async def update_continuity_plan(
         raise
     await db.refresh(plan)
     await _refresh_blocked_state(current_user.id, db)
-    return _to_response(plan)
+    return await plan_response_with_labels(db, plan)
 
 
 @router.post(
@@ -286,7 +289,7 @@ async def adopt_reading_order(
         await db.rollback()
         raise
     await db.refresh(plan)
-    return _to_response(plan)
+    return await plan_response_with_labels(db, plan)
 
 
 @router.delete("/continuity-plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)

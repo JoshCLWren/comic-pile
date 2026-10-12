@@ -51,6 +51,7 @@ async def _seed_template_evidence(
     async_db: AsyncSession,
     *,
     issues: list[Issue],
+    repository: str = "repo/events",
 ) -> int:
     """Persist CBL + comicvine evidence linking the given issues to one list.
 
@@ -58,7 +59,7 @@ async def _seed_template_evidence(
     provided issues in their given order.
     """
     source = CBLSource(
-        repository="repo/events",
+        repository=repository,
         revision_sha="sha-1",
         synced_at=datetime.now(UTC),
     )
@@ -326,6 +327,41 @@ async def test_preview_surfaces_unresolved_matches(
     assert match["position"] == 3
     assert match["reason"] == "no confirmed ComicPile mapping"
     assert match["source_path"] == "repo/events:Events/Crossover.cbl"
+
+
+@pytest.mark.asyncio
+async def test_preview_hides_filesystem_mirror_repository(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Crossover preview must not leak the local CBL mirror directory."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    list_id = await _seed_template_evidence(
+        async_db,
+        issues=issues,
+        repository="/mnt/bigdata/CBL-ReadingLists",
+    )
+    list_obj = await async_db.get(CBLSourceList, list_id)
+    assert list_obj is not None
+    await _seed_unmatched_entry(
+        async_db,
+        source_list=list_obj,
+        position=3,
+        series_name="Unmatched Mirror",
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/preview",
+        json={"source_list_ids": [list_id]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "/mnt/" not in response.text
+    public_ref = "JoshCLWren/CBL-ReadingLists:Events/Crossover.cbl"
+    assert body["items"][0]["source_paths"] == [public_ref]
+    assert body["unresolved"][0]["source_path"] == public_ref
 
 
 @pytest.mark.asyncio

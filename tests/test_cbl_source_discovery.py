@@ -101,6 +101,34 @@ async def test_discovery_filters_searches_orders_and_limits(
 
 
 @pytest.mark.asyncio
+async def test_discovery_sanitizes_filesystem_mirror_repository(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Discovery must not return the production CBL mirror path (#3365)."""
+    source = CBLSource(
+        repository="/mnt/bigdata/CBL-ReadingLists",
+        revision_sha="abc123",
+        synced_at=datetime.now(UTC),
+    )
+    async_db.add(source)
+    await async_db.flush()
+    await _seed_list(
+        async_db,
+        source=source,
+        name="Ultimate Universe",
+        path="Marvel/Ultimate.cbl",
+    )
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/issue-identity/cbl-sources?q=ultimate")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body[0]["source_repository"] == "JoshCLWren/CBL-ReadingLists"
+    assert "/mnt/" not in body[0]["source_repository"]
+
+
+@pytest.mark.asyncio
 async def test_discovery_is_read_only(
     auth_client: AsyncClient,
     async_db: AsyncSession,

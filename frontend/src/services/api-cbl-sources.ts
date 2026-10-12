@@ -155,6 +155,7 @@ export function createCblSourcesApi(client: HttpClient) {
       client.post<CBLAdoptionCommitResult>(
         `/v1/cbl/${listId}/adoption-commit`,
         commitPayload(preview, choices),
+        { timeout: 60_000 },
       ),
   }
 }

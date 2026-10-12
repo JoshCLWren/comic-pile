@@ -299,4 +299,33 @@ describe('useContinuityPlannerEditor', () => {
     await waitFor(() => expect(result.current.nodes).toHaveLength(1))
     expect(result.current.nodes[0]?.label).toBe('[deleted series]')
   })
+
+  it('does not label unlabeled issue steps as [deleted series] (#3481)', async () => {
+    // SAFETY: the plan fixture supplies only the fields the editor reads
+    const planWithUnlabeledIssue = {
+      ...savedPlan,
+      nodes: [
+        {
+          id: 'issue-40',
+          node_type: 'issue',
+          ref_id: 40,
+          lane_id: 'main',
+          position: 0,
+          label: '',
+        },
+      ],
+    } as ContinuityPlan
+    const { result } = renderHook(
+      ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
+      {
+        wrapper,
+        initialProps: {
+          inputs: { ...baseInputs, planId: 12, planData: planWithUnlabeledIssue, threads: [thread] },
+        },
+      },
+    )
+
+    await waitFor(() => expect(result.current.nodes).toHaveLength(1))
+    expect(result.current.nodes[0]?.label).not.toBe('[deleted series]')
+  })
 })

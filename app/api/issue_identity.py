@@ -18,6 +18,7 @@ from app.services.cbl_reconciliation import (
     preview_cbl_adoption,
     reconcile_cbl_source_list,
 )
+from app.services.cbl_source_public import public_cbl_repository
 from app.services.issue_identity_reconciliation import (
     DuplicateIdentityAnomaly,
     consolidate_duplicate_issues,
@@ -607,7 +608,7 @@ def _adoption_payload(
     return CBLAdoptionPreviewResponse(
         source=CBLSourceFingerprintResponse(
             source_list_id=report.source_list_id,
-            source_repository=report.source_repository,
+            source_repository=public_cbl_repository(report.source_repository),
             source_path=report.source_path,
             content_hash=report.content_hash,
             revision_sha=report.revision_sha,

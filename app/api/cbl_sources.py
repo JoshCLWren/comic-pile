@@ -12,6 +12,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.repositories.cbl_source_repository import discover_cbl_source_lists as discover_source_rows
+from app.services.cbl_source_public import public_cbl_repository
 
 router = APIRouter(prefix="/issue-identity", tags=["issue-identity"])
 
@@ -43,7 +44,7 @@ async def discover_cbl_source_lists(
             id=source_list.id,
             name=source_list.name,
             source_path=source_list.source_path,
-            source_repository=repository,
+            source_repository=public_cbl_repository(repository),
             declared_issue_count=source_list.declared_issue_count,
             content_hash=source_list.content_hash,
             revision_sha=source_list.revision_sha,

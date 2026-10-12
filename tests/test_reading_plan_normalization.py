@@ -25,6 +25,7 @@ from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.reading_plan_membership import (
     ReadingPlanDependency,
+    ReadingPlanSource,
 )
 from app.models.thread import Thread
 from app.repositories import reading_plan_repository
@@ -422,6 +423,39 @@ async def test_provenance_round_trips_through_normalized_representation(
         ("first", by_path["DC/Starman.cbl"], 55),
         ("first", by_path["DC/Events.cbl"], 7),
     }
+
+
+@pytest.mark.asyncio
+async def test_membership_hides_filesystem_mirror_repository(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Normalized membership snapshots must not leak the local CBL mirror path."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="mirrored")
+    await async_db.commit()
+    plan_id = await _create_plan(
+        auth_client, "Mirrored source", [_node("first", issue.id, 0)]
+    )
+    async_db.add(
+        ReadingPlanSource(
+            plan_id=plan_id,
+            raw_source_path="/mnt/bigdata/CBL-ReadingLists/Marvel/Ultimate.cbl",
+            repository="/mnt/bigdata/CBL-ReadingLists",
+            source_path="/mnt/bigdata/CBL-ReadingLists/Marvel/Ultimate.cbl",
+        )
+    )
+    await async_db.commit()
+
+    membership = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/membership")
+    assert membership.status_code == 200, membership.text
+    assert "/mnt/" not in membership.text
+    mirrored = next(
+        source
+        for source in membership.json()["sources"]
+        if source["repository"] == "JoshCLWren/CBL-ReadingLists"
+    )
+    assert mirrored["source_path"] == "Marvel/Ultimate.cbl"
+    assert mirrored["raw_source_path"] == "Marvel/Ultimate.cbl"
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import continuity_plan as continuity_plan_api
@@ -108,6 +108,55 @@ async def test_informational_plan_round_trips_without_creating_rules(
     fetched = await auth_client.get(f"/api/v1/continuity-plans/{body['id']}")
     assert fetched.status_code == 200
     assert fetched.json()["nodes"] == body["nodes"]
+
+
+@pytest.mark.asyncio
+async def test_get_fills_missing_issue_labels_from_owned_comics(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Unlabeled CBL issue steps are repaired on GET without rewriting storage (#3481)."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="usm")
+    await async_db.execute(
+        insert(ContinuityPlan).values(
+            user_id=user.id,
+            name="Unlabeled CBL plan",
+            ordering_mode="informational",
+            lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+            nodes_json=[
+                {
+                    "id": "cbl-1",
+                    "node_type": "issue",
+                    "ref_id": issue.id,
+                    "lane_id": "main",
+                    "position": 0,
+                    "label": "",
+                    "is_checkpoint": False,
+                    "convergence_gate": [],
+                }
+            ],
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+    await async_db.commit()
+    plan = (
+        await async_db.execute(
+            select(ContinuityPlan).where(
+                ContinuityPlan.user_id == user.id,
+                ContinuityPlan.name == "Unlabeled CBL plan",
+            )
+        )
+    ).scalar_one()
+
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan.id}")
+    assert fetched.status_code == 200, fetched.text
+    node = fetched.json()["nodes"][0]
+    assert node["label"] == "Plan usm #1"
+    stored = (
+        await async_db.execute(select(ContinuityPlan).where(ContinuityPlan.id == plan.id))
+    ).scalar_one()
+    assert stored.nodes_json[0]["label"] == ""
 
 
 @pytest.mark.asyncio

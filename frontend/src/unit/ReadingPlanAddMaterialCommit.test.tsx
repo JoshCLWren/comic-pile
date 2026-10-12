@@ -114,8 +114,8 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     await openSource()
     const commitButton = await screen.findByRole('button', { name: 'Add selected material' })
     expect(commitButton).toBeDisabled()
-    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Include' })[1])
-    await waitFor(() => expect(mocks.plan).toHaveBeenCalledWith(42, { series_decisions: {}, entry_decisions: { '102': true } }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Universal Machine #1' }))
+    expect(mocks.plan).not.toHaveBeenCalled()
     await waitFor(() => expect(commitButton).toBeEnabled())
     fireEvent.click(commitButton)
     await waitFor(() => expect(mocks.commit).toHaveBeenCalledTimes(1))
@@ -127,16 +127,34 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     expect(await screen.findByText(/Added material to this Reading Plan · created 1 · reused 1/)).toBeInTheDocument()
   })
 
+  it('lets the reader exclude one owned issue individually and keep the missing selection', async () => {
+    render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
+    await openSource()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Universal Machine #1' }))
+    const ownedBox = screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Black Flame #6' })
+    expect(ownedBox).toBeChecked()
+    fireEvent.click(ownedBox)
+    expect(ownedBox).not.toBeChecked()
+    expect(mocks.plan).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected material' }))
+    await waitFor(() => expect(mocks.commit).toHaveBeenCalledTimes(1))
+    const [, , , choices] = mocks.commit.mock.calls[0]
+    expect(choices.entry_decisions).toEqual({ '102': true, '101': false })
+  })
+
   it('lets the reader exclude missing material and commits the remaining reviewed selection', async () => {
     mocks.plan
       .mockResolvedValueOnce(preview([existingEntry, missingSelected]))
       .mockResolvedValueOnce(preview([existingEntry, missingExcluded]))
     render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
     await openSource()
-    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Include' })[1])
+    const missingBox = screen.getByRole('checkbox', {
+      name: 'Include B.P.R.D.: The Universal Machine #1',
+    })
+    fireEvent.click(missingBox)
     await screen.findByText('Missing · selected to add')
-    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Include' })[1])
-    await waitFor(() => expect(mocks.plan).toHaveBeenLastCalledWith(42, { series_decisions: {}, entry_decisions: { '102': false } }))
+    fireEvent.click(missingBox)
+    expect(mocks.plan).not.toHaveBeenCalled()
     expect(await screen.findByText('Excluded')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Add selected material' }))
     await waitFor(() => expect(mocks.commit).toHaveBeenCalledOnce())
@@ -235,9 +253,12 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     mocks.preview.mockResolvedValueOnce(preview())
     fireEvent.click(screen.getByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs Vol\. 3/i }))
     await screen.findByText('Missing · choose whether to add')
-    mocks.plan.mockRejectedValueOnce(new Error('selection boom'))
-    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Include' })[1])
-    expect(await screen.findByText('selection boom')).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Universal Machine #1' }),
+    )
+    expect(mocks.plan).not.toHaveBeenCalled()
+    expect(screen.queryByText('selection boom')).not.toBeInTheDocument()
+    expect(await screen.findByText('Missing · selected to add')).toBeInTheDocument()
   })
 
   it('shows the empty discovery state without inventing source material', async () => {

@@ -96,7 +96,9 @@ export function useContinuityPlannerEditor({
           return { ...plannerNode, label: threadNames.get(node.ref_id) ?? '[deleted series]' }
         }
         if (stored) return { ...plannerNode, label: stored }
-        return { ...plannerNode, label: '[deleted series]' }
+        // Issue steps without a stored label are not deleted series; GET
+        // enrichment fills series + number. Keep a generic issue fallback.
+        return { ...plannerNode, label: 'Issue' }
       })
     },
     [],

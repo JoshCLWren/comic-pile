@@ -4,6 +4,7 @@ import GlossaryLink from '../components/GlossaryLink'
 import Modal from '../components/Modal'
 import { useDeleteReadingPlan, useReadingPlans } from '../hooks/useReadingPlans'
 import { readingPlanModeLabel } from '../services/api-continuity-plans'
+import { displayCblSourcePath } from '../utils/cblSourceDisplay'
 
 function formatDate(iso: string): string {
   try {
@@ -159,9 +160,11 @@ export default function ContinuityPlansIndexPage() {
                   {plan.source_paths.length > 0 && (
                     <div className="mt-3 rounded-lg border border-[var(--theme-continuity-accent)] p-2">
                       <span className="text-xs font-black text-[var(--theme-continuity-accent)]">CBL-backed</span>
-                      <span className="ml-2 text-xs text-[var(--theme-text-muted)]">
-                        Source reading order: {plan.source_paths[0]}
-                      </span>
+                      {displayCblSourcePath(plan.source_paths[0]) && (
+                        <span className="ml-2 text-xs text-[var(--theme-text-muted)]">
+                          Source reading order: {displayCblSourcePath(plan.source_paths[0])}
+                        </span>
+                      )}
                       {plan.source_paths.length > 1 && <span className="ml-1 text-xs text-[var(--theme-text-dim)]">+{plan.source_paths.length - 1} more</span>}
                     </div>
                   )}

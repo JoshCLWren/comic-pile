@@ -72,6 +72,22 @@ def test_merge_revisions_list_only_independent_heads() -> None:
     )
 
 
+def test_cbl_adoption_receipts_follow_cutover_head() -> None:
+    """Receipts stay a child of ``c25530000001`` after #3495 patches that revision.
+
+    #3495 edits the Roll cutover upgrade in place and keeps the same
+    revision id. Pointing this child at a new id would fork the graph
+    once that patch lands; pointing it at the pre-cutover parent would
+    create two heads.
+    """
+    revision = _script_directory().get_revision("n7c4a1000001")
+    assert revision is not None
+    assert revision.down_revision == "c25530000001"
+    cutover = _script_directory().get_revision("c25530000001")
+    assert cutover is not None
+    assert cutover.down_revision == "m5d300000001"
+
+
 def test_every_down_revision_resolves() -> None:
     """Every referenced down revision must exist in the revision map."""
     script = _script_directory()

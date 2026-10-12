@@ -33,7 +33,10 @@ Does not silently change ``informational`` to ``strict_sequential``. Existing ex
 Reading Plan semantics remain authoritative.
 
 Transactional and idempotent. Concurrent same-user/same-source adoption must
-not duplicate issues or Reading Plan nodes.
+not duplicate issues or Reading Plan nodes. The durable guarantee is a unique
+``(user_id, cbl_source_list_id)`` receipt plus transactional get-or-create:
+retries and concurrent workers converge on one plan even when the client never
+receives the success response.
 
 Returns the updated Reading Plan plus machine-readable reused/created/excluded/
 unresolved source positions.
@@ -41,6 +44,8 @@ unresolved source positions.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import NamedTuple, cast
@@ -50,6 +55,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.cbl_adoption_receipt import CblAdoptionReceipt
 from app.models.cbl_reference import CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
 from app.models.external_identity import (
@@ -59,10 +65,12 @@ from app.models.external_identity import (
 )
 from app.models.issue import Issue
 from app.models.thread import Thread
-from app.repositories import issue_repository, thread_repository
+from app.repositories import cbl_adoption_receipt_repository, issue_repository, thread_repository
 from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
+from app.services.continuity_plan_labels import issue_step_label
+from app.services.issue_insertion import create_issue_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
 
@@ -180,7 +188,8 @@ async def _find_existing_adopted_plan(
     """Find the existing plan that has CBL source provenance from this source list.
 
     Scans user-owned plans for nodes containing ``source_cbl_placements`` that
-    reference the given source path.
+    reference the given source path. Legacy fallback for plans adopted before
+    unique receipts existed.
 
     Args:
         db: Database session.
@@ -190,19 +199,209 @@ async def _find_existing_adopted_plan(
     Returns:
         The existing ContinuityPlan if one is found, None otherwise.
     """
-    result = await db.execute(
-        select(ContinuityPlan).where(ContinuityPlan.user_id == user_id)
+    return await cbl_adoption_receipt_repository.find_plan_by_source_path(
+        db, user_id=user_id, source_path=source_path
     )
-    plans = result.scalars().all()
 
-    for plan in plans:
-        for node in plan.nodes_json or []:
-            placements = _placement_list(node.get("source_cbl_placements"))
-            if not placements:
-                placements = _placement_list(node.get("source_cbl_placement"))
-            if any(str(p.get("source_path")) == source_path for p in placements):
-                return plan
-    return None
+
+def _request_fingerprint(
+    *,
+    content_hash: str,
+    revision_sha: str,
+    entry_decisions: dict[int, SourceBackedDecision],
+    series_overrides: dict[int, SourceBackedDecision],
+    series_decisions: dict[str, SourceBackedDecision],
+) -> str:
+    """Return a stable SHA-256 of the source identity plus reviewed decisions.
+
+    Matching fingerprints are true retries (replay the claimed plan). A
+    different fingerprint is a changed list or changed include/exclude
+    choices and must merge into the same claimed plan instead of creating
+    a second one.
+
+    Args:
+        content_hash: Current CBL list content hash.
+        revision_sha: Current CBL list revision.
+        entry_decisions: Per-entry include/exclude map.
+        series_overrides: Per-position overrides of series decisions.
+        series_decisions: Per-series include/exclude map.
+
+    Returns:
+        Hex digest of the canonical request payload.
+    """
+    payload = {
+        "content_hash": content_hash,
+        "revision_sha": revision_sha,
+        "entry_decisions": [
+            [position, decision.value]
+            for position, decision in sorted(entry_decisions.items())
+        ],
+        "series_overrides": [
+            [position, decision.value]
+            for position, decision in sorted(series_overrides.items())
+        ],
+        "series_decisions": [
+            [name, decision.value]
+            for name, decision in sorted(series_decisions.items())
+        ],
+    }
+    encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+async def _load_adoption_claim(
+    db: AsyncSession,
+    user_id: int,
+    list_id: int,
+) -> tuple[CblAdoptionReceipt, ContinuityPlan] | None:
+    """Return the unique (user, list) receipt and plan, if any.
+
+    Args:
+        db: Database session.
+        user_id: Owner user ID.
+        list_id: CBL source list ID.
+
+    Returns:
+        The receipt plus claimed Reading Plan, or ``None``.
+    """
+    return await cbl_adoption_receipt_repository.find_adoption_claim(
+        db, user_id=user_id, cbl_source_list_id=list_id
+    )
+
+
+async def _replay_matching_claim(
+    db: AsyncSession,
+    claim: tuple[CblAdoptionReceipt, ContinuityPlan] | None,
+    fingerprint: str,
+) -> AdoptionCommitResult | None:
+    """Return a no-write replay when the receipt already records this request.
+
+    Args:
+        db: Database session.
+        claim: Unique receipt and plan, if this user already claimed the list.
+        fingerprint: Fingerprint of the current adoption request.
+
+    Returns:
+        The existing plan as a commit result, or ``None`` when the caller
+        must merge (no receipt, or a different request).
+    """
+    if claim is None:
+        return None
+    receipt, plan = claim
+    if receipt.request_fingerprint != fingerprint:
+        return None
+    replay = _result_from_existing_plan(plan)
+    await db.commit()
+    await db.refresh(replay.plan)
+    return replay
+
+
+def _result_from_existing_plan(plan: ContinuityPlan) -> AdoptionCommitResult:
+    """Build a commit result that replays an already-adopted plan without writes.
+
+    Args:
+        plan: The uniquely claimed Reading Plan.
+
+    Returns:
+        Positions already on the plan as reused, with no created issues.
+    """
+    reused: list[int] = []
+    for node in plan.nodes_json or []:
+        for placement in _placement_list(node.get("source_cbl_placements")):
+            position = placement.get("position")
+            if isinstance(position, int):
+                reused.append(position)
+    return AdoptionCommitResult(
+        plan=plan,
+        reused_positions=reused,
+        created_positions=[],
+        excluded_positions=[],
+        unresolved_positions=[],
+    )
+
+
+async def _try_insert_receipt(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    list_id: int,
+    plan_id: int,
+    request_fingerprint: str,
+) -> CblAdoptionReceipt | None:
+    """Record a receipt for a legacy plan; ignore a concurrent unique winner.
+
+    Args:
+        db: Database session.
+        user_id: Owner user ID.
+        list_id: CBL source list ID.
+        plan_id: Existing Reading Plan ID.
+        request_fingerprint: SHA-256 of the source hash, revision, and decisions.
+
+    Returns:
+        The inserted receipt, or ``None`` when a concurrent worker already claimed
+        the list.
+    """
+    try:
+        async with db.begin_nested():
+            return await cbl_adoption_receipt_repository.insert_adoption_receipt(
+                db,
+                user_id=user_id,
+                cbl_source_list_id=list_id,
+                plan_id=plan_id,
+                request_fingerprint=request_fingerprint,
+            )
+    except IntegrityError:
+        return None
+
+
+async def _create_plan_with_receipt(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    cbl_list: CBLSourceList,
+    request_fingerprint: str,
+) -> tuple[ContinuityPlan, bool, CblAdoptionReceipt | None]:
+    """Create a Reading Plan and uniquely claim this CBL list, or load the winner.
+
+    Args:
+        db: Database session.
+        user_id: Owner user ID.
+        cbl_list: Active CBL source list being adopted.
+        request_fingerprint: SHA-256 of the source hash, revision, and decisions.
+
+    Returns:
+        The plan to merge into, whether this caller created it, and the receipt
+        when the unique claim is visible.
+    """
+    source_path = cbl_list.source_path
+    try:
+        async with db.begin_nested():
+            plan = ContinuityPlan(
+                user_id=user_id,
+                name=cbl_list.name or f"CBL adoption for {source_path}",
+                ordering_mode="informational",
+                lanes_json=_default_lane(),
+                nodes_json=[],
+            )
+            db.add(plan)
+            await db.flush()
+            receipt = await cbl_adoption_receipt_repository.insert_adoption_receipt(
+                db,
+                user_id=user_id,
+                cbl_source_list_id=cbl_list.id,
+                plan_id=plan.id,
+                request_fingerprint=request_fingerprint,
+            )
+        return plan, True, receipt
+    except IntegrityError:
+        winner = await _load_adoption_claim(db, user_id, cbl_list.id)
+        if winner is None:
+            raise AdoptionCommitError(
+                "Could not claim this reading order because another adoption "
+                "for the same list is already in progress."
+            ) from None
+        receipt, plan = winner
+        return plan, False, receipt
 
 
 def _comicvine_issue_id(fact: dict[str, object]) -> str | None:
@@ -377,23 +576,22 @@ async def _ensure_missing_issue_created(
             await _confirm_comicvine_issue_mapping(db, existing_by_number, comicvine_id)
         return MaterializedIssue(existing_by_number, False)
 
-    issue_position = max((item.position for item in existing_issues), default=0) + 1
-    issue = Issue(
-        thread_id=thread.id,
-        issue_number=issue_number,
-        position=issue_position,
-        status="unread",
-    )
-    db.add(issue)
     try:
-        await db.flush()
+        async with db.begin_nested():
+            issue = await create_issue_in_natural_order(db, thread.id, issue_number)
     except IntegrityError as exc:
-        raise AdoptionCommitError(
-            f"Could not add {series_name} #{issue_number} to the library; "
-            "it collides with an issue that is already owned."
-        ) from exc
+        existing = await issue_repository.find_in_thread_by_number(db, thread.id, issue_number)
+        if existing is None:
+            raise AdoptionCommitError(
+                f"Could not add {series_name} #{issue_number} to the library; "
+                "it collides with an issue that is already owned."
+            ) from exc
+        if comicvine_id is not None:
+            await _confirm_comicvine_issue_mapping(db, existing, comicvine_id)
+        return MaterializedIssue(existing, False)
 
-    apply_thread_issue_tracking_state(thread, [*existing_issues, issue])
+    tracked_issues = await issue_repository.get_issues_by_thread(db, thread.id)
+    apply_thread_issue_tracking_state(thread, tracked_issues)
     thread.status = "active"
 
     if comicvine_id is not None:
@@ -529,6 +727,53 @@ def _default_lane() -> list[dict[str, object]]:
     return [{"id": "default", "name": "Default", "order": 0}]
 
 
+def _step_label(entry: CBLSourceEntry, fact: dict[str, object]) -> str:
+    """Return the planner label for one adopted CBL entry.
+
+    Args:
+        entry: CBL source entry.
+        fact: Reconciliation facts for the entry.
+
+    Returns:
+        ``Series #N`` from CBL series name and issue number.
+    """
+    series_name = str(fact.get("series_name") or entry.series_name or "")
+    issue_number = str(fact.get("issue_number") or getattr(entry, "issue_number", "") or "")
+    return issue_step_label(series_name, issue_number)
+
+
+def _record_node_provenance(
+    node: dict[str, object],
+    *,
+    source_path: str,
+    placement: dict[str, object],
+    label: str,
+) -> None:
+    """Attach CBL provenance and a display label to one plan node.
+
+    Args:
+        node: Mutable plan node dict.
+        source_path: CBL source path for this adoption.
+        placement: Placement dict for ``source_cbl_placements``.
+        label: Series + issue display label.
+    """
+    placements = _placement_list(node.get("source_cbl_placements"))
+    if not _has_placement(placements, source_path):
+        placements.append(placement)
+        node["source_cbl_placements"] = placements
+    stored_paths = node.get("source_paths")
+    paths = (
+        [str(path) for path in stored_paths if isinstance(path, str)]
+        if isinstance(stored_paths, list | tuple)
+        else []
+    )
+    if source_path not in paths:
+        paths.append(source_path)
+    node["source_paths"] = paths
+    if not str(node.get("label") or "").strip():
+        node["label"] = label
+
+
 def _node_ref_id(node: dict[str, object]) -> int | None:
     """Return the issue ref id of an issue-type plan node when available.
 
@@ -653,11 +898,11 @@ async def _merge_adopted_nodes(
             "source_path": source_path,
             "position": entry.position,
         }
+        label = _step_label(entry, fact)
         if node is not None:
-            placements = _placement_list(node.get("source_cbl_placements"))
-            if not _has_placement(placements, source_path):
-                placements.append(placement)
-                node["source_cbl_placements"] = placements
+            _record_node_provenance(
+                node, source_path=source_path, placement=placement, label=label
+            )
             issues_by_id.setdefault(existing_issue_id, node)
             if not created_now:
                 reused_positions.append(entry.position)
@@ -671,6 +916,8 @@ async def _merge_adopted_nodes(
             "position": next_position,
             "is_checkpoint": False,
             "convergence_gate": [],
+            "label": label,
+            "source_paths": [source_path],
             "source_cbl_placements": [placement],
         }
         existing_nodes.append(new_node)
@@ -783,19 +1030,62 @@ async def adopt_cbl_material_into_reading_plan(
     )
     entries = list(entries_result.scalars().all())
 
-    existing_plan = await _find_existing_adopted_plan(db, user_id, source_path)
-    if existing_plan is None:
-        plan = ContinuityPlan(
-            user_id=user_id,
-            name=cbl_list.name or f"CBL adoption for {source_path}",
-            ordering_mode="informational",
-            lanes_json=_default_lane(),
-            nodes_json=[],
-        )
-        db.add(plan)
-        await db.flush()
+    fingerprint = _request_fingerprint(
+        content_hash=cbl_list.content_hash,
+        revision_sha=cbl_list.revision_sha,
+        entry_decisions=entry_decisions,
+        series_overrides=effective_overrides,
+        series_decisions=series_decisions,
+    )
+    claim = await _load_adoption_claim(db, user_id, list_id)
+    replay = await _replay_matching_claim(db, claim, fingerprint)
+    if replay is not None:
+        return replay
+
+    receipt: CblAdoptionReceipt | None = None
+    plan: ContinuityPlan | None = None
+    if claim is not None:
+        receipt, plan = claim
     else:
-        plan = existing_plan
+        existing_plan = await _find_existing_adopted_plan(db, user_id, source_path)
+        if existing_plan is None:
+            plan, claimed, receipt = await _create_plan_with_receipt(
+                db,
+                user_id=user_id,
+                cbl_list=cbl_list,
+                request_fingerprint=fingerprint,
+            )
+            if not claimed:
+                replay = await _replay_matching_claim(
+                    db,
+                    None if receipt is None else (receipt, plan),
+                    fingerprint,
+                )
+                if replay is not None:
+                    return replay
+        else:
+            plan = existing_plan
+            if plan.id is not None:
+                receipt = await _try_insert_receipt(
+                    db,
+                    user_id=user_id,
+                    list_id=list_id,
+                    plan_id=plan.id,
+                    request_fingerprint=fingerprint,
+                )
+                if receipt is None:
+                    raced = await _load_adoption_claim(db, user_id, list_id)
+                    replay = await _replay_matching_claim(db, raced, fingerprint)
+                    if replay is not None:
+                        return replay
+                    if raced is not None:
+                        receipt, plan = raced
+
+    if plan is None:
+        raise AdoptionCommitError(
+            "Could not claim this reading order because another adoption "
+            "for the same list is already in progress."
+        )
 
     merge_report = await _merge_adopted_nodes(
         db,
@@ -824,9 +1114,16 @@ async def adopt_cbl_material_into_reading_plan(
             nodes=node_models,
             ordering_mode=_plan_ordering_mode(plan),
         )
+        if receipt is not None and receipt.request_fingerprint != fingerprint:
+            await cbl_adoption_receipt_repository.update_receipt_fingerprint(
+                db, receipt, fingerprint
+            )
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
+        winner = await _load_adoption_claim(db, user_id, list_id)
+        if winner is not None:
+            return _result_from_existing_plan(winner[1])
         raise AdoptionCommitError(
             "Could not commit this reading order because it would duplicate "
             "an issue already in the library or plan."
