@@ -50,6 +50,7 @@ it('ignores a second undo while one is already in flight', async () => {
   const gate = new Promise<void>((resolve) => {
     release = resolve
   })
+  // SAFETY: the gate promise is only held, never resolved with a body
   mockedUndoApi.undo.mockReturnValueOnce(gate as never)
 
   const { result } = renderHook(() => useUndo(), { wrapper })
