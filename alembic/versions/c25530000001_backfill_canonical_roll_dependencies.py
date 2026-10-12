@@ -1,7 +1,7 @@
 """Backfill canonical issue Dependencies from ContinuityRules for the Roll cutover (#2553).
 
 Revision ID: c25530000001
-Revises: f2a3b4c5d6e7
+Revises: m5d300000001
 Create Date: 2026-10-10
 
 Cutover data step for #2553 (frozen architecture: docs/READING_GRAPH_ADR.md,
@@ -45,7 +45,7 @@ from app.services.canonical_backfill import (
 
 # revision identifiers, used by Alembic.
 revision: str = "c25530000001"
-down_revision: str | Sequence[str] | None = "f2a3b4c5d6e7"
+down_revision: str | Sequence[str] | None = "m5d300000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
