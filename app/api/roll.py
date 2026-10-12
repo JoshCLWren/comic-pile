@@ -10,18 +10,24 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import Text, func, or_, select
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.config import get_recommendation_settings
 from app.database import get_db
 from app.middleware import limiter
-from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, ReadingSession, Snapshot, Thread
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
+from app.repositories.roll_bootstrap_repository import (
+    fetch_blocked_summary_rows,
+    fetch_exclusion_library_rows,
+    fetch_roll_pool_rows,
+    fetch_session_scope_summary_rows,
+    fetch_stale_candidate_rows,
+)
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
