@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import logging
 from sqlalchemy import select
-from github import GitHub
-from github import GitHub as Repository
+from github import Github, GithubException
+from github.Repository import Repository
 
 from app.config import get_github_settings
 from app.database import AsyncSession

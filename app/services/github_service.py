@@ -2,7 +2,7 @@
 
 import logging
 
-from github import GitHub as Github
+from github import Github, GithubException
 
 from app.config import get_github_settings
 from app.schemas.bug_report import BugReportDiagnostics, ReportType
