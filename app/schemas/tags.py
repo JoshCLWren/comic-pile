@@ -272,3 +272,22 @@ class EffectiveTagsResponse(BaseModel):
     target_id: int
     direct_tags: list[TagResponse]
     effective_tags: list[EffectiveTagResponse]
+
+
+class ThreadIssuesEffectiveTagsResponse(BaseModel):
+    """Direct and effective tags for every issue in one thread.
+
+    Bulk read for surfaces that render many issues at once (the thread
+    detail issue rows in issue #3422): one response carries each issue's
+    effective tags so the client never issues one request per issue.
+
+    Attributes:
+        thread_id: Primary key of the thread.
+        issues: Per-issue direct and effective tags in canonical position
+            order. Issues without any visible tag still appear with empty
+            tag lists so clients can distinguish "no tags" from missing
+            data without fallback requests.
+    """
+
+    thread_id: int
+    issues: list[EffectiveTagsResponse]

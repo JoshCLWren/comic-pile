@@ -110,6 +110,16 @@ export interface EffectiveTagsResponse {
   effective_tags: EffectiveTag[]
 }
 
+/**
+ * Bulk effective tags for every issue in one thread (issue #3422).
+ * Issues without any visible tag appear with empty tag lists so clients can
+ * distinguish "no tags" from missing data without fallback requests.
+ */
+export interface ThreadIssuesEffectiveTagsResponse {
+  thread_id: number
+  issues: EffectiveTagsResponse[]
+}
+
 /** Fixed 32-color palette names, mirroring `app/constants.py`. Red is default. */
 export const TAG_COLOR_NAMES = [
   'red',
@@ -241,6 +251,15 @@ export function createTagsApi(client: HttpClient) {
       client.get<EffectiveTagsResponse>(`/v1/tags/effective/issue/${issueId}/`),
     effectiveForThread: (threadId: number) =>
       client.get<EffectiveTagsResponse>(`/v1/tags/effective/thread/${threadId}/`),
+    /**
+     * Bulk effective tags for every issue in one thread (issue #3422).
+     * Powers the thread detail issue rows so the client never issues one
+     * request per issue.
+     */
+    threadIssuesEffective: (threadId: number) =>
+      client.get<ThreadIssuesEffectiveTagsResponse>(
+        `/v1/tags/effective/thread/${threadId}/issues/`,
+      ),
     effectiveForPlan: (planId: number) =>
       client.get<EffectiveTagsResponse>(`/v1/tags/effective/plan/${planId}/`),
   }

@@ -67,6 +67,7 @@ vi.mock('../services/api-tags', async (importOriginal) => {
         direct_tags: [],
         effective_tags: [],
       }),
+      threadIssuesEffective: vi.fn().mockResolvedValue({ thread_id: 1, issues: [] }),
     },
   }
 })

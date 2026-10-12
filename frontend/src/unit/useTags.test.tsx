@@ -11,6 +11,7 @@ import {
   useTag,
   useTags,
   useTagUsage,
+  useThreadIssuesEffectiveTags,
   useUnassignTag,
   useUpdateTag,
 } from '../hooks/useTags'
@@ -33,6 +34,7 @@ vi.mock('../services/api-tags', () => ({
     effectiveForIssue: vi.fn(),
     effectiveForThread: vi.fn(),
     effectiveForPlan: vi.fn(),
+    threadIssuesEffective: vi.fn(),
   },
 }))
 
@@ -135,6 +137,30 @@ describe('useEffectiveTags', () => {
     })
     await waitFor(() => expect(result.current.isError).toBe(false))
     expect(result.current.data?.target_id).toBe(11)
+  })
+})
+
+describe('useThreadIssuesEffectiveTags (issue #3422)', () => {
+  it('loads bulk effective tags under the canonical thread-issues key', async () => {
+    mockedTagsApi.threadIssuesEffective.mockResolvedValue({ thread_id: 4, issues: [] })
+
+    const { result } = renderHook(() => useThreadIssuesEffectiveTags(4))
+    await waitFor(() => expect(result.current.data?.thread_id).toBe(4))
+
+    expect(mockedTagsApi.threadIssuesEffective).toHaveBeenCalledWith(4)
+    expect(queryClient.getQueryData(queryKeys.tags.effectiveForThreadIssues(4))).toEqual({
+      thread_id: 4,
+      issues: [],
+    })
+  })
+
+  it('stays disabled without a thread id or when gated off', () => {
+    const { result: withoutId } = renderHook(() => useThreadIssuesEffectiveTags(null))
+    expect(withoutId.current.fetchStatus).toBe('idle')
+
+    const { result: gated } = renderHook(() => useThreadIssuesEffectiveTags(4, false))
+    expect(gated.current.fetchStatus).toBe('idle')
+    expect(mockedTagsApi.threadIssuesEffective).not.toHaveBeenCalled()
   })
 })
 

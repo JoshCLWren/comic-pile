@@ -10,6 +10,7 @@ import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
+import { tagsApi } from '../services/api-tags'
 
 const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
@@ -70,6 +71,7 @@ vi.mock('../services/api-tags', async (importOriginal) => {
         direct_tags: [],
         effective_tags: [],
       }),
+      threadIssuesEffective: vi.fn().mockResolvedValue({ thread_id: 1, issues: [] }),
     },
   }
 })
@@ -78,6 +80,7 @@ const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
+const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 
 beforeEach(() => {
   routeParams.id = '1'
@@ -95,6 +98,8 @@ beforeEach(() => {
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
   mockedConnectedThreads.mockReset()
   mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
+  mockedThreadIssuesTags.mockReset()
+  mockedThreadIssuesTags.mockResolvedValue({ thread_id: 1, issues: [] })
 })
 
 function renderPage() {
@@ -482,4 +487,63 @@ it('reports dependency load failures without hiding the section', async () => {
   await waitFor(() =>
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load dependencies.'),
   )
+})
+
+it('shows direct and inherited tag chips on issue rows without opening an editor (#3422)', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 1, queue_position: 1,
+    status: 'active', total_issues: 2, next_unread_issue_number: '2', notes: null,
+  } as never)
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' },
+      { id: 2, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 2, page_size: 100,
+  })
+  const mine = {
+    id: 1, name: 'Mine', normalized_name: 'mine', scope: 'private' as const,
+    owner_user_id: 1, color: '#DC2626', created_at: '', updated_at: '',
+  }
+  const physical = {
+    id: 2, name: 'Physical', normalized_name: 'physical', scope: 'private' as const,
+    owner_user_id: 1, color: '#3B82F6', created_at: '', updated_at: '',
+  }
+  mockedThreadIssuesTags.mockResolvedValue({
+    thread_id: 1,
+    issues: [
+      {
+        target_type: 'Issue', target_id: 1, direct_tags: [mine],
+        effective_tags: [
+          { tag: mine, direct: true, sources: [{ target_type: 'Issue', target_id: 1, display_name: '#1' }] },
+        ],
+      },
+      {
+        target_type: 'Issue', target_id: 2, direct_tags: [],
+        effective_tags: [
+          { tag: physical, direct: false, sources: [{ target_type: 'Thread', target_id: 1, display_name: 'Saga' }] },
+        ],
+      },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+
+  // Both rows render chips with no editor opened: the direct chip is solid
+  // while the inherited chip is dashed and marked read-only.
+  await waitFor(() => expect(screen.getByText('Mine')).toBeInTheDocument())
+  expect(screen.getByText('Physical')).toBeInTheDocument()
+  expect(screen.getByText('Inherited')).toBeInTheDocument()
+  expect(
+    screen.getByText('Physical').closest('span[class*="rounded-full"]'),
+  ).toHaveClass('border-dashed')
+  expect(
+    screen.getByText('Mine').closest('span[class*="rounded-full"]'),
+  ).not.toHaveClass('border-dashed')
+  expect(mockedThreadIssuesTags).toHaveBeenCalledWith(1)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })

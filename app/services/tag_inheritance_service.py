@@ -217,6 +217,89 @@ class TagInheritanceService:
             self_type="Issue", self_id=issue_id, pairs=rows
         )
 
+    async def get_thread_issues_effective_tags(
+        self, user: User, thread_id: int
+    ) -> list[EffectiveTagsResult]:
+        """Return direct and effective tags for every issue in one owned thread.
+
+        Bulk variant of :meth:`get_issue_effective_tags` for surfaces that
+        render many issues at once (the thread detail issue rows in issue
+        #3422): thread tags, direct issue tags, and plan tags resolve in a
+        constant number of round trips instead of one request per issue. Each
+        entry follows the same additive union as the single-issue read — the
+        issue's direct tags, its thread's tags, and the tags of every Reading
+        Plan owned by the viewer that contains the issue — with every
+        contributing source retained.
+
+        Args:
+            user: The requesting user; must own the thread.
+            thread_id: Primary key of the thread.
+
+        Returns:
+            One result per issue in canonical position order. Empty when the
+            thread has no issues.
+
+        Raises:
+            NotFoundError: When the thread does not exist or is not owned by
+                the user.
+        """
+        thread = await thread_repository.find_owned(self._db, user.id, thread_id)
+        if thread is None:
+            raise NotFoundError(f"Thread {thread_id} does not exist")
+        thread_title = thread.title
+
+        issues = await issue_repository.get_issues_by_thread(self._db, thread_id)
+        issue_ids = [issue.id for issue in issues]
+        issue_numbers = {issue.id: issue.issue_number for issue in issues}
+        if not issues:
+            return []
+
+        plans_by_issue = await reading_plan_repository.plans_containing_issues_for_user(
+            self._db, issue_ids=issue_ids, user_id=user.id
+        )
+        plan_names: dict[int, str] = {}
+        for plans in plans_by_issue.values():
+            for plan in plans:
+                plan_names[plan.id] = plan.name
+
+        targets: list[tuple[str, int]] = [("Thread", thread_id)]
+        targets.extend(("Issue", issue_id) for issue_id in issue_ids)
+        targets.extend(("ContinuityPlan", plan_id) for plan_id in plan_names)
+        pairs = await tag_repository.list_visible_assignments_for_targets(
+            self._db, user.id, targets
+        )
+
+        display_names: dict[tuple[str, int], str] = {("Thread", thread_id): thread_title}
+        for issue_id, issue_number in issue_numbers.items():
+            display_names[("Issue", issue_id)] = f"#{issue_number}"
+        for plan_id, plan_name in plan_names.items():
+            display_names[("ContinuityPlan", plan_id)] = plan_name
+        rows = [
+            (
+                tag,
+                assignment.target_type,
+                assignment.target_id,
+                display_names[(assignment.target_type, assignment.target_id)],
+            )
+            for tag, assignment in pairs
+        ]
+        results: list[EffectiveTagsResult] = []
+        for issue_id in issue_ids:
+            plan_ids = {plan.id for plan in plans_by_issue.get(issue_id, [])}
+            contributing = [
+                row
+                for row in rows
+                if (row[1], row[2]) == ("Issue", issue_id)
+                or (row[1], row[2]) == ("Thread", thread_id)
+                or (row[1] == "ContinuityPlan" and row[2] in plan_ids)
+            ]
+            results.append(
+                _combine_assignments(
+                    self_type="Issue", self_id=issue_id, pairs=contributing
+                )
+            )
+        return results
+
     async def get_thread_effective_tags(
         self, user: User, thread_id: int
     ) -> EffectiveTagsResult:

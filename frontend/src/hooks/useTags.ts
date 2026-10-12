@@ -53,6 +53,23 @@ export function useEffectiveTags(
   })
 }
 
+/**
+ * Bulk direct + effective tags for every issue in one thread (issue #3422).
+ * The thread detail issue rows read this single query so the client never
+ * issues one request per issue. Entries render read-only: direct tags as
+ * solid chips, inherited tags as dashed chips.
+ */
+export function useThreadIssuesEffectiveTags(
+  threadId?: number | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: threadId ? queryKeys.tags.effectiveForThreadIssues(threadId) : [],
+    queryFn: () => tagsApi.threadIssuesEffective(threadId!),
+    enabled: !!threadId && enabled,
+  })
+}
+
 /** Usage counts plus consumer references for the delete-confirmation dialog. */
 export function useTagUsage(id?: number | null) {
   return useQuery({

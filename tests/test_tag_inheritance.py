@@ -209,6 +209,78 @@ async def _make_private(
     await service.assign_tag(owner, created.tag.id, target_type, target_id)
 
 
+async def _create_thread_with_two_issues(
+    db: AsyncSession,
+    owner: User,
+    *,
+    thread_id: int = 10,
+    first_issue_id: int = 10,
+    second_issue_id: int = 11,
+    plan_id: int = 10,
+    plan_name: str = "Mignolaverse",
+) -> tuple[Thread, Issue, Issue, ContinuityPlan]:
+    """Create a thread with two issues and a plan containing the second issue."""
+    now = datetime.now(UTC)
+    thread = Thread(
+        id=thread_id,
+        title="B.P.R.D.",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=thread_id,
+        status="active",
+        user_id=owner.id,
+        created_at=now,
+    )
+    db.add(thread)
+    await db.flush()
+    first = Issue(
+        id=first_issue_id,
+        thread_id=thread.id,
+        issue_number="3",
+        position=1,
+        status="unread",
+        created_at=now,
+    )
+    second = Issue(
+        id=second_issue_id,
+        thread_id=thread.id,
+        issue_number="4",
+        position=2,
+        status="unread",
+        created_at=now,
+    )
+    db.add(first)
+    db.add(second)
+    await db.flush()
+    plan = ContinuityPlan(
+        id=plan_id,
+        user_id=owner.id,
+        name=plan_name,
+        ordering_mode="informational",
+        nodes_json=[],
+        lanes_json=[],
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(plan)
+    await db.flush()
+    db.add(
+        ReadingPlanIssue(
+            plan_id=plan.id,
+            occurrence_id=f"occ-{plan.id}-{second.id}",
+            issue_id=second.id,
+            lane_id="main",
+            display_position=1,
+        )
+    )
+    await db.commit()
+    await db.refresh(thread)
+    await db.refresh(first)
+    await db.refresh(second)
+    await db.refresh(plan)
+    return thread, first, second, plan
+
+
 class TestIssueEffectiveTags:
     """Issue effective tags union direct, thread, and plan tags."""
 
@@ -543,5 +615,186 @@ class TestEffectiveTagsApi:
         )
 
         response = await owner_auth_client.get(f"/api/v1/tags/effective/issue/{issue.id}/")
+
+        assert response.status_code == 404
+
+
+class TestThreadIssuesEffectiveTags:
+    """Bulk effective tags power the thread detail issue rows (issue #3422)."""
+
+    async def test_returns_effective_tags_for_every_issue(
+        self, async_db: AsyncSession, admin_user: User, owner_user: User
+    ) -> None:
+        """Thread tags reach both issues; direct and plan tags stay scoped."""
+        thread, first, second, plan = await _create_thread_with_two_issues(
+            async_db, owner_user
+        )
+        await _make_private(async_db, owner_user, "Physical", "Thread", thread.id)
+        await _make_private(async_db, owner_user, "Mine", "Issue", first.id)
+        await _make_global(async_db, admin_user, "Horror", "ContinuityPlan", plan.id)
+
+        results = await TagInheritanceService(async_db).get_thread_issues_effective_tags(
+            owner_user, thread.id
+        )
+
+        assert [result.target_type for result in results] == ["Issue", "Issue"]
+        assert [result.target_id for result in results] == [first.id, second.id]
+        assert {entry.tag.name for entry in results[0].effective_tags} == {
+            "Physical",
+            "Mine",
+        }
+        assert {entry.tag.name for entry in results[1].effective_tags} == {
+            "Physical",
+            "Horror",
+        }
+        assert [tag.name for tag in results[0].direct_tags] == ["Mine"]
+        assert results[1].direct_tags == []
+        second_by_name = {entry.tag.name: entry for entry in results[1].effective_tags}
+        assert second_by_name["Physical"].direct is False
+        assert [
+            (source.target_type, source.target_id)
+            for source in second_by_name["Horror"].sources
+        ] == [("ContinuityPlan", plan.id)]
+
+    async def test_empty_thread_returns_empty_list(
+        self, async_db: AsyncSession, owner_user: User
+    ) -> None:
+        """A thread without issues yields an empty bulk response, not an error."""
+        now = datetime.now(UTC)
+        thread = Thread(
+            id=20,
+            title="Empty",
+            format="Comic",
+            issues_remaining=0,
+            queue_position=20,
+            status="active",
+            user_id=owner_user.id,
+            created_at=now,
+        )
+        async_db.add(thread)
+        await async_db.commit()
+
+        results = await TagInheritanceService(async_db).get_thread_issues_effective_tags(
+            owner_user, thread.id
+        )
+
+        assert results == []
+
+    async def test_unowned_thread_is_not_found(
+        self, async_db: AsyncSession, owner_user: User, other_user: User
+    ) -> None:
+        """Viewers cannot bulk-resolve effective tags for a foreign thread."""
+        thread, _first, _second, _plan = await _create_thread_with_two_issues(
+            async_db, other_user, thread_id=21, first_issue_id=21,
+            second_issue_id=22, plan_id=21,
+        )
+
+        with pytest.raises(NotFoundError):
+            await TagInheritanceService(async_db).get_thread_issues_effective_tags(
+                owner_user, thread.id
+            )
+
+    async def test_foreign_plans_and_private_tags_excluded(
+        self, async_db: AsyncSession, admin_user: User, owner_user: User,
+        other_user: User,
+    ) -> None:
+        """Another user's plan and private vocabulary never leak into the bulk."""
+        thread, first, _second, _plan = await _create_thread_with_two_issues(
+            async_db, owner_user
+        )
+        now = datetime.now(UTC)
+        foreign_plan = ContinuityPlan(
+            id=98,
+            user_id=other_user.id,
+            name="Foreign Plan",
+            ordering_mode="informational",
+            nodes_json=[],
+            lanes_json=[],
+            created_at=now,
+            updated_at=now,
+        )
+        async_db.add(foreign_plan)
+        await async_db.flush()
+        async_db.add(
+            ReadingPlanIssue(
+                plan_id=foreign_plan.id,
+                occurrence_id="occ-foreign-bulk",
+                issue_id=first.id,
+                lane_id="main",
+                display_position=1,
+            )
+        )
+        await async_db.commit()
+        await _make_private(
+            async_db, other_user, "Sneaky", "ContinuityPlan", foreign_plan.id
+        )
+        await _make_global(
+            async_db, admin_user, "ForeignGlobal", "ContinuityPlan", foreign_plan.id
+        )
+
+        results = await TagInheritanceService(async_db).get_thread_issues_effective_tags(
+            owner_user, thread.id
+        )
+
+        assert [result.effective_tags for result in results] == [[], []]
+        assert [result.direct_tags for result in results] == [[], []]
+
+    async def test_thread_issues_effective_tags_api(
+        self,
+        async_db: AsyncSession,
+        admin_user: User,
+        owner_user: User,
+        owner_auth_client: AsyncClient,
+    ) -> None:
+        """The bulk endpoint returns per-issue tags, including empty entries."""
+        thread, first, second, plan = await _create_thread_with_two_issues(
+            async_db, owner_user
+        )
+        await _make_private(async_db, owner_user, "Physical", "Thread", thread.id)
+        await _make_private(async_db, owner_user, "Mine", "Issue", first.id)
+        await _make_global(async_db, admin_user, "Horror", "ContinuityPlan", plan.id)
+
+        response = await owner_auth_client.get(
+            f"/api/v1/tags/effective/thread/{thread.id}/issues/"
+        )
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["thread_id"] == thread.id
+        assert [entry["target_id"] for entry in payload["issues"]] == [
+            first.id,
+            second.id,
+        ]
+        assert [tag["name"] for tag in payload["issues"][0]["direct_tags"]] == ["Mine"]
+        assert payload["issues"][1]["direct_tags"] == []
+        second_by_name = {
+            entry["tag"]["name"]: entry for entry in payload["issues"][1]["effective_tags"]
+        }
+        assert set(second_by_name) == {"Physical", "Horror"}
+        assert second_by_name["Physical"]["direct"] is False
+        assert second_by_name["Horror"]["sources"] == [
+            {
+                "target_type": "ContinuityPlan",
+                "target_id": plan.id,
+                "display_name": "Mignolaverse",
+            }
+        ]
+
+    async def test_foreign_thread_issues_api_is_not_found(
+        self,
+        async_db: AsyncSession,
+        owner_user: User,
+        owner_auth_client: AsyncClient,
+        other_user: User,
+    ) -> None:
+        """Bulk effective tags for another user's thread are not discoverable."""
+        thread, _first, _second, _plan = await _create_thread_with_two_issues(
+            async_db, other_user, thread_id=22, first_issue_id=23,
+            second_issue_id=24, plan_id=22,
+        )
+
+        response = await owner_auth_client.get(
+            f"/api/v1/tags/effective/thread/{thread.id}/issues/"
+        )
 
         assert response.status_code == 404

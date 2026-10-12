@@ -101,4 +101,12 @@ describe('tagsApi routes (issue #3032)', () => {
     expect(client.get).toHaveBeenNthCalledWith(2, '/v1/tags/effective/thread/4/')
     expect(client.get).toHaveBeenNthCalledWith(3, '/v1/tags/effective/plan/9/')
   })
+
+  it('reads bulk effective tags for every issue in a thread (issue #3422)', async () => {
+    client.get.mockResolvedValue({ thread_id: 4, issues: [] })
+
+    await tagsApi.threadIssuesEffective(4)
+
+    expect(client.get).toHaveBeenCalledWith('/v1/tags/effective/thread/4/issues/')
+  })
 })
