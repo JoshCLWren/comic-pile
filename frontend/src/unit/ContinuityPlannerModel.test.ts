@@ -65,6 +65,18 @@ describe('buildPayload', () => {
         convergence_gate: [],
       }),
     ])
+    expect(payload).not.toHaveProperty('expected_updated_at')
+  })
+
+  it('includes expected_updated_at only when a loaded plan timestamp is provided', () => {
+    const payload = buildPayload(
+      'Kirby lane',
+      [{ id: 'a', name: 'First', order: 0 }],
+      [node({ id: 'n1' })],
+      'strict_sequential',
+      '2026-08-12T00:00:00Z',
+    )
+    expect(payload.expected_updated_at).toBe('2026-08-12T00:00:00Z')
   })
 })
 
@@ -134,6 +146,18 @@ describe('getConflictMessage', () => {
     )
     expect(getConflictMessage(axiosError({ code: 'something-else' }), nodes)).toBe(
       'Unable to save this continuity plan.',
+    )
+  })
+
+  it('asks the reader to reload on a version conflict', () => {
+    expect(getConflictMessage(axiosError({ code: 'plan_version_conflict' }), nodes)).toContain(
+      'Reload and try again',
+    )
+  })
+
+  it('asks the reader to reload leftover saved steps', () => {
+    expect(getConflictMessage(axiosError({ code: 'stale_plan_nodes' }), nodes)).toContain(
+      'leftover saved steps',
     )
   })
 })

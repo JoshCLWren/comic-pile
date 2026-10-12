@@ -16,7 +16,7 @@ Scope notes (``docs/READING_GRAPH_PERSISTENCE_DESIGN.md``, Chunk 1):
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -39,9 +39,10 @@ from app.models.reading_plan_membership import (
 )
 from app.models.thread import Thread
 from app.repositories import continuity_repository, reading_plan_repository
-from app.schemas.continuity_plan import ContinuityPlanNode
-from app.services.cbl_source_public import public_cbl_repository, public_cbl_source_path
+from app.schemas.continuity_plan import ContinuityPlanNode, ContinuityPlanResponse
 from app.schemas.reading_plan_membership import (
+    # public_cbl helpers imported below after membership schemas
+
     ReadingPlanDependencyLink,
     ReadingPlanMemberIssue,
     ReadingPlanMembershipResponse,
@@ -337,6 +338,149 @@ def parse_plan_nodes_json(nodes_json: object) -> tuple[list[ContinuityPlanNode],
         except ValidationError:
             invalid += 1
     return nodes, invalid
+
+
+def issue_ids_from_plan_json(nodes_json: object) -> set[int]:
+    """Return canonical issue ids referenced by leftover or live plan JSON.
+
+    Args:
+        nodes_json: Raw ``ContinuityPlan.nodes_json`` value.
+
+    Returns:
+        Distinct positive issue ids. Boolean JSON values are ignored.
+    """
+    ids: set[int] = set()
+    if not isinstance(nodes_json, list):
+        return ids
+    for raw in nodes_json:
+        if not isinstance(raw, dict):
+            continue
+        if raw.get("node_type") != "issue":
+            continue
+        ref_id = raw.get("ref_id")
+        if isinstance(ref_id, bool) or not isinstance(ref_id, int) or ref_id <= 0:
+            continue
+        ids.add(ref_id)
+    return ids
+
+
+def overlay_membership_editor_nodes(
+    members: Sequence[ReadingPlanIssue],
+    nodes_json: object,
+) -> list[ContinuityPlanNode]:
+    """Build editor nodes from membership, overlaying matching JSON annotations.
+
+    Leftover issue rows in ``nodes_json`` that are not membership occurrences
+    are omitted. Checkpoint, convergence, and source annotations overlay only
+    for matching occurrence ids. Non-issue JSON nodes (crossover/thread) stay.
+
+    Args:
+        members: Normalized membership rows in display order.
+        nodes_json: Stored plan JSON, which may be a stale superset.
+
+    Returns:
+        Editor nodes whose issue membership matches ``members``.
+    """
+    json_by_id: dict[str, dict[str, object]] = {}
+    extra_non_issue: list[dict[str, object]] = []
+    if isinstance(nodes_json, list):
+        for raw in nodes_json:
+            if not isinstance(raw, dict):
+                continue
+            node_id = raw.get("id")
+            node_type = raw.get("node_type")
+            if node_type == "issue":
+                if isinstance(node_id, str) and node_id:
+                    json_by_id[node_id] = raw
+                continue
+            if node_type in {"crossover", "thread"}:
+                extra_non_issue.append(raw)
+
+    nodes: list[ContinuityPlanNode] = []
+    for member in members:
+        overlay: dict[str, object] = dict(json_by_id.get(member.occurrence_id) or {})
+        overlay.update(
+            {
+                "id": member.occurrence_id,
+                "node_type": "issue",
+                "ref_id": member.issue_id,
+                "lane_id": member.lane_id,
+                "position": member.display_position,
+                "is_checkpoint": member.is_checkpoint,
+            }
+        )
+        if member.label is not None:
+            overlay["label"] = member.label
+        if member.reader_role is not None:
+            overlay["reader_role"] = member.reader_role
+        if member.reader_optional is not None:
+            overlay["reader_optional"] = member.reader_optional
+        metadata = member.source_metadata_json or {}
+        for key, value in metadata.items():
+            if overlay.get(key) is None:
+                overlay[key] = value
+        try:
+            nodes.append(ContinuityPlanNode.model_validate(overlay))
+        except ValidationError:
+            nodes.append(
+                ContinuityPlanNode(
+                    id=member.occurrence_id,
+                    node_type="issue",
+                    ref_id=member.issue_id,
+                    lane_id=member.lane_id,
+                    position=member.display_position,
+                    label=member.label,
+                    is_checkpoint=member.is_checkpoint,
+                )
+            )
+    for raw in extra_non_issue:
+        try:
+            nodes.append(ContinuityPlanNode.model_validate(raw))
+        except ValidationError:
+            continue
+    nodes.sort(key=lambda node: (node.position, node.lane_id, node.id))
+    return nodes
+
+
+async def editor_nodes_for_plan(
+    db: AsyncSession,
+    plan: ContinuityPlan,
+) -> list[ContinuityPlanNode]:
+    """Return membership-authoritative editor nodes for one plan.
+
+    Empty membership falls back to ``nodes_json`` so legacy plans that were
+    never rebuilt, including #3347 duplicate-issue JSON, still GET.
+
+    Args:
+        db: Async database session.
+        plan: Owned continuity plan.
+
+    Returns:
+        Editor nodes for GET/PUT round-trip.
+    """
+    members = await reading_plan_repository.list_plan_issues(db, plan_id=plan.id)
+    if not members:
+        nodes, _invalid = parse_plan_nodes_json(plan.nodes_json)
+        return nodes
+    return overlay_membership_editor_nodes(members, plan.nodes_json)
+
+
+async def editor_plan_response(
+    db: AsyncSession,
+    plan: ContinuityPlan,
+) -> ContinuityPlanResponse:
+    """Serialize one plan from membership, ignoring leftover ``nodes_json``.
+
+    Args:
+        db: Async database session.
+        plan: Owned continuity plan.
+
+    Returns:
+        API response whose issue nodes match normalized membership.
+    """
+    from app.services.continuity import _to_plan_response
+
+    return _to_plan_response(plan, await editor_nodes_for_plan(db, plan))
 
 
 def drop_issue_nodes_from_plan_json(

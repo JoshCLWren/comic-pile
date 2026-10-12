@@ -7,44 +7,54 @@ module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
 The compiler's hard-edge semantics (#2553 Phase B):
-  1. ``strict_sequential`` plans compile thread-entry ``item_read`` gates,
+  1. ``strict_sequential`` plans infer thread-entry ``item_read`` gates,
      not every adjacent imported/suggested-order pair;
   2. checkpoint nodes block the next node in the same lane;
   3. convergence gates compile ``converged`` self-loop rules;
   4. plan-level cycles and persisted-rule conflicts keep their stable codes;
-  5. informational plans add no inferred blockers.
+  5. informational plans add no inferred blockers;
+  6. an ordinary save of unchanged membership retains existing plan-owned
+     ``item_read`` pairs (Julix/Mignolaverse hops included) so Roll
+     eligibility does not change. New mid-run hops are never synthesized.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import cast
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select, tuple_
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.continuity_rules import _would_create_cycle, ensure_owned_continuity_node
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
-from app.models.reading_plan_membership import ReadingPlanDependency
+from app.models.reading_plan_membership import ReadingPlanDependency, ReadingPlanIssue
 from app.models.thread import Thread
 from app.schemas.continuity_plan import (
     ContinuityPlanLane,
     ContinuityPlanListItem,
     ContinuityPlanNode,
+    ContinuityPlanWrite,
     PlanOrderingMode,
 )
 from app.schemas.continuity_rule import ContinuityNodeType
 from app.repositories.continuity_repository import plans_for_user
+from app.repositories.reading_plan_repository import distinct_plan_issue_ids
 from app.services.canonical_constraint_compiler import (
     compile_rule_edges,
     retire_rule_edges,
     rule_edge_pairs,
 )
-from app.services.reading_plan_normalization import rebuild_plan_membership
+from app.services.reading_plan_normalization import (
+    issue_ids_from_plan_json,
+    rebuild_plan_membership,
+)
 from app.services.strict_plan_constraints import (
+    IssueThreadIndex,
     load_issue_thread_index,
     strict_plan_item_read_pairs,
 )
@@ -83,6 +93,71 @@ def preserve_server_lane_metadata(
 def plan_rule_marker(plan_id: int) -> str:
     """Return the durable ownership marker for rules compiled from one plan."""
     return f"{PLAN_RULE_MARKER_PREFIX}:{plan_id}"
+
+
+def payload_issue_ids(nodes: Sequence[ContinuityPlanNode]) -> set[int]:
+    """Return canonical issue ids from one editor payload.
+
+    Args:
+        nodes: Plan nodes from a create/update payload.
+
+    Returns:
+        Distinct issue ids referenced by issue-typed nodes.
+    """
+    return {node.ref_id for node in nodes if node.node_type == "issue"}
+
+
+def _aware_utc(value: datetime) -> datetime:
+    """Normalize a timestamp to UTC for optimistic-concurrency comparison."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+async def guard_plan_update(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    payload: ContinuityPlanWrite,
+) -> set[int]:
+    """Reject stale leftover JSON and conflicting versions before a plan write.
+
+    Args:
+        db: Async database session.
+        plan: Owned plan being replaced.
+        payload: Incoming editor payload.
+
+    Returns:
+        Current normalized membership issue ids, snapshotted before rebuild.
+
+    Raises:
+        HTTPException: 409 ``plan_version_conflict`` when ``expected_updated_at``
+            does not match ``plan.updated_at``. 409 ``stale_plan_nodes`` when
+            the payload issue set equals leftover ``nodes_json`` and not
+            membership.
+    """
+    if payload.expected_updated_at is not None:
+        if _aware_utc(payload.expected_updated_at) != _aware_utc(plan.updated_at):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "plan_version_conflict",
+                    "expected_updated_at": plan.updated_at.isoformat(),
+                },
+            )
+    membership_ids = set(await distinct_plan_issue_ids(db, plan_id=plan.id))
+    incoming_ids = payload_issue_ids(payload.nodes)
+    json_ids = issue_ids_from_plan_json(plan.nodes_json)
+    if membership_ids and incoming_ids == json_ids and incoming_ids != membership_ids:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_plan_nodes",
+                "membership_issue_count": len(membership_ids),
+                "payload_issue_count": len(incoming_ids),
+            },
+        )
+    return membership_ids
 
 
 def _detect_plan_cycles(
@@ -205,6 +280,7 @@ async def replace_compiled_rules(
     ordering_mode: PlanOrderingMode,
     sync_canonical_edges: bool = True,
     extra_item_read_pairs: Sequence[tuple[int, int]] | None = None,
+    prior_ordering_mode: str | None = None,
 ) -> bool:
     """Replace only rules owned by this plan and compile plan semantics into rules.
 
@@ -232,42 +308,56 @@ async def replace_compiled_rules(
             inferred thread-entry gates.
         sync_canonical_edges: When True (default), retire this plan's stale
             compiled edges and compile the new rules into canonical
-            Dependencies (#2553). Only pairs that actually changed are
-            retired/compiled, so re-saving an unchanged plan is a no-op
-            for the Dependency table.
+            Dependencies (#2553). An unchanged membership save restores
+            the existing plan-owned ``item_read`` set, so Roll eligibility
+            does not change.
         extra_item_read_pairs: Explicit selected hard restrictions to compile
             in addition to inferred thread-entry gates. Same-thread pairs are
-            ignored. Live plan create/update omit this; migrations pass
-            classified genuine prerequisites that are not series starts.
+            ignored when newly supplied. Existing plan-owned same-thread pairs
+            are retained on an unchanged membership save. Live plan
+            create/update omit this; migrations pass classified genuine
+            prerequisites that are not series starts.
+        prior_ordering_mode: Ordering mode before this write. An ordinary
+            no-change save retains existing item_read only when this was
+            already ``strict_sequential``. Create and mode changes omit it
+            so thread-entry inference still runs.
 
     Returns:
         True when all rules compiled without cycle conflicts.
     """
+    # Snapshot membership and plan-owned item_read *before* rebuild so an
+    # ordinary no-change save can restore those pairs identically (#3499).
+    prior_membership_ids = set(await distinct_plan_issue_ids(db, plan_id=plan.id))
+    marker = plan_rule_marker(plan.id)
+    old_plan_rules = list(
+        (
+            await db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == user_id,
+                    ContinuityRule.note == marker,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    old_pairs: set[tuple[int, int]] = set()
+    prior_item_read: set[tuple[int, int]] = set()
+    for old_rule in old_plan_rules:
+        if sync_canonical_edges:
+            old_pairs.update(rule_edge_pairs(old_rule))
+        if (
+            old_rule.satisfaction_type == "item_read"
+            and old_rule.source_type == "issue"
+            and old_rule.target_type == "issue"
+        ):
+            prior_item_read.add((old_rule.source_id, old_rule.target_id))
+
     # Normalized membership/provenance always reflects the latest nodes in the
     # same transaction: informational plans with no compiled edges still own
     # relational membership, and a later rule-compilation failure rolls the
     # membership rebuild back with the rest of the write.
     await rebuild_plan_membership(db, plan_id=plan.id, nodes=nodes)
-
-    marker = plan_rule_marker(plan.id)
-    # Collect the compiled pairs of the outgoing rules before replacing them,
-    # so their canonical edges can be retired unless still intended (#2553).
-    old_pairs: set[tuple[int, int]] = set()
-    if sync_canonical_edges:
-        old_plan_rules = (
-            (
-                await db.execute(
-                    select(ContinuityRule).where(
-                        ContinuityRule.user_id == user_id,
-                        ContinuityRule.note == marker,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        for old_rule in old_plan_rules:
-            old_pairs.update(rule_edge_pairs(old_rule))
     await db.execute(
         delete(ContinuityRule).where(
             ContinuityRule.user_id == user_id,
@@ -292,24 +382,31 @@ async def replace_compiled_rules(
         tuple[str, int, str, int, str, int | list[convergence_target] | None]
     ] = []
 
-    # 1. Strict-sequential thread-entry gates, plus selected extra pairs.
+    # 1. Strict-sequential item_read: retain existing in-plan pairs on an
+    # unchanged membership save; otherwise retain surviving pairs and union
+    # new thread-entry gates. Never synthesize new mid-run adjacencies.
     if ordering_mode == "strict_sequential":
-        issue_ids = [node.ref_id for node in nodes if node.node_type == "issue"]
-        issue_index = await load_issue_thread_index(db, issue_ids)
-        compiled_item_read: set[tuple[int, int]] = set()
-        for source_id, target_id in strict_plan_item_read_pairs(nodes, issue_index):
-            edges_to_add.append((
-                "issue", source_id,
-                "issue", target_id,
-                "item_read", None,
-            ))
-            compiled_item_read.add((source_id, target_id))
-        issue_id_set = set(issue_ids)
+        incoming_ids = payload_issue_ids(nodes)
+        compiled_item_read: set[tuple[int, int]] = {
+            pair
+            for pair in prior_item_read
+            if pair[0] in incoming_ids and pair[1] in incoming_ids
+        }
+        unchanged_strict_save = (
+            incoming_ids == prior_membership_ids
+            and prior_ordering_mode == "strict_sequential"
+        )
+        issue_index: dict[int, IssueThreadIndex] = {}
+        needs_index = not unchanged_strict_save or bool(extra_item_read_pairs)
+        if needs_index:
+            issue_index = await load_issue_thread_index(db, incoming_ids)
+        if not unchanged_strict_save:
+            compiled_item_read.update(strict_plan_item_read_pairs(nodes, issue_index))
         for source_id, target_id in extra_item_read_pairs or ():
             pair = (source_id, target_id)
             if pair in compiled_item_read or source_id == target_id:
                 continue
-            if source_id not in issue_id_set or target_id not in issue_id_set:
+            if source_id not in incoming_ids or target_id not in incoming_ids:
                 continue
             source_meta = issue_index.get(source_id)
             target_meta = issue_index.get(target_id)
@@ -317,12 +414,13 @@ async def replace_compiled_rules(
                 continue
             if source_meta.thread_id == target_meta.thread_id:
                 continue
+            compiled_item_read.add(pair)
+        for source_id, target_id in compiled_item_read:
             edges_to_add.append((
                 "issue", source_id,
                 "issue", target_id,
                 "item_read", None,
             ))
-            compiled_item_read.add(pair)
 
     # 2. Checkpoint rules: checkpoint node blocks the next node in the same lane
     for node in nodes:
@@ -542,13 +640,24 @@ async def list_continuity_plan_items(
     """Return typed Reading Plan list items for one user, newest first."""
     rows = await plans_for_user(db, user_id=user_id)
     ordered = sorted(rows, key=lambda plan: plan.updated_at, reverse=True)
+    membership_counts: dict[int, int] = {}
+    if ordered:
+        membership_counts = dict(
+            (
+                await db.execute(
+                    select(ReadingPlanIssue.plan_id, func.count())
+                    .where(ReadingPlanIssue.plan_id.in_([plan.id for plan in ordered]))
+                    .group_by(ReadingPlanIssue.plan_id)
+                )
+            ).all()
+        )
     return [
         ContinuityPlanListItem(
             id=plan.id,
             name=plan.name,
             ordering_mode=plan.ordering_mode,
             lane_count=len(plan.lanes_json),
-            step_count=len(plan.nodes_json),
+            step_count=membership_counts.get(plan.id, 0) or len(plan.nodes_json),
             source_paths=plan_source_paths(plan),
             updated_at=plan.updated_at,
         )

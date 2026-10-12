@@ -133,6 +133,14 @@ class ContinuityPlanRead(BaseModel):
 class ContinuityPlanWrite(ContinuityPlanRead):
     """Create/replace payload for a persisted continuity plan."""
 
+    expected_updated_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Optimistic-concurrency token from GET ``updated_at``. When present "
+            "on PUT, a mismatch returns 409 ``plan_version_conflict``."
+        ),
+    )
+
     @model_validator(mode="after")
     def validate_structure(self) -> ContinuityPlanWrite:
         """Reject duplicate identifiers and malformed ordering before persistence."""

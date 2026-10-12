@@ -68,6 +68,7 @@ export function useContinuityPlannerEditor({
   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
   const [savedOrderingMode, setSavedOrderingMode] =
     useState<ContinuityPlanOrderingMode>('informational')
+  const [savedUpdatedAt, setSavedUpdatedAt] = useState<string | null>(null)
   const [selectedThread, setSelectedThread] = useState<ThreadListItem | null>(null)
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState('')
@@ -122,6 +123,7 @@ export function useContinuityPlannerEditor({
       setSavedLanes([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
       setSavedNodes([])
       setSavedOrderingMode('informational')
+      setSavedUpdatedAt(null)
       setPlanHydrated(true)
       return
     }
@@ -146,6 +148,7 @@ export function useContinuityPlannerEditor({
       setSavedLanes(loadedLanes)
       setSavedNodes(normalizePositions(hydrated))
       setSavedOrderingMode(planData.ordering_mode)
+      setSavedUpdatedAt(planData.updated_at)
       setActiveLaneId(loadedLanes[0]?.id ?? DEFAULT_LANE_ID)
       window.localStorage.setItem(LAST_PLAN_KEY, String(planData.id))
       setPlanHydrated(true)
@@ -324,7 +327,13 @@ export function useContinuityPlannerEditor({
     }
     setSaveError(null)
     try {
-      const payload = buildPayload(name, lanes, nodes, orderingMode)
+      const payload = buildPayload(
+        name,
+        lanes,
+        nodes,
+        orderingMode,
+        planId != null ? savedUpdatedAt : null,
+      )
       const saved = await savePlan.mutateAsync(payload)
       const nextSavedLanes = (
         saved.lanes.length > 0
@@ -342,6 +351,7 @@ export function useContinuityPlannerEditor({
       setSavedLanes(nextSavedLanes)
       setSavedNodes(normalized)
       setSavedOrderingMode(saved.ordering_mode)
+      setSavedUpdatedAt(saved.updated_at)
       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
       if (!planId) {
         navigate(`/continuity-plans/${saved.id}${addFromCblRequested ? '?addFrom=cbl' : ''}`, {
@@ -372,6 +382,7 @@ export function useContinuityPlannerEditor({
     setSavedLanes(committedLanes)
     setSavedNodes(committedNodes)
     setSavedOrderingMode(committed.ordering_mode)
+    setSavedUpdatedAt(committed.updated_at)
     setActiveLaneId(committedLanes[0]?.id ?? DEFAULT_LANE_ID)
     setSaveError(null)
   }

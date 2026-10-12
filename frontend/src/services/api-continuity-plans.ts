@@ -61,6 +61,7 @@ export interface ContinuityPlanWrite {
   ordering_mode: ContinuityPlanOrderingMode
   lanes: ContinuityPlanLane[]
   nodes: ContinuityPlanNode[]
+  expected_updated_at?: string | null
 }
 
 export interface ContinuityPlan extends ContinuityPlanWrite {

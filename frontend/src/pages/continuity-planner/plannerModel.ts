@@ -54,6 +54,15 @@ export function getConflictMessage(error: unknown, nodes: PlannerNode[]): string
   if (detail && isObject(detail) && 'code' in detail) {
     // SAFETY: 'code' in detail narrows the object to the ConflictDetail discriminated shape before access.
     const conflict = detail as ConflictDetail
+    if (conflict.code === 'plan_version_conflict') {
+      return 'This plan changed since you loaded it. Reload and try again.'
+    }
+    if (conflict.code === 'stale_plan_nodes') {
+      return (
+        'This plan still has leftover saved steps that are no longer in the reading list. ' +
+        'Reload and save the current list so removed titles stay removed.'
+      )
+    }
     if (conflict.code === 'plan_rule_conflict' || conflict.code === 'continuity_cycle') {
       const sourceId = conflict.source_node_id
       const targetId = conflict.target_node_id
@@ -100,12 +109,14 @@ export function buildPayload(
   lanes: PlannerLane[],
   nodeList: PlannerNode[],
   orderingMode: ContinuityPlanOrderingMode,
+  expectedUpdatedAt?: string | null,
 ) {
   const normalized = normalizePositions(nodeList)
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
   return {
     name: name.trim(),
     ordering_mode: orderingMode,
+    ...(expectedUpdatedAt ? { expected_updated_at: expectedUpdatedAt } : {}),
     lanes: orderedLanes.map((lane) => ({ id: lane.id, name: lane.name, order: lane.order })),
     nodes: normalized.map((node) => ({
       id: node.id,

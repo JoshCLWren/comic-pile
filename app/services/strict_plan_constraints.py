@@ -23,6 +23,25 @@ That representation is title-agnostic:
 
 Informational plans compile no inferred gates. Explicit checkpoints,
 convergence gates, and caller-supplied selected pairs remain separate.
+
+Existing plan-owned ``item_read`` rows are a separate concern from this
+selector. An ordinary no-change save must retain those rows until a hop is
+classified and removed on purpose:
+
+- **Intended reading order** — keep. Mignolaverse/Julix cross-thread
+  mid-run hops (Abe Sapien minis, Hellboy in Love → Shadow Theater) are
+  interleaved reading-order gates, not series-start inference.
+- **Redundant** — implied by ``Issue.position`` / ``next_unread_issue_id``.
+  Same-thread leftover adjacencies stay on no-change save because a stale
+  frontier (Hellboy in Love next-unread pointing at #5 while #1-4 are
+  unread) would newly roll a later issue if the hop were dropped.
+- **Erroneous** — none proven in the live Mignolaverse, Absolute, Ultimate,
+  or JSA plans; do not silently drop any existing restriction.
+
+New inference on a real membership edit remains thread-entry only. This
+module never emits a duplicate Starman #55 → JSA #1 edge; that sequence
+is already recorded Starman #55 → All-Star Comics (1999) #1, then Secret
+Files #1 → JSA #1.
 """
 
 from __future__ import annotations
