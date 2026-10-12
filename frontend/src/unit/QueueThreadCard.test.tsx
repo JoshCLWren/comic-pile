@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
-import type { BlockingDependency, Thread } from '../types'
+import type { BlockingDependency, ThreadListItem } from '../types'
+import type { ComicVineMappingHealth } from '../generated/openapi'
 
 vi.mock('../components/Tooltip', () => ({
   default: ({ children, content }: { children: React.ReactNode; content?: string }) => (
@@ -31,7 +32,7 @@ vi.mock('../components/PositionMenu', () => ({
     onMoveToBack: () => void
     onEdit: () => void
     onDelete: () => void
-    onSnooze?: (thread: Thread) => void
+    onSnooze?: (thread: ThreadListItem) => void
     snoozeLabel?: string
     snoozeDisabled?: boolean
   }) => (
@@ -50,7 +51,7 @@ vi.mock('../components/PositionMenu', () => ({
           type="button"
           data-testid="mock-position-snooze"
           // SAFETY: the card forwards the thread to onSnooze without reading its fields
-          onClick={onSnooze ? () => onSnooze({} as Thread) : undefined}
+          onClick={onSnooze ? () => onSnooze({} as ThreadListItem) : undefined}
           disabled={snoozeDisabled}
         >
           {snoozeLabel}
@@ -91,14 +92,13 @@ vi.mock('../components/QueueMapSeriesDialog', () => ({
     ) : null,
 }))
 
-function createMockThread(overrides: Partial<Thread> = {}): Thread {
+function createMockThread(overrides: Partial<ThreadListItem> = {}): ThreadListItem {
   return {
     id: 1,
     title: 'Test Thread',
     format: 'Comic',
     issues_remaining: 5,
     total_issues: 10,
-    next_unread_issue_id: null,
     next_unread_issue_number: null,
     reading_progress: '50.0',
     queue_position: 1,
@@ -110,11 +110,12 @@ function createMockThread(overrides: Partial<Thread> = {}): Thread {
     last_rating: null,
     is_test: false,
     created_at: '2024-01-01T00:00:00.000Z',
+    comicvine_mapping: null,
     ...overrides,
   }
 }
 
-function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueThreadCard>[0]> = {}) {
+function renderCard(thread: ThreadListItem, overrides: Partial<Parameters<typeof QueueThreadCard>[0]> = {}) {
   const defaults = {
     thread,
     index: 0,
@@ -800,16 +801,16 @@ describe('QueueThreadCard', () => {
     it('opens the Map series repair dialog from an unresolved mapping indicator', async () => {
       const user = userEvent.setup()
       const onCardClick = vi.fn()
-      const threadWithMapping = {
+      const threadWithMapping: ThreadListItem = {
         ...createMockThread(),
         comicvine_mapping: {
-          status: 'unresolved' as const,
+          status: 'unresolved',
           tracked_issue_count: 4,
           confirmed_issue_count: 0,
           needs_mapping_count: 4,
           needs_review_count: 0,
         },
-      } as Thread
+      }
       renderCard(threadWithMapping, { onCardClick })
 
       expect(screen.getByText('4 issues need mapping')).toBeInTheDocument()
@@ -827,16 +828,16 @@ describe('QueueThreadCard', () => {
     })
 
     it('stays quiet without a Map series action for fully mapped series', () => {
-      const threadWithMapping = {
+      const threadWithMapping: ThreadListItem = {
         ...createMockThread(),
         comicvine_mapping: {
-          status: 'fully_mapped' as const,
+          status: 'fully_mapped',
           tracked_issue_count: 5,
           confirmed_issue_count: 5,
           needs_mapping_count: 0,
           needs_review_count: 0,
         },
-      } as Thread
+      }
       renderCard(threadWithMapping)
 
       expect(screen.queryByTestId('queue-map-series-btn')).not.toBeInTheDocument()
@@ -844,16 +845,16 @@ describe('QueueThreadCard', () => {
     })
 
     it('distinguishes review-needed indicator from an ordinary unmapped pill', () => {
-      const threadWithMapping = {
+      const threadWithMapping: ThreadListItem = {
         ...createMockThread(),
         comicvine_mapping: {
-          status: 'needs_review' as const,
+          status: 'needs_review',
           tracked_issue_count: 3,
           confirmed_issue_count: 1,
           needs_mapping_count: 0,
           needs_review_count: 2,
         },
-      } as Thread
+      }
       renderCard(threadWithMapping)
 
       expect(screen.getByText('2 issues need review')).toBeInTheDocument()
