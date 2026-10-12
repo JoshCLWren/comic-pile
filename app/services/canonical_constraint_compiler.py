@@ -11,15 +11,31 @@ that inference needs the Wild Hunt exception decision (Phase B of #2553).
 
 from __future__ import annotations
 
-from sqlalchemy import delete, select, tuple_
+from collections.abc import Collection
+
+from sqlalchemy import delete, or_, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.reading_plan_membership import ReadingPlanDependency
 
 EDGE_NOTE_PREFIX = "canonical:rule:"
+BACKFILL_EDGE_NOTE_PREFIX = "canonical:rule-backfill:"
+
+
+def rule_compiled_note_filter() -> ColumnElement[bool]:
+    """Match live write-path notes and migration-backfilled notes.
+
+    The two prefixes stay distinct so Alembic downgrade can delete only the
+    rows the cutover inserted, while retirement still finds both.
+    """
+    return or_(
+        Dependency.note.like(f"{EDGE_NOTE_PREFIX}%"),
+        Dependency.note.like(f"{BACKFILL_EDGE_NOTE_PREFIX}%"),
+    )
 
 
 def rule_edge_pairs(rule: ContinuityRule) -> list[tuple[int, int]]:
@@ -126,8 +142,9 @@ async def compile_rule_edges(
                 index_elements=["source_issue_id", "target_issue_id"],
                 set_={"note": f"{EDGE_NOTE_PREFIX}{rule.id}"},
                 # Never overwrite a standalone reader-created edge's note;
-                # only refresh notes on previously rule-compiled edges.
-                where=Dependency.note.like(f"{EDGE_NOTE_PREFIX}%"),
+                # only refresh notes on previously rule-compiled edges,
+                # including rows the cutover backfill inserted.
+                where=rule_compiled_note_filter(),
             )
             .returning(Dependency.id)
         )
@@ -165,24 +182,18 @@ async def _pair_has_other_rule(
     *,
     user_id: int,
     pair: tuple[int, int],
-    exclude_rule_id: int,
+    exclude_rule_ids: Collection[int],
 ) -> bool:
     """Whether another of the user's rules still compiles to the pair."""
-    rules = (
-        (
-            await db.execute(
-                select(ContinuityRule).where(
-                    ContinuityRule.user_id == user_id,
-                    ContinuityRule.id != exclude_rule_id,
-                    ContinuityRule.satisfaction_type.in_(
-                        ("item_read", "checkpoint", "converged")
-                    ),
-                )
-            )
-        )
-        .scalars()
-        .all()
+    query = select(ContinuityRule).where(
+        ContinuityRule.user_id == user_id,
+        ContinuityRule.satisfaction_type.in_(
+            ("item_read", "checkpoint", "converged")
+        ),
     )
+    if exclude_rule_ids:
+        query = query.where(ContinuityRule.id.not_in(list(exclude_rule_ids)))
+    rules = ((await db.execute(query)).scalars().all())
     return any(pair in rule_edge_pairs(other) for other in rules)
 
 
@@ -191,23 +202,28 @@ async def retire_rule_edges(
     *,
     user_id: int,
     pairs: list[tuple[int, int]],
-    exclude_rule_id: int,
+    exclude_rule_id: int | None = None,
+    exclude_rule_ids: Collection[int] | None = None,
 ) -> None:
     """Delete rule-compiled edges for retired pairs unless still intended.
 
     An edge is removed only when no other rule of the user compiles to the
     same pair and the edge is a rule-compiled edge (never a standalone
-    reader-created Dependency).
+    reader-created Dependency). Backfilled ``canonical:rule-backfill:`` notes
+    are included so plan rollback and rule deletion retire the cutover rows.
     """
+    excluded = set(exclude_rule_ids or ())
+    if exclude_rule_id is not None:
+        excluded.add(exclude_rule_id)
     for source_id, target_id in set(pairs):
         if await _pair_has_other_rule(
-            db, user_id=user_id, pair=(source_id, target_id), exclude_rule_id=exclude_rule_id
+            db, user_id=user_id, pair=(source_id, target_id), exclude_rule_ids=excluded
         ):
             continue
         await db.execute(
             delete(Dependency).where(
                 Dependency.source_issue_id == source_id,
                 Dependency.target_issue_id == target_id,
-                Dependency.note.like(f"{EDGE_NOTE_PREFIX}%"),
+                rule_compiled_note_filter(),
             )
         )

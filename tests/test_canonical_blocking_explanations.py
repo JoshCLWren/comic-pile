@@ -156,6 +156,61 @@ async def test_cbl_order_rows_never_block_or_explain(async_db: AsyncSession) -> 
 
 
 @pytest.mark.asyncio
+async def test_cbl_order_source_rows_do_not_block_unless_canonical_edge_exists(
+    async_db: AsyncSession,
+) -> None:
+    """Prod-shaped ``cbl-order:source:*`` rows stay inert unless a canonical edge exists.
+
+    User 1's 2026-10-12 read-only audit had 74,542 dependency rows, 74,259 of
+    them ``cbl-order:source:*``. Those historical CBL rows must not block Roll
+    on their own. A genuine prerequisite (NULL note or non-cbl-order note) on
+    a different pair independently establishes hard semantics and does block.
+    The unique (source, target) constraint means the same pair cannot hold
+    both a cbl-order row and a canonical edge.
+    """
+    user = await get_or_create_user_async(async_db)
+    _cbl_source, cbl_source_issue = await _thread_issue(
+        async_db, user_id=user.id, title="CBL Source Star", queue_position=1
+    )
+    cbl_target_thread, cbl_target_issue = await _thread_issue(
+        async_db, user_id=user.id, title="CBL Target Star", queue_position=2
+    )
+    genuine_source_thread, genuine_source_issue = await _thread_issue(
+        async_db, user_id=user.id, title="Genuine Source", queue_position=3
+    )
+    genuine_target_thread, genuine_target_issue = await _thread_issue(
+        async_db, user_id=user.id, title="Genuine Target", queue_position=4
+    )
+    async_db.add_all(
+        [
+            Dependency(
+                source_issue_id=cbl_source_issue.id,
+                target_issue_id=cbl_target_issue.id,
+                note="cbl-order:source:abc123:1->2",
+            ),
+            Dependency(
+                source_issue_id=genuine_source_issue.id,
+                target_issue_id=genuine_target_issue.id,
+                note="genuine prerequisite",
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    blocked = await dependencies._get_blocked_thread_ids_uncached(user.id, async_db)
+    assert cbl_target_thread.id not in blocked
+    assert genuine_target_thread.id in blocked
+    assert genuine_source_thread.id not in blocked
+    assert await get_blocking_explanations(cbl_target_thread.id, user.id, async_db) == []
+    genuine_reasons = await get_blocking_explanations(
+        genuine_target_thread.id, user.id, async_db
+    )
+    assert [format_blocking_reason(dep) for dep in genuine_reasons] == [
+        "Blocked by Genuine Source: #1"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_sequence_order_never_blocks(async_db: AsyncSession) -> None:
     """Crossover sequence_order is presentation only, never a blocking authority."""
     from app.models.dependency_group import DependencyGroup, DependencyGroupMembership

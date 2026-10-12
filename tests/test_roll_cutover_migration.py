@@ -23,6 +23,10 @@ from app.models.reading_plan_membership import ReadingPlanDependency
 from app.models.thread import Thread
 from app.models.user import User
 from app.services import canonical_backfill as mig
+from app.services.canonical_constraint_compiler import (
+    BACKFILL_EDGE_NOTE_PREFIX,
+    EDGE_NOTE_PREFIX,
+)
 
 
 def _sync_connection() -> sa.Connection:
@@ -223,8 +227,8 @@ async def test_backfill_creates_edges_and_validated_plan_links(
             sa.select(Dependency.source_issue_id, Dependency.target_issue_id, Dependency.note)
         )
     }
-    assert (edges[(a1.id, b1.id)] or "").startswith("canonical:rule:")
-    assert (edges[(c1.id, c2.id)] or "").startswith("canonical:rule:")
+    assert (edges[(a1.id, b1.id)] or "").startswith(BACKFILL_EDGE_NOTE_PREFIX)
+    assert (edges[(c1.id, c2.id)] or "").startswith(BACKFILL_EDGE_NOTE_PREFIX)
     assert (b1.id, b1.id) not in edges  # self-edge never persisted
 
     links = {
@@ -456,3 +460,149 @@ async def test_backfill_aborts_on_cbl_collision(
             mig.backfill_item_read_edges(conn)
     finally:
         conn.close()
+
+
+@pytest.mark.asyncio
+async def test_validation_aborts_when_rule_edges_form_a_cycle(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """Rule pairs plus existing canonical edges that cycle abort with the rule ids."""
+    db = _isolated_migration_data
+
+    user = await _user(db, "cutover-cycle-user")
+    _, (a1,) = await _thread_with_issues(db, user.id, "Cycle A", ["1"])
+    _, (b1,) = await _thread_with_issues(db, user.id, "Cycle B", ["1"])
+    db.add(
+        Dependency(
+            source_issue_id=a1.id,
+            target_issue_id=b1.id,
+            note="genuine prerequisite",
+        )
+    )
+    reverse = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=b1.id,
+        target_type="issue",
+        target_id=a1.id,
+        satisfaction_type="item_read",
+    )
+    db.add(reverse)
+    await db.commit()
+    rule_id = reverse.id
+
+    conn = _sync_connection()
+    try:
+        with pytest.raises(RuntimeError, match="dependency cycle") as captured:
+            mig.validate_compilable_rules(conn)
+        assert str(rule_id) in str(captured.value)
+    finally:
+        conn.close()
+
+
+@pytest.mark.asyncio
+async def test_downgrade_keeps_live_write_path_edges(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """Alembic downgrade deletes backfill notes only, not later canonical:rule: rows."""
+    db = _isolated_migration_data
+
+    user = await _user(db, "cutover-downgrade-user")
+    _, (a1,) = await _thread_with_issues(db, user.id, "Downgrade A", ["1"])
+    _, (b1,) = await _thread_with_issues(db, user.id, "Downgrade B", ["1"])
+    _, (c1,) = await _thread_with_issues(db, user.id, "Downgrade C", ["1"])
+    db.add(
+        ContinuityRule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=a1.id,
+            target_type="issue",
+            target_id=b1.id,
+            satisfaction_type="item_read",
+        )
+    )
+    await db.commit()
+
+    conn = _sync_connection()
+    try:
+        mig.validate_compilable_rules(conn)
+        inserted, _skipped = mig.backfill_item_read_edges(conn)
+        conn.commit()
+        assert inserted == 1
+        conn.execute(
+            sa.text(
+                "INSERT INTO dependencies (source_issue_id, target_issue_id, note, created_at) "
+                "VALUES (:src, :tgt, :note, now())"
+            ),
+            {
+                "src": b1.id,
+                "tgt": c1.id,
+                "note": f"{EDGE_NOTE_PREFIX}99999",
+            },
+        )
+        conn.commit()
+        removed = mig.revert_backfilled_edges(conn)
+        conn.commit()
+        assert removed == 1
+    finally:
+        conn.close()
+
+    notes = {
+        (source_id, target_id): note
+        for source_id, target_id, note in await db.execute(
+            sa.select(Dependency.source_issue_id, Dependency.target_issue_id, Dependency.note)
+        )
+    }
+    assert (a1.id, b1.id) not in notes
+    assert notes[(b1.id, c1.id)] == f"{EDGE_NOTE_PREFIX}99999"
+
+
+@pytest.mark.asyncio
+async def test_resave_then_downgrade_keeps_refreshed_edge(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """Re-saving after cutover retargets the note so downgrade will not delete it."""
+    db = _isolated_migration_data
+
+    user = await _user(db, "cutover-resave-user")
+    _, (a1,) = await _thread_with_issues(db, user.id, "Resave A", ["1"])
+    _, (b1,) = await _thread_with_issues(db, user.id, "Resave B", ["1"])
+    rule = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=a1.id,
+        target_type="issue",
+        target_id=b1.id,
+        satisfaction_type="item_read",
+    )
+    db.add(rule)
+    await db.commit()
+    a_id, b_id, rule_id = a1.id, b1.id, rule.id
+
+    conn = _sync_connection()
+    try:
+        mig.backfill_item_read_edges(conn)
+        conn.commit()
+        conn.execute(
+            sa.text(
+                "UPDATE dependencies SET note = :note "
+                "WHERE source_issue_id = :src AND target_issue_id = :tgt"
+            ),
+            {"note": f"{EDGE_NOTE_PREFIX}{rule_id}", "src": a_id, "tgt": b_id},
+        )
+        conn.commit()
+        removed = mig.revert_backfilled_edges(conn)
+        conn.commit()
+        assert removed == 0
+    finally:
+        conn.close()
+
+    remaining = (
+        await db.execute(
+            sa.select(Dependency.note).where(
+                Dependency.source_issue_id == a_id,
+                Dependency.target_issue_id == b_id,
+            )
+        )
+    ).scalar_one()
+    assert remaining == f"{EDGE_NOTE_PREFIX}{rule_id}"

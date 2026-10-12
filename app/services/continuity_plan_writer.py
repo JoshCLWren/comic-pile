@@ -521,7 +521,10 @@ async def retire_plan_edges_for_deletion(
     it (shared-pair semantics from retire_rule_edges). Lives in the service
     layer to keep routers free of queries.
     """
-    from app.services.canonical_constraint_compiler import rule_edge_pairs
+    from app.services.canonical_constraint_compiler import (
+        rule_compiled_note_filter,
+        rule_edge_pairs,
+    )
 
     marker = plan_rule_marker(plan_id)
     plan_rules = list(
@@ -564,6 +567,6 @@ async def retire_plan_edges_for_deletion(
             delete(Dependency).where(
                 Dependency.source_issue_id == source_id,
                 Dependency.target_issue_id == target_id,
-                Dependency.note.like("canonical:rule:%"),
+                rule_compiled_note_filter(),
             )
         )

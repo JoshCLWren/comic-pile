@@ -515,3 +515,58 @@ async def test_plan_delete_keeps_shared_canonical_edge(
     assert await _edge_note(async_db, source_issue.id, target_issue.id) is not None
     blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
     assert target_thread.id in blocked
+
+
+@pytest.mark.asyncio
+async def test_plan_rollback_keeps_edge_shared_with_standalone_rule(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """BPRD/Ultimate rollback must not delete a pair another rule still compiles."""
+    from app.models.continuity_rule import ContinuityRule
+    from app.services.canonical_constraint_compiler import compile_rule_edges
+    from app.services.migration_shared import retire_plan_compiled_edges
+
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issue = await _thread_issue(
+        async_db, user_id=user.id, title="Rollback Shared Source", queue_position=1
+    )
+    target_thread, target_issue = await _thread_issue(
+        async_db, user_id=user.id, title="Rollback Shared Target", queue_position=2
+    )
+    await async_db.commit()
+    source_id = source_issue.id
+    target_id = target_issue.id
+    target_thread_id = target_thread.id
+
+    standalone = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=await _rule_payload(source_id, target_id),
+    )
+    assert standalone.status_code == 201, standalone.text
+
+    plan_rule = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=target_id,
+        target_type="issue",
+        target_id=target_id,
+        satisfaction_type="converged",
+        convergence_targets=[{"type": "issue", "id": source_id}],
+        note="continuity-plan:1",
+    )
+    async_db.add(plan_rule)
+    await async_db.flush()
+    await compile_rule_edges(async_db, plan_rule)
+    plan_rule_id = plan_rule.id
+    await async_db.commit()
+
+    refreshed = await _edge_note(async_db, source_id, target_id)
+    assert refreshed == f"canonical:rule:{plan_rule_id}"
+
+    await retire_plan_compiled_edges(async_db, rule_ids=[plan_rule_id])
+    await async_db.commit()
+
+    assert await _edge_note(async_db, source_id, target_id) is not None
+    blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert target_thread_id in blocked

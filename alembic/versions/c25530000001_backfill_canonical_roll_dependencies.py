@@ -8,9 +8,10 @@ Cutover data step for #2553 (frozen architecture: docs/READING_GRAPH_ADR.md,
 docs/READING_GRAPH_RUNTIME_AUDIT.md section 7 step 1):
 
 1. Validates that every rule-native ContinuityRule (no legacy_dependency_id
-   mirror) compiles to issue-level Dependency edges. Anything that cannot
-   compile aborts the migration with the offending rule IDs instead of
-   silently dropping constraints.
+   mirror) compiles to issue-level Dependency edges, and that those edges
+   plus existing canonical Dependencies do not form a cycle. Anything that
+   cannot compile (or would cycle) aborts with the offending rule IDs
+   instead of silently dropping constraints or blocking threads forever.
 2. Drops the Dependency -> ContinuityRule mirroring trigger before the
    backfill so backfilled edges are not claimed back into mirrored rules.
 3. Persists one canonical Dependency edge per rule-native item_read rule and
@@ -31,15 +32,14 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-import sqlalchemy as sa
 from alembic import op
 
 from app.services.canonical_backfill import (
-    EDGE_NOTE_PREFIX,
     backfill_converged_edges,
     backfill_item_read_edges,
     drop_mirror_trigger,
     link_plan_provenance,
+    revert_backfilled_edges,
     validate_compilable_rules,
 )
 
@@ -74,12 +74,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove backfilled edges and restore the mirror trigger."""
+    """Remove backfilled edges only and restore the mirror trigger.
+
+    Live ``canonical:rule:<id>`` edges authored after the upgrade are kept,
+    including their ``reading_plan_dependencies`` provenance links.
+    """
     bind = op.get_bind()
-    bind.execute(
-        sa.text("DELETE FROM dependencies WHERE note LIKE :pattern"),
-        {"pattern": f"{EDGE_NOTE_PREFIX}%"},
-    )
+    revert_backfilled_edges(bind)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import c84400000002_sync_legacy_dependency_writes as trigger_migration
 

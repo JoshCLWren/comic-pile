@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import json
 import re
+from collections import defaultdict, deque
 
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
-# Single source of truth for rule-compiled edge notes, shared with the
-# write-path compiler. Retirement, plan save, and migration rollbacks match
-# this prefix; the backfill must use it too, or orphaned rows survive.
-from app.services.canonical_constraint_compiler import EDGE_NOTE_PREFIX
+# Live writes use EDGE_NOTE_PREFIX; this backfill uses a distinct prefix so
+# Alembic downgrade can revert only the rows it inserted. Retirement matches
+# both prefixes via rule_compiled_note_filter().
+from app.services.canonical_constraint_compiler import BACKFILL_EDGE_NOTE_PREFIX
 
 _PLAN_NOTE_RE = re.compile(r"^continuity-plan:(\d+)$")
 _MAX_REPORTED_IDS = 50
@@ -139,6 +140,8 @@ def validate_compilable_rules(bind: Connection) -> None:
             "owned by the rule's user",
         )
 
+    _abort_on_cycles(bind)
+
 
 def drop_mirror_trigger(bind: Connection) -> None:
     """Remove the Dependency -> ContinuityRule compatibility bridge."""
@@ -202,6 +205,104 @@ def _abort_on_converged_cbl_collisions(bind: Connection) -> None:
         )
 
 
+def _rule_native_pairs(bind: Connection) -> list[tuple[int, int, int]]:
+    """Return (rule_id, source_issue_id, target_issue_id) the backfill would persist."""
+    item_read = bind.execute(
+        sa.text(
+            "SELECT r.id, r.source_id, r.target_id FROM continuity_rules r "
+            "WHERE r.legacy_dependency_id IS NULL "
+            "AND r.satisfaction_type = 'item_read' "
+            "AND r.source_type = 'issue' AND r.target_type = 'issue' "
+            "AND r.source_id <> r.target_id"
+        )
+    ).all()
+    converged = bind.execute(
+        sa.text(
+            "SELECT r.id, (elem->>'id')::int, r.target_id "
+            "FROM continuity_rules r, "
+            "LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "WHERE r.legacy_dependency_id IS NULL "
+            "AND r.satisfaction_type = 'converged' "
+            "AND (elem->>'id')::int <> r.target_id"
+        )
+    ).all()
+    return [(int(row[0]), int(row[1]), int(row[2])) for row in (*item_read, *converged)]
+
+
+def _abort_on_cycles(bind: Connection) -> None:
+    """Abort if rule-native pairs plus existing canonical edges form a cycle.
+
+    A cycle would block the involved threads forever with no migration error.
+    Historical ``cbl-order:%`` rows are ignored here, matching the evaluator.
+    """
+    existing = bind.execute(
+        sa.text(
+            "SELECT source_issue_id, target_issue_id FROM dependencies "
+            "WHERE note IS NULL OR note NOT LIKE 'cbl-order:%'"
+        )
+    ).all()
+    rule_pairs = _rule_native_pairs(bind)
+    adjacency: dict[int, set[int]] = defaultdict(set)
+    incoming: dict[int, int] = defaultdict(int)
+    nodes: set[int] = set()
+    for source_id, target_id in existing:
+        src, tgt = int(source_id), int(target_id)
+        if tgt in adjacency[src]:
+            continue
+        adjacency[src].add(tgt)
+        incoming[tgt] += 1
+        nodes.add(src)
+        nodes.add(tgt)
+    for _rule_id, source_id, target_id in rule_pairs:
+        if target_id in adjacency[source_id]:
+            continue
+        adjacency[source_id].add(target_id)
+        incoming[target_id] += 1
+        nodes.add(source_id)
+        nodes.add(target_id)
+    if not nodes:
+        return
+    remaining_incoming = {node: incoming.get(node, 0) for node in nodes}
+    queue: deque[int] = deque(node for node, count in remaining_incoming.items() if count == 0)
+    while queue:
+        node = queue.popleft()
+        for nxt in adjacency[node]:
+            remaining_incoming[nxt] -= 1
+            if remaining_incoming[nxt] == 0:
+                queue.append(nxt)
+    cyclic_nodes = {node for node, count in remaining_incoming.items() if count > 0}
+    if not cyclic_nodes:
+        return
+    cyclic_rule_ids = sorted(
+        {
+            rule_id
+            for rule_id, source_id, target_id in rule_pairs
+            if source_id in cyclic_nodes and target_id in cyclic_nodes
+            and target_id in adjacency[source_id]
+        }
+    )
+    if cyclic_rule_ids:
+        abort_with_rule_ids(
+            cyclic_rule_ids,
+            "would form a dependency cycle with existing canonical edges",
+        )
+
+
+def revert_backfilled_edges(bind: Connection) -> int:
+    """Delete only Dependency rows inserted by this cutover backfill.
+
+    Live write-path edges use ``canonical:rule:<id>`` and must survive
+    downgrade; their ``reading_plan_dependencies`` links stay with them.
+    Backfill notes are ``canonical:rule-backfill:<id>``. CASCADE unlinks
+    only the provenance rows for the deleted backfill edges.
+    """
+    result = bind.execute(
+        sa.text("DELETE FROM dependencies WHERE note LIKE :pattern"),
+        {"pattern": f"{BACKFILL_EDGE_NOTE_PREFIX}%"},
+    )
+    return int(result.rowcount or 0)
+
+
 def backfill_item_read_edges(bind: Connection) -> tuple[int, int]:
     """Persist one edge per rule-native item_read rule. Returns (inserted, skipped_existing)."""
     _abort_on_cbl_collisions(
@@ -213,7 +314,7 @@ def backfill_item_read_edges(bind: Connection) -> tuple[int, int]:
         sa.text(
             "INSERT INTO dependencies (source_issue_id, target_issue_id, note, created_at) "
             "SELECT r.source_id, r.target_id, "
-            f"'{EDGE_NOTE_PREFIX}' || r.id, now() "
+            f"'{BACKFILL_EDGE_NOTE_PREFIX}' || r.id, now() "
             "FROM continuity_rules r "
             "WHERE r.legacy_dependency_id IS NULL "
             "AND r.satisfaction_type = 'item_read' "
@@ -248,7 +349,7 @@ def backfill_converged_edges(bind: Connection) -> tuple[int, int, int]:
         sa.text(
             "INSERT INTO dependencies (source_issue_id, target_issue_id, note, created_at) "
             "SELECT DISTINCT (elem->>'id')::int, r.target_id, "
-            f"'{EDGE_NOTE_PREFIX}' || r.id, now() "
+            f"'{BACKFILL_EDGE_NOTE_PREFIX}' || r.id, now() "
             "FROM continuity_rules r, "
             "LATERAL json_array_elements(r.convergence_targets) AS elem "
             "WHERE r.legacy_dependency_id IS NULL "

@@ -10,12 +10,14 @@ from datetime import datetime
 from hashlib import sha256
 import json
 
-from sqlalchemy import delete
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
+from app.models.issue import Issue
+from app.models.thread import Thread
 from app.services.continuity_graph import invalidate_continuity_snapshot as _invalidate_continuity_snapshot
 from comic_pile.dependencies import (
     _get_blocked_thread_ids_uncached,
@@ -256,12 +258,65 @@ async def retire_plan_compiled_edges(db: AsyncSession, *, rule_ids: list[int]) -
     Plan rollbacks must retire a plan's compiled edges before checking that
     legacy dependency IDs/pairs are free: the cutover compiles plan rules
     into Dependencies, so those pairs are legitimately occupied until the
-    plan's rules are removed. Only edges whose note identifies one of the
-    given rules are deleted; edges compiled from other rules (or standalone
-    reader-created dependencies) are left alone.
+    plan's rules are removed. A pair is kept when another surviving rule
+    still compiles to it (the same shared-pair check as plan deletion), so
+    a standalone rule whose note was refreshed onto the plan rule's id is
+    not stranded.
     """
     if not rule_ids:
         return
-    notes = [f"canonical:rule:{rule_id}" for rule_id in rule_ids]
-    await db.execute(delete(Dependency).where(Dependency.note.in_(notes)))
+    from app.services.canonical_constraint_compiler import (
+        BACKFILL_EDGE_NOTE_PREFIX,
+        EDGE_NOTE_PREFIX,
+        retire_rule_edges,
+        rule_edge_pairs,
+    )
+
+    rules = list(
+        (await db.execute(select(ContinuityRule).where(ContinuityRule.id.in_(rule_ids))))
+        .scalars()
+        .all()
+    )
+    excluded = set(rule_ids)
+    pairs_by_user: dict[int, set[tuple[int, int]]] = {}
+    for rule in rules:
+        pairs_by_user.setdefault(rule.user_id, set()).update(rule_edge_pairs(rule))
+
+    # Ultimate rollback deletes the plan rules first. Recover pairs from the
+    # notes those rules left on Dependency rows so retirement still runs.
+    notes = [f"{EDGE_NOTE_PREFIX}{rule_id}" for rule_id in rule_ids]
+    notes.extend(f"{BACKFILL_EDGE_NOTE_PREFIX}{rule_id}" for rule_id in rule_ids)
+    noted_pairs = {
+        (int(source_id), int(target_id))
+        for source_id, target_id in (
+            await db.execute(
+                select(Dependency.source_issue_id, Dependency.target_issue_id).where(
+                    Dependency.note.in_(notes)
+                )
+            )
+        ).all()
+    }
+    if noted_pairs:
+        if pairs_by_user:
+            for pairs in pairs_by_user.values():
+                pairs.update(noted_pairs)
+        else:
+            sample_issue_id = next(iter(noted_pairs))[0]
+            owner_id = await db.scalar(
+                select(Thread.user_id)
+                .join(Issue, Issue.thread_id == Thread.id)
+                .where(Issue.id == sample_issue_id)
+            )
+            if owner_id is not None:
+                pairs_by_user[int(owner_id)] = set(noted_pairs)
+
+    for user_id, pairs in pairs_by_user.items():
+        if not pairs:
+            continue
+        await retire_rule_edges(
+            db,
+            user_id=user_id,
+            pairs=list(pairs),
+            exclude_rule_ids=excluded,
+        )
     await db.flush()
