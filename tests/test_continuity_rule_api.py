@@ -449,3 +449,36 @@ async def test_converged_gate_cycle_through_existing_convergence_target_is_rejec
     assert second.status_code == 409
     assert second.json()["detail"]["code"] == "continuity_cycle"
 
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_update_to_non_compilable_rule(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """PUT validates compilability: updating to a non-compiling shape is 400 (#2553)."""
+    user = await get_or_create_user_async(async_db)
+    issue_a = await _make_issue(async_db, user_id=user.id, suffix="put-a")
+    issue_b = await _make_issue(async_db, user_id=user.id, suffix="put-b")
+    group = await _make_group(async_db, user_id=user.id, suffix="put-group")
+    await async_db.commit()
+
+    # Start from a compilable rule.
+    created = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", issue_a.id, "issue", issue_b.id),
+    )
+    assert created.status_code == 201, created.text
+    rule_id = created.json()["id"]
+
+    # Updating to a crossover endpoint must be rejected, not silently saved.
+    bad = await auth_client.put(
+        f"/api/v1/continuity-rules/{rule_id}",
+        json=_payload("issue", issue_a.id, "crossover", group.id),
+    )
+    assert bad.status_code == 400, bad.text
+    assert bad.json()["detail"]["code"] == "continuity_rule_not_compilable"
+
+    # The original rule (and its edge) must be unchanged.
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["target_type"] == "issue"
