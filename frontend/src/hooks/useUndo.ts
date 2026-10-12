@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { undoApi } from '../services/api-undo'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -32,8 +32,14 @@ export function useSnapshots(sessionId: number | string | null | undefined) {
 export function useUndo() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
+  // Synchronous re-entry guard: React state updates batch, so two rapid
+  // clicks can both pass an `isPending` check before either re-renders and
+  // each one would log its own identical undo event (#3265).
+  const pendingRef = useRef(false)
 
   const mutate = useCallback(async ({ sessionId, snapshotId }: UndoPayload) => {
+    if (pendingRef.current) return
+    pendingRef.current = true
     setIsPending(true)
     setIsError(false)
 
@@ -44,6 +50,7 @@ export function useUndo() {
       console.error('Failed to undo action:', getApiErrorDetail(error))
       throw error
     } finally {
+      pendingRef.current = false
       setIsPending(false)
     }
   }, [])

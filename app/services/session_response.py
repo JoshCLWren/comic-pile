@@ -4,20 +4,65 @@ This module consolidates cross-router shared logic that was previously
 living as private functions in session.py, snooze.py, and roll.py.
 """
 
+from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
+from app.repositories import reading_session_repository, thread_repository
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import (
+    EventDetail,
     SnoozeCorrectionInfo,
     SnoozedThreadInfo,
     build_session_bandwidth_state,
     build_session_intent_state,
 )
 from comic_pile.reading_session import get_current_die
+
+#: Reader-friendly verbs for session event types on the history timeline.
+EVENT_TYPE_DESCRIPTIONS: dict[str, str] = {
+    "skip": "Skipped",
+    "rolled_but_skipped": "Skipped",
+    "complete": "Completed",
+    "completion": "Completed",
+    "reorder": "Reordered",
+    "undo": "Restored",
+    "restore": "Restored",
+    "move": "Moved",
+    "shuffle": "Shuffled",
+    "roll": "Rolled",
+    "rate": "Rated",
+    "unsnooze": "Unsnoozed",
+}
+
+
+def _event_word(event_type: str) -> str:
+    """Return a reader-friendly verb for a session event type.
+
+    Args:
+        event_type: Raw event type identifier.
+
+    Returns:
+        Human-readable past-tense verb for timeline descriptions.
+    """
+    return EVENT_TYPE_DESCRIPTIONS.get(event_type, event_type.replace("_", " ").capitalize())
+
+
+def _deleted_title(title: str | None) -> str:
+    """Return display text for a deleted thread reference.
+
+    Args:
+        title: Last-known title recovered from snapshots, or None.
+
+    Returns:
+        The recovered title with a deletion marker, or a graceful fallback.
+    """
+    if title:
+        return f"{title} (deleted)"
+    return "deleted thread"
 
 
 async def build_ladder_path(
@@ -268,6 +313,160 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     )
 
     return await build_canonical_summary(session_id, db)
+
+
+def _event_thread_id(event: Event) -> int | None:
+    """Return the thread referenced by a session event, if any.
+
+    Roll events record their pick in ``selected_thread_id``; every other type
+    uses ``thread_id``. Undo events may carry either (undoing a roll preserves
+    the roll's selected reference), so ``thread_id`` is preferred with a
+    fallback to ``selected_thread_id``.
+
+    Args:
+        event: The session event to inspect.
+
+    Returns:
+        The referenced thread ID, or None when the event names no thread.
+    """
+    if event.type == "roll":
+        return event.selected_thread_id
+    if event.thread_id is not None:
+        return event.thread_id
+    return event.selected_thread_id
+
+
+async def build_session_event_details(
+    db: AsyncSession,
+    session_id: int,
+    events: Sequence[Event],
+) -> list[EventDetail]:
+    """Format session events for the history timeline.
+
+    Live threads are loaded with the same thread-id resolution the timeline
+    uses, so an event can never be flagged ``thread_deleted`` just because a
+    caller forgot to prefetch its reference. Events that reference a deleted
+    thread resolve their title from the session's snapshots when possible and
+    are flagged with ``thread_deleted`` so the timeline can render a graceful
+    placeholder instead of an error-like missing state (#3265).
+
+    Args:
+        db: Database session.
+        session_id: Session whose snapshots provide last-known titles.
+        events: Session events in display order.
+
+    Returns:
+        EventDetail list with titles, deletion flags, and reader-language
+        descriptions.
+    """
+    thread_ids: set[int] = set()
+    for event in events:
+        thread_id = _event_thread_id(event)
+        if thread_id is not None:
+            thread_ids.add(thread_id)
+    threads_by_id = await thread_repository.threads_by_ids(db, thread_ids)
+    missing_ids = {thread_id for thread_id in thread_ids if thread_id not in threads_by_id}
+    snapshot_titles: dict[int, str] = {}
+    if missing_ids:
+        recovered = await reading_session_repository.snapshot_thread_titles(db, session_id)
+        snapshot_titles = {tid: title for tid, title in recovered.items() if tid in missing_ids}
+
+    formatted_events: list[EventDetail] = []
+    for event in events:
+        thread_id = _event_thread_id(event)
+        thread_title: str | None = None
+        thread_deleted = False
+        if thread_id is not None:
+            thread = threads_by_id.get(thread_id)
+            if thread is not None:
+                thread_title = thread.title
+            else:
+                thread_deleted = True
+                thread_title = snapshot_titles.get(thread_id)
+
+        event_data = EventDetail(
+            id=event.id,
+            type=event.type,
+            timestamp=event.timestamp,
+            thread_title=thread_title,
+            thread_deleted=thread_deleted,
+            issue_number=event.issue_number,
+        )
+
+        if event.type == "roll":
+            event_data.die = event.die
+            event_data.result = event.result
+            event_data.selection_method = event.selection_method
+            if thread_deleted:
+                event_data.description = f"Selected {_deleted_title(thread_title)}"
+            else:
+                event_data.description = f"Selected {thread_title or 'a thread'}"
+        elif event.type == "rate":
+            event_data.rating = event.rating
+            event_data.issues_read = event.issues_read
+            event_data.queue_move = event.queue_move
+            event_data.die_after = event.die_after
+            parts = ["Rated"]
+            if thread_title:
+                parts.append(thread_title if not thread_deleted else _deleted_title(thread_title))
+            elif thread_deleted:
+                parts.append("deleted thread")
+            if event.issues_read:
+                noun = "issue" if event.issues_read == 1 else "issues"
+                parts.append(f"{event.issues_read} {noun} read")
+            if event.rating is not None:
+                parts.append(f"{event.rating:.1f}/5")
+            event_data.description = " · ".join(parts)
+        elif event.type == "snooze":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            if thread_deleted:
+                event_data.description = f"Snoozed {_deleted_title(thread_title)}"
+            else:
+                event_data.description = f"Snoozed {thread_title or 'thread'}"
+        elif event.type == "unsnooze":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            if thread_deleted:
+                event_data.description = f"Unsnoozed {_deleted_title(thread_title)}"
+            else:
+                event_data.description = f"Unsnoozed {thread_title or 'thread'}"
+        elif event.type == "skip" or event.type == "rolled_but_skipped":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            word = _event_word(event.type)
+            if thread_deleted:
+                event_data.description = f"{word} {_deleted_title(thread_title)}"
+            else:
+                event_data.description = f"{word} {thread_title or 'thread'}"
+        elif event.type == "move":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            if thread_deleted:
+                event_data.description = f"Moved {_deleted_title(thread_title)}"
+            else:
+                event_data.description = f"Moved {thread_title or 'thread'}"
+        elif event.type == "shuffle":
+            event_data.die = event.die
+            event_data.die_after = event.die_after
+            if thread_deleted:
+                event_data.description = f"Shuffled {_deleted_title(thread_title)}"
+            else:
+                event_data.description = f"Shuffled {thread_title or 'thread'}"
+        elif event.type in ("reorder", "undo", "restore"):
+            word = _event_word(event.type)
+            if thread_deleted:
+                desc_parts = [f"{word} {_deleted_title(thread_title)}"]
+            else:
+                desc_parts = [f"{word} {thread_title or 'thread'}"]
+            if event.rating is not None:
+                desc_parts.append(f"rating {event.rating:.1f}")
+            if event.issue_number:
+                desc_parts.append(f"#{event.issue_number}")
+            event_data.description = " · ".join(desc_parts)
+
+        formatted_events.append(event_data)
+    return formatted_events
 
 
 async def build_session_response(

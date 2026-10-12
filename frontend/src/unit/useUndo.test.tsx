@@ -24,6 +24,7 @@ beforeEach(() => {
   mockedUndoApi.listSnapshots.mockResolvedValue([{ id: 1 }] as never)
   // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   mockedUndoApi.undo.mockResolvedValue(undefined as never)
+  mockedUndoApi.undo.mockClear()
 })
 
 it('loads undo snapshots', async () => {
@@ -40,5 +41,32 @@ it('undoes snapshot', async () => {
     await result.current.mutate({ sessionId: 5, snapshotId: 2 })
   })
 
+  expect(mockedUndoApi.undo).toHaveBeenCalledWith(5, 2)
+})
+
+// #3265: two clicks in the same frame must not log duplicate undo events.
+it('ignores a second undo while one is already in flight', async () => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  // SAFETY: the gate promise is only held, never resolved with a body
+  mockedUndoApi.undo.mockReturnValueOnce(gate as never)
+
+  const { result } = renderHook(() => useUndo(), { wrapper })
+
+  let first!: Promise<void>
+  let second!: Promise<void>
+  act(() => {
+    first = result.current.mutate({ sessionId: 5, snapshotId: 2 })
+    second = result.current.mutate({ sessionId: 5, snapshotId: 2 })
+  })
+  await act(async () => {
+    release()
+    await first
+    await second
+  })
+
+  expect(mockedUndoApi.undo).toHaveBeenCalledTimes(1)
   expect(mockedUndoApi.undo).toHaveBeenCalledWith(5, 2)
 })

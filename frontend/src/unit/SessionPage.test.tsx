@@ -428,3 +428,28 @@ it('separates same-minute timeline events with second precision', () => {
   expect(timestamps).toHaveLength(2)
   expect(new Set(timestamps.map((node) => node.textContent)).size).toBe(2)
 })
+
+// #3265: deleted threads render a graceful placeholder with the last known
+// title and a deletion marker instead of an error-like missing state.
+it('marks deleted threads instead of showing them as unavailable', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 24, started_at: '2024-01-01', ended_at: null, start_die: 20, current_die: 20,
+    ladder_path: 'd20', narrative_summary: {},
+    events: [
+      { id: 40, timestamp: '2024-01-01', type: 'roll', thread_title: 'Saga', thread_deleted: true, issue_number: '44', result: 3, die: 6 },
+      { id: 41, timestamp: '2024-01-01', type: 'roll', thread_title: null, thread_deleted: true, issue_number: '5', result: 3, die: 6 },
+      { id: 42, timestamp: '2024-01-01', type: 'roll', thread_title: 'Flash', thread_deleted: false, result: 3, die: 6 },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  expect(
+    screen.getByText((_text, node) => node?.textContent === 'Saga · #44 (deleted)'),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText((_text, node) => node?.textContent === 'Deleted thread · #5'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('Flash')).toBeInTheDocument()
+  expect(screen.queryByText('Thread unavailable')).not.toBeInTheDocument()
+})
