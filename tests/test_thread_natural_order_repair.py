@@ -74,17 +74,19 @@ async def test_preflight_reports_17982_shape_without_writing(
 ) -> None:
     """Read-only preflight plans the reseat and leaves positions untouched."""
     thread, issues = await _messy_ultimate_xmen(async_db, "repair-preflight-uxm")
-    issue_13 = next(issue for issue in issues if issue.issue_number == "13")
+    thread_id = thread.id
+    user_id = thread.user_id
+    issue_13_id = next(issue.id for issue in issues if issue.issue_number == "13")
 
     report = await repair_thread_natural_issue_order(
-        async_db, user_id=thread.user_id, thread_id=thread.id, commit=False
+        async_db, user_id=user_id, thread_id=thread_id, commit=False
     )
 
     assert report.mode == "preflight"
     assert report.committed is False
     assert report.repaired == 1
-    assert report.repairs[0].thread_id == thread.id
-    assert report.repairs[0].next_unread_issue_id_before == issue_13.id
+    assert report.repairs[0].thread_id == thread_id
+    assert report.repairs[0].next_unread_issue_id_before == issue_13_id
     assert [
         item.issue_number
         for item in sorted(
@@ -92,11 +94,12 @@ async def test_preflight_reports_17982_shape_without_writing(
         )
     ] == [str(number) for number in range(2, 25)]
 
-    await async_db.refresh(thread)
-    assert await _ordered_numbers(async_db, thread.id) == [
+    persisted = await async_db.get(Thread, thread_id)
+    assert persisted is not None
+    assert await _ordered_numbers(async_db, thread_id) == [
         str(number) for number in range(7, 25)
     ] + [str(number) for number in range(2, 7)]
-    assert thread.next_unread_issue_id == issue_13.id
+    assert persisted.next_unread_issue_id == issue_13_id
 
 
 @pytest.mark.asyncio
@@ -136,22 +139,25 @@ async def test_apply_reseats_17982_and_points_next_unread_at_first_unread(
 async def test_rollback_restores_snapshot_positions(async_db: AsyncSession) -> None:
     """Rollback from an apply snapshot restores the previous positions."""
     thread, _issues = await _messy_ultimate_xmen(async_db, "repair-rollback-uxm")
-    original = await _ordered_numbers(async_db, thread.id)
+    thread_id = thread.id
+    user_id = thread.user_id
+    original = await _ordered_numbers(async_db, thread_id)
     original_next = thread.next_unread_issue_id
 
     applied = await repair_thread_natural_issue_order(
-        async_db, user_id=thread.user_id, thread_id=thread.id, commit=True
+        async_db, user_id=user_id, thread_id=thread_id, commit=True
     )
-    assert await _ordered_numbers(async_db, thread.id) != original
+    assert await _ordered_numbers(async_db, thread_id) != original
 
     rolled = await rollback_thread_natural_issue_order(
         async_db, applied.to_snapshot(), commit=True
     )
     assert rolled.mode == "rollback"
     assert rolled.committed is True
-    await async_db.refresh(thread)
-    assert await _ordered_numbers(async_db, thread.id) == original
-    assert thread.next_unread_issue_id == original_next
+    persisted = await async_db.get(Thread, thread_id)
+    assert persisted is not None
+    assert await _ordered_numbers(async_db, thread_id) == original
+    assert persisted.next_unread_issue_id == original_next
 
 
 @pytest.mark.asyncio

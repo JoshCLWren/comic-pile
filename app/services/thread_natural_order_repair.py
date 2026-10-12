@@ -84,7 +84,13 @@ class NaturalOrderRepairReport:
             "skipped_already_natural": self.skipped_already_natural,
             "repaired": self.repaired,
             "committed": self.committed,
-            "repairs": [asdict(repair) for repair in self.repairs],
+            "repairs": [
+                {
+                    **asdict(repair),
+                    "issues": [asdict(issue) for issue in repair.issues],
+                }
+                for repair in self.repairs
+            ],
         }
 
 
@@ -278,7 +284,7 @@ def _repair_from_snapshot(raw: object) -> ThreadNaturalOrderRepair:
     if not isinstance(raw, dict):
         raise NaturalOrderRepairError("snapshot repair must be an object")
     issues_raw = raw.get("issues")
-    if not isinstance(issues_raw, list):
+    if not isinstance(issues_raw, list | tuple):
         raise NaturalOrderRepairError("snapshot repair issues must be a list")
     issues: list[IssuePositionSnapshot] = []
     for issue_raw in issues_raw:
