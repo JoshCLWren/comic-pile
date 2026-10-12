@@ -1,0 +1,126 @@
+{
+  "report_version": "v1",
+  "issue_ref": "#3217",
+  "title": "DB scale 01 — read-only storage, index, and query census",
+  "measurement_timestamp_utc": "2026-10-11T23:01:55.811008+00:00",
+  "postgresql_version": null,
+  "read_only_transaction": true,
+  "mutation_modes_rejected": true,
+  "explain_analyze_on_writes_rejected": true,
+  "redaction_applied": true,
+  "redacted_fields": [
+    "user_display_name",
+    "thread_title",
+    "issue_notes",
+    "payload_content",
+    "credentials",
+    "identifiable_titles"
+  ],
+  "fixture_definitions": {
+    "users_2_small": {
+      "profile": "users_2_small",
+      "users": 2,
+      "threads": 4,
+      "events": 12,
+      "snapshots": 3,
+      "library_size": "small",
+      "snapshot_mix": [
+        "legacy",
+        "delta"
+      ],
+      "shared_provider_identities": [
+        "provider-alpha",
+        "provider-beta"
+      ],
+      "synthetic": true,
+      "redacted": true
+    },
+    "users_100_large": {
+      "profile": "users_100_large",
+      "users": 100,
+      "threads": 320,
+      "events": 880,
+      "snapshots": 180,
+      "library_size": "large",
+      "snapshot_mix": [
+        "legacy",
+        "delta",
+        "shared_provider"
+      ],
+      "shared_provider_identities": [
+        "provider-alpha",
+        "provider-beta"
+      ],
+      "synthetic": true,
+      "redacted": true
+    }
+  },
+  "synthetic_baseline": {
+    "users_2_small": {
+      "fixture": "users_2_small",
+      "synthetic": true,
+      "users": 2,
+      "threads": 4,
+      "events": 12,
+      "snapshots": 3,
+      "library_size": "small",
+      "snapshot_mix": [
+        "legacy",
+        "delta"
+      ],
+      "shared_provider_identities": [
+        "provider-alpha",
+        "provider-beta"
+      ],
+      "simulated_table_bytes": {
+        "users": 512,
+        "threads": 2048,
+        "events": 1536,
+        "snapshots": 7680
+      },
+      "simulated_index_bytes": 4096,
+      "simulated_toast_bytes": 1024,
+      "simulated_total_bytes": 16896,
+      "redacted_payload_content": true
+    },
+    "users_100_large": {
+      "fixture": "users_100_large",
+      "synthetic": true,
+      "users": 100,
+      "threads": 320,
+      "events": 880,
+      "snapshots": 180,
+      "library_size": "large",
+      "snapshot_mix": [
+        "legacy",
+        "delta",
+        "shared_provider"
+      ],
+      "shared_provider_identities": [
+        "provider-alpha",
+        "provider-beta"
+      ],
+      "simulated_table_bytes": {
+        "users": 25600,
+        "threads": 163840,
+        "events": 112640,
+        "snapshots": 460800
+      },
+      "simulated_index_bytes": 81920,
+      "simulated_toast_bytes": 51200,
+      "simulated_total_bytes": 896000,
+      "redacted_payload_content": true
+    }
+  },
+  "real_measurement": null,
+  "index_overview": {
+    "constraint_backed_indexes_reviewed": true,
+    "overlapping_index_candidates_identified": false,
+    "predicate_key_uniqueness_deferrability_noted": true
+  },
+  "query_growth_notes": {
+    "undo_workload": "bounded by pre-compute before commit (test_undo_performance.py)",
+    "reorder_workload": "queue_position indexed path; bounded sample",
+    "hardware_specific_latency_claims": null
+  }
+}
