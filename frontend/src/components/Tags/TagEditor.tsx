@@ -285,10 +285,12 @@ export function TagEditor({
                       <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] px-2.5 py-1 text-xs text-[var(--theme-text-muted)]">
                         <span
                           aria-hidden="true"
-                          className="inline-block h-2 w-2 shrink-0 rounded-full"
+                          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                           style={{ backgroundColor: tag.color }}
                         />
-                        <span className="min-w-0 truncate font-semibold">{tag.name}</span>
+                        <span className="min-w-0 truncate font-bold text-[var(--theme-text-primary)]">
+                          {tag.name}
+                        </span>
                         {tag.scope === 'global' && (
                           <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">
                             Global

@@ -41,7 +41,7 @@ export function TagSection({
   return (
     <div className="min-w-0 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+        <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
           {title}
         </span>
         <button
