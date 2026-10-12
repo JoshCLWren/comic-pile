@@ -1,0 +1,13 @@
+{
+  "revision": "m5d200000001",
+  "summary": "Enforce one membership per canonical issue per Reading Plan (#3037): prove no duplicate (plan_id, issue_id) pairs exist before the unique constraint is added.",
+  "risks": ["unique-constraint"],
+  "preflight_checks": [
+    {
+      "name": "no duplicate canonical issue memberships in reading plans",
+      "condition": "reading_plan_issues contains no (plan_id, issue_id) pair more than once",
+      "sql": "SELECT count(*) FROM (SELECT plan_id, issue_id FROM reading_plan_issues GROUP BY plan_id, issue_id HAVING count(*) > 1) AS duplicates",
+      "expect": { "operator": "equals", "value": 0 }
+    }
+  ]
+}
