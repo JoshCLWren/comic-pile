@@ -7,7 +7,7 @@ return ORM models or plain values; callers (services) own transactions.
 from datetime import datetime
 from typing import TypedDict
 
-from sqlalchemy import and_, delete, func, literal_column, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -424,7 +424,9 @@ async def fetch_comicvine_mapping_health(
     """Compute ComicVine mapping health for a set of threads in a single batched query.
 
     Derives health from stored canonical issue mappings only. No live provider calls.
-    Counts are scoped to the issues represented by each thread.
+    Counts are scoped to the issues represented by each thread. Threads without
+    issue tracking (legacy) or without issue rows resolve to zero counts via the
+    Python fill-in below, so this query only aggregates tracked threads.
 
     Args:
         db: Database session.
@@ -443,7 +445,10 @@ async def fetch_comicvine_mapping_health(
     # - issues with no confirmed mapping (unresolved/candidate or no mapping at all)
     # - issues with multiple confirmed mappings or other conflicts (needs_review_count)
 
-    # Subquery: for each issue, determine its mapping state
+    # Subquery: for each issue, determine its mapping state. The per-issue
+    # grain is required so that fan-out from multiple mappings on one issue
+    # cannot inflate thread-level counts, and so that issues with more than
+    # one confirmed mapping are detectable for review.
     issue_mapping_state = (
         select(
             Issue.id.label("issue_id"),
@@ -456,16 +461,10 @@ async def fetch_comicvine_mapping_health(
                 )
             )
             .label("confirmed_count"),
-            func.count()
-            .filter(
-                and_(
-                    IssueExternalIdentityMapping.status.in_(["candidate", "unresolved"]),
-                    ExternalIdentity.provider == "comicvine",
-                )
-            )
-            .label("unconfirmed_count"),
         )
         .select_from(Issue)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.total_issues.is_not(None))
         .outerjoin(
             IssueExternalIdentityMapping,
             IssueExternalIdentityMapping.issue_id == Issue.id,
@@ -479,68 +478,26 @@ async def fetch_comicvine_mapping_health(
         .subquery()
     )
 
-    # Aggregate per thread
-    thread_aggregation = (
-        select(
-            issue_mapping_state.c.thread_id,
-            func.count(issue_mapping_state.c.issue_id).label("tracked_issue_count"),
-            func.count()
-            .filter(issue_mapping_state.c.confirmed_count > 0)
-            .label("confirmed_issue_count"),
-            func.count()
-            .filter(issue_mapping_state.c.confirmed_count == 0)
-            .label("needs_mapping_count"),
-            func.count()
-            .filter(issue_mapping_state.c.confirmed_count > 1)
-            .label("needs_review_count"),
-            (func.count(issue_mapping_state.c.issue_id) > 0).label("has_issues"),
-        )
-        .group_by(issue_mapping_state.c.thread_id)
-        .subquery()
-    )
+    # Aggregate per thread. This subquery already yields one row per thread,
+    # so selecting from it directly is the whole query: no UNION arm and no
+    # redundant outer GROUP BY pass. Threads with no rows here (legacy or
+    # empty) are completed by the fill-in below with identical zero values.
+    thread_aggregation = select(
+        issue_mapping_state.c.thread_id,
+        func.count(issue_mapping_state.c.issue_id).label("tracked_issue_count"),
+        func.count()
+        .filter(issue_mapping_state.c.confirmed_count > 0)
+        .label("confirmed_issue_count"),
+        func.count()
+        .filter(issue_mapping_state.c.confirmed_count == 0)
+        .label("needs_mapping_count"),
+        func.count()
+        .filter(issue_mapping_state.c.confirmed_count > 1)
+        .label("needs_review_count"),
+        (func.count(issue_mapping_state.c.issue_id) > 0).label("has_issues"),
+    ).group_by(issue_mapping_state.c.thread_id)
 
-    # Also get threads that have no issues at all (legacy or empty)
-    threads_without_issues = (
-        select(
-            Thread.id.label("thread_id"),
-            literal_column("0::bigint").label("tracked_issue_count"),
-            literal_column("0::bigint").label("confirmed_issue_count"),
-            literal_column("0::bigint").label("needs_mapping_count"),
-            literal_column("0::bigint").label("needs_review_count"),
-            literal_column("false::boolean").label("has_issues"),
-        )
-        .where(Thread.id.in_(thread_ids))
-        .where(Thread.total_issues.is_(None))  # Legacy threads without issue tracking
-    )
-
-    # Union the two queries using select().union_all()
-    combined = select(
-        thread_aggregation.c.thread_id,
-        thread_aggregation.c.tracked_issue_count,
-        thread_aggregation.c.confirmed_issue_count,
-        thread_aggregation.c.needs_mapping_count,
-        thread_aggregation.c.needs_review_count,
-        thread_aggregation.c.has_issues,
-    ).union_all(threads_without_issues).subquery()
-
-    # Final select
-    final_query = select(
-        combined.c.thread_id,
-        combined.c.tracked_issue_count,
-        combined.c.confirmed_issue_count,
-        combined.c.needs_mapping_count,
-        combined.c.needs_review_count,
-        combined.c.has_issues,
-    ).group_by(
-        combined.c.thread_id,
-        combined.c.tracked_issue_count,
-        combined.c.confirmed_issue_count,
-        combined.c.needs_mapping_count,
-        combined.c.needs_review_count,
-        combined.c.has_issues,
-    )
-
-    result = await db.execute(final_query)
+    result = await db.execute(thread_aggregation)
     rows = result.all()
 
     health_map: dict[int, _MappingHealthRow] = {}
