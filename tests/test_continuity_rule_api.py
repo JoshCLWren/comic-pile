@@ -489,3 +489,44 @@ async def test_put_rejects_update_to_non_compilable_rule(
     assert body["target_type"] == "issue"
     assert body["target_id"] == original_target_id
     assert body["source_id"] == original_source_id
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_converged_rule_with_crossover_prerequisite(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A mixed issue+crossover convergence is rejected, not partially compiled."""
+    user = await get_or_create_user_async(async_db)
+    source = await _make_issue(async_db, user_id=user.id, suffix="mixed-source")
+    target = await _make_issue(async_db, user_id=user.id, suffix="mixed-target")
+    prereq = await _make_issue(async_db, user_id=user.id, suffix="mixed-prereq")
+    group = await _make_group(async_db, user_id=user.id, suffix="mixed-group")
+    await async_db.commit()
+
+    created = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", source.id, "issue", target.id),
+    )
+    assert created.status_code == 201, created.text
+    rule_id = created.json()["id"]
+
+    bad = await auth_client.put(
+        f"/api/v1/continuity-rules/{rule_id}",
+        json={
+            "source_type": "issue",
+            "source_id": source.id,
+            "target_type": "issue",
+            "target_id": target.id,
+            "satisfaction_type": "converged",
+            "convergence_targets": [
+                {"type": "issue", "id": prereq.id},
+                {"type": "crossover", "id": group.id},
+            ],
+        },
+    )
+    assert bad.status_code == 400, bad.text
+    assert bad.json()["detail"]["code"] == "continuity_rule_not_compilable"
+
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["satisfaction_type"] == "item_read"
