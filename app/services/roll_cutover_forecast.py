@@ -42,7 +42,7 @@ SELECT t.id, t.title, t.is_blocked, t.next_unread_issue_id
 FROM threads t
 WHERE t.user_id = :user_id
   AND t.status = 'active'
-  AND t.queue_position IS NOT NULL
+  AND t.queue_position >= 1
 """
 
 _CANONICAL_FRONTIER_SQL = """
@@ -53,7 +53,7 @@ JOIN issues src ON src.id = d.source_issue_id
 JOIN threads st ON st.id = src.thread_id AND st.user_id = :user_id
 WHERE t.user_id = :user_id
   AND t.status = 'active'
-  AND t.queue_position IS NOT NULL
+  AND t.queue_position >= 1
   AND src.status <> 'read'
   AND (d.note IS NULL OR d.note NOT LIKE 'cbl-order:%')
 """
@@ -71,7 +71,7 @@ JOIN issues src ON src.id = r.source_id
 JOIN threads st ON st.id = src.thread_id AND st.user_id = :user_id
 WHERE t.user_id = :user_id
   AND t.status = 'active'
-  AND t.queue_position IS NOT NULL
+  AND t.queue_position >= 1
   AND src.status <> 'read'
 """
 
@@ -87,7 +87,7 @@ JOIN issues src ON src.id = (elem->>'id')::int
 JOIN threads st ON st.id = src.thread_id AND st.user_id = :user_id
 WHERE t.user_id = :user_id
   AND t.status = 'active'
-  AND t.queue_position IS NOT NULL
+  AND t.queue_position >= 1
   AND (elem->>'id')::int <> r.target_id
   AND src.status <> 'read'
 """

@@ -18,7 +18,7 @@ WITH queued AS (
     FROM threads t
     WHERE t.user_id = 1
       AND t.status = 'active'
-      AND t.queue_position IS NOT NULL
+      AND t.queue_position >= 1
 ),
 canonical AS (
     SELECT DISTINCT t.id

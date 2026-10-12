@@ -68,22 +68,33 @@ numbers #1–102 and #103–231 with no overlap **(a)**.
 
 `001_ff_series_thread_merge.sql` is one guarded transaction:
 
-- Preflight asserts counts, no number overlap, consecutive split ids, and **every
-  FK to `threads.id`** (issues, events, reading-order items, group memberships,
-  pending sessions, release sources, series mappings). Non-FK
-  `events.selected_thread_id`, session snooze/skip JSON, `blocked_by_thread_ids`,
-  and plan `nodes_json` are also checked. Abort if anything unexpected appears.
+- **`SELECT … FOR UPDATE` first**: threads 3166/18560, their issues (and split
+  ids 115395–115519), every `pg_constraint` FK child of `threads.id`, plus
+  non-FK referencing rows (`events.selected_thread_id`, session snooze/skip
+  JSON, `blocked_by_thread_ids`, polymorphic `continuity_rules` thread
+  endpoints, `tag_assignments` `Thread` targets, plan `nodes_json` thread
+  nodes). Guards run only after those locks are held.
+- Preflight records `row_to_json` of thread 18560 and mapping 378 and asserts
+  them equal to `001_ff_series_thread_merge_recorded.json`. Also asserts 3166
+  restore fields (title, format, `reading_progress`, next unread, totals,
+  queue, status, owner). Counts, no number overlap, consecutive split ids, and
+  **every FK to `threads.id`**. Abort if anything unexpected appears, including
+  polymorphic thread refs.
 - Issue rows are reassigned (`thread_id=3166`, `position = position + 102`).
   Ids, `status`, `read_at`, ratings, events, and issue-level Dependencies stay.
 - Mapping 378 is dropped. 3166 next unread stays #16. Combined totals: 227
-  issues, 208 remaining.
+  issues, 208 remaining. `reading_progress` is left as the recorded live value.
 - **No persistent backup tables.**
 
-Rollback (`001_ff_series_thread_merge_rollback.sql`) restores from the recorded
-mapping (`id BETWEEN 115395 AND 115519`, original `position = id - 115394`) plus
-the recorded 18560 row and mapping 378 constants. It **refuses** if intervening
-writes (reads, `read_at`, position/thread drift, extra 3166 issues, or a drifted
-3166 frontier) would overwrite progress.
+Rollback (`001_ff_series_thread_merge_rollback.sql`) restores thread 18560 and
+mapping 378 with `jsonb_populate_record` from that receipt, then asserts
+`row_to_json` of the restored rows equals the recorded JSON. Split issues use
+the deterministic mapping (`id BETWEEN 115395 AND 115519`, original
+`position = id - 115394`). 3166 `reading_progress` is restored from the
+recorded canonical receipt, not hard-coded. It **refuses** if intervening
+writes (reads, `read_at`, position/thread drift, extra 3166 issues, a drifted
+3166 frontier, or new dependencies / `reading_plan_issues` / events on the
+moved issue ids) would overwrite progress.
 
 Out of scope: thread 3145 `Fantastic Four` (next ~#600) and completed
 16706/16707 **(a)**.
