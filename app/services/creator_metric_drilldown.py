@@ -76,6 +76,7 @@ async def _load_creator_issue_dicts(
             for issue_id, _, _, _, status in rows
             if status == "read" and inputs.effective_ratings.get(issue_id) is None
         ],
+        inputs=inputs,
     )
     issue_dicts: list[dict] = []
     for issue_id, issue_number, thread_id, thread_title, status in rows:

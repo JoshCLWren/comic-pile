@@ -17,9 +17,10 @@ Evidence model:
   effective rating from it.
 - Identity evidence comes from issue external-identity mappings
   (``confirmed``/``candidate``/``unresolved``/``rejected``).
-- Edition/duplicate evidence comes from normalized ``issue_number`` collisions
-  across the user's other read issues. Collisions inside one thread are
-  impossible (``uq_issue_thread_number``), so every duplicate is cross-thread.
+- Edition/duplicate evidence comes from two owned read issues confirmed against
+  the same external issue identity. Issue numbers are unique only within a
+  thread and every series restarts at 1, so a shared number alone is not
+  conflict evidence.
 """
 
 from __future__ import annotations
@@ -76,21 +77,6 @@ class ReadWithoutRatingSignals:
     )
     mapping_statuses: dict[int, list[str]] = field(default_factory=dict)
     duplicate_issue_ids: dict[int, list[int]] = field(default_factory=dict)
-
-
-def normalize_issue_number(raw: object) -> str:
-    """Normalize an issue number for cross-thread duplicate detection.
-
-    Args:
-        raw: Raw ``issue_number`` value from the database.
-
-    Returns:
-        The stripped, casefolded issue number, or ``""`` when the value is
-        not usable text.
-    """
-    if not isinstance(raw, str):
-        return ""
-    return raw.strip().casefold()
 
 
 @dataclass
@@ -282,42 +268,74 @@ async def _load_duplicate_issue_ids(
     user_id: int,
     issue_ids: Sequence[int],
 ) -> dict[int, list[int]]:
-    """Find cross-thread read-issue collisions on normalized issue numbers.
+    """Find true edition/duplicate conflicts among the requested issues.
+
+    Two owned read issues conflict when both are confirmed against the *same*
+    external issue identity: the library then holds two copies of one work, so
+    a historical rating cannot be attributed to either copy alone.
+
+    A shared normalized issue number is deliberately **not** treated as
+    conflict evidence. ``uq_issue_thread_number`` makes the number unique only
+    *within* a thread, and ComicPile numbers every series from 1, so virtually
+    every issue number collides across unrelated threads. Keying conflicts on
+    the number alone would classify nearly the whole library as an edition
+    conflict and suppress every repair.
 
     Args:
         db: Async database session.
         user_id: Owner whose library scopes the lookup.
-        issue_ids: Read-without-rating issue ids to check for collisions.
+        issue_ids: Read-without-rating issue ids to check for conflicts.
 
     Returns:
         Mapping of issue id to the sorted ids of *other* read issues in the
-        user's library sharing the same normalized issue number. Issues with
-        no collision are absent. Unusable (empty normalized) numbers never
-        collide.
+        user's library confirmed against a shared external identity. Issues
+        with no conflict are absent.
     """
-    wanted = set(int(issue_id) for issue_id in issue_ids)
+    wanted = {int(issue_id) for issue_id in issue_ids}
     if not wanted:
         return {}
-    result = await db.execute(
-        select(Issue.id, Issue.issue_number)
+
+    requested = await db.execute(
+        select(
+            IssueExternalIdentityMapping.issue_id,
+            IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(IssueExternalIdentityMapping.issue_id.in_(wanted))
+        .where(IssueExternalIdentityMapping.status == "confirmed")
+    )
+    issue_identities: dict[int, set[int]] = {}
+    for issue_id, external_identity_id in requested.all():
+        issue_identities.setdefault(int(issue_id), set()).add(int(external_identity_id))
+    shared_identities: set[int] = set()
+    for identities in issue_identities.values():
+        shared_identities |= identities
+    if not shared_identities:
+        return {}
+
+    shared = await db.execute(
+        select(
+            IssueExternalIdentityMapping.issue_id,
+            IssueExternalIdentityMapping.external_identity_id,
+        )
+        .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
         .where(Issue.status == "read")
+        .where(IssueExternalIdentityMapping.status == "confirmed")
+        .where(IssueExternalIdentityMapping.external_identity_id.in_(shared_identities))
     )
-    by_number: dict[str, list[int]] = {}
-    for issue_id, issue_number in result.all():
-        normalized = normalize_issue_number(issue_number)
-        if normalized:
-            by_number.setdefault(normalized, []).append(int(issue_id))
+    by_identity: dict[int, set[int]] = {}
+    for issue_id, external_identity_id in shared.all():
+        by_identity.setdefault(int(external_identity_id), set()).add(int(issue_id))
+
     duplicates: dict[int, list[int]] = {}
-    for numbers in by_number.values():
-        if len(numbers) < 2:
-            continue
-        for issue_id in numbers:
-            if issue_id in wanted:
-                others = sorted(other for other in numbers if other != issue_id)
-                if others:
-                    duplicates[issue_id] = others
+    for issue_id, identities in issue_identities.items():
+        others: set[int] = set()
+        for identity_id in identities:
+            others |= by_identity.get(identity_id, set())
+        others.discard(issue_id)
+        if others:
+            duplicates[issue_id] = sorted(others)
     return duplicates
 
 
@@ -394,5 +412,4 @@ __all__ = [
     "load_owned_issue_identities",
     "load_read_without_rating_signals",
     "load_repair_event_issue_ids",
-    "normalize_issue_number",
 ]

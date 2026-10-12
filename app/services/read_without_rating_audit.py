@@ -6,8 +6,8 @@ event. This service explains that population row by row and repairs only the
 rows where a known historical rating is safely matchable.
 
 Classification contract (one cause per row, first match wins):
-- ``edition_conflict``: another read issue in the library shares the same
-  normalized issue number, so no historical rating can be attributed to one
+- ``edition_conflict``: another owned read issue is confirmed against the same
+  external issue identity, so no historical rating can be attributed to one
   copy without guessing. Never repaired.
 - ``ambiguous_thread_rating``: thread-level historical rating(s) exist but
   cannot be attributed safely (several unrated read issues share the thread,
@@ -212,8 +212,8 @@ def classify_missing_rating(
         historical_ratings: Thread-level historical ratings for the thread,
             oldest first.
         mapping_statuses: Distinct identity-mapping statuses for the issue.
-        duplicate_issue_ids: Other read issues sharing the normalized issue
-            number.
+        duplicate_issue_ids: Other owned read issues confirmed against a
+            shared external issue identity.
         unrated_read_in_thread: Count of read issues without an effective
             rating in the thread, including this issue.
 
@@ -229,8 +229,9 @@ def classify_missing_rating(
             detail={
                 "duplicate_issue_ids": list(duplicate_issue_ids),
                 "reason": (
-                    "Another read issue shares this issue number, so a "
-                    "historical rating cannot be attributed to one copy."
+                    "Another read issue is confirmed against the same external "
+                    "issue identity, so the library holds two copies and a "
+                    "historical rating cannot be attributed to one of them."
                 ),
             },
         )
@@ -380,6 +381,8 @@ async def classify_issue_ids(
     db: AsyncSession,
     user_id: int,
     issue_ids: list[int],
+    *,
+    inputs: CreatorSummaryInputs | None = None,
 ) -> dict[int, MissingRatingCause]:
     """Classify exactly the requested read-without-rating issues.
 
@@ -390,6 +393,9 @@ async def classify_issue_ids(
         db: Async database session.
         user_id: Owner of the library.
         issue_ids: Read-without-rating issue ids to classify.
+        inputs: Already-loaded creator summary inputs. Callers that hold them
+            must pass them so the shared aggregation is not re-read; omit only
+            when the caller has none.
 
     Returns:
         Mapping of issue id to its evidenced classification. Requested ids
@@ -398,7 +404,8 @@ async def classify_issue_ids(
     unique_ids = list(dict.fromkeys(issue_ids))
     if not unique_ids:
         return {}
-    inputs = await load_creator_summary_inputs(db, user_id)
+    if inputs is None:
+        inputs = await load_creator_summary_inputs(db, user_id)
     population = _read_without_rating_ids(inputs, unique_ids)
     if not population:
         return {}

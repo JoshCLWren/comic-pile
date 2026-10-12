@@ -104,6 +104,34 @@ async def _confirm_identity(
     await db.flush()
 
 
+async def _confirm_shared_identity(
+    db: AsyncSession,
+    first: Issue,
+    second: Issue,
+) -> None:
+    """Confirm two local issues against one shared external issue identity."""
+    global _identity_serial
+    _identity_serial += 1
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id=f"shared-{_identity_serial}",
+        metadata_json={"creator_credits": []},
+    )
+    db.add(identity)
+    await db.flush()
+    for issue in (first, second):
+        db.add(
+            IssueExternalIdentityMapping(
+                issue_id=issue.id,
+                external_identity_id=identity.id,
+                status="confirmed",
+                confidence=1.0,
+            )
+        )
+    await db.flush()
+
+
 async def _candidate_mapping(db: AsyncSession, issue: Issue) -> None:
     """Create a candidate (non-confirmed) identity mapping for an issue."""
     global _identity_serial
@@ -350,7 +378,7 @@ async def test_edition_conflict_blocks_repair_despite_rating(
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
-    """Duplicate issue numbers across threads block attribution."""
+    """Two copies confirmed to one external identity block attribution."""
     thread_a, issues_a = await _make_thread(
         async_db, default_user, title="Team Book", issue_count=1, queue_position=1,
         read_through=1,
@@ -359,8 +387,9 @@ async def test_edition_conflict_blocks_repair_despite_rating(
         async_db, default_user, title="Team Book Reprint", issue_count=1,
         queue_position=2, read_through=1,
     )
-    await _confirm_identity(async_db, issues_a[0])
-    await _confirm_identity(async_db, issues_b[0])
+    # Both local issues resolve to the same provider issue: a genuine
+    # edition/duplicate conflict.
+    await _confirm_shared_identity(async_db, issues_a[0], issues_b[0])
     await _thread_rate(async_db, thread_a, rating=4.5, timestamp=D1)
 
     audit = await audit_read_without_rating(async_db, default_user.id)
@@ -378,6 +407,45 @@ async def test_edition_conflict_blocks_repair_despite_rating(
     report = await repair_safe_missing_ratings(async_db, default_user.id)
     assert report.repaired == 0
     assert await _issue_rate_events(async_db, issues_a[0].id) == []
+
+
+@pytest.mark.asyncio
+async def test_shared_issue_number_across_threads_is_not_a_conflict(
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Two unrelated series both numbered 1 are not an edition conflict.
+
+    Every ComicPile series restarts at issue 1, so number collisions across
+    threads are the norm. Treating them as duplicates would classify the whole
+    library as conflicted and suppress every repair.
+    """
+    thread_a, issues_a = await _make_thread(
+        async_db, default_user, title="Alpha", issue_count=1, queue_position=1,
+        read_through=1,
+    )
+    _thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Beta", issue_count=1, queue_position=2,
+        read_through=1,
+    )
+    assert issues_a[0].issue_number == issues_b[0].issue_number
+    await _confirm_identity(async_db, issues_a[0])
+    await _confirm_identity(async_db, issues_b[0])
+    await _thread_rate(async_db, thread_a, rating=4.5, timestamp=D1)
+
+    audit = await audit_read_without_rating(async_db, default_user.id)
+    assert audit.total == 2
+    assert audit.by_cause == {
+        CAUSE_MISSING_RATE_EVENT: 1,
+        CAUSE_NO_SOURCE_RATING: 1,
+    }
+
+    report = await repair_safe_missing_ratings(async_db, default_user.id)
+    assert report.repaired == 1
+    assert report.repaired_issue_ids == [issues_a[0].id]
+    events = await _issue_rate_events(async_db, issues_a[0].id)
+    assert len(events) == 1
+    assert events[0].rating == pytest.approx(4.5)
 
 
 @pytest.mark.asyncio
