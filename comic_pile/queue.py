@@ -4,6 +4,7 @@ from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 import logging
 import random
+from typing import NamedTuple
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
@@ -14,6 +15,21 @@ logger = logging.getLogger(__name__)
 
 ADVISORY_LOCK_NAMESPACE = 699001
 QueuePositionChanges = dict[int, int]
+
+
+class ActiveQueueThread(NamedTuple):
+    """The active-queue columns `move_to_safe_position` actually needs.
+
+    Safe-position placement reads only identity, ordering, and blocked state for
+    every active thread. Selecting the full ``Thread`` entity instead made
+    SQLAlchemy build one ORM instance per active thread on every rate call that
+    lands in the safe-position branch, so the projection is pinned here to the
+    three columns the placement algorithm consumes.
+    """
+
+    id: int
+    queue_position: int
+    is_blocked: bool
 
 
 async def _acquire_queue_lock(user_id: int, db: AsyncSession) -> None:
@@ -331,13 +347,13 @@ async def move_to_safe_position(
 
     excluded_ids = set(excluded_thread_ids or ())
     result = await db.execute(
-        select(Thread)
+        select(Thread.id, Thread.queue_position, Thread.is_blocked)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
         .order_by(Thread.queue_position, Thread.id)
     )
-    all_active = list(result.scalars().all())
+    all_active = [ActiveQueueThread(*row) for row in result.all()]
     rollable = [t for t in all_active if not t.is_blocked and t.id not in excluded_ids]
 
     target_rollable_index = next(

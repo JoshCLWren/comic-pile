@@ -337,6 +337,24 @@ async def default_user(async_db: SQLAlchemyAsyncSession) -> User:
     return await _ensure_default_user_async(async_db)
 
 
+@pytest_asyncio.fixture(scope="function")
+async def db(async_db: SQLAlchemyAsyncSession) -> SQLAlchemyAsyncSession:
+    """Alias for ``async_db`` used by catalog tests that name the session ``db``."""
+    return async_db
+
+
+@pytest_asyncio.fixture(scope="function")
+async def sample_user(async_db: SQLAlchemyAsyncSession) -> User:
+    """Create a distinct first test user for catalog tests."""
+    return await get_or_create_user_async(async_db, username="sample_user_catalog")
+
+
+@pytest_asyncio.fixture(scope="function")
+async def sample_user2(async_db: SQLAlchemyAsyncSession) -> User:
+    """Create a distinct second test user for catalog tests."""
+    return await get_or_create_user_async(async_db, username="sample_user2_catalog")
+
+
 @pytest.fixture(scope="session")
 def test_username() -> str:
     """Get process-specific test username for direct database queries."""
@@ -780,3 +798,13 @@ def clear_config_cache() -> Iterator[None]:
     clear_settings_cache()
     yield
     clear_settings_cache()
+
+
+@pytest.fixture(scope="function", autouse=True)
+def clear_image_delivery_caches() -> Iterator[None]:
+    """Clear image delivery caches before and after each test to prevent test pollution."""
+    from app.services.image_delivery import clear_caches
+
+    clear_caches()
+    yield
+    clear_caches()

@@ -1,7 +1,7 @@
 """Add image optimization cache table.
 
 Revision ID: 20261012034501
-Revises: f2a3b4c5d6e7
+Revises: m5d300000001
 Create Date: 2026-10-12 03:45:00.000000
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import BYTEA
 
 revision = "20261012034501"
-down_revision = "f2a3b4c5d6e7"
+down_revision = "m5d300000001"
 branch_labels = None
 depends_on = None
 

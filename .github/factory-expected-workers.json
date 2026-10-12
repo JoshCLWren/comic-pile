@@ -29,7 +29,6 @@
     73,
     74,
     75,
-    76,
     77,
     78,
     79,
@@ -58,10 +57,12 @@
     67,
     70,
     71,
-    72
+    72,
+    76
   ],
   "retired_models": [
     "deepseek-v4-flash-free",
+    "fledge-alpha-free",
     "hy3-free",
     "inclusionai/ling-3.0-flash-fin:free",
     "inclusionai/ling-3.0-flash-vl:free",

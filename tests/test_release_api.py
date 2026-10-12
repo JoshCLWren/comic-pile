@@ -259,6 +259,7 @@ async def test_public_release_payload_rejects_placeholder_content(
     ("field", "offending", "fragment"),
     [
         ("title", "incomplete #1551 fix for roll recovery", "#1551"),
+        ("summary", "Fixes #1234 for the release", "#1234"),
         ("title", "Roll history now loads instantly (Phase 2 and 3)", "Phase 2"),
         ("summary", "Added source_roll_event_id instrumentation detail.", "source_roll_event_id"),
         ("summary", "This update is still incomplete but shipped anyway.", "incomplete"),
@@ -527,3 +528,108 @@ async def test_public_release_payload_rejects_capability_claim_without_path(
         "provenance_json.reader_reachable_path must be a string" in error["message"]
         for error in response.json()["errors"]
     )
+
+
+@pytest.mark.asyncio
+async def test_release_source_endpoint_performance(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that /api/v1/releases/source endpoint performs within budget.
+    
+    This endpoint has a 1000ms performance budget. The optimization should ensure
+    that we only retrieve minimal data (excluding the large 'body' field).
+    
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+    
+    Returns:
+        None.
+    """
+    import time
+    
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+
+    # Create a release with a large body to test the optimization
+    large_body = "This is a very large body content " * 100  # ~2500 characters
+    payload = {
+        "source_repository": "JoshCLWren/comic-pile",
+        "source_pr_number": 9999,
+        "source_merge_sha": "a" * 40,
+        "category": "feature",
+        "title": "Test Release with Large Body",
+        "summary": "Test summary",
+        "body": large_body,
+        "visibility": "public",
+        "released_at": "2026-01-01T00:00:00Z",
+        "provenance_json": {
+            "automation": "test",
+            "reader_reachable_path": "/test-path",
+            "classification": "public",
+            "classification_reason": "Test release for performance testing",
+            "user_visible_evidence": "This is a test release for performance testing of the releases/source endpoint",
+            "reader_reachable": True,
+        },
+    }
+
+    # Create the release first
+    create_response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+    assert create_response.status_code == 200
+    release_id = create_response.json()["id"]
+    
+    # Test the performance of the source reconciliation endpoint
+    start_time = time.time()
+    response = await auth_client.get(
+        "/api/v1/releases/source",
+        params={
+            "source_repository": "JoshCLWren/comic-pile",
+            "source_pr_number": 9999,
+        },
+        headers=headers,
+    )
+    end_time = time.time()
+    
+    response_time_ms = (end_time - start_time) * 1000
+    
+    # Verify the response is correct
+    assert response.status_code == 200
+    assert response.json()["exists"] is True
+    assert response.json()["release"]["id"] == release_id
+    
+    # Verify performance is within budget (with some tolerance for test environment)
+    assert response_time_ms < 1000, f"Response time {response_time_ms}ms exceeds 1000ms budget"
+    
+    # The optimization should ensure we don't retrieve the large body
+    response_data = response.json()["release"]
+    assert "body" not in response_data, "Body field should not be retrieved in optimized endpoint"
+
+
+@pytest.mark.asyncio
+async def test_release_publication_with_capability_claim_and_path(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reader capability language publishes once the shipped path is recorded.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1223, merge_sha="d" * 40)
+    payload["category"] = "You can now save queue filters"
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 200
+    published = response.json()
+    assert published["category"] == "You can now save queue filters"
+    provenance = published["provenance_json"]
+    assert isinstance(provenance, dict)
+    assert provenance["reader_reachable_path"] == "Queue page at /queue"

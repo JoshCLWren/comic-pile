@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,6 +103,71 @@ async def find_release_by_source(
         )
     )
     matches = list(result.scalars().all())
+    if len(matches) > 1:
+        raise ReleaseSourceConflictError(
+            "source PR and merge SHA already identify different release records"
+        )
+    return matches[0] if matches else None
+
+
+async def find_release_minimal_by_source(
+    db: AsyncSession,
+    *,
+    source_repository: str,
+    source_pr_number: int | None,
+    source_merge_sha: str | None,
+) -> RowMapping | None:
+    """Resolve a release by stable GitHub source identity with a minimal column projection.
+
+    Retrieves only the reconciliation fields and skips the potentially large ``body``
+    column, so the token-gated ``/api/v1/releases/source`` endpoint stays inside its
+    performance budget even for releases with very large bodies.
+
+    Args:
+        db: Async database session.
+        source_repository: Repository containing the source pull request.
+        source_pr_number: Source pull request number when known.
+        source_merge_sha: Source merge commit SHA when known.
+
+    Returns:
+        Mapping of the selected minimal release columns, or None when no source
+        identity matches.
+
+    Raises:
+        ReleaseSourceConflictError: If the PR and merge SHA point to different rows.
+    """
+    predicates = []
+    if source_pr_number is not None:
+        predicates.append(Release.source_pr_number == source_pr_number)
+    if source_merge_sha is not None:
+        predicates.append(Release.source_merge_sha == source_merge_sha)
+    if not predicates:
+        return None
+
+    # Only retrieve the columns needed for reconciliation; the large body stays unfetched.
+    result = await db.execute(
+        select(
+            Release.id,
+            Release.source_repository,
+            Release.source_pr_number,
+            Release.source_merge_sha,
+            Release.merged_at,
+            Release.released_at,
+            Release.category,
+            Release.title,
+            Release.summary,
+            Release.visibility,
+            Release.status,
+            Release.sort_order,
+            Release.provenance_json,
+            Release.created_at,
+            Release.updated_at,
+        ).where(
+            Release.source_repository == source_repository,
+            or_(*predicates),
+        )
+    )
+    matches = list(result.mappings().all())
     if len(matches) > 1:
         raise ReleaseSourceConflictError(
             "source PR and merge SHA already identify different release records"

@@ -29,10 +29,12 @@ async def test_comicvine_intelligence_normalizes_metadata_and_matches_arc_member
 ) -> None:
     """Rich metadata includes mapped duplicates and missing external arc members."""
 
-    async def _noop_refresh(_identity_id: int) -> bool:
+    def _noop_schedule(_identity_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+    monkeypatch.setattr(
+        comicvine_intelligence, "schedule_issue_metadata_refresh", _noop_schedule
+    )
 
     primary_thread = Thread(
         user_id=default_user.id,
@@ -226,13 +228,13 @@ async def test_comicvine_intelligence_stays_usable_when_hydration_scheduling_fai
     )
     await async_db.flush()
 
-    async def _boom(_identity_id: int) -> bool:
-        raise TimeoutError("simulated advisory-lock timeout")
+    def _declined(_identity_id: int) -> bool:
+        return False
 
     monkeypatch.setattr(
         comicvine_intelligence,
-        "refresh_issue_metadata",
-        _boom,
+        "schedule_issue_metadata_refresh",
+        _declined,
     )
 
     response = await auth_client.get(f"/api/v1/issues/{issue.id}/comicvine")
@@ -253,10 +255,12 @@ async def test_comicvine_creator_stable_id_propagation(
 ) -> None:
     """Creator credits with stable provider IDs expose creator_id in the API response."""
 
-    async def _noop_refresh(_identity_id: int) -> bool:
+    def _noop_schedule(_identity_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+    monkeypatch.setattr(
+        comicvine_intelligence, "schedule_issue_metadata_refresh", _noop_schedule
+    )
 
     thread = Thread(
         user_id=default_user.id,
@@ -315,10 +319,12 @@ async def test_comicvine_creator_same_name_different_id_distinct(
 ) -> None:
     """Two creators with the same display name but different IDs remain distinct."""
 
-    async def _noop_refresh(_identity_id: int) -> bool:
+    def _noop_schedule(_identity_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+    monkeypatch.setattr(
+        comicvine_intelligence, "schedule_issue_metadata_refresh", _noop_schedule
+    )
 
     thread = Thread(
         user_id=default_user.id,
@@ -376,10 +382,12 @@ async def test_comicvine_creator_multi_role_grouping(
 ) -> None:
     """One creator credited in multiple roles on the same issue is grouped into one identity."""
 
-    async def _noop_refresh(_identity_id: int) -> bool:
+    def _noop_schedule(_identity_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+    monkeypatch.setattr(
+        comicvine_intelligence, "schedule_issue_metadata_refresh", _noop_schedule
+    )
 
     thread = Thread(
         user_id=default_user.id,
@@ -439,10 +447,12 @@ async def test_comicvine_creator_duplicate_credits_deduplicated(
 ) -> None:
     """Duplicate provider credit rows for the same person/role do not duplicate identities."""
 
-    async def _noop_refresh(_identity_id: int) -> bool:
+    def _noop_schedule(_identity_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+    monkeypatch.setattr(
+        comicvine_intelligence, "schedule_issue_metadata_refresh", _noop_schedule
+    )
 
     thread = Thread(
         user_id=default_user.id,
@@ -501,10 +511,12 @@ async def test_comicvine_creator_missing_id_not_fabricated(
 ) -> None:
     """Credits without a usable stable ID produce creator_id=None, not a fabricated key."""
 
-    async def _noop_refresh(_identity_id: int) -> bool:
+    def _noop_schedule(_identity_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+    monkeypatch.setattr(
+        comicvine_intelligence, "schedule_issue_metadata_refresh", _noop_schedule
+    )
 
     thread = Thread(
         user_id=default_user.id,
@@ -564,10 +576,12 @@ async def test_comicvine_creator_comma_separated_roles_split_and_grouped(
 ) -> None:
     """Comma-separated role strings are split into individual roles and grouped."""
 
-    async def _noop_refresh(_identity_id: int) -> bool:
+    def _noop_schedule(_identity_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+    monkeypatch.setattr(
+        comicvine_intelligence, "schedule_issue_metadata_refresh", _noop_schedule
+    )
 
     thread = Thread(
         user_id=default_user.id,

@@ -68,11 +68,10 @@ _DEFAULT_CACHE_TTL_SECONDS = 31536000
 
 
 def clear_caches() -> None:
-    """Clear in-memory image delivery caches.
-
-    Used by tests to ensure isolation between cases.
-    """
+    """Clear all in-memory caches. Used by tests to ensure isolation."""
     _DNS_CACHE.clear()
+    _IMAGE_CACHE.clear()
+    _IMAGE_CACHE_ORDER.clear()
 
 
 class ImageDeliveryError(Exception):
@@ -95,6 +94,13 @@ class OptimizedImage:
     media_type: str
     width: int
     transcoded: bool
+
+
+# Optimized image cache: (validated_url, target_width) -> OptimizedImage
+# Max 100 entries to bound memory usage
+_IMAGE_CACHE_MAX_SIZE = 100
+_IMAGE_CACHE: dict[tuple[str, int], OptimizedImage] = {}
+_IMAGE_CACHE_ORDER: list[tuple[str, int]] = []
 
 
 def resolve_variant_width(requested_width: int) -> int:
@@ -214,21 +220,19 @@ def _resolve_addresses_blocking(hostname: str) -> list[ipaddress.IPv4Address | i
     return [ipaddress.ip_address(info[4][0]) for info in infos]
 
 
-async def ensure_publicly_routable(hostname: str) -> None:
-    """Reject hostnames that resolve to non-public network ranges.
-
-    Protects against SSRF-style abuse of the optimizer endpoint even if an
-    allowlisted host (or an attacker-controllable DNS record for one) resolves
-    to loopback, private, link-local, reserved, or multicast space.
+async def _resolve_and_validate_cached(hostname: str) -> None:
+    """Resolve and validate a hostname with in-memory caching.
 
     Uses an in-memory cache to avoid repeated DNS resolution for the same host.
+    Positive results are cached for one hour; negative results (failed
+    resolution or non-public addresses) are cached for five minutes to avoid
+    repeated resolver pressure.
 
     Args:
-        hostname: Upstream hostname about to be fetched.
+        hostname: Upstream hostname to resolve.
 
     Raises:
-        InvalidImageSourceError: If resolution fails or any address is
-            non-public.
+        InvalidImageSourceError: If resolution fails or any address is non-public.
     """
     now = datetime.now(UTC)
 
@@ -277,6 +281,26 @@ def _generate_cache_key(validated_url: str, target_width: int) -> str:
     """Generate a deterministic cache key for an optimized image."""
     key_material = f"{validated_url}|{target_width}".encode("utf-8")
     return hashlib.sha256(key_material).hexdigest()
+
+
+async def ensure_publicly_routable(hostname: str) -> None:
+    """Reject hostnames that resolve to non-public network ranges.
+
+    Protects against SSRF-style abuse of the optimizer endpoint even if an
+    allowlisted host (or an attacker-controllable DNS record for one) resolves
+    to loopback, private, link-local, reserved, or multicast space.
+
+    Uses an in-memory cache to avoid repeated DNS lookups for the same
+    allowlisted hosts.
+
+    Args:
+        hostname: Upstream hostname about to be fetched.
+
+    Raises:
+        InvalidImageSourceError: If resolution fails or any address is
+            non-public.
+    """
+    await _resolve_and_validate_cached(hostname)
 
 
 async def fetch_upstream(
@@ -375,13 +399,41 @@ def transcode_to_webp(payload: bytes, target_width: int) -> tuple[bytes, str] | 
             )
             converted = image.convert("RGBA" if has_alpha else "RGB")
             buffer = io.BytesIO()
-            converted.save(buffer, format="WEBP", quality=settings.image_optimizer_webp_quality)
+            # Use method=1 for fast WebP encoding (Pillow default method=4 is slower)
+            converted.save(
+                buffer,
+                format="WEBP",
+                quality=settings.image_optimizer_webp_quality,
+                method=1,
+            )
             return buffer.getvalue(), "image/webp"
     except ImportError:
         logger.warning("Pillow unavailable; serving remote covers without transformation")
     except Exception as exc:
         logger.warning("Remote cover transcode failed; serving original bytes: %s", exc)
     return None
+
+
+def _cache_get(key: tuple[str, int]) -> OptimizedImage | None:
+    """Get an item from the image cache and update LRU order."""
+    if key in _IMAGE_CACHE:
+        # Move to end (most recently used)
+        _IMAGE_CACHE_ORDER.remove(key)
+        _IMAGE_CACHE_ORDER.append(key)
+        return _IMAGE_CACHE[key]
+    return None
+
+
+def _cache_put(key: tuple[str, int], value: OptimizedImage) -> None:
+    """Put an item in the image cache, evicting LRU if necessary."""
+    if key in _IMAGE_CACHE:
+        _IMAGE_CACHE_ORDER.remove(key)
+    elif len(_IMAGE_CACHE) >= _IMAGE_CACHE_MAX_SIZE:
+        # Evict LRU
+        lru_key = _IMAGE_CACHE_ORDER.pop(0)
+        del _IMAGE_CACHE[lru_key]
+    _IMAGE_CACHE[key] = value
+    _IMAGE_CACHE_ORDER.append(key)
 
 
 async def optimize_remote_image(
@@ -443,6 +495,10 @@ async def optimize_remote_image(
                 width=cached_entry.width,
                 transcoded=cached_entry.transcoded,
             )
+            _cache_put((validated_url, target_width), cached_result)
+
+    if cached_result is None and transport is None:
+        cached_result = _cache_get((validated_url, target_width))
 
     timings["cache_lookup_ms"] = (time.perf_counter() - cache_lookup_start) * 1000
 
@@ -489,7 +545,10 @@ async def optimize_remote_image(
             transcoded=False,
         )
 
-    # Phase 7: Store in persistent cache
+    # Phase 7: Store in caches
+    if transport is None:
+        _cache_put((validated_url, target_width), result)
+
     if db is not None:
         start = time.perf_counter()
         repo = ImageOptimizationCacheRepository(db)

@@ -113,6 +113,38 @@ function chipData(): EffectiveTagsResponse {
   }
 }
 
+/**
+ * A directly assigned global tag that is also inherited through a thread, so
+ * the direct chip carries both the scope marker and an extra-source count.
+ */
+function directStateChipData(): EffectiveTagsResponse {
+  const horror = {
+    id: 2,
+    name: 'Horror',
+    normalized_name: 'horror',
+    scope: 'global' as const,
+    owner_user_id: null,
+    color: '#7F1D1D',
+    created_at: '',
+    updated_at: '',
+  }
+  return {
+    target_type: 'Issue',
+    target_id: 11,
+    direct_tags: [horror],
+    effective_tags: [
+      {
+        tag: horror,
+        direct: true,
+        sources: [
+          { target_type: 'Issue', target_id: 11, display_name: '#11' },
+          { target_type: 'Thread', target_id: 3, display_name: 'B.P.R.D.' },
+        ],
+      },
+    ],
+  }
+}
+
 describe('tag chips (issue #3032)', () => {
   it('distinguishes direct and inherited tags without relying on color alone', () => {
     render(
@@ -128,6 +160,35 @@ describe('tag chips (issue #3032)', () => {
     expect(screen.getByText('Inherited')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /show sources for inherited tag horror/i }))
       .toBeInTheDocument()
+  })
+
+  it('keeps the tag name visually dominant over state markers (issue #3391)', () => {
+    render(
+      <MemoryRouter>
+        <TagChips data={chipData()} canEdit onRemoveDirect={() => {}} />
+      </MemoryRouter>,
+    )
+
+    // The pill is the single owner of the chip's typography role, so the tag
+    // name reads first in both direct and inherited chips: body size, bold, in
+    // the primary text color. Asserting on the pill (not the inner name span)
+    // keeps this test tied to what actually renders the name.
+    for (const name of ['Physical', 'Horror']) {
+      const pill = screen.getByText(name).parentElement
+      expect(pill).toHaveClass('text-sm')
+      expect(pill).toHaveClass('font-bold')
+      expect(pill).toHaveClass('text-[var(--theme-text-primary)]')
+    }
+    // State markers stay tertiary beside the name rather than competing with
+    // it for width or emphasis.
+    for (const marker of ['Inherited', 'via 2 sources']) {
+      expect(screen.getByText(marker).className).toMatch(/--theme-text-(dim|muted)/)
+    }
+    // The remove affordance keeps an explicit compact size so it never
+    // inherits the ambient body size and out-competes the tag name.
+    expect(screen.getByRole('button', { name: 'Remove tag Physical' })).toHaveClass(
+      'text-[11px]',
+    )
   })
 
   it('exposes every inheritance source with navigation to each source object', async () => {
@@ -184,6 +245,66 @@ describe('tag chips (issue #3032)', () => {
     const list = container.querySelector('section[aria-label="Tags"] > ul')
     expect(list?.className).toContain('flex-wrap')
     expect(list?.className).toContain('max-w-full')
+  })
+})
+
+describe('tag chip visibility (issue #3393)', () => {
+  it('renders direct and inherited names bold in the primary text color', () => {
+    render(
+      <MemoryRouter>
+        <TagChips data={chipData()} />
+      </MemoryRouter>,
+    )
+
+    // The tag name is the chip's content and must read first: bold weight in
+    // the primary text color for both direct and inherited chips.
+    for (const name of ['Physical', 'Horror']) {
+      const pill = screen.getByText(name).parentElement
+      expect(pill).toHaveClass('font-bold')
+      expect(pill).toHaveClass('text-[var(--theme-text-primary)]')
+    }
+  })
+
+  it('keeps inherited state outside the pill so it cannot squeeze the name', () => {
+    render(
+      <MemoryRouter>
+        <TagChips data={chipData()} />
+      </MemoryRouter>,
+    )
+
+    const pill = screen.getByText('Horror').parentElement
+    // The pill carries only the tag identity.
+    expect(pill?.textContent).toBe('Horror')
+
+    const inheritedMarker = screen.getByText('Inherited')
+    const sourcesButton = screen.getByRole('button', {
+      name: /show sources for inherited tag horror/i,
+    })
+    expect(pill?.contains(inheritedMarker)).toBe(false)
+    expect(pill?.contains(sourcesButton)).toBe(false)
+
+    // The state stays grouped with its tag and wraps instead of truncating.
+    expect(inheritedMarker.closest('li')).toBe(pill?.closest('li'))
+    expect(inheritedMarker.closest('div')?.className).toContain('flex-wrap')
+  })
+
+  it('keeps direct-chip state (scope marker, extra sources) outside the pill', () => {
+    render(
+      <MemoryRouter>
+        <TagChips data={directStateChipData()} />
+      </MemoryRouter>,
+    )
+
+    const pill = screen.getByText('Horror').parentElement
+    expect(pill?.textContent).toBe('Horror')
+
+    const scopeMarker = screen.getByText('Global')
+    const extraSourcesButton = screen.getByRole('button', {
+      name: /show additional sources for tag horror/i,
+    })
+    expect(pill?.contains(scopeMarker)).toBe(false)
+    expect(pill?.contains(extraSourcesButton)).toBe(false)
+    expect(scopeMarker.closest('li')).toBe(pill?.closest('li'))
   })
 })
 

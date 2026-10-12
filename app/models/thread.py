@@ -86,6 +86,9 @@ class Thread(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    catalog_series_id: Mapped[int | None] = mapped_column(
+        ForeignKey("catalog_series.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_thread_position", "queue_position"),
@@ -121,6 +124,7 @@ class Thread(Base):
             "id",
             postgresql_where=text("status = 'completed'"),
         ),
+        Index("ix_thread_catalog_series", "catalog_series_id"),
     )
 
     user: Mapped[User] = relationship("User", back_populates="threads", lazy="raise")
