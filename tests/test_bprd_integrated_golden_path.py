@@ -390,11 +390,16 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
     assert groups_after == groups_before
 
     pool_after_adoption = await _bprd_pool(user.id, async_db)
-    assert [thread.id for thread in pool_after_adoption] == [black_flame.id]
+    assert [thread.id for thread in pool_after_adoption] == [
+        black_flame.id,
+        universal_machine.id,
+        garden_of_souls.id,
+        killing_ground.id,
+    ]
     assert war_on_frogs.is_blocked is True
-    assert universal_machine.is_blocked is True
-    assert garden_of_souls.is_blocked is True
-    assert killing_ground.is_blocked is True
+    assert universal_machine.is_blocked is False
+    assert garden_of_souls.is_blocked is False
+    assert killing_ground.is_blocked is False
 
     # Finish the active Black Flame boundary through the same supported issue API
     # used by the reader.  War on Frogs #3 must then become the Roll candidate.
@@ -405,10 +410,15 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
     await async_db.refresh(war_on_frogs)
 
     after_black_flame = await _bprd_pool(user.id, async_db)
-    assert [thread.id for thread in after_black_flame] == [war_on_frogs.id]
+    assert [thread.id for thread in after_black_flame] == [
+        war_on_frogs.id,
+        universal_machine.id,
+        garden_of_souls.id,
+        killing_ground.id,
+    ]
     assert war_on_frogs.next_unread_issue_id == wof3.id
     assert war_on_frogs.is_blocked is False
-    assert universal_machine.is_blocked is True
+    assert universal_machine.is_blocked is False
 
     # Completing the last pre-adoption prerequisite exposes the first issue from
     # the source-adopted phase.  There is no second readiness veto after Roll.
@@ -418,8 +428,12 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
     await async_db.refresh(universal_machine)
 
     after_wof = await _bprd_pool(user.id, async_db)
-    assert [thread.id for thread in after_wof] == [universal_machine.id]
+    assert [thread.id for thread in after_wof] == [
+        universal_machine.id,
+        garden_of_souls.id,
+        killing_ground.id,
+    ]
     assert universal_machine.next_unread_issue_id == next_phase[0].id
     assert universal_machine.is_blocked is False
-    assert garden_of_souls.is_blocked is True
-    assert killing_ground.is_blocked is True
+    assert garden_of_souls.is_blocked is False
+    assert killing_ground.is_blocked is False

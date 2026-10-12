@@ -47,6 +47,7 @@ from app.services.migration_shared import (
     legacy_prefix as _legacy_prefix,
     plan_fingerprint as _plan_fingerprint,
     plan_fingerprint_from_payload as _plan_fingerprint_from_payload,
+    planned_item_read_pairs as _planned_item_read_pairs,
     planned_rule_descriptor as _planned_rule_descriptor,
     refresh_blocked_status as _refresh_blocked_status,
     require_snapshot_token as _require_reviewed_snapshot,
@@ -935,7 +936,8 @@ async def apply_ultimate_universe_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential"
+        ordering_mode="strict_sequential",
+        extra_item_read_pairs=_planned_item_read_pairs(snapshot["planned"]),
     )
     await _refresh_blocked_status(spec.user_id, db)
     await db.flush()

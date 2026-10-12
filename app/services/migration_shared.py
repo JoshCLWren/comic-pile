@@ -166,6 +166,36 @@ def planned_rule_descriptor(rule: dict[str, object]) -> dict[str, object]:
     }
 
 
+def planned_item_read_pairs(planned: object) -> list[tuple[int, int]]:
+    """Return dry-run ``item_read`` pairs for a one-time migration apply.
+
+    Live plan create/update does not infer these. Held production-migration
+    scripts pass the pairs they already classified in the dry-run.
+
+    Args:
+        planned: Dry-run ``planned`` object, typically a mapping with ``rules``.
+
+    Returns:
+        Source/target issue id pairs with ``satisfaction_type`` ``item_read``.
+    """
+    if not isinstance(planned, dict):
+        return []
+    rules = planned.get("rules")
+    if not isinstance(rules, list):
+        return []
+    pairs: list[tuple[int, int]] = []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        if rule.get("satisfaction_type") != "item_read":
+            continue
+        source_id = rule.get("source_id")
+        target_id = rule.get("target_id")
+        if isinstance(source_id, int) and isinstance(target_id, int):
+            pairs.append((source_id, target_id))
+    return pairs
+
+
 def require_clean_snapshot(snapshot: dict[str, object]) -> None:
     """Validate snapshot is clean; raise MigrationInvariantError otherwise."""
     if snapshot.get("ok") is not True or not snapshot.get("snapshot_token"):
