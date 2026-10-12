@@ -1706,43 +1706,49 @@ async def test_absolute_shaped_custom_cbl_apply_ignores_leftover_nodes(
         numbers=["1"],
         queue_position=queue_position,
     )
+    membership_ids = [issue.id for issue in membership_issues]
+    leftover_ids = {issue.id for issue in leftover_issues}
+    catwoman_id = catwoman.id
+    catwoman_issue_id = catwoman_issues[0].id
+    bridge_issue_id = bridge_issues[0].id
+    last_membership_id = membership_issues[-1].id
+    leftover_json = [
+        _issue_node_dict(issue, position)
+        for position, issue in enumerate(membership_issues + leftover_issues)
+    ]
+    plan_payload = _plan_payload("Absolute Universe", membership_issues)
     await async_db.commit()
-    assert len(membership_issues) == 76
-    assert len(leftover_issues) == 29
+    assert len(membership_ids) == 76
+    assert len(leftover_ids) == 29
+    assert len(leftover_json) == 105
 
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
-        json=_plan_payload("Absolute Universe", membership_issues),
+        json=plan_payload,
     )
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
     plan = await async_db.get(ContinuityPlan, plan_id)
     assert plan is not None
-    leftover_json = [
-        _issue_node_dict(issue, position)
-        for position, issue in enumerate(membership_issues + leftover_issues)
-    ]
-    assert len(leftover_json) == 105
     plan.nodes_json = leftover_json
     await async_db.commit()
 
     fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
     assert fetched.status_code == 200, fetched.text
     fetched_ids = [node["ref_id"] for node in fetched.json()["nodes"]]
-    assert fetched_ids == [issue.id for issue in membership_issues]
-    leftover_ids = {issue.id for issue in leftover_issues}
+    assert fetched_ids == membership_ids
     assert leftover_ids.isdisjoint(fetched_ids)
     before_roll = await _roll_ids(user.id, async_db)
-    assert catwoman.id in before_roll
+    assert catwoman_id in before_roll
 
     custom = await auth_client.post(
         "/api/v1/custom-cbls",
         json={
             "name": "Absolute membership order",
             "issue_ids": [
-                membership_issues[0].id,
-                membership_issues[1].id,
-                bridge_issues[0].id,
+                membership_ids[0],
+                membership_ids[1],
+                bridge_issue_id,
             ],
         },
     )
@@ -1762,8 +1768,8 @@ async def test_absolute_shaped_custom_cbl_apply_ignores_leftover_nodes(
     assert applied.status_code == 200, applied.text
     applied_ids = [node["ref_id"] for node in applied.json()["nodes"] if node["node_type"] == "issue"]
     assert leftover_ids.isdisjoint(applied_ids)
-    assert catwoman_issues[0].id not in applied_ids
-    assert bridge_issues[0].id in applied_ids
+    assert catwoman_issue_id not in applied_ids
+    assert bridge_issue_id in applied_ids
     assert len(applied_ids) == 77
 
     stored = await async_db.get(ContinuityPlan, plan_id)
@@ -1784,9 +1790,9 @@ async def test_absolute_shaped_custom_cbl_apply_ignores_leftover_nodes(
     assert leftover_ids.isdisjoint(member_ids)
     assert len(member_ids) == 77
     compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
-    assert (membership_issues[-1].id, catwoman_issues[0].id) not in compiled
+    assert (last_membership_id, catwoman_issue_id) not in compiled
     after_roll = await _roll_ids(user.id, async_db)
-    assert catwoman.id in after_roll
+    assert catwoman_id in after_roll
 
 
 @pytest.mark.asyncio
