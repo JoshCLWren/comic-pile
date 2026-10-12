@@ -29,6 +29,41 @@ def _placement_list(placements: object) -> list[dict[str, object]]:
     return []
 
 
+async def find_adoption_claim(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    cbl_source_list_id: int,
+) -> tuple[CblAdoptionReceipt, ContinuityPlan] | None:
+    """Return the unique (user, list) receipt and its Reading Plan, if any.
+
+    Args:
+        db: Async database session.
+        user_id: Owner user ID.
+        cbl_source_list_id: CBL source list ID.
+
+    Returns:
+        The receipt plus claimed plan, or ``None`` when this user has never
+        claimed the list.
+    """
+    result = await db.execute(
+        select(CblAdoptionReceipt, ContinuityPlan)
+        .join(ContinuityPlan, CblAdoptionReceipt.plan_id == ContinuityPlan.id)
+        .where(
+            CblAdoptionReceipt.user_id == user_id,
+            CblAdoptionReceipt.cbl_source_list_id == cbl_source_list_id,
+        )
+    )
+    row = result.first()
+    if row is None:
+        return None
+    receipt = row[0]
+    plan = row[1]
+    if not isinstance(receipt, CblAdoptionReceipt) or not isinstance(plan, ContinuityPlan):
+        return None
+    return receipt, plan
+
+
 async def find_adoption_plan(
     db: AsyncSession,
     *,
@@ -45,15 +80,10 @@ async def find_adoption_plan(
     Returns:
         The adopted plan, or ``None`` when this user has never claimed the list.
     """
-    result = await db.execute(
-        select(ContinuityPlan)
-        .join(CblAdoptionReceipt, CblAdoptionReceipt.plan_id == ContinuityPlan.id)
-        .where(
-            CblAdoptionReceipt.user_id == user_id,
-            CblAdoptionReceipt.cbl_source_list_id == cbl_source_list_id,
-        )
+    claim = await find_adoption_claim(
+        db, user_id=user_id, cbl_source_list_id=cbl_source_list_id
     )
-    return result.scalars().first()
+    return None if claim is None else claim[1]
 
 
 async def insert_adoption_receipt(
@@ -62,6 +92,7 @@ async def insert_adoption_receipt(
     user_id: int,
     cbl_source_list_id: int,
     plan_id: int,
+    request_fingerprint: str,
 ) -> CblAdoptionReceipt:
     """Insert the unique (user, list) claim inside the caller's transaction.
 
@@ -73,6 +104,7 @@ async def insert_adoption_receipt(
         user_id: Owner user ID.
         cbl_source_list_id: CBL source list ID.
         plan_id: Reading Plan that owns this adoption.
+        request_fingerprint: SHA-256 of the source hash, revision, and decisions.
 
     Returns:
         The persisted receipt.
@@ -81,10 +113,27 @@ async def insert_adoption_receipt(
         user_id=user_id,
         cbl_source_list_id=cbl_source_list_id,
         plan_id=plan_id,
+        request_fingerprint=request_fingerprint,
     )
     db.add(receipt)
     await db.flush()
     return receipt
+
+
+async def update_receipt_fingerprint(
+    db: AsyncSession,
+    receipt: CblAdoptionReceipt,
+    request_fingerprint: str,
+) -> None:
+    """Record the latest successful adoption request fingerprint on the receipt.
+
+    Args:
+        db: Async database session inside the adoption transaction.
+        receipt: Unique (user, list) receipt being updated.
+        request_fingerprint: SHA-256 of the source hash, revision, and decisions.
+    """
+    receipt.request_fingerprint = request_fingerprint
+    await db.flush()
 
 
 async def find_plan_by_source_path(

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
+from app.services.cbl_source_public import public_cbl_source_ref
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -176,7 +177,7 @@ async def derive_crossover_template_from_lists(
     arcs_by_issue: dict[int, set[str]] = {}
     issue_structure: dict[int, tuple[int, int]] = {}
     for entry, source_list, source, mapping, identity, issue in rows:
-        source_path = f"{source.repository}:{source_list.source_path}"
+        source_path = public_cbl_source_ref(source.repository, source_list.source_path)
         placements_by_issue.setdefault(mapping.issue_id, []).append(
             CBLPlacement(source_path=source_path, position=entry.position)
         )
@@ -266,7 +267,7 @@ async def _unresolved_matches(
     )
     return tuple(
         CrossoverTemplateUnresolvedMatch(
-            source_path=f"{source.repository}:{source_list.source_path}",
+            source_path=public_cbl_source_ref(source.repository, source_list.source_path),
             position=entry.position,
             series_name=entry.series_name,
             issue_number=entry.issue_number,

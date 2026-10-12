@@ -298,12 +298,14 @@ test.describe('CBL browser one-decision adoption', () => {
       headers,
     })
     expect(planResponse.ok(), await planResponse.text()).toBeTruthy()
+    // SAFETY: the test reads only the response fields listed in this type
     const plan = (await planResponse.json()) as { nodes: Array<{ ref_id: number }> }
     expect(plan.nodes.map((node) => node.ref_id)).not.toContain(ownedIssueId)
     expect(plan.nodes.length).toBe(1)
 
     const ownedIssue = await page.request.get(`/api/v1/threads/${owned.id}/issues`, { headers })
     expect(ownedIssue.ok(), await ownedIssue.text()).toBeTruthy()
+    // SAFETY: the test reads only the response fields listed in this type
     const ownedJson = (await ownedIssue.json()) as { issues: Array<{ id: number }> }
     expect(ownedJson.issues.some((issue) => issue.id === ownedIssueId)).toBe(true)
   })
@@ -357,6 +359,7 @@ test.describe('CBL browser one-decision adoption', () => {
 
     const plansAfter = await page.request.get('/api/v1/continuity-plans/', { headers })
     expect(plansAfter.ok(), await plansAfter.text()).toBeTruthy()
+    // SAFETY: the test reads only the response fields listed in this type
     const plansAfterJson = (await plansAfter.json()) as Array<{ name: string }>
     expect(plansAfterJson.some((plan) => plan.name === sourceName)).toBe(false)
   })

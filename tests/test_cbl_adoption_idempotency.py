@@ -280,6 +280,74 @@ async def test_owned_entry_excluded_individually(
 
 
 @pytest.mark.asyncio
+async def test_changed_decisions_merge_into_the_same_plan(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A later commit with different include/exclude choices updates the claimed plan.
+
+    Replay is only for an identical request fingerprint. Unchecking Include
+    on an owned issue, then later including it, must not create a second plan
+    or rematerialize the already-created missing comic.
+    """
+    user = await get_or_create_user_async(async_db)
+    tag = f"merge-{_suffix()}"
+    source_list, owned_issue = await _seed_list(async_db, user_id=user.id, tag=tag)
+    issues_before = await async_db.scalar(select(func.count()).select_from(Issue))
+
+    exclude_owned = {
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [{"cbl_position": 1, "decision": "exclude"}],
+        "content_hash": source_list.content_hash,
+        "revision_sha": source_list.revision_sha,
+    }
+    first = await auth_client.post(
+        f"/api/v1/cbl/{source_list.id}/adoption-commit",
+        json=exclude_owned,
+    )
+    assert first.status_code == 201, first.text
+    first_body = first.json()
+    first_refs = [node["ref_id"] for node in first_body["nodes"] if node["node_type"] == "issue"]
+    assert owned_issue.id not in first_refs
+    assert first_body["excluded_positions"] == [1]
+
+    include_all = {
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [],
+        "content_hash": source_list.content_hash,
+        "revision_sha": source_list.revision_sha,
+    }
+    second = await auth_client.post(
+        f"/api/v1/cbl/{source_list.id}/adoption-commit",
+        json=include_all,
+    )
+    assert second.status_code == 201, second.text
+    second_body = second.json()
+    assert second_body["id"] == first_body["id"]
+    second_refs = [
+        node["ref_id"] for node in second_body["nodes"] if node["node_type"] == "issue"
+    ]
+    assert owned_issue.id in second_refs
+    assert len(second_refs) == 2
+    assert second_body["created_positions"] == []
+    assert await async_db.scalar(
+        select(func.count()).select_from(ContinuityPlan).where(ContinuityPlan.user_id == user.id)
+    ) == 1
+    assert await async_db.scalar(select(func.count()).select_from(Issue)) == (issues_before or 0) + 1
+    receipt = (
+        await async_db.execute(
+            select(CblAdoptionReceipt).where(
+                CblAdoptionReceipt.user_id == user.id,
+                CblAdoptionReceipt.cbl_source_list_id == source_list.id,
+            )
+        )
+    ).scalar_one()
+    assert receipt.request_fingerprint != ""
+
+
+@pytest.mark.asyncio
 async def test_concurrent_double_submit_creates_one_plan(db_engine: AsyncEngine) -> None:
     """Two overlapping adoption-commits for the same user and list create one plan.
 

@@ -9,14 +9,19 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
 
 class CblAdoptionReceipt(Base):
-    """One adopted CBL source list for one user, pointing at its Reading Plan."""
+    """One adopted CBL source list for one user, pointing at its Reading Plan.
+
+    ``request_fingerprint`` records the last successful commit payload so a
+    lost-response retry can replay without writes, while a changed list or
+    changed include/exclude choices still merge into this same plan.
+    """
 
     __tablename__ = "cbl_adoption_receipts"
 
@@ -28,6 +33,7 @@ class CblAdoptionReceipt(Base):
     plan_id: Mapped[int] = mapped_column(
         ForeignKey("continuity_plans.id", ondelete="CASCADE"), nullable=False
     )
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )

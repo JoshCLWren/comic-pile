@@ -301,6 +301,7 @@ describe('useContinuityPlannerEditor', () => {
   })
 
   it('does not label unlabeled issue steps as [deleted series] (#3481)', async () => {
+    // SAFETY: the plan fixture supplies only the fields the editor reads
     const planWithUnlabeledIssue = {
       ...savedPlan,
       nodes: [
