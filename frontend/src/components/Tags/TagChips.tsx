@@ -101,7 +101,7 @@ function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
             type="button"
             onClick={() => onRemove(tag)}
             aria-label={`Remove tag ${tag.name}`}
-            className="shrink-0 rounded-full px-1 text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            className="shrink-0 rounded-full px-1 text-[11px] text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
           >
             ×
           </button>

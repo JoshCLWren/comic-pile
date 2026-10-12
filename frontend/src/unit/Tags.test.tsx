@@ -133,7 +133,7 @@ describe('tag chips (issue #3032)', () => {
   it('keeps the tag name visually dominant over state markers (issue #3391)', () => {
     render(
       <MemoryRouter>
-        <TagChips data={chipData()} />
+        <TagChips data={chipData()} canEdit onRemoveDirect={() => {}} />
       </MemoryRouter>,
     )
 
@@ -150,6 +150,10 @@ describe('tag chips (issue #3032)', () => {
       const markerEl = screen.getByText(marker)
       expect(markerEl.className).toMatch(/--theme-text-(dim|muted)/)
     }
+    // The remove affordance keeps an explicit compact size so it never
+    // inherits the ambient body size and out-competes the tag name.
+    const removeEl = screen.getByRole('button', { name: 'Remove tag Physical' })
+    expect(removeEl.className).toContain('text-[11px]')
   })
 
   it('exposes every inheritance source with navigation to each source object', async () => {
