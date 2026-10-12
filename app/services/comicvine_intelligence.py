@@ -171,7 +171,7 @@ async def _related_external_rows(
     db: AsyncSession,
     arc_ids: list[int],
     current_external_id: str,
-) -> list[dict[str, object]]:
+) -> tuple[list[dict[str, object]], bool]:
     """Fetch candidate arc members for the related-issues section.
 
     The read only displays ``MAX_RELATED_ISSUES_PER_ARC`` members per arc, so
@@ -179,6 +179,11 @@ async def _related_external_rows(
     of hydrating every row that shares an arc. Ordering stays deterministic
     (``external_id``, then ``id``) and per-arc truncation still happens in
     Python where cover-date ordering is applied.
+
+    Returns:
+        The candidate rows plus whether the bounded window was saturated, so
+        callers can resolve exact per-arc totals the truncated fetch can no
+        longer count locally.
     """
     capped_arc_ids: list[int] = []
     for arc_id in arc_ids:
@@ -187,7 +192,7 @@ async def _related_external_rows(
         if len(capped_arc_ids) >= MAX_ARCS_PER_INTELLIGENCE_READ:
             break
     if not capped_arc_ids:
-        return []
+        return [], False
     arc_predicates: list[str] = []
     parameters: dict[str, object] = {
         "provider": COMICVINE_PROVIDER,
@@ -225,7 +230,57 @@ async def _related_external_rows(
         ),
         parameters,
     )
-    return [dict(row) for row in result.mappings().all()]
+    rows = [dict(row) for row in result.mappings().all()]
+    row_limit = int(parameters["related_row_limit"])
+    return rows, len(rows) >= row_limit
+
+
+async def _arc_related_total(
+    db: AsyncSession,
+    arc_id: int,
+    current_external_id: str,
+) -> int:
+    """Count every related member of one story arc without hydrating rows.
+
+    The bounded rows query can no longer report how many members an arc truly
+    has once its window truncates, and the UI exposes that total as the
+    ``(X of Y shown)`` indicator. This scalar count uses the same containment
+    predicates as the rows query so the displayed total stays exact while the
+    request path still fetches at most ``MAX_RELATED_ISSUES_PER_ARC`` rows per
+    arc.
+
+    Args:
+        db: Async database session.
+        arc_id: ComicVine story-arc identifier.
+        current_external_id: The current issue's external ID, excluded from
+            the total exactly as it is from the related rows.
+
+    Returns:
+        The number of distinct related ComicVine issue identities in the arc.
+    """
+    result = await db.execute(
+        text(
+            """
+            SELECT COUNT(DISTINCT ei.external_id)
+            FROM external_identities ei
+            WHERE ei.provider = :provider
+              AND ei.entity_type = 'issue'
+              AND ei.external_id <> :current_external_id
+              AND (
+                    ei.metadata_json::jsonb @> CAST(:arc_credits AS jsonb)
+                 OR ei.metadata_json::jsonb @> CAST(:arc_normalized AS jsonb)
+              )
+            """
+        ),
+        {
+            "provider": COMICVINE_PROVIDER,
+            "current_external_id": current_external_id,
+            "arc_credits": json.dumps({"story_arc_credits": [{"id": arc_id}]}),
+            "arc_normalized": json.dumps({"story_arcs": [{"id": arc_id}]}),
+        },
+    )
+    total = result.scalar()
+    return int(total) if total is not None else 0
 
 
 async def _comicpile_matches(
