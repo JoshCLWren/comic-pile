@@ -2,7 +2,10 @@
 
 Provenance key is the worker number, not the App slug. A model swap keeps the same App and the same name. Model and worker number stay in human-readable PR text. No `comicpile` prefix and no model name in the App slug. GitHub appends `[bot]`.
 
-This change scaffolds **worker 48 / Mark Cordova** only. It does not create or register a GitHub App. Workers other than 48 keep using `PR_REBASE_TOKEN` for push and pull-request creation. Worker 48 also keeps using `PR_REBASE_TOKEN` until the App id, installation id, and private key are all present.
+Worker 48 is provisioned as **Mark Cordova** (`mark-cordova[bot]`), App ID
+`5275306`, installation ID `170306933`. The installation is scoped only to
+`JoshCLWren/comic-pile`, and the three worker-48 repository secrets are configured.
+Workers other than 48 keep using `PR_REBASE_TOKEN` for push and pull-request creation.
 
 ## Bootstrap (already done for worker 48)
 
@@ -15,9 +18,23 @@ python3 .github/scripts/factory_worker_github_app.py bootstrap-name 48
 python3 .github/scripts/factory_worker_github_app.py bootstrap-collision 48
 ```
 
-## What Josh does at login to finish the App
+## Terminal provisioning (preferred)
 
-Borat does not create the App in this PR.
+Use the resumable [owner-run provisioning helper](../docs/WORKER_APP_PROVISIONING.md).
+It prepares the manifest, captures the generated private key, verifies installation,
+and uploads the three secrets without manual credential copying. An interactive
+agent may drive creation and installation only with Josh's explicit session
+authorization; scheduled workers remain prohibited.
+
+```sh
+node .github/scripts/provision-worker-app.cjs start
+node .github/scripts/provision-worker-app.cjs finish
+```
+
+## Manual fallback
+
+The original scaffolding did not create the App. The following manual path remains
+available if manifest registration cannot be used.
 
 1. GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.
 2. Name: `Mark Cordova` (or the one persisted collision fallback). GitHub will append `[bot]`. Do not put `comicpile` or a model id in the name or slug.
@@ -27,6 +44,7 @@ Borat does not create the App in this PR.
 6. Repository permissions, least privilege for push and pull-request creation:
    - Contents: Read and write
    - Pull requests: Read and write
+   - Issues: Read and write (readable handoff comments)
    - Metadata: Read-only (GitHub requires it)
 7. Installation: only this account. Install **only** on `JoshCLWren/comic-pile`.
 8. Generate a private key. Do not commit it.
@@ -36,7 +54,9 @@ Borat does not create the App in this PR.
    - `FACTORY_WORKER_48_APP_PRIVATE_KEY` (PEM)
 10. Optionally commit `app_id`, `app_login`, and `installation_id` into the worker 48 mapping entry. Do not re-roll `display_name`.
 
-Until those three values exist, the factory runner's checkout still uses `PR_REBASE_TOKEN`, and worker 48 push plus `gh pr create` stay on `PR_REBASE_TOKEN` too. When they exist, only worker 48 switches push and PR creation onto a short-lived installation token. No other worker consults this mapping.
+When all three secrets exist, only worker 48 switches push and PR creation onto a
+short-lived installation token. Missing any secret fails back to `PR_REBASE_TOKEN`.
+No other worker consults this mapping.
 
 Worker Apps stay off every trusted-marker author path. `TRUSTED_FACTORY_APP_SLUGS` remains `github-actions` only. A worker App comment is not trusted even if GitHub reports a trusted association.
 

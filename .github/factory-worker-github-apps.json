@@ -14,9 +14,9 @@
     "48": {
       "worker": 48,
       "display_name": "Mark Cordova",
-      "app_id": null,
-      "app_login": null,
-      "installation_id": null,
+      "app_id": 5275306,
+      "app_login": "mark-cordova[bot]",
+      "installation_id": 170306933,
       "app_id_secret": "FACTORY_WORKER_48_APP_ID",
       "installation_id_secret": "FACTORY_WORKER_48_INSTALLATION_ID",
       "private_key_secret": "FACTORY_WORKER_48_APP_PRIVATE_KEY",

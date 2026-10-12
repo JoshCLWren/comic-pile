@@ -178,9 +178,9 @@ class Worker48BootstrapContractTest(unittest.TestCase):
         entry = mapping["workers"]["48"]
         self.assertEqual(entry["display_name"], "Mark Cordova")
         self.assertEqual(entry["display_name"], self.app.bootstrap_display_name(48))
-        self.assertIsNone(entry["app_id"])
-        self.assertIsNone(entry["app_login"])
-        self.assertIsNone(entry["installation_id"])
+        self.assertEqual(entry["app_id"], 5275306)
+        self.assertEqual(entry["app_login"], "mark-cordova[bot]")
+        self.assertEqual(entry["installation_id"], 170306933)
         self.assertIn("Autonomous ComicPile Factory worker", entry["profile"])
         blob = json.dumps(mapping)
         self.assertNotIn('"46"', blob)

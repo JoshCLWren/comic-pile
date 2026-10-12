@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Worker 48 GitHub App identity mapping and installation-token minting.
 
-The provenance key is the worker number. This module scaffolds worker 48
-(Mark Cordova) only. It does not create a GitHub App and it does not move
-any other worker off PR_REBASE_TOKEN.
+The provenance key is the worker number. This module configures worker 48
+(Mark Cordova) only. It does not create Apps and it does not move any other
+worker off PR_REBASE_TOKEN.
 
 Name bootstrap is explicit (`bootstrap-name` / `bootstrap-collision`).
 Token selection never calls Faker and never re-rolls a persisted name.
