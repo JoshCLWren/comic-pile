@@ -162,6 +162,35 @@ describe('tag chips (issue #3032)', () => {
       .toBeInTheDocument()
   })
 
+  it('keeps the tag name visually dominant over state markers (issue #3391)', () => {
+    render(
+      <MemoryRouter>
+        <TagChips data={chipData()} canEdit onRemoveDirect={() => {}} />
+      </MemoryRouter>,
+    )
+
+    // The pill is the single owner of the chip's typography role, so the tag
+    // name reads first in both direct and inherited chips: body size, bold, in
+    // the primary text color. Asserting on the pill (not the inner name span)
+    // keeps this test tied to what actually renders the name.
+    for (const name of ['Physical', 'Horror']) {
+      const pill = screen.getByText(name).parentElement
+      expect(pill).toHaveClass('text-sm')
+      expect(pill).toHaveClass('font-bold')
+      expect(pill).toHaveClass('text-[var(--theme-text-primary)]')
+    }
+    // State markers stay tertiary beside the name rather than competing with
+    // it for width or emphasis.
+    for (const marker of ['Inherited', 'via 2 sources']) {
+      expect(screen.getByText(marker).className).toMatch(/--theme-text-(dim|muted)/)
+    }
+    // The remove affordance keeps an explicit compact size so it never
+    // inherits the ambient body size and out-competes the tag name.
+    expect(screen.getByRole('button', { name: 'Remove tag Physical' })).toHaveClass(
+      'text-[11px]',
+    )
+  })
+
   it('exposes every inheritance source with navigation to each source object', async () => {
     const user = userEvent.setup()
     render(
