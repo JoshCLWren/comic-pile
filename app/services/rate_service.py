@@ -40,7 +40,7 @@ from app.services.snapshot_contract import (
     classify_snapshot,
 )
 from comic_pile.bandwidth import capture_ephemeral_bandwidth
-from comic_pile.dependencies import refresh_affected_blocked_status
+from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
 from comic_pile.reading_session import get_current_die_for_session
@@ -547,13 +547,7 @@ async def rate_thread(
     # or completing a thread can change hard-prerequisite eligibility for this
     # thread and others (issue #2467).  Refreshing only on thread completion
     # left stale is_blocked flags that let blocked threads enter the roll pool.
-    # Use targeted refresh to only re-evaluate threads that could be affected.
-    blocked_changes = await refresh_affected_blocked_status(
-        user_id,
-        db,
-        read_issue_id=rated_issue_id,
-        completed_thread_id=thread_id if should_complete_thread else None,
-    )
+    blocked_changes = await refresh_user_blocked_status(user_id, db)
 
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)

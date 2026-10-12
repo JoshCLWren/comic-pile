@@ -4,6 +4,7 @@ from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 import logging
 import random
+from typing import NamedTuple
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
@@ -14,6 +15,21 @@ logger = logging.getLogger(__name__)
 
 ADVISORY_LOCK_NAMESPACE = 699001
 QueuePositionChanges = dict[int, int]
+
+
+class ActiveQueueThread(NamedTuple):
+    """The active-queue columns `move_to_safe_position` actually needs.
+
+    Safe-position placement reads only identity, ordering, and blocked state for
+    every active thread. Selecting the full ``Thread`` entity instead made
+    SQLAlchemy build one ORM instance per active thread on every rate call that
+    lands in the safe-position branch, so the projection is pinned here to the
+    three columns the placement algorithm consumes.
+    """
+
+    id: int
+    queue_position: int
+    is_blocked: bool
 
 
 async def _acquire_queue_lock(user_id: int, db: AsyncSession) -> None:
@@ -278,9 +294,6 @@ async def move_to_position(
     positions, changes = _split_position_rows(result.fetchall())
     _sync_cached_queue_positions(db, positions)
 
-    if do_commit:
-        await db.commit()
-
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("Final queue state after operation:")
         result = await db.execute(
@@ -299,6 +312,9 @@ async def move_to_position(
                 thread.id,
                 thread.title[:50],
             )
+
+    if do_commit:
+        await db.commit()
 
     logger.debug(
         "move_to_position SUCCESS: thread %d moved to position %d",
@@ -337,11 +353,11 @@ async def move_to_safe_position(
         .where(Thread.queue_position >= 1)
         .order_by(Thread.queue_position, Thread.id)
     )
-    all_active = [(row.id, row.queue_position, row.is_blocked) for row in result.all()]
-    rollable = [t for t in all_active if not t[2] and t[0] not in excluded_ids]
+    all_active = [ActiveQueueThread(*row) for row in result.all()]
+    rollable = [t for t in all_active if not t.is_blocked and t.id not in excluded_ids]
 
     target_rollable_index = next(
-        (i for i, thread in enumerate(rollable) if thread[0] == thread_id), -1
+        (i for i, thread in enumerate(rollable) if thread.id == thread_id), -1
     )
     if target_rollable_index == -1 or len(rollable) <= 1:
         return {}
@@ -351,9 +367,9 @@ async def move_to_safe_position(
     non_blocked_seen = 0
     target_seq = len(all_active)
     for index, thread in enumerate(all_active):
-        if thread[0] == thread_id:
+        if thread.id == thread_id:
             continue
-        if not thread[2] and thread[0] not in excluded_ids:
+        if not thread.is_blocked and thread.id not in excluded_ids:
             non_blocked_seen += 1
         if non_blocked_seen >= die_size:
             target_seq = index + 1
@@ -361,7 +377,7 @@ async def move_to_safe_position(
 
     target_seq = min(target_seq, len(all_active))
     target_current_seq = next(
-        (i + 1 for i, thread in enumerate(all_active) if thread[0] == thread_id), 0
+        (i + 1 for i, thread in enumerate(all_active) if thread.id == thread_id), 0
     )
     if target_current_seq == target_seq:
         return {}
