@@ -259,6 +259,7 @@ async def test_public_release_payload_rejects_placeholder_content(
     ("field", "offending", "fragment"),
     [
         ("title", "incomplete #1551 fix for roll recovery", "#1551"),
+        ("summary", "Fixes #1234 for the release", "#1234"),
         ("title", "Roll history now loads instantly (Phase 2 and 3)", "Phase 2"),
         ("summary", "Added source_roll_event_id instrumentation detail.", "source_roll_event_id"),
         ("summary", "This update is still incomplete but shipped anyway.", "incomplete"),
@@ -530,101 +531,11 @@ async def test_public_release_payload_rejects_capability_claim_without_path(
 
 
 @pytest.mark.asyncio
-async def test_release_validator_caching_performance(
-    auth_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Verify that validator caching reduces repeated validation overhead.
-
-    This test ensures that the _reader_facing_fields_cache is properly
-    set and reused across multiple ReleaseUpsertRequest validations,
-    which is important for cold-start performance of the publish endpoint.
-
-    Args:
-        auth_client: Authenticated async API client.
-        monkeypatch: Pytest environment patch helper.
-
-    Returns:
-        None.
-    """
-    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
-    headers = {"X-Release-Writer-Token": "writer-secret"}
-    now = datetime.now(UTC).isoformat()
-
-    # First validation
-    payload1 = {
-        "source_repository": "JoshCLWren/comic-pile",
-        "source_pr_number": 1203,
-        "source_merge_sha": "d" * 40,
-        "merged_at": now,
-        "released_at": now,
-        "category": "What's New",
-        "title": "Release 1203",
-        "summary": "A user-facing release summary",
-        "body": "More release detail",
-        "visibility": "public",
-        "status": "published",
-        "sort_order": 0,
-        "provenance_json": {
-            "classification": "public",
-            "classification_reason": "Test provenance reason.",
-            "user_visible_evidence": "Test user visible evidence.",
-            "reader_reachable": True,
-            "inspected_issue_numbers": [1070],
-            "scope_fences": [],
-            "contradicting_evidence": [],
-        },
-    }
-
-    response1 = await auth_client.put(
-        "/api/v1/releases/", json=payload1, headers=headers
-    )
-    assert response1.status_code == 200
-    first_id = response1.json()["id"]
-
-    # Second validation with same-style payload (cache should be populated)
-    payload2 = {
-        "source_repository": "JoshCLWren/comic-pile",
-        "source_pr_number": 1204,
-        "source_merge_sha": "e" * 40,
-        "merged_at": now,
-        "released_at": now,
-        "category": "What's New",
-        "title": "Release 1204",
-        "summary": "Another user-facing release summary",
-        "body": "More release detail",
-        "visibility": "public",
-        "status": "published",
-        "sort_order": 0,
-        "provenance_json": {
-            "classification": "public",
-            "classification_reason": "Test provenance reason.",
-            "user_visible_evidence": "Test user visible evidence.",
-            "reader_reachable": True,
-            "inspected_issue_numbers": [1071],
-            "scope_fences": [],
-            "contradicting_evidence": [],
-        },
-    }
-
-    response2 = await auth_client.put(
-        "/api/v1/releases/", json=payload2, headers=headers
-    )
-    assert response2.status_code == 200
-    second_id = response2.json()["id"]
-
-    # Both should succeed and have different IDs
-    assert first_id != second_id
-    assert first_id is not None
-    assert second_id is not None
-
-
-@pytest.mark.asyncio
 async def test_release_publication_with_capability_claim_and_path(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify that public releases with capability claim language and reader_reachable_path pass validation.
+    """Reader capability language publishes once the shipped path is recorded.
 
     Args:
         auth_client: Authenticated async API client.
@@ -635,119 +546,16 @@ async def test_release_publication_with_capability_claim_and_path(
     """
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
-    now = datetime.now(UTC).isoformat()
-
-    payload = {
-        "source_repository": "JoshCLWren/comic-pile",
-        "source_pr_number": 1205,
-        "source_merge_sha": "f" * 40,
-        "merged_at": now,
-        "released_at": now,
-        "category": "You can now support new features",
-        "title": "Release 1205",
-        "summary": "A user-facing release summary",
-        "body": "More release detail",
-        "visibility": "public",
-        "status": "published",
-        "sort_order": 0,
-        "provenance_json": {
-            "classification": "public",
-            "classification_reason": "Test provenance reason.",
-            "user_visible_evidence": "Test user visible evidence.",
-            "reader_reachable": True,
-            "inspected_issue_numbers": [1072],
-            "scope_fences": [],
-            "contradicting_evidence": [],
-            "reader_reachable_path": "Queue page at /queue",
-        },
-    }
+    payload = _release_payload(pr_number=1223, merge_sha="d" * 40)
+    payload["category"] = "You can now save queue filters"
 
     response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
     assert response.status_code == 200
-    data = response.json()
-    assert data["title"] == "Release 1205"
-    assert "reader_reachable_path" in data["provenance_json"]
+    published = response.json()
+    assert published["category"] == "You can now save queue filters"
+    provenance = published["provenance_json"]
+    assert isinstance(provenance, dict)
+    assert provenance["reader_reachable_path"] == "Queue page at /queue"
 
 
-@pytest.mark.asyncio
-async def test_release_publication_with_internal_artifacts_rejected(
-    auth_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Verify that public releases with internal engineering artifacts are rejected.
-
-    Args:
-        auth_client: Authenticated async API client.
-        monkeypatch: Pytest environment patch helper.
-
-    Returns:
-        None.
-    """
-    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
-    headers = {"X-Release-Writer-Token": "writer-secret"}
-    now = datetime.now(UTC).isoformat()
-
-    # Test with ticket reference in summary
-    payload = {
-        "source_repository": "JoshCLWren/comic-pile",
-        "source_pr_number": 1206,
-        "source_merge_sha": "g" * 40,
-        "merged_at": now,
-        "released_at": now,
-        "category": "What's New",
-        "title": "Release 1206",
-        "summary": "Fixes #1234 for the release",
-        "body": "More release detail",
-        "visibility": "public",
-        "status": "published",
-        "sort_order": 0,
-        "provenance_json": {
-            "classification": "public",
-            "classification_reason": "Test provenance reason.",
-            "user_visible_evidence": "Test user visible evidence.",
-            "reader_reachable": True,
-            "inspected_issue_numbers": [1073],
-            "scope_fences": [],
-            "contradicting_evidence": [],
-        },
-    }
-
-    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
-    assert response.status_code == 422
-    errors = response.json()["errors"]
-    assert any(
-        "summary must use reader-facing product language" in error["message"]
-        for error in errors
-    )
-
-    # Test with phase terminology in title
-    payload2 = {
-        "source_repository": "JoshCLWren/comic-pile",
-        "source_pr_number": 1207,
-        "source_merge_sha": "h" * 40,
-        "merged_at": now,
-        "released_at": now,
-        "category": "What's New",
-        "title": "Release 1207 - Phase 2 completion",
-        "summary": "A user-facing release summary",
-        "body": "More release detail",
-        "visibility": "public",
-        "status": "published",
-        "sort_order": 0,
-        "provenance_json": {
-            "classification": "public",
-            "classification_reason": "Test provenance reason.",
-            "user_visible_evidence": "Test user visible evidence.",
-            "reader_reachable": True,
-            "inspected_issue_numbers": [1074],
-            "scope_fences": [],
-            "contradicting_evidence": [],
-        },
-    }
-
-    response2 = await auth_client.put("/api/v1/releases/", json=payload2, headers=headers)
-    assert response2.status_code == 422
-    errors2 = response2.json()["errors"]
-    assert any(
-        "Phase 2" in error["message"] for error in errors2
-    )
