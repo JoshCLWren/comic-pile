@@ -232,6 +232,8 @@ class ReleaseUpsertRequest(BaseModel):
             raise ValueError("source_pr_number or source_merge_sha is required")
         return self
 
+    _reader_facing_fields_cache: tuple[str, ...] = ()
+
     @model_validator(mode="after")
     def enforce_reader_facing_copy(self) -> Self:
         """Reject public published copy that exposes internal engineering artifacts.
@@ -249,8 +251,21 @@ class ReleaseUpsertRequest(BaseModel):
         """
         if self.status != "published" or self.visibility != "public":
             return self
-        for field_name in _READER_FACING_FIELDS:
-            artifact = find_internal_artifact(field_name, getattr(self, field_name))
+        cached = getattr(self, "_reader_facing_fields_cache", None)
+        if cached is not None and len(cached) == 3:
+            category, title, summary = cached
+        else:
+            category = str(self.category)
+            title = str(self.title)
+            summary = str(self.summary)
+            cached = (category, title, summary)
+            object.__setattr__(self, "_reader_facing_fields_cache", cached)
+        for field_name, value in (
+            ("category", category),
+            ("title", title),
+            ("summary", summary),
+        ):
+            artifact = find_internal_artifact(field_name, value)
             if artifact is not None:
                 raise ValueError(artifact)
         return self
@@ -322,9 +337,18 @@ class ReleaseUpsertRequest(BaseModel):
                 "record provenance_json.contradicting_evidence explaining the "
                 "shipped reader path"
             )
+        cached = getattr(self, "_reader_facing_fields_cache", None)
+        if cached is not None and len(cached) == 3:
+            category, title, summary = cached
+        else:
+            category = str(self.category)
+            title = str(self.title)
+            summary = str(self.summary)
+            cached = (category, title, summary)
+            object.__setattr__(self, "_reader_facing_fields_cache", cached)
         if any(
-            _CAPABILITY_CLAIM_PATTERN.search(str(getattr(self, name)))
-            for name in _READER_FACING_FIELDS
+            _CAPABILITY_CLAIM_PATTERN.search(v)
+            for v in (category, title, summary)
         ):
             _provenance_text(provenance, "reader_reachable_path")
         return self
