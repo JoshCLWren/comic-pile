@@ -18,7 +18,7 @@ interface CustomCBLBuilderProps {
 }
 
 function normalizePositions(entries: CustomCBLEntry[]): CustomCBLEntry[] {
-  return entries.map((entry, position) => ({ ...entry, position }))
+  return entries.map((entry, position) => ({ ...entry, position, is_checkpoint: Boolean(entry.is_checkpoint) }))
 }
 
 function draftEntry(result: CustomCBLIssueSearchResult, position: number): CustomCBLEntry {
@@ -30,11 +30,19 @@ function draftEntry(result: CustomCBLIssueSearchResult, position: number): Custo
     series_name: result.series_name,
     issue_number: result.issue_number,
     status: result.status,
+    is_checkpoint: false,
   }
 }
 
 function sameIssueOrder(left: CustomCBLEntry[], right: CustomCBLEntry[]): boolean {
-  return left.length === right.length && left.every((entry, index) => entry.issue_id === right[index]?.issue_id)
+  return (
+    left.length === right.length &&
+    left.every(
+      (entry, index) =>
+        entry.issue_id === right[index]?.issue_id &&
+        Boolean(entry.is_checkpoint) === Boolean(right[index]?.is_checkpoint),
+    )
+  )
 }
 
 export default function CustomCBLBuilder({
@@ -100,6 +108,9 @@ export default function CustomCBLBuilder({
         name: name.trim(),
         description: description.trim() || null,
         issue_ids: entries.map((entry) => entry.issue_id),
+        checkpoint_issue_ids: entries
+          .filter((entry) => entry.is_checkpoint)
+          .map((entry) => entry.issue_id),
       })
     },
     onSuccess: async (saved) => {
@@ -183,6 +194,14 @@ export default function CustomCBLBuilder({
     })
     setMessage(null)
   }
+  const toggleCheckpoint = (issueId: number) => {
+    setEntries((current) =>
+      current.map((entry) =>
+        entry.issue_id === issueId ? { ...entry, is_checkpoint: !entry.is_checkpoint } : entry,
+      ),
+    )
+    setMessage(null)
+  }
   const exportList = async () => {
     if (!selectedId || !persisted || dirty || disabled || isPending) return
     setExportError(null)
@@ -211,7 +230,7 @@ export default function CustomCBLBuilder({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 id="custom-cbl-heading" className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
-          <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Build an ordered list from real ComicPile issues, then apply it to this Reading Plan.</p>
+          <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Build one ordered list of real comics, flag crossover checkpoints if a later issue must wait, then apply it to this Reading Plan.</p>
         </div>
         <button type="button" onClick={() => setOpen((value) => !value)} disabled={disabled || isPending} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50" aria-expanded={open}>
           {open ? 'Close custom CBLs' : 'Create or edit custom CBL'}
@@ -262,6 +281,24 @@ export default function CustomCBLBuilder({
                   <li key={entry.issue_id} className="flex items-center gap-2 rounded-xl border border-[var(--theme-border)] p-2">
                     <span className="w-7 shrink-0 text-center text-xs font-black text-[var(--theme-text-dim)]">{index + 1}</span>
                     <span className="min-w-0 flex-1 truncate text-sm text-[var(--theme-text-primary)]">{entry.series_name} #{entry.issue_number}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleCheckpoint(entry.issue_id)}
+                      title={
+                        entry.is_checkpoint
+                          ? 'Remove checkpoint'
+                          : 'Mark as checkpoint (blocks next step)'
+                      }
+                      aria-label={
+                        entry.is_checkpoint
+                          ? `Remove checkpoint from ${entry.series_name} #${entry.issue_number}`
+                          : `Mark ${entry.series_name} #${entry.issue_number} as checkpoint`
+                      }
+                      disabled={disabled || isPending}
+                      className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${entry.is_checkpoint ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-bg-panel)] text-[var(--theme-comic-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'} disabled:opacity-50`}
+                    >
+                      {entry.is_checkpoint ? '⚑' : '⚐'}
+                    </button>
                     <button type="button" aria-label={`Move ${entry.series_name} #${entry.issue_number} earlier`} onClick={() => moveIssue(index, -1)} disabled={index === 0 || disabled || isPending} className="min-h-9 min-w-9 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30">↑</button>
                     <button type="button" aria-label={`Move ${entry.series_name} #${entry.issue_number} later`} onClick={() => moveIssue(index, 1)} disabled={index === entries.length - 1 || disabled || isPending} className="min-h-9 min-w-9 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30">↓</button>
                     <button type="button" aria-label={`Remove ${entry.series_name} #${entry.issue_number}`} onClick={() => removeIssue(entry.issue_id)} disabled={disabled || isPending} className="min-h-9 rounded-lg border border-red-900 px-2 text-xs font-bold text-red-300 disabled:opacity-50">Remove</button>

@@ -5,15 +5,16 @@ ContinuityRule is the human-authoring record. This module keeps the two in sync
 inside the author's write transaction so rule authoring keeps its intended
 behavior after ContinuityRule leaves the Roll eligibility path.
 
-Strict-sequential adjacent plan edges are intentionally NOT compiled here;
-that inference needs the Wild Hunt exception decision (Phase B of #2553).
+Strict-sequential inferred edges are selected in
+``app.services.strict_plan_constraints`` (Phase B of #2553) and compiled
+here as ordinary ``item_read`` rules. This module does not invent adjacency.
 """
 
 from __future__ import annotations
 
 from collections.abc import Collection
 
-from sqlalchemy import delete, or_, select, tuple_
+from sqlalchemy import delete, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
@@ -93,7 +94,11 @@ def validate_rule_compiles(rule: ContinuityRule) -> None:
 
 
 async def compile_rule_edges(
-    db: AsyncSession, rule: ContinuityRule, *, plan_id: int | None = None
+    db: AsyncSession,
+    rule: ContinuityRule,
+    *,
+    plan_id: int | None = None,
+    promote_cbl_occupants: bool = False,
 ) -> None:
     """Insert canonical Dependency edges for a rule.
 
@@ -102,9 +107,12 @@ async def compile_rule_edges(
     duplicated; notes are refreshed to the compiling rule.
 
     Raises ValueError if a historical cbl-order row occupies a pair the rule
-    must compile: ON CONFLICT DO UPDATE would silently leave the inert row,
-    and the hard constraint would never block Roll. (The migration aborts on
-    the same collision.)
+    must compile and ``promote_cbl_occupants`` is false: ON CONFLICT DO UPDATE
+    would silently leave the inert row, and the hard constraint would never
+    block Roll. Strict-plan compilation passes ``promote_cbl_occupants=True``
+    so an inferred thread-entry gate can promote *that pair only* from inert
+    CBL materialization into a canonical blocker. Unrelated ``cbl-order:%``
+    rows stay inert.
 
     When plan_id is given, also links each compiled edge through
     reading_plan_dependencies for provenance (#2553 P2).
@@ -125,10 +133,21 @@ async def compile_rule_edges(
             )
             .all()
         )
-        if cbl_occupants:
+        if cbl_occupants and not promote_cbl_occupants:
             raise ValueError(
                 f"Rule {rule.id} collides with historical cbl-order rows on "
                 f"{len(cbl_occupants)} pair(s); resolve the overlap before saving"
+            )
+        if cbl_occupants and promote_cbl_occupants:
+            await db.execute(
+                update(Dependency)
+                .where(
+                    tuple_(Dependency.source_issue_id, Dependency.target_issue_id).in_(
+                        list(cbl_occupants)
+                    ),
+                    Dependency.note.like("cbl-order:%"),
+                )
+                .values(note=f"{EDGE_NOTE_PREFIX}{rule.id}")
             )
     for source_id, target_id in pairs:
         result = await db.execute(

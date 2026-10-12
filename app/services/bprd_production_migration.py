@@ -29,6 +29,10 @@ from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
 )
+from app.services.strict_plan_constraints import (
+    load_issue_thread_index,
+    strict_plan_item_read_pairs,
+)
 from app.services.migration_shared import (
     MigrationInvariantError,
     json_value as _json_value,
@@ -209,8 +213,25 @@ def _plan_lanes() -> list[ContinuityPlanLane]:
 
 
 
-def _planned_edges(spec: BPRDMigrationSpec) -> list[tuple[int, int]]:
-    return list(zip(spec.issue_ids, spec.issue_ids[1:], strict=False))
+async def _planned_edges(
+    db: AsyncSession, spec: BPRDMigrationSpec
+) -> list[tuple[int, int]]:
+    """Return inferred thread-entry gates plus classified B.P.R.D. prerequisites.
+
+    Same-thread adjacency is not compiled. The five reviewed legacy edges remain
+    selected hard restrictions, including the two interleave pairs that are not
+    series starts.
+    """
+    nodes = _plan_nodes(spec)
+    index = await load_issue_thread_index(db, spec.issue_ids)
+    pairs = list(strict_plan_item_read_pairs(nodes, index))
+    seen = set(pairs)
+    for edge in spec.legacy_edges:
+        pair = (edge.source_issue_id, edge.target_issue_id)
+        if pair not in seen:
+            pairs.append(pair)
+            seen.add(pair)
+    return pairs
 
 
 def _detect_cycle(
@@ -588,7 +609,7 @@ async def build_bprd_dry_run(
             select(ContinuityRule).where(ContinuityRule.user_id == spec.user_id)
         )
     ).scalars().all()
-    intended_edges = _planned_edges(spec)
+    intended_edges = await _planned_edges(db, spec)
     intended_edge_set = set(intended_edges)
     removable_rule_ids = {edge.rule_id for edge in spec.legacy_edges}
     for rule in all_rules:
@@ -721,12 +742,14 @@ async def apply_bprd_migration(
     )
     db.add(plan)
     await db.flush()
+    intended_edges = await _planned_edges(db, spec)
     await replace_compiled_rules(
         db,
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential"
+        ordering_mode="strict_sequential",
+        extra_item_read_pairs=intended_edges,
     )
     await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
@@ -742,9 +765,9 @@ async def apply_bprd_migration(
             .order_by(ContinuityRule.id)
         )
     ).scalars().all()
-    if len(plan_rules) != len(spec.issue_ids) - 1:
+    if len(plan_rules) != len(intended_edges):
         raise MigrationInvariantError(
-            f"expected {len(spec.issue_ids) - 1} plan-owned rules, "
+            f"expected {len(intended_edges)} plan-owned rules, "
             f"found {len(plan_rules)}"
         )
 
@@ -826,7 +849,8 @@ async def rollback_bprd_migration(
             )
         )
     ).scalars().all()
-    if len(plan_rules) != len(spec.issue_ids) - 1:
+    expected_rule_count = receipt.get("plan_rule_count")
+    if not isinstance(expected_rule_count, int) or len(plan_rules) != expected_rule_count:
         raise MigrationInvariantError(
             "plan-owned rule set changed after cutover; refusing automatic rollback"
         )

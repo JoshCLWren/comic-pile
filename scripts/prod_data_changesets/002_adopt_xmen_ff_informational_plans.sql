@@ -1,0 +1,32 @@
+-- HELD. Do not apply. No production mutation. No Neon clones.
+--
+-- X-Men Era Ten (CBL list 9, 210 entries) and Fantastic Four Early Years
+-- (CBL list 22, 288 entries) must not become ContinuityPlans until every
+-- unmatched and multi-matched identity is resolved from ComicVine evidence.
+--
+-- Why this is held (production read-only, 2026-10-12, user 1):
+--   List 9: 28 unmatched, 53 multi-matched (2 volume-resolvable, 51 duplicate copies)
+--   List 22: 36 unmatched, 14 multi-matched (Masterworks / 1961 thread / Vol.1 clone)
+-- The previous importer omitted unresolved entries and picked the lowest
+-- issue id on duplicates. That is forbidden.
+--
+-- Never having adopted a strict plan is NOT evidence of informational mode.
+-- Hard restrictions stay the already-recorded canonical Dependencies
+-- (Magneto War 1577-1581, Hunt for Xavier 1848-1852, UXRO semantic notes,
+-- Lee/Kirby spine 2678). Do not compile inferred gates.
+--
+-- Report path (read-only; requires an explicit --database-url):
+--   python scripts/report_cbl_source_identity_resolution.py \
+--     --database-url "$DATABASE_URL" \
+--     --user-id 1 \
+--     --source-list-id 9
+--   python scripts/report_cbl_source_identity_resolution.py \
+--     --database-url "$DATABASE_URL" \
+--     --user-id 1 \
+--     --source-list-id 22
+--
+-- Full unresolved table: cbl_identity_resolution.json
+--
+-- This file is a no-op so a mistaken apply cannot write plans.
+
+SELECT 'held: x-men/ff identity resolution incomplete; no plan writes' AS status;

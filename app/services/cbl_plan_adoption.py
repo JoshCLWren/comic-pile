@@ -73,6 +73,7 @@ from app.services.continuity_plan_labels import issue_step_label
 from app.services.issue_insertion import create_issue_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from app.services.reading_plan_normalization import drop_issue_nodes_from_plan_json
 from comic_pile.dependencies import refresh_user_blocked_status
 
 
@@ -814,9 +815,11 @@ async def _merge_adopted_nodes(
 
     Existing plan nodes for the same issue are reused (never duplicated) and
     receive the new ``source_cbl_placements`` provenance. Existing issue nodes
-    without a decision are preserved by default; missing/importable entries are
-    materialized only when explicitly approved; unresolved/ambiguous entries are
-    never guessed.
+    without a decision are preserved by default. An explicit EXCLUDE removes
+    already-present nodes for those issues from the plan record so membership
+    and source order cannot keep leftovers the reader just dropped. Missing
+    importable entries are materialized only when explicitly approved;
+    unresolved/ambiguous entries are never guessed.
 
     Returns:
         The machine-readable reused/created/excluded/unresolved source positions
@@ -843,6 +846,8 @@ async def _merge_adopted_nodes(
     created_positions: list[int] = []
     excluded_positions: list[int] = []
     unresolved_positions: list[int] = []
+    excluded_issue_ids: set[int] = set()
+    excluded_node_ids: set[str] = set()
 
     for entry in entries:
         fact = facts_by_entry_id.get(entry.id)
@@ -858,6 +863,13 @@ async def _merge_adopted_nodes(
         )
         if early_decision == SourceBackedDecision.EXCLUDE:
             excluded_positions.append(entry.position)
+            excluded_node_ids.add(f"cbl-{entry.id}")
+            if fact is not None:
+                resolved_issue_id = fact.get("resolved_issue_id")
+                if isinstance(resolved_issue_id, int) and not isinstance(
+                    resolved_issue_id, bool
+                ):
+                    excluded_issue_ids.add(resolved_issue_id)
             continue
 
         if fact is None:
@@ -935,6 +947,13 @@ async def _merge_adopted_nodes(
         if not created_now:
             reused_positions.append(entry.position)
 
+    existing_nodes = drop_issue_nodes_from_plan_json(
+        existing_nodes,
+        drop_issue_ids=excluded_issue_ids,
+        drop_node_ids=excluded_node_ids,
+        drop_source_path=source_path,
+        drop_source_positions=excluded_positions,
+    )
     plan.lanes_json = plan.lanes_json or _default_lane()
     plan.nodes_json = existing_nodes
     return AdoptionMergeReport(

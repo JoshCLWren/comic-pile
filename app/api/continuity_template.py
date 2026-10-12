@@ -7,7 +7,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.continuity import _refresh_blocked_state, _to_plan_response as _to_response
+from app.services.continuity import _refresh_blocked_state
+from app.services.reading_plan_normalization import editor_plan_response
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.continuity_plan import ContinuityPlan
@@ -243,4 +244,4 @@ async def adopt_crossover_template(
     # Always refresh: informational plans with checkpoint/convergence gates
     # also compile canonical edges via the write-path hook (#2553).
     await _refresh_blocked_state(current_user.id, db)
-    return _to_response(plan)
+    return await editor_plan_response(db, plan)

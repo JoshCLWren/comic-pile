@@ -495,6 +495,69 @@ async def test_existing_plan_reuses_nodes_with_provenance() -> None:
 
 
 @pytest.mark.asyncio
+async def test_exclude_drops_existing_nodes_for_removed_series() -> None:
+    """Explicit series EXCLUDE must drop already-present plan nodes (#3486)."""
+    existing = _FakePlan(
+        id=5, user_id=1, name="CBL adoption",
+        ordering_mode="informational",
+        nodes_json=[
+            {
+                "id": "cbl-10",
+                "node_type": "issue",
+                "ref_id": 100,
+                "lane_id": "default",
+                "position": 0,
+                "is_checkpoint": False,
+                "convergence_gate": [],
+                "source_cbl_placements": [
+                    {"source_path": "/x.xml", "position": 0},
+                ],
+            },
+            {
+                "id": "cbl-11",
+                "node_type": "issue",
+                "ref_id": 200,
+                "lane_id": "default",
+                "position": 1,
+                "is_checkpoint": False,
+                "convergence_gate": [],
+                "source_cbl_placements": [
+                    {"source_path": "/x.xml", "position": 1},
+                ],
+            },
+        ],
+        lanes_json=[{"id": "default", "name": "Default", "order": 0}],
+    )
+    kept = _FakeEntry(id=10, position=0, series_name="X")
+    dropped = _FakeEntry(id=11, position=1, series_name="Y")
+    result = await _adopt(
+        _FakeDB(),
+        existing_plan=existing,
+        entries=[kept, dropped],
+        facts=[
+            _make_fact(
+                resolved_issue_id=100,
+                resolution_status="existing",
+                position=0,
+                cbl_entry_id=10,
+                series_name="X",
+            ),
+            _make_fact(
+                resolved_issue_id=200,
+                resolution_status="existing",
+                position=1,
+                cbl_entry_id=11,
+                series_name="Y",
+            ),
+        ],
+        series_decisions={"Y": SourceBackedDecision.EXCLUDE},
+    )
+    assert result.excluded_positions == [1]
+    assert [node["ref_id"] for node in result.plan.nodes_json] == [100]
+    assert result.plan.nodes_json[0]["id"] == "cbl-10"
+
+
+@pytest.mark.asyncio
 async def test_approved_missing_issue_materialized_and_node_added() -> None:
     """Approved missing-importable entry should create an issue node."""
     entry = _FakeEntry(id=20, position=0, series_name="Y")

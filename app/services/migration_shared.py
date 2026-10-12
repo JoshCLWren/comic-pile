@@ -166,6 +166,36 @@ def planned_rule_descriptor(rule: dict[str, object]) -> dict[str, object]:
     }
 
 
+def planned_item_read_pairs(planned: object) -> list[tuple[int, int]]:
+    """Return dry-run ``item_read`` pairs for a one-time migration apply.
+
+    Live plan create/update does not infer these. Held production-migration
+    scripts pass the pairs they already classified in the dry-run.
+
+    Args:
+        planned: Dry-run ``planned`` object, typically a mapping with ``rules``.
+
+    Returns:
+        Source/target issue id pairs with ``satisfaction_type`` ``item_read``.
+    """
+    if not isinstance(planned, dict):
+        return []
+    rules = planned.get("rules")
+    if not isinstance(rules, list):
+        return []
+    pairs: list[tuple[int, int]] = []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        if rule.get("satisfaction_type") != "item_read":
+            continue
+        source_id = rule.get("source_id")
+        target_id = rule.get("target_id")
+        if isinstance(source_id, int) and isinstance(target_id, int):
+            pairs.append((source_id, target_id))
+    return pairs
+
+
 def require_clean_snapshot(snapshot: dict[str, object]) -> None:
     """Validate snapshot is clean; raise MigrationInvariantError otherwise."""
     if snapshot.get("ok") is not True or not snapshot.get("snapshot_token"):
@@ -258,10 +288,10 @@ async def retire_plan_compiled_edges(db: AsyncSession, *, rule_ids: list[int]) -
     Plan rollbacks must retire a plan's compiled edges before checking that
     legacy dependency IDs/pairs are free: the cutover compiles plan rules
     into Dependencies, so those pairs are legitimately occupied until the
-    plan's rules are removed. A pair is kept when another surviving rule
-    still compiles to it (the same shared-pair check as plan deletion), so
-    a standalone rule whose note was refreshed onto the plan rule's id is
-    not stranded.
+    plan's rules are removed. Pass reused standalone rule IDs in ``rule_ids``
+    as well so their cutover-compiled edges are excluded from the keep check
+    and restored source ``cbl-order`` rows can reclaim those pairs. A pair is
+    still kept when a *non-excluded* surviving rule compiles to it.
     """
     if not rule_ids:
         return

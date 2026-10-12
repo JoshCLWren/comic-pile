@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
 from app.models.issue import Issue
+from app.models.reading_plan_membership import ReadingPlanDependency
 from app.models.thread import Thread
 from app.schemas.continuity_plan import ContinuityPlanNode
 from app.services.continuity_plan_writer import replace_compiled_rules
@@ -105,6 +107,7 @@ async def test_equivalent_standalone_item_read_rule_is_reused_without_reownershi
         plan=plan,
         nodes=nodes,
         ordering_mode="strict_sequential",
+        extra_item_read_pairs=[(source.id, target.id)],
     )
     await async_db.flush()
 
@@ -132,6 +135,7 @@ async def test_equivalent_standalone_item_read_rule_is_reused_without_reownershi
         plan=plan,
         nodes=nodes,
         ordering_mode="strict_sequential",
+        extra_item_read_pairs=[(source.id, target.id)],
     )
     await async_db.flush()
     surviving = await async_db.get(ContinuityRule, standalone_id)
@@ -140,10 +144,10 @@ async def test_equivalent_standalone_item_read_rule_is_reused_without_reownershi
 
 
 @pytest.mark.asyncio
-async def test_rule_owned_by_another_reading_plan_still_conflicts(
+async def test_rule_owned_by_another_reading_plan_is_shared_not_duplicated(
     async_db: AsyncSession,
 ) -> None:
-    """Equivalent edges owned by another Reading Plan retain the stable conflict."""
+    """Two plans may share one item_read edge through provenance links."""
     user = await get_or_create_user_async(async_db)
     source = await _make_issue(async_db, user_id=user.id, suffix="plan-a-source")
     target = await _make_issue(async_db, user_id=user.id, suffix="plan-a-target")
@@ -156,21 +160,55 @@ async def test_rule_owned_by_another_reading_plan_still_conflicts(
         plan=first,
         nodes=nodes,
         ordering_mode="strict_sequential",
+        extra_item_read_pairs=[(source.id, target.id)],
     )
     await async_db.flush()
 
     second = await _plan(async_db, user_id=user.id, name="Second plan")
-    with pytest.raises(HTTPException) as captured:
-        await replace_compiled_rules(
-            async_db,
-            user_id=user.id,
-            plan=second,
-            nodes=nodes,
-            ordering_mode="strict_sequential",
-        )
+    await replace_compiled_rules(
+        async_db,
+        user_id=user.id,
+        plan=second,
+        nodes=nodes,
+        ordering_mode="strict_sequential",
+        extra_item_read_pairs=[(source.id, target.id)],
+    )
+    await async_db.flush()
 
-    assert captured.value.status_code == 409
-    assert captured.value.detail["code"] == "plan_rule_conflict"
+    rules = list(
+        (
+            await async_db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == user.id,
+                    ContinuityRule.source_id == source.id,
+                    ContinuityRule.target_id == target.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rules) == 1
+    dep_id = (
+        await async_db.execute(
+            select(Dependency.id).where(
+                Dependency.source_issue_id == source.id,
+                Dependency.target_issue_id == target.id,
+            )
+        )
+    ).scalar_one()
+    links = list(
+        (
+            await async_db.execute(
+                select(ReadingPlanDependency).where(
+                    ReadingPlanDependency.dependency_id == dep_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {link.plan_id for link in links} == {first.id, second.id}
 
 
 @pytest.mark.asyncio
@@ -203,6 +241,7 @@ async def test_non_equivalent_same_edge_rule_still_conflicts(
             plan=plan,
             nodes=_nodes(source, target),
             ordering_mode="strict_sequential",
+            extra_item_read_pairs=[(source.id, target.id)],
         )
 
     assert captured.value.status_code == 409

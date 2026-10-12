@@ -257,7 +257,7 @@ async def test_adopt_strict_sequential_compiles_explicit_rules(
             )
         ).scalars().all()
     )
-    assert len(rules) == 2, "strict adoption of a 3-issue list compiles two edges"
+    assert rules == [], "strict adoption compiles no inferred adjacency edges"
 
 
 @pytest.mark.asyncio

@@ -165,12 +165,14 @@ async def test_strict_plan_compiles_idempotently_then_informational_update_remov
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Explicit strict intent creates adjacent edges; reverting intent removes only plan-owned edges."""
+    """Explicit checkpoints compile; reverting intent removes only plan-owned edges."""
     monkeypatch.setattr(continuity_plan_api, "_refresh_blocked_state", AsyncMock())
     user = await get_or_create_user_async(async_db)
     issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(3)]
     await async_db.commit()
     payload = _plan_payload([issue.id for issue in issues], mode="strict_sequential")
+    payload["nodes"][0]["is_checkpoint"] = True
+    payload["nodes"][1]["is_checkpoint"] = True
 
     created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
     assert created.status_code == 201, created.text
@@ -200,6 +202,9 @@ async def test_strict_plan_compiles_idempotently_then_informational_update_remov
 
     informational = dict(payload)
     informational["ordering_mode"] = "informational"
+    informational["nodes"] = [
+        {**node, "is_checkpoint": False} for node in payload["nodes"]
+    ]
     updated = await auth_client.put(
         f"/api/v1/continuity-plans/{plan_id}", json=informational
     )
@@ -997,6 +1002,7 @@ async def test_delete_plan_cascades_owned_rules_and_leaves_unrelated_rules_intac
 
     plan_payload = _plan_payload([plan_issue_1.id, plan_issue_2.id], mode="strict_sequential")
     plan_payload["name"] = "Plan to delete"
+    plan_payload["nodes"][0]["is_checkpoint"] = True
     created = await auth_client.post("/api/v1/continuity-plans/", json=plan_payload)
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]

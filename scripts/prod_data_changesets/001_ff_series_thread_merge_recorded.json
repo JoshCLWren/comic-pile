@@ -1,0 +1,64 @@
+{
+  "recorded_at": "2026-10-12",
+  "source": "Neon production read-only row_to_json, project delicate-sea-51036121 branch br-silent-violet-ayobfez5",
+  "split_thread": {
+    "id": 18560,
+    "title": "Fantastic Four (1970)",
+    "format": "Comic",
+    "issues_remaining": 125,
+    "queue_position": 208,
+    "status": "active",
+    "last_rating": null,
+    "last_activity_at": null,
+    "created_at": "2026-08-31T11:26:07.658653+00:00",
+    "user_id": 1,
+    "notes": "Broad saved-CBL representation; ComicVine volume 2045.",
+    "is_test": false,
+    "is_blocked": true,
+    "total_issues": 125,
+    "next_unread_issue_id": 115395,
+    "reading_progress": "not_started",
+    "blocked_by_thread_ids": null,
+    "blocked_by_issue_ids": null,
+    "manual_creator_credits": [],
+    "catalog_series_id": null
+  },
+  "mapping": {
+    "id": 378,
+    "thread_id": 18560,
+    "external_identity_id": 12970,
+    "status": "confirmed",
+    "evidence_source": "broad_cbl_volume_representation",
+    "confidence": 0.95,
+    "created_at": "2026-08-31T11:26:07.658653+00:00",
+    "updated_at": "2026-08-31T11:26:07.658653+00:00"
+  },
+  "canonical_thread": {
+    "id": 3166,
+    "title": "Fantastic Four (1961)",
+    "format": "Comics",
+    "reading_progress": "in_progress",
+    "next_unread_issue_id": 23029,
+    "total_issues": 102,
+    "queue_position": 205,
+    "status": "active",
+    "user_id": 1
+  },
+  "moved_issue_refs": {
+    "dependencies": {
+      "count": 23625,
+      "ids_md5": "51cab31505d01e2f1be31a7e2a45761f",
+      "fingerprint_md5": "b52d3718b10796674b8b7c3db1145be7"
+    },
+    "reading_plan_issues": {
+      "count": 0,
+      "ids_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "fingerprint_md5": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "events": {
+      "count": 0,
+      "ids_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "fingerprint_md5": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  }
+}

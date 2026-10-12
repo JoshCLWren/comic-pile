@@ -373,8 +373,8 @@ describe('targeted cache effects', () => {
       created_at: '2026-08-03T00:00:00Z',
       updated_at: '2026-08-03T00:00:00Z',
       entries: [
-        { id: 1, position: 0, issue_id: 100, thread_id: 7, series_name: 'Batman', issue_number: '#1', status: 'read' },
-        { id: 2, position: 1, issue_id: 101, thread_id: 8, series_name: 'Superman', issue_number: '#1', status: 'unread' },
+        { id: 1, position: 0, issue_id: 100, thread_id: 7, series_name: 'Batman', issue_number: '#1', status: 'read', is_checkpoint: false },
+        { id: 2, position: 1, issue_id: 101, thread_id: 8, series_name: 'Superman', issue_number: '#1', status: 'unread', is_checkpoint: false },
       ],
     }
 

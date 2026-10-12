@@ -17,10 +17,15 @@ from app.schemas.continuity_plan import (
     ContinuityPlanLane,
     ContinuityPlanNode,
     ContinuityPlanWrite,
+    PlanInferredGateKind,
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.continuity_graph import issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from app.services.strict_plan_constraints import (
+    load_issue_thread_index,
+    strict_plan_item_read_pairs,
+)
 from app.services.explicit_reader_order_migration import (
     _explicit_classifications,
     _load_step14_index,
@@ -34,6 +39,7 @@ from app.services.migration_shared import (
     legacy_prefix,
     plan_fingerprint,
     plan_fingerprint_from_payload,
+    planned_item_read_pairs,
     planned_rule_descriptor,
     refresh_blocked_status,
     require_clean_snapshot,
@@ -45,7 +51,6 @@ from app.services.ultimate_universe_production_migration import (
     _build_plan,
     _derive_gap_bridges,
     _factual_snapshot,
-    _planned_rules,
     _resolved_entries,
 )
 from comic_pile.dependencies import _get_blocked_thread_ids_uncached
@@ -71,6 +76,7 @@ class SourceBackedReaderOrderSpec:
     expected_source_path: str | None = None
     reader_order_dependency_ids: tuple[int, ...] = ()
     classification_family_keys: tuple[str, ...] = ()
+    inferred_gate_kind: PlanInferredGateKind = "thread_entry"
 
 
 PRODUCTION_ABSOLUTE_UNIVERSE_SPEC = SourceBackedReaderOrderSpec(
@@ -171,6 +177,26 @@ PRODUCTION_SOURCE_BACKED_SPECS: dict[str, SourceBackedReaderOrderSpec] = {
 }
 
 
+READING_ORDER_SOURCE_BACKED_MANIFESTS: frozenset[str] = frozenset(
+    {
+        "x-men-era-ten",
+        "fantastic-four-early-years",
+        "americas-best-comics",
+        "doom-patrol",
+        "unnamed-universe",
+    }
+)
+
+# These two CBL lists were imported as cbl-order rows and never adopted as
+# ContinuityPlans. That is not evidence of informational mode. Apply is held
+# until every unmatched and multi-matched CBL identity is resolved from
+# ComicVine evidence. Do not compile inferred gates through this path.
+INFORMATIONAL_CBL_ADOPTION_PLAN_NAMES: frozenset[str] = frozenset(
+    {
+        "Late-90s X-Men Reading Order",
+        "Fantastic Four 001 - Early Years",
+    }
+)
 
 
 async def build_source_backed_reader_order_dry_run(
@@ -506,7 +532,33 @@ async def build_source_backed_reader_order_dry_run(
         source_path=report.source_path or source.source_path,
         bridges=bridges,
     )
-    planned_rules = _planned_rules(nodes, bridges)
+    issue_index = await load_issue_thread_index(db, issue_ids)
+    inferred_pairs = strict_plan_item_read_pairs(nodes, issue_index)
+    planned_rules = [
+        {
+            "kind": "adjacent",
+            "source_type": "issue",
+            "source_id": source_id,
+            "target_type": "issue",
+            "target_id": target_id,
+            "satisfaction_type": "item_read",
+        }
+        for source_id, target_id in inferred_pairs
+    ]
+    for bridge in bridges:
+        planned_rules.append(
+            {
+                "kind": "historical_gap",
+                "source_type": "issue",
+                "source_id": bridge["target_issue_id"],
+                "target_type": "issue",
+                "target_id": bridge["target_issue_id"],
+                "satisfaction_type": "converged",
+                "convergence_targets": [
+                    {"type": "issue", "id": bridge["source_issue_id"]}
+                ],
+            }
+        )
     adjacency = {
         (int(rule["source_id"]), int(rule["target_id"]))
         for rule in planned_rules
@@ -631,7 +683,11 @@ async def build_source_backed_reader_order_dry_run(
         blocked = bool(other or existing or planned)
         if blocked:
             future_blocked.add(thread.id)
-        if removed and not blocked:
+        next_meta = issue_index.get(next_issue_id)
+        is_crossover_gate = (
+            next_meta is not None and next_meta.is_thread_natural_start
+        )
+        if removed and not blocked and is_crossover_gate:
             errors.append(
                 f"planned representation loses protection for next issue {next_issue_id}"
             )
@@ -648,11 +704,24 @@ async def build_source_backed_reader_order_dry_run(
         )
 
     future_eligible = sorted(affected_ids - future_blocked)
-    if future_eligible != current_eligible:
+    newly_eligible = sorted(set(future_eligible) - set(current_eligible))
+    unexpected_release: list[int] = []
+    for thread_id in newly_eligible:
+        matching = next(
+            (row for row in behavior if int(row["thread_id"]) == thread_id),
+            None,
+        )
+        if matching is None:
+            continue
+        meta = issue_index.get(int(matching["next_unread_issue_id"]))
+        if meta is not None and meta.is_thread_natural_start:
+            unexpected_release.append(thread_id)
+    if unexpected_release:
         errors.append(
-            "affected Roll eligibility would change: "
+            "affected Roll-eligible thread set would gain eligibility: "
             f"before={current_eligible}, after={future_eligible}"
         )
+    adjacent_count = sum(1 for rule in planned_rules if rule["kind"] == "adjacent")
 
     plan_payload = {
         "name": spec.plan_name,
@@ -670,6 +739,7 @@ async def build_source_backed_reader_order_dry_run(
             "plan_name": spec.plan_name,
             "reader_order_dependency_ids": list(spec.reader_order_dependency_ids),
             "classification_family_keys": list(spec.classification_family_keys),
+            "inferred_gate_kind": spec.inferred_gate_kind,
         },
         "source": {
             "list_id": source.id,
@@ -707,11 +777,11 @@ async def build_source_backed_reader_order_dry_run(
         "planned": {
             "plan": plan_payload,
             "rules": planned_rules,
-            "adjacent_rule_count": max(len(nodes) - 1, 0),
+            "adjacent_rule_count": adjacent_count,
             "gap_bridge_count": len(bridges),
             "reused_standalone_rule_count": len(reusable),
             "expected_new_plan_rule_count": (
-                max(len(nodes) - 1, 0) - len(reusable) + len(bridges)
+                adjacent_count - len(reusable) + len(bridges)
             ),
         },
         "runtime_behavior": {
@@ -736,6 +806,12 @@ async def apply_source_backed_reader_order_migration(
     spec: SourceBackedReaderOrderSpec,
 ) -> dict[str, Any]:
     """Apply one reviewed snapshot inside the caller-owned transaction."""
+    if spec.plan_name in INFORMATIONAL_CBL_ADOPTION_PLAN_NAMES:
+        raise MigrationInvariantError(
+            f"{spec.plan_name!r} is held until CBL identity resolution is complete; "
+            "never having adopted a strict plan is not evidence of informational mode; "
+            "do not compile inferred gates"
+        )
     require_clean_snapshot(snapshot)
     current = await build_source_backed_reader_order_dry_run(db, spec)
     if (
@@ -804,7 +880,8 @@ async def apply_source_backed_reader_order_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential"
+        ordering_mode="strict_sequential",
+        extra_item_read_pairs=planned_item_read_pairs(snapshot["planned"]),
     )
     await refresh_blocked_status(spec.user_id, db)
     await db.flush()
@@ -905,12 +982,22 @@ async def apply_source_backed_reader_order_migration(
         spec=spec,
         ordered_issue_ids=issue_ids,
     )
+    planned_eligibility_change = snapshot["runtime_behavior"][
+        "simulated_future_eligible_thread_ids"
+    ] != snapshot["runtime_behavior"]["current_affected_roll_eligible_thread_ids"]
     for key in (
         "issue_state_hash",
         "thread_state_hash",
         "event_state_hash",
         "identity_state_hash",
     ):
+        if (
+            key == "thread_state_hash"
+            and planned_eligibility_change
+        ):
+            # Newly blocking a mid-run frontier updates Thread.is_blocked; issue
+            # read state, queue position, and identities must still match.
+            continue
         if factual[key] != snapshot["factual"][key]:
             raise MigrationInvariantError(f"protected reader state changed: {key}")
 
@@ -921,11 +1008,16 @@ async def apply_source_backed_reader_order_migration(
     eligible = sorted(
         {thread.id for thread in await get_roll_pool(spec.user_id, db)} & affected_ids
     )
-    if eligible != snapshot["runtime_behavior"][
-        "current_affected_roll_eligible_thread_ids"
-    ]:
+    expected_eligible = [
+        coerce_int(thread_id)
+        for thread_id in snapshot["runtime_behavior"][
+            "simulated_future_eligible_thread_ids"
+        ]
+    ]
+    if eligible != expected_eligible:
         raise MigrationInvariantError(
-            "affected Roll eligibility changed after migration"
+            "affected Roll eligibility diverges from reviewed snapshot: "
+            f"expected={expected_eligible}, after={eligible}"
         )
 
     return {

@@ -267,8 +267,14 @@ async def test_rule_delete_never_removes_standalone_edge(
     assert target_thread.id in blocked
 
 
-def _strict_plan_payload(issue_ids: list[int], *, name: str = "Compiler Plan") -> dict[str, object]:
+def _strict_plan_payload(
+    issue_ids: list[int],
+    *,
+    name: str = "Compiler Plan",
+    checkpoint_ids: set[int] | None = None,
+) -> dict[str, object]:
     """Build a one-lane strict sequential plan payload."""
+    flagged = checkpoint_ids or set()
     return {
         "name": name,
         "ordering_mode": "strict_sequential",
@@ -280,7 +286,7 @@ def _strict_plan_payload(issue_ids: list[int], *, name: str = "Compiler Plan") -
                 "ref_id": issue_id,
                 "lane_id": "main",
                 "position": position,
-                "is_checkpoint": False,
+                "is_checkpoint": issue_id in flagged,
                 "convergence_gate": None,
             }
             for position, issue_id in enumerate(issue_ids)
@@ -382,16 +388,16 @@ async def test_rule_update_rejects_cbl_order_collision_with_409(
 
 
 @pytest.mark.asyncio
-async def test_plan_save_rejects_cbl_order_collision_with_409(
+async def test_plan_save_promotes_cbl_order_occupant_of_checkpoint_gate(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Strict plan create fails closed on a cbl-order occupant of an adjacent pair."""
+    """A CBL checkpoint occupying an inert cbl-order pair promotes that pair."""
     user = await get_or_create_user_async(async_db)
     _source_thread, source_issue = await _thread_issue(
         async_db, user_id=user.id, title="Plan CBL Source", queue_position=1
     )
-    _target_thread, target_issue = await _thread_issue(
+    target_thread, target_issue = await _thread_issue(
         async_db, user_id=user.id, title="Plan CBL Target", queue_position=2
     )
     source_id = source_issue.id
@@ -407,17 +413,13 @@ async def test_plan_save_rejects_cbl_order_collision_with_409(
 
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
-        json=_strict_plan_payload([source_id, target_id]),
+        json=_strict_plan_payload([source_id, target_id], checkpoint_ids={source_id}),
     )
-    assert created.status_code == 409, created.text
-    assert created.json()["detail"]["code"] == "continuity_cbl_collision"
-
-    listed = await auth_client.get("/api/v1/continuity-plans/")
-    assert listed.status_code == 200
-    assert listed.json() == []
-    assert await _edge_note(async_db, source_id, target_id) == (
-        "cbl-order:source:hash:plan"
-    )
+    assert created.status_code == 201, created.text
+    note = await _edge_note(async_db, source_id, target_id)
+    assert note is not None and note.startswith("canonical:rule:")
+    blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert target_thread.id in blocked
 
 
 @pytest.mark.asyncio
@@ -437,7 +439,11 @@ async def test_plan_create_links_canonical_edges_for_provenance(
 
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
-        json=_strict_plan_payload([source_issue.id, target_issue.id], name="Provenance"),
+        json=_strict_plan_payload(
+            [source_issue.id, target_issue.id],
+            name="Provenance",
+            checkpoint_ids={source_issue.id},
+        ),
     )
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
@@ -467,7 +473,11 @@ async def test_plan_resave_refreshes_compiled_edge_notes_to_new_rule_ids(
     )
     await async_db.commit()
 
-    payload = _strict_plan_payload([source_issue.id, target_issue.id], name="Resave")
+    payload = _strict_plan_payload(
+        [source_issue.id, target_issue.id],
+        name="Resave",
+        checkpoint_ids={source_issue.id},
+    )
     created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]

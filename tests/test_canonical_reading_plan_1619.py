@@ -273,7 +273,7 @@ async def test_adopt_preserves_cross_series_boundaries_without_hard_edges(
 async def test_informational_plan_creates_zero_blocking_rules_while_strict_creates_explicit_edges(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Queue/Roll use one canonical contract: informational = no block, strict = explicit gates."""
+    """Informational compiles nothing; strict compiles only an explicit checkpoint."""
     user = await get_or_create_user_async(async_db)
     t_a = await _make_thread(async_db, user_id=user.id, title="Strict A")
     t_b = await _make_thread(async_db, user_id=user.id, title="Strict B")
@@ -300,7 +300,14 @@ async def test_informational_plan_creates_zero_blocking_rules_while_strict_creat
         "ordering_mode": "strict_sequential",
         "lanes": [{"id": "main", "name": "Main", "order": 0}],
         "nodes": [
-            {"id": "s-a", "node_type": "issue", "ref_id": i1.id, "lane_id": "main", "position": 0},
+            {
+                "id": "s-a",
+                "node_type": "issue",
+                "ref_id": i1.id,
+                "lane_id": "main",
+                "position": 0,
+                "is_checkpoint": True,
+            },
             {"id": "s-b", "node_type": "issue", "ref_id": i2.id, "lane_id": "main", "position": 1},
         ],
     }

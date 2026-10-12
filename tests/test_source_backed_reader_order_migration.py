@@ -22,7 +22,10 @@ from app.services.source_backed_reader_order_migration import (
     build_source_backed_reader_order_dry_run,
 )
 from app.services.ultimate_universe_production_migration import MigrationInvariantError
-from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.dependencies import (
+    _get_blocked_thread_ids_uncached,
+    refresh_user_blocked_status,
+)
 from tests.conftest import get_or_create_user_async
 
 
@@ -74,8 +77,13 @@ async def _thread_issue(
 @pytest.mark.asyncio
 async def test_source_backed_migration_accepts_group_superset_and_replaces_live_order(
     async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ignore extra group members while replacing live legacy order authority."""
+    monkeypatch.setattr(
+        "app.services.source_backed_reader_order_migration._explicit_classifications",
+        lambda _index: ({}, {}),
+    )
     user = await get_or_create_user_async(async_db)
     rows = [
         await _thread_issue(
@@ -279,6 +287,140 @@ async def test_source_backed_migration_accepts_group_superset_and_replaces_live_
         {"node_type": "issue", "node_id": f"issue-{issues[1].id}"}
     ]
     assert extra_thread.id not in receipt["affected_roll_eligible_thread_ids"]
+
+
+@pytest.mark.asyncio
+async def test_source_backed_mid_series_frontier_is_released_after_cbl_order_delete(
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Thread-entry compile replaces cbl-order and releases a mid-run frontier."""
+    monkeypatch.setattr(
+        "app.services.source_backed_reader_order_migration._explicit_classifications",
+        lambda _index: ({}, {}),
+    )
+    user = await get_or_create_user_async(async_db)
+    pred_thread, pred_issue = await _thread_issue(
+        async_db,
+        user_id=user.id,
+        title="Generation X",
+        queue_position=1,
+        status="unread",
+    )
+    mid_thread = Thread(
+        user_id=user.id,
+        title="Uncanny X-Men",
+        format="comic",
+        queue_position=2,
+        status="active",
+        total_issues=3,
+        issues_remaining=1,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(mid_thread)
+    await async_db.flush()
+    mid_issues: list[Issue] = []
+    for position, status in enumerate(("read", "read", "unread"), start=1):
+        issue = Issue(
+            thread_id=mid_thread.id,
+            issue_number=str(357 + position),
+            position=position,
+            status=status,
+            read_at=datetime.now(UTC) if status == "read" else None,
+        )
+        async_db.add(issue)
+        await async_db.flush()
+        mid_issues.append(issue)
+    mid_thread.next_unread_issue_id = mid_issues[2].id
+    cbl_issues = [pred_issue, mid_issues[2]]
+
+    source = CBLSource(
+        repository="test/step27-reading-order",
+        revision_sha="b" * 40,
+        synced_at=datetime.now(UTC),
+    )
+    async_db.add(source)
+    await async_db.flush()
+    source_list = CBLSourceList(
+        source_id=source.id,
+        source_path="Marvel/X-Men/UXRO.cbl",
+        name="UXRO mid-series fixture",
+        declared_issue_count=2,
+        content_hash="r" * 64,
+        revision_sha="b" * 40,
+        active=True,
+    )
+    async_db.add(source_list)
+    await async_db.flush()
+    for position, issue in enumerate(cbl_issues, start=1):
+        identity = ExternalIdentity(
+            provider="comicvine",
+            entity_type="issue",
+            external_id=f"reading-order-{position}",
+            metadata_json={},
+        )
+        async_db.add(identity)
+        await async_db.flush()
+        async_db.add(
+            IssueExternalIdentityMapping(
+                issue_id=issue.id,
+                external_identity_id=identity.id,
+                status="confirmed",
+                evidence_source="step27-test",
+                confidence=1.0,
+            )
+        )
+        async_db.add(
+            CBLSourceEntry(
+                list_id=source_list.id,
+                position=position,
+                series_name=f"UXRO {position}",
+                issue_number=issue.issue_number,
+                external_issue_identity_id=identity.id,
+            )
+        )
+    cbl_dependency = Dependency(
+        source_issue_id=pred_issue.id,
+        target_issue_id=mid_issues[2].id,
+        note=f"cbl-order:source:{source_list.content_hash}:1->2",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(cbl_dependency)
+    await async_db.flush()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    blocked_before = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert mid_thread.id not in blocked_before
+
+    spec = SourceBackedReaderOrderSpec(
+        user_id=user.id,
+        source_list_id=source_list.id,
+        expected_content_hash=source_list.content_hash,
+        expected_positions=2,
+        plan_name="UXRO mid-series fixture",
+        expected_source_path=source_list.source_path,
+    )
+    snapshot = await build_source_backed_reader_order_dry_run(async_db, spec)
+    assert snapshot["ok"] is True, snapshot["errors"]
+    assert snapshot["manifest"]["inferred_gate_kind"] == "thread_entry"
+    assert mid_thread.id in snapshot["runtime_behavior"][
+        "simulated_future_eligible_thread_ids"
+    ]
+
+    receipt = await apply_source_backed_reader_order_migration(
+        async_db,
+        snapshot=snapshot,
+        spec=spec,
+    )
+    await async_db.commit()
+    assert await async_db.get(Dependency, cbl_dependency.id) is None
+    plan = await async_db.get(ContinuityPlan, receipt["plan_id"])
+    assert plan is not None
+    blocked_after = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert pred_thread.id not in blocked_after
+    assert mid_thread.id not in blocked_after
 
 
 @pytest.mark.asyncio

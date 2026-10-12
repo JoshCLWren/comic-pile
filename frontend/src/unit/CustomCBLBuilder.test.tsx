@@ -53,6 +53,7 @@ const existingList = {
       series_name: 'Starman',
       issue_number: '55',
       status: 'unread',
+      is_checkpoint: false,
     },
     {
       id: 92,
@@ -62,6 +63,7 @@ const existingList = {
       series_name: 'All-Star Comics',
       issue_number: '1',
       status: 'unread',
+      is_checkpoint: false,
     },
   ],
 }
@@ -104,6 +106,7 @@ describe('CustomCBLBuilder', () => {
           series_name: 'JSA',
           issue_number: '1',
           status: 'unread',
+          is_checkpoint: false,
         },
       ],
     }
@@ -145,6 +148,7 @@ describe('CustomCBLBuilder', () => {
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         issue_ids: [26360, 30001, 30002],
+        checkpoint_issue_ids: [],
       })
     })
 
@@ -226,6 +230,7 @@ describe('CustomCBLBuilder', () => {
         name: 'Starman into JSA',
         description: null,
         issue_ids: [30001],
+        checkpoint_issue_ids: [],
       })
     })
 
@@ -246,6 +251,32 @@ describe('CustomCBLBuilder', () => {
 
     confirm.mockRestore()
     anchorClick.mockRestore()
+  })
+
+  it('flags a custom CBL checkpoint and includes it on save', async () => {
+    mocks.update.mockResolvedValue({
+      ...existingList,
+      entries: [
+        { ...existingList.entries[0], is_checkpoint: true },
+        existingList.entries[1],
+      ],
+    })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Starman #55 as checkpoint' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+
+    await waitFor(() => {
+      expect(mocks.update).toHaveBeenCalledWith(9, {
+        name: 'Starman into JSA',
+        description: 'The bridge I actually want',
+        issue_ids: [26360, 30001],
+        checkpoint_issue_ids: [26360],
+      })
+    })
   })
 
   it('shows export failures and revokes a created object URL', async () => {

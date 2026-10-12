@@ -20,7 +20,6 @@ from app.schemas.continuity_plan import (
     CBLPlacement,
     ContinuityPlanLane,
     ContinuityPlanNode,
-    ContinuityPlanResponse,
     PlanOrderingMode,
 )
 from app.schemas.custom_cbl import (
@@ -31,10 +30,13 @@ from app.schemas.custom_cbl import (
     CustomCBLResponse,
 )
 from app.services.continuity_plan_writer import (
+    guard_plan_write,
+    payload_issue_ids,
     preserve_server_lane_metadata,
     replace_compiled_rules,
     validate_node_ownership,
 )
+from app.services.reading_plan_normalization import editor_nodes_for_plan, editor_plan_response
 from comic_pile.dependencies import refresh_user_blocked_status
 
 
@@ -49,6 +51,7 @@ class CustomCBLEntryView:
     series_name: str
     issue_number: str
     status: str
+    is_checkpoint: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +122,7 @@ async def load_custom_cbl_entries(
             series_name=thread.title,
             issue_number=issue.issue_number,
             status=issue.status,
+            is_checkpoint=entry.is_checkpoint,
         )
         for entry, issue, thread in result.all()
     ]
@@ -130,8 +134,10 @@ async def replace_custom_cbl_entries(
     user_id: int,
     list_row: CustomCBLList,
     issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
 ) -> None:
     """Replace membership after proving every referenced issue belongs to the user."""
+    checkpoint_set = set(checkpoint_issue_ids or ())
     if issue_ids:
         result = await db.execute(
             select(Issue.id)
@@ -148,7 +154,14 @@ async def replace_custom_cbl_entries(
 
     await db.execute(delete(CustomCBLEntry).where(CustomCBLEntry.list_id == list_row.id))
     for position, issue_id in enumerate(issue_ids):
-        db.add(CustomCBLEntry(list_id=list_row.id, issue_id=issue_id, position=position))
+        db.add(
+            CustomCBLEntry(
+                list_id=list_row.id,
+                issue_id=issue_id,
+                position=position,
+                is_checkpoint=issue_id in checkpoint_set,
+            )
+        )
     await db.flush()
 
 
@@ -330,11 +343,12 @@ def _merge_custom_cbl_into_lane(
                 lane_id=target_lane_id,
                 position=0,
                 label=f"{entry.series_name} #{entry.issue_number}",
+                is_checkpoint=entry.is_checkpoint,
                 convergence_gate=[],
             )
             added.append(entry.issue_id)
         else:
-            node = existing
+            node = existing.model_copy(update={"is_checkpoint": entry.is_checkpoint})
             reused.append(entry.issue_id)
         ordered_source_nodes.append(
             _with_source_provenance(
@@ -363,6 +377,7 @@ async def apply_custom_cbl_to_plan(
     list_row: CustomCBLList,
     plan_id: int,
     lane_id: str | None,
+    expected_updated_at: datetime | None = None,
 ) -> CustomCBLApplyResult:
     """Merge custom CBL order into one owned Reading Plan through its canonical writer."""
     plan = (
@@ -399,7 +414,13 @@ async def apply_custom_cbl_to_plan(
                 detail={"code": "custom_cbl_lane_not_found", "lane_id": lane_id},
             )
 
-    nodes = [ContinuityPlanNode.model_validate(value) for value in (plan.nodes_json or [])]
+    nodes = await editor_nodes_for_plan(db, plan)
+    await guard_plan_write(
+        db,
+        plan=plan,
+        incoming_ids=payload_issue_ids(nodes),
+        expected_updated_at=expected_updated_at,
+    )
     merged_nodes, added, reused = _merge_custom_cbl_into_lane(
         all_nodes=nodes,
         target_lane_id=target_lane.id,
@@ -436,6 +457,7 @@ def _entry_response(entry: CustomCBLEntryView) -> CustomCBLEntryResponse:
         series_name=entry.series_name,
         issue_number=entry.issue_number,
         status=entry.status,
+        is_checkpoint=entry.is_checkpoint,
     )
 
 
@@ -451,20 +473,6 @@ async def _full_response(db: AsyncSession, row: CustomCBLList) -> CustomCBLRespo
         created_at=row.created_at,
         updated_at=row.updated_at,
         entries=[_entry_response(entry) for entry in entries],
-    )
-
-
-def _plan_response(plan: ContinuityPlan) -> ContinuityPlanResponse:
-    """Serialize one persisted Reading Plan."""
-    return ContinuityPlanResponse(
-        id=plan.id,
-        user_id=plan.user_id,
-        name=plan.name,
-        ordering_mode=plan.ordering_mode,
-        lanes=plan.lanes_json or [],
-        nodes=plan.nodes_json or [],
-        created_at=plan.created_at,
-        updated_at=plan.updated_at,
     )
 
 
@@ -513,6 +521,7 @@ async def create_custom_cbl_for_user(
     name: str,
     description: str | None,
     issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
 ) -> CustomCBLResponse:
     """Create one custom CBL, persist exact membership, and return its full representation."""
     try:
@@ -528,6 +537,7 @@ async def create_custom_cbl_for_user(
             user_id=user_id,
             list_row=row,
             issue_ids=issue_ids,
+            checkpoint_issue_ids=checkpoint_issue_ids,
         )
         await db.commit()
     except Exception:
@@ -553,6 +563,7 @@ async def update_custom_cbl_for_user(
     name: str,
     description: str | None,
     issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
 ) -> CustomCBLResponse:
     """Replace one owned custom CBL's metadata and ordered membership atomically."""
     try:
@@ -565,6 +576,7 @@ async def update_custom_cbl_for_user(
             user_id=user_id,
             list_row=row,
             issue_ids=issue_ids,
+            checkpoint_issue_ids=checkpoint_issue_ids,
         )
         await db.commit()
     except Exception:
@@ -606,6 +618,7 @@ async def apply_custom_cbl_for_user(
     list_id: int,
     plan_id: int,
     lane_id: str | None,
+    expected_updated_at: datetime | None = None,
 ) -> CustomCBLApplyResponse:
     """Apply one owned custom CBL and persist plan rules plus blocked projection atomically."""
     try:
@@ -616,6 +629,7 @@ async def apply_custom_cbl_for_user(
             list_row=row,
             plan_id=plan_id,
             lane_id=lane_id,
+            expected_updated_at=expected_updated_at,
         )
         if result.plan.ordering_mode == "strict_sequential":
             await refresh_user_blocked_status(user_id, db)
@@ -625,7 +639,7 @@ async def apply_custom_cbl_for_user(
         raise
 
     await db.refresh(result.plan)
-    plan = _plan_response(result.plan)
+    plan = await editor_plan_response(db, result.plan)
     return CustomCBLApplyResponse(
         **plan.model_dump(),
         added_issue_ids=list(result.added_issue_ids),

@@ -57,6 +57,7 @@ from app.services.migration_shared import (
     json_value,
     plan_fingerprint,
     plan_fingerprint_from_payload,
+    planned_item_read_pairs,
     planned_rule_descriptor,
     refresh_blocked_status,
     require_clean_snapshot,
@@ -654,7 +655,8 @@ async def apply_crossover_reading_order_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential"
+        ordering_mode="strict_sequential",
+        extra_item_read_pairs=planned_item_read_pairs(planned),
     )
     await refresh_blocked_status(spec.user_id, db)
     await db.flush()

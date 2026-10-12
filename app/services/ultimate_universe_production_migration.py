@@ -47,6 +47,7 @@ from app.services.migration_shared import (
     legacy_prefix as _legacy_prefix,
     plan_fingerprint as _plan_fingerprint,
     plan_fingerprint_from_payload as _plan_fingerprint_from_payload,
+    planned_item_read_pairs as _planned_item_read_pairs,
     planned_rule_descriptor as _planned_rule_descriptor,
     refresh_blocked_status as _refresh_blocked_status,
     require_snapshot_token as _require_reviewed_snapshot,
@@ -935,7 +936,8 @@ async def apply_ultimate_universe_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential"
+        ordering_mode="strict_sequential",
+        extra_item_read_pairs=_planned_item_read_pairs(snapshot["planned"]),
     )
     await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
@@ -1181,14 +1183,25 @@ async def rollback_ultimate_universe_migration(
                 "refusing automatic rollback"
             )
 
-    # #2553: retire the plan's compiled canonical edges before the freeness
-    # check. The cutover compiles plan rules into Dependencies, so the legacy
-    # pairs are legitimately occupied until the plan's rules are removed.
+    # #2553: retire cutover-compiled canonical edges before the freeness
+    # check. Plan-owned rules occupy the new sequential pairs; reused
+    # standalones also compile (Phase B links them for Roll) and must be
+    # un-compiled so a restored source cbl-order row can reclaim that pair.
+    # Live plan deletion keeps those shared edges; failed-cutover rollback
+    # restores the reviewed pre-apply Dependency graph instead.
     plan_rule_ids = [rule.id for rule in plan_rules]
+    reused_standalone_ids = [
+        coerce_int(row["id"])
+        for row in snapshot.get("reused_standalone_rules", [])
+        if isinstance(row, dict)
+    ]
     for rule in plan_rules:
         await db.delete(rule)
     await db.flush()
-    await _retire_plan_compiled_edges(db, rule_ids=plan_rule_ids)
+    await _retire_plan_compiled_edges(
+        db,
+        rule_ids=plan_rule_ids + reused_standalone_ids,
+    )
     remaining_plan_rule_ids = list(
         (
             await db.execute(

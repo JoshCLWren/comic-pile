@@ -6,40 +6,59 @@ plan-owned rules are compiled and replaced from the same node semantics. This
 module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
-The compiler preserves the historical router semantics exactly:
-  1. ``strict_sequential`` plans compile adjacent ``item_read`` edges;
-  2. checkpoint nodes block the next node in the same lane;
+The compiler's hard-edge semantics (#2553 Phase B / #3499 CBL redirect):
+  1. ``strict_sequential`` plans retain existing in-plan ``item_read``
+     pairs; they do not infer thread-entry or adjacent Dependencies.
+     Complicated reading order is authored as a custom CBL and applied;
+  2. checkpoint nodes (including flags copied from a custom CBL) block
+     the next node in the same lane;
   3. convergence gates compile ``converged`` self-loop rules;
-  4. plan-level cycles and persisted-rule conflicts keep their stable codes.
+  4. plan-level cycles and persisted-rule conflicts keep their stable codes;
+  5. informational plans add no inferred blockers;
+  6. an ordinary save of unchanged membership retains existing plan-owned
+     ``item_read`` pairs (Julix/Mignolaverse hops included) so Roll
+     eligibility does not change. Saving never invents new pairs.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import cast
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.continuity_rules import _would_create_cycle, ensure_owned_continuity_node
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
+from app.models.reading_plan_membership import ReadingPlanDependency, ReadingPlanIssue
 from app.models.thread import Thread
 from app.schemas.continuity_plan import (
     ContinuityPlanLane,
     ContinuityPlanListItem,
     ContinuityPlanNode,
+    ContinuityPlanWrite,
     PlanOrderingMode,
 )
 from app.schemas.continuity_rule import ContinuityNodeType
 from app.repositories.continuity_repository import plans_for_user
+from app.repositories.reading_plan_repository import distinct_plan_issue_ids
 from app.services.canonical_constraint_compiler import (
     compile_rule_edges,
     retire_rule_edges,
     rule_edge_pairs,
 )
-from app.services.reading_plan_normalization import rebuild_plan_membership
+from app.services.reading_plan_normalization import (
+    issue_ids_from_plan_json,
+    rebuild_plan_membership,
+)
+from app.services.strict_plan_constraints import (
+    IssueThreadIndex,
+    load_issue_thread_index,
+)
 
 
 PLAN_RULE_MARKER_PREFIX = "continuity-plan"
@@ -75,6 +94,102 @@ def preserve_server_lane_metadata(
 def plan_rule_marker(plan_id: int) -> str:
     """Return the durable ownership marker for rules compiled from one plan."""
     return f"{PLAN_RULE_MARKER_PREFIX}:{plan_id}"
+
+
+def payload_issue_ids(nodes: Sequence[ContinuityPlanNode]) -> set[int]:
+    """Return canonical issue ids from one editor payload.
+
+    Args:
+        nodes: Plan nodes from a create/update payload.
+
+    Returns:
+        Distinct issue ids referenced by issue-typed nodes.
+    """
+    return {node.ref_id for node in nodes if node.node_type == "issue"}
+
+
+def _aware_utc(value: datetime) -> datetime:
+    """Normalize a timestamp to UTC for optimistic-concurrency comparison."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+async def guard_plan_write(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    incoming_ids: set[int],
+    expected_updated_at: datetime | None,
+) -> set[int]:
+    """Reject stale leftover JSON and conflicting versions before a plan write.
+
+    Shared by ordinary PUT and custom-CBL apply so neither path can rebuild
+    membership from leftover ``nodes_json`` or clobber a newer plan version.
+
+    Args:
+        db: Async database session.
+        plan: Owned plan being replaced.
+        incoming_ids: Issue ids the writer is about to persist.
+        expected_updated_at: Optional optimistic-concurrency token.
+
+    Returns:
+        Current normalized membership issue ids, snapshotted before rebuild.
+
+    Raises:
+        HTTPException: 409 ``plan_version_conflict`` when ``expected_updated_at``
+            does not match ``plan.updated_at``. 409 ``stale_plan_nodes`` when
+            the incoming issue set equals leftover ``nodes_json`` and not
+            membership.
+    """
+    if expected_updated_at is not None:
+        if _aware_utc(expected_updated_at) != _aware_utc(plan.updated_at):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "plan_version_conflict",
+                    "expected_updated_at": plan.updated_at.isoformat(),
+                },
+            )
+    membership_ids = set(await distinct_plan_issue_ids(db, plan_id=plan.id))
+    json_ids = issue_ids_from_plan_json(plan.nodes_json)
+    if membership_ids and incoming_ids == json_ids and incoming_ids != membership_ids:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_plan_nodes",
+                "membership_issue_count": len(membership_ids),
+                "payload_issue_count": len(incoming_ids),
+            },
+        )
+    return membership_ids
+
+
+async def guard_plan_update(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    payload: ContinuityPlanWrite,
+) -> set[int]:
+    """Reject stale leftover JSON and conflicting versions before a PUT write.
+
+    Args:
+        db: Async database session.
+        plan: Owned plan being replaced.
+        payload: Incoming editor payload.
+
+    Returns:
+        Current normalized membership issue ids, snapshotted before rebuild.
+
+    Raises:
+        HTTPException: 409 ``plan_version_conflict`` or ``stale_plan_nodes``.
+    """
+    return await guard_plan_write(
+        db,
+        plan=plan,
+        incoming_ids=payload_issue_ids(payload.nodes),
+        expected_updated_at=payload.expected_updated_at,
+    )
 
 
 def _detect_plan_cycles(
@@ -173,17 +288,16 @@ def _is_equivalent_reusable_item_read_rule(
     *,
     requested_satisfaction_type: str,
 ) -> bool:
-    """Return whether an existing standalone rule already satisfies a plan edge.
+    """Return whether an existing ``item_read`` rule already satisfies a plan edge.
 
-    Equivalent standalone ``item_read`` rules may satisfy the same hard edge
-    without being re-owned by the Reading Plan. Rules owned by another Reading
-    Plan remain conflicts so two plans cannot silently share execution ownership.
+    Equivalent ``item_read`` rules — standalone or owned by another Reading
+    Plan — may satisfy the same hard edge without duplicating the unique
+    ContinuityRule identity. Provenance is the ``reading_plan_dependencies``
+    join, not exclusive note ownership.
     """
-    note = rule.note or ""
     return (
         requested_satisfaction_type == "item_read"
         and rule.satisfaction_type == "item_read"
-        and not note.startswith("continuity-plan:")
         and rule.checkpoint_issue_id is None
         and not rule.convergence_targets
     )
@@ -197,16 +311,20 @@ async def replace_compiled_rules(
     nodes: list[ContinuityPlanNode],
     ordering_mode: PlanOrderingMode,
     sync_canonical_edges: bool = True,
+    extra_item_read_pairs: Sequence[tuple[int, int]] | None = None,
+    prior_ordering_mode: str | None = None,
 ) -> bool:
     """Replace only rules owned by this plan and compile plan semantics into rules.
 
     This compiles:
-    1. Strict-sequential adjacent edges (existing behavior)
+    1. Existing in-plan ``item_read`` pairs that still have both endpoints
     2. Checkpoint rules from nodes with ``is_checkpoint=True``
     3. Converged rules from nodes with ``convergence_gate`` entries
+    4. Caller-supplied selected ``item_read`` pairs that are still in the plan
 
     Checkpoint semantics: a node marked as checkpoint blocks the next node in
-    the same lane until the checkpoint node is read.
+    the same lane until the checkpoint node is read. Custom CBL apply copies
+    entry ``is_checkpoint`` onto those nodes.
 
     Convergence semantics: a node with convergence targets is blocked until all
     referenced upstream nodes are read.
@@ -219,45 +337,60 @@ async def replace_compiled_rules(
         user_id: Authenticated plan owner.
         plan: The persisted (or to-be-persisted) plan owning the compiled rules.
         nodes: Canonical node set to compile from.
-        ordering_mode: Plan ordering mode; only ``strict_sequential`` creates
-            adjacent order rules.
+        ordering_mode: Plan ordering mode; only ``strict_sequential`` retains
+            or accepts explicit ``item_read`` pairs. Natural series order is
+            ``Thread.next_unread_issue_id``, not inferred Dependencies.
         sync_canonical_edges: When True (default), retire this plan's stale
             compiled edges and compile the new rules into canonical
-            Dependencies (#2553). Only pairs that actually changed are
-            retired/compiled, so re-saving an unchanged plan is a no-op
-            for the Dependency table.
+            Dependencies (#2553). An unchanged membership save restores
+            the existing plan-owned ``item_read`` set, so Roll eligibility
+            does not change.
+        extra_item_read_pairs: Explicit selected hard restrictions to compile.
+            Same-thread pairs are ignored when newly supplied. Existing
+            plan-owned same-thread pairs are retained. Live plan create/update
+            omit this; migrations pass classified genuine prerequisites.
+            Ignored on an ordinary no-change strict save so extras cannot
+            invent restrictions.
+        prior_ordering_mode: Ordering mode before this write. An ordinary
+            no-change save retains existing item_read only when this was
+            already ``strict_sequential``. Create and mode changes omit it.
 
     Returns:
         True when all rules compiled without cycle conflicts.
     """
+    # Snapshot membership and plan-owned item_read *before* rebuild so an
+    # ordinary no-change save can restore those pairs identically (#3499).
+    prior_membership_ids = set(await distinct_plan_issue_ids(db, plan_id=plan.id))
+    marker = plan_rule_marker(plan.id)
+    old_plan_rules = list(
+        (
+            await db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == user_id,
+                    ContinuityRule.note == marker,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    old_pairs: set[tuple[int, int]] = set()
+    prior_item_read: set[tuple[int, int]] = set()
+    for old_rule in old_plan_rules:
+        if sync_canonical_edges:
+            old_pairs.update(rule_edge_pairs(old_rule))
+        if (
+            old_rule.satisfaction_type == "item_read"
+            and old_rule.source_type == "issue"
+            and old_rule.target_type == "issue"
+        ):
+            prior_item_read.add((old_rule.source_id, old_rule.target_id))
+
     # Normalized membership/provenance always reflects the latest nodes in the
     # same transaction: informational plans with no compiled edges still own
     # relational membership, and a later rule-compilation failure rolls the
     # membership rebuild back with the rest of the write.
     await rebuild_plan_membership(db, plan_id=plan.id, nodes=nodes)
-
-    marker = plan_rule_marker(plan.id)
-    # Collect the compiled pairs of the outgoing rules before replacing them,
-    # so their canonical edges can be retired unless still intended (#2553).
-    # The backfill and this hook compile existing rule semantics only; they
-    # do not invent new strict constraints. Phase B (Wild Hunt exception
-    # decision) covers whether to ADD strict enforcement where none exists.
-    old_pairs: set[tuple[int, int]] = set()
-    if sync_canonical_edges:
-        old_plan_rules = (
-            (
-                await db.execute(
-                    select(ContinuityRule).where(
-                        ContinuityRule.user_id == user_id,
-                        ContinuityRule.note == marker,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        for old_rule in old_plan_rules:
-            old_pairs.update(rule_edge_pairs(old_rule))
     await db.execute(
         delete(ContinuityRule).where(
             ContinuityRule.user_id == user_id,
@@ -282,13 +415,40 @@ async def replace_compiled_rules(
         tuple[str, int, str, int, str, int | list[convergence_target] | None]
     ] = []
 
-    # 1. Strict-sequential adjacent edges
-    if ordering_mode == "strict_sequential" and len(nodes) >= 2:
-        ordered = sorted(nodes, key=lambda node: node.position)
-        for source, target in zip(ordered, ordered[1:], strict=False):
+    # 1. Strict-sequential item_read: retain existing in-plan pairs whose
+    # both endpoints remain. Never infer thread-entry or adjacency.
+    if ordering_mode == "strict_sequential":
+        incoming_ids = payload_issue_ids(nodes)
+        compiled_item_read: set[tuple[int, int]] = {
+            pair
+            for pair in prior_item_read
+            if pair[0] in incoming_ids and pair[1] in incoming_ids
+        }
+        unchanged_strict_save = (
+            incoming_ids == prior_membership_ids
+            and prior_ordering_mode == "strict_sequential"
+        )
+        if extra_item_read_pairs and not unchanged_strict_save:
+            issue_index: dict[int, IssueThreadIndex] = await load_issue_thread_index(
+                db, incoming_ids
+            )
+            for source_id, target_id in extra_item_read_pairs:
+                pair = (source_id, target_id)
+                if pair in compiled_item_read or source_id == target_id:
+                    continue
+                if source_id not in incoming_ids or target_id not in incoming_ids:
+                    continue
+                source_meta = issue_index.get(source_id)
+                target_meta = issue_index.get(target_id)
+                if source_meta is None or target_meta is None:
+                    continue
+                if source_meta.thread_id == target_meta.thread_id:
+                    continue
+                compiled_item_read.add(pair)
+        for source_id, target_id in compiled_item_read:
             edges_to_add.append((
-                source.node_type, source.ref_id,
-                target.node_type, target.ref_id,
+                "issue", source_id,
+                "issue", target_id,
                 "item_read", None,
             ))
 
@@ -409,6 +569,15 @@ async def replace_compiled_rules(
                 existing,
                 requested_satisfaction_type=satisfaction_type,
             ):
+                if sync_canonical_edges:
+                    for pair in rule_edge_pairs(existing):
+                        new_pairs.add(pair)
+                    await compile_rule_edges(
+                        db,
+                        existing,
+                        plan_id=plan.id,
+                        promote_cbl_occupants=True,
+                    )
                 continue
             raise HTTPException(
                 status_code=409,
@@ -464,7 +633,12 @@ async def replace_compiled_rules(
         )
         for created_rule in created_rules:
             if rule_edge_pairs(created_rule):
-                await compile_rule_edges(db, created_rule, plan_id=plan.id)
+                await compile_rule_edges(
+                    db,
+                    created_rule,
+                    plan_id=plan.id,
+                    promote_cbl_occupants=True,
+                )
     return True
 
 
@@ -496,13 +670,24 @@ async def list_continuity_plan_items(
     """Return typed Reading Plan list items for one user, newest first."""
     rows = await plans_for_user(db, user_id=user_id)
     ordered = sorted(rows, key=lambda plan: plan.updated_at, reverse=True)
+    membership_counts: dict[int, int] = {}
+    if ordered:
+        membership_counts = dict(
+            (
+                await db.execute(
+                    select(ReadingPlanIssue.plan_id, func.count())
+                    .where(ReadingPlanIssue.plan_id.in_([plan.id for plan in ordered]))
+                    .group_by(ReadingPlanIssue.plan_id)
+                )
+            ).all()
+        )
     return [
         ContinuityPlanListItem(
             id=plan.id,
             name=plan.name,
             ordering_mode=plan.ordering_mode,
             lane_count=len(plan.lanes_json),
-            step_count=len(plan.nodes_json),
+            step_count=membership_counts.get(plan.id, 0) or len(plan.nodes_json),
             source_paths=plan_source_paths(plan),
             updated_at=plan.updated_at,
         )
@@ -518,8 +703,8 @@ async def retire_plan_edges_for_deletion(
     After the Roll cutover (#2553) those Dependency rows are the only Roll
     authority, so plan deletion must clean them up or orphaned rows keep
     blocking. A pair is kept when another surviving rule still compiles to
-    it (shared-pair semantics from retire_rule_edges). Lives in the service
-    layer to keep routers free of queries.
+    it, or another plan still links it through ``reading_plan_dependencies``.
+    Standalone reader-created edges are never deleted here.
     """
     from app.services.canonical_constraint_compiler import (
         rule_compiled_note_filter,
@@ -539,30 +724,52 @@ async def retire_plan_edges_for_deletion(
         .scalars()
         .all()
     )
-    if not plan_rules:
-        return
     deleted_ids = {r.id for r in plan_rules}
     pairs = {p for rule in plan_rules for p in rule_edge_pairs(rule)}
+    linked_pairs = {
+        (source_id, target_id)
+        for source_id, target_id in (
+            await db.execute(
+                select(Dependency.source_issue_id, Dependency.target_issue_id)
+                .join(
+                    ReadingPlanDependency,
+                    ReadingPlanDependency.dependency_id == Dependency.id,
+                )
+                .where(ReadingPlanDependency.plan_id == plan_id)
+            )
+        ).all()
+    }
+    pairs.update(linked_pairs)
     if not pairs:
         return
-    # Survivor check: any rule outside the deleted set that compiles to the pair.
-    survivors = list(
-        (
+    survivor_query = select(ContinuityRule).where(
+        ContinuityRule.user_id == user_id,
+        ContinuityRule.satisfaction_type.in_(("item_read", "checkpoint", "converged")),
+    )
+    if deleted_ids:
+        survivor_query = survivor_query.where(ContinuityRule.id.not_in(list(deleted_ids)))
+    survivors = list((await db.execute(survivor_query)).scalars().all())
+    survivor_pairs = {p for r in survivors for p in rule_edge_pairs(r)}
+    other_plan_pairs = {
+        (source_id, target_id)
+        for source_id, target_id in (
             await db.execute(
-                select(ContinuityRule).where(
-                    ContinuityRule.user_id == user_id,
-                    ContinuityRule.id.not_in(deleted_ids),
-                    ContinuityRule.satisfaction_type.in_(
-                        ("item_read", "checkpoint", "converged")
+                select(Dependency.source_issue_id, Dependency.target_issue_id)
+                .join(
+                    ReadingPlanDependency,
+                    ReadingPlanDependency.dependency_id == Dependency.id,
+                )
+                .where(
+                    ReadingPlanDependency.plan_id != plan_id,
+                    tuple_(Dependency.source_issue_id, Dependency.target_issue_id).in_(
+                        list(pairs)
                     ),
                 )
             )
-        )
-        .scalars()
-        .all()
-    )
-    survivor_pairs = {p for r in survivors for p in rule_edge_pairs(r)}
-    for source_id, target_id in pairs - survivor_pairs:
+        ).all()
+    }
+    keep = survivor_pairs | other_plan_pairs
+    for source_id, target_id in pairs - keep:
         await db.execute(
             delete(Dependency).where(
                 Dependency.source_issue_id == source_id,

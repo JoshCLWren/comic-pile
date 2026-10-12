@@ -28,9 +28,10 @@ from app.schemas.reading_plan_membership import (
 )
 from app.schemas.tags import TagTargetType
 from app.services.continuity import _refresh_blocked_state
-from app.services.continuity_plan_labels import plan_response_with_labels
 from app.services.continuity_plan_writer import (
+    guard_plan_update,
     list_continuity_plan_items,
+    payload_issue_ids,
     plan_rule_marker,
     preserve_server_lane_metadata,
     replace_compiled_rules,
@@ -39,7 +40,10 @@ from app.services.continuity_plan_writer import (
     validate_node_ownership,
 )
 from app.services.reading_plan_normalization import (
+    editor_nodes_for_plan,
+    editor_plan_response,
     get_plan_membership,
+    is_identity_editor_payload,
     link_dependency_to_plan,
     unlink_dependency_from_plan,
 )
@@ -113,7 +117,7 @@ async def create_continuity_plan(
     # Always refresh: informational plans with checkpoint/convergence gates
     # also compile canonical edges via the write-path hook (#2553).
     await _refresh_blocked_state(current_user.id, db)
-    return await plan_response_with_labels(db, plan)
+    return await editor_plan_response(db, plan)
 
 
 @router.get("/continuity-plans/{plan_id}", response_model=ContinuityPlanResponse)
@@ -122,8 +126,8 @@ async def get_continuity_plan(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityPlanResponse:
-    """Return one owned continuity plan."""
-    return await plan_response_with_labels(
+    """Return one owned continuity plan from normalized membership."""
+    return await editor_plan_response(
         db, await _get_owned_plan(db, current_user.id, plan_id)
     )
 
@@ -226,13 +230,23 @@ async def update_continuity_plan(
     """Replace a plan atomically, including rules explicitly owned by that plan."""
     plan = await _get_owned_plan(db, current_user.id, plan_id)
     await validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
+    membership_ids = await guard_plan_update(db, plan=plan, payload=payload)
+    prior_ordering_mode = plan.ordering_mode
     plan.name = payload.name
     plan.ordering_mode = payload.ordering_mode
     plan.lanes_json = preserve_server_lane_metadata(
         list(plan.lanes_json or []),
         payload.lanes,
     )
-    plan.nodes_json = [node.model_dump() for node in payload.nodes]
+    # An ordinary GET-then-save of the membership overlay must not collapse
+    # leftover nodes_json. A real editor change (lane, order, checkpoint,
+    # convergence, or membership) rewrites stored JSON.
+    current_editor = await editor_nodes_for_plan(db, plan)
+    if (
+        payload_issue_ids(payload.nodes) != membership_ids
+        or not is_identity_editor_payload(current_editor, payload.nodes)
+    ):
+        plan.nodes_json = [node.model_dump() for node in payload.nodes]
     try:
         await replace_compiled_rules(
             db,
@@ -240,6 +254,7 @@ async def update_continuity_plan(
             plan=plan,
             nodes=payload.nodes,
             ordering_mode=payload.ordering_mode,
+            prior_ordering_mode=prior_ordering_mode,
         )
         await db.commit()
     except ValueError as exc:
@@ -253,7 +268,7 @@ async def update_continuity_plan(
         raise
     await db.refresh(plan)
     await _refresh_blocked_state(current_user.id, db)
-    return await plan_response_with_labels(db, plan)
+    return await editor_plan_response(db, plan)
 
 
 @router.post(
@@ -289,7 +304,7 @@ async def adopt_reading_order(
         await db.rollback()
         raise
     await db.refresh(plan)
-    return await plan_response_with_labels(db, plan)
+    return await editor_plan_response(db, plan)
 
 
 @router.delete("/continuity-plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
