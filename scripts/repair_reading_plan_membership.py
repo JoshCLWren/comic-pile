@@ -18,15 +18,15 @@ by apply and by rollback.
 Examples::
 
     python scripts/repair_reading_plan_membership.py dry-run
-        --database-url "$CLONE_DATABASE_URL" --plan-id 20
+        --database-url "$DATABASE_URL" --plan-id 20
 
     python scripts/repair_reading_plan_membership.py apply
-        --database-url "$CLONE_DATABASE_URL" --plan-id 20
+        --database-url "$DATABASE_URL" --plan-id 20
         --receipt /tmp/plan-20-membership-trim.json
         --confirm MEMBERSHIP-TABLE-AUTHORITATIVE
 
     python scripts/repair_reading_plan_membership.py rollback
-        --database-url "$CLONE_DATABASE_URL" --plan-id 20
+        --database-url "$DATABASE_URL" --plan-id 20
         --receipt /tmp/plan-20-membership-trim.json
         --confirm MEMBERSHIP-TABLE-AUTHORITATIVE
 """

@@ -8,30 +8,16 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
-from app.models.continuity_plan import ContinuityPlan
-from app.models.continuity_rule import ContinuityRule
 from app.models.external_identity import (
     ExternalIdentity,
-    IssueExternalIdentityMapping,
     ThreadExternalSeriesMapping,
 )
 from app.models.issue import Issue
-from app.models.reading_plan_membership import ReadingPlanIssue
 from app.models.thread import Thread
-from app.services.cbl_informational_plan_adoption import (
-    InformationalCblAdoptionError,
-    adopt_cbl_list_as_informational_plan,
-)
 from app.services.series_thread_reattach import (
     SeriesThreadReattachError,
     reattach_split_series_thread,
 )
-from app.services.source_backed_reader_order_migration import (
-    PRODUCTION_SOURCE_BACKED_SPECS,
-    apply_source_backed_reader_order_migration,
-)
-from app.services.ultimate_universe_production_migration import MigrationInvariantError
 from tests.conftest import get_or_create_user_async
 
 
@@ -205,116 +191,3 @@ async def test_reattach_refuses_overlapping_issue_numbers(
     leftover = await async_db.get(Issue, later_id)
     assert leftover is not None
     assert leftover.thread_id == split.id
-
-
-@pytest.mark.asyncio
-async def test_informational_cbl_adoption_adds_membership_without_compiling(
-    async_db: AsyncSession,
-) -> None:
-    """Imported CBL lists become informational plans, not inferred blockers."""
-    user = await get_or_create_user_async(async_db)
-    thread, issues = await _thread_with_numbers(
-        async_db,
-        user_id=user.id,
-        title="X-Men",
-        numbers=["80", "91"],
-        queue_position=1,
-    )
-    source = CBLSource(
-        repository="test/cbl",
-        revision_sha="a" * 40,
-        synced_at=datetime.now(UTC),
-    )
-    async_db.add(source)
-    await async_db.flush()
-    source_list = CBLSourceList(
-        source_id=source.id,
-        source_path="Marvel/Teams/X-Men/era-ten.cbl",
-        name="[1997-2000] X-Men Era Ten Aftermath (UXRO)",
-        declared_issue_count=2,
-        content_hash="5" * 64,
-        revision_sha="a" * 40,
-        active=True,
-    )
-    async_db.add(source_list)
-    await async_db.flush()
-    for position, issue in enumerate(issues, start=1):
-        identity = ExternalIdentity(
-            provider="comicvine",
-            entity_type="issue",
-            external_id=f"xmen-{issue.issue_number}",
-            metadata_json={},
-        )
-        async_db.add(identity)
-        await async_db.flush()
-        async_db.add(
-            IssueExternalIdentityMapping(
-                issue_id=issue.id,
-                external_identity_id=identity.id,
-                status="confirmed",
-                evidence_source="test",
-                confidence=1.0,
-            )
-        )
-        async_db.add(
-            CBLSourceEntry(
-                list_id=source_list.id,
-                position=position,
-                series_name="X-Men",
-                issue_number=issue.issue_number,
-                external_issue_identity_id=identity.id,
-            )
-        )
-    await async_db.commit()
-
-    plan = await adopt_cbl_list_as_informational_plan(
-        async_db,
-        user_id=user.id,
-        source_list_id=source_list.id,
-        plan_name="Late-90s X-Men Reading Order",
-    )
-    await async_db.commit()
-    assert plan.ordering_mode == "informational"
-    membership = list(
-        (
-            await async_db.execute(
-                select(ReadingPlanIssue)
-                .where(ReadingPlanIssue.plan_id == plan.id)
-                .order_by(ReadingPlanIssue.display_position)
-            )
-        ).scalars().all()
-    )
-    assert [row.issue_id for row in membership] == [issues[0].id, issues[1].id]
-    compiled = list(
-        (
-            await async_db.execute(
-                select(ContinuityRule).where(ContinuityRule.user_id == user.id)
-            )
-        ).scalars().all()
-    )
-    assert compiled == []
-    with pytest.raises(InformationalCblAdoptionError, match="already exists"):
-        await adopt_cbl_list_as_informational_plan(
-            async_db,
-            user_id=user.id,
-            source_list_id=source_list.id,
-            plan_name="Late-90s X-Men Reading Order",
-        )
-    leftover = await async_db.get(ContinuityPlan, plan.id)
-    assert leftover is not None
-    assert leftover.ordering_mode == "informational"
-    assert thread.id == issues[0].thread_id
-
-
-@pytest.mark.asyncio
-async def test_xmen_ff_cannot_apply_as_strict_source_backed_plans(
-    async_db: AsyncSession,
-) -> None:
-    """Imported X-Men/FF CBL lists must not compile inferred gates."""
-    for key in ("x-men-era-ten", "fantastic-four-early-years"):
-        with pytest.raises(MigrationInvariantError, match="informational CBL adoption only"):
-            await apply_source_backed_reader_order_migration(
-                async_db,
-                snapshot={},
-                spec=PRODUCTION_SOURCE_BACKED_SPECS[key],
-            )

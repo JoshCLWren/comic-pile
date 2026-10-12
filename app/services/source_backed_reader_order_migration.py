@@ -187,8 +187,9 @@ READING_ORDER_SOURCE_BACKED_MANIFESTS: frozenset[str] = frozenset(
 )
 
 # These two CBL lists were imported as cbl-order rows and never adopted as
-# ContinuityPlans. They are reconciled by informational membership adoption,
-# not by compiling inferred gates through this strict source-backed apply path.
+# ContinuityPlans. That is not evidence of informational mode. Apply is held
+# until every unmatched and multi-matched CBL identity is resolved from
+# ComicVine evidence. Do not compile inferred gates through this path.
 INFORMATIONAL_CBL_ADOPTION_PLAN_NAMES: frozenset[str] = frozenset(
     {
         "Late-90s X-Men Reading Order",
@@ -806,7 +807,8 @@ async def apply_source_backed_reader_order_migration(
     """Apply one reviewed snapshot inside the caller-owned transaction."""
     if spec.plan_name in INFORMATIONAL_CBL_ADOPTION_PLAN_NAMES:
         raise MigrationInvariantError(
-            f"{spec.plan_name!r} is informational CBL adoption only; "
+            f"{spec.plan_name!r} is held until CBL identity resolution is complete; "
+            "never having adopted a strict plan is not evidence of informational mode; "
             "do not compile inferred gates"
         )
     require_clean_snapshot(snapshot)

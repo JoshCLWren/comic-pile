@@ -1,60 +1,151 @@
 -- Rollback for 001_ff_series_thread_merge.sql.
--- Requires the backup tables created by a successful 001 apply.
--- NOT APPLIED. Josh approves before this runs against production.
+-- HELD. Josh approves before this runs against production. No backup tables.
+-- Restore from the recorded change set / deterministic mapping:
+--   split issue ids 115395-115519
+--   original position = id - 115394
+--   post-merge position = id - 115394 + 102
+--   thread 18560 row constants recorded 2026-10-12
+--   mapping 378 → identity 12970, confirmed, 0.95, broad_cbl_volume_representation
 --
--- Restores issue ids onto thread 18560 with original positions, mapping 378,
--- and 3166 totals. Issue rows are never deleted or recreated.
+-- Refuses if intervening writes (reads, position changes, extra issues, or a
+-- drifted 3166 frontier) would make restoration overwrite progress.
 
 BEGIN;
 
 DO $$
 BEGIN
-    IF to_regclass('public.prod_changeset_001_ff_issue_backup') IS NULL
-        OR to_regclass('public.prod_changeset_001_ff_thread_backup') IS NULL
-        OR to_regclass('public.prod_changeset_001_ff_mapping_backup') IS NULL
-        OR to_regclass('public.prod_changeset_001_ff_canonical_backup') IS NULL
-    THEN
-        RAISE EXCEPTION 'changeset 001 backup tables missing; cannot roll back';
-    END IF;
     IF EXISTS (SELECT 1 FROM threads WHERE id = 18560) THEN
         RAISE EXCEPTION 'thread 18560 already exists; refuse rollback';
     END IF;
+    IF (SELECT COUNT(*) FROM issues WHERE id BETWEEN 115395 AND 115519) <> 125 THEN
+        RAISE EXCEPTION 'expected 125 split issue ids 115395-115519';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM issues
+        WHERE id BETWEEN 115395 AND 115519
+          AND (
+              thread_id <> 3166
+              OR position <> (id - 115394 + 102)
+              OR status <> 'unread'
+              OR read_at IS NOT NULL
+          )
+    ) THEN
+        RAISE EXCEPTION
+            'intervening write on split issues (thread/position/status/read_at); refuse unsafe restoration';
+    END IF;
+    IF (SELECT next_unread_issue_id FROM threads WHERE id = 3166) IS DISTINCT FROM 23029 THEN
+        RAISE EXCEPTION '3166 next_unread drifted from 23029; refuse unsafe restoration';
+    END IF;
+    IF (
+        SELECT COUNT(*) FROM issues
+        WHERE thread_id = 3166 AND id NOT BETWEEN 115395 AND 115519
+    ) <> 102 THEN
+        RAISE EXCEPTION '3166 original issue set drifted; refuse unsafe restoration';
+    END IF;
+    IF EXISTS (SELECT 1 FROM thread_external_series_mappings WHERE id = 378) THEN
+        RAISE EXCEPTION 'mapping 378 already exists; refuse rollback';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM issues
+        WHERE thread_id = 3166
+          AND id BETWEEN 115395 AND 115519
+          AND issue_number IN (
+              SELECT issue_number FROM issues
+              WHERE thread_id = 3166 AND id NOT BETWEEN 115395 AND 115519
+          )
+    ) THEN
+        RAISE EXCEPTION 'issue_number overlap appeared after merge; refuse rollback';
+    END IF;
 END $$;
 
-INSERT INTO threads
-SELECT *
-FROM prod_changeset_001_ff_thread_backup;
+INSERT INTO threads (
+    id,
+    title,
+    format,
+    issues_remaining,
+    queue_position,
+    status,
+    last_rating,
+    last_activity_at,
+    created_at,
+    user_id,
+    notes,
+    is_test,
+    is_blocked,
+    total_issues,
+    next_unread_issue_id,
+    reading_progress,
+    blocked_by_thread_ids,
+    blocked_by_issue_ids,
+    manual_creator_credits,
+    catalog_series_id
+) VALUES (
+    18560,
+    'Fantastic Four (1970)',
+    'Comic',
+    125,
+    208,
+    'active',
+    NULL,
+    NULL,
+    TIMESTAMPTZ '2026-08-31 11:26:07.658+00',
+    1,
+    'Broad saved-CBL representation; ComicVine volume 2045.',
+    FALSE,
+    TRUE,
+    125,
+    NULL,
+    'not_started',
+    NULL,
+    NULL,
+    '[]'::json,
+    NULL
+);
+
+UPDATE issues
+SET
+    thread_id = 18560,
+    position = id - 115394
+WHERE id BETWEEN 115395 AND 115519
+  AND thread_id = 3166
+  AND position = id - 115394 + 102
+  AND status = 'unread'
+  AND read_at IS NULL;
 
 UPDATE threads
-SET next_unread_issue_id = NULL
-WHERE id = 18560;
+SET next_unread_issue_id = 115395
+WHERE id = 18560
+  AND next_unread_issue_id IS NULL;
 
-UPDATE issues AS i
+INSERT INTO thread_external_series_mappings (
+    id,
+    thread_id,
+    external_identity_id,
+    status,
+    evidence_source,
+    confidence,
+    created_at,
+    updated_at
+) VALUES (
+    378,
+    18560,
+    12970,
+    'confirmed',
+    'broad_cbl_volume_representation',
+    0.95,
+    TIMESTAMPTZ '2026-08-31 11:26:07.658+00',
+    TIMESTAMPTZ '2026-08-31 11:26:07.658+00'
+);
+
+UPDATE threads
 SET
-    thread_id = b.thread_id,
-    position = b.position
-FROM prod_changeset_001_ff_issue_backup AS b
-WHERE i.id = b.issue_id;
-
-UPDATE threads AS t
-SET next_unread_issue_id = b.next_unread_issue_id
-FROM prod_changeset_001_ff_thread_backup AS b
-WHERE t.id = 18560
-  AND t.id = b.id;
-
-INSERT INTO thread_external_series_mappings
-SELECT *
-FROM prod_changeset_001_ff_mapping_backup;
-
-UPDATE threads AS t
-SET
-    total_issues = b.total_issues,
-    issues_remaining = b.issues_remaining,
-    next_unread_issue_id = b.next_unread_issue_id,
-    reading_progress = b.reading_progress
-FROM prod_changeset_001_ff_canonical_backup AS b
-WHERE t.id = 3166
-  AND t.id = b.id;
+    total_issues = 102,
+    issues_remaining = (
+        SELECT COUNT(*) FROM issues WHERE thread_id = 3166 AND status <> 'read'
+    ),
+    next_unread_issue_id = 23029,
+    reading_progress = 'in_progress'
+WHERE id = 3166;
 
 DO $$
 BEGIN
@@ -64,16 +155,21 @@ BEGIN
     IF (SELECT COUNT(*) FROM issues WHERE thread_id = 3166) <> 102 THEN
         RAISE EXCEPTION 'rollback did not restore 102 issues onto 3166';
     END IF;
+    IF EXISTS (
+        SELECT 1 FROM issues
+        WHERE thread_id = 18560 AND (id < 115395 OR id > 115519 OR position <> id - 115394)
+    ) THEN
+        RAISE EXCEPTION 'rollback positions drifted from id-115394';
+    END IF;
+    IF (SELECT next_unread_issue_id FROM threads WHERE id = 18560) <> 115395 THEN
+        RAISE EXCEPTION 'rollback did not restore next unread 115395';
+    END IF;
     IF NOT EXISTS (
-        SELECT 1 FROM thread_external_series_mappings WHERE id = 378
+        SELECT 1 FROM thread_external_series_mappings
+        WHERE id = 378 AND thread_id = 18560 AND external_identity_id = 12970
     ) THEN
         RAISE EXCEPTION 'rollback did not restore mapping 378';
     END IF;
 END $$;
-
-DROP TABLE prod_changeset_001_ff_issue_backup;
-DROP TABLE prod_changeset_001_ff_thread_backup;
-DROP TABLE prod_changeset_001_ff_mapping_backup;
-DROP TABLE prod_changeset_001_ff_canonical_backup;
 
 COMMIT;

@@ -1,0 +1,2812 @@
+{
+  "as_of": "2026-10-12",
+  "source": "production read-only Neon, user 1; no writes",
+  "held": true,
+  "resolution_complete": false,
+  "lists": [
+    {
+      "list_id": 9,
+      "name": "[1997-2000] X-Men Era Ten Aftermath (UXRO)",
+      "entries": 210,
+      "unique_confirmed_identity": 129,
+      "resolved_comicvine_volume": 2,
+      "ambiguous_duplicate_copies": 51,
+      "unmatched": 28,
+      "volume_resolved": [
+        {
+          "position": 90,
+          "series_name": "X-Men / Dr. Doom '98",
+          "issue_number": "1",
+          "comicvine_issue_id": "178128",
+          "comicvine_series_id": "26316",
+          "status": "resolved_comicvine_volume",
+          "chosen_issue_id": 116603,
+          "classification": "a",
+          "evidence": "exactly one candidate Thread maps to CBL ComicVine volume 26316; rejected X-Men #X-Men/Dr. Doom Annual 1998",
+          "candidates": [
+            {
+              "issue_id": 2359,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "X-Men/Dr. Doom Annual 1998",
+              "series_identity_matches_cbl": false
+            },
+            {
+              "issue_id": 116603,
+              "thread_id": 18689,
+              "thread_title": "X-Men / Dr. Doom '98 (1998)",
+              "issue_number": "1",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 129,
+          "series_name": "X-Men 1999",
+          "issue_number": "1",
+          "comicvine_issue_id": "156744",
+          "comicvine_series_id": "60463",
+          "status": "resolved_comicvine_volume",
+          "chosen_issue_id": 116775,
+          "classification": "a",
+          "evidence": "exactly one candidate Thread maps to CBL ComicVine volume 60463; rejected X-Men #X-Men Annual '99",
+          "candidates": [
+            {
+              "issue_id": 2360,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "X-Men Annual '99",
+              "series_identity_matches_cbl": false
+            },
+            {
+              "issue_id": 116775,
+              "thread_id": 18721,
+              "thread_title": "X-Men 1999 (1999)",
+              "issue_number": "1",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "position": 2,
+          "series_name": "X-Force",
+          "issue_number": "71",
+          "comicvine_issue_id": "64544",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64544 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 754,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "71",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101436,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "71",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 3,
+          "series_name": "X-Force",
+          "issue_number": "72",
+          "comicvine_issue_id": "64545",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64545 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 755,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "72",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101437,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "72",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 4,
+          "series_name": "X-Force",
+          "issue_number": "73",
+          "comicvine_issue_id": "64546",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64546 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 756,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "73",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101438,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "73",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 5,
+          "series_name": "X-Force",
+          "issue_number": "74",
+          "comicvine_issue_id": "64547",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64547 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 757,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "74",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101439,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "74",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 13,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "351",
+          "comicvine_issue_id": "65135",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 65135 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2019,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "351",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101039,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "351",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 14,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "352",
+          "comicvine_issue_id": "44712",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 44712 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2020,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "352",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101040,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "352",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 15,
+          "series_name": "X-Men",
+          "issue_number": "72",
+          "comicvine_issue_id": "65772",
+          "comicvine_series_id": "4605",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 65772 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1625,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "72",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101561,
+              "thread_id": 16975,
+              "thread_title": "X-Men (Vol. 2) (1991 - 2001)",
+              "issue_number": "72",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 16,
+          "series_name": "X-Force",
+          "issue_number": "75",
+          "comicvine_issue_id": "64548",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64548 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 758,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "75",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101440,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "75",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 17,
+          "series_name": "X-Force",
+          "issue_number": "76",
+          "comicvine_issue_id": "64549",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64549 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 759,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "76",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101441,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "76",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 19,
+          "series_name": "Generation X",
+          "issue_number": "32",
+          "comicvine_issue_id": "83097",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83097 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 834,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "32",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99760,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "32",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 20,
+          "series_name": "Generation X",
+          "issue_number": "33",
+          "comicvine_issue_id": "83098",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83098 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 835,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "33",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99761,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "33",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 21,
+          "series_name": "Excalibur",
+          "issue_number": "115",
+          "comicvine_issue_id": "66397",
+          "comicvine_series_id": "4052",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 66397 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 649,
+              "thread_id": 100,
+              "thread_title": "Excalibur",
+              "issue_number": "115",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99556,
+              "thread_id": 16697,
+              "thread_title": "Excalibur (Vol. 1) (1988 - 1998)",
+              "issue_number": "115",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 22,
+          "series_name": "Generation X",
+          "issue_number": "34",
+          "comicvine_issue_id": "83099",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83099 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 836,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "34",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99762,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "34",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 23,
+          "series_name": "Generation X",
+          "issue_number": "35",
+          "comicvine_issue_id": "83100",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83100 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 837,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "35",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99763,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "35",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 24,
+          "series_name": "Generation X",
+          "issue_number": "36",
+          "comicvine_issue_id": "83101",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83101 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 838,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "36",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99764,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "36",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 25,
+          "series_name": "Generation X",
+          "issue_number": "37",
+          "comicvine_issue_id": "83102",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83102 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 839,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "37",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99765,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "37",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 26,
+          "series_name": "Generation X",
+          "issue_number": "38",
+          "comicvine_issue_id": "83103",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83103 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 840,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "38",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99766,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "38",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 27,
+          "series_name": "Generation X",
+          "issue_number": "39",
+          "comicvine_issue_id": "83104",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83104 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 841,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "39",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99767,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "39",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 28,
+          "series_name": "Generation X",
+          "issue_number": "40",
+          "comicvine_issue_id": "83105",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83105 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 842,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "40",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99768,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "40",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 29,
+          "series_name": "Excalibur",
+          "issue_number": "120",
+          "comicvine_issue_id": "66402",
+          "comicvine_series_id": "4052",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 66402 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 654,
+              "thread_id": 100,
+              "thread_title": "Excalibur",
+              "issue_number": "120",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99561,
+              "thread_id": 16697,
+              "thread_title": "Excalibur (Vol. 1) (1988 - 1998)",
+              "issue_number": "120",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 30,
+          "series_name": "Excalibur",
+          "issue_number": "121",
+          "comicvine_issue_id": "66403",
+          "comicvine_series_id": "4052",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 66403 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 655,
+              "thread_id": 100,
+              "thread_title": "Excalibur",
+              "issue_number": "121",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99562,
+              "thread_id": 16697,
+              "thread_title": "Excalibur (Vol. 1) (1988 - 1998)",
+              "issue_number": "121",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 31,
+          "series_name": "X-Men",
+          "issue_number": "73",
+          "comicvine_issue_id": "65773",
+          "comicvine_series_id": "4605",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 65773 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1626,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "73",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101562,
+              "thread_id": 16975,
+              "thread_title": "X-Men (Vol. 2) (1991 - 2001)",
+              "issue_number": "73",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 32,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "353",
+          "comicvine_issue_id": "44810",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 44810 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2021,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "353",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101041,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "353",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 33,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "354",
+          "comicvine_issue_id": "44896",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 44896 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2022,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "354",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101042,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "354",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 34,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "355",
+          "comicvine_issue_id": "44982",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 44982 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2023,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "355",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101043,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "355",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 38,
+          "series_name": "X-Force",
+          "issue_number": "77",
+          "comicvine_issue_id": "64550",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64550 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 760,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "77",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101442,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "77",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 39,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "356",
+          "comicvine_issue_id": "45067",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 45067 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2024,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "356",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101044,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "356",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 40,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "357",
+          "comicvine_issue_id": "45179",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 45179 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2025,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "357",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101045,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "357",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 41,
+          "series_name": "X-Force",
+          "issue_number": "78",
+          "comicvine_issue_id": "64551",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64551 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 761,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "78",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101443,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "78",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 42,
+          "series_name": "X-Force",
+          "issue_number": "79",
+          "comicvine_issue_id": "64552",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64552 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 762,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "79",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101444,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "79",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 43,
+          "series_name": "X-Force",
+          "issue_number": "80",
+          "comicvine_issue_id": "152909",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 152909 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 763,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "80",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101445,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "80",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 44,
+          "series_name": "X-Force",
+          "issue_number": "81",
+          "comicvine_issue_id": "64553",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64553 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 764,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "81",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101446,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "81",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 45,
+          "series_name": "Excalibur",
+          "issue_number": "122",
+          "comicvine_issue_id": "66404",
+          "comicvine_series_id": "4052",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 66404 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 656,
+              "thread_id": 100,
+              "thread_title": "Excalibur",
+              "issue_number": "122",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99563,
+              "thread_id": 16697,
+              "thread_title": "Excalibur (Vol. 1) (1988 - 1998)",
+              "issue_number": "122",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 46,
+          "series_name": "Excalibur",
+          "issue_number": "123",
+          "comicvine_issue_id": "66405",
+          "comicvine_series_id": "4052",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 66405 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 657,
+              "thread_id": 100,
+              "thread_title": "Excalibur",
+              "issue_number": "123",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99564,
+              "thread_id": 16697,
+              "thread_title": "Excalibur (Vol. 1) (1988 - 1998)",
+              "issue_number": "123",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 47,
+          "series_name": "Generation X",
+          "issue_number": "0.5",
+          "comicvine_issue_id": "41114",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 41114 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 807,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "5",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99733,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "5",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 48,
+          "series_name": "Generation X",
+          "issue_number": "41",
+          "comicvine_issue_id": "83106",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83106 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 843,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "41",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99769,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "41",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 54,
+          "series_name": "X-Force",
+          "issue_number": "82",
+          "comicvine_issue_id": "64554",
+          "comicvine_series_id": "4604",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 64554 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 765,
+              "thread_id": 102,
+              "thread_title": "X-Force",
+              "issue_number": "82",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101447,
+              "thread_id": 16970,
+              "thread_title": "X-Force (Vol. 1) (1991 - 2002)",
+              "issue_number": "82",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 55,
+          "series_name": "X-Men",
+          "issue_number": "74",
+          "comicvine_issue_id": "65774",
+          "comicvine_series_id": "4605",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 65774 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1627,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "74",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101563,
+              "thread_id": 16975,
+              "thread_title": "X-Men (Vol. 2) (1991 - 2001)",
+              "issue_number": "74",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 56,
+          "series_name": "X-Men",
+          "issue_number": "75",
+          "comicvine_issue_id": "65775",
+          "comicvine_series_id": "4605",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 65775 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1628,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "75",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101564,
+              "thread_id": 16975,
+              "thread_title": "X-Men (Vol. 2) (1991 - 2001)",
+              "issue_number": "75",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 58,
+          "series_name": "X-Men",
+          "issue_number": "76",
+          "comicvine_issue_id": "65776",
+          "comicvine_series_id": "4605",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 65776 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1629,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "76",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101565,
+              "thread_id": 16975,
+              "thread_title": "X-Men (Vol. 2) (1991 - 2001)",
+              "issue_number": "76",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 59,
+          "series_name": "X-Men",
+          "issue_number": "77",
+          "comicvine_issue_id": "65777",
+          "comicvine_series_id": "4605",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 65777 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1631,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "77",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101566,
+              "thread_id": 16975,
+              "thread_title": "X-Men (Vol. 2) (1991 - 2001)",
+              "issue_number": "77",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 60,
+          "series_name": "X-Men",
+          "issue_number": "78",
+          "comicvine_issue_id": "131381",
+          "comicvine_series_id": "4605",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 131381 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1632,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "78",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101567,
+              "thread_id": 16975,
+              "thread_title": "X-Men (Vol. 2) (1991 - 2001)",
+              "issue_number": "78",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 61,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "358",
+          "comicvine_issue_id": "45237",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 45237 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2026,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "358",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101046,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "358",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 62,
+          "series_name": "Generation X",
+          "issue_number": "42",
+          "comicvine_issue_id": "83107",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83107 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 844,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "42",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99770,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "42",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 63,
+          "series_name": "Generation X",
+          "issue_number": "43",
+          "comicvine_issue_id": "83108",
+          "comicvine_series_id": "5300",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 83108 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 845,
+              "thread_id": 84,
+              "thread_title": "Generation X",
+              "issue_number": "43",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99771,
+              "thread_id": 16726,
+              "thread_title": "Generation X (Vol. 1) (1994 - 2001)",
+              "issue_number": "43",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 64,
+          "series_name": "The Uncanny X-Men",
+          "issue_number": "359",
+          "comicvine_issue_id": "45332",
+          "comicvine_series_id": "3092",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 45332 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 2027,
+              "thread_id": 305,
+              "thread_title": "Uncanny X-Men",
+              "issue_number": "359",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101047,
+              "thread_id": 16935,
+              "thread_title": "Uncanny X-Men (Vol. 1) (1980 - 2011)",
+              "issue_number": "359",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 66,
+          "series_name": "X-Men",
+          "issue_number": "79",
+          "comicvine_issue_id": "65778",
+          "comicvine_series_id": "4605",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 65778 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1633,
+              "thread_id": 98,
+              "thread_title": "X-Men",
+              "issue_number": "79",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 101568,
+              "thread_id": 16975,
+              "thread_title": "X-Men (Vol. 2) (1991 - 2001)",
+              "issue_number": "79",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 72,
+          "series_name": "Excalibur",
+          "issue_number": "124",
+          "comicvine_issue_id": "66406",
+          "comicvine_series_id": "4052",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 66406 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 658,
+              "thread_id": 100,
+              "thread_title": "Excalibur",
+              "issue_number": "124",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99565,
+              "thread_id": 16697,
+              "thread_title": "Excalibur (Vol. 1) (1988 - 1998)",
+              "issue_number": "124",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 73,
+          "series_name": "Excalibur",
+          "issue_number": "125",
+          "comicvine_issue_id": "66407",
+          "comicvine_series_id": "4052",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 66407 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 659,
+              "thread_id": 100,
+              "thread_title": "Excalibur",
+              "issue_number": "125",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99566,
+              "thread_id": 16697,
+              "thread_title": "Excalibur (Vol. 1) (1988 - 1998)",
+              "issue_number": "125",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 100,
+          "series_name": "Team X 2000",
+          "issue_number": "1",
+          "comicvine_issue_id": "136135",
+          "comicvine_series_id": "22706",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 136135 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 22863,
+              "thread_id": 3147,
+              "thread_title": "Team x 2000",
+              "issue_number": "1",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 100407,
+              "thread_id": 16873,
+              "thread_title": "Team X 2000 (1999)",
+              "issue_number": "1",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 176,
+          "series_name": "Cable",
+          "issue_number": "-1",
+          "comicvine_issue_id": "43910",
+          "comicvine_series_id": "4993",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 43910 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 51514,
+              "thread_id": 76,
+              "thread_title": "Cable",
+              "issue_number": "-1",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99126,
+              "thread_id": 16650,
+              "thread_title": "Cable (Vol. 1) (1993 - 2002)",
+              "issue_number": "-1",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        }
+      ],
+      "unmatched_entries": [
+        {
+          "position": 1,
+          "series_name": "Marvel Team-Up",
+          "issue_number": "1",
+          "volume_year": 1997,
+          "publication_year": 1997,
+          "comicvine_issue_id": "44085",
+          "comicvine_series_id": "6011",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 44085; not omitted"
+        },
+        {
+          "position": 7,
+          "series_name": "Heroes Reborn: The Return",
+          "issue_number": "1",
+          "volume_year": 1997,
+          "publication_year": 1997,
+          "comicvine_issue_id": "44392",
+          "comicvine_series_id": "6004",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 44392; not omitted"
+        },
+        {
+          "position": 8,
+          "series_name": "Heroes Reborn: The Return",
+          "issue_number": "2",
+          "volume_year": 1997,
+          "publication_year": 1997,
+          "comicvine_issue_id": "44451",
+          "comicvine_series_id": "6004",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 44451; not omitted"
+        },
+        {
+          "position": 9,
+          "series_name": "Heroes Reborn: The Return",
+          "issue_number": "3",
+          "volume_year": 1997,
+          "publication_year": 1997,
+          "comicvine_issue_id": "44454",
+          "comicvine_series_id": "6004",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 44454; not omitted"
+        },
+        {
+          "position": 10,
+          "series_name": "Heroes Reborn: The Return",
+          "issue_number": "4",
+          "volume_year": 1997,
+          "publication_year": 1997,
+          "comicvine_issue_id": "44455",
+          "comicvine_series_id": "6004",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 44455; not omitted"
+        },
+        {
+          "position": 57,
+          "series_name": "Wolverine",
+          "issue_number": "900",
+          "volume_year": 2003,
+          "publication_year": 2010,
+          "comicvine_issue_id": "213629",
+          "comicvine_series_id": "10809",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 213629; not omitted"
+        },
+        {
+          "position": 78,
+          "series_name": "Gambit",
+          "issue_number": "5",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "66893",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66893; not omitted"
+        },
+        {
+          "position": 109,
+          "series_name": "X-Man",
+          "issue_number": "50",
+          "volume_year": 1995,
+          "publication_year": 1999,
+          "comicvine_issue_id": "45771",
+          "comicvine_series_id": "5567",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 45771; not omitted"
+        },
+        {
+          "position": 116,
+          "series_name": "Gambit",
+          "issue_number": "1",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "66890",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66890; not omitted"
+        },
+        {
+          "position": 117,
+          "series_name": "Gambit",
+          "issue_number": "2",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "66891",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66891; not omitted"
+        },
+        {
+          "position": 140,
+          "series_name": "Gambit 1999",
+          "issue_number": "1",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "136123",
+          "comicvine_series_id": "22700",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 136123; not omitted"
+        },
+        {
+          "position": 141,
+          "series_name": "Contest of Champions II",
+          "issue_number": "1",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "46012",
+          "comicvine_series_id": "6353",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 46012; not omitted"
+        },
+        {
+          "position": 142,
+          "series_name": "Contest of Champions II",
+          "issue_number": "2",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "46039",
+          "comicvine_series_id": "6353",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 46039; not omitted"
+        },
+        {
+          "position": 143,
+          "series_name": "Contest of Champions II",
+          "issue_number": "3",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "46057",
+          "comicvine_series_id": "6353",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 46057; not omitted"
+        },
+        {
+          "position": 144,
+          "series_name": "Contest of Champions II",
+          "issue_number": "4",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "46099",
+          "comicvine_series_id": "6353",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 46099; not omitted"
+        },
+        {
+          "position": 145,
+          "series_name": "Contest of Champions II",
+          "issue_number": "5",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "46127",
+          "comicvine_series_id": "6353",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 46127; not omitted"
+        },
+        {
+          "position": 158,
+          "series_name": "Astonishing X-Men",
+          "issue_number": "1",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "105554",
+          "comicvine_series_id": "18027",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 105554; not omitted"
+        },
+        {
+          "position": 159,
+          "series_name": "Astonishing X-Men",
+          "issue_number": "2",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "105591",
+          "comicvine_series_id": "18027",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 105591; not omitted"
+        },
+        {
+          "position": 160,
+          "series_name": "Astonishing X-Men",
+          "issue_number": "3",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "105592",
+          "comicvine_series_id": "18027",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 105592; not omitted"
+        },
+        {
+          "position": 161,
+          "series_name": "Gambit",
+          "issue_number": "8",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "66896",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66896; not omitted"
+        },
+        {
+          "position": 162,
+          "series_name": "Gambit",
+          "issue_number": "9",
+          "volume_year": 1999,
+          "publication_year": 1999,
+          "comicvine_issue_id": "66897",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66897; not omitted"
+        },
+        {
+          "position": 178,
+          "series_name": "X-Man",
+          "issue_number": "59",
+          "volume_year": 1995,
+          "publication_year": 2000,
+          "comicvine_issue_id": "132387",
+          "comicvine_series_id": "5567",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 132387; not omitted"
+        },
+        {
+          "position": 179,
+          "series_name": "X-Man",
+          "issue_number": "60",
+          "volume_year": 1995,
+          "publication_year": 2000,
+          "comicvine_issue_id": "136073",
+          "comicvine_series_id": "5567",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 136073; not omitted"
+        },
+        {
+          "position": 203,
+          "series_name": "The New Warriors",
+          "issue_number": "5",
+          "volume_year": 1999,
+          "publication_year": 2000,
+          "comicvine_issue_id": "48482",
+          "comicvine_series_id": "6787",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 48482; not omitted"
+        },
+        {
+          "position": 207,
+          "series_name": "Gambit",
+          "issue_number": "12",
+          "volume_year": 1999,
+          "publication_year": 2000,
+          "comicvine_issue_id": "66900",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66900; not omitted"
+        },
+        {
+          "position": 208,
+          "series_name": "Gambit",
+          "issue_number": "13",
+          "volume_year": 1999,
+          "publication_year": 2000,
+          "comicvine_issue_id": "66901",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66901; not omitted"
+        },
+        {
+          "position": 209,
+          "series_name": "Gambit",
+          "issue_number": "14",
+          "volume_year": 1999,
+          "publication_year": 2000,
+          "comicvine_issue_id": "66902",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66902; not omitted"
+        },
+        {
+          "position": 210,
+          "series_name": "Gambit",
+          "issue_number": "15",
+          "volume_year": 1999,
+          "publication_year": 2000,
+          "comicvine_issue_id": "66903",
+          "comicvine_series_id": "9111",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 66903; not omitted"
+        }
+      ]
+    },
+    {
+      "list_id": 22,
+      "name": "Fantastic Four 001 - Early Years",
+      "entries": 288,
+      "unique_confirmed_identity": 238,
+      "resolved_comicvine_volume": 0,
+      "ambiguous_duplicate_copies": 14,
+      "unmatched": 36,
+      "volume_resolved": [],
+      "ambiguous": [
+        {
+          "position": 1,
+          "series_name": "Fantastic Four",
+          "issue_number": "1",
+          "comicvine_issue_id": "5558",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 5558 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1076,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "1",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23014,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "1",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99636,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "1",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 2,
+          "series_name": "Fantastic Four",
+          "issue_number": "2",
+          "comicvine_issue_id": "5712",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 5712 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1077,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "2",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23015,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "2",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99637,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "2",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 3,
+          "series_name": "Fantastic Four",
+          "issue_number": "3",
+          "comicvine_issue_id": "5796",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 5796 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1078,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "3",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23016,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "3",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99638,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "3",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 4,
+          "series_name": "Fantastic Four",
+          "issue_number": "4",
+          "comicvine_issue_id": "5881",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 5881 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1079,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "4",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23017,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "4",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99639,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "4",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 5,
+          "series_name": "Fantastic Four",
+          "issue_number": "5",
+          "comicvine_issue_id": "5974",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 5974 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1080,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "5",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23018,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "5",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99640,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "5",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 6,
+          "series_name": "Fantastic Four",
+          "issue_number": "6",
+          "comicvine_issue_id": "6063",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 6063 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1081,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "6",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23019,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "6",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99641,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "6",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 7,
+          "series_name": "Fantastic Four",
+          "issue_number": "7",
+          "comicvine_issue_id": "6115",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 6115 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1082,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "7",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23020,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "7",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99642,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "7",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 8,
+          "series_name": "Fantastic Four",
+          "issue_number": "8",
+          "comicvine_issue_id": "6158",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 6158 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1083,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "8",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23021,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "8",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99643,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "8",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 9,
+          "series_name": "Fantastic Four",
+          "issue_number": "9",
+          "comicvine_issue_id": "6206",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 6206 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1084,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "9",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23022,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "9",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99644,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "9",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 10,
+          "series_name": "Fantastic Four",
+          "issue_number": "10",
+          "comicvine_issue_id": "6328",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 6328 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 1085,
+              "thread_id": 107,
+              "thread_title": "Fantastic Four Marvel Masterworks Vol 1",
+              "issue_number": "10",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 23023,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "10",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99645,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "10",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 24,
+          "series_name": "Fantastic Four",
+          "issue_number": "23",
+          "comicvine_issue_id": "6986",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 6986 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 23036,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "23",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99646,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "23",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 51,
+          "series_name": "Fantastic Four",
+          "issue_number": "48",
+          "comicvine_issue_id": "8428",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 8428 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 23061,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "48",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99647,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "48",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 52,
+          "series_name": "Fantastic Four",
+          "issue_number": "49",
+          "comicvine_issue_id": "8490",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 8490 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 23062,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "49",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99648,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "49",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        },
+        {
+          "position": 53,
+          "series_name": "Fantastic Four",
+          "issue_number": "50",
+          "comicvine_issue_id": "8546",
+          "comicvine_series_id": "2045",
+          "status": "ambiguous_duplicate_copies",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "evidence": "several owned Issues share ComicVine issue 8546 on the same volume; not selecting the lowest issue id",
+          "candidates": [
+            {
+              "issue_id": 23063,
+              "thread_id": 3166,
+              "thread_title": "Fantastic Four (1961)",
+              "issue_number": "50",
+              "series_identity_matches_cbl": true
+            },
+            {
+              "issue_id": 99649,
+              "thread_id": 16706,
+              "thread_title": "Fantastic Four (Vol. 1) (1961 - 1996)",
+              "issue_number": "50",
+              "series_identity_matches_cbl": true
+            }
+          ]
+        }
+      ],
+      "unmatched_entries": [
+        {
+          "position": 144,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "1",
+          "volume_year": 1974,
+          "publication_year": 1974,
+          "comicvine_issue_id": "14067",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 14067; not omitted"
+        },
+        {
+          "position": 157,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "3",
+          "volume_year": 1974,
+          "publication_year": 1974,
+          "comicvine_issue_id": "14277",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 14277; not omitted"
+        },
+        {
+          "position": 158,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "4",
+          "volume_year": 1974,
+          "publication_year": 1974,
+          "comicvine_issue_id": "14434",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 14434; not omitted"
+        },
+        {
+          "position": 159,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "5",
+          "volume_year": 1974,
+          "publication_year": 1974,
+          "comicvine_issue_id": "14597",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 14597; not omitted"
+        },
+        {
+          "position": 177,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "8",
+          "volume_year": 1974,
+          "publication_year": 1975,
+          "comicvine_issue_id": "114572",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 114572; not omitted"
+        },
+        {
+          "position": 178,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "9",
+          "volume_year": 1974,
+          "publication_year": 1975,
+          "comicvine_issue_id": "15192",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 15192; not omitted"
+        },
+        {
+          "position": 187,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "14",
+          "volume_year": 1974,
+          "publication_year": 1976,
+          "comicvine_issue_id": "16174",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 16174; not omitted"
+        },
+        {
+          "position": 188,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "16",
+          "volume_year": 1974,
+          "publication_year": 1976,
+          "comicvine_issue_id": "16428",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 16428; not omitted"
+        },
+        {
+          "position": 195,
+          "series_name": "Marvel Two-in-One Annual",
+          "issue_number": "1",
+          "volume_year": 1976,
+          "publication_year": 1976,
+          "comicvine_issue_id": "15916",
+          "comicvine_series_id": "2865",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 15916; not omitted"
+        },
+        {
+          "position": 196,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "20",
+          "volume_year": 1974,
+          "publication_year": 1976,
+          "comicvine_issue_id": "16789",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 16789; not omitted"
+        },
+        {
+          "position": 197,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "21",
+          "volume_year": 1974,
+          "publication_year": 1976,
+          "comicvine_issue_id": "16881",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 16881; not omitted"
+        },
+        {
+          "position": 198,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "22",
+          "volume_year": 1974,
+          "publication_year": 1976,
+          "comicvine_issue_id": "16969",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 16969; not omitted"
+        },
+        {
+          "position": 199,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "23",
+          "volume_year": 1974,
+          "publication_year": 1977,
+          "comicvine_issue_id": "17109",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 17109; not omitted"
+        },
+        {
+          "position": 205,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "27",
+          "volume_year": 1974,
+          "publication_year": 1977,
+          "comicvine_issue_id": "17437",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 17437; not omitted"
+        },
+        {
+          "position": 206,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "28",
+          "volume_year": 1974,
+          "publication_year": 1977,
+          "comicvine_issue_id": "17513",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 17513; not omitted"
+        },
+        {
+          "position": 207,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "32",
+          "volume_year": 1974,
+          "publication_year": 1977,
+          "comicvine_issue_id": "17881",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 17881; not omitted"
+        },
+        {
+          "position": 208,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "36",
+          "volume_year": 1974,
+          "publication_year": 1978,
+          "comicvine_issue_id": "18257",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 18257; not omitted"
+        },
+        {
+          "position": 238,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "44",
+          "volume_year": 1974,
+          "publication_year": 1978,
+          "comicvine_issue_id": "18905",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 18905; not omitted"
+        },
+        {
+          "position": 240,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "46",
+          "volume_year": 1974,
+          "publication_year": 1978,
+          "comicvine_issue_id": "19049",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 19049; not omitted"
+        },
+        {
+          "position": 241,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "47",
+          "volume_year": 1974,
+          "publication_year": 1979,
+          "comicvine_issue_id": "19201",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 19201; not omitted"
+        },
+        {
+          "position": 242,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "50",
+          "volume_year": 1974,
+          "publication_year": 1979,
+          "comicvine_issue_id": "19441",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 19441; not omitted"
+        },
+        {
+          "position": 254,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "59",
+          "volume_year": 1974,
+          "publication_year": 1980,
+          "comicvine_issue_id": "20105",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20105; not omitted"
+        },
+        {
+          "position": 255,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "60",
+          "volume_year": 1974,
+          "publication_year": 1980,
+          "comicvine_issue_id": "20172",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20172; not omitted"
+        },
+        {
+          "position": 265,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "64",
+          "volume_year": 1974,
+          "publication_year": 1980,
+          "comicvine_issue_id": "20461",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20461; not omitted"
+        },
+        {
+          "position": 266,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "67",
+          "volume_year": 1974,
+          "publication_year": 1980,
+          "comicvine_issue_id": "20670",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20670; not omitted"
+        },
+        {
+          "position": 267,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "68",
+          "volume_year": 1974,
+          "publication_year": 1980,
+          "comicvine_issue_id": "20737",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20737; not omitted"
+        },
+        {
+          "position": 268,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "69",
+          "volume_year": 1974,
+          "publication_year": 1980,
+          "comicvine_issue_id": "20800",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20800; not omitted"
+        },
+        {
+          "position": 269,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "70",
+          "volume_year": 1974,
+          "publication_year": 1980,
+          "comicvine_issue_id": "20867",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20867; not omitted"
+        },
+        {
+          "position": 276,
+          "series_name": "Marvel Two-in-One Annual",
+          "issue_number": "5",
+          "volume_year": 1976,
+          "publication_year": 1980,
+          "comicvine_issue_id": "20039",
+          "comicvine_series_id": "2865",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20039; not omitted"
+        },
+        {
+          "position": 278,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "71",
+          "volume_year": 1974,
+          "publication_year": 1981,
+          "comicvine_issue_id": "20976",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 20976; not omitted"
+        },
+        {
+          "position": 279,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "72",
+          "volume_year": 1974,
+          "publication_year": 1981,
+          "comicvine_issue_id": "21043",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 21043; not omitted"
+        },
+        {
+          "position": 281,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "74",
+          "volume_year": 1974,
+          "publication_year": 1981,
+          "comicvine_issue_id": "21183",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 21183; not omitted"
+        },
+        {
+          "position": 282,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "75",
+          "volume_year": 1974,
+          "publication_year": 1981,
+          "comicvine_issue_id": "21247",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 21247; not omitted"
+        },
+        {
+          "position": 283,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "77",
+          "volume_year": 1974,
+          "publication_year": 1981,
+          "comicvine_issue_id": "21381",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 21381; not omitted"
+        },
+        {
+          "position": 287,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "78",
+          "volume_year": 1974,
+          "publication_year": 1981,
+          "comicvine_issue_id": "21447",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 21447; not omitted"
+        },
+        {
+          "position": 288,
+          "series_name": "Marvel Two-in-One",
+          "issue_number": "80",
+          "volume_year": 1974,
+          "publication_year": 1981,
+          "comicvine_issue_id": "21601",
+          "comicvine_series_id": "2696",
+          "status": "unmatched",
+          "chosen_issue_id": null,
+          "classification": "c",
+          "candidates": [],
+          "evidence": "no owned confirmed mapping for ComicVine issue 21601; not omitted"
+        }
+      ]
+    }
+  ]
+}
