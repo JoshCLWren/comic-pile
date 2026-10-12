@@ -117,8 +117,10 @@ def _plan_payload(
     issues: list[Issue],
     *,
     mode: str = "strict_sequential",
+    checkpoint_ids: set[int] | None = None,
 ) -> dict[str, object]:
     """Build a one-lane plan create/update payload."""
+    flagged = checkpoint_ids or set()
     return {
         "name": name,
         "ordering_mode": mode,
@@ -130,7 +132,7 @@ def _plan_payload(
                 "ref_id": issue.id,
                 "lane_id": "main",
                 "position": position,
-                "is_checkpoint": False,
+                "is_checkpoint": issue.id in flagged,
                 "convergence_gate": None,
             }
             for position, issue in enumerate(issues)
@@ -379,11 +381,11 @@ async def test_xmen_cable_xforce_preserves_genuine_prereqs_not_suggested_order(
 
 
 @pytest.mark.asyncio
-async def test_mignolaverse_thread_entry_does_not_compile_mid_run_hops(
+async def test_mignolaverse_strict_create_does_not_infer_thread_entry(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Killing Ground gates the next series start; mid-run issues are not inferred targets."""
+    """Plan order is membership only; later series stay Roll-eligible without a checkpoint."""
     user = await get_or_create_user_async(async_db)
     _killing_ground, kg_issues = await _make_series(
         async_db,
@@ -392,7 +394,7 @@ async def test_mignolaverse_thread_entry_does_not_compile_mid_run_hops(
         numbers=["1", "2", "3", "4", "5"],
         queue_position=1,
     )
-    _sequel, sequel_issues = await _make_series(
+    sequel, sequel_issues = await _make_series(
         async_db,
         user_id=user.id,
         title="Hellboy: Darkness Calls",
@@ -419,27 +421,23 @@ async def test_mignolaverse_thread_entry_does_not_compile_mid_run_hops(
     assert body["ordering_mode"] == "strict_sequential"
     assert body["name"] == "Mignolaverse"
     compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=body["id"])
-    assert compiled == {
-        (kg_issues[-1].id, sequel_issues[0].id),
-        (sequel_issues[-1].id, later_issues[0].id),
-    }
+    assert compiled == set()
     assert (sequel_issues[1].id, sequel_issues[2].id) not in compiled
     assert (kg_issues[-1].id, sequel_issues[2].id) not in compiled
 
     roll_ids = await _roll_ids(user.id, async_db)
-    assert later.id not in roll_ids
+    assert sequel.id in roll_ids
+    assert later.id in roll_ids
     blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
-    assert later.id in blocked
-    reasons = await get_blocking_explanations(later.id, user.id, async_db)
-    assert reasons[0].issue_number == "4"
+    assert later.id not in blocked
 
 
 @pytest.mark.asyncio
-async def test_absolute_universe_later_series_are_gated_without_same_thread_edges(
+async def test_absolute_universe_cbl_order_stays_inert_without_explicit_gates(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Later Absolute titles are not Roll-eligible; same-title progression is not a Dependency."""
+    """Later Absolute titles stay Roll-eligible; inert cbl-order is not promoted."""
     user = await get_or_create_user_async(async_db)
     batman, batman_issues = await _make_series(
         async_db,
@@ -486,16 +484,13 @@ async def test_absolute_universe_later_series_are_gated_without_same_thread_edge
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
     compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
-    assert compiled == {
-        (batman_issues[1].id, superman_issues[0].id),
-        (superman_issues[1].id, ww_issues[0].id),
-    }
+    assert compiled == set()
     assert (batman_issues[0].id, batman_issues[1].id) not in compiled
 
     roll_ids = await _roll_ids(user.id, async_db)
     assert batman.id in roll_ids
-    assert superman.id not in roll_ids
-    assert wonder_woman.id not in roll_ids
+    assert superman.id in roll_ids
+    assert wonder_woman.id in roll_ids
     same_thread_cbl = (
         await async_db.execute(
             select(Dependency.note).where(
@@ -506,7 +501,7 @@ async def test_absolute_universe_later_series_are_gated_without_same_thread_edge
     ).scalar_one()
     assert same_thread_cbl is not None
     assert same_thread_cbl.startswith("cbl-order:source:")
-    promoted = (
+    unpromoted = (
         await async_db.execute(
             select(Dependency.note).where(
                 Dependency.source_issue_id == batman_issues[1].id,
@@ -514,25 +509,8 @@ async def test_absolute_universe_later_series_are_gated_without_same_thread_edge
             )
         )
     ).scalar_one()
-    assert promoted is not None
-    assert promoted.startswith("canonical:rule:")
-
-    batman_issues[0].status = "read"
-    batman_issues[0].read_at = datetime.now(UTC)
-    batman.next_unread_issue_id = batman_issues[1].id
-    batman.issues_remaining = 1
-    await async_db.flush()
-    still_gated = await _roll_ids(user.id, async_db)
-    assert superman.id not in still_gated
-
-    batman_issues[1].status = "read"
-    batman_issues[1].read_at = datetime.now(UTC)
-    batman.next_unread_issue_id = None
-    batman.issues_remaining = 0
-    await async_db.flush()
-    after_batman = await _roll_ids(user.id, async_db)
-    assert superman.id in after_batman
-    assert wonder_woman.id not in after_batman
+    assert unpromoted is not None
+    assert unpromoted.startswith("cbl-order:source:")
 
 
 @pytest.mark.asyncio
@@ -575,13 +553,21 @@ async def test_strict_plan_unchanged_save_retains_existing_plan_owned_gates(
     created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
-    thread_entry = {(first_issues[1].id, second_issues[0].id)}
+    existing_gate = (first_issues[1].id, second_issues[0].id)
     same_thread_adjacent = (first_issues[0].id, first_issues[1].id)
-    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == thread_entry
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
+    await _inject_plan_owned_pair(
+        async_db,
+        user_id=user.id,
+        plan_id=plan_id,
+        source_id=existing_gate[0],
+        target_id=existing_gate[1],
+    )
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == {existing_gate}
 
     unchanged = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=payload)
     assert unchanged.status_code == 200, unchanged.text
-    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == thread_entry
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == {existing_gate}
 
     leftover_adjacent = ContinuityRule(
         user_id=user.id,
@@ -608,7 +594,7 @@ async def test_strict_plan_unchanged_save_retains_existing_plan_owned_gates(
     saved = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=payload)
     assert saved.status_code == 200, saved.text
     compiled_after = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
-    assert compiled_after == thread_entry | {same_thread_adjacent}
+    assert compiled_after == {existing_gate, same_thread_adjacent}
     retained_adjacent = (
         await async_db.execute(
             select(Dependency).where(
@@ -627,6 +613,58 @@ async def test_strict_plan_unchanged_save_retains_existing_plan_owned_gates(
         )
     ).scalar_one()
     assert recorded.note == recorded_note
+
+
+@pytest.mark.asyncio
+async def test_unchanged_reading_plan_save_neither_removes_nor_invents_restrictions(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Editing or saving an unchanged Reading Plan never silently mutates gates."""
+    user = await get_or_create_user_async(async_db)
+    first, first_issues = await _make_series(
+        async_db, user_id=user.id, title="Identity A", numbers=["1", "2"], queue_position=1
+    )
+    second, second_issues = await _make_series(
+        async_db, user_id=user.id, title="Identity B", numbers=["1"], queue_position=2
+    )
+    third, third_issues = await _make_series(
+        async_db, user_id=user.id, title="Identity C", numbers=["1"], queue_position=3
+    )
+    await async_db.commit()
+    payload = _plan_payload("Identity", first_issues + second_issues)
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
+
+    keep = (first_issues[1].id, second_issues[0].id)
+    await _inject_plan_owned_pair(
+        async_db,
+        user_id=user.id,
+        plan_id=plan_id,
+        source_id=keep[0],
+        target_id=keep[1],
+    )
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    saved = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json=_write_payload_from_get(fetched.json()),
+    )
+    assert saved.status_code == 200, saved.text
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == {keep}
+
+    expanded = _plan_payload("Identity", first_issues + second_issues + third_issues)
+    edited = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=expanded)
+    assert edited.status_code == 200, edited.text
+    after_edit = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
+    assert after_edit == {keep}
+    assert (second_issues[0].id, third_issues[0].id) not in after_edit
+    assert (first_issues[1].id, third_issues[0].id) not in after_edit
+    roll_ids = await _roll_ids(user.id, async_db)
+    assert first.id in roll_ids
+    assert third.id in roll_ids
+    assert second.id not in roll_ids
 
 
 @pytest.mark.asyncio
@@ -684,6 +722,14 @@ async def test_strict_plan_lifecycle_create_edit_strictness_delete(
     created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
+    await _inject_plan_owned_pair(
+        async_db,
+        user_id=user.id,
+        plan_id=plan_id,
+        source_id=first_issues[0].id,
+        target_id=second_issues[0].id,
+    )
     assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == {
         (first_issues[0].id, second_issues[0].id),
     }
@@ -698,11 +744,9 @@ async def test_strict_plan_lifecycle_create_edit_strictness_delete(
     edited = _plan_payload("Lifecycle", first_issues + third_issues)
     updated = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=edited)
     assert updated.status_code == 200, updated.text
-    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == {
-        (first_issues[0].id, third_issues[0].id),
-    }
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
     blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
-    assert third.id in blocked
+    assert third.id not in blocked
     assert second.id not in blocked
 
     informational = _plan_payload(
@@ -719,16 +763,14 @@ async def test_strict_plan_lifecycle_create_edit_strictness_delete(
     restored = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=edited)
     assert restored.status_code == 200, restored.text
     assert restored.json()["ordering_mode"] == "strict_sequential"
-    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == {
-        (first_issues[0].id, third_issues[0].id),
-    }
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
 
     peer = await auth_client.post(
         "/api/v1/continuity-plans/",
         json=_plan_payload("Peer", first_issues + third_issues),
     )
-    # Equivalent standalone reuse: the second plan must not destroy the first gate.
-    assert peer.status_code in {201, 409}, peer.text
+    assert peer.status_code == 201, peer.text
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=peer.json()["id"]) == set()
 
     deleted = await auth_client.delete(f"/api/v1/continuity-plans/{plan_id}")
     assert deleted.status_code == 204
@@ -740,10 +782,7 @@ async def test_strict_plan_lifecycle_create_edit_strictness_delete(
             )
         )
     ).scalar_one_or_none()
-    if peer.status_code == 201:
-        assert remaining_edge is not None
-    else:
-        assert remaining_edge is None
+    assert remaining_edge is None
 
 
 @pytest.mark.asyncio
@@ -1261,11 +1300,11 @@ async def test_cbl_exclude_drops_existing_series_from_plan_record(
 
 
 @pytest.mark.asyncio
-async def test_queue_and_roll_agree_on_strict_thread_entry(
+async def test_queue_and_roll_agree_on_explicit_checkpoint(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Queue explanations and Roll eligibility use the same canonical edge."""
+    """Queue explanations and Roll eligibility use the same canonical checkpoint edge."""
     user = await get_or_create_user_async(async_db)
     lead, lead_issues = await _make_series(
         async_db, user_id=user.id, title="Lead Series", numbers=["1"], queue_position=1
@@ -1276,7 +1315,11 @@ async def test_queue_and_roll_agree_on_strict_thread_entry(
     await async_db.commit()
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
-        json=_plan_payload("Queue Roll", lead_issues + follow_issues),
+        json=_plan_payload(
+            "Queue Roll",
+            lead_issues + follow_issues,
+            checkpoint_ids={lead_issues[0].id},
+        ),
     )
     assert created.status_code == 201, created.text
     blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
@@ -1569,7 +1612,7 @@ async def test_ultimate_unchanged_save_keeps_existing_gates(
     created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
-    leftover = (spider_issues[0].id, spider_issues[1].id)
+    leftover = (spider_issues[1].id, xmen_issues[0].id)
     await _inject_plan_owned_pair(
         async_db,
         user_id=user.id,
@@ -1664,8 +1707,8 @@ async def test_jsa_starman_sequence_is_transitive_without_duplicate_edge(
     plan_id = created.json()["id"]
     compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
     assert (starman_55.id, jsa_1.id) not in compiled
-    assert (starman_55.id, all_star_1.id) in compiled
-    assert (secret_1.id, jsa_1.id) in compiled
+    assert (starman_55.id, all_star_1.id) not in compiled
+    assert (secret_1.id, jsa_1.id) not in compiled
 
     roll_ids = await _roll_ids(user.id, async_db)
     assert starman.id in roll_ids

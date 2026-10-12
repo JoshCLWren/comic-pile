@@ -1,32 +1,19 @@
-"""Strict Reading Plan hard-constraint selection (#2553 Phase B).
+"""Held thread-entry selector and issue-thread index helpers (#2553).
 
-A strict plan promises that Roll will honor its *selected* hard restrictions.
-It does not promise that every imported or suggested-order adjacency is a
-blocker. Natural Thread sequence remains ``Issue.position`` /
-``Thread.next_unread_issue_id``; same-thread adjacent pairs are never
-compiled into Dependencies.
+Live Reading Plan writes no longer infer Dependencies from plan order.
+Complicated reading orders are authored as custom CBLs (one ordered list of
+actual comics, with optional checkpoints) and consumed by Reading Plans.
+Roll honors (a) natural in-series progression via
+``Thread.next_unread_issue_id`` and (b) explicitly defined prerequisites and
+checkpoints only.
 
-The durable inferred restriction for ``strict_sequential`` is a *thread-entry
-gate*: the natural first issue of a Thread (minimum ``Issue.position`` on that
-Thread, whether or not earlier issues appear in the plan) waits on the nearest
-preceding required plan issue from a different Thread.
+``strict_plan_item_read_pairs`` remains for held production-migration
+scripts that still classify historical thread-entry gates. The live writer
+does not call it. Same-thread adjacent pairs are never compiled into
+Dependencies.
 
-That representation is title-agnostic:
-
-- Starman #55 before a JSA series start is a thread-entry (or standalone) gate.
-- X-Men / Cable / X-Force mid-run suggested-order hops are not inferred;
-  genuine crossover Dependencies remain the blockers.
-- A mid-run issue is never a thread-entry while an earlier issue exists on
-  the Thread; that is series-start geometry, not a title exemption.
-- Absolute Universe later titles whose #1 is in the plan are gated, closing
-  the "later material is Roll-eligible" leak without blanketing every hop.
-
-Informational plans compile no inferred gates. Explicit checkpoints,
-convergence gates, and caller-supplied selected pairs remain separate.
-
-Existing plan-owned ``item_read`` rows are a separate concern from this
-selector. An ordinary no-change save must retain those rows until a hop is
-classified and removed on purpose:
+Existing plan-owned ``item_read`` rows are retained on an ordinary no-change
+save until a hop is classified and removed on purpose:
 
 - **Intended reading order** — keep. Mignolaverse/Julix cross-thread
   mid-run hops (Abe Sapien minis, Hellboy in Love → Shadow Theater) are
@@ -38,8 +25,7 @@ classified and removed on purpose:
 - **Erroneous** — none proven in the live Mignolaverse, Absolute, Ultimate,
   or JSA plans; do not silently drop any existing restriction.
 
-New inference on a real membership edit remains thread-entry only. This
-module never emits a duplicate Starman #55 → JSA #1 edge; that sequence
+This module never emits a duplicate Starman #55 → JSA #1 edge; that sequence
 is already recorded Starman #55 → All-Star Comics (1999) #1, then Secret
 Files #1 → JSA #1.
 """

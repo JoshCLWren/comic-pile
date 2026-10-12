@@ -70,6 +70,7 @@ async def create_custom_cbl(
         name=payload.name,
         description=payload.description,
         issue_ids=payload.issue_ids,
+        checkpoint_issue_ids=payload.checkpoint_issue_ids,
     )
 
 
@@ -102,6 +103,7 @@ async def update_custom_cbl(
         name=payload.name,
         description=payload.description,
         issue_ids=payload.issue_ids,
+        checkpoint_issue_ids=payload.checkpoint_issue_ids,
     )
 
 

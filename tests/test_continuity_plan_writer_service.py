@@ -169,7 +169,7 @@ async def test_strict_sequential_adjacent_rules_compile_identically_to_router(
     auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The shared compiler and the router compile the exact same strict rules."""
+    """The shared compiler and the router compile the same empty inferred-rule set."""
     monkeypatch.setattr(continuity_plan_api, "_refresh_blocked_state", AsyncMock())
     user = await get_or_create_user_async(async_db)
     issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(3)]
@@ -189,10 +189,7 @@ async def test_strict_sequential_adjacent_rules_compile_identically_to_router(
     service_rule_edges = [
         (rule.source_id, rule.target_id, rule.satisfaction_type) for rule in service_rules
     ]
-    assert service_rule_edges == [
-        (issues[0].id, issues[1].id, "item_read"),
-        (issues[1].id, issues[2].id, "item_read"),
-    ]
+    assert service_rule_edges == []
     assert all(rule.note == f"continuity-plan:{service_plan.id}" for rule in service_rules)
 
     # The service compile is proven above; clear its plan-owned rules so the

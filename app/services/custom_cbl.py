@@ -49,6 +49,7 @@ class CustomCBLEntryView:
     series_name: str
     issue_number: str
     status: str
+    is_checkpoint: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +120,7 @@ async def load_custom_cbl_entries(
             series_name=thread.title,
             issue_number=issue.issue_number,
             status=issue.status,
+            is_checkpoint=entry.is_checkpoint,
         )
         for entry, issue, thread in result.all()
     ]
@@ -130,8 +132,10 @@ async def replace_custom_cbl_entries(
     user_id: int,
     list_row: CustomCBLList,
     issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
 ) -> None:
     """Replace membership after proving every referenced issue belongs to the user."""
+    checkpoint_set = set(checkpoint_issue_ids or ())
     if issue_ids:
         result = await db.execute(
             select(Issue.id)
@@ -148,7 +152,14 @@ async def replace_custom_cbl_entries(
 
     await db.execute(delete(CustomCBLEntry).where(CustomCBLEntry.list_id == list_row.id))
     for position, issue_id in enumerate(issue_ids):
-        db.add(CustomCBLEntry(list_id=list_row.id, issue_id=issue_id, position=position))
+        db.add(
+            CustomCBLEntry(
+                list_id=list_row.id,
+                issue_id=issue_id,
+                position=position,
+                is_checkpoint=issue_id in checkpoint_set,
+            )
+        )
     await db.flush()
 
 
@@ -330,11 +341,12 @@ def _merge_custom_cbl_into_lane(
                 lane_id=target_lane_id,
                 position=0,
                 label=f"{entry.series_name} #{entry.issue_number}",
+                is_checkpoint=entry.is_checkpoint,
                 convergence_gate=[],
             )
             added.append(entry.issue_id)
         else:
-            node = existing
+            node = existing.model_copy(update={"is_checkpoint": entry.is_checkpoint})
             reused.append(entry.issue_id)
         ordered_source_nodes.append(
             _with_source_provenance(
@@ -436,6 +448,7 @@ def _entry_response(entry: CustomCBLEntryView) -> CustomCBLEntryResponse:
         series_name=entry.series_name,
         issue_number=entry.issue_number,
         status=entry.status,
+        is_checkpoint=entry.is_checkpoint,
     )
 
 
@@ -513,6 +526,7 @@ async def create_custom_cbl_for_user(
     name: str,
     description: str | None,
     issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
 ) -> CustomCBLResponse:
     """Create one custom CBL, persist exact membership, and return its full representation."""
     try:
@@ -528,6 +542,7 @@ async def create_custom_cbl_for_user(
             user_id=user_id,
             list_row=row,
             issue_ids=issue_ids,
+            checkpoint_issue_ids=checkpoint_issue_ids,
         )
         await db.commit()
     except Exception:
@@ -553,6 +568,7 @@ async def update_custom_cbl_for_user(
     name: str,
     description: str | None,
     issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
 ) -> CustomCBLResponse:
     """Replace one owned custom CBL's metadata and ordered membership atomically."""
     try:
@@ -565,6 +581,7 @@ async def update_custom_cbl_for_user(
             user_id=user_id,
             list_row=row,
             issue_ids=issue_ids,
+            checkpoint_issue_ids=checkpoint_issue_ids,
         )
         await db.commit()
     except Exception:

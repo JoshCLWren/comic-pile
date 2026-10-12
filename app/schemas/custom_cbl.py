@@ -15,24 +15,32 @@ class CustomCBLWrite(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     issue_ids: list[int] = Field(default_factory=list, max_length=1000)
+    checkpoint_issue_ids: list[int] = Field(default_factory=list, max_length=1000)
 
-    @field_validator("issue_ids", mode="before")
+    @field_validator("issue_ids", "checkpoint_issue_ids", mode="before")
     @classmethod
     def reject_boolean_issue_ids(cls, value: object) -> object:
         """Reject JSON booleans before Pydantic can coerce them to integers."""
         if isinstance(value, (list, tuple)) and any(isinstance(item, bool) for item in value):
-            raise ValueError("issue_ids must contain positive integers")
+            raise ValueError("issue ids must contain positive integers")
         return value
 
     @model_validator(mode="after")
     def validate_write(self) -> CustomCBLWrite:
-        """Reject blank names, duplicates, and non-positive issue references."""
+        """Reject blank names, duplicates, and checkpoint ids outside membership."""
         if not self.name.strip():
             raise ValueError("name must not be blank")
         if any(issue_id <= 0 for issue_id in self.issue_ids):
             raise ValueError("issue_ids must contain positive integers")
         if len(set(self.issue_ids)) != len(self.issue_ids):
             raise ValueError("issue_ids must not contain duplicates")
+        if any(issue_id <= 0 for issue_id in self.checkpoint_issue_ids):
+            raise ValueError("checkpoint_issue_ids must contain positive integers")
+        if len(set(self.checkpoint_issue_ids)) != len(self.checkpoint_issue_ids):
+            raise ValueError("checkpoint_issue_ids must not contain duplicates")
+        owned = set(self.issue_ids)
+        if any(issue_id not in owned for issue_id in self.checkpoint_issue_ids):
+            raise ValueError("checkpoint_issue_ids must be a subset of issue_ids")
         return self
 
 
@@ -46,6 +54,7 @@ class CustomCBLEntryResponse(BaseModel):
     series_name: str
     issue_number: str
     status: str
+    is_checkpoint: bool = False
 
 
 class CustomCBLListItem(BaseModel):

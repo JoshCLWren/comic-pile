@@ -9,6 +9,7 @@ export interface CustomCBLEntry {
   series_name: string
   issue_number: string
   status: string
+  is_checkpoint: boolean
 }
 
 export interface CustomCBLListItem {
@@ -37,6 +38,7 @@ export interface CustomCBLWrite {
   name: string
   description?: string | null
   issue_ids: number[]
+  checkpoint_issue_ids?: number[]
 }
 
 export interface CustomCBLApplyResult extends ContinuityPlan {

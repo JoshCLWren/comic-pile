@@ -175,6 +175,80 @@ async def test_custom_cbl_create_edit_export_and_apply_without_synthetic_threads
 
 
 @pytest.mark.asyncio
+async def test_custom_cbl_rejects_checkpoint_outside_membership(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A checkpoint must name an issue that is already in the custom CBL."""
+    user = await get_or_create_user_async(async_db)
+    owned = await _issue(
+        async_db,
+        user_id=user.id,
+        title="Starman",
+        issue_number="55",
+        queue_position=1,
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Bad checkpoint",
+            "issue_ids": [owned.id],
+            "checkpoint_issue_ids": [owned.id + 999],
+        },
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.asyncio
+async def test_custom_cbl_apply_without_checkpoint_does_not_invent_item_read(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Applying an ordered CBL copies membership only; Roll stays natural unless flagged."""
+    user = await get_or_create_user_async(async_db)
+    first = await _issue(
+        async_db,
+        user_id=user.id,
+        title="Starman",
+        issue_number="55",
+        queue_position=1,
+    )
+    second = await _issue(
+        async_db,
+        user_id=user.id,
+        title="JSA",
+        issue_number="1",
+        queue_position=2,
+    )
+    await async_db.commit()
+
+    custom = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={"name": "Order only", "issue_ids": [first.id, second.id]},
+    )
+    assert custom.status_code == 201, custom.text
+    plan = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload([first.id], mode="strict_sequential"),
+    )
+    assert plan.status_code == 201, plan.text
+
+    applied = await auth_client.post(
+        f"/api/v1/custom-cbls/{custom.json()['id']}/reading-plans/{plan.json()['id']}:apply",
+        json={},
+    )
+    assert applied.status_code == 200, applied.text
+    rules = (
+        await async_db.execute(
+            select(ContinuityRule).where(ContinuityRule.user_id == user.id)
+        )
+    ).scalars().all()
+    assert rules == []
+
+
+@pytest.mark.asyncio
 async def test_custom_cbl_rejects_issue_owned_by_another_user(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -206,7 +280,7 @@ async def test_custom_cbl_strict_plan_application_uses_canonical_rule_compiler(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Applying custom material to a strict plan recompiles adjacent hard gates."""
+    """Applying a custom CBL copies flagged checkpoints onto the next lane entries."""
     user = await get_or_create_user_async(async_db)
     first = await _issue(
         async_db,
@@ -233,9 +307,18 @@ async def test_custom_cbl_strict_plan_application_uses_canonical_rule_compiler(
 
     custom = await auth_client.post(
         "/api/v1/custom-cbls",
-        json={"name": "Strict bridge", "issue_ids": [first.id, second.id, third.id]},
+        json={
+            "name": "Strict bridge",
+            "issue_ids": [first.id, second.id, third.id],
+            "checkpoint_issue_ids": [first.id, second.id],
+        },
     )
     assert custom.status_code == 201, custom.text
+    assert [entry["is_checkpoint"] for entry in custom.json()["entries"]] == [
+        True,
+        True,
+        False,
+    ]
     plan = await auth_client.post(
         "/api/v1/continuity-plans/",
         json=_plan_payload([first.id], mode="strict_sequential"),
@@ -248,6 +331,11 @@ async def test_custom_cbl_strict_plan_application_uses_canonical_rule_compiler(
     )
     assert applied.status_code == 200, applied.text
     assert applied.json()["skipped_existing_issue_ids"] == [first.id]
+    assert [node["is_checkpoint"] for node in applied.json()["nodes"] if node["ref_id"] in {first.id, second.id, third.id}] == [
+        True,
+        True,
+        False,
+    ]
 
     rules = (
         await async_db.execute(
@@ -256,9 +344,9 @@ async def test_custom_cbl_strict_plan_application_uses_canonical_rule_compiler(
             .order_by(ContinuityRule.id)
         )
     ).scalars().all()
-    assert [(rule.source_id, rule.target_id) for rule in rules] == [
-        (first.id, second.id),
-        (second.id, third.id),
+    assert [(rule.source_id, rule.target_id, rule.satisfaction_type) for rule in rules] == [
+        (first.id, second.id, "checkpoint"),
+        (second.id, third.id, "checkpoint"),
     ]
 
 

@@ -107,6 +107,7 @@ async def test_equivalent_standalone_item_read_rule_is_reused_without_reownershi
         plan=plan,
         nodes=nodes,
         ordering_mode="strict_sequential",
+        extra_item_read_pairs=[(source.id, target.id)],
     )
     await async_db.flush()
 
@@ -134,6 +135,7 @@ async def test_equivalent_standalone_item_read_rule_is_reused_without_reownershi
         plan=plan,
         nodes=nodes,
         ordering_mode="strict_sequential",
+        extra_item_read_pairs=[(source.id, target.id)],
     )
     await async_db.flush()
     surviving = await async_db.get(ContinuityRule, standalone_id)
@@ -158,6 +160,7 @@ async def test_rule_owned_by_another_reading_plan_is_shared_not_duplicated(
         plan=first,
         nodes=nodes,
         ordering_mode="strict_sequential",
+        extra_item_read_pairs=[(source.id, target.id)],
     )
     await async_db.flush()
 
@@ -168,6 +171,7 @@ async def test_rule_owned_by_another_reading_plan_is_shared_not_duplicated(
         plan=second,
         nodes=nodes,
         ordering_mode="strict_sequential",
+        extra_item_read_pairs=[(source.id, target.id)],
     )
     await async_db.flush()
 
@@ -237,6 +241,7 @@ async def test_non_equivalent_same_edge_rule_still_conflicts(
             plan=plan,
             nodes=_nodes(source, target),
             ordering_mode="strict_sequential",
+            extra_item_read_pairs=[(source.id, target.id)],
         )
 
     assert captured.value.status_code == 409

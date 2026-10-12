@@ -41,8 +41,6 @@ from app.models.thread import Thread
 from app.repositories import continuity_repository, reading_plan_repository
 from app.schemas.continuity_plan import ContinuityPlanNode, ContinuityPlanResponse
 from app.schemas.reading_plan_membership import (
-    # public_cbl helpers imported below after membership schemas
-
     ReadingPlanDependencyLink,
     ReadingPlanMemberIssue,
     ReadingPlanMembershipResponse,
@@ -50,6 +48,7 @@ from app.schemas.reading_plan_membership import (
     ReadingPlanSourcePlacementView,
     ReadingPlanSourceSnapshot,
 )
+from app.services.cbl_source_public import public_cbl_repository, public_cbl_source_path
 
 
 def ensure_plan_issue_uniqueness(nodes: list[ContinuityPlanNode]) -> None:

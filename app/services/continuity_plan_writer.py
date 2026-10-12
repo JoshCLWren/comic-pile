@@ -6,16 +6,18 @@ plan-owned rules are compiled and replaced from the same node semantics. This
 module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
-The compiler's hard-edge semantics (#2553 Phase B):
-  1. ``strict_sequential`` plans infer thread-entry ``item_read`` gates,
-     not every adjacent imported/suggested-order pair;
-  2. checkpoint nodes block the next node in the same lane;
+The compiler's hard-edge semantics (#2553 Phase B / #3499 CBL redirect):
+  1. ``strict_sequential`` plans retain existing in-plan ``item_read``
+     pairs; they do not infer thread-entry or adjacent Dependencies.
+     Complicated reading order is authored as a custom CBL and applied;
+  2. checkpoint nodes (including flags copied from a custom CBL) block
+     the next node in the same lane;
   3. convergence gates compile ``converged`` self-loop rules;
   4. plan-level cycles and persisted-rule conflicts keep their stable codes;
   5. informational plans add no inferred blockers;
   6. an ordinary save of unchanged membership retains existing plan-owned
      ``item_read`` pairs (Julix/Mignolaverse hops included) so Roll
-     eligibility does not change. New mid-run hops are never synthesized.
+     eligibility does not change. Saving never invents new pairs.
 """
 
 from __future__ import annotations
@@ -56,7 +58,6 @@ from app.services.reading_plan_normalization import (
 from app.services.strict_plan_constraints import (
     IssueThreadIndex,
     load_issue_thread_index,
-    strict_plan_item_read_pairs,
 )
 
 
@@ -285,13 +286,14 @@ async def replace_compiled_rules(
     """Replace only rules owned by this plan and compile plan semantics into rules.
 
     This compiles:
-    1. Strict-sequential thread-entry gates (Phase B of #2553)
+    1. Existing in-plan ``item_read`` pairs that still have both endpoints
     2. Checkpoint rules from nodes with ``is_checkpoint=True``
     3. Converged rules from nodes with ``convergence_gate`` entries
     4. Caller-supplied selected ``item_read`` pairs that are still in the plan
 
     Checkpoint semantics: a node marked as checkpoint blocks the next node in
-    the same lane until the checkpoint node is read.
+    the same lane until the checkpoint node is read. Custom CBL apply copies
+    entry ``is_checkpoint`` onto those nodes.
 
     Convergence semantics: a node with convergence targets is blocked until all
     referenced upstream nodes are read.
@@ -304,23 +306,23 @@ async def replace_compiled_rules(
         user_id: Authenticated plan owner.
         plan: The persisted (or to-be-persisted) plan owning the compiled rules.
         nodes: Canonical node set to compile from.
-        ordering_mode: Plan ordering mode; only ``strict_sequential`` creates
-            inferred thread-entry gates.
+        ordering_mode: Plan ordering mode; only ``strict_sequential`` retains
+            or accepts explicit ``item_read`` pairs. Natural series order is
+            ``Thread.next_unread_issue_id``, not inferred Dependencies.
         sync_canonical_edges: When True (default), retire this plan's stale
             compiled edges and compile the new rules into canonical
             Dependencies (#2553). An unchanged membership save restores
             the existing plan-owned ``item_read`` set, so Roll eligibility
             does not change.
-        extra_item_read_pairs: Explicit selected hard restrictions to compile
-            in addition to inferred thread-entry gates. Same-thread pairs are
-            ignored when newly supplied. Existing plan-owned same-thread pairs
-            are retained on an unchanged membership save. Live plan
-            create/update omit this; migrations pass classified genuine
-            prerequisites that are not series starts.
+        extra_item_read_pairs: Explicit selected hard restrictions to compile.
+            Same-thread pairs are ignored when newly supplied. Existing
+            plan-owned same-thread pairs are retained. Live plan create/update
+            omit this; migrations pass classified genuine prerequisites.
+            Ignored on an ordinary no-change strict save so extras cannot
+            invent restrictions.
         prior_ordering_mode: Ordering mode before this write. An ordinary
             no-change save retains existing item_read only when this was
-            already ``strict_sequential``. Create and mode changes omit it
-            so thread-entry inference still runs.
+            already ``strict_sequential``. Create and mode changes omit it.
 
     Returns:
         True when all rules compiled without cycle conflicts.
@@ -382,9 +384,8 @@ async def replace_compiled_rules(
         tuple[str, int, str, int, str, int | list[convergence_target] | None]
     ] = []
 
-    # 1. Strict-sequential item_read: retain existing in-plan pairs on an
-    # unchanged membership save; otherwise retain surviving pairs and union
-    # new thread-entry gates. Never synthesize new mid-run adjacencies.
+    # 1. Strict-sequential item_read: retain existing in-plan pairs whose
+    # both endpoints remain. Never infer thread-entry or adjacency.
     if ordering_mode == "strict_sequential":
         incoming_ids = payload_issue_ids(nodes)
         compiled_item_read: set[tuple[int, int]] = {
@@ -396,25 +397,23 @@ async def replace_compiled_rules(
             incoming_ids == prior_membership_ids
             and prior_ordering_mode == "strict_sequential"
         )
-        issue_index: dict[int, IssueThreadIndex] = {}
-        needs_index = not unchanged_strict_save or bool(extra_item_read_pairs)
-        if needs_index:
-            issue_index = await load_issue_thread_index(db, incoming_ids)
-        if not unchanged_strict_save:
-            compiled_item_read.update(strict_plan_item_read_pairs(nodes, issue_index))
-        for source_id, target_id in extra_item_read_pairs or ():
-            pair = (source_id, target_id)
-            if pair in compiled_item_read or source_id == target_id:
-                continue
-            if source_id not in incoming_ids or target_id not in incoming_ids:
-                continue
-            source_meta = issue_index.get(source_id)
-            target_meta = issue_index.get(target_id)
-            if source_meta is None or target_meta is None:
-                continue
-            if source_meta.thread_id == target_meta.thread_id:
-                continue
-            compiled_item_read.add(pair)
+        if extra_item_read_pairs and not unchanged_strict_save:
+            issue_index: dict[int, IssueThreadIndex] = await load_issue_thread_index(
+                db, incoming_ids
+            )
+            for source_id, target_id in extra_item_read_pairs:
+                pair = (source_id, target_id)
+                if pair in compiled_item_read or source_id == target_id:
+                    continue
+                if source_id not in incoming_ids or target_id not in incoming_ids:
+                    continue
+                source_meta = issue_index.get(source_id)
+                target_meta = issue_index.get(target_id)
+                if source_meta is None or target_meta is None:
+                    continue
+                if source_meta.thread_id == target_meta.thread_id:
+                    continue
+                compiled_item_read.add(pair)
         for source_id, target_id in compiled_item_read:
             edges_to_add.append((
                 "issue", source_id,
