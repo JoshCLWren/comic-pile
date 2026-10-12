@@ -806,6 +806,54 @@ def test_retired_lock_model_is_not_silently_re_pinned() -> None:
     assert "muse-spark-1.3-contributor-free" in added
 
 
+def test_exo_free_410_zombie_is_skipped_by_add_unused_free(tmp_path: Path) -> None:
+    """CLI-listed but 410-dead exo-free never enters add_unused_free selection.
+
+    OpenCode still lists exo-free while the provider returns HTTP 410. The
+    committed roster lock must keep it in retired_models so discovery and the
+    Sync PR cannot pin it even when the catalog reports cost==0.
+    """
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    assert "exo-free" in lock["retired_models"]
+
+    fixture_path = tmp_path / "exo-free-zombie.json"
+    fixture_path.write_text(
+        json.dumps(
+            {
+                "source": "recorded-opencode-cli",
+                "providers": {
+                    "opencode": [
+                        {"id": "big-pickle", "cost": {"input": 0, "output": 0}},
+                        {"id": "exo-free", "cost": {"input": 0, "output": 0}},
+                        {
+                            "id": "mimo-v2.6-flash-free",
+                            "cost": {"input": 0, "output": 0},
+                        },
+                    ],
+                    "nvidia": [],
+                    "openrouter": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    catalogs = CATALOG.load_catalog_fixture(fixture_path)
+    rows = [
+        _row("23", "opencode-free", "big-pickle", minute="0"),
+        _row("41", "opencode-free", "mimo-v2.6-flash-free", minute="10"),
+        _row("46", "kilo-auto", "kilo-auto/free", minute="40"),
+    ]
+
+    plan = RETIRE.plan_retirement(rows, catalogs, lock=lock)
+    added = {item.model for item in plan.additions}
+
+    assert "exo-free" in {item.model for item in plan.unused_free}
+    assert "exo-free" in plan.locked_unused
+    assert "exo-free" not in added
+    assert all(item.model != "kilo-auto/free" for item in plan.retirements)
+    assert "46" in {item.worker for item in plan.kept}
+
+
 def test_mixed_retire_and_add_rebalances_in_one_plan(tmp_path: Path) -> None:
     """One apply can drop a dead pin and convert unused free onto surplus."""
     catalogs = CATALOG.load_catalog_fixture(_fixture_without_step5(tmp_path))
