@@ -233,36 +233,43 @@ async def move_to_position(
             await db.commit()
         return {}
 
-    result = await db.execute(
-        text(
-            """
-            SELECT
-                count(*)::integer AS total,
-                count(*) FILTER (
-                    WHERE queue_position < :queue_position
-                       OR (queue_position = :queue_position AND id <= :tid)
-                )::integer AS seq
-            FROM threads
-            WHERE user_id = :uid
-              AND status = 'active'
-              AND queue_position >= 1
-            """
-        ),
-        {
-            "uid": user_id,
-            "tid": thread_id,
-            "queue_position": queue_position,
-        },
-    )
-    thread_count, old_seq = result.one()
-    logger.debug("Active thread count: %d", thread_count)
-
-    if new_position < 1:
-        raise ValueError(f"Position must be at least 1, got {new_position}")
-    if new_position > thread_count:
-        raise ValueError(
-            f"Position {new_position} is out of range. Maximum position is {thread_count}."
+    # For move_to_front (new_position=1), we can skip the stats query since:
+    # - Position 1 is always valid (thread_count >= 1 because thread is active)
+    # - old_seq is only used for logging
+    if new_position == 1:
+        thread_count = 0  # Not needed for validation
+        old_seq = 0  # Only used for logging
+    else:
+        result = await db.execute(
+            text(
+                """
+                SELECT
+                    count(*)::integer AS total,
+                    count(*) FILTER (
+                        WHERE queue_position < :queue_position
+                           OR (queue_position = :queue_position AND id <= :tid)
+                    )::integer AS seq
+                FROM threads
+                WHERE user_id = :uid
+                  AND status = 'active'
+                  AND queue_position >= 1
+                """
+            ),
+            {
+                "uid": user_id,
+                "tid": thread_id,
+                "queue_position": queue_position,
+            },
         )
+        thread_count, old_seq = result.one()
+        logger.debug("Active thread count: %d", thread_count)
+
+        if new_position < 1:
+            raise ValueError(f"Position must be at least 1, got {new_position}")
+        if new_position > thread_count:
+            raise ValueError(
+                f"Position {new_position} is out of range. Maximum position is {thread_count}."
+            )
 
     logger.debug(
         "Moving thread %d from sequential position %d to %d",
