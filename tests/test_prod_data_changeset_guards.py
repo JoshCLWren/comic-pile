@@ -113,6 +113,22 @@ def test_ff_rollback_restores_from_recorded_json_not_hardcoded_columns() -> None
             assert parsed == recorded["moved_issue_refs"]
 
 
+def test_held_sql_is_not_wired_into_deploy_or_migrations() -> None:
+    """Merging the compiler does not authorize or auto-run 001/002 SQL."""
+    workflow_blob = "\n".join(
+        path.read_text() for path in Path(".github/workflows").glob("*.yml")
+    )
+    alembic_blob = "\n".join(
+        path.read_text()
+        for path in Path("alembic").rglob("*.py")
+        if path.is_file()
+    )
+    assert "001_ff_series_thread_merge.sql" not in workflow_blob
+    assert "001_ff_series_thread_merge.sql" not in alembic_blob
+    assert "002_adopt_xmen_ff_informational_plans.sql" not in workflow_blob
+    assert "002_adopt_xmen_ff_informational_plans.sql" not in alembic_blob
+
+
 def test_forecast_sql_uses_roll_queue_position_predicate() -> None:
     """Harvy nit: forecast population matches Roll's queue_position >= 1."""
     forecast_sql = CHANGESET_DIR.joinpath("forecast_roll_eligibility.sql").read_text()

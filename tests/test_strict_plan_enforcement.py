@@ -27,6 +27,7 @@ from app.models.thread import Thread
 from app.schemas.continuity_plan import CBLPlacement, ContinuityPlanNode
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_plan_adoption import _merge_adopted_nodes
+from app.services.canonical_constraint_compiler import compile_rule_edges
 from app.services.continuity_plan_writer import plan_rule_marker, replace_compiled_rules
 from app.services.reading_plan_normalization import (
     drop_threads_from_plan_record,
@@ -534,6 +535,102 @@ async def test_absolute_universe_later_series_are_gated_without_same_thread_edge
     after_batman = await _roll_ids(user.id, async_db)
     assert superman.id in after_batman
     assert wonder_woman.id not in after_batman
+
+
+@pytest.mark.asyncio
+async def test_strict_plan_edit_save_compiles_only_thread_entry_and_recorded(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Re-saving a strict plan retires leftover adjacent gates and keeps recorded edges.
+
+    Production strict plans were compiled with main's all-adjacent item_read
+    loop. An edit/save after #3499 must replace that set with thread-entry
+    gates only, without inventing mid-run hops and without deleting a
+    standalone recorded prerequisite.
+    """
+    user = await get_or_create_user_async(async_db)
+    first, first_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Edit-save first",
+        numbers=["1", "2"],
+        queue_position=1,
+    )
+    second, second_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Edit-save second",
+        numbers=["1", "2"],
+        queue_position=2,
+    )
+    recorded_note = "Recorded crossover: first #1 before second #2"
+    async_db.add(
+        Dependency(
+            source_issue_id=first_issues[0].id,
+            target_issue_id=second_issues[1].id,
+            note=recorded_note,
+        )
+    )
+    await async_db.commit()
+
+    payload = _plan_payload("Edit-save strict", first_issues + second_issues)
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+    thread_entry = {(first_issues[1].id, second_issues[0].id)}
+    same_thread_adjacent = (first_issues[0].id, first_issues[1].id)
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == thread_entry
+
+    unchanged = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=payload)
+    assert unchanged.status_code == 200, unchanged.text
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == thread_entry
+
+    leftover_adjacent = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=first_issues[0].id,
+        target_type="issue",
+        target_id=first_issues[1].id,
+        satisfaction_type="item_read",
+        note=plan_rule_marker(plan_id),
+    )
+    async_db.add(leftover_adjacent)
+    await async_db.flush()
+    await compile_rule_edges(
+        async_db,
+        leftover_adjacent,
+        plan_id=plan_id,
+        promote_cbl_occupants=True,
+    )
+    await async_db.commit()
+    assert same_thread_adjacent in await _compiled_pairs(
+        async_db, user_id=user.id, plan_id=plan_id
+    )
+
+    saved = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=payload)
+    assert saved.status_code == 200, saved.text
+    compiled_after = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
+    assert compiled_after == thread_entry
+    assert same_thread_adjacent not in compiled_after
+    retired_adjacent = (
+        await async_db.execute(
+            select(Dependency).where(
+                Dependency.source_issue_id == first_issues[0].id,
+                Dependency.target_issue_id == first_issues[1].id,
+            )
+        )
+    ).scalar_one_or_none()
+    assert retired_adjacent is None
+    recorded = (
+        await async_db.execute(
+            select(Dependency).where(
+                Dependency.source_issue_id == first_issues[0].id,
+                Dependency.target_issue_id == second_issues[1].id,
+            )
+        )
+    ).scalar_one()
+    assert recorded.note == recorded_note
 
 
 @pytest.mark.asyncio
