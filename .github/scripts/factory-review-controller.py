@@ -22,6 +22,7 @@ classify_ci_reconciliation = _review_policy.classify_ci_reconciliation
 head_contributor_marker = _review_policy.head_contributor_marker
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
 head_contributor_provenance = _review_policy.head_contributor_provenance
+head_has_cross_model_review = _review_policy.head_has_cross_model_review
 parse_review_marker = _review_policy.parse_review_marker
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
@@ -1458,6 +1459,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
     contributors, provenance_complete = head_contributor_provenance(
         comments, pr=pr_number, head=head, producer=producer
     )
+    cross_model = head_has_cross_model_review(comments, pr=pr_number, head=head)
     authorized = (
         str(pr.get("state")) == "OPEN"
         and "factory:ready" in labels_of(pr)
@@ -1467,6 +1469,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
             approvers=approvers,
             provenance_complete=provenance_complete,
         )
+        and cross_model
     )
     if authorized:
         return {
@@ -1476,6 +1479,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
             "contributors": sorted(contributors),
             "provenance_complete": provenance_complete,
             "approvers": sorted(approvers),
+            "cross_model_review": True,
         }
 
     if str(pr.get("state")) == "OPEN" and "factory:ready" in labels_of(pr):
@@ -1500,6 +1504,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
         "contributors": sorted(contributors),
         "provenance_complete": provenance_complete,
         "approvers": sorted(approvers),
+        "cross_model_review": cross_model,
     }
 
 

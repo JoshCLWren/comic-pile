@@ -27,6 +27,19 @@ HEAD_CONTRIBUTOR_RE = re.compile(
     r"pr-(?P<pr>\d+):head-(?P<head>[0-9a-f]{40}):"
     r"worker-(?P<worker>\d+):epoch-(?P<epoch>\d+) -->$"
 )
+_MODEL_TOKEN = r"[A-Za-z0-9][A-Za-z0-9._+-]*"
+AGENT_MODEL_AUTHOR_RE = re.compile(
+    r"^<!-- comic-pile-agent-model-author-v1:"
+    rf"pr-(?P<pr>\d+):head-(?P<head>[0-9a-f]{{40}}):"
+    rf"model-(?P<model>{_MODEL_TOKEN}) -->$"
+)
+AGENT_MODEL_REVIEW_RE = re.compile(
+    r"^<!-- comic-pile-agent-model-review-v1:"
+    rf"pr-(?P<pr>\d+):head-(?P<head>[0-9a-f]{{40}}):"
+    rf"author-(?P<author>{_MODEL_TOKEN}):"
+    rf"reviewer-(?P<reviewer>{_MODEL_TOKEN}):"
+    r"verdict-(?P<verdict>approve) -->$"
+)
 
 
 def classify_ci_reconciliation(
@@ -351,3 +364,162 @@ def approval_can_promote(
         producer=producer,
         provenance_complete=provenance_complete,
     )
+
+
+def agent_model_author_marker(*, pr: int, head: str, model: str) -> str:
+    """Build one controller-trusted author-model marker.
+
+    Args:
+        pr: Pull request number.
+        head: Exact commit SHA being attributed.
+        model: Cursor cloud-agent model that authored the head.
+
+    Returns:
+        Entire-comment-body marker text.
+
+    """
+    return (
+        "<!-- comic-pile-agent-model-author-v1:"
+        f"pr-{pr}:head-{head}:model-{model} -->"
+    )
+
+
+def parse_agent_model_author_marker(line: str) -> dict[str, str] | None:
+    """Parse one exact author-model marker line.
+
+    Args:
+        line: Comment body or first line.
+
+    Returns:
+        Named groups when the line is a trusted author-model marker.
+
+    """
+    match = AGENT_MODEL_AUTHOR_RE.fullmatch(line.strip())
+    return match.groupdict() if match else None
+
+
+def agent_model_review_marker(
+    *,
+    pr: int,
+    head: str,
+    author_model: str,
+    reviewer_model: str,
+) -> str:
+    """Build one controller-trusted cross-model review marker.
+
+    Args:
+        pr: Pull request number.
+        head: Exact commit SHA that was reviewed.
+        author_model: Model that authored the head.
+        reviewer_model: Cursor cloud-agent model that reviewed the head.
+
+    Returns:
+        First-line marker text.
+
+    """
+    return (
+        "<!-- comic-pile-agent-model-review-v1:"
+        f"pr-{pr}:head-{head}:author-{author_model}:"
+        f"reviewer-{reviewer_model}:verdict-approve -->"
+    )
+
+
+def parse_agent_model_review_marker(line: str) -> dict[str, str] | None:
+    """Parse one exact cross-model review marker line.
+
+    Args:
+        line: Comment first line.
+
+    Returns:
+        Named groups when the line is a trusted approve review marker.
+
+    """
+    match = AGENT_MODEL_REVIEW_RE.fullmatch(line.strip())
+    return match.groupdict() if match else None
+
+
+def _normalize_model(value: str) -> str:
+    """Canonicalize a recorded model id for equality checks.
+
+    Args:
+        value: Raw model token from a marker.
+
+    Returns:
+        Lowercased model token.
+
+    """
+    return value.strip().lower()
+
+
+def current_head_author_model(
+    comments: Iterable[str],
+    *,
+    pr: int,
+    head: str,
+) -> str | None:
+    """Return the author model recorded against one exact PR head.
+
+    Only a comment whose whole body is one author-model marker is honored.
+
+    Args:
+        comments: Trusted comment bodies.
+        pr: Pull request number.
+        head: Exact commit SHA.
+
+    Returns:
+        Normalized author model, or ``None`` when none is recorded.
+
+    """
+    models: set[str] = set()
+    for body in comments:
+        stripped = str(body or "").strip()
+        if not stripped or "\n" in stripped:
+            continue
+        marker = parse_agent_model_author_marker(stripped)
+        if not marker or int(marker["pr"]) != pr or marker["head"] != head:
+            continue
+        models.add(_normalize_model(marker["model"]))
+    if len(models) != 1:
+        return None
+    return next(iter(models))
+
+
+def head_has_cross_model_review(
+    comments: Iterable[str],
+    *,
+    pr: int,
+    head: str,
+) -> bool:
+    """Return whether an exact head has a different-model Cursor review.
+
+    A review counts only when it is recorded against ``head``, names both the
+    author model and the reviewing model, and those models differ. A stale
+    review bound to another SHA does not authorize the current head. When an
+    author-model marker exists for the head, the review's author model must
+    match it.
+
+    Args:
+        comments: Trusted comment bodies.
+        pr: Pull request number.
+        head: Exact commit SHA being merged.
+
+    Returns:
+        True when a qualifying cross-model approve review exists.
+
+    """
+    recorded_author = current_head_author_model(comments, pr=pr, head=head)
+    for body in comments:
+        first_line = str(body or "").splitlines()[0] if body else ""
+        marker = parse_agent_model_review_marker(first_line)
+        if not marker:
+            continue
+        if int(marker["pr"]) != pr or marker["head"] != head:
+            continue
+        author = _normalize_model(marker["author"])
+        reviewer = _normalize_model(marker["reviewer"])
+        if not author or not reviewer or author == reviewer:
+            continue
+        if recorded_author is not None and author != recorded_author:
+            continue
+        return True
+    return False

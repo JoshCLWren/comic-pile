@@ -25,6 +25,9 @@ current_head_contributors = _review_policy.current_head_contributors
 head_contributor_marker = _review_policy.head_contributor_marker
 head_contributor_provenance = _review_policy.head_contributor_provenance
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
+head_has_cross_model_review = _review_policy.head_has_cross_model_review
+agent_model_author_marker = _review_policy.agent_model_author_marker
+agent_model_review_marker = _review_policy.agent_model_review_marker
 parse_head_contributor_marker = _review_policy.parse_head_contributor_marker
 recorded_pr_contributors = _review_policy.recorded_pr_contributors
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
@@ -1708,3 +1711,164 @@ def test_merge_drain_never_reads_native_review_state_for_merge() -> None:
     assert "author_association" not in content
     # Drain must not treat a native APPROVED event as merge authority.
     assert "pull_request_review" not in content
+
+
+def _cross_model_comments(
+    *,
+    pr: int = 1390,
+    head: str = REVIEWED_HEAD,
+    author_model: str = "grok-4.6",
+    reviewer_model: str = "claude-opus-5-5",
+    include_author: bool = True,
+) -> list[str]:
+    """Build trusted provenance for one exact-head cross-model review.
+
+    Args:
+        pr: Pull request number.
+        head: Commit SHA recorded on the markers.
+        author_model: Model that authored the head.
+        reviewer_model: Cursor cloud-agent model that reviewed the head.
+        include_author: Whether to include the whole-body author marker.
+
+    Returns:
+        Comment bodies the merge gate reads.
+
+    """
+    comments = [
+        contributor_comment(pr=pr, head=head, worker="43", epoch=1),
+        review_marker(
+            pr=pr,
+            head=head,
+            reviewer="17",
+            producer="43",
+            verdict="approve",
+        ),
+        agent_model_review_marker(
+            pr=pr,
+            head=head,
+            author_model=author_model,
+            reviewer_model=reviewer_model,
+        ),
+    ]
+    if include_author:
+        comments.append(
+            agent_model_author_marker(pr=pr, head=head, model=author_model)
+        )
+    return comments
+
+
+def test_same_model_review_is_rejected() -> None:
+    """A Cursor review from the author's own model cannot authorize merge."""
+    comments = _cross_model_comments(
+        author_model="grok-4.6",
+        reviewer_model="grok-4.6",
+    )
+    assert not head_has_cross_model_review(
+        comments, pr=1390, head=REVIEWED_HEAD
+    )
+
+
+def test_different_model_review_is_accepted() -> None:
+    """A different Cursor model on the exact head satisfies the merge gate."""
+    comments = _cross_model_comments(
+        author_model="grok-4.6",
+        reviewer_model="claude-opus-5-5",
+    )
+    assert head_has_cross_model_review(comments, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_stale_head_cross_model_review_is_rejected() -> None:
+    """A cross-model review bound to a previous SHA does not follow the head."""
+    comments = _cross_model_comments(head=REVIEWED_HEAD)
+    assert not head_has_cross_model_review(comments, pr=1390, head=MOVED_HEAD)
+    assert head_has_cross_model_review(comments, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_missing_cross_model_review_is_rejected() -> None:
+    """Factory worker approval alone is not the Cursor cross-model review."""
+    comments = producer_contribution()
+    comments.append(
+        review_marker(
+            pr=1390,
+            head=REVIEWED_HEAD,
+            reviewer="17",
+            producer="43",
+            verdict="approve",
+        )
+    )
+    assert not head_has_cross_model_review(
+        comments, pr=1390, head=REVIEWED_HEAD
+    )
+
+
+def test_authorize_ready_requires_cross_model_review(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The merge-drain authorization command refuses same-model or missing reviews."""
+    module = load_review_controller()
+    writes: list[tuple[object, ...]] = []
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": REVIEWED_HEAD,
+            "headRefName": "factory/43-1386-opencode-free",
+            "body": "Closes #1386.\nWorker: opencode-free-model-factory-43",
+            "labels": [
+                {"name": "factory"},
+                {"name": "factory:unowned"},
+                {"name": "factory:ready"},
+            ],
+        },
+    )
+    monkeypatch.setattr(module, "linked_issue_from_branch", lambda _branch: None)
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda *args: writes.append(args),
+    )
+
+    monkeypatch.setattr(
+        module,
+        "review_comment_bodies",
+        lambda _pr: _cross_model_comments(
+            author_model="grok-4.6",
+            reviewer_model="grok-4.6",
+        ),
+    )
+    same_model = module.authorize_ready(1390)
+    assert same_model["authorized"] is False
+    assert same_model["cross_model_review"] is False
+
+    writes.clear()
+    monkeypatch.setattr(
+        module,
+        "review_comment_bodies",
+        lambda _pr: _cross_model_comments(
+            author_model="grok-4.6",
+            reviewer_model="claude-opus-5-5",
+        ),
+    )
+    accepted = module.authorize_ready(1390)
+    assert accepted["authorized"] is True
+    assert accepted["cross_model_review"] is True
+    assert writes == []
+
+
+def test_required_checks_gate_denies_red_ci() -> None:
+    """Green CI is the other half of the merge gate; red required checks deny."""
+    module = load_review_controller()
+    denied = module.interpret_required_checks(
+        [{"state": "FAILURE"}],
+        command_status=1,
+        stderr="",
+    )
+    assert denied["decision"] == "deny"
+    assert "FAILURE" in str(denied["reason"])
+    passed = module.interpret_required_checks(
+        [{"state": "SUCCESS"}],
+        command_status=0,
+        stderr="",
+    )
+    assert passed["decision"] == "pass"

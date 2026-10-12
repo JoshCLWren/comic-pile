@@ -141,3 +141,28 @@ make migrate  # or: alembic upgrade head
 - Attach screenshots when UI is affected
 - Ensure all tests pass and coverage is maintained
 - Do not add or edit changelog Markdown as part of implementation delivery. User-facing release notes are published after merge by the dedicated release writer to the database-backed release ledger. Release-note publication or reconciliation delays do not block an otherwise-ready implementation PR.
+
+### Merge gate (agent-authored PRs)
+
+This is the only pre-merge process rule (#3561). Every agent-authored pull
+request — Cursor cloud agents and factory workers — may merge only when both
+are true for the **exact current head**:
+
+1. One thorough code review by a Cursor cloud agent running a **different
+   model** than the PR author. Same-model reviews do not count. A review
+   recorded against a previous SHA does not count after the head moves.
+2. CI is green on that head.
+
+There are no extra pre-merge QA, preview, smoke, or migration-rehearsal
+steps. Do not add a `factory:approved` label; controller provenance is the
+authority.
+
+Record models as trusted GitHub issue comments on the PR:
+
+- Author (entire comment body):
+  `<!-- comic-pile-agent-model-author-v1:pr-<n>:head-<sha>:model-<model> -->`
+- Reviewer (first line of the review comment):
+  `<!-- comic-pile-agent-model-review-v1:pr-<n>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:verdict-approve -->`
+
+The factory merge drain refuses the PR when those markers are missing, the
+models match, the review SHA is stale, or required CI is red.
