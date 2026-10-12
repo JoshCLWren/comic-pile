@@ -23,9 +23,11 @@ Commands:
         --output /tmp/natural-order-rollback.json
 
 Preflight is read-only: it rolls the transaction back. Apply and rollback
-are transactional and refuse to run without the confirmation token. This
-file is committed for review and must not be executed against production
-from the #3483 implementation change.
+are transactional and refuse to run without the confirmation token. Apply
+writes the durable rollback snapshot before the database commit so a
+snapshot-write failure cannot leave an irreversible reseat. This file is
+committed for review and must not be executed against production from the
+#3483 implementation change.
 """
 
 from __future__ import annotations
@@ -33,8 +35,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 from pathlib import Path
 import sys
+import tempfile
 
 from app.database import AsyncSessionLocal
 from app.services.thread_natural_order_repair import (
@@ -46,12 +50,36 @@ from app.services.thread_natural_order_repair import (
 )
 
 
-def _write_json(path: Path, payload: dict[str, object]) -> None:
+def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+    """Write JSON via temp file + fsync + replace so readers never see a partial file.
+
+    Args:
+        path: Destination path for the durable snapshot.
+        payload: JSON-serializable object.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+    data = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=str(path.parent),
     )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        # Best-effort directory fsync so the rename itself is durable.
+        dir_fd = os.open(str(path.parent), os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -131,13 +159,21 @@ async def _preflight(args: argparse.Namespace) -> int:
             thread_id=args.thread_id,
             limit=args.limit,
             commit=False,
+            apply_changes=False,
         )
-    _write_json(args.output, report.to_snapshot())
+    _write_json_atomic(args.output, report.to_snapshot())
     _print_summary(report)
     return 0
 
 
 async def _apply(args: argparse.Namespace) -> int:
+    """Apply reseats only after the rollback snapshot is durably written.
+
+    The service mutates inside the open transaction with ``commit=False``.
+    The snapshot is published atomically next; only then does the DB commit.
+    Any snapshot-write failure rolls the transaction back so production cannot
+    be left reseated without a rollback artifact.
+    """
     _require_confirmation(args.confirm)
     async with AsyncSessionLocal() as db:
         try:
@@ -146,13 +182,25 @@ async def _apply(args: argparse.Namespace) -> int:
                 user_id=args.user_id,
                 thread_id=args.thread_id,
                 limit=args.limit,
-                commit=True,
+                commit=False,
+                apply_changes=True,
             )
+            # Durable before-state (and after-state) must exist before commit.
+            committed_report = NaturalOrderRepairReport(
+                mode=report.mode,
+                scanned=report.scanned,
+                skipped_irregular=report.skipped_irregular,
+                skipped_already_natural=report.skipped_already_natural,
+                repaired=report.repaired,
+                committed=True,
+                repairs=report.repairs,
+            )
+            _write_json_atomic(args.output, committed_report.to_snapshot())
+            await db.commit()
         except Exception:
             await db.rollback()
             raise
-    _write_json(args.output, report.to_snapshot())
-    _print_summary(report)
+    _print_summary(committed_report)
     return 0
 
 
@@ -164,13 +212,24 @@ async def _rollback(args: argparse.Namespace) -> int:
             report = await rollback_thread_natural_issue_order(
                 db,
                 snapshot,
-                commit=True,
+                commit=False,
+                apply_changes=True,
             )
+            committed_report = NaturalOrderRepairReport(
+                mode=report.mode,
+                scanned=report.scanned,
+                skipped_irregular=report.skipped_irregular,
+                skipped_already_natural=report.skipped_already_natural,
+                repaired=report.repaired,
+                committed=True,
+                repairs=report.repairs,
+            )
+            _write_json_atomic(args.output, committed_report.to_snapshot())
+            await db.commit()
         except Exception:
             await db.rollback()
             raise
-    _write_json(args.output, report.to_snapshot())
-    _print_summary(report)
+    _print_summary(committed_report)
     return 0
 
 

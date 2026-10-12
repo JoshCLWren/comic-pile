@@ -89,6 +89,8 @@ async def create_issues(
     current_user_id: int,
     issue_range: str,
     insert_after_issue_id: int | None,
+    *,
+    append_to_end: bool = False,
 ) -> tuple[list[Issue], int]:
     """Create issues from a range and integrate them into the thread order.
 
@@ -97,7 +99,8 @@ async def create_issues(
     ``#2, #33, #34, #35`` instead of appending ``#2`` at the end.
 
     Placement stays append-only whenever automatic ordering would be ambiguous:
-    an explicit ``insert_after_issue_id`` anchor, or irregular numbering such as
+    an explicit ``insert_after_issue_id`` anchor, ``append_to_end`` (explicit
+    JSON ``null`` / UI "At the end"), or irregular numbering such as
     ``Annual 1``, ``0``, or fractions. Ordinary numeric series are seated in
     natural number order even when an earlier append left the thread messy.
 
@@ -107,6 +110,9 @@ async def create_issues(
         current_user_id: User owning the thread.
         issue_range: Range string to parse.
         insert_after_issue_id: Optional anchor for insertion.
+        append_to_end: When True, append after the last issue even if
+            ``insert_after_issue_id`` is ``None``. Distinguishes the wire
+            contract for explicit null from an omitted placement field.
 
     Returns:
         A tuple of (newly_created_issues, total_issue_count).
@@ -156,9 +162,9 @@ async def create_issues(
     new_issues_count = len(new_issue_numbers)
 
     new_issues: list[Issue] | None = None
-    if insert_after_issue_id is None:
+    if insert_after_issue_id is None and not append_to_end:
         new_issues = await create_issues_in_natural_order(
-            db, thread_id, new_issue_numbers
+            db, thread_id, new_issue_numbers, existing_rows=existing_rows
         )
 
     if new_issues is None:

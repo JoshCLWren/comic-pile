@@ -5,7 +5,7 @@ return ORM models, plain rows/tuples, or counts; callers (services) own
 transaction boundaries.
 """
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import case, delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -263,6 +263,30 @@ async def shift_positions_after(
         update(Issue)
         .where(Issue.thread_id == thread_id, Issue.position > after_position)
         .values(position=Issue.position + delta)
+    )
+
+
+async def set_positions(
+    db: AsyncSession, thread_id: int, positions_by_id: dict[int, int]
+) -> None:
+    """Assign absolute positions with one set-based ``UPDATE``.
+
+    Used when reseating many rows at once (natural-order inserts). Callers must
+    defer ``uq_issue_thread_position`` before invoking this when the new
+    positions would temporarily collide.
+
+    Args:
+        db: Database session.
+        thread_id: Thread that owns every issue in ``positions_by_id``.
+        positions_by_id: Mapping of issue primary key to the target position.
+    """
+    if not positions_by_id:
+        return
+
+    await db.execute(
+        update(Issue)
+        .where(Issue.thread_id == thread_id, Issue.id.in_(tuple(positions_by_id)))
+        .values(position=case(positions_by_id, value=Issue.id))
     )
 
 

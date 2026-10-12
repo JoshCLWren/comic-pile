@@ -11,8 +11,9 @@ Modeled on prod threads after the #3489 retest:
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import event as sa_event
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Issue, Thread
 from app.services.cbl_plan_adoption import _ensure_missing_issue_created
@@ -231,4 +232,58 @@ async def test_create_issue_in_natural_order_reseats_messy_ordinary_series(
     assert created.position == 1
     assert await _ordered_numbers(async_db, thread.id) == [
         str(number) for number in range(1, 25)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sequential_natural_order_inserts_use_set_based_reseats(
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Six early inserts on a large thread must not emit O(k·n) position UPDATEs."""
+    user = await get_or_create_user_async(async_db, "insert-set-based-large")
+    large_count = 500
+    thread = await _series_thread(
+        async_db,
+        user_id=user.id,
+        title="CBL: Large Series",
+        numbers=[str(number) for number in range(7, 7 + large_count)],
+        read_through=None,
+    )
+
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(" ".join(statement.split()).lower())
+
+    sa_event.listen(db_engine.sync_engine, "before_cursor_execute", record_statement)
+    try:
+        for number in ("1", "2", "3", "4", "5", "6"):
+            created = await create_issue_in_natural_order(async_db, thread.id, number)
+            assert created.issue_number == number
+    finally:
+        sa_event.remove(db_engine.sync_engine, "before_cursor_execute", record_statement)
+
+    position_updates = [
+        statement
+        for statement in statements
+        if statement.startswith("update issues") and "position" in statement
+    ]
+    # One set-based UPDATE per insert (plus no per-row UPDATE flood).
+    assert len(position_updates) == 6, (
+        f"expected 6 set-based position updates, got {len(position_updates)}: "
+        f"{position_updates[:8]}"
+    )
+    for statement in position_updates:
+        assert "position=case" in statement or "position = case" in statement, statement
+
+    assert await _ordered_numbers(async_db, thread.id) == [
+        str(number) for number in range(1, 7 + large_count)
     ]

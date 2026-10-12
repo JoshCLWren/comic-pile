@@ -872,6 +872,56 @@ async def test_create_issues_restores_natural_order_on_messy_thread(
     assert thread.next_unread_issue_id == issues_in_order[0].id
 
 
+async def test_create_issues_explicit_null_append_at_end_not_natural_order(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Explicit insert_after_issue_id:null means At the end, not natural order.
+
+    IssueCorrectionDialog sends null for its user-visible At the end choice.
+    Adding missing #1 to a #3/#4 thread must append after #4, not seat first.
+    """
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Explicit End Placement",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="not_started",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issues = [
+        Issue(thread_id=thread.id, issue_number="3", position=1, status="unread"),
+        Issue(thread_id=thread.id, issue_number="4", position=2, status="unread"),
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+    thread.next_unread_issue_id = issues[0].id
+    await async_db.commit()
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues",
+        json={"issue_range": "1", "insert_after_issue_id": None},
+    )
+    assert response.status_code == 201
+
+    data = response.json()
+    assert [issue["issue_number"] for issue in data["issues"]] == ["1"]
+    assert [issue["position"] for issue in data["issues"]] == [3]
+
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    issues_in_order = result.scalars().all()
+    assert [issue.issue_number for issue in issues_in_order] == ["3", "4", "1"]
+    assert [issue.position for issue in issues_in_order] == [1, 2, 3]
+
+
 async def test_create_issues_auto_maps_to_comicvine(
     auth_client: AsyncClient, async_db: AsyncSession, mocker
 ) -> None:

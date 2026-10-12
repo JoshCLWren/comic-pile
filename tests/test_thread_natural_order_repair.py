@@ -6,6 +6,8 @@ threads untouched, and must keep preflight read-only.
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import select
@@ -15,11 +17,17 @@ from app.models import Issue, Thread
 from app.services.thread_natural_order_repair import (
     CONFIRMATION_TOKEN,
     NaturalOrderRepairError,
+    SNAPSHOT_VERSION,
     parse_repair_snapshot,
     repair_thread_natural_issue_order,
     rollback_thread_natural_issue_order,
 )
-from scripts.repair_thread_natural_issue_order import build_parser, main
+from scripts.repair_thread_natural_issue_order import (
+    _write_json_atomic,
+    async_main,
+    build_parser,
+    main,
+)
 from tests.conftest import get_or_create_user_async
 
 
@@ -148,6 +156,7 @@ async def test_rollback_restores_snapshot_positions(async_db: AsyncSession) -> N
         async_db, user_id=user_id, thread_id=thread_id, commit=True
     )
     assert await _ordered_numbers(async_db, thread_id) != original
+    assert applied.to_snapshot()["version"] == SNAPSHOT_VERSION
 
     rolled = await rollback_thread_natural_issue_order(
         async_db, applied.to_snapshot(), commit=True
@@ -158,6 +167,45 @@ async def test_rollback_restores_snapshot_positions(async_db: AsyncSession) -> N
     assert persisted is not None
     assert await _ordered_numbers(async_db, thread_id) == original
     assert persisted.next_unread_issue_id == original_next
+
+
+@pytest.mark.asyncio
+async def test_rollback_restores_drifted_thread_tracking_state(
+    async_db: AsyncSession,
+) -> None:
+    """Rollback restores every Thread field apply mutates, including drifted counters."""
+    thread, issues = await _messy_ultimate_xmen(async_db, "repair-rollback-drift")
+    drifted_next = next(issue.id for issue in issues if issue.issue_number == "13")
+    thread.total_issues = 99
+    thread.issues_remaining = 88
+    thread.reading_progress = "completed"
+    thread.next_unread_issue_id = drifted_next
+    await async_db.commit()
+    thread_id = thread.id
+    user_id = thread.user_id
+    original_order = await _ordered_numbers(async_db, thread_id)
+
+    applied = await repair_thread_natural_issue_order(
+        async_db, user_id=user_id, thread_id=thread_id, commit=True
+    )
+    await async_db.refresh(thread)
+    assert thread.total_issues == 23
+    assert thread.issues_remaining == 17
+    assert thread.reading_progress == "in_progress"
+    assert applied.repairs[0].thread_state_before.total_issues == 99
+    assert applied.repairs[0].thread_state_before.issues_remaining == 88
+    assert applied.repairs[0].thread_state_before.reading_progress == "completed"
+
+    await rollback_thread_natural_issue_order(
+        async_db, applied.to_snapshot(), commit=True
+    )
+    persisted = await async_db.get(Thread, thread_id)
+    assert persisted is not None
+    assert await _ordered_numbers(async_db, thread_id) == original_order
+    assert persisted.total_issues == 99
+    assert persisted.issues_remaining == 88
+    assert persisted.reading_progress == "completed"
+    assert persisted.next_unread_issue_id == drifted_next
 
 
 @pytest.mark.asyncio
@@ -297,4 +345,156 @@ def test_cli_requires_subcommand_and_apply_confirmation() -> None:
 def test_rollback_snapshot_rejects_bad_version() -> None:
     """Rollback fails closed on an unsupported snapshot."""
     with pytest.raises(NaturalOrderRepairError, match="unsupported"):
-        parse_repair_snapshot({"version": 2, "repairs": []})
+        parse_repair_snapshot({"version": 1, "repairs": []})
+
+
+@pytest.mark.asyncio
+async def test_apply_cli_writes_snapshot_before_commit(tmp_path: Path) -> None:
+    """Apply publishes the rollback snapshot before commit; write failure rolls back."""
+    call_order: list[str] = []
+    output = tmp_path / "natural-order-apply.json"
+
+    class _FakeReport:
+        mode = "apply"
+        scanned = 1
+        skipped_irregular = 0
+        skipped_already_natural = 0
+        repaired = 1
+        committed = False
+        repairs: tuple[object, ...] = ()
+
+        def to_snapshot(self) -> dict[str, object]:
+            return {"version": SNAPSHOT_VERSION, "repairs": []}
+
+    class _FakeSession:
+        async def commit(self) -> None:
+            call_order.append("commit")
+
+        async def rollback(self) -> None:
+            call_order.append("rollback")
+
+        async def __aenter__(self) -> _FakeSession:
+            return self
+
+        async def __aexit__(self, *_exc: object) -> bool:
+            return False
+
+    async def _fake_repair(*_args: object, **kwargs: object) -> _FakeReport:
+        call_order.append("repair")
+        assert kwargs.get("apply_changes") is True
+        assert kwargs.get("commit") is False
+        return _FakeReport()
+
+    def _failing_write(path: Path, payload: dict[str, object]) -> None:
+        call_order.append("write")
+        assert path == output
+        assert payload.get("committed") is True
+        raise OSError("disk full")
+
+    with (
+        patch(
+            "scripts.repair_thread_natural_issue_order.AsyncSessionLocal",
+            return_value=_FakeSession(),
+        ),
+        patch(
+            "scripts.repair_thread_natural_issue_order.repair_thread_natural_issue_order",
+            side_effect=_fake_repair,
+        ),
+        patch(
+            "scripts.repair_thread_natural_issue_order._write_json_atomic",
+            side_effect=_failing_write,
+        ),
+    ):
+        with pytest.raises(OSError, match="disk full"):
+            await async_main(
+                [
+                    "apply",
+                    "--confirm",
+                    CONFIRMATION_TOKEN,
+                    "--output",
+                    str(output),
+                ]
+            )
+
+    assert call_order == ["repair", "write", "rollback"]
+    assert not output.exists()
+
+
+@pytest.mark.asyncio
+async def test_apply_cli_commits_only_after_snapshot_write(tmp_path: Path) -> None:
+    """Successful apply writes the durable snapshot, then commits."""
+    call_order: list[str] = []
+    output = tmp_path / "natural-order-apply.json"
+
+    class _FakeReport:
+        mode = "apply"
+        scanned = 1
+        skipped_irregular = 0
+        skipped_already_natural = 0
+        repaired = 1
+        committed = False
+        repairs: tuple[object, ...] = ()
+
+        def to_snapshot(self) -> dict[str, object]:
+            return {"version": SNAPSHOT_VERSION, "repairs": []}
+
+    class _FakeSession:
+        async def commit(self) -> None:
+            call_order.append("commit")
+
+        async def rollback(self) -> None:
+            call_order.append("rollback")
+
+        async def __aenter__(self) -> _FakeSession:
+            return self
+
+        async def __aexit__(self, *_exc: object) -> bool:
+            return False
+
+    async def _fake_repair(*_args: object, **kwargs: object) -> _FakeReport:
+        call_order.append("repair")
+        assert kwargs.get("apply_changes") is True
+        assert kwargs.get("commit") is False
+        return _FakeReport()
+
+    def _ok_write(path: Path, payload: dict[str, object]) -> None:
+        call_order.append("write")
+        path.write_text('{"version": 2, "repairs": []}\n', encoding="utf-8")
+
+    with (
+        patch(
+            "scripts.repair_thread_natural_issue_order.AsyncSessionLocal",
+            return_value=_FakeSession(),
+        ),
+        patch(
+            "scripts.repair_thread_natural_issue_order.repair_thread_natural_issue_order",
+            side_effect=_fake_repair,
+        ),
+        patch(
+            "scripts.repair_thread_natural_issue_order._write_json_atomic",
+            side_effect=_ok_write,
+        ),
+    ):
+        assert (
+            await async_main(
+                [
+                    "apply",
+                    "--confirm",
+                    CONFIRMATION_TOKEN,
+                    "--output",
+                    str(output),
+                ]
+            )
+            == 0
+        )
+
+    assert call_order == ["repair", "write", "commit"]
+    assert output.exists()
+
+
+def test_write_json_atomic_replaces_destination(tmp_path: Path) -> None:
+    """Atomic snapshot publish leaves a complete JSON object at the destination."""
+    path = tmp_path / "snapshot.json"
+    _write_json_atomic(path, {"version": SNAPSHOT_VERSION, "ok": True})
+    assert path.read_text(encoding="utf-8").startswith("{\n")
+    assert '"ok": true' in path.read_text(encoding="utf-8")
