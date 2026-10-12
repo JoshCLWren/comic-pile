@@ -861,7 +861,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
     Dispatch failures release any lease created by the dispatcher and
     do not strand ownership.
     """
-    if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-7][0-9])', worker):
+    if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-9][0-9])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
