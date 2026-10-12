@@ -203,6 +203,8 @@ async def test_background_refresh_scheduler_is_bounded_and_deduped(
     _pending_metadata_refreshes.clear()
     try:
         assert schedule_issue_metadata_refresh(77) is True
+        # Allow the event loop to start the task
+        await asyncio.sleep(0)
         assert schedule_issue_metadata_refresh(77) is False
         assert calls == [77]
     finally:
