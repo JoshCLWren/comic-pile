@@ -35,7 +35,10 @@ from app.repositories.creator_detail import (
     load_recent_creator_issue_rows,
     load_upcoming_creator_issue_rows,
 )
-from app.repositories.creator_summary import CreatorSummaryInputs, load_creator_summary_inputs, load_creator_summary_inputs_optimized, resolve_creator_issues
+from app.repositories.creator_summary import (
+    CreatorSummaryInputs,
+    load_creator_summary_inputs,
+)
 from app.schemas.creator_detail import (
     CreatorDetailResponse,
     CreatorIssueRow,
@@ -56,6 +59,40 @@ from app.services.creator_series import (
     select_series_group,
 )
 from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
+
+
+def resolve_creator_issues(
+    inputs: CreatorSummaryInputs,
+    *,
+    creator_id: int,
+) -> tuple[frozenset[int], set[str], str]:
+    """Resolve one creator's attributed issues, roles, and display name.
+
+    Args:
+        inputs: User-scoped creator summary inputs.
+        creator_id: Stable external provider person id for the creator.
+
+    Returns:
+        Tuple of attributed issue ids, the creator's distinct roles, and the
+        provider display name.
+
+    Raises:
+        KeyError: When the creator is not present in the user's own library.
+    """
+    issue_ids: set[int] = set()
+    roles: set[str] = set()
+    display_name: str | None = None
+    for issue_id, credits in inputs.issue_creator_credits.items():
+        for credit in credits:
+            if credit.external_id != creator_id:
+                continue
+            issue_ids.add(issue_id)
+            roles.update(credit.roles)
+            if display_name is None:
+                display_name = credit.display_name
+    if display_name is None:
+        raise KeyError(f"Creator {creator_id} not found in user's library")
+    return frozenset(issue_ids), roles, display_name
 
 
 def _build_issue_row(
@@ -129,9 +166,10 @@ async def get_creator_detail(
         raise ValueError("Invalid creator key format")
     page_offset = offset if offset is not None else 0
 
-    # Load summary inputs and resolve creator issues in one call
-    inputs, creator_id_set, creator_roles_all, display_name = await load_creator_summary_inputs_optimized(
-        db, user_id, creator_id=creator_id
+    inputs = await load_creator_summary_inputs(db, user_id)
+
+    creator_id_set, creator_roles_all, display_name = resolve_creator_issues(
+        inputs, creator_id=creator_id
     )
 
     # 1. Headline summary scoped to this creator, mirroring #2028 exactly:
@@ -219,35 +257,32 @@ async def get_creator_detail(
 
     # 3. Role-specific statistics. Every distinct role is preserved honestly,
     #    including pure cover/editorial and unknown roles.
-    # Optimized to reduce iterations over the data
-    role_stats: list[CreatorRoleStat] = []
-    
-    # Pre-compute role mappings to avoid repeated iterations
-    role_to_issue_ids: dict[str, list[int]] = {}
-    issue_to_ratings: dict[int, float] = inputs.effective_ratings
-    
+    #
+    #    One pass over the creator's attributed issues builds the role -> issue
+    #    map instead of rescanning every credit for every role. One issue
+    #    contributes at most once per role even when the provider credited the
+    #    same person twice with overlapping role sets (issue #3247).
+    role_issue_ids_by_role: dict[str, set[int]] = {}
     for issue_id in creator_id_set:
-        credits = inputs.issue_creator_credits.get(issue_id, [])
-        for credit in credits:
-            if credit.external_id == creator_id:
-                for role in credit.roles:
-                    if role not in role_to_issue_ids:
-                        role_to_issue_ids[role] = []
-                    role_to_issue_ids[role].append(issue_id)
-    
-    # Build role statistics in a single pass
+        for credit in inputs.issue_creator_credits.get(issue_id, ()):
+            if credit.external_id != creator_id:
+                continue
+            for role in credit.roles:
+                role_issue_ids_by_role.setdefault(role, set()).add(issue_id)
+
+    role_stats: list[CreatorRoleStat] = []
     for role in sorted(creator_roles_all):
-        role_issue_ids = role_to_issue_ids.get(role, [])
-        role_rated_issue_ids = [
-            issue_id for issue_id in role_issue_ids if issue_id in issue_to_ratings
+        role_issue_ids = role_issue_ids_by_role.get(role, set())
+        role_ratings = [
+            inputs.effective_ratings[issue_id]
+            for issue_id in role_issue_ids
+            if issue_id in inputs.effective_ratings
         ]
-        role_ratings = [issue_to_ratings[issue_id] for issue_id in role_rated_issue_ids]
-        
         role_stats.append(
             CreatorRoleStat(
                 role=role,
                 issue_count=len(role_issue_ids),
-                rated_issue_count=len(role_rated_issue_ids),
+                rated_issue_count=len(role_ratings),
                 average_rating=(
                     round(sum(role_ratings) / len(role_ratings), 2) if role_ratings else None
                 ),
@@ -461,4 +496,5 @@ async def get_creator_series_issues(
 __all__ = [
     "get_creator_detail",
     "get_creator_series_issues",
+    "resolve_creator_issues",
 ]

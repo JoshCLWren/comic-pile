@@ -7,9 +7,12 @@ effective ``rate`` event wins, one issue contributes at most once to headline
 totals, and pure cover/editorial/unknown roles are preserved in role stats
 without distorting the headline average. This module covers bounded collections,
 deterministic ordering (recent-first and queue order), pagination, explicit
-partial coverage, ownership isolation, and non-leaking not-found behavior.
+partial coverage, ownership isolation, and non-leaking not-found behavior, plus
+the issue #3247 read-shape regressions that keep a warm detail read off a second
+rating round trip and keep one issue counted once per role.
 """
 
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -818,94 +821,163 @@ async def test_rated_collection_matches_headline_when_roles_are_mixed(
 
 
 @pytest.mark.asyncio
-async def test_creator_detail_performance(
+async def test_detail_takes_rating_timestamps_from_the_single_rating_read(
     auth_client: AsyncClient,
     async_db: AsyncSession,
+    db_engine: AsyncEngine,
     default_user: User,
 ) -> None:
-    """Performance test for creator detail API with realistic data volume.
-    
-    This test measures the performance of the creator detail API with a realistic
-    volume of data to ensure optimizations meet the <500ms target for warm reads.
-    """
-    import time
+    """One events read supplies both the effective rating and its timestamp.
 
-    # Create a larger dataset to simulate production conditions
-    thread, issues = await _make_thread(
-        async_db, default_user, title="Performance Test", issue_count=50, queue_position=1, read_through=40
+    The detail route used to issue a second ``events`` round trip purely to
+    recover the winning ``rate`` event timestamp for the rows on the page. The
+    timestamp now rides along on the same ``DISTINCT ON`` row as the rating, so
+    a rating can never be paired with another event's timestamp and the extra
+    round trip cannot creep back (issue #3247).
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="One Read", issue_count=4, queue_position=1, read_through=4
     )
-    
-    # Add creator credits to all issues
-    for issue in issues:
+    for offset, issue in enumerate(issues):
         await _confirm_identity(
             async_db, issue, creators=[{"id": 42, "name": "Test Creator", "role": "writer"}]
         )
-    
-    # Add ratings to 30 issues to create a realistic workload
-    for i, issue in enumerate(issues[:30]):
-        rating = 3.0 + (i % 5) * 0.5  # Create varied ratings
-        timestamp = D1.replace(day=i + 1)  # Spread timestamps over time
-        await _rate(async_db, issue, rating=rating, timestamp=timestamp)
-    
-    # Measure response time
-    start_time = time.time()
-    response = await auth_client.get("/api/v1/creators/creator:42")
-    end_time = time.time()
-    
-    response_time_ms = (end_time - start_time) * 1000
-    
-    # Assert performance target is met
+        # A rerated issue proves the rating and its timestamp come from one row.
+        await _rate(async_db, issue, rating=1.0, timestamp=D1)
+        await _rate(async_db, issue, rating=4.0, timestamp=D3.replace(day=offset + 1))
+    await async_db.flush()
+
+    with _captured_selects(db_engine) as statements:
+        response = await auth_client.get("/api/v1/creators/creator:42")
+
     assert response.status_code == 200
-    assert response_time_ms < 500, f"Response time {response_time_ms:.2f}ms exceeds 500ms target"
-    
-    # Verify response data is correct
+    lowered = [statement.lower() for statement in statements]
+    rate_reads = [statement for statement in lowered if "events.rating" in statement]
+    assert len(rate_reads) == 1, statements
+    rate_read = " ".join(rate_reads[0].split())
+    assert "distinct on" in rate_read, rate_reads[0]
+    assert "events.timestamp" in rate_read, rate_reads[0]
+    # The removed round trip read the timestamp without the rating; it must not
+    # return, or the extra round trip this issue removes comes straight back.
+    assert [statement for statement in lowered if "events.timestamp" in statement] == rate_reads
+
+    # The surviving semantics are unchanged: latest event wins for both fields.
     body = response.json()
-    assert body["summary"]["ratings_count"] == 30
-    assert len(body["rated_issues"]) <= 50  # Should be paginated
-    assert len(body["read_unrated_issues"]) <= 50
-    assert len(body["upcoming_issues"]) <= 50
+    assert body["summary"]["ratings_count"] == 4
+    by_issue = {row["issue_id"]: row for row in body["rated_issues"]}
+    for offset, issue in enumerate(issues):
+        row = by_issue[issue.id]
+        assert row["effective_rating"] == pytest.approx(4.0)
+        assert str(row["rating_timestamp"]).startswith(f"2026-03-{offset + 1:02d}")
 
 
-@pytest.mark.asyncio 
-async def test_creator_detail_performance_with_multiple_creators(
+@pytest.mark.asyncio
+async def test_role_stats_count_one_issue_once_per_role_when_role_sets_overlap(
     auth_client: AsyncClient,
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
-    """Performance test with multiple creators to test query optimization."""
-    import time
-    
-    # Create multiple threads with different creators
-    threads_and_issues = []
-    for thread_num in range(5):
-        thread, issues = await _make_thread(
-            async_db, default_user, 
-            title=f"Thread {thread_num}", 
-            issue_count=20, 
-            queue_position=thread_num + 1,
-            read_through=15
+    """Overlapping provider role sets on one issue never double-count the issue.
+
+    Provider payloads credit the same person more than once, so one issue can
+    carry several distinct role sets that share a role. Every role must still
+    count that issue exactly once (issue #3247).
+    """
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Overlap", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db,
+        issues[0],
+        creators=[
+            {"id": 77, "name": "Overlap Olive", "role": "writer"},
+            {"id": 77, "name": "Overlap Olive", "role": "writer, artist"},
+        ],
+    )
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/creator:77")
+
+    assert response.status_code == 200
+    by_role = {stat["role"]: stat for stat in response.json()["role_stats"]}
+    assert set(by_role) == {"artist", "writer"}
+    for role in ("artist", "writer"):
+        assert by_role[role]["issue_count"] == 1, by_role[role]
+        assert by_role[role]["rated_issue_count"] == 1, by_role[role]
+        assert by_role[role]["average_rating"] == pytest.approx(5.0)
+
+
+@pytest.mark.asyncio
+async def test_detail_work_stays_bounded_as_the_library_grows(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """Warm detail reads keep flat SQL work and payload as the library grows.
+
+    Latency is the product symptom, but wall-clock thresholds are not a valid
+    CI gate: this pins the durable causes instead. One ``MEASUREMENT`` line is
+    printed so the request-time baseline stays visible without failing a shared
+    runner.
+    """
+    wide_creators = 3
+    issues_per_creator = 20
+    for creator_index in range(wide_creators):
+        _thread, issues = await _make_thread(
+            async_db,
+            default_user,
+            title=f"Wide {creator_index}",
+            issue_count=issues_per_creator,
+            queue_position=creator_index + 1,
+            read_through=issues_per_creator,
         )
-        threads_and_issues.append((thread, issues))
-        
-        # Add creator credits
         for issue in issues:
             await _confirm_identity(
-                async_db, issue, creators=[{"id": 100 + thread_num, "name": f"Creator {thread_num}", "role": "writer"}]
+                async_db,
+                issue,
+                creators=[
+                    {
+                        "id": 500 + creator_index,
+                        "name": f"Wide {creator_index}",
+                        "role": "writer",
+                    }
+                ],
             )
-        
-        # Add ratings to some issues
-        for i, issue in enumerate(issues[:10]):
-            rating = 4.0 + (i % 3) * 0.5
-            timestamp = D1.replace(day=(thread_num * 10 + i) % 28 + 1)
-            await _rate(async_db, issue, rating=rating, timestamp=timestamp)
-    
-    # Test performance for each creator
-    for thread_num in range(3):  # Test first 3 creators
-        creator_id = 100 + thread_num
-        start_time = time.time()
-        response = await auth_client.get(f"/api/v1/creators/creator:{creator_id}")
-        end_time = time.time()
-        
-        response_time_ms = (end_time - start_time) * 1000
-        assert response.status_code == 200
-        assert response_time_ms < 500, f"Creator {creator_id} response time {response_time_ms:.2f}ms exceeds target"
+            await _rate(async_db, issue, rating=4.0, timestamp=D1)
+    _narrow_thread, narrow_issues = await _make_thread(
+        async_db, default_user, title="Narrow", issue_count=2, queue_position=99, read_through=2
+    )
+    for issue in narrow_issues:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 900, "name": "Narrow Nate", "role": "writer"}]
+        )
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+    await async_db.flush()
+
+    # Warm the route so neither measurement pays first-request import cost.
+    await auth_client.get("/api/v1/creators/creator:900")
+
+    started = time.perf_counter()
+    with _captured_selects(db_engine) as narrow_selects:
+        narrow = await auth_client.get("/api/v1/creators/creator:900")
+    narrow_ms = (time.perf_counter() - started) * 1000
+
+    started = time.perf_counter()
+    with _captured_selects(db_engine) as wide_selects:
+        wide = await auth_client.get("/api/v1/creators/creator:500")
+    wide_ms = (time.perf_counter() - started) * 1000
+
+    assert narrow.status_code == 200
+    assert wide.status_code == 200
+    assert len(narrow_selects) == len(wide_selects), (narrow_selects, wide_selects)
+    assert len(wide_selects) <= 12, wide_selects
+    assert len(wide.json()["rated_issues"]) == issues_per_creator
+
+    print(
+        f"MEASUREMENT issue=3247 kind=creator-detail "
+        f"library_issues={wide_creators * issues_per_creator + len(narrow_issues)} "
+        f"detail_selects={len(wide_selects)} "
+        f"narrow_ms={narrow_ms:.1f} wide_ms={wide_ms:.1f} "
+        f"payload_bytes={len(wide.content)}"
+    )
