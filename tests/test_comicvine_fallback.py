@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import cast
 from unittest.mock import AsyncMock
@@ -176,10 +177,48 @@ async def test_refresh_skips_without_api_key(monkeypatch: pytest.MonkeyPatch) ->
     assert result is False
 
 
-def test_no_detached_task_scheduling_remains() -> None:
-    """The fallback no longer exposes the unbounded background-task scheduler."""
-    assert not hasattr(comicvine_fallback, "schedule_issue_metadata_hydration")
-    assert not hasattr(comicvine_fallback, "_pending_hydrations")
+@pytest.mark.asyncio
+async def test_background_refresh_scheduler_is_bounded_and_deduped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The request-path scheduler never blocks and never fans out.
+
+    Interactive reads (issue #3248) schedule at most one in-flight refresh per
+    identity instead of awaiting provider I/O. A second schedule while the
+    first is pending is declined so parallel reads cannot stack provider work.
+    """
+    from app.services.comicvine_fallback import (
+        _pending_metadata_refreshes,
+        schedule_issue_metadata_refresh,
+    )
+
+    calls: list[int] = []
+
+    async def _never_finishes(identity_id: int) -> bool:
+        calls.append(identity_id)
+        await asyncio.sleep(3600)
+        return False
+
+    monkeypatch.setattr(comicvine_fallback, "refresh_issue_metadata", _never_finishes)
+    _pending_metadata_refreshes.clear()
+    try:
+        assert schedule_issue_metadata_refresh(77) is True
+        assert schedule_issue_metadata_refresh(77) is False
+        assert calls == [77]
+    finally:
+        pending = list(_pending_metadata_refreshes.values())
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        _pending_metadata_refreshes.clear()
+
+
+def test_background_refresh_scheduler_never_raises_without_a_loop() -> None:
+    """Scheduling outside a running loop is declined, never raised."""
+    from app.services.comicvine_fallback import schedule_issue_metadata_refresh
+
+    assert schedule_issue_metadata_refresh(78) is False
 
 
 @pytest.mark.asyncio
@@ -188,18 +227,18 @@ async def test_no_confirmed_mapping_never_schedules_provider_lookup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Issue intelligence never guesses a ComicVine identity from title, thread, or issue number."""
-    hydrated: list[int] = []
+    scheduled: list[int] = []
 
-    async def fake_refresh(identity_id: int) -> bool:
-        hydrated.append(identity_id)
-        return False
+    def fake_schedule(identity_id: int) -> bool:
+        scheduled.append(identity_id)
+        return True
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", fake_refresh)
+    monkeypatch.setattr(comicvine_intelligence, "schedule_issue_metadata_refresh", fake_schedule)
 
     result = await get_issue_intelligence(async_db, issue_id=987_654_321, user_id=1)
 
     assert result is None
-    assert hydrated == []
+    assert scheduled == []
 
 
 async def _mapped_issue(
@@ -246,30 +285,37 @@ async def _mapped_issue(
 
 
 @pytest.mark.asyncio
-async def test_missing_metadata_hydrates_inline_but_returns_current_db_result(
+async def test_missing_metadata_schedules_refresh_without_blocking(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A missing metadata row remains usable while its confirmed identity hydrates inline."""
+    """A missing metadata row is served from the database while refresh runs behind the read."""
     user, issue, identity = await _mapped_issue(
         async_db,
         metadata={"issue_number": "1"},
         username="comicvine_fallback_missing",
     )
-    hydrated: list[int] = []
+    scheduled: list[int] = []
+    awaited: list[int] = []
+
+    def fake_schedule(identity_id: int) -> bool:
+        scheduled.append(identity_id)
+        return True
 
     async def fake_refresh(identity_id: int) -> bool:
-        hydrated.append(identity_id)
+        awaited.append(identity_id)
         return False
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", fake_refresh)
+    monkeypatch.setattr(comicvine_intelligence, "schedule_issue_metadata_refresh", fake_schedule)
+    monkeypatch.setattr(comicvine_fallback, "refresh_issue_metadata", fake_refresh)
 
     result = await get_issue_intelligence(async_db, issue.id, user.id)
 
     assert result is not None
     assert result.comicvine_issue_id == "123"
     assert result.issue_number == "1"
-    assert hydrated == [identity.id]
+    assert scheduled == [identity.id]
+    assert awaited == []
 
 
 @pytest.mark.asyncio
@@ -288,54 +334,61 @@ async def test_complete_metadata_causes_no_provider_hydration(
         },
         username="comicvine_fallback_complete",
     )
-    hydrated: list[int] = []
+    scheduled: list[int] = []
 
-    async def fake_refresh(identity_id: int) -> bool:
-        hydrated.append(identity_id)
-        return False
+    def fake_schedule(identity_id: int) -> bool:
+        scheduled.append(identity_id)
+        return True
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", fake_refresh)
+    monkeypatch.setattr(comicvine_intelligence, "schedule_issue_metadata_refresh", fake_schedule)
 
     result = await get_issue_intelligence(async_db, issue.id, user.id)
 
     assert result is not None
     assert result.series_name == "Series"
     assert result.name == "Issue title"
-    assert hydrated == []
+    assert scheduled == []
 
 
 @pytest.mark.asyncio
-async def test_inline_hydration_serves_fresh_provider_metadata(
+async def test_scheduled_refresh_serves_fresh_provider_metadata_on_next_read(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A previously shallow identity serves the real provider image URL after inline hydration."""
+    """A background refresh persists metadata that the next read serves from the database."""
     user, issue, identity = await _mapped_issue(
         async_db,
         metadata={"issue_number": "1"},
-        username="comicvine_fallback_inline_refresh",
+        username="comicvine_fallback_background_refresh",
     )
 
-    async def fake_refresh(identity_id: int) -> bool:
-        row = await async_db.get(ExternalIdentity, identity_id)
-        assert row is not None
-        row.metadata_json = {
-            "issue_number": "1",
-            "name": "Martian Manhunter Annual",
-            "primary_image": "https://static.comicvine.example/cover.jpg",
-            "volume": {"id": 456, "name": "Series"},
-            "raw_provider_payload": _deep_raw_payload(),
-        }
-        await async_db.flush()
+    def fake_schedule(identity_id: int) -> bool:
+        assert identity_id == identity.id
         return True
 
-    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", fake_refresh)
+    monkeypatch.setattr(comicvine_intelligence, "schedule_issue_metadata_refresh", fake_schedule)
 
-    result = await get_issue_intelligence(async_db, issue.id, user.id)
+    first = await get_issue_intelligence(async_db, issue.id, user.id)
 
-    assert result is not None
-    assert result.name == "Martian Manhunter Annual"
-    assert result.image_url == "https://static.comicvine.example/cover.jpg"
+    assert first is not None
+    assert first.name is None
+
+    row = await async_db.get(ExternalIdentity, identity.id)
+    assert row is not None
+    row.metadata_json = {
+        "issue_number": "1",
+        "name": "Martian Manhunter Annual",
+        "primary_image": "https://static.comicvine.example/cover.jpg",
+        "volume": {"id": 456, "name": "Series"},
+        "raw_provider_payload": _deep_raw_payload(),
+    }
+    await async_db.flush()
+
+    second = await get_issue_intelligence(async_db, issue.id, user.id)
+
+    assert second is not None
+    assert second.name == "Martian Manhunter Annual"
+    assert second.image_url == "https://static.comicvine.example/cover.jpg"
 
 
 @pytest.mark.asyncio

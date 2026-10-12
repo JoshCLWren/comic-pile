@@ -893,12 +893,15 @@ async def test_reader_context_no_synchronous_provider_dependency(
         series_name="Thanos",
     )
 
+    def _unexpected_schedule(*_args: object, **_kwargs: object) -> bool:
+        raise AssertionError("ComicVine provider work was scheduled synchronously")
+
     async def _unexpected_call(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("ComicVine provider was hydrated synchronously")
 
     monkeypatch.setattr(
-        "app.services.comicvine_intelligence.refresh_issue_metadata",
-        _unexpected_call,
+        "app.services.comicvine_intelligence.schedule_issue_metadata_refresh",
+        _unexpected_schedule,
     )
     monkeypatch.setattr(
         "app.services.comicvine_fallback.refresh_issue_metadata",
