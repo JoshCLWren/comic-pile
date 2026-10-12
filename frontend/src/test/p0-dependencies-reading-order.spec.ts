@@ -51,6 +51,7 @@ async function createDependency(
     data: {
       source_type: 'issue',
       source_id: sourceIssue.id,
+      target_type: 'issue',
       target_id: targetIssue.id,
     },
     headers: {
@@ -186,6 +187,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
       data: {
         source_type: 'issue',
         source_id: issuesA[0].id,
+        target_type: 'issue',
         target_id: issuesB[0].id,
       },
       headers: {

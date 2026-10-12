@@ -60,10 +60,13 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
-    const snoozedToggle = page.getByRole('button', { name: /snoozed/i })
+    const snoozedToggle = page.getByRole('button', { name: /snoozed/i }).first()
     await expect(snoozedToggle).toBeVisible({ timeout: 10000 })
 
+    // The snoozed list is a collapsed section under the active pool. Expand
+    // it, then unsnooze from there to restore the thread to the pool.
     await snoozedToggle.click()
+    await page.getByRole('button', { name: 'Unsnooze this comic' }).click()
     await expect(page.locator('[data-roll-pool]').getByText('Unsnooze Me Thread')).toBeVisible({
       timeout: 10000,
     })

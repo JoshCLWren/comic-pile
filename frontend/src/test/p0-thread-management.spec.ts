@@ -8,7 +8,7 @@
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
-import { gotoQueue, waitForQueueReady } from './helpers'
+import { gotoQueue, waitForQueueReady, dismissRollNudgeIfPresent } from './helpers'
 
 test.describe('THREAD-001: Thread management', () => {
   test('user can create a new thread from the queue page', async ({
@@ -42,6 +42,7 @@ test.describe('THREAD-001: Thread management', () => {
     await page.locator('#create-thread-issues').fill('1-3')
     await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('Edit Target Thread')).toBeVisible({ timeout: 10000 })
+    await dismissRollNudgeIfPresent(page)
 
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Edit Target Thread' })
     await threadItem.locator('button[aria-label="Series actions"]').click()
@@ -68,6 +69,7 @@ test.describe('THREAD-001: Thread management', () => {
     await page.locator('#create-thread-issues').fill('1-2')
     await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('Delete Target Thread')).toBeVisible({ timeout: 10000 })
+    await dismissRollNudgeIfPresent(page)
 
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Delete Target Thread' })
     await threadItem.locator('button[aria-label="Series actions"]').click()
@@ -95,6 +97,7 @@ test.describe('THREAD-001: Thread management', () => {
     await page.locator('#create-thread-issues').fill('1-3')
     await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('First Thread')).toBeVisible({ timeout: 10000 })
+    await dismissRollNudgeIfPresent(page)
 
     await page.getByRole('button', { name: /add series/i }).first().click()
     await page.locator('#create-thread-title').fill('Second Thread')
@@ -118,6 +121,7 @@ test.describe('THREAD-001: Thread management', () => {
     await page.locator('#create-thread-issues').fill('1-5')
     await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('Detail View Thread')).toBeVisible({ timeout: 10000 })
+    await dismissRollNudgeIfPresent(page)
 
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Detail View Thread' })
     await threadItem.getByRole('button', { name: /open detail view thread/i }).click()
