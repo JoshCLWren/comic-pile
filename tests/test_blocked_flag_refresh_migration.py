@@ -155,27 +155,35 @@ async def test_refresh_unblocks_inert_edges_for_all_users_and_keeps_canonical(
     )
     await async_db.flush()
 
-    changed = await refresh_all_users_blocked_status_async(async_db)
-    assert changed[user_a.id] == 1
-    assert changed[user_b.id] == 1
-    assert set(changed) == {user_a.id, user_b.id}
+    user_a_id = user_a.id
+    user_b_id = user_b.id
+    stale_target_a_id = stale_target_a.id
+    stale_target_b_id = stale_target_b.id
+    canon_target_a_id = canon_target_a.id
+    stale_source_a_id = stale_source_a.id
+    canon_source_a_id = canon_source_a.id
+    stale_source_b_id = stale_source_b.id
 
-    async_db.expire_all()
-    await _assert_flags_match_evaluator(async_db, [user_a.id, user_b.id])
+    changed = await refresh_all_users_blocked_status_async(async_db)
+    assert changed[user_a_id] == 1
+    assert changed[user_b_id] == 1
+    assert set(changed) == {user_a_id, user_b_id}
+
+    await _assert_flags_match_evaluator(async_db, [user_a_id, user_b_id])
 
     flags = await _stored_flags(async_db)
-    assert flags[stale_target_a.id] is False
-    assert flags[stale_target_b.id] is False
-    assert flags[canon_target_a.id] is True
-    assert flags[stale_source_a.id] is False
-    assert flags[canon_source_a.id] is False
-    assert flags[stale_source_b.id] is False
+    assert flags[stale_target_a_id] is False
+    assert flags[stale_target_b_id] is False
+    assert flags[canon_target_a_id] is True
+    assert flags[stale_source_a_id] is False
+    assert flags[canon_source_a_id] is False
+    assert flags[stale_source_b_id] is False
 
-    pool_a = {thread.id for thread in await get_roll_pool(user_a.id, async_db)}
-    pool_b = {thread.id for thread in await get_roll_pool(user_b.id, async_db)}
-    assert stale_target_a.id in pool_a
-    assert canon_target_a.id not in pool_a
-    assert stale_target_b.id in pool_b
+    pool_a = {thread.id for thread in await get_roll_pool(user_a_id, async_db)}
+    pool_b = {thread.id for thread in await get_roll_pool(user_b_id, async_db)}
+    assert stale_target_a_id in pool_a
+    assert canon_target_a_id not in pool_a
+    assert stale_target_b_id in pool_b
 
     second = await refresh_all_users_blocked_status_async(async_db)
     assert second == {}
