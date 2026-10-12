@@ -98,30 +98,9 @@ async def reconcile_release_source(
         )
     except ReleaseSourceConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    # Convert tuple result to Release-like object for the response
-    if release is not None:
-        # Create a Release-like object from the tuple
-        release_data = {
-            "id": release.id,
-            "source_repository": release.source_repository,
-            "source_pr_number": release.source_pr_number,
-            "source_merge_sha": release.source_merge_sha,
-            "merged_at": release.merged_at,
-            "released_at": release.released_at,
-            "category": release.category,
-            "title": release.title,
-            "summary": release.summary,
-            "visibility": release.visibility,
-            "status": release.status,
-            "sort_order": release.sort_order,
-            "provenance_json": release.provenance_json,
-            "created_at": release.created_at,
-            "updated_at": release.updated_at,
-        }
-        release_obj = MinimalReleaseResponse(**release_data)
-    else:
-        release_obj = None
-    
+    release_obj = (
+        MinimalReleaseResponse.model_validate(dict(release)) if release is not None else None
+    )
     return ReleaseSourceResponse(exists=release is not None, release=release_obj)
 
 

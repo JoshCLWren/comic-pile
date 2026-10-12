@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,16 +75,16 @@ async def find_release_by_source(
     source_merge_sha: str | None,
 ) -> Release | None:
     """Resolve a release by stable GitHub source identity.
-    
+
     Args:
         db: Async database session.
         source_repository: Repository containing the source pull request.
         source_pr_number: Source pull request number when known.
         source_merge_sha: Source merge commit SHA when known.
-    
+
     Returns:
         The matching release, or None when no source identity matches.
-    
+
     Raises:
         ReleaseSourceConflictError: If the PR and merge SHA point to different rows.
     """
@@ -115,21 +116,23 @@ async def find_release_minimal_by_source(
     source_repository: str,
     source_pr_number: int | None,
     source_merge_sha: str | None,
-) -> Release | None:
-    """Resolve a release by stable GitHub source identity with minimal data retrieval.
-    
-    This optimized version only retrieves the fields needed for reconciliation,
-    avoiding the large 'body' field which is not needed for the /api/v1/releases/source endpoint.
-    
+) -> RowMapping | None:
+    """Resolve a release by stable GitHub source identity with a minimal column projection.
+
+    Retrieves only the reconciliation fields and skips the potentially large ``body``
+    column, so the token-gated ``/api/v1/releases/source`` endpoint stays inside its
+    performance budget even for releases with very large bodies.
+
     Args:
         db: Async database session.
         source_repository: Repository containing the source pull request.
         source_pr_number: Source pull request number when known.
         source_merge_sha: Source merge commit SHA when known.
-    
+
     Returns:
-        The matching release with minimal data, or None when no source identity matches.
-    
+        Mapping of the selected minimal release columns, or None when no source
+        identity matches.
+
     Raises:
         ReleaseSourceConflictError: If the PR and merge SHA point to different rows.
     """
@@ -141,7 +144,7 @@ async def find_release_minimal_by_source(
     if not predicates:
         return None
 
-    # Only retrieve the fields we actually need for reconciliation
+    # Only retrieve the columns needed for reconciliation; the large body stays unfetched.
     result = await db.execute(
         select(
             Release.id,
@@ -164,7 +167,7 @@ async def find_release_minimal_by_source(
             or_(*predicates),
         )
     )
-    matches = list(result.all())
+    matches = list(result.mappings().all())
     if len(matches) > 1:
         raise ReleaseSourceConflictError(
             "source PR and merge SHA already identify different release records"
