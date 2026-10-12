@@ -9,6 +9,7 @@ from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.delivery import DeliveryRecord
+from app.models.image_optimization_cache import ImageOptimizationCache
 from app.models.event import Event
 from app.models.recommendation_context import RecommendationContext
 from app.models.external_identity import (
@@ -52,6 +53,7 @@ __all__ = [
     "DependencyGroup",
     "DependencyGroupMembership",
     "DeliveryRecord",
+    "ImageOptimizationCache",
     "Event",
     "ExternalIdentity",
     "RecommendationContext",

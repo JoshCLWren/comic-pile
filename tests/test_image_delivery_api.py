@@ -9,13 +9,11 @@ upstream host.
 import asyncio
 import io
 import ipaddress
-from collections.abc import AsyncIterator
 
 import httpx
 import pytest
 from PIL import Image
 
-from app.main import create_app
 from app.services import image_delivery
 from app.services.image_delivery import (
     InvalidImageSourceError,
@@ -233,6 +231,8 @@ class TestSsrfGuard:
 
     def test_public_addresses_are_allowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A publicly routable resolution passes the SSRF guard."""
+        # Clear DNS cache to ensure our mock is used
+        image_delivery._DNS_CACHE.clear()
         monkeypatch.setattr(
             image_delivery,
             "_resolve_addresses_blocking",
@@ -246,6 +246,8 @@ class TestSsrfGuard:
 
     def test_unresolvable_host_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """DNS resolution failure is treated as an invalid source."""
+        # Clear DNS cache to ensure our mock is used
+        image_delivery._DNS_CACHE.clear()
         def _raise(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
             raise OSError("resolution failed")
 
@@ -386,14 +388,6 @@ class TestOptimizeEndpoint:
     def endpoint_url(self) -> str:
         """Expose the canonical endpoint path to individual tests."""
         return self.ENDPOINT
-
-    @pytest.fixture
-    async def client(self) -> AsyncIterator[httpx.AsyncClient]:
-        """ASGI client bound to one application instance per test."""
-        application = create_app(serve_frontend=False)
-        transport = httpx.ASGITransport(app=application)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http_client:
-            yield http_client
 
     async def test_success_serves_webp_with_edge_cache_headers(
         self,

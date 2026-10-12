@@ -16,16 +16,23 @@ URLs and the bytes the browser receives:
 """
 
 import asyncio
+import hashlib
 import io
 import ipaddress
 import logging
 import socket
+import time
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
 from app.config import get_image_delivery_settings
+from app.repositories.image_optimization_cache_repository import (
+    ImageOptimizationCacheRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +59,13 @@ _COMICVINE_CANONICAL_SCHEME = "https"
 _COMICVINE_CANONICAL_HOST = "comicvine.gamespot.com"
 _COMICVINE_CANONICAL_PATH_PREFIX = "/a"
 
+# In-memory DNS resolution cache (hostname -> (is_public, expires_at))
+_DNS_CACHE: dict[str, tuple[bool, datetime]] = {}
+_DNS_CACHE_TTL = timedelta(hours=1)
+
+# Default cache TTL for optimized images (1 year to match edge cache headers)
+_DEFAULT_CACHE_TTL_SECONDS = 31536000
+
 
 class ImageDeliveryError(Exception):
     """Base error for remote image delivery failures."""
@@ -73,6 +87,21 @@ class OptimizedImage:
     media_type: str
     width: int
     transcoded: bool
+
+
+@dataclass(frozen=True)
+class OptimizationTimings:
+    """Phase timings for image optimization."""
+
+    total_ms: float
+    canonicalize_ms: float
+    validate_ms: float
+    dns_check_ms: float
+    cache_lookup_ms: float
+    fetch_upstream_ms: float
+    transcode_ms: float
+    cache_store_ms: float
+    cache_hit: bool
 
 
 def resolve_variant_width(requested_width: int) -> int:
@@ -199,6 +228,8 @@ async def ensure_publicly_routable(hostname: str) -> None:
     allowlisted host (or an attacker-controllable DNS record for one) resolves
     to loopback, private, link-local, reserved, or multicast space.
 
+    Uses an in-memory cache to avoid repeated DNS resolution for the same host.
+
     Args:
         hostname: Upstream hostname about to be fetched.
 
@@ -206,14 +237,30 @@ async def ensure_publicly_routable(hostname: str) -> None:
         InvalidImageSourceError: If resolution fails or any address is
             non-public.
     """
+    now = datetime.now(UTC)
+
+    # Check cache first
+    cached = _DNS_CACHE.get(hostname.lower())
+    if cached:
+        is_public, expires_at = cached
+        if expires_at > now:
+            if not is_public:
+                raise InvalidImageSourceError("Upstream image host resolves to a non-public address")
+            return
+
+    # Not cached or expired - perform DNS resolution
     try:
         addresses = await asyncio.to_thread(_resolve_addresses_blocking, hostname)
     except OSError as exc:
+        # Cache negative result for shorter TTL
+        _DNS_CACHE[hostname.lower()] = (False, now + timedelta(minutes=5))
         raise InvalidImageSourceError("Upstream image host could not be resolved") from exc
 
     if not addresses:
+        _DNS_CACHE[hostname.lower()] = (False, now + timedelta(minutes=5))
         raise InvalidImageSourceError("Upstream image host did not resolve")
 
+    is_public = True
     for address in addresses:
         if (
             address.is_private
@@ -223,7 +270,20 @@ async def ensure_publicly_routable(hostname: str) -> None:
             or address.is_multicast
             or address.is_unspecified
         ):
-            raise InvalidImageSourceError("Upstream image host resolves to a non-public address")
+            is_public = False
+            break
+
+    # Cache the result
+    _DNS_CACHE[hostname.lower()] = (is_public, now + _DNS_CACHE_TTL)
+
+    if not is_public:
+        raise InvalidImageSourceError("Upstream image host resolves to a non-public address")
+
+
+def _generate_cache_key(validated_url: str, target_width: int) -> str:
+    """Generate a deterministic cache key for an optimized image."""
+    key_material = f"{validated_url}|{target_width}".encode("utf-8")
+    return hashlib.sha256(key_material).hexdigest()
 
 
 async def fetch_upstream(
@@ -336,6 +396,7 @@ async def optimize_remote_image(
     requested_width: int,
     *,
     transport: httpx.AsyncBaseTransport | None = None,
+    db: Optional["AsyncSession"] = None,
 ) -> OptimizedImage:
     """Turn a canonical external image URL into optimized, cacheable bytes.
 
@@ -343,6 +404,7 @@ async def optimize_remote_image(
         source_url: Canonical external image URL (never rewritten at rest).
         requested_width: Desired rendered width in pixels.
         transport: Optional httpx transport override (used by tests).
+        db: Optional database session for persistent caching.
 
     Returns:
         An :class:`OptimizedImage` ready to serve with long-lived edge caching.
@@ -351,25 +413,120 @@ async def optimize_remote_image(
         InvalidImageSourceError: If validation or SSRF checks fail.
         UpstreamImageUnavailableError: If the upstream fetch fails.
     """
+    start_total = time.perf_counter()
+    timings = {}
+
+    # Phase 1: Canonicalize
+    start = time.perf_counter()
     validated_url = validate_source_url(canonicalize_source_url(source_url))
+    timings["canonicalize_ms"] = (time.perf_counter() - start) * 1000
+
+    # Phase 2: DNS check (with caching)
     hostname = urlsplit(validated_url).hostname or ""
+    start = time.perf_counter()
     await ensure_publicly_routable(hostname)
+    timings["dns_check_ms"] = (time.perf_counter() - start) * 1000
 
+    # Phase 3: Determine target width
     target_width = resolve_variant_width(requested_width)
-    payload, content_type = await fetch_upstream(validated_url, transport=transport)
 
+    # Phase 4: Check persistent cache
+    cache_key = _generate_cache_key(validated_url, target_width)
+    cache_hit = False
+    cache_lookup_start = time.perf_counter()
+
+    cached_result: Optional[OptimizedImage] = None
+    if db is not None:
+        repo = ImageOptimizationCacheRepository(db)
+        cached_entry = await repo.get(cache_key)
+        if cached_entry is not None:
+            cached_result = OptimizedImage(
+                content=cached_entry.content,
+                media_type=cached_entry.media_type,
+                width=cached_entry.width,
+                transcoded=cached_entry.transcoded,
+            )
+            cache_hit = True
+
+    timings["cache_lookup_ms"] = (time.perf_counter() - cache_lookup_start) * 1000
+
+    if cache_hit:
+        timings["fetch_upstream_ms"] = 0.0
+        timings["transcode_ms"] = 0.0
+        timings["cache_store_ms"] = 0.0
+        timings["total_ms"] = (time.perf_counter() - start_total) * 1000
+
+        logger.info(
+            "Image optimization cache hit",
+            extra={
+                "cache_key": cache_key[:16],
+                "source_url": validated_url,
+                "width": target_width,
+                "timings_ms": timings,
+            },
+        )
+        return cached_result
+
+    # Phase 5: Fetch upstream
+    start = time.perf_counter()
+    payload, content_type = await fetch_upstream(validated_url, transport=transport)
+    timings["fetch_upstream_ms"] = (time.perf_counter() - start) * 1000
+
+    # Phase 6: Transcode
+    start = time.perf_counter()
     transcoded = transcode_to_webp(payload, target_width)
+    timings["transcode_ms"] = (time.perf_counter() - start) * 1000
+
     if transcoded is not None:
-        return OptimizedImage(
+        result = OptimizedImage(
             content=transcoded[0],
             media_type=transcoded[1],
             width=target_width,
             transcoded=True,
         )
+    else:
+        result = OptimizedImage(
+            content=payload,
+            media_type=content_type.split(";")[0].strip().lower() or "application/octet-stream",
+            width=target_width,
+            transcoded=False,
+        )
 
-    return OptimizedImage(
-        content=payload,
-        media_type=content_type.split(";")[0].strip().lower() or "application/octet-stream",
-        width=target_width,
-        transcoded=False,
+    # Phase 7: Store in persistent cache
+    if db is not None:
+        start = time.perf_counter()
+        repo = ImageOptimizationCacheRepository(db)
+        try:
+            await repo.set(
+                cache_key=cache_key,
+                source_url=validated_url,
+                width=target_width,
+                content=result.content,
+                media_type=result.media_type,
+                transcoded=result.transcoded,
+                ttl_seconds=_DEFAULT_CACHE_TTL_SECONDS,
+            )
+            await db.commit()
+        except Exception as exc:
+            logger.warning("Failed to store image in cache: %s", exc)
+            await db.rollback()
+        timings["cache_store_ms"] = (time.perf_counter() - start) * 1000
+    else:
+        timings["cache_store_ms"] = 0.0
+
+    timings["total_ms"] = (time.perf_counter() - start_total) * 1000
+
+    logger.info(
+        "Image optimization completed",
+        extra={
+            "cache_key": cache_key[:16],
+            "source_url": validated_url,
+            "width": target_width,
+            "cache_hit": cache_hit,
+            "transcoded": result.transcoded,
+            "content_length": len(result.content),
+            "timings_ms": timings,
+        },
     )
+
+    return result

@@ -8,9 +8,11 @@ size cap, and finite width buckets enforced by the delivery service.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.services.image_delivery import (
     InvalidImageSourceError,
     UpstreamImageUnavailableError,
@@ -39,12 +41,14 @@ async def api_optimize_remote_image(
         int,
         Query(ge=16, le=10000, description="Desired rendered width in pixels"),
     ],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     """Fetch, optimize, and serve an allowlisted remote cover image.
 
     Args:
         url: Canonical external image URL from persisted ComicPile data.
         width: Desired rendered width; snapped to a supported variant bucket.
+        db: Database session for persistent caching.
 
     Returns:
         A binary image response with long-lived shared-cache headers, or an
@@ -52,7 +56,7 @@ async def api_optimize_remote_image(
         unavailable.
     """
     try:
-        result = await optimize_remote_image(url, width)
+        result = await optimize_remote_image(url, width, db=db)
     except InvalidImageSourceError as exc:
         return JSONResponse(
             status_code=400,
