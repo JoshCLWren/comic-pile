@@ -61,7 +61,17 @@ _COMICVINE_CANONICAL_PATH_PREFIX = "/a"
 
 # In-memory DNS resolution cache (hostname -> (is_public, expires_at))
 _DNS_CACHE: dict[str, tuple[bool, datetime]] = {}
-_DNS_CACHE_TTL = timedelta(hours=1)
+# Positive verdicts stay cached for five minutes, the pre-existing guard window.
+# The SSRF guard is a pre-fetch check that the fetcher's own connect-time
+# resolution can diverge from, so a longer TTL would silently widen the
+# rebinding window without buying measurable latency: repeat covers are served
+# from the image caches below before DNS is consulted at all.
+_DNS_CACHE_TTL = timedelta(minutes=5)
+
+# Negative verdicts (resolution failed, or every address was non-public) are
+# cached for the same five minutes so a dead or hostile host cannot drive a
+# resolver request per incoming cover request.
+_DNS_NEGATIVE_CACHE_TTL = timedelta(minutes=5)
 
 # Default cache TTL for optimized images (1 year to match edge cache headers)
 _DEFAULT_CACHE_TTL_SECONDS = 31536000
@@ -224,9 +234,10 @@ async def _resolve_and_validate_cached(hostname: str) -> None:
     """Resolve and validate a hostname with in-memory caching.
 
     Uses an in-memory cache to avoid repeated DNS resolution for the same host.
-    Positive results are cached for one hour; negative results (failed
-    resolution or non-public addresses) are cached for five minutes to avoid
-    repeated resolver pressure.
+    Both positive and negative verdicts are cached for five minutes, which is
+    the same guard window the module used before the persistent image cache
+    existed and is deliberately not lengthened: the cache is a latency
+    optimization for the SSRF guard, never a way to weaken it.
 
     Args:
         hostname: Upstream hostname to resolve.
@@ -250,11 +261,11 @@ async def _resolve_and_validate_cached(hostname: str) -> None:
         addresses = await asyncio.to_thread(_resolve_addresses_blocking, hostname)
     except OSError as exc:
         # Cache negative result for shorter TTL
-        _DNS_CACHE[hostname.lower()] = (False, now + timedelta(minutes=5))
+        _DNS_CACHE[hostname.lower()] = (False, now + _DNS_NEGATIVE_CACHE_TTL)
         raise InvalidImageSourceError("Upstream image host could not be resolved") from exc
 
     if not addresses:
-        _DNS_CACHE[hostname.lower()] = (False, now + timedelta(minutes=5))
+        _DNS_CACHE[hostname.lower()] = (False, now + _DNS_NEGATIVE_CACHE_TTL)
         raise InvalidImageSourceError("Upstream image host did not resolve")
 
     is_public = True
@@ -279,7 +290,7 @@ async def _resolve_and_validate_cached(hostname: str) -> None:
 
 def _generate_cache_key(validated_url: str, target_width: int) -> str:
     """Generate a deterministic cache key for an optimized image."""
-    key_material = f"{validated_url}|{target_width}".encode("utf-8")
+    key_material = f"{validated_url}|{target_width}".encode()
     return hashlib.sha256(key_material).hexdigest()
 
 
