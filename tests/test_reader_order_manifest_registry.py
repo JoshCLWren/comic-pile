@@ -11,6 +11,7 @@ from app.services.explicit_reader_order_migration import (
 )
 from app.services.source_backed_reader_order_migration import (
     PRODUCTION_SOURCE_BACKED_SPECS,
+    READING_ORDER_SOURCE_BACKED_MANIFESTS,
 )
 
 
@@ -49,3 +50,15 @@ def test_production_source_manifests_cover_every_step14_cbl_source() -> None:
     assert registered_hashes - set(source_hash_map) == {
         "bb54dfc094a2a7c469b6baa77f6751a8d30ea034ede24d686ba1ab4a968ae0ca"
     }
+
+
+def test_josh_reading_order_manifests_are_stamped_reading_order() -> None:
+    """The five CBL lists covering Josh's 18 cbl-order-only frontiers compile mid-run hops."""
+    assert READING_ORDER_SOURCE_BACKED_MANIFESTS <= set(PRODUCTION_SOURCE_BACKED_SPECS)
+    for key, spec in PRODUCTION_SOURCE_BACKED_SPECS.items():
+        expected = (
+            "reading_order"
+            if key in READING_ORDER_SOURCE_BACKED_MANIFESTS
+            else "thread_entry"
+        )
+        assert spec.inferred_gate_kind == expected, key

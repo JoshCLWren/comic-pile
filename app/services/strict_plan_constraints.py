@@ -6,18 +6,27 @@ blocker. Natural Thread sequence remains ``Issue.position`` /
 ``Thread.next_unread_issue_id``; same-thread adjacent pairs are never
 compiled into Dependencies.
 
-The durable inferred restriction for ``strict_sequential`` is a *thread-entry
-gate*: the natural first issue of a Thread (minimum ``Issue.position`` on that
-Thread, whether or not earlier issues appear in the plan) waits on the nearest
-preceding required plan issue from a different Thread.
+The durable inferred restriction for ``strict_sequential`` defaults to a
+*thread-entry gate*: the natural first issue of a Thread (minimum
+``Issue.position`` on that Thread, whether or not earlier issues appear in
+the plan) waits on the nearest preceding required plan issue from a
+different Thread.
+
+Plans stamped ``inferred_gate_kind=reading_order`` additionally compile that
+nearest different-thread predecessor for *every* required issue, not only
+series starts. That is how Josh's CBL reading lists (Late-90s X-Men, Fantastic
+Four Early Years, America's Best Comics, Doom Patrol 1, The Unnamed Universe)
+keep mid-run frontiers blocked after historical ``cbl-order`` rows become
+inert. The stamp is the durable selector; titles are never special-cased.
 
 That representation is title-agnostic:
 
 - Starman #55 before a JSA series start is a thread-entry (or standalone) gate.
-- X-Men / Cable / X-Force mid-run suggested-order hops are not inferred;
-  genuine crossover Dependencies remain the blockers.
 - Wild Hunt #3 is never a thread-entry while #1 exists on the Thread, so an
-  in-progress Wild Hunt stays Roll-eligible after earlier unread plan material.
+  in-progress Wild Hunt stays Roll-eligible after earlier unread plan material
+  when the plan uses the default thread-entry kind.
+- A reading-order stamp on the same geometry would gate Wild Hunt #3; Mignolaverse
+  therefore stays thread-entry.
 - Absolute Universe later titles whose #1 is in the plan are gated, closing
   the "later material is Roll-eligible" leak without blanketing every hop.
 
@@ -67,19 +76,23 @@ def is_required_issue_node(node: ContinuityPlanNode) -> bool:
     return True
 
 
-def strict_plan_item_read_pairs(
+def _strict_cross_thread_pairs(
     nodes: Sequence[ContinuityPlanNode],
     index: Mapping[int, IssueThreadIndex],
+    *,
+    natural_starts_only: bool,
 ) -> list[tuple[int, int]]:
-    """Return inferred strict ``item_read`` pairs for one plan node list.
+    """Return inferred ``item_read`` pairs from plan order and Thread geometry.
 
-    Same-thread adjacency is omitted. A pair is emitted only when the target
-    is the Thread's natural first issue and a required predecessor on a
-    different Thread exists earlier in plan order.
+    Same-thread adjacency is omitted. When ``natural_starts_only`` is true, a
+    pair is emitted only when the target is the Thread's natural first issue.
+    Otherwise every required issue waits on the nearest preceding required
+    issue from a different Thread.
 
     Args:
         nodes: Plan nodes in any order; display ``position`` is the sort key.
         index: Runtime Thread metadata for every referenced Issue.
+        natural_starts_only: Restrict targets to Thread natural first issues.
 
     Returns:
         Ordered ``(source_issue_id, target_issue_id)`` pairs with no
@@ -97,7 +110,7 @@ def strict_plan_item_read_pairs(
     seen: set[tuple[int, int]] = set()
     for offset, target in enumerate(ordered):
         target_meta = index[target.ref_id]
-        if not target_meta.is_thread_natural_start:
+        if natural_starts_only and not target_meta.is_thread_natural_start:
             continue
         predecessor_id: int | None = None
         for source in reversed(ordered[:offset]):
@@ -112,6 +125,48 @@ def strict_plan_item_read_pairs(
         seen.add(pair)
         pairs.append(pair)
     return pairs
+
+
+def strict_plan_item_read_pairs(
+    nodes: Sequence[ContinuityPlanNode],
+    index: Mapping[int, IssueThreadIndex],
+) -> list[tuple[int, int]]:
+    """Return inferred thread-entry ``item_read`` pairs for one plan node list.
+
+    Same-thread adjacency is omitted. A pair is emitted only when the target
+    is the Thread's natural first issue and a required predecessor on a
+    different Thread exists earlier in plan order.
+
+    Args:
+        nodes: Plan nodes in any order; display ``position`` is the sort key.
+        index: Runtime Thread metadata for every referenced Issue.
+
+    Returns:
+        Ordered ``(source_issue_id, target_issue_id)`` pairs with no
+        duplicates. Missing index entries are skipped rather than guessed.
+    """
+    return _strict_cross_thread_pairs(nodes, index, natural_starts_only=True)
+
+
+def strict_plan_reading_order_pairs(
+    nodes: Sequence[ContinuityPlanNode],
+    index: Mapping[int, IssueThreadIndex],
+) -> list[tuple[int, int]]:
+    """Return inferred reading-order ``item_read`` pairs for one plan node list.
+
+    Same-thread adjacency is omitted. Every required issue waits on the
+    nearest preceding required issue from a different Thread, including
+    mid-run frontiers that are not series starts.
+
+    Args:
+        nodes: Plan nodes in any order; display ``position`` is the sort key.
+        index: Runtime Thread metadata for every referenced Issue.
+
+    Returns:
+        Ordered ``(source_issue_id, target_issue_id)`` pairs with no
+        duplicates. Missing index entries are skipped rather than guessed.
+    """
+    return _strict_cross_thread_pairs(nodes, index, natural_starts_only=False)
 
 
 async def load_issue_thread_index(

@@ -11,6 +11,8 @@ export function readingPlanModeLabel(
   return mode === 'strict_sequential' ? 'Strict' : 'Informational'
 }
 
+export type ContinuityPlanInferredGateKind = 'thread_entry' | 'reading_order'
+
 export interface ExplicitReaderOrderMigrationContract {
   kind: 'explicit_reader_order'
   classification_family_keys: string[]
@@ -25,6 +27,7 @@ export interface ContinuityPlanLane {
   id: string
   name: string
   order: number
+  inferred_gate_kind?: ContinuityPlanInferredGateKind | null
   migration_contract?: ExplicitReaderOrderMigrationContract | null
 }
 

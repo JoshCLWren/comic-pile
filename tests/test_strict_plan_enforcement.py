@@ -34,10 +34,16 @@ from app.services.reading_plan_normalization import (
     reconcile_plan_record_to_membership,
     restore_plan_record_from_backup,
 )
+from app.services.source_backed_reader_order_migration import (
+    JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS,
+    PRODUCTION_SOURCE_BACKED_SPECS,
+    READING_ORDER_SOURCE_BACKED_MANIFESTS,
+)
 from app.services.strict_plan_constraints import (
     IssueThreadIndex,
     load_issue_thread_index,
     strict_plan_item_read_pairs,
+    strict_plan_reading_order_pairs,
 )
 from comic_pile.dependencies import (
     _get_blocked_thread_ids_uncached,
@@ -116,12 +122,16 @@ def _plan_payload(
     issues: list[Issue],
     *,
     mode: str = "strict_sequential",
+    inferred_gate_kind: str | None = None,
 ) -> dict[str, object]:
     """Build a one-lane plan create/update payload."""
+    lane: dict[str, object] = {"id": "main", "name": "Main", "order": 0}
+    if inferred_gate_kind is not None:
+        lane["inferred_gate_kind"] = inferred_gate_kind
     return {
         "name": name,
         "ordering_mode": mode,
-        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "lanes": [lane],
         "nodes": [
             {
                 "id": f"issue-{issue.id}",
@@ -196,6 +206,61 @@ def test_in_progress_series_omitted_earlier_issues_are_not_starts() -> None:
     # Wild Hunt #3 is not a target. The later series start waits on the nearest
     # preceding required issue from another Thread, which is Wild Hunt #3.
     assert strict_plan_item_read_pairs(nodes, index) == [(203, 301)]
+
+
+def test_reading_order_pairs_gate_mid_run_frontiers() -> None:
+    """Reading-order stamps compile nearest different-thread hops for every required issue."""
+    killing_ground = [101, 102]
+    wild_hunt = [201, 202, 203]
+    later_start = [301]
+    nodes = _nodes_from_ids(killing_ground + wild_hunt + later_start)
+    index = {
+        101: IssueThreadIndex(1, 1, True),
+        102: IssueThreadIndex(1, 2, False),
+        201: IssueThreadIndex(2, 1, True),
+        202: IssueThreadIndex(2, 2, False),
+        203: IssueThreadIndex(2, 3, False),
+        301: IssueThreadIndex(3, 1, True),
+    }
+    assert strict_plan_reading_order_pairs(nodes, index) == [
+        (102, 201),
+        (102, 202),
+        (102, 203),
+        (203, 301),
+    ]
+    assert (102, 203) not in strict_plan_item_read_pairs(nodes, index)
+
+
+def test_josh_cbl_order_only_frontiers_map_to_reading_order_plans() -> None:
+    """The 18 cbl-order-only frontiers belong to five strict reading-order manifests."""
+    assert len(JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS) == 18
+    assert {row.manifest_key for row in JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS} == (
+        READING_ORDER_SOURCE_BACKED_MANIFESTS
+    )
+    x_men_threads = {
+        row.thread_id
+        for row in JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS
+        if row.manifest_key == "x-men-era-ten"
+    }
+    assert x_men_threads == {
+        98, 305, 3152, 18595, 18646, 18655, 18660, 18673,
+        18689, 18699, 18719, 18720, 18721, 18722,
+    }
+    by_thread = {row.thread_id: row for row in JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS}
+    assert by_thread[18560].manifest_key == "fantastic-four-early-years"
+    assert by_thread[3177].manifest_key == "americas-best-comics"
+    assert by_thread[114].manifest_key == "doom-patrol"
+    assert by_thread[3171].manifest_key == "unnamed-universe"
+    for key in READING_ORDER_SOURCE_BACKED_MANIFESTS:
+        spec = PRODUCTION_SOURCE_BACKED_SPECS[key]
+        assert spec.inferred_gate_kind == "reading_order"
+        assert spec.plan_name
+    assert PRODUCTION_SOURCE_BACKED_SPECS["absolute-universe"].inferred_gate_kind == (
+        "thread_entry"
+    )
+    assert PRODUCTION_SOURCE_BACKED_SPECS["ultimate-universe"].inferred_gate_kind == (
+        "thread_entry"
+    )
 
 
 def _nodes_from_ids(issue_ids: list[int]) -> list[ContinuityPlanNode]:
@@ -294,11 +359,11 @@ async def test_starman_jsa_shared_prerequisite_survives_independent_plans(
 
 
 @pytest.mark.asyncio
-async def test_xmen_cable_xforce_preserves_genuine_prereqs_not_suggested_order(
+async def test_xmen_cable_xforce_reading_order_enforces_list_order(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Interleaved suggested-order hops are not compiled; UXRO-style edges still block."""
+    """Josh's UXRO list compiles mid-run hops so later titles are not Roll-eligible."""
     user = await get_or_create_user_async(async_db)
     uncanny, uncanny_all = await _make_series(
         async_db,
@@ -347,12 +412,24 @@ async def test_xmen_cable_xforce_preserves_genuine_prereqs_not_suggested_order(
     ]
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
-        json=_plan_payload("Late-90s X-Men Reading Order", interleaved),
+        json=_plan_payload(
+            "Late-90s X-Men Reading Order",
+            interleaved,
+            inferred_gate_kind="reading_order",
+        ),
     )
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
     compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
-    assert compiled == set()
+    assert compiled == {
+        (uncanny_issues[0].id, cable_issues[0].id),
+        (cable_issues[0].id, uncanny_issues[1].id),
+        (uncanny_issues[1].id, cable_issues[1].id),
+        (cable_issues[1].id, uncanny_issues[2].id),
+        (uncanny_issues[2].id, cable_issues[2].id),
+        (cable_issues[2].id, xforce_issues[0].id),
+        (cable_issues[2].id, xforce_issues[1].id),
+    }
     note = (
         await async_db.execute(
             select(Dependency.note).where(
@@ -365,16 +442,70 @@ async def test_xmen_cable_xforce_preserves_genuine_prereqs_not_suggested_order(
 
     roll_ids = await _roll_ids(user.id, async_db)
     assert uncanny.id in roll_ids
-    assert cable.id in roll_ids
+    assert cable.id not in roll_ids
     assert xforce.id not in roll_ids
 
-    cable_issues[2].status = "read"
-    cable_issues[2].read_at = datetime.now(UTC)
-    cable.next_unread_issue_id = None
-    cable.issues_remaining = 0
-    await async_db.flush()
+    saved = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json=_plan_payload("Late-90s X-Men Reading Order", interleaved),
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["lanes"][0]["inferred_gate_kind"] == "reading_order"
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == compiled
+    assert cable.id not in await _roll_ids(user.id, async_db)
+
+
+@pytest.mark.asyncio
+async def test_mid_series_cbl_order_frontier_stays_blocked_by_reading_order_plan(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """After cutover, a mid-run frontier blocked only by cbl-order stays blocked by the plan."""
+    user = await get_or_create_user_async(async_db)
+    pred, pred_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Generation X",
+        numbers=["45"],
+        queue_position=1,
+    )
+    mid, mid_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Uncanny X-Men",
+        numbers=["358", "359", "360"],
+        queue_position=2,
+        read_through=2,
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=pred_issues[0].id,
+            target_issue_id=mid_issues[2].id,
+            note="cbl-order:source:5a221581571c7d55083b15641e23d90112c0875d09c875065a78fbb77f117ec2:70->74",
+        )
+    )
+    await async_db.commit()
+
+    roll_before = await _roll_ids(user.id, async_db)
+    assert pred.id in roll_before
+    assert mid.id in roll_before
+
+    created = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload(
+            "Late-90s X-Men Reading Order",
+            pred_issues + mid_issues,
+            inferred_gate_kind="reading_order",
+        ),
+    )
+    assert created.status_code == 201, created.text
+    compiled = await _compiled_pairs(
+        async_db, user_id=user.id, plan_id=created.json()["id"]
+    )
+    assert (pred_issues[0].id, mid_issues[2].id) in compiled
     roll_after = await _roll_ids(user.id, async_db)
-    assert xforce.id in roll_after
+    assert pred.id in roll_after
+    assert mid.id not in roll_after
 
 
 @pytest.mark.asyncio

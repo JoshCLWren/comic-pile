@@ -2039,6 +2039,21 @@
             "title": "Id",
             "type": "string"
           },
+          "inferred_gate_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "thread_entry",
+                  "reading_order"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inferred Gate Kind"
+          },
           "migration_contract": {
             "anyOf": [
               {

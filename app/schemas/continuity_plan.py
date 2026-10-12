@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, BeforeValidator, Field, model_validator
 
 PlanOrderingMode = Literal["informational", "strict_sequential"]
+PlanInferredGateKind = Literal["thread_entry", "reading_order"]
 PlanNodeType = Literal["issue", "crossover", "thread"]
 
 def _reject_boolean_item_id(value: object) -> object:
@@ -38,6 +39,10 @@ class ContinuityPlanLane(BaseModel):
     id: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=120)
     order: int = Field(ge=0)
+    inferred_gate_kind: PlanInferredGateKind | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
     migration_contract: ExplicitReaderOrderMigrationContract | None = Field(
         default=None,
         exclude_if=lambda value: value is None,

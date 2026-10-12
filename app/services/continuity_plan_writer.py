@@ -7,8 +7,10 @@ module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
 The compiler's hard-edge semantics (#2553 Phase B):
-  1. ``strict_sequential`` plans compile thread-entry ``item_read`` gates,
-     not every adjacent imported/suggested-order pair;
+  1. ``strict_sequential`` plans compile inferred ``item_read`` gates
+     selected by the plan's durable ``inferred_gate_kind`` (thread-entry
+     by default; reading-order for stamped CBL reading lists), never
+     same-thread adjacency;
   2. checkpoint nodes block the next node in the same lane;
   3. convergence gates compile ``converged`` self-loop rules;
   4. plan-level cycles and persisted-rule conflicts keep their stable codes;
@@ -34,6 +36,7 @@ from app.schemas.continuity_plan import (
     ContinuityPlanLane,
     ContinuityPlanListItem,
     ContinuityPlanNode,
+    PlanInferredGateKind,
     PlanOrderingMode,
 )
 from app.schemas.continuity_rule import ContinuityNodeType
@@ -47,6 +50,7 @@ from app.services.reading_plan_normalization import rebuild_plan_membership
 from app.services.strict_plan_constraints import (
     load_issue_thread_index,
     strict_plan_item_read_pairs,
+    strict_plan_reading_order_pairs,
 )
 
 
@@ -70,14 +74,46 @@ def preserve_server_lane_metadata(
         for lane in existing_lanes
         if lane.get("migration_contract") is not None
     }
+    gate_kinds = {
+        str(lane.get("id")): lane["inferred_gate_kind"]
+        for lane in existing_lanes
+        if lane.get("inferred_gate_kind") is not None
+    }
     serialized: list[dict[str, object]] = []
     for lane in lanes:
         row = lane.model_dump(exclude={"migration_contract"})
         contract = contracts.get(lane.id)
         if contract is not None:
             row["migration_contract"] = contract
+        if row.get("inferred_gate_kind") is None:
+            existing_kind = gate_kinds.get(lane.id)
+            if existing_kind is not None:
+                row["inferred_gate_kind"] = existing_kind
         serialized.append(row)
     return serialized
+
+
+def inferred_gate_kind_from_lanes(
+    lanes: Sequence[ContinuityPlanLane] | Sequence[dict[str, object]] | None,
+) -> PlanInferredGateKind:
+    """Return the durable inferred-gate kind stamped on a plan's lanes.
+
+    Args:
+        lanes: Persisted ``lanes_json`` rows or validated lane models.
+
+    Returns:
+        ``reading_order`` when any lane carries that stamp; otherwise
+        ``thread_entry``, the default for live planner creates.
+    """
+    for lane in lanes or ():
+        kind = (
+            lane.inferred_gate_kind
+            if isinstance(lane, ContinuityPlanLane)
+            else lane.get("inferred_gate_kind")
+        )
+        if kind == "reading_order":
+            return "reading_order"
+    return "thread_entry"
 
 
 def plan_rule_marker(plan_id: int) -> str:
@@ -229,16 +265,17 @@ async def replace_compiled_rules(
         plan: The persisted (or to-be-persisted) plan owning the compiled rules.
         nodes: Canonical node set to compile from.
         ordering_mode: Plan ordering mode; only ``strict_sequential`` creates
-            inferred thread-entry gates.
+            inferred gates. Thread-entry is the default; ``reading_order``
+            stamped on ``lanes_json`` compiles mid-run cross-thread hops.
         sync_canonical_edges: When True (default), retire this plan's stale
             compiled edges and compile the new rules into canonical
             Dependencies (#2553). Only pairs that actually changed are
             retired/compiled, so re-saving an unchanged plan is a no-op
             for the Dependency table.
         extra_item_read_pairs: Explicit selected hard restrictions to compile
-            in addition to inferred thread-entry gates. Same-thread pairs are
-            ignored. Live plan create/update omit this; migrations pass
-            classified genuine prerequisites that are not series starts.
+            in addition to inferred gates. Same-thread pairs are ignored.
+            Live plan create/update omit this; migrations pass classified
+            genuine prerequisites that are not series starts.
 
     Returns:
         True when all rules compiled without cycle conflicts.
@@ -292,12 +329,17 @@ async def replace_compiled_rules(
         tuple[str, int, str, int, str, int | list[convergence_target] | None]
     ] = []
 
-    # 1. Strict-sequential thread-entry gates, plus selected extra pairs.
+    # 1. Strict-sequential inferred gates, plus selected extra pairs.
     if ordering_mode == "strict_sequential":
         issue_ids = [node.ref_id for node in nodes if node.node_type == "issue"]
         issue_index = await load_issue_thread_index(db, issue_ids)
         compiled_item_read: set[tuple[int, int]] = set()
-        for source_id, target_id in strict_plan_item_read_pairs(nodes, issue_index):
+        inferred_pairs = (
+            strict_plan_reading_order_pairs(nodes, issue_index)
+            if inferred_gate_kind_from_lanes(plan.lanes_json) == "reading_order"
+            else strict_plan_item_read_pairs(nodes, issue_index)
+        )
+        for source_id, target_id in inferred_pairs:
             edges_to_add.append((
                 "issue", source_id,
                 "issue", target_id,

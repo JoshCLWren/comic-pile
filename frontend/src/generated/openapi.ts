@@ -5139,6 +5139,11 @@ export interface components {
         ContinuityPlanLane: {
             /** Id */
             id: string;
+            /**
+             * Inferred Gate Kind
+             * @enum {string|null}
+             */
+            inferred_gate_kind?: ("thread_entry" | "reading_order") | null;
             migration_contract?: components["schemas"]["ExplicitReaderOrderMigrationContract"] | null;
             /** Name */
             name: string;
