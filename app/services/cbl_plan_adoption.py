@@ -43,9 +43,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
+from typing import NamedTuple, cast
 
+from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSourceEntry, CBLSourceList
@@ -73,6 +75,21 @@ class StalePreviewError(AdoptionCommitError):
     """Raised when the reviewed preview fingerprint no longer matches the source."""
 
     code: str = "stale_preview"
+
+
+class ConflictingComicVineIdentityError(AdoptionCommitError):
+    """Owned issue number is already confirmed as a different ComicVine issue.
+
+    Reconciliation refuses to attach a CBL entry to that issue. Adoption must
+    not override that decision by confirming the new id on the same row.
+    """
+
+
+class MaterializedIssue(NamedTuple):
+    """An issue reused or inserted for one approved CBL entry."""
+
+    issue: Issue
+    created: bool
 
 
 @dataclass
@@ -188,20 +205,111 @@ async def _find_existing_adopted_plan(
     return None
 
 
+def _comicvine_issue_id(fact: dict[str, object]) -> str | None:
+    """Return the ComicVine issue id from one reconciliation fact when present.
+
+    Args:
+        fact: Reconciliation facts for one CBL entry.
+
+    Returns:
+        The non-empty ComicVine issue id string, or None.
+    """
+    value = fact.get("comicvine_issue_id")
+    if value is None:
+        return None
+    comicvine_id = str(value).strip()
+    return comicvine_id or None
+
+
+async def _confirm_comicvine_issue_mapping(
+    db: AsyncSession,
+    issue: Issue,
+    comicvine_issue_id: str,
+) -> None:
+    """Confirm the ComicVine issue identity on an owned issue if it is missing.
+
+    Args:
+        db: Database session.
+        issue: Owned issue to link.
+        comicvine_issue_id: ComicVine issue external id.
+    """
+    identity_result = await db.execute(
+        select(ExternalIdentity).where(
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+            ExternalIdentity.external_id == comicvine_issue_id,
+        )
+    )
+    identity = identity_result.scalar_one_or_none()
+    if identity is None:
+        identity = ExternalIdentity(
+            provider="comicvine",
+            entity_type="issue",
+            external_id=comicvine_issue_id,
+            metadata_json={},
+        )
+        db.add(identity)
+        await db.flush()
+    existing_mapping = (
+        await db.execute(
+            select(IssueExternalIdentityMapping.id).where(
+                IssueExternalIdentityMapping.issue_id == issue.id,
+                IssueExternalIdentityMapping.external_identity_id == identity.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing_mapping is not None:
+        return
+    db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            evidence_source="cbl_adoption_commit",
+        )
+    )
+    await db.flush()
+
+
+async def _confirmed_comicvine_issue_ids(db: AsyncSession, issue_id: int) -> set[str]:
+    """Return ComicVine issue ids already confirmed on one owned issue."""
+    result = await db.execute(
+        select(ExternalIdentity.external_id)
+        .join(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
+        )
+        .where(
+            IssueExternalIdentityMapping.issue_id == issue_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            ExternalIdentity.provider == "comicvine",
+            ExternalIdentity.entity_type == "issue",
+        )
+    )
+    return {str(external_id) for external_id in result.scalars().all()}
+
+
 async def _ensure_missing_issue_created(
     db: AsyncSession,
     user_id: int,
     *,
     fact: dict[str, object],
     volume_year: int | None,
-) -> Issue:
+) -> MaterializedIssue:
     """Materialize a missing issue for an explicitly approved CBL entry.
 
-    Creates the owning series Thread and the Issue itself, and links the known
-    ComicVine issue identity so the new issue is canonical on the next
-    reconciliation. The Thread is resolved through the stable external series
-    identity when available; a titled series fallback is disambiguated by volume
-    year rather than guessed.
+    Reuses a just-created or already-owned issue when the same ComicVine
+    identity or the same thread+number is listed more than once in one
+    source (#3364). Creates the owning series Thread and the Issue only
+    when neither reuse path applies, and links the known ComicVine issue
+    identity so the issue is canonical on the next reconciliation. The
+    Thread is resolved through the stable external series identity when
+    available; a titled series fallback is disambiguated by volume year
+    rather than guessed.
+
+    A thread+number match is refused when that issue is already confirmed
+    as a different ComicVine issue. Reconciliation rejects that candidate
+    for the same reason; adoption must not confirm the conflicting id.
 
     Args:
         db: Database session.
@@ -210,15 +318,26 @@ async def _ensure_missing_issue_created(
         volume_year: Volume year used to disambiguate the series thread title.
 
     Returns:
-        The newly created Issue.
+        The reused or newly created issue, and whether a row was inserted.
 
     Raises:
+        ConflictingComicVineIdentityError: The number is already a different comic.
         AdoptionCommitError: If the entry cannot be materialized safely.
     """
     series_name = str(fact.get("series_name") or "")
     issue_number = str(fact.get("issue_number") or "")
-    comicvine_issue_id = fact.get("comicvine_issue_id")
+    comicvine_id = _comicvine_issue_id(fact)
     external_series_identity_id = fact.get("external_series_identity_id")
+
+    if comicvine_id is not None:
+        existing = await issue_repository.find_owned_issue_by_confirmed_identity(
+            db,
+            user_id,
+            provider="comicvine",
+            external_id=comicvine_id,
+        )
+        if existing is not None:
+            return MaterializedIssue(existing, False)
 
     thread = await _find_or_create_series_thread(
         db,
@@ -236,6 +355,28 @@ async def _ensure_missing_issue_created(
         thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1
 
     existing_issues = await issue_repository.locked_issues(db, thread.id)
+    existing_by_number = next(
+        (item for item in existing_issues if item.issue_number == issue_number),
+        None,
+    )
+    if existing_by_number is not None:
+        confirmed_ids = await _confirmed_comicvine_issue_ids(db, existing_by_number.id)
+        if comicvine_id is None:
+            if confirmed_ids:
+                raise ConflictingComicVineIdentityError(
+                    f"{series_name} #{issue_number} is already confirmed as a different "
+                    "ComicVine issue, so this entry was left unresolved."
+                )
+        elif comicvine_id not in confirmed_ids and confirmed_ids:
+            raise ConflictingComicVineIdentityError(
+                f"{series_name} #{issue_number} is already confirmed as ComicVine "
+                f"{', '.join(sorted(confirmed_ids))}, not {comicvine_id}, so this "
+                "entry was left unresolved."
+            )
+        elif comicvine_id not in confirmed_ids:
+            await _confirm_comicvine_issue_mapping(db, existing_by_number, comicvine_id)
+        return MaterializedIssue(existing_by_number, False)
+
     issue_position = max((item.position for item in existing_issues), default=0) + 1
     issue = Issue(
         thread_id=thread.id,
@@ -244,40 +385,21 @@ async def _ensure_missing_issue_created(
         status="unread",
     )
     db.add(issue)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise AdoptionCommitError(
+            f"Could not add {series_name} #{issue_number} to the library; "
+            "it collides with an issue that is already owned."
+        ) from exc
 
     apply_thread_issue_tracking_state(thread, [*existing_issues, issue])
     thread.status = "active"
 
-    if comicvine_issue_id is not None:
-        identity_result = await db.execute(
-            select(ExternalIdentity).where(
-                ExternalIdentity.provider == "comicvine",
-                ExternalIdentity.entity_type == "issue",
-                ExternalIdentity.external_id == str(comicvine_issue_id),
-            )
-        )
-        identity = identity_result.scalar_one_or_none()
-        if identity is None:
-            identity = ExternalIdentity(
-                provider="comicvine",
-                entity_type="issue",
-                external_id=str(comicvine_issue_id),
-                metadata_json={},
-            )
-            db.add(identity)
-            await db.flush()
-        db.add(
-            IssueExternalIdentityMapping(
-                issue_id=issue.id,
-                external_identity_id=identity.id,
-                status="confirmed",
-                evidence_source="cbl_adoption_commit",
-            )
-        )
-        await db.flush()
+    if comicvine_id is not None:
+        await _confirm_comicvine_issue_mapping(db, issue, comicvine_id)
 
-    return issue
+    return MaterializedIssue(issue, True)
 
 
 async def _find_or_create_series_thread(
@@ -507,15 +629,21 @@ async def _merge_adopted_nodes(
 
         created_now = False
         if existing_issue_id is None:
-            issue = await _ensure_missing_issue_created(
-                db,
-                user_id,
-                fact=fact,
-                volume_year=entry.volume_year,
-            )
+            try:
+                materialized = await _ensure_missing_issue_created(
+                    db,
+                    user_id,
+                    fact=fact,
+                    volume_year=entry.volume_year,
+                )
+            except ConflictingComicVineIdentityError:
+                unresolved_positions.append(entry.position)
+                continue
+            issue, created = materialized
             existing_issue_id = issue.id
-            created_positions.append(entry.position)
-            created_now = True
+            if created:
+                created_positions.append(entry.position)
+                created_now = True
 
         node = issues_by_id.get(existing_issue_id)
         if node is None:
@@ -681,7 +809,12 @@ async def adopt_cbl_material_into_reading_plan(
         series_decisions,
     )
 
-    node_models = _to_node_models(plan.nodes_json)
+    try:
+        node_models = _to_node_models(plan.nodes_json)
+    except ValidationError as exc:
+        raise AdoptionCommitError(
+            "Adopted entries could not be assembled into a valid Reading Plan."
+        ) from exc
     await validate_node_ownership(db, user_id=user_id, nodes=node_models)
     try:
         await replace_compiled_rules(
@@ -692,6 +825,12 @@ async def adopt_cbl_material_into_reading_plan(
             ordering_mode=_plan_ordering_mode(plan),
         )
         await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise AdoptionCommitError(
+            "Could not commit this reading order because it would duplicate "
+            "an issue already in the library or plan."
+        ) from exc
     except Exception:
         await db.rollback()
         raise
