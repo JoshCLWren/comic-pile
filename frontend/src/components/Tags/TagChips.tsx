@@ -95,13 +95,13 @@ function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
       <div className="flex max-w-full flex-wrap items-center gap-1">
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 py-1 text-sm font-bold text-[var(--theme-text-primary)]">
           <ColorDot color={tag.color} label={tag.name} />
-          <span className="min-w-0 truncate">{tag.name}</span>
+          <span className="min-w-0 truncate font-bold text-sm">{tag.name}</span>
           {canEdit && onRemove && (
             <button
               type="button"
               onClick={() => onRemove(tag)}
               aria-label={`Remove tag ${tag.name}`}
-              className="shrink-0 rounded-full px-1 text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              className="shrink-0 rounded-full px-1 text-[11px] text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             >
               ×
             </button>
@@ -158,7 +158,7 @@ function InheritedChip({ entry }: InheritedChipProps) {
       <div className="flex max-w-full flex-wrap items-center gap-1">
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-dashed border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 py-1 text-sm font-bold text-[var(--theme-text-primary)]">
           <ColorDot color={tag.color} label={tag.name} />
-          <span className="min-w-0 truncate">{tag.name}</span>
+          <span className="min-w-0 truncate font-bold text-sm">{tag.name}</span>
         </span>
         <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">
           Inherited
