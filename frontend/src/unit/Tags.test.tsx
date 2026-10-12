@@ -169,23 +169,26 @@ describe('tag chips (issue #3032)', () => {
       </MemoryRouter>,
     )
 
-    // The tag name is the primary readout in both direct and inherited chips:
-    // bold primary-text at body size, while state markers stay dim and tiny.
+    // The pill is the single owner of the chip's typography role, so the tag
+    // name reads first in both direct and inherited chips: body size, bold, in
+    // the primary text color. Asserting on the pill (not the inner name span)
+    // keeps this test tied to what actually renders the name.
     for (const name of ['Physical', 'Horror']) {
-      const nameEl = screen.getByText(name)
-      expect(nameEl.className).toContain('font-bold')
-      expect(nameEl.className).toContain('text-sm')
-      const chip = nameEl.closest('span')?.parentElement
-      expect(chip?.className).toContain('--theme-text-primary')
+      const pill = screen.getByText(name).parentElement
+      expect(pill).toHaveClass('text-sm')
+      expect(pill).toHaveClass('font-bold')
+      expect(pill).toHaveClass('text-[var(--theme-text-primary)]')
     }
+    // State markers stay tertiary beside the name rather than competing with
+    // it for width or emphasis.
     for (const marker of ['Inherited', 'via 2 sources']) {
-      const markerEl = screen.getByText(marker)
-      expect(markerEl.className).toMatch(/--theme-text-(dim|muted)/)
+      expect(screen.getByText(marker).className).toMatch(/--theme-text-(dim|muted)/)
     }
     // The remove affordance keeps an explicit compact size so it never
     // inherits the ambient body size and out-competes the tag name.
-    const removeEl = screen.getByRole('button', { name: 'Remove tag Physical' })
-    expect(removeEl.className).toContain('text-[11px]')
+    expect(screen.getByRole('button', { name: 'Remove tag Physical' })).toHaveClass(
+      'text-[11px]',
+    )
   })
 
   it('exposes every inheritance source with navigation to each source object', async () => {
