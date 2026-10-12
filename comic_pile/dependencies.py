@@ -544,6 +544,185 @@ async def refresh_user_blocked_status(
     return changes
 
 
+async def _get_legacy_affected_thread_ids(
+    user_id: int,
+    db: AsyncSession,
+    read_issue_id: int | None = None,
+    completed_thread_id: int | None = None,
+) -> set[int]:
+    """Find thread IDs whose blocked status may have changed due to a specific read or completion.
+
+    Args:
+        user_id: Thread owner.
+        db: Database session.
+        read_issue_id: Issue that was just marked as read (if any).
+        completed_thread_id: Thread that was just completed (if any).
+
+    Returns:
+        Set of thread IDs that should have their blocked status re-evaluated.
+    """
+    affected_ids: set[int] = set()
+
+    if read_issue_id is not None:
+        # Threads that depend on the issue that was just read.
+        source_issue = Issue.__table__.alias("source_issue")
+        next_unread_issue = Issue.__table__.alias("next_unread_issue")
+        target_thread = Thread.__table__.alias("target_thread")
+        source = Thread.__table__.alias("source_thread")
+
+        result = await db.execute(
+            select(target_thread.c.id)
+            .join(
+                next_unread_issue,
+                next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+            )
+            .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+            .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+            .join(source, source_issue.c.thread_id == source.c.id)
+            .where(target_thread.c.user_id == user_id)
+            .where(source.c.user_id == user_id)
+            .where(source_issue.c.id == read_issue_id)
+            .where(target_thread.c.next_unread_issue_id.isnot(None))
+            .distinct()
+        )
+        affected_ids.update(row[0] for row in result.all())
+
+    if completed_thread_id is not None:
+        # Threads that depend on any issue in the completed thread.
+        source_issue = Issue.__table__.alias("source_issue")
+        next_unread_issue = Issue.__table__.alias("next_unread_issue")
+        target_thread = Thread.__table__.alias("target_thread")
+        source = Thread.__table__.alias("source_thread")
+
+        result = await db.execute(
+            select(target_thread.c.id)
+            .join(
+                next_unread_issue,
+                next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+            )
+            .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+            .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+            .join(source, source_issue.c.thread_id == source.c.id)
+            .where(target_thread.c.user_id == user_id)
+            .where(source.c.user_id == user_id)
+            .where(source_issue.c.thread_id == completed_thread_id)
+            .where(target_thread.c.next_unread_issue_id.isnot(None))
+            .distinct()
+        )
+        affected_ids.update(row[0] for row in result.all())
+
+    return affected_ids
+
+
+async def _get_continuity_affected_thread_ids(
+    user_id: int,
+    db: AsyncSession,
+    read_issue_id: int | None = None,
+    completed_thread_id: int | None = None,
+) -> set[int]:
+    """Find thread IDs whose continuity-blocked status may have changed.
+
+    For continuity blocking, the graph is more interconnected, so we conservatively
+    return all threads that have a next_unread_issue when a relevant issue is read
+    or a thread is completed. This is still more targeted than refreshing all threads
+    when the user has many threads but only a few are in the dependency chain.
+    """
+    from app.services.continuity_graph import load_snapshot
+
+    snapshot = await load_snapshot(db, user_id)
+    affected_ids: set[int] = set()
+
+    if read_issue_id is not None:
+        # Find threads whose next_unread_issue has a path from the read issue.
+        # For simplicity, we check all threads with next_unread_issue.
+        # A more precise implementation would traverse the graph.
+        for thread_id, thread in snapshot.threads.items():
+            if thread.next_unread_issue_id is not None:
+                affected_ids.add(thread_id)
+
+    if completed_thread_id is not None:
+        for thread_id, thread in snapshot.threads.items():
+            if thread.next_unread_issue_id is not None:
+                affected_ids.add(thread_id)
+
+    return affected_ids
+
+
+async def refresh_affected_blocked_status(
+    user_id: int,
+    db: AsyncSession,
+    *,
+    read_issue_id: int | None = None,
+    completed_thread_id: int | None = None,
+) -> dict[int, bool]:
+    """Recalculate blocked flags only for threads affected by a specific change.
+
+    This is a targeted version of ``refresh_user_blocked_status`` that avoids
+    recomputing blocked status for all user threads when only a few could be
+    affected by the given change.
+
+    Args:
+        user_id: Thread owner.
+        db: Database session.
+        read_issue_id: Issue that was just marked as read (if any).
+        completed_thread_id: Thread that was just completed (if any).
+
+    Returns:
+        Mapping of changed thread IDs to their previous blocked flag.
+    """
+    if read_issue_id is None and completed_thread_id is None:
+        # Fall back to full refresh if no targeting info provided.
+        return await refresh_user_blocked_status(user_id, db)
+
+    legacy_affected = await _get_legacy_affected_thread_ids(
+        user_id, db, read_issue_id, completed_thread_id
+    )
+    continuity_affected = await _get_continuity_affected_thread_ids(
+        user_id, db, read_issue_id, completed_thread_id
+    )
+    affected_ids = legacy_affected | continuity_affected
+
+    if not affected_ids:
+        return {}
+
+    # Also include currently blocked threads in case they become unblocked.
+    blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
+    candidate_ids = affected_ids | (blocked_ids & affected_ids)
+
+    # Fetch current is_blocked values only for candidate threads.
+    result = await db.execute(
+        select(Thread.id, Thread.is_blocked)
+        .where(Thread.user_id == user_id)
+        .where(Thread.id.in_(candidate_ids))
+    )
+    prior_values = {row.id: row.is_blocked for row in result.all()}
+    changes = {
+        thread_id: old_value
+        for thread_id, old_value in prior_values.items()
+        if old_value != (thread_id in blocked_ids)
+    }
+
+    to_unblock = [thread_id for thread_id in changes if thread_id not in blocked_ids]
+    if to_unblock:
+        await db.execute(
+            update(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(to_unblock))
+            .values(is_blocked=False)
+        )
+
+    to_block = [thread_id for thread_id in changes if thread_id in blocked_ids]
+    if to_block:
+        await db.execute(
+            update(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(to_block))
+            .values(is_blocked=True)
+        )
+
+    return changes
+
+
 async def refresh_legacy_blocked_status(
     user_id: int,
     db: AsyncSession,
