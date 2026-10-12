@@ -20,12 +20,16 @@ from app.schemas.comicvine import (
 )
 from app.services.comicvine_fallback import (
     metadata_needs_hydration,
-    refresh_issue_metadata,
+    schedule_issue_metadata_refresh,
 )
 from app.services.comicvine_series_resolution import schedule_series_issue_resolution
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RELATED_ISSUES_PER_ARC = 60
+# A single issue rarely belongs to many story arcs, but provider metadata is
+# unbounded. Capping the arcs considered keeps the containment query (one OR
+# branch per arc) and the Python-side grouping bounded on the request path.
+MAX_ARCS_PER_INTELLIGENCE_READ = 10
 
 logger = logging.getLogger(__name__)
 
@@ -167,15 +171,35 @@ async def _related_external_rows(
     db: AsyncSession,
     arc_ids: list[int],
     current_external_id: str,
-) -> list[dict[str, object]]:
-    if not arc_ids:
-        return []
+) -> tuple[list[dict[str, object]], bool]:
+    """Fetch candidate arc members for the related-issues section.
+
+    The read only displays ``MAX_RELATED_ISSUES_PER_ARC`` members per arc, so
+    the query is bounded to that window (times the capped arc count) instead
+    of hydrating every row that shares an arc. Ordering stays deterministic
+    (``external_id``, then ``id``) and per-arc truncation still happens in
+    Python where cover-date ordering is applied.
+
+    Returns:
+        The candidate rows plus whether the bounded window was saturated, so
+        callers can resolve exact per-arc totals the truncated fetch can no
+        longer count locally.
+    """
+    capped_arc_ids: list[int] = []
+    for arc_id in arc_ids:
+        if arc_id not in capped_arc_ids:
+            capped_arc_ids.append(arc_id)
+        if len(capped_arc_ids) >= MAX_ARCS_PER_INTELLIGENCE_READ:
+            break
+    if not capped_arc_ids:
+        return [], False
     arc_predicates: list[str] = []
     parameters: dict[str, object] = {
         "provider": COMICVINE_PROVIDER,
         "current_external_id": current_external_id,
+        "related_row_limit": MAX_RELATED_ISSUES_PER_ARC * len(capped_arc_ids),
     }
-    for index, arc_id in enumerate(arc_ids):
+    for index, arc_id in enumerate(capped_arc_ids):
         credits_parameter = f"arc_credits_{index}"
         normalized_parameter = f"story_arcs_{index}"
         arc_predicates.extend(
@@ -201,11 +225,62 @@ async def _related_external_rows(
               AND ei.external_id <> :current_external_id
               AND ({containment_sql})
             ORDER BY ei.external_id, ei.id
+            LIMIT :related_row_limit
             """
         ),
         parameters,
     )
-    return [dict(row) for row in result.mappings().all()]
+    rows = [dict(row) for row in result.mappings().all()]
+    row_limit = int(parameters["related_row_limit"])
+    return rows, len(rows) >= row_limit
+
+
+async def _arc_related_total(
+    db: AsyncSession,
+    arc_id: int,
+    current_external_id: str,
+) -> int:
+    """Count every related member of one story arc without hydrating rows.
+
+    The bounded rows query can no longer report how many members an arc truly
+    has once its window truncates, and the UI exposes that total as the
+    ``(X of Y shown)`` indicator. This scalar count uses the same containment
+    predicates as the rows query so the displayed total stays exact while the
+    request path still fetches at most ``MAX_RELATED_ISSUES_PER_ARC`` rows per
+    arc.
+
+    Args:
+        db: Async database session.
+        arc_id: ComicVine story-arc identifier.
+        current_external_id: The current issue's external ID, excluded from
+            the total exactly as it is from the related rows.
+
+    Returns:
+        The number of distinct related ComicVine issue identities in the arc.
+    """
+    result = await db.execute(
+        text(
+            """
+            SELECT COUNT(DISTINCT ei.external_id)
+            FROM external_identities ei
+            WHERE ei.provider = :provider
+              AND ei.entity_type = 'issue'
+              AND ei.external_id <> :current_external_id
+              AND (
+                    ei.metadata_json::jsonb @> CAST(:arc_credits AS jsonb)
+                 OR ei.metadata_json::jsonb @> CAST(:arc_normalized AS jsonb)
+              )
+            """
+        ),
+        {
+            "provider": COMICVINE_PROVIDER,
+            "current_external_id": current_external_id,
+            "arc_credits": json.dumps({"story_arc_credits": [{"id": arc_id}]}),
+            "arc_normalized": json.dumps({"story_arcs": [{"id": arc_id}]}),
+        },
+    )
+    total = result.scalar()
+    return int(total) if total is not None else 0
 
 
 async def _comicpile_matches(
@@ -253,10 +328,11 @@ async def get_issue_intelligence(
 ) -> ComicVineIssueIntelligence | None:
     """Build curated metadata and explicit story-arc relationships for one issue.
 
-    Missing or stale metadata is hydrated inline for a bounded best-effort window before the
-    response is built, so Vercel/serverless never needs to keep a detached background task alive
-    after the request. When hydration succeeds, the freshly persisted provider metadata is served;
-    when it is skipped, rate-limited, or fails, the current database-backed result is returned.
+    The response is served entirely from trusted stored data: missing or stale
+    provider metadata schedules a non-blocking background refresh and the
+    current database-backed result is returned immediately. Interactive reads
+    never wait on live ComicVine network I/O (issue #3248). Related story-arc
+    members are likewise bounded to the per-arc display window.
 
     Args:
         db: Async database session.
@@ -272,16 +348,14 @@ async def get_issue_intelligence(
         return None
 
     if metadata_needs_hydration(identity):
-        try:
-            await refresh_issue_metadata(identity.id)
-        except Exception as e:
-            logger.warning(f"Hydration failed: {str(e).lower()} (issue_id={identity.id})")
-        await db.refresh(identity)
+        schedule_issue_metadata_refresh(identity.id)
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
     arc_ids = [arc_id for arc in arc_refs if (arc_id := _integer(arc.get("id"))) is not None]
-    related_rows = await _related_external_rows(db, arc_ids, identity.external_id)
+    related_rows, window_saturated = await _related_external_rows(
+        db, arc_ids, identity.external_id
+    )
     matches = await _comicpile_matches(
         db,
         [int(row["identity_id"]) for row in related_rows],
@@ -322,8 +396,11 @@ async def get_issue_intelligence(
             related_by_arc.get(arc_id, []),
             key=lambda item: (item.cover_date or "", item.series_name or "", item.issue_number or ""),
         )
-        total_count = len(all_related)
         related_issues = all_related[:MAX_RELATED_ISSUES_PER_ARC]
+        if window_saturated:
+            total_count = await _arc_related_total(db, arc_id, identity.external_id)
+        else:
+            total_count = len(all_related)
         story_arcs.append(
             ComicVineStoryArc(
                 comicvine_arc_id=arc_id,

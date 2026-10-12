@@ -158,8 +158,8 @@ def test_new_slots_pin_apodex_and_native_ling_31(validate) -> None:
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in rows}
 
 
-def test_worker_76_pins_native_fledge_alpha_free(validate) -> None:
-    """Worker 76 is the native OpenCode fledge-alpha-free slot."""
+def test_worker_76_fledge_alpha_free_is_retired_by_discovery(validate) -> None:
+    """Worker 76 was retired once fledge-alpha-free left the Zen catalog."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     by_worker = {row["worker"]: row for row in rows}
     assert by_worker["46"]["source"] == "kilo-auto"
@@ -167,12 +167,9 @@ def test_worker_76_pins_native_fledge_alpha_free(validate) -> None:
     assert by_worker["74"]["model"] == "apodex/apodex-1.1-mini:free"
     assert by_worker["75"]["model"] == "ling-3.1-flash-free"
     assert by_worker["75"]["model"] != "inclusionai/ling-3.1-flash"
-    assert by_worker["76"]["source"] == "opencode-free"
-    assert by_worker["76"]["model"] == "fledge-alpha-free"
-    assert by_worker["76"]["minute"] == "0"
-    assert validate.opencode_model_is_free(by_worker["76"]["model"])
+    assert "76" not in by_worker
+    assert "fledge-alpha-free" not in {row["model"] for row in rows}
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in rows}
-
 
 def test_new_slots_pin_nvidia_kimi_k3_and_glm_53(validate) -> None:
     """Workers 77–78 are Harvy-smoked native NVIDIA NIM slots (kimi-k3, glm-5.3)."""
@@ -184,7 +181,7 @@ def test_new_slots_pin_nvidia_kimi_k3_and_glm_53(validate) -> None:
     assert by_worker["77"]["minute"] == "35"
     assert by_worker["78"]["source"] == "nvidia"
     assert by_worker["78"]["model"] == "z-ai/glm-5.3"
-    assert by_worker["78"]["minute"] == "45"
+    assert by_worker["78"]["minute"] == "0"
 
 
 def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
