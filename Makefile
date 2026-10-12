@@ -1,4 +1,4 @@
-.PHONY: help init setup next-task start-task lint python-ci-lint verify verify-e2e pytest sync venv githook install-githook tidy
+.PHONY: help init setup next-task start-task lint python-ci-lint verify verify-e2e verify-e2e-regression pytest sync venv githook install-githook tidy
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
@@ -99,6 +99,9 @@ verify:  ## Run backend and frontend lint, typecheck, build, and unit tests
 
 verify-e2e:  ## Run the TypeScript Playwright suite
 	@pnpm --filter frontend run test:e2e
+
+verify-e2e-regression:  ## Run inventory-driven Chromium regression (SCOPE=p1-p2|p0|all)
+	@pnpm --filter frontend run test:e2e:regression $(if $(SCOPE),--scope $(SCOPE),)
 
 install-githook:  ## Install git hooks for new developers
 	@bash scripts/install-git-hooks.sh

@@ -2,6 +2,7 @@
 #
 # Epic:       #1476 — Rebuild ComicPile E2E from a canonical behavior inventory
 # Child work: #1479 — inventory canonical user behaviors with stable scenario IDs
+#             #1483 — scheduled/manual Chromium regression runs selected from this file
 #
 # This file is the single, authoritative inventory of what ComicPile's browser
 # E2E suite must protect. It is the source of truth for coverage work; the
@@ -20,13 +21,19 @@
 #   behavior — user-visible behavior / invariant at the user-contract level
 #   priority — P0 | P1 | P2
 #   status   — uncovered | covered | blocked
+#   specs    — required when status is `covered`: the Playwright spec files
+#              (basenames under frontend/src/test/) that own this scenario ID.
+#              The scheduled regression selector (scripts/e2e_regression_select.py)
+#              executes exactly these files, so a covered entry with a missing
+#              spec file fails selection instead of silently losing coverage.
 #   mobile   — optional note when behavior materially differs on mobile
 #   evidence — optional supporting references (legacy tests / bug history)
 
 meta:
-  version: 1
+  version: 2
   generated_for: "current product behavior (after #1478 legacy suite removal)"
   source_of_truth: "current routes, UI, APIs, user workflows, business invariants"
+  coverage_selection: "scripts/e2e_regression_select.py maps priority scopes (p0, p1-p2, all) to the spec files listed here"
   priority_definitions:
     P0: "Core user journey that must never regress; protects startup and primary flows."
     P1: "Important historical regression or secondary flow that should be covered."
@@ -43,6 +50,14 @@ behaviors:
     behavior: "User can sign in with username/password and obtain a session"
     priority: P0
     status: covered
+    specs: ["p0-auth-startup.spec.ts"]
+
+  - id: AUTH-002
+    area: auth
+    behavior: "Authenticated session loss degrades gracefully and recovers to the original route"
+    priority: P0
+    status: covered
+    specs: ["p0-auth-outage-recovery.spec.ts"]
 
   # ---- Queue availability (P0) ----
   - id: QUEUE-001
@@ -50,6 +65,7 @@ behaviors:
     behavior: "Queue page displays pending comics in order and allows marking as completed"
     priority: P0
     status: covered
+    specs: ["issue-932-queue-bounded-pagination.spec.ts", "issue-2571-queue-pagination-regression.spec.ts"]
 
   # ---- Roll selection (P0) ----
   - id: ROLL-001
@@ -57,6 +73,7 @@ behaviors:
     behavior: "User can roll a comic and see the result"
     priority: P0
     status: covered
+    specs: ["p0-roll-selection.spec.ts"]
 
   # ---- Rating / advance (P0) ----
   - id: RATE-001
@@ -64,6 +81,7 @@ behaviors:
     behavior: "User can rate a comic after viewing"
     priority: P0
     status: covered
+    specs: ["p0-rate-comic.spec.ts"]
 
   # ---- Snooze / unsnooze (P0) ----
   - id: SNOOZE-001
@@ -71,6 +89,7 @@ behaviors:
     behavior: "User can snooze or unsnooze a comic and it appears appropriately in the queue"
     priority: P0
     status: covered
+    specs: ["p0-snooze-unsnooze.spec.ts"]
 
   # ---- Core thread management (P0) ----
   - id: THREAD-001
@@ -78,6 +97,7 @@ behaviors:
     behavior: "Users can create, edit, and delete thread topics"
     priority: P0
     status: covered
+    specs: ["p0-thread-management.spec.ts"]
 
   # ---- Dependency behavior (P0) ----
   - id: DEP-001
@@ -85,6 +105,7 @@ behaviors:
     behavior: "Dependency relations between comics are resolved correctly"
     priority: P0
     status: covered
+    specs: ["p0-dependencies-reading-order.spec.ts"]
 
   # ---- Reading-order behavior (P0) ----
   - id: ORDER-001
@@ -92,6 +113,7 @@ behaviors:
     behavior: "Reading order follows declared dependency graph"
     priority: P0
     status: covered
+    specs: ["p0-dependencies-reading-order.spec.ts"]
 
   # ---- Primary mobile interaction path (P0) ----
   - id: MOBILE-001
@@ -99,6 +121,185 @@ behaviors:
     behavior: "Primary mobile interaction path works for core user journeys"
     priority: P0
     status: covered
+    specs: ["p0-mobile-interaction.spec.ts"]
+
+  # ---- Historical regressions promoted to P1 coverage (issue #1483) ----
+  - id: AUTH-003
+    area: auth
+    behavior: "Account switching isolates per-account data and stops signed-out requests"
+    priority: P1
+    status: covered
+    specs: ["auth-account-switching.spec.ts"]
+
+  - id: AUTH-004
+    area: auth
+    behavior: "Guest demo roll runs end to end and prompts conversion without persisting"
+    priority: P1
+    status: covered
+    specs: ["issue-2757-guest-demo-roll.spec.ts"]
+
+  - id: QUEUE-002
+    area: queue
+    behavior: "Queue keeps one scroll surface across virtualization with no nested scrollers or blank regions"
+    priority: P1
+    status: covered
+    specs: ["issue-2184-queue-nested-scroll.spec.ts", "issue-2725-queue-virtualization-blank-region.spec.ts"]
+
+  - id: QUEUE-003
+    area: queue
+    behavior: "Queue Read Now lands on the rating view for the chosen thread"
+    priority: P1
+    status: covered
+    specs: ["issue-2153-queue-read-now.spec.ts"]
+
+  - id: QUEUE-004
+    area: queue
+    behavior: "Queue card text and titles stay readable inside their row at desktop and tablet widths"
+    priority: P1
+    status: covered
+    specs: ["issue-1637-queue-text-overflow.spec.ts", "issue-2284-queue-tablet-title-width.spec.ts"]
+
+  - id: ROLL-002
+    area: roll
+    behavior: "Rendered Roll layout invariants hold across sparse, rich, and dense states"
+    priority: P1
+    status: covered
+    specs:
+      - "issue-1943-roll-desktop-layout.spec.ts"
+      - "issue-1944-roll-layout-invariants.spec.ts"
+      - "issue-2919-roll-desktop-layout-overlap.spec.ts"
+      - "issue-2942-roll-layout-invariants.spec.ts"
+      - "issue-2992-roll-density-guard.spec.ts"
+      - "roll-layout-containment.spec.ts"
+
+  - id: ROLL-003
+    area: roll
+    behavior: "Roll primary action hierarchy and roll-mode grammar stay unambiguous"
+    priority: P1
+    status: covered
+    specs: ["issue-2197-roll-primary-action.spec.ts", "issue-2304-roll-mode-control.spec.ts"]
+
+  - id: ROLL-004
+    area: roll
+    behavior: "A fresh roll anchors the rating surface start at the top of the viewport"
+    priority: P1
+    status: covered
+    specs: ["issue-2286-roll-scroll-anchor.spec.ts", "issue-2492-roll-scroll-reading-boundaries.spec.ts"]
+
+  - id: ROLL-005
+    area: roll
+    behavior: "Roll cover renders a stable portrait surface within the viewport budget"
+    priority: P1
+    status: covered
+    specs: ["issue-2352-roll-cover-geometry.spec.ts"]
+
+  - id: ROLL-006
+    area: roll
+    behavior: "Roll interactive controls meet WCAG 2.2 AA target-size minimums"
+    priority: P1
+    status: covered
+    specs: ["issue-1885-roll-target-sizes.spec.ts", "issue-1883-roll-a11y-duplicates.spec.ts"]
+
+  - id: ROLL-007
+    area: roll
+    behavior: "Roll metadata details and cover utilities follow the redesign contract"
+    priority: P1
+    status: covered
+    specs: ["issue-2768-roll-metadata-details.spec.ts"]
+
+  - id: ROLL-008
+    area: roll
+    behavior: "Back after opening a creator from Roll returns to the previous roll without rerolling"
+    priority: P1
+    status: covered
+    specs: ["issue-2544-roll-back-button.spec.ts"]
+
+  - id: ROLL-009
+    area: roll
+    behavior: "Manual die-ladder selection updates the roll readout"
+    priority: P1
+    status: covered
+    specs: ["issue-3144-manual-die-ladder-readout.spec.ts"]
+
+  - id: REG-001
+    area: regression
+    behavior: "Fixed chrome and the app shell never overlap page content across supported viewports"
+    priority: P1
+    status: covered
+    specs: ["issue-1645-fixed-chrome-overlap.spec.ts", "issue-2023-responsive-app-shell.spec.ts"]
+
+  - id: REG-002
+    area: regression
+    behavior: "Authenticated navigation is intentional at desktop and collapses cleanly on tablet"
+    priority: P1
+    status: covered
+    specs: ["issue-1887-desktop-navigation.spec.ts", "issue-2285-nav-collapse.spec.ts"]
+
+  - id: REG-003
+    area: regression
+    behavior: "Desktop sidebar controls stay contained inside their rendered boundary"
+    priority: P1
+    status: covered
+    specs: ["issue-1941-sidebar-theme-containment.spec.ts"]
+
+  - id: REG-004
+    area: regression
+    behavior: "Normal Roll, crossover detail, and planner never request deleted readiness surfaces"
+    priority: P1
+    status: covered
+    specs: ["issue-2104-zero-readiness.spec.ts"]
+
+  - id: REG-005
+    area: regression
+    behavior: "Legacy /threads/:id URLs and crossover reading flows land on working pages"
+    priority: P1
+    status: covered
+    specs: ["issue-3268-threads-route-redirect.spec.ts"]
+
+  - id: REG-006
+    area: regression
+    behavior: "Roll and Queue actions move focus to the result surface"
+    priority: P1
+    status: covered
+    specs: ["issue-3147-focus-management.spec.ts"]
+
+  - id: MOBILE-002
+    area: mobile
+    behavior: "Blocked Roll content stays usable on narrow mobile screens"
+    priority: P1
+    status: covered
+    specs: ["issue-2468-mobile-blocked-roll.spec.ts"]
+
+  - id: MOBILE-003
+    area: mobile
+    behavior: "Narrow rating actions keep contained touch targets at tablet and phone widths"
+    priority: P1
+    status: covered
+    specs: ["issue-2350-rating-action-reflow.spec.ts"]
+
+  - id: CREATOR-001
+    area: feature
+    behavior: "Creator browse, detail, and comparison routes render responsive summaries"
+    priority: P1
+    status: covered
+    specs:
+      - "issue-2030-creator-detail.spec.ts"
+      - "issue-2774-creators-browse.spec.ts"
+      - "issue-3091-creator-comparison.spec.ts"
+
+  - id: RMODE-001
+    area: feature
+    behavior: "Reading-mode switching, quiz flow, and bootstrap restore behave per contract"
+    priority: P1
+    status: covered
+    specs: ["reading-mode-acceptance.spec.ts", "reading-mode-quiz.spec.ts"]
+
+  - id: PLAN-001
+    area: feature
+    behavior: "Reading-plan CBL golden path and browser CBL flows work end to end"
+    priority: P1
+    status: covered
+    specs: ["reading-plan-cbl-golden-path.spec.ts", "cbl-browser.spec.ts"]
 
   # ---- Secondary features (P2) ----
   - id: CONT-001
@@ -106,3 +307,25 @@ behaviors:
     behavior: "User can create and modify continuity plans with parallel lanes"
     priority: P2
     status: covered
+    specs: ["continuity-parallel-lanes.spec.ts", "continuity-checkpoint-convergence.spec.ts"]
+
+  - id: CONT-002
+    area: feature
+    behavior: "Continuity lists reflow with the page instead of nested scrollers at tablet widths"
+    priority: P2
+    status: covered
+    specs: ["issue-2297-story-arcs-nested-scroll.spec.ts", "issue-2298-crossover-reading-order.spec.ts"]
+
+  - id: CONT-003
+    area: feature
+    behavior: "Planner selections and dialogs stay visible and reachable at tablet widths"
+    priority: P2
+    status: covered
+    specs: ["issue-2299-planner-selected-title.spec.ts", "issue-2296-fix-issue-modal.spec.ts"]
+
+  - id: THEME-001
+    area: feature
+    behavior: "Each theme keeps a distinct visual personality with shared semantic accents"
+    priority: P2
+    status: covered
+    specs: ["issue-2232-theme-personality.spec.ts"]
