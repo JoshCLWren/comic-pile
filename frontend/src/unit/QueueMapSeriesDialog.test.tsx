@@ -1,10 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PropsWithChildren, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
-import type { ComicVineSeriesResult } from '../services/api-comicvine'
+import type { ComicVineSeriesResult, ComicVineSeriesSearchResponse } from '../services/api-comicvine'
 import { seriesMappingApi } from '../services/api-series-mapping'
 import type {
   SeriesMappingCommitResponse,
@@ -151,6 +151,32 @@ const COMMIT_SUCCESS: SeriesMappingCommitResponse = {
   },
 }
 
+const VOLUME_2: ComicVineSeriesResult = {
+  comicvine_volume_id: 31111,
+  name: 'Saga (Book Two)',
+  publisher: 'Image',
+  start_year: 2019,
+  issue_count: 18,
+  site_detail_url: null,
+  image_url: null,
+}
+
+function searchResponse(
+  results: ComicVineSeriesResult[],
+  overrides: Partial<ComicVineSeriesSearchResponse> = {},
+): ComicVineSeriesSearchResponse {
+  return {
+    query: 'Saga',
+    results,
+    total_available: results.length,
+    offset: 0,
+    limit: 10,
+    has_more: false,
+    next_offset: null,
+    ...overrides,
+  }
+}
+
 function issueListResponse(): IssueListResponse {
   return {
     issues: [
@@ -186,17 +212,9 @@ function renderDialog(onMapped = vi.fn(), onClose = vi.fn()) {
   }
 }
 
-beforeEach(() => {
+  beforeEach(() => {
   vi.clearAllMocks()
-  mockedSearchSeries.mockResolvedValue({
-    query: 'Saga',
-    results: [VOLUME],
-    total_available: 1,
-    offset: 0,
-    limit: 10,
-    has_more: false,
-    next_offset: null,
-  })
+  mockedSearchSeries.mockResolvedValue(searchResponse([VOLUME]))
   mockedListIssues.mockResolvedValue(issueListResponse())
   mockedPreview.mockResolvedValue(
     previewResponse([
@@ -293,15 +311,7 @@ describe('QueueMapSeriesDialog', () => {
     )
     expect(onClose).not.toHaveBeenCalled()
 
-    mockedSearchSeries.mockResolvedValue({
-      query: 'Saga',
-      results: [VOLUME],
-      total_available: 1,
-      offset: 0,
-      limit: 10,
-      has_more: false,
-      next_offset: null,
-    })
+    mockedSearchSeries.mockResolvedValue(searchResponse([VOLUME]))
     await user.type(screen.getByTestId('queue-map-series-search-input'), '!')
     expect((await screen.findAllByTestId('queue-map-series-result')).length).toBeGreaterThan(0)
   })
@@ -375,5 +385,353 @@ describe('QueueMapSeriesDialog', () => {
     renderDialog()
 
     expect(await screen.findByText('This series has no tracked issues to map.')).toBeInTheDocument()
+  })
+
+  it('does not search when the thread title has no usable text', async () => {
+    render(
+      <QueueMapSeriesDialog
+        isOpen
+        threadId={7}
+        threadTitle=""
+        onClose={vi.fn()}
+        onMapped={vi.fn()}
+      />,
+      { wrapper: createWrapper() },
+    )
+
+    expect(mockedSearchSeries).not.toHaveBeenCalled()
+    expect(screen.getByTestId('queue-map-series-search-input')).toHaveValue('')
+  })
+
+  it('shows a searching indicator and ignores a stale response that resolves later', async () => {
+    const user = userEvent.setup()
+    let resolveFirst!: (value: ComicVineSeriesSearchResponse) => void
+    mockedSearchSeries
+      .mockImplementationOnce(
+        () =>
+          new Promise<ComicVineSeriesSearchResponse>((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockResolvedValueOnce(searchResponse([VOLUME]))
+    renderDialog()
+
+    expect(await screen.findByLabelText('Searching')).toBeInTheDocument()
+
+    await user.type(screen.getByTestId('queue-map-series-search-input'), '!')
+    await waitFor(() => expect(mockedSearchSeries).toHaveBeenCalledTimes(2))
+    expect(await screen.findAllByTestId('queue-map-series-result')).toHaveLength(1)
+
+    resolveFirst(
+      searchResponse([
+        VOLUME,
+        { ...VOLUME_2, comicvine_volume_id: 99999, name: 'Stale Volume' },
+      ]),
+    )
+    await waitFor(() => expect(mockedSearchSeries).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText('Stale Volume')).not.toBeInTheDocument()
+    expect(await screen.findAllByTestId('queue-map-series-result')).toHaveLength(1)
+  })
+
+  it('loads more results and deduplicates volumes already listed', async () => {
+    const user = userEvent.setup()
+    mockedSearchSeries.mockResolvedValueOnce(
+      searchResponse([VOLUME], { has_more: true, next_offset: 10 }),
+    )
+    mockedSearchSeries.mockResolvedValueOnce(
+      searchResponse([VOLUME, VOLUME_2], { offset: 10, has_more: false, next_offset: null }),
+    )
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-back'))
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+
+    await user.click(screen.getByTestId('queue-map-series-load-more'))
+
+    expect(mockedSearchSeries).toHaveBeenLastCalledWith('Saga', 10, 10, true)
+    expect(await screen.findAllByTestId('queue-map-series-result')).toHaveLength(2)
+    expect(screen.getByText('Saga (Book Two)')).toBeInTheDocument()
+    expect(screen.queryByTestId('queue-map-series-load-more')).not.toBeInTheDocument()
+  })
+
+  it('disables the load more button while a search is in flight', async () => {
+    const user = userEvent.setup()
+    mockedSearchSeries.mockResolvedValueOnce(
+      searchResponse([VOLUME], { has_more: true, next_offset: 10 }),
+    )
+    let resolveSecond!: (value: ComicVineSeriesSearchResponse) => void
+    mockedSearchSeries.mockImplementationOnce(
+      () =>
+        new Promise<ComicVineSeriesSearchResponse>((resolve) => {
+          resolveSecond = resolve
+        }),
+    )
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-back'))
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+
+    await user.type(screen.getByTestId('queue-map-series-search-input'), '!')
+    await waitFor(() => expect(mockedSearchSeries).toHaveBeenCalledTimes(2))
+
+    const loadMore = screen.getByTestId('queue-map-series-load-more')
+    expect(loadMore).toHaveTextContent('Loading...')
+    expect(loadMore).toBeDisabled()
+    fireEvent.click(loadMore)
+    expect(mockedSearchSeries).toHaveBeenCalledTimes(2)
+
+    resolveSecond(searchResponse([VOLUME_2], { has_more: false, next_offset: null }))
+    expect(await screen.findByText('Saga (Book Two)')).toBeInTheDocument()
+    expect(screen.queryByTestId('queue-map-series-load-more')).not.toBeInTheDocument()
+  })
+
+  it('clears the results when the search text is emptied', async () => {
+    const user = userEvent.setup()
+    renderDialog()
+
+    await screen.findByTestId('queue-map-series-result')
+    await user.clear(screen.getByTestId('queue-map-series-search-input'))
+
+    expect(screen.queryByTestId('queue-map-series-result')).not.toBeInTheDocument()
+    expect(screen.queryByText('No volumes matched that search.')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('queue-map-series-load-more')).not.toBeInTheDocument()
+  })
+
+  it('shows an empty-results message when no volumes match', async () => {
+    mockedSearchSeries.mockResolvedValueOnce(searchResponse([]))
+    renderDialog()
+
+    expect(await screen.findByText('No volumes matched that search.')).toBeInTheDocument()
+    expect(screen.queryByTestId('queue-map-series-result')).not.toBeInTheDocument()
+  })
+
+  it('returns to search and re-previews when choosing a different volume', async () => {
+    const user = userEvent.setup()
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await screen.findByTestId('queue-map-series-preview')
+
+    await user.click(screen.getByTestId('queue-map-series-back'))
+    expect(screen.getByTestId('queue-map-series-search-input')).toBeInTheDocument()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await screen.findByTestId('queue-map-series-preview')
+
+    expect(mockedPreview).toHaveBeenCalledTimes(2)
+  })
+
+  it('unchecks and rechecks safe rows, updating the approval count', async () => {
+    const user = userEvent.setup()
+    mockedPreview.mockResolvedValueOnce(
+      previewResponse([
+        previewRow({}),
+        previewRow({
+          row_id: 'issue:3',
+          issue_id: 3,
+          issue_number: '3',
+          title: 'Chapter Three',
+        }),
+      ]),
+    )
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    const approve = await screen.findByTestId('queue-map-series-approve')
+    expect(approve).toHaveTextContent('Map 2 issues')
+
+    const checkboxes = screen.getAllByRole('checkbox')
+    expect(checkboxes).toHaveLength(2)
+    await user.click(checkboxes[0])
+    expect(screen.getByTestId('queue-map-series-approve')).toBeDisabled()
+
+    await user.click(screen.getAllByRole('checkbox')[0])
+    expect(screen.getByTestId('queue-map-series-approve')).toHaveTextContent('Map 2 issues')
+  })
+
+  it('labels rows without an issue number as Unnumbered and omits missing titles', async () => {
+    const user = userEvent.setup()
+    mockedPreview.mockResolvedValueOnce(
+      previewResponse([
+        previewRow({ issue_number: '', title: null }),
+      ]),
+    )
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+
+    const row = await screen.findByTestId('queue-map-series-row')
+    expect(row).toHaveTextContent('Unnumbered')
+    expect(row).not.toHaveTextContent('Chapter Two')
+  })
+
+  it('omits meta text when the volume has no publisher, year, or issue count', async () => {
+    mockedSearchSeries.mockResolvedValueOnce(
+      searchResponse([{ ...VOLUME, publisher: null, start_year: null, issue_count: null }]),
+    )
+    renderDialog()
+
+    const result = await screen.findByRole('button', { name: 'Saga' })
+    expect(result).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Image/ })).not.toBeInTheDocument()
+  })
+
+  it('disables volume selection when the origin issue fails to load', async () => {
+    mockedListIssues.mockRejectedValueOnce(new Error('origin down'))
+    renderDialog()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This series could not be loaded for mapping. Please try again.',
+    )
+    expect(screen.getByTestId('queue-map-series-result')).toBeDisabled()
+  })
+
+  it('reports a generic commit failure without refreshing the Queue', async () => {
+    const user = userEvent.setup()
+    mockedCommit.mockRejectedValueOnce(new Error('commit failed'))
+    const { onMapped } = renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not map the series. Nothing was changed.',
+    )
+    expect(onMapped).not.toHaveBeenCalled()
+    expect(invalidateQueueSpy).not.toHaveBeenCalled()
+  })
+
+  it('re-reads the plan when the commit reports a stale preview', async () => {
+    const user = userEvent.setup()
+    mockedCommit.mockRejectedValueOnce({
+      response: { status: 409, data: { detail: 'preview_expired' } },
+    })
+    const { onMapped } = renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2))
+    expect(onMapped).not.toHaveBeenCalled()
+    expect(invalidateQueueSpy).not.toHaveBeenCalled()
+  })
+
+  it('uses plural wording when multiple issues map and some still need review', async () => {
+    const user = userEvent.setup()
+    mockedCommit.mockResolvedValueOnce({
+      ...COMMIT_SUCCESS,
+      confirmed_issue_ids: [2, 3],
+      needs_review_issue_ids: [4, 5],
+      hydration_queued_issue_ids: [2, 3],
+    })
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('2 issues mapped to Saga')
+    expect(screen.getByRole('status')).toHaveTextContent('2 still need review.')
+    expect(screen.getByTestId('queue-map-series-dismiss')).toHaveTextContent('Done')
+    expect(screen.queryByTestId('queue-map-series-approve')).not.toBeInTheDocument()
+  })
+
+  it('does not mention review when nothing is left for review', async () => {
+    const user = userEvent.setup()
+    mockedCommit.mockResolvedValueOnce({
+      ...COMMIT_SUCCESS,
+      needs_review_issue_ids: [],
+      hydration_queued_issue_ids: [2],
+    })
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
+    expect(screen.queryByText(/still need/)).not.toBeInTheDocument()
+  })
+
+  it('explains when the volume has no exact matches for owned issues', async () => {
+    const user = userEvent.setup()
+    mockedPreview.mockResolvedValueOnce(
+      previewResponse([
+        previewRow({
+          row_id: 'issue:3',
+          issue_id: 3,
+          issue_number: '3',
+          title: 'Chapter Three',
+          classification: 'needs_review_ambiguous',
+          proposed_mapping: false,
+          default_selected: false,
+        }),
+      ]),
+    )
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+
+    expect(await screen.findByText(/No exact matches for your issues in this volume/)).toBeInTheDocument()
+    expect(screen.getByTestId('queue-map-series-approve')).toBeDisabled()
+  })
+
+  it('shows a pending state while the commit is in flight', async () => {
+    const user = userEvent.setup()
+    let resolveCommit!: (value: SeriesMappingCommitResponse) => void
+    mockedCommit.mockImplementationOnce(
+      () =>
+        new Promise<SeriesMappingCommitResponse>((resolve) => {
+          resolveCommit = resolve
+        }),
+    )
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('button', { name: 'Mapping...' })).toBeInTheDocument()
+    expect(screen.getByTestId('queue-map-series-dismiss')).toBeDisabled()
+
+    resolveCommit(COMMIT_SUCCESS)
+    expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
+  })
+
+  it('counts provider inventory in plural when several rows are not owned', async () => {
+    const user = userEvent.setup()
+    mockedPreview.mockResolvedValueOnce(
+      previewResponse([
+        previewRow({}),
+        previewRow({
+          row_id: 'provider:99',
+          issue_id: 99,
+          issue_number: '99',
+          title: 'Not owned',
+          classification: 'unresolved',
+          thread_id: null,
+          thread_title: null,
+          proposed_mapping: false,
+          default_selected: false,
+        }),
+        previewRow({
+          row_id: 'provider:100',
+          issue_id: 100,
+          issue_number: '100',
+          title: 'Also not owned',
+          classification: 'unresolved',
+          thread_id: null,
+          thread_title: null,
+          proposed_mapping: false,
+          default_selected: false,
+        }),
+      ]),
+    )
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+
+    expect(await screen.findByTestId('queue-map-series-provider-inventory')).toHaveTextContent(
+      '2 other issues are in this volume but not in your library',
+    )
   })
 })
