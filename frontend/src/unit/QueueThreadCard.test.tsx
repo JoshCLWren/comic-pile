@@ -4,7 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { BlockingDependency, ThreadListItem } from '../types'
-import type { ComicVineMappingHealth } from '../generated/openapi'
+import type { components } from '../generated/openapi'
+type ComicVineMappingHealth = components['schemas']['ComicVineMappingHealth']
 
 vi.mock('../components/Tooltip', () => ({
   default: ({ children, content }: { children: React.ReactNode; content?: string }) => (
@@ -100,15 +101,12 @@ function createMockThread(overrides: Partial<ThreadListItem> = {}): ThreadListIt
     issues_remaining: 5,
     total_issues: 10,
     next_unread_issue_number: null,
-    reading_progress: '50.0',
     queue_position: 1,
     status: 'active',
     is_blocked: false,
     blocking_reasons: [],
     notes: null,
     last_activity_at: null,
-    last_rating: null,
-    is_test: false,
     created_at: '2024-01-01T00:00:00.000Z',
     comicvine_mapping: null,
     ...overrides,
