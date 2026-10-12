@@ -29,6 +29,19 @@ def _json_response(payload: object, status_code: int = 200) -> MagicMock:
     response.status_code = status_code
     response.text = f"status {status_code}"
     response.json.return_value = payload
+
+    def _raise_for_status() -> None:
+        """Fail GitHub error statuses like the real client, pass the rest."""
+        if status_code < 400:
+            return
+        request = httpx.Request("POST", "https://api.github.com/repos/o/r/issues")
+        raise httpx.HTTPStatusError(
+            f"status {status_code}",
+            request=request,
+            response=httpx.Response(status_code, text=response.text, request=request),
+        )
+
+    response.raise_for_status = _raise_for_status
     return response
 
 
@@ -944,7 +957,7 @@ class TestPerformanceGithubClient:
         from app.services import github_service as gh
 
         def _post(url: str, headers: dict, payload: dict) -> object:
-            """Return a body without an issue URL."""
+            """Fail the creation with a GitHub validation error."""
             return _json_response({"message": "Validation Failed"}, status_code=422)
 
         client_double, _ = _github_client_double(post_handler=_post)
@@ -956,6 +969,26 @@ class TestPerformanceGithubClient:
             ),
         ):
             with pytest.raises(RuntimeError, match="issue"):
+                await gh.create_performance_issue(title="t", body="b", labels=["bug"])
+
+    @pytest.mark.asyncio
+    async def test_create_performance_issue_missing_url_raises_runtime_error(self) -> None:
+        """A 2xx body without an issue URL becomes RuntimeError, never a KeyError."""
+        from app.services import github_service as gh
+
+        def _post(url: str, headers: dict, payload: dict) -> object:
+            """Return a success body that carries no issue URL."""
+            return _json_response({"message": "Validation Failed"})
+
+        client_double, _ = _github_client_double(post_handler=_post)
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="response contained no issue URL"):
                 await gh.create_performance_issue(title="t", body="b", labels=["bug"])
 
 
