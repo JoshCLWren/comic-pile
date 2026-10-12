@@ -424,9 +424,9 @@ async def load_creator_summary_inputs_optimized(
 ) -> tuple[CreatorSummaryInputs, frozenset[int], set[str], str]:
     """Load creator summary inputs and resolve creator issues in one call.
 
-    This optimized version combines loading the full user-scoped inputs with
-    resolving the specific creator's attributed issues, roles, and display name,
-    avoiding a separate Python pass over all credits when only one creator is needed.
+    This combined function loads the full user-scoped inputs and resolves the
+    specific creator's attributed issues, roles, and display name in a single
+    function call, avoiding separate calls in the service layer.
 
     Args:
         db: Async database session.

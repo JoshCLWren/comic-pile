@@ -32,9 +32,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.creator_detail import (
-    load_latest_rating_timestamps,
     load_recent_creator_issue_rows,
-    load_creator_detail_data_optimized,
+    load_upcoming_creator_issue_rows,
     RecentCreatorIssueRow,
     UpcomingCreatorIssueRow,
 )
@@ -59,31 +58,6 @@ from app.services.creator_series import (
     select_series_group,
 )
 from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
-
-
-async def _load_creator_detail_collection_optimized(
-    db: AsyncSession,
-    *,
-    user_id: int,
-    creator_issue_ids: frozenset[int],
-    limit: int,
-    offset: int,
-    upcoming: bool = False,
-) -> tuple[list[RecentCreatorIssueRow] | list[UpcomingCreatorIssueRow], dict[int, datetime]]:
-    """Helper to load creator detail collection with optimized queries."""
-    if not creator_issue_ids:
-        return [], {}
-    
-    if upcoming:
-        _, upcoming_rows, timestamps = await load_creator_detail_data_optimized(
-            db, user_id=user_id, creator_issue_ids=creator_issue_ids, limit=limit, offset=offset
-        )
-        return upcoming_rows, timestamps
-    else:
-        recent_rows, _, timestamps = await load_creator_detail_data_optimized(
-            db, user_id=user_id, creator_issue_ids=creator_issue_ids, limit=limit, offset=offset
-        )
-        return recent_rows, timestamps
 
 
 def _build_issue_row(
@@ -157,7 +131,7 @@ async def get_creator_detail(
         raise ValueError("Invalid creator key format")
     page_offset = offset if offset is not None else 0
 
-    # Use optimized version that loads inputs and resolves creator issues in fewer queries
+    # Load summary inputs and resolve creator issues in one call
     inputs, creator_id_set, creator_roles_all, display_name = await load_creator_summary_inputs_optimized(
         db, user_id, creator_id=creator_id
     )
@@ -283,19 +257,27 @@ async def get_creator_detail(
         )
 
     # 4. Bounded collections with the ordering contract from the issue.
-    # Use optimized version to reduce database round trips
-    rated_rows, rated_timestamps = await _load_creator_detail_collection_optimized(
-        db, user_id=user_id, creator_issue_ids=rated_ids, limit=limit, offset=page_offset
+    rated_rows = await load_recent_creator_issue_rows(
+        db,
+        user_id=user_id,
+        creator_issue_ids=rated_ids,
+        limit=limit,
+        offset=page_offset,
     )
-    read_unrated_rows, read_unrated_timestamps = await _load_creator_detail_collection_optimized(
-        db, user_id=user_id, creator_issue_ids=read_unrated_ids, limit=limit, offset=page_offset
+    read_unrated_rows = await load_recent_creator_issue_rows(
+        db,
+        user_id=user_id,
+        creator_issue_ids=read_unrated_ids,
+        limit=limit,
+        offset=page_offset,
     )
-    upcoming_rows, upcoming_timestamps = await _load_creator_detail_collection_optimized(
-        db, user_id=user_id, creator_issue_ids=upcoming_ids, limit=limit, offset=page_offset, upcoming=True
+    upcoming_rows = await load_upcoming_creator_issue_rows(
+        db,
+        user_id=user_id,
+        creator_issue_ids=upcoming_ids,
+        limit=limit,
+        offset=page_offset,
     )
-    
-    # Combine timestamps from all collections
-    latest_rating_timestamps = {**rated_timestamps, **read_unrated_timestamps, **upcoming_timestamps}
 
     rated_issues = [
         _build_issue_row(
@@ -307,7 +289,7 @@ async def get_creator_detail(
             thread_title=thread_title,
             status=status,
             effective_rating=inputs.effective_ratings.get(issue_id),
-            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            rating_timestamp=inputs.effective_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),
         )
         for issue_id, issue_number, thread_id, thread_title, status in rated_rows
@@ -323,7 +305,7 @@ async def get_creator_detail(
             thread_title=thread_title,
             status=status,
             effective_rating=inputs.effective_ratings.get(issue_id),
-            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            rating_timestamp=inputs.effective_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),
         )
         for issue_id, issue_number, thread_id, thread_title, status in read_unrated_rows
@@ -339,7 +321,7 @@ async def get_creator_detail(
             thread_title=thread_title,
             status=status,
             effective_rating=inputs.effective_ratings.get(issue_id),
-            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            rating_timestamp=inputs.effective_rating_timestamps.get(issue_id),
             sort_key=f"{queue_position:07d}:{issue_position:07d}:{issue_id}",
         )
         for issue_id, issue_number, thread_id, thread_title, status, queue_position, issue_position
@@ -442,10 +424,6 @@ async def get_creator_series_issues(
         limit=limit,
         offset=page_offset,
     )
-    latest_rating_timestamps = await load_latest_rating_timestamps(
-        db,
-        issue_ids=sorted({row[0] for row in rows}),
-    )
     group = build_series_group(aggregate)
     issues = [
         _build_issue_row(
@@ -457,7 +435,7 @@ async def get_creator_series_issues(
             thread_title=thread_title,
             status=status,
             effective_rating=inputs.effective_ratings.get(issue_id),
-            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            rating_timestamp=inputs.effective_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),
         )
         for issue_id, issue_number, row_thread_id, thread_title, status in rows
