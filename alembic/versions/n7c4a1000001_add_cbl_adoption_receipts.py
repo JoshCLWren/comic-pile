@@ -1,7 +1,7 @@
 """Add unique CBL adoption receipts per user and source list.
 
 Revision ID: n7c4a1000001
-Revises: m5d300000001
+Revises: c25530000001
 Create Date: 2026-10-12 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "n7c4a1000001"
-down_revision: str | Sequence[str] | None = "m5d300000001"
+down_revision: str | Sequence[str] | None = "c25530000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
