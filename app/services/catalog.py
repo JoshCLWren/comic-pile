@@ -427,7 +427,13 @@ async def search_catalog_issues(
     """
     from app.repositories.catalog_repository import search_catalog_issues as repo_search
     
-    return await repo_search(db, search=search, provider=provider, series_external_id=series_external_id, limit=limit)
+    return await repo_search(
+        db,
+        search=search,
+        provider=provider,
+        series_external_id=series_external_id,
+        limit=limit
+    )
 
 
 async def list_series_mappings(
@@ -572,7 +578,11 @@ async def build_series_mapping_plan(
     origin_mapping_provider = origin_issue.get("provider")
     origin_mapping_external_id = origin_issue.get("external_id")
     origin_mapping_status = origin_issue.get("current_mapping_status")
-    if (origin_mapping_provider and origin_mapping_external_id and origin_mapping_status == "confirmed"):
+    if (
+        origin_mapping_provider
+        and origin_mapping_external_id
+        and origin_mapping_status == "confirmed"
+    ):
         # Check if origin issue is already in the list (by issue_id)
         origin_in_list = any(
             info.get("issue_id") == origin_issue.get("issue_id")
@@ -619,7 +629,11 @@ async def build_series_mapping_plan(
         counts = _empty_preview_counts()
         classified_rows = []
 
-    issue_numbers = [str(row.get("issue_number", "")) for row in classified_rows if row.get("issue_number")]
+    issue_numbers = [
+        str(row.get("issue_number", "")) 
+        for row in classified_rows 
+        if row.get("issue_number")
+    ]
     state_digest = _plan_state_digest(
         provider=provider,
         provider_series_external_id=provider_series_external_id,
