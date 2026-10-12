@@ -1414,7 +1414,6 @@ async def link_catalog_issue_to_series(
         The updated CatalogIssue if the link was applied, None if the issue
         was not found or already had a series link.
     """
-    from app.models.catalog import CatalogIssue, CatalogSeries
     from app.repositories.catalog_repository import (
         get_catalog_issue_by_id,
         get_catalog_series_by_id,

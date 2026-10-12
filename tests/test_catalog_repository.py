@@ -7,13 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.catalog import CatalogIssue, CatalogSeries
-from app.models.external_identity import (
-    ExternalIdentity,
-    IssueExternalIdentityMapping,
-    ThreadExternalSeriesMapping,
-)
-from app.models.issue import Issue
-from app.models.thread import Thread
+from app.models.external_identity import ExternalIdentity
 from app.repositories.catalog_repository import (
     get_catalog_issue_by_external_identity,
     get_catalog_issue_by_id,

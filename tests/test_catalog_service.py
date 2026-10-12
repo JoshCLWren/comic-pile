@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.catalog import CatalogIssue, CatalogSeries
-from app.models.external_identity import (
-    ExternalIdentity,
-    IssueExternalIdentityMapping,
-    ThreadExternalSeriesMapping,
-)
+from app.models.external_identity import ExternalIdentity
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.catalog import (
