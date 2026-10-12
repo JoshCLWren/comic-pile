@@ -60,6 +60,7 @@ const CrossoversPage = lazyRoute('crossovers')
 const CrossoverDetailPage = lazyRoute('crossoverDetail')
 const ContinuityPlannerPage = lazyRoute('continuityPlanner')
 const ContinuityPlansIndexPage = lazyRoute('continuityPlansIndex')
+const ReadingPlanDetailPage = lazyRoute('readingPlanDetail')
 const CblBrowserPage = lazyRoute('cblBrowser')
 const HelpPage = lazyRoute('glossary')
 const WhatsNewPage = lazyRoute('whatsNew')
@@ -470,6 +471,15 @@ function LegacyThreadsRedirect() {
   return <Navigate to={`/thread/${id ?? ''}`} replace />
 }
 
+function CrossoversListRedirect() {
+  const { search } = useLocation()
+  const group = new URLSearchParams(search).get('group')
+  if (group) {
+    return <Navigate to={`/continuity-plans/events${search}`} replace />
+  }
+  return <Navigate to="/continuity-plans" replace />
+}
+
 function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
   const { authState } = useAuth()
 
@@ -612,11 +622,7 @@ function AppRoutes() {
         } />
         <Route path="/crossovers" element={
           <ProtectedRoute>
-            <ServiceUnavailableWrapper>
-              <AuthenticatedLayout onBugReportSubmit={submit}>
-                <CrossoversPage />
-              </AuthenticatedLayout>
-            </ServiceUnavailableWrapper>
+            <CrossoversListRedirect />
           </ProtectedRoute>
         } />
         <Route path="/crossovers/:group" element={
@@ -646,11 +652,29 @@ function AppRoutes() {
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
         } />
-        <Route path="/continuity-plans/:id" element={
+        <Route path="/continuity-plans/events" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <CrossoversPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/continuity-plans/:id/edit" element={
           <ProtectedRoute>
             <ServiceUnavailableWrapper>
               <AuthenticatedLayout onBugReportSubmit={submit}>
                 <ContinuityPlannerPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/continuity-plans/:id" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <ReadingPlanDetailPage />
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>

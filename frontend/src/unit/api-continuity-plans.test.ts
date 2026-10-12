@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { createContinuityPlansApi } from '../services/api-continuity-plans'
+import { createContinuityPlansApi, readingPlanModeLabel } from '../services/api-continuity-plans'
 import { createHttpClientStub } from './httpClientStub'
 
 const client = createHttpClientStub()
@@ -28,6 +28,11 @@ beforeEach(() => {
 })
 
 describe('continuityPlansApi', () => {
+  it('labels ordering modes with reader-facing Strict and Informational terms', () => {
+    expect(readingPlanModeLabel('strict_sequential')).toBe('Strict')
+    expect(readingPlanModeLabel('informational')).toBe('Informational')
+  })
+
   it('creates a strict-sequential plan', async () => {
     client.post.mockResolvedValueOnce(basePlan)
 
@@ -52,6 +57,23 @@ describe('continuityPlansApi', () => {
     await expect(continuityPlansApi.get(12)).resolves.toEqual(basePlan)
 
     expect(client.get).toHaveBeenCalledWith('/v1/continuity-plans/12')
+  })
+
+  it('loads the reader view by id', async () => {
+    const reader = {
+      plan_id: 12,
+      name: 'Kirby lane',
+      ordering_mode: 'informational' as const,
+      progress: { total_issues: 2, read_issues: 1 },
+      available_now: [],
+      blocked_next: [],
+      lanes: [],
+      sources: [],
+    }
+    client.get.mockResolvedValueOnce(reader)
+
+    await expect(continuityPlansApi.getReader(12)).resolves.toEqual(reader)
+    expect(client.get).toHaveBeenCalledWith('/v1/continuity-plans/12/reader')
   })
 
   it('replaces a plan with a full ordered payload', async () => {

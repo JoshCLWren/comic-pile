@@ -48,7 +48,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Roll', icon: 'roll', ariaLabel: 'Roll page' },
   { path: '/queue', label: 'Queue', icon: 'queue', ariaLabel: 'Queue page' },
   { path: '/history', label: 'History', icon: 'history', ariaLabel: 'History page' },
-  { path: '/crossovers', label: 'Crossovers', icon: 'crossovers', ariaLabel: 'Crossovers page' },
+  { path: '/continuity-plans', label: 'Reading plans', icon: 'planner', ariaLabel: 'Reading plans page' },
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
@@ -56,7 +56,6 @@ const SECONDARY_NAV_ITEMS: NavItem[] = [
   // secondary list and the mobile More menu rather than crowding the phone
   // bottom bar with a sixth item.
   { path: '/creators', label: 'Creators', icon: 'creators', ariaLabel: 'Creators page' },
-  { path: '/continuity-plans', label: 'Reading plans', icon: 'planner', ariaLabel: 'Reading plans page' },
   { path: '/whats-new', label: "What's new", icon: 'new', ariaLabel: "What's new page" },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
   { path: '/identity-inbox', label: 'Identity Inbox', icon: 'identity-inbox', ariaLabel: 'Identity Inbox page' },
@@ -226,7 +225,8 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     }
   }, [isMoreOpen])
 
-  const isActive = (path: string) => location.pathname === path
+  const isActive = (path: string) =>
+    location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`))
   const isMoreRoute = visibleSecondaryNavItems.some((item) =>
     location.pathname === item.path || location.pathname.startsWith(`${item.path}/`),
   )

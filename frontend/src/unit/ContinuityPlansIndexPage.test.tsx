@@ -6,12 +6,19 @@ import ContinuityPlansIndexPage from '../pages/ContinuityPlansIndexPage'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
 
-vi.mock('../services/api-continuity-plans', () => ({
-  continuityPlansApi: {
-    list: vi.fn(),
-    delete: vi.fn(),
-  },
-}))
+vi.mock('../services/api-continuity-plans', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
+    '../services/api-continuity-plans',
+  )
+  return {
+    ...actual,
+    continuityPlansApi: {
+      ...actual.continuityPlansApi,
+      list: vi.fn(),
+      delete: vi.fn(),
+    },
+  }
+})
 
 const mockList = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
 const mockDelete = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.delete)
@@ -51,9 +58,9 @@ describe('ContinuityPlansIndexPage', () => {
     await waitFor(() => {
       expect(screen.getByText('No reading plans yet')).toBeInTheDocument()
     })
-    expect(screen.getByText(/saved arrangement of issues, series, and crossovers/)).toBeInTheDocument()
-    const glossaryLink = screen.getByRole('link', { name: 'What is a continuity plan?' })
-    expect(glossaryLink).toHaveAttribute('href', '/glossary#continuity-plan')
+    expect(screen.getByText(/A reading plan is your reading project/i)).toBeInTheDocument()
+    const glossaryLink = screen.getByRole('link', { name: 'What is a reading plan?' })
+    expect(glossaryLink).toHaveAttribute('href', '/glossary#reading-plan')
     expect(screen.getByRole('button', { name: 'New Reading Plan' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add from CBL' })).toBeInTheDocument()
   })
@@ -82,7 +89,7 @@ describe('ContinuityPlansIndexPage', () => {
     await waitFor(() => {
       expect(screen.getByText('My Plan')).toBeInTheDocument()
     })
-    expect(screen.getByText('2 lanes · 5 steps')).toBeInTheDocument()
+    expect(screen.getByText((_, node) => node?.textContent === 'Informational · 2 lanes · 5 steps')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'New Reading Plan' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add from CBL' })).toBeInTheDocument()
   })
@@ -117,7 +124,7 @@ describe('ContinuityPlansIndexPage', () => {
       </MemoryRouter>
     )
     expect(await screen.findByText('CBL-backed')).toBeInTheDocument()
-    expect(screen.getByText('Source: Dark Horse/BPRD/Plague of Frogs.cbl')).toBeInTheDocument()
+    expect(screen.getByText('Source reading order: Dark Horse/BPRD/Plague of Frogs.cbl')).toBeInTheDocument()
   })
 
   it('shows delete confirmation when delete is clicked', async () => {

@@ -33,6 +33,7 @@ export const routeModules = {
   crossoverDetail: () => import('../pages/CrossoverDetailPage'),
   continuityPlanner: () => import('../pages/ContinuityPlannerPage'),
   continuityPlansIndex: () => import('../pages/ContinuityPlansIndexPage'),
+  readingPlanDetail: () => import('../pages/ReadingPlanDetailPage'),
   cblBrowser: () => import('../pages/CblBrowserPage'),
   glossary: () => import('../pages/HelpPage'),
   whatsNew: () => import('../pages/WhatsNewPage'),

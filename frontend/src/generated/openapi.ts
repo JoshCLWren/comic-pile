@@ -950,6 +950,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-plans/{plan_id}/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Continuity Plan Reader
+         * @description Return progress, available now, blocked next, and ordered lanes.
+         *
+         *     Blocking uses canonical issue-level Dependencies only. The payload is the
+         *     primary reader view for a Reading Plan and does not change Roll eligibility.
+         */
+        get: operations["get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
         parameters: {
             query?: never;
@@ -5243,6 +5266,137 @@ export interface components {
              * @enum {string}
              */
             ordering_mode: "informational" | "strict_sequential";
+        };
+        /**
+         * ReadingPlanBlocker
+         * @description One unread canonical Dependency source holding a plan issue back.
+         */
+        ReadingPlanBlocker: {
+            /** Explanation */
+            explanation: string;
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string;
+        };
+        /**
+         * ReadingPlanProgress
+         * @description Plan progress derived from global Issue read state.
+         */
+        ReadingPlanProgress: {
+            /** Read Issues */
+            read_issues: number;
+            /** Total Issues */
+            total_issues: number;
+        };
+        /**
+         * ReadingPlanSourceSnapshot
+         * @description One preserved import snapshot referenced by a Reading Plan.
+         */
+        ReadingPlanSourceSnapshot: {
+            /**
+             * Adopted At
+             * Format: date-time
+             */
+            adopted_at?: string | null;
+            /** Content Hash */
+            content_hash?: string | null;
+            /** Id */
+            id: number;
+            /** Raw Source Path */
+            raw_source_path: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Repository */
+            repository?: string | null;
+            /** Revision Sha */
+            revision_sha?: string | null;
+            /** Source Path */
+            source_path?: string | null;
+        };
+        /**
+         * ReadingPlanReaderIssue
+         * @description One plan occurrence with display identity and canonical availability.
+         */
+        ReadingPlanReaderIssue: {
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "read" | "available" | "blocked" | "later";
+            /** Blockers */
+            blockers?: components["schemas"]["ReadingPlanBlocker"][];
+            /** Display Position */
+            display_position: number;
+            /**
+             * Is Checkpoint
+             * @default false
+             */
+            is_checkpoint: boolean;
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Label */
+            label?: string | null;
+            /** Lane Id */
+            lane_id: string;
+            /** Occurrence Id */
+            occurrence_id: string;
+            /** Reader Optional */
+            reader_optional?: boolean | null;
+            /** Reader Role */
+            reader_role?: string | null;
+            /** Source Paths */
+            source_paths?: string[];
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string;
+        };
+        /**
+         * ReadingPlanReaderLane
+         * @description One reading lane of ordered plan issues.
+         */
+        ReadingPlanReaderLane: {
+            /** Id */
+            id: string;
+            /** Issues */
+            issues: components["schemas"]["ReadingPlanReaderIssue"][];
+            /** Name */
+            name: string;
+            /** Order */
+            order: number;
+        };
+        /**
+         * ReadingPlanReaderResponse
+         * @description Primary reader view for one Reading Plan.
+         */
+        ReadingPlanReaderResponse: {
+            /** Available Now */
+            available_now: components["schemas"]["ReadingPlanReaderIssue"][];
+            /** Blocked Next */
+            blocked_next: components["schemas"]["ReadingPlanReaderIssue"][];
+            /** Lanes */
+            lanes: components["schemas"]["ReadingPlanReaderLane"][];
+            /** Name */
+            name: string;
+            /** Ordering Mode */
+            ordering_mode: string;
+            /** Plan Id */
+            plan_id: number;
+            progress: components["schemas"]["ReadingPlanProgress"];
+            /** Sources */
+            sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
         };
         /**
          * ContinuityRuleCreate
@@ -10298,6 +10452,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanReaderResponse"];
                 };
             };
             /** @description Validation Error */

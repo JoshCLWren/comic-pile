@@ -779,7 +779,7 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                 </button>
               ) : (
                 <p className="text-xs text-stone-500">
-                  Save a Continuity Plan or use the Dependency Builder from the Queue to create and manage dependencies.
+                  Save a Reading Plan or use the Dependency Builder from the Queue to create and manage prerequisites.
                 </p>
               )}
             </div>

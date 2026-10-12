@@ -123,7 +123,7 @@ export function ReadingContextPillar({
     if (dependencyEdges.length === 0) return null
     if (dependencyEdges.every(e => e.target_issue_id === currentIssueId)) return 'Blocked by:'
     if (dependencyEdges.every(e => e.source_issue_id === currentIssueId)) return 'Blocks:'
-    return 'Dependency edges:'
+    return 'Prerequisites:'
   }, [dependencyEdges, currentIssueId])
 
   const openCurrentThread = () => {

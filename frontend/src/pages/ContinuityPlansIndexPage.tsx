@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import GlossaryLink from '../components/GlossaryLink'
 import Modal from '../components/Modal'
 import { useDeleteReadingPlan, useReadingPlans } from '../hooks/useReadingPlans'
+import { readingPlanModeLabel } from '../services/api-continuity-plans'
 
 function formatDate(iso: string): string {
   try {
@@ -45,7 +46,11 @@ export default function ContinuityPlansIndexPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 id="plans-heading" className="text-2xl font-black text-[var(--theme-text-primary)]">Reading Plans</h1>
-          <p className="mt-2 text-sm text-[var(--theme-text-muted)]">Your saved reading order, including plans backed by CBL sources.</p>
+          <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
+            Your reading projects: progress, next unread issues, and the real blockers holding later
+            comics back. Informational plans are a reference; Strict records intent for selected
+            hard prerequisites, which are not compiled from plan order yet.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -68,6 +73,13 @@ export default function ContinuityPlansIndexPage() {
             className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
           >
             Browse CBL sources
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/continuity-plans/events')}
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+          >
+            Crossover events
           </button>
         </div>
       </header>
@@ -114,10 +126,9 @@ export default function ContinuityPlansIndexPage() {
         <div className="text-center py-8">
           <p className="text-lg font-bold text-[var(--theme-text-primary)]">No reading plans yet</p>
           <p className="mx-auto mt-2 max-w-xl text-sm text-[var(--theme-text-muted)]">
-            A reading plan is a saved arrangement of issues, series, and crossovers in one or more
-            reading lanes — so you can read a storyline in order, even when it hops across crossovers
-            and your Queue.{' '}
-            <GlossaryLink id="continuity-plan">What is a continuity plan?</GlossaryLink>
+            A reading plan is your reading project: the order you intend to read, the comics available
+            now, and any hard blockers holding later issues back.{' '}
+            <GlossaryLink id="reading-plan">What is a reading plan?</GlossaryLink>
           </p>
           <p className="mt-2 text-sm text-[var(--theme-text-muted)]">Create a plan yourself or start one from a saved CBL source.</p>
         </div>
@@ -138,12 +149,19 @@ export default function ContinuityPlansIndexPage() {
                 >
                   <p className="truncate text-base font-black text-[var(--theme-text-primary)]">{plan.name}</p>
                   <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
-                    {plan.lane_count} {plan.lane_count === 1 ? 'lane' : 'lanes'} · {plan.step_count} {plan.step_count === 1 ? 'step' : 'steps'}
+                    <span className="font-bold text-[var(--theme-continuity-accent)]">
+                      {readingPlanModeLabel(plan.ordering_mode)}
+                    </span>
+                    {' · '}
+                    {plan.lane_count} {plan.lane_count === 1 ? 'lane' : 'lanes'} · {plan.step_count}{' '}
+                    {plan.step_count === 1 ? 'step' : 'steps'}
                   </p>
                   {plan.source_paths.length > 0 && (
                     <div className="mt-3 rounded-lg border border-[var(--theme-continuity-accent)] p-2">
                       <span className="text-xs font-black text-[var(--theme-continuity-accent)]">CBL-backed</span>
-                      <span className="ml-2 text-xs text-[var(--theme-text-muted)]">Source: {plan.source_paths[0]}</span>
+                      <span className="ml-2 text-xs text-[var(--theme-text-muted)]">
+                        Source reading order: {plan.source_paths[0]}
+                      </span>
                       {plan.source_paths.length > 1 && <span className="ml-1 text-xs text-[var(--theme-text-dim)]">+{plan.source_paths.length - 1} more</span>}
                     </div>
                   )}

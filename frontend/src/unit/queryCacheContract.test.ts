@@ -431,6 +431,7 @@ describe('targeted cache effects', () => {
 
       expect(setQueryData).toHaveBeenCalledWith(queryKeys.readingPlans.detail(readingPlan.id), readingPlan)
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.list(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.reader(readingPlan.id) })
       expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.current(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })

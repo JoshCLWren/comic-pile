@@ -25,12 +25,12 @@ export default function QueueThreadActions({
       aria-label={`Actions for ${title}`}
     >
       {readDisabled ? (
-        <Tooltip content={readDisabledReason ?? 'Blocked by dependency'}>
+        <Tooltip content={readDisabledReason ?? 'Blocked by a prerequisite'}>
           <button
             type="button"
             aria-label="Read & Rate"
             disabled
-            title={readDisabledReason ?? 'Blocked by dependency'}
+            title={readDisabledReason ?? 'Blocked by a prerequisite'}
             onClick={(event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()}
             className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)]/25 px-4 text-sm font-bold text-white/60 hover:bg-[var(--theme-primary-action)]/25 disabled:cursor-not-allowed disabled:opacity-40"
           >

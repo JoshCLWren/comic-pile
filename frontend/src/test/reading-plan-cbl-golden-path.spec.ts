@@ -137,7 +137,7 @@ test.describe('Reading Plan CBL golden path', () => {
     await expect(page.getByRole('heading', { name: 'New Reading Plan' })).toBeVisible()
 
     await page.getByLabel('Plan name').fill(`Golden Path Browser Plan ${fixtureSuffix}`)
-    await page.getByRole('radio', { name: /Strict sequential/i }).check()
+    await page.getByRole('radio', { name: /^Strict/i }).check()
     await page.getByRole('button', { name: 'Save plan' }).click()
     await expect(page).toHaveURL(/\/continuity-plans\/\d+/)
 
@@ -178,7 +178,7 @@ test.describe('Reading Plan CBL golden path', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByText('CBL-backed')).toBeVisible()
-    await expect(page.getByText(sourcePath)).toBeVisible()
+    await expect(page.getByText(sourcePath, { exact: true })).toBeVisible()
 
     const planId = Number(page.url().match(/\/continuity-plans\/(\d+)/)?.[1])
     expect(planId).toBeGreaterThan(0)

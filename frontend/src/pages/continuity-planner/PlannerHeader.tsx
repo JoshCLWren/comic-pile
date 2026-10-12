@@ -16,16 +16,30 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
   return (
     <>
       <header>
-        <h1 id="planner-heading" className="text-2xl font-black text-[var(--theme-text-primary)]">
-          {planId ? editor.name : 'New Reading Plan'}
-        </h1>
-        <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
-          Arrange issues and crossovers in source order or your own order. Strict order keeps later
-          material out of Roll until earlier steps are read.{' '}
-          <GlossaryLink id="continuity-plan">Reading Plan</GlossaryLink>,{' '}
-          <GlossaryLink id="lane">Lane</GlossaryLink>, and{' '}
-          <GlossaryLink id="crossover">Crossover</GlossaryLink> definitions.
-        </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 id="planner-heading" className="text-2xl font-black text-[var(--theme-text-primary)]">
+              {planId ? `Edit ${editor.name || 'Reading Plan'}` : 'New Reading Plan'}
+            </h1>
+            <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
+              Arrange issues in source reading order or your own order. Strict records intent for
+              selected hard prerequisites; compiling them from plan order is not active yet. Source
+              reading order is not a blocker by itself.{' '}
+              <GlossaryLink id="reading-plan">Reading Plan</GlossaryLink>,{' '}
+              <GlossaryLink id="lane">Lane</GlossaryLink>, and{' '}
+              <GlossaryLink id="crossover">Crossover</GlossaryLink> definitions.
+            </p>
+          </div>
+          {planId && (
+            <button
+              type="button"
+              onClick={() => onReopenLast(String(planId))}
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+            >
+              View plan
+            </button>
+          )}
+        </div>
       </header>
 
       {editor.sourcePaths.length > 0 && (
@@ -38,10 +52,11 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
               id="plan-sources-heading"
               className="text-sm font-black text-[var(--theme-continuity-accent)]"
             >
-              CBL-backed
+              Source reading order
             </h2>
+            <p className="text-xs font-black text-[var(--theme-continuity-accent)]">CBL-backed</p>
             <p className="text-xs text-[var(--theme-text-muted)]">
-              This Reading Plan uses the following CBL source order.
+              This Reading Plan uses the following source reading order.
             </p>
           </div>
           <ul className="mt-2 space-y-1 text-xs text-[var(--theme-text-primary)]">
@@ -77,8 +92,9 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
           Ordering mode
         </legend>
         <p id="ordering-mode-help" className="mt-1 text-sm text-[var(--theme-text-muted)]">
-          Informational plans are a reading reference only. Strict sequential plans keep each later
-          step out of Roll until the earlier step is read.{' '}
+          Informational plans keep source reading order as a reference and add no hard blockers.
+          Strict records that intent; selected hard prerequisites are not compiled from plan order
+          yet.{' '}
           <GlossaryLink id="ordering-mode">What is an ordering mode?</GlossaryLink>
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -121,16 +137,16 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
               className="mt-0.5 accent-[var(--theme-continuity-accent)]"
             />
             <span className="text-sm">
-              <span className="font-bold text-[var(--theme-text-primary)]">Strict sequential</span>
+              <span className="font-bold text-[var(--theme-text-primary)]">Strict</span>
               <span className="ml-1.5 text-xs text-[var(--theme-text-dim)]">
-                Each step blocks the next.
+                Records intent — plan-order blockers are not compiled yet.
               </span>
             </span>
           </label>
         </div>
         {editor.lanes.length > 1 && (
           <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
-            Strict sequential requires exactly one lane.
+            Strict requires exactly one lane.
           </p>
         )}
       </fieldset>
