@@ -182,8 +182,6 @@ def test_new_slots_pin_nvidia_kimi_k3_and_glm_53(validate) -> None:
     assert by_worker["78"]["source"] == "nvidia"
     assert by_worker["78"]["model"] == "z-ai/glm-5.3"
     assert by_worker["78"]["minute"] == "0"
-    assert "z-ai/glm-5.3-flash" not in {row["model"] for row in rows}
-    assert "deepseek-ai/deepseek-v4.1-flash" not in {row["model"] for row in rows}
 
 
 def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:

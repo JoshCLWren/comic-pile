@@ -698,17 +698,24 @@ def test_opencode_free_display_name_matches_roster_style() -> None:
 
 
 def _fixture_without_step5(tmp_path: Path) -> Path:
-    """Copy keep-present.json plus the retired ``fledge-alpha-free`` Zen id.
+    """Copy keep-present.json minus ``step-5-preview-free`` plus ``fledge-alpha-free``.
 
-    Worker 76 was retired by discovery once ``fledge-alpha-free`` left
-    ``opencode models opencode``. Synthetic rosters below still use it as a
-    pinned unique free model, so they use this copy of the catalog.
+    Synthetic rosters below model "every keep-present free OpenCode model is
+    pinned except the named hole"; the committed-TSV tests need worker 79's
+    model in the shared fixture, so these tests use this trimmed copy.
+    Worker 76's retired ``fledge-alpha-free`` is re-added so the synthetic
+    rosters that still pin it see it as catalog-present.
     """
     payload = json.loads((FIXTURES / "keep-present.json").read_text(encoding="utf-8"))
+    payload["providers"]["opencode"] = [
+        item
+        for item in payload["providers"]["opencode"]
+        if item["id"] != "step-5-preview-free"
+    ]
     payload["providers"]["opencode"].append(
         {"id": "fledge-alpha-free", "cost": {"input": 0, "output": 0}}
     )
-    path = tmp_path / "keep-present-with-fledge.json"
+    path = tmp_path / "keep-present-without-step5.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
