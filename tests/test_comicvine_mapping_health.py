@@ -281,6 +281,59 @@ async def test_mapping_health_not_applicable_legacy_thread(
 
 
 @pytest.mark.asyncio
+async def test_mapping_health_not_applicable_legacy_thread_with_issue_rows(
+    async_db: AsyncSession,
+) -> None:
+    """Legacy thread stays not_applicable even when orphan issue rows exist.
+
+    Regression coverage for the GET /api/v1/threads performance fix (issue
+    #3384): the batched mapping-health query only aggregates tracked threads
+    and completes legacy threads with zero counts, so stray issue rows on a
+    legacy thread never leak into the queue payload.
+    """
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        user_id=user.id,
+        title="Legacy Series With Rows",
+        format="Comic",
+        issues_remaining=2,
+        total_issues=None,  # Legacy - no issue tracking
+        queue_position=1,
+        status="active",
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issues = [
+        Issue(thread_id=thread.id, issue_number="1", position=1, status="unread"),
+        Issue(thread_id=thread.id, issue_number="2", position=2, status="unread"),
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+
+    identity = _identity("100", {"issue_number": "1", "volume_id": 1, "volume_name": "Series"})
+    async_db.add(identity)
+    await async_db.flush()
+
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issues[0].id, external_identity_id=identity.id, status="confirmed", confidence=1.0
+        )
+    )
+    await async_db.commit()
+
+    health_map = await thread_repository.fetch_comicvine_mapping_health(async_db, {thread.id})
+    health = health_map[thread.id]
+
+    assert health["tracked_issue_count"] == 0
+    assert health["confirmed_issue_count"] == 0
+    assert health["needs_mapping_count"] == 0
+    assert health["needs_review_count"] == 0
+    assert health["has_issues"] is False
+
+
+@pytest.mark.asyncio
 async def test_mapping_health_not_applicable_empty_tracked_thread(
     async_db: AsyncSession,
 ) -> None:
