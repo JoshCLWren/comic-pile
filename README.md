@@ -79,10 +79,6 @@ Start with [`docs/README.md`](docs/README.md). It identifies the authoritative r
 
 For architectural decisions and system overview, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For deployment and self-hosting with Neon, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-Coding agents must also follow [`AGENTS.md`](AGENTS.md). Autonomous factory workers must follow [`docs/AUTONOMOUS_FACTORY_POLICY.md`](docs/AUTONOMOUS_FACTORY_POLICY.md) and [`docs/ISSUE_EXECUTION_PROTOCOL.md`](docs/ISSUE_EXECUTION_PROTOCOL.md).
-
-What's New reads the database-backed release ledger. User-facing release notes are published after merge by the dedicated release writer. [`docs/changelog.md`](docs/changelog.md) and `docs/changelog.d/` are frozen historical migration sources retained only for provenance.
-
 ## Contributing
 
 Comic Pile is actively developed in public. Bug reports, focused improvements, documentation fixes, and pull requests are welcome. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) and follow the project's [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
@@ -90,5 +86,3 @@ Comic Pile is actively developed in public. Bug reports, focused improvements, d
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
-# Fix CI
-# Another fix attempt
