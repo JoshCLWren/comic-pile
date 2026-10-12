@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import populate_existing
 
 from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.external_identity import ExternalIdentity
