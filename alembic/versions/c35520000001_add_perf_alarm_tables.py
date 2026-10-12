@@ -1,7 +1,7 @@
 """Add durable performance-alarm counter and incident tables.
 
 Revision ID: c35520000001
-Revises: n7c4a1000001
+Revises: c35120000001
 Create Date: 2026-10-12
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c35520000001"
-down_revision: str | Sequence[str] | None = "n7c4a1000001"
+down_revision: str | Sequence[str] | None = "c35120000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
