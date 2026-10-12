@@ -9,9 +9,13 @@ docs/READING_GRAPH_RUNTIME_AUDIT.md section 7 step 1):
 
 1. Validates that every rule-native ContinuityRule (no legacy_dependency_id
    mirror) compiles to issue-level Dependency edges, and that those edges
-   plus existing canonical Dependencies do not form a cycle. Anything that
-   cannot compile (or would cycle) aborts with the offending rule IDs
-   instead of silently dropping constraints or blocking threads forever.
+   plus existing canonical Dependencies do not form a cycle. A reviewed
+   allowlist of six test-user ContinuityRule ids may dangle: those rows
+   are reported (owner, rule id, missing issue ids, missing side) and left
+   unchanged. Any other dangling rule — especially a user-owned
+   prerequisite — aborts with an investigation-grade error. Cycles,
+   non-issue endpoints, cross-user references, and unhandled types still
+   abort with the offending rule IDs.
 2. Drops the Dependency -> ContinuityRule mirroring trigger before the
    backfill so backfilled edges are not claimed back into mirrored rules.
 3. Persists one canonical Dependency edge per rule-native item_read rule and
@@ -19,8 +23,9 @@ docs/READING_GRAPH_RUNTIME_AUDIT.md section 7 step 1):
    touched; they stay inert via the evaluator's note predicate.
 4. Links each backfilled edge to its owning Reading Plan through
    reading_plan_dependencies, but only when the plan exists and is owned by
-   the same user as the rule. Cross-user note references are skipped and
-   reported, never blindly translated.
+   the same user as the rule. Cross-user / missing plan notes are skipped
+   and reported. Allowlisted dangling item_read rows are skipped the same
+   way; any other missing endpoint aborts.
 
 The heavy lifting lives in app.services.canonical_backfill so it is unit
 testable without an Alembic context.
@@ -35,6 +40,7 @@ from pathlib import Path
 from alembic import op
 
 from app.services.canonical_backfill import (
+    DanglingRuleReport,
     backfill_converged_edges,
     backfill_item_read_edges,
     drop_mirror_trigger,
@@ -50,27 +56,46 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _print_dangling_skipped(skipped: list[DanglingRuleReport]) -> None:
+    """Report each reviewed dangling skip with owner, rule, issues, and side."""
+    if not skipped:
+        return
+    print(
+        f"[c25530000001] WARNING: {len(skipped)} reviewed dangling rule(s) "
+        "skipped (left unchanged, not compiled):"
+    )
+    for row in skipped:
+        print(f"[c25530000001]   {row.report()}")
+
+
+def _print_skipped(kind: str, skipped: list[tuple[int, str]]) -> None:
+    """Report skipped plan-note translations."""
+    if not skipped:
+        return
+    print(f"[c25530000001] WARNING: {len(skipped)} {kind}:")
+    for rule_id, reason in skipped:
+        print(f"[c25530000001]   rule {rule_id}: {reason}")
+
+
 def upgrade() -> None:
     """Validate, drop the mirror trigger, backfill canonical edges, link plans."""
     bind = op.get_bind()
 
-    validate_compilable_rules(bind)
+    skipped_dangling = validate_compilable_rules(bind)
     drop_mirror_trigger(bind)
 
     item_inserted, item_existing = backfill_item_read_edges(bind)
     conv_inserted, conv_existing, conv_self_skipped = backfill_converged_edges(bind)
     links_created, links_skipped = link_plan_provenance(bind)
 
+    _print_dangling_skipped(skipped_dangling)
     print(f"[c25530000001] item_read edges: {item_inserted} inserted, {item_existing} already present")
     print(
         f"[c25530000001] converged edges: {conv_inserted} inserted, "
         f"{conv_existing} already present, {conv_self_skipped} self-edges skipped"
     )
     print(f"[c25530000001] reading_plan_dependencies links created: {links_created}")
-    if links_skipped:
-        print(f"[c25530000001] WARNING: {len(links_skipped)} plan links skipped (not translated):")
-        for rule_id, reason in links_skipped:
-            print(f"[c25530000001]   rule {rule_id}: {reason}")
+    _print_skipped("plan links skipped (not translated)", links_skipped)
 
 
 def downgrade() -> None:
