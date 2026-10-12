@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.release import (
+    MinimalReleaseResponse,
     PublicReleaseResponse,
     ReleaseListResponse,
     ReleaseResponse,
@@ -17,7 +18,7 @@ from app.schemas.release import (
 )
 from app.services.release_ledger import (
     ReleaseSourceConflictError,
-    find_release_by_source,
+    find_release_minimal_by_source,
     get_published_release,
     list_published_releases,
     upsert_release,
@@ -89,7 +90,7 @@ async def reconcile_release_source(
             detail="source_pr_number or source_merge_sha is required",
         )
     try:
-        release = await find_release_by_source(
+        release = await find_release_minimal_by_source(
             db,
             source_repository=source_repository,
             source_pr_number=source_pr_number,
@@ -97,7 +98,10 @@ async def reconcile_release_source(
         )
     except ReleaseSourceConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    return ReleaseSourceResponse(exists=release is not None, release=release)
+    release_obj = (
+        MinimalReleaseResponse.model_validate(dict(release)) if release is not None else None
+    )
+    return ReleaseSourceResponse(exists=release is not None, release=release_obj)
 
 
 @router.get(
