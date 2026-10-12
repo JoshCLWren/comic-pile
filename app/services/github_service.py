@@ -225,6 +225,24 @@ async def _post_issue(settings: GitHubSettings, payload: dict[str, object]) -> s
     return html_url
 
 
+def _normalize_route_template(route: str) -> str:
+    """Normalize a route template for identity matching.
+
+    Args:
+        route: Route template such as ``/api/v1/threads/{thread_id}``.
+
+    Returns:
+        Normalized template with a leading slash and no trailing slash
+        (except the root path).
+    """
+    normalized = (route or "__unmatched__").strip() or "__unmatched__"
+    if not normalized.startswith("/"):
+        normalized = "/" + normalized
+    if len(normalized) > 1:
+        normalized = normalized.rstrip("/")
+    return normalized
+
+
 def _issue_matches_fingerprint(issue_body: str | None, fingerprint: str) -> bool:
     """Check whether an issue body carries a performance fingerprint marker.
 
@@ -240,20 +258,75 @@ def _issue_matches_fingerprint(issue_body: str | None, fingerprint: str) -> bool
     return f"{PERFORMANCE_FINGERPRINT_PREFIX}{fingerprint}" in issue_body
 
 
+def _issue_matches_request_identity(
+    *,
+    title: str | None,
+    body: str | None,
+    method: str | None,
+    route_template: str | None,
+) -> bool:
+    """Match an open issue by method plus route when the hash marker differs.
+
+    Used so the #3552 fingerprint change reuses issues opened under the
+    legacy ``request|METHOD|route|warm|phase|workload`` hash.
+
+    Args:
+        title: Issue title, when available.
+        body: Issue body, when available.
+        method: HTTP method of the new sample.
+        route_template: Normalized route of the new sample.
+
+    Returns:
+        True when the issue is the same method plus route.
+    """
+    if not method or not route_template:
+        return False
+    identity = f"{method.upper()} {_normalize_route_template(route_template)}"
+    body_text = body or ""
+    title_text = title or ""
+    if f"- Method + route: {identity}" in body_text:
+        return True
+    return f"Performance: {identity} took" in title_text
+
+
+def _fingerprints_to_search(
+    fingerprint: str,
+    extra_fingerprints: list[str] | tuple[str, ...] | None,
+) -> list[str]:
+    """Build the ordered unique fingerprint list for a GitHub search.
+
+    Args:
+        fingerprint: Current deterministic performance signature hash.
+        extra_fingerprints: Legacy hashes that should reuse the same issue.
+
+    Returns:
+        Deduplicated fingerprint hashes, current first.
+    """
+    ordered = [fingerprint]
+    for extra in extra_fingerprints or ():
+        if extra and extra not in ordered:
+            ordered.append(extra)
+    return ordered
+
+
 async def _search_issues(
     settings: GitHubSettings,
     state: str,
-    fingerprint: str,
+    fingerprints: list[str],
+    method: str | None = None,
+    route_template: str | None = None,
 ) -> int | None:
     """Find the newest issue carrying a performance fingerprint marker.
 
     Args:
         settings: Verified GitHub settings for the target repository.
         state: Issue state to search (``"open"`` or ``"closed"``).
-        fingerprint: Deterministic performance signature hash.
+        fingerprints: Current and legacy fingerprint hashes to match.
+        method: HTTP method for rollout-compatible route matching.
+        route_template: Route template for rollout-compatible matching.
 
     Returns:
-        The matching issue number, or None when no issue matches.
+        Matching issue number, or None.
 
     Raises:
         RuntimeError: If the GitHub request fails or returns an unusable body.
@@ -288,19 +361,42 @@ async def _search_issues(
             continue
         if issue.get("pull_request") is not None:
             continue
-        if not _issue_matches_fingerprint(issue.get("body"), fingerprint):
-            continue
-        number = issue.get("number")
-        if isinstance(number, int):
-            return number
+        issue_body = issue.get("body")
+        issue_title = issue.get("title")
+        for candidate in fingerprints:
+            if _issue_matches_fingerprint(issue_body, candidate):
+                number = issue.get("number")
+                if isinstance(number, int):
+                    return number
+        if _issue_matches_request_identity(
+            title=issue_title,
+            body=issue_body,
+            method=method,
+            route_template=route_template,
+        ):
+            number = issue.get("number")
+            if isinstance(number, int):
+                return number
     return None
 
 
-async def find_open_issue_by_fingerprint(fingerprint: str) -> int | None:
+async def find_open_issue_by_fingerprint(
+    fingerprint: str,
+    *,
+    extra_fingerprints: list[str] | tuple[str, ...] | None = None,
+    method: str | None = None,
+    route_template: str | None = None,
+) -> int | None:
     """Find an open performance issue for a fingerprint, if one exists.
+
+    Lookup is rollout-compatible: the current hash, any legacy hashes, and
+    the method-plus-route identity in title or body all match.
 
     Args:
         fingerprint: Deterministic performance signature hash.
+        extra_fingerprints: Legacy hashes that should reuse the same issue.
+        method: HTTP method for route-identity fallback matching.
+        route_template: Route template for route-identity fallback matching.
 
     Returns:
         The open issue number, or None when no open issue matches.
@@ -309,10 +405,23 @@ async def find_open_issue_by_fingerprint(fingerprint: str) -> int | None:
         RuntimeError: If the GitHub lookup fails.
     """
     settings = _configured_settings()
-    return await _search_issues(settings, "open", fingerprint)
+    fingerprints = _fingerprints_to_search(fingerprint, extra_fingerprints)
+    return await _search_issues(
+        settings,
+        "open",
+        fingerprints,
+        method=method,
+        route_template=route_template,
+    )
 
 
-async def find_closed_issue_by_fingerprint(fingerprint: str) -> int | None:
+async def find_closed_issue_by_fingerprint(
+    fingerprint: str,
+    *,
+    extra_fingerprints: list[str] | tuple[str, ...] | None = None,
+    method: str | None = None,
+    route_template: str | None = None,
+) -> int | None:
     """Find a closed performance issue for a fingerprint, if one exists.
 
     Used for regression detection: when a previously fixed signature
@@ -321,6 +430,9 @@ async def find_closed_issue_by_fingerprint(fingerprint: str) -> int | None:
 
     Args:
         fingerprint: Deterministic performance signature hash.
+        extra_fingerprints: Legacy hashes that should reuse the same issue.
+        method: HTTP method for route-identity fallback matching.
+        route_template: Route template for route-identity fallback matching.
 
     Returns:
         The most recent closed issue number, or None.
@@ -329,7 +441,45 @@ async def find_closed_issue_by_fingerprint(fingerprint: str) -> int | None:
         RuntimeError: If the GitHub lookup fails.
     """
     settings = _configured_settings()
-    return await _search_issues(settings, "closed", fingerprint)
+    fingerprints = _fingerprints_to_search(fingerprint, extra_fingerprints)
+    return await _search_issues(
+        settings,
+        "closed",
+        fingerprints,
+        method=method,
+        route_template=route_template,
+    )
+
+
+async def get_performance_issue_state(issue_number: int) -> str | None:
+    """Return the GitHub state of a performance issue without commenting.
+
+    Args:
+        issue_number: GitHub issue number.
+
+    Returns:
+        ``open``, ``closed``, or None when unread.
+
+    Raises:
+        RuntimeError: If GitHub is unconfigured or the lookup fails.
+    """
+    settings = _configured_settings()
+
+    url = f"{_repo_url(settings)}/issues/{issue_number}"
+    headers = _github_headers(settings)
+
+    try:
+        async with httpx.AsyncClient(timeout=GITHUB_REQUEST_TIMEOUT_SECONDS) as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            issue_data: object = response.json()
+    except httpx.HTTPStatusError as e:
+        raise RuntimeError(f"Failed to read performance issue #{issue_number}: {e.response.text}") from e
+    except (httpx.RequestError, ValueError) as e:
+        raise RuntimeError(f"Failed to read performance issue #{issue_number}: {e}") from e
+
+    state = issue_data.get("state") if isinstance(issue_data, dict) else None
+    return state if isinstance(state, str) else None
 
 
 async def add_performance_issue_comment(issue_number: int, comment: str) -> str | None:

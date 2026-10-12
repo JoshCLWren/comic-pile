@@ -879,6 +879,87 @@ class TestPerformanceGithubClient:
         assert calls["get"][0][2]["state"] == "closed"
 
     @pytest.mark.asyncio
+    async def test_find_open_issue_matches_legacy_fingerprint(self) -> None:
+        """Rollout lookup reuses an issue tagged with the pre-#3552 hash."""
+        from app.services import github_service as gh
+
+        issues = [
+            {
+                "number": 3560,
+                "body": "evidence\n\n<!-- performance-fingerprint:v1:baa678d6d31003dd -->\n",
+                "title": "Performance: GET /api/v1/roll/bootstrap took 1500ms (budget 1000ms)",
+            }
+        ]
+        client_double, calls = _github_client_double(
+            get_handler=lambda url, headers, params: _json_response(issues)
+        )
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            found = await gh.find_open_issue_by_fingerprint(
+                "91eb38be9dc36a6d",
+                extra_fingerprints=("baa678d6d31003dd",),
+            )
+
+        assert found == 3560
+
+    @pytest.mark.asyncio
+    async def test_find_open_issue_matches_method_and_route(self) -> None:
+        """Rollout lookup reuses an issue by method plus route when hashes differ."""
+        from app.services import github_service as gh
+
+        issues = [
+            {
+                "number": 3561,
+                "body": "- Method + route: GET /api/v1/roll/bootstrap\n<!-- performance-fingerprint:v1:oldhash -->",
+                "title": "Performance: GET /api/v1/roll/bootstrap took 1637ms (budget 1000ms)",
+            }
+        ]
+        client_double, calls = _github_client_double(
+            get_handler=lambda url, headers, params: _json_response(issues)
+        )
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            found = await gh.find_open_issue_by_fingerprint(
+                "91eb38be9dc36a6d",
+                method="GET",
+                route_template="/api/v1/roll/bootstrap",
+            )
+
+        assert found == 3561
+
+    @pytest.mark.asyncio
+    async def test_get_performance_issue_state(self) -> None:
+        """Reading issue state works without commenting."""
+        from app.services import github_service as gh
+
+        def _get(url: str, headers: dict, params: dict) -> object:
+            """Return an open issue state."""
+            return _json_response({"state": "open"})
+
+        client_double, calls = _github_client_double(get_handler=_get)
+
+        with (
+            patch("app.services.github_service.httpx.AsyncClient", client_double),
+            patch.object(
+                gh, "get_github_settings", return_value=_github_settings_double()
+            ),
+        ):
+            state = await gh.get_performance_issue_state(4242)
+
+        assert state == "open"
+        assert calls["get"][0][0] == "https://api.github.com/repos/o/r/issues/4242"
+
+    @pytest.mark.asyncio
     async def test_github_lookup_failure_raises_runtime_error(self) -> None:
         """GitHub API failures surface as RuntimeError for the caller to log."""
         from app.services import github_service as gh

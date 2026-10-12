@@ -255,6 +255,9 @@ class FilingDecision:
     canonical: str
     high_priority: bool
     reason: str
+    method: str | None = None
+    route_template: str | None = None
+    legacy_fingerprints: tuple[str, ...] = ()
 
 
 class PerformanceIssueTracker:
@@ -518,6 +521,9 @@ def evaluate_request_event(
                 canonical=canonical,
                 high_priority=True,
                 reason="repeat violation for known open fingerprint",
+                method=method,
+                route_template=route_template,
+                legacy_fingerprints=(),
             )
         return FilingDecision(
             action="file",
@@ -525,6 +531,9 @@ def evaluate_request_event(
             canonical=canonical,
             high_priority=True,
             reason="warm violation >=1000ms files immediately",
+            method=method,
+            route_template=route_template,
+            legacy_fingerprints=(),
         )
     if duration_ms >= REQUEST_WARNING_MS:
         route_key = f"{method.upper()} {normalize_route_template(route_template)}"
@@ -535,6 +544,9 @@ def evaluate_request_event(
                 canonical=canonical,
                 high_priority=False,
                 reason="repeat warning for known open fingerprint",
+                method=method,
+                route_template=route_template,
+                legacy_fingerprints=(),
             )
         if _tracker.evaluate_warning_hit(route_key=route_key, now=current):
             return FilingDecision(
@@ -543,6 +555,9 @@ def evaluate_request_event(
                 canonical=canonical,
                 high_priority=False,
                 reason="warning accumulation threshold crossed",
+                method=method,
+                route_template=route_template,
+                legacy_fingerprints=(),
             )
         return FilingDecision(
             action="accumulate",
@@ -550,6 +565,9 @@ def evaluate_request_event(
             canonical=canonical,
             high_priority=False,
             reason="warning recorded below filing threshold",
+            method=method,
+            route_template=route_template,
+            legacy_fingerprints=(),
         )
     return None
 
@@ -581,6 +599,9 @@ def evaluate_startup_event(
                 canonical=canonical,
                 high_priority=True,
                 reason="repeat hard startup failure for known open fingerprint",
+                method=None,
+                route_template=None,
+                legacy_fingerprints=(),
             )
         return FilingDecision(
             action="file",
@@ -588,6 +609,9 @@ def evaluate_startup_event(
             canonical=canonical,
             high_priority=True,
             reason="hard startup failure >=2.5s files immediately",
+            method=None,
+            route_template=None,
+            legacy_fingerprints=(),
         )
     if duration_ms >= STARTUP_WARNING_MS:
         if _tracker.open_issue_for(fingerprint) is not None:
@@ -597,6 +621,9 @@ def evaluate_startup_event(
                 canonical=canonical,
                 high_priority=False,
                 reason="repeat startup warning for known open fingerprint",
+                method=None,
+                route_template=None,
+                legacy_fingerprints=(),
             )
         if _tracker.evaluate_startup_warning(now=current):
             return FilingDecision(
@@ -605,6 +632,9 @@ def evaluate_startup_event(
                 canonical=canonical,
                 high_priority=False,
                 reason="startup warnings twice within 1 hour",
+                method=None,
+                route_template=None,
+                legacy_fingerprints=(),
             )
         return FilingDecision(
             action="accumulate",
@@ -612,6 +642,9 @@ def evaluate_startup_event(
             canonical=canonical,
             high_priority=False,
             reason="startup warning recorded below filing threshold",
+            method=None,
+            route_template=None,
+            legacy_fingerprints=(),
         )
     return None
 
@@ -644,6 +677,9 @@ def evaluate_coroutine_timeout(
             canonical=canonical,
             high_priority=True,
             reason="repeat coroutine timeout for known open fingerprint",
+            method=None,
+            route_template=None,
+            legacy_fingerprints=(),
         )
     return FilingDecision(
         action="file",
@@ -651,6 +687,9 @@ def evaluate_coroutine_timeout(
         canonical=canonical,
         high_priority=True,
         reason="readiness-critical coroutine timeout files immediately",
+        method=None,
+        route_template=None,
+        legacy_fingerprints=(),
     )
 
 
@@ -876,7 +915,12 @@ async def _file_decision_background(
                 # to server-side dedupe so a regression opens a new issue
                 # referencing the prior one instead of silently appending
                 # recurrence notes to closed historical work.
-        existing = await gh.find_open_issue_by_fingerprint(decision.fingerprint)
+        existing = await gh.find_open_issue_by_fingerprint(
+            decision.fingerprint,
+            extra_fingerprints=decision.legacy_fingerprints,
+            method=decision.method,
+            route_template=decision.route_template,
+        )
         if existing is not None:
             _tracker.mark_open(decision.fingerprint, existing)
             try:
@@ -892,7 +936,12 @@ async def _file_decision_background(
         prior = _tracker.closed_issue_for(decision.fingerprint)
         if prior is None:
             try:
-                prior = await gh.find_closed_issue_by_fingerprint(decision.fingerprint)
+                prior = await gh.find_closed_issue_by_fingerprint(
+                    decision.fingerprint,
+                    extra_fingerprints=decision.legacy_fingerprints,
+                    method=decision.method,
+                    route_template=decision.route_template,
+                )
             except RuntimeError as exc:
                 logger.warning("Performance regression lookup failed: %s", exc)
                 prior = None
