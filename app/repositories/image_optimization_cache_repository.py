@@ -1,7 +1,11 @@
-"""Repository for image optimization cache."""
+"""Image optimization cache query construction and persistence.
 
-from datetime import UTC, datetime
-from typing import Optional
+All SQLAlchemy access for the ``ImageOptimizationCache`` model family lives
+here. Functions return ORM models or plain values; services own transactions
+and error handling.
+"""
+
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,10 +17,22 @@ class ImageOptimizationCacheRepository:
     """Repository for image optimization cache operations."""
 
     def __init__(self, db: AsyncSession) -> None:
+        """Initialize the repository with a database session.
+
+        Args:
+            db: Async database session.
+        """
         self._db = db
 
-    async def get(self, cache_key: str) -> Optional[ImageOptimizationCache]:
-        """Get a cached optimized image by cache key."""
+    async def get(self, cache_key: str) -> ImageOptimizationCache | None:
+        """Get an unexpired cached optimized image by cache key.
+
+        Args:
+            cache_key: Deterministic cache key for the optimized variant.
+
+        Returns:
+            The cache entry, or ``None`` when absent or expired.
+        """
         stmt = select(ImageOptimizationCache).where(
             ImageOptimizationCache.cache_key == cache_key,
             ImageOptimizationCache.expires_at > datetime.now(UTC),
@@ -34,13 +50,20 @@ class ImageOptimizationCacheRepository:
         transcoded: bool,
         ttl_seconds: int = 31536000,  # 1 year default
     ) -> ImageOptimizationCache:
-        """Store an optimized image in the cache."""
-        expires_at = datetime.now(UTC).replace(
-            microsecond=0
-        )  # Expires at end of TTL
-        # We'll set expires_at using the TTL
-        from datetime import timedelta
+        """Store an optimized image in the cache.
 
+        Args:
+            cache_key: Deterministic cache key for the optimized variant.
+            source_url: Validated upstream image URL.
+            width: Snapped variant width in pixels.
+            content: Optimized image bytes to store.
+            media_type: Media type of the stored bytes.
+            transcoded: Whether the bytes were transcoded.
+            ttl_seconds: Seconds until the entry expires.
+
+        Returns:
+            The created cache entry (flushed; the caller owns the commit).
+        """
         expires_at = datetime.now(UTC) + timedelta(seconds=ttl_seconds)
 
         cache_entry = ImageOptimizationCache(
@@ -58,7 +81,11 @@ class ImageOptimizationCacheRepository:
         return cache_entry
 
     async def delete_expired(self) -> int:
-        """Delete expired cache entries. Returns count of deleted entries."""
+        """Delete expired cache entries.
+
+        Returns:
+            Count of deleted entries.
+        """
         stmt = delete(ImageOptimizationCache).where(
             ImageOptimizationCache.expires_at <= datetime.now(UTC)
         )

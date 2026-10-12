@@ -24,10 +24,10 @@ import socket
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_image_delivery_settings
 from app.repositories.image_optimization_cache_repository import (
@@ -67,6 +67,14 @@ _DNS_CACHE_TTL = timedelta(hours=1)
 _DEFAULT_CACHE_TTL_SECONDS = 31536000
 
 
+def clear_caches() -> None:
+    """Clear in-memory image delivery caches.
+
+    Used by tests to ensure isolation between cases.
+    """
+    _DNS_CACHE.clear()
+
+
 class ImageDeliveryError(Exception):
     """Base error for remote image delivery failures."""
 
@@ -87,21 +95,6 @@ class OptimizedImage:
     media_type: str
     width: int
     transcoded: bool
-
-
-@dataclass(frozen=True)
-class OptimizationTimings:
-    """Phase timings for image optimization."""
-
-    total_ms: float
-    canonicalize_ms: float
-    validate_ms: float
-    dns_check_ms: float
-    cache_lookup_ms: float
-    fetch_upstream_ms: float
-    transcode_ms: float
-    cache_store_ms: float
-    cache_hit: bool
 
 
 def resolve_variant_width(requested_width: int) -> int:
@@ -396,7 +389,7 @@ async def optimize_remote_image(
     requested_width: int,
     *,
     transport: httpx.AsyncBaseTransport | None = None,
-    db: Optional["AsyncSession"] = None,
+    db: AsyncSession | None = None,
 ) -> OptimizedImage:
     """Turn a canonical external image URL into optimized, cacheable bytes.
 
@@ -414,7 +407,7 @@ async def optimize_remote_image(
         UpstreamImageUnavailableError: If the upstream fetch fails.
     """
     start_total = time.perf_counter()
-    timings = {}
+    timings: dict[str, float] = {}
 
     # Phase 1: Canonicalize
     start = time.perf_counter()
@@ -435,10 +428,14 @@ async def optimize_remote_image(
     cache_hit = False
     cache_lookup_start = time.perf_counter()
 
-    cached_result: Optional[OptimizedImage] = None
+    cached_result: OptimizedImage | None = None
     if db is not None:
-        repo = ImageOptimizationCacheRepository(db)
-        cached_entry = await repo.get(cache_key)
+        try:
+            repo = ImageOptimizationCacheRepository(db)
+            cached_entry = await repo.get(cache_key)
+        except Exception as exc:
+            logger.warning("Image cache lookup failed; falling back to upstream: %s", exc)
+            cached_entry = None
         if cached_entry is not None:
             cached_result = OptimizedImage(
                 content=cached_entry.content,
@@ -446,11 +443,11 @@ async def optimize_remote_image(
                 width=cached_entry.width,
                 transcoded=cached_entry.transcoded,
             )
-            cache_hit = True
 
     timings["cache_lookup_ms"] = (time.perf_counter() - cache_lookup_start) * 1000
 
-    if cache_hit:
+    if cached_result is not None:
+        cache_hit = True
         timings["fetch_upstream_ms"] = 0.0
         timings["transcode_ms"] = 0.0
         timings["cache_store_ms"] = 0.0
