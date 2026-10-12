@@ -1139,7 +1139,7 @@ async def roll_bootstrap(
         .where(Thread.is_blocked.is_(False))
         .order_by(Thread.queue_position)
         .limit(die_size)
-        .group_by(Thread.id)
+        .group_by(Thread.id, Issue.issue_number)
     )
 
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
