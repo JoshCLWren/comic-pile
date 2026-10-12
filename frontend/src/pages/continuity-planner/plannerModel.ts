@@ -3,6 +3,7 @@ import type {
   ContinuityPlanNode,
   ContinuityPlanNodeType,
   ContinuityPlanOrderingMode,
+  ContinuityPlanWrite,
 } from '../../services/api-continuity-plans'
 import { isObject, isString } from '../../utils/runtimeChecks'
 
@@ -113,10 +114,9 @@ export function buildPayload(
 ) {
   const normalized = normalizePositions(nodeList)
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
-  return {
+  const payload: ContinuityPlanWrite = {
     name: name.trim(),
     ordering_mode: orderingMode,
-    ...(expectedUpdatedAt ? { expected_updated_at: expectedUpdatedAt } : {}),
     lanes: orderedLanes.map((lane) => ({ id: lane.id, name: lane.name, order: lane.order })),
     nodes: normalized.map((node) => ({
       id: node.id,
@@ -138,6 +138,10 @@ export function buildPayload(
       reader_optional: node.reader_optional ?? null,
     })),
   }
+  if (expectedUpdatedAt) {
+    payload.expected_updated_at = expectedUpdatedAt
+  }
+  return payload
 }
 
 /** Count nodes assigned to a lane. */
