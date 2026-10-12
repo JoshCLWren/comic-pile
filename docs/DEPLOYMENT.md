@@ -128,20 +128,36 @@ Merges to `main` are the production source. The production workflow runs the req
 
 ### Red-deploy freeze
 
-While the most recent completed **Deploy Production** run on `main` is red
+While the most recent **attempted** Deploy Production run on `main` is red
 (`failure`, `timed_out`, or `startup_failure`), ComicPile freezes further
-factory merges and fails new Deploy Production runs before migrations.
+factory merges and skips new Deploy Production runs before migrations.
+
+An attempted run is one that got past the freeze gate and actually tried to
+deploy. Runs that the freeze gate itself blocked are skipped when evaluating
+the latest run, so the gate cannot latch on its own failures. Cancelled,
+skipped, and neutral runs also do not count and cannot lift the freeze. Only a
+later successful attempted deploy lifts it.
 
 This exists so a broken production deploy cannot keep accumulating merges
 (#3509). There is no P1-issue freeze.
 
-**Override (maintainers only).** After the fix is on `main`, a maintainer
-re-runs **Deploy Production** with `workflow_dispatch`:
+**Factory merges.** The freeze blocks factory merge drains, except pull
+requests labeled `deploy-fix`. Those PRs may merge while production is red so
+the factory can land its own fix. Every other `factory:ready` PR waits.
+
+**Runs API errors fail open.** If GitHub cannot list Deploy Production runs,
+the freeze check warns and does not freeze (and does not fail the deploy
+workflow). A runs-API blip must not become a self-sustaining red deploy.
+
+**Override (repository owner only).** After the fix is on `main`, the
+repository owner re-runs **Deploy Production** with `workflow_dispatch`.
+`github.actor` must match `github.repository_owner`; other accounts, including
+`GITHUB_TOKEN` jobs, cannot override.
 
 1. Set `override_freeze` to `true`.
 2. Provide a non-empty `reason`. The reason is written to the run summary.
-3. Factory workers must not use the override. The merge drain has no override
-   input; humans merge the fix, then a maintainer dispatches the deploy.
+3. Factory workers must not use the override. Label a factory PR `deploy-fix`
+   to merge it while frozen, then the owner dispatches the deploy.
 
 Once that overridden run completes successfully, the freeze lifts.
 

@@ -22,15 +22,20 @@ later automatic triggers exit without rerunning migrations or creating another d
 
 ## Red-deploy freeze
 
-Deploy Production starts with a freeze gate. If the last completed Deploy
-Production run on `main` is red, the job fails immediately and does not run
-migrations. Factory merge drains honor the same freeze so more changes cannot
-land on a broken production deploy.
+Deploy Production starts with a freeze gate. If the last *attempted* Deploy
+Production run on `main` is red, later deploys skip migrations instead of
+failing. Gate-blocked, cancelled, skipped, and neutral runs are ignored, so
+the gate cannot latch on itself and a cancelled run cannot lift the freeze.
 
-Maintainers unfreeze a red deploy by dispatching Deploy Production with
-`override_freeze=true` and a required `reason` after the fix is on `main`.
-The reason is logged in the run summary. Factory workers must not use that
-override. See [Deployment](DEPLOYMENT.md#red-deploy-freeze).
+Factory merge drains honor the same freeze so more changes cannot land on a
+broken production deploy, except PRs labeled `deploy-fix`. A runs-API error
+fails open with a warning rather than freezing.
+
+The repository owner unfreezes a red deploy by dispatching Deploy Production
+with `override_freeze=true` and a required `reason` after the fix is on
+`main`. `github.actor` must be the repository owner. The reason is logged in
+the run summary. Factory workers must not use that override; they can label a
+fix PR `deploy-fix` instead. See [Deployment](DEPLOYMENT.md#red-deploy-freeze).
 
 ## Deployment retention
 

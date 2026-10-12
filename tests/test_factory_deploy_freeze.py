@@ -30,6 +30,53 @@ def load_module() -> ModuleType:
     return module
 
 
+def jobs(*pairs: tuple[str, str]) -> list[dict[str, str]]:
+    """Build job fixtures for one workflow run.
+
+    Args:
+        pairs: ``(job name, conclusion)`` tuples.
+
+    Returns:
+        Job mappings the freeze helper understands.
+
+    """
+    return [{"name": name, "conclusion": conclusion} for name, conclusion in pairs]
+
+
+def attempted_jobs(*, deploy_conclusion: str = "success") -> list[dict[str, str]]:
+    """Jobs for a run that got past the freeze gate.
+
+    Args:
+        deploy_conclusion: Conclusion of the migrate/deploy job.
+
+    Returns:
+        Job fixtures including a non-gate job that ran.
+
+    """
+    return jobs(
+        ("Red-deploy freeze gate", "success"),
+        ("Deduplicate exact main SHA", "success"),
+        ("Migrate Neon and deploy exact main SHA", deploy_conclusion),
+    )
+
+
+def gate_blocked_jobs(*, freeze_conclusion: str = "success") -> list[dict[str, str]]:
+    """Jobs for a run the freeze gate stopped before a deploy.
+
+    Args:
+        freeze_conclusion: Conclusion of the freeze job itself.
+
+    Returns:
+        Job fixtures with only the freeze gate running.
+
+    """
+    return jobs(
+        ("Red-deploy freeze gate", freeze_conclusion),
+        ("Deduplicate exact main SHA", "skipped"),
+        ("Migrate Neon and deploy exact main SHA", "skipped"),
+    )
+
+
 def run(
     run_id: int,
     *,
@@ -38,6 +85,7 @@ def run(
     conclusion: str = "success",
     updated_at: str = "2026-10-12T12:00:00Z",
     html_url: str | None = None,
+    job_list: list[dict[str, str]] | None = None,
 ) -> dict[str, object]:
     """Build one workflow-run fixture.
 
@@ -48,6 +96,7 @@ def run(
         conclusion: Terminal workflow conclusion.
         updated_at: ISO timestamp used to pick the latest run.
         html_url: Optional HTML URL for the run.
+        job_list: Optional jobs used to detect gate-blocked runs.
 
     Returns:
         Workflow-run fixture.
@@ -61,6 +110,8 @@ def run(
         "status": status,
         "updated_at": updated_at,
     }
+    if job_list is not None:
+        payload["jobs"] = job_list
     return payload
 
 
@@ -69,12 +120,18 @@ def test_red_last_run_blocks_without_override() -> None:
     module = load_module()
     payload = {
         "workflow_runs": [
-            run(10, conclusion="success", updated_at="2026-10-12T11:00:00Z"),
+            run(
+                10,
+                conclusion="success",
+                updated_at="2026-10-12T11:00:00Z",
+                job_list=attempted_jobs(),
+            ),
             run(
                 99,
                 conclusion="failure",
                 updated_at="2026-10-12T18:00:00Z",
                 html_url=RED_RUN_URL,
+                job_list=attempted_jobs(deploy_conclusion="failure"),
             ),
             run(11, status="in_progress", conclusion="", updated_at="2026-10-12T19:00:00Z"),
         ]
@@ -96,8 +153,18 @@ def test_successful_last_run_is_all_clear() -> None:
     module = load_module()
     payload = {
         "workflow_runs": [
-            run(8, conclusion="failure", updated_at="2026-10-11T12:00:00Z"),
-            run(9, conclusion="success", updated_at="2026-10-12T12:00:00Z"),
+            run(
+                8,
+                conclusion="failure",
+                updated_at="2026-10-11T12:00:00Z",
+                job_list=attempted_jobs(deploy_conclusion="failure"),
+            ),
+            run(
+                9,
+                conclusion="success",
+                updated_at="2026-10-12T12:00:00Z",
+                job_list=attempted_jobs(),
+            ),
         ]
     }
 
@@ -111,7 +178,16 @@ def test_successful_last_run_is_all_clear() -> None:
 def test_override_requires_reason_and_unblocks_red_run() -> None:
     """Override without a reason stays blocked; a reason logs and proceeds."""
     module = load_module()
-    payload = {"workflow_runs": [run(99, conclusion="timed_out", html_url=RED_RUN_URL)]}
+    payload = {
+        "workflow_runs": [
+            run(
+                99,
+                conclusion="timed_out",
+                html_url=RED_RUN_URL,
+                job_list=attempted_jobs(deploy_conclusion="timed_out"),
+            )
+        ]
+    }
 
     missing = module.evaluate_freeze(payload, override=True, reason="   ")
     assert missing["blocked"] is True
@@ -144,7 +220,18 @@ def test_cli_exits_one_when_frozen() -> None:
     from unittest.mock import patch
 
     module = load_module()
-    payload = json_dumps({"workflow_runs": [run(99, conclusion="failure", html_url=RED_RUN_URL)]})
+    payload = json_dumps(
+        {
+            "workflow_runs": [
+                run(
+                    99,
+                    conclusion="failure",
+                    html_url=RED_RUN_URL,
+                    job_list=attempted_jobs(deploy_conclusion="failure"),
+                )
+            ]
+        }
+    )
     stdout = io.StringIO()
     stderr = io.StringIO()
     with patch.object(module.sys, "stdin", io.StringIO(payload)):
@@ -161,7 +248,18 @@ def test_cli_override_exits_zero() -> None:
     from unittest.mock import patch
 
     module = load_module()
-    payload = json_dumps({"workflow_runs": [run(99, conclusion="failure", html_url=RED_RUN_URL)]})
+    payload = json_dumps(
+        {
+            "workflow_runs": [
+                run(
+                    99,
+                    conclusion="failure",
+                    html_url=RED_RUN_URL,
+                    job_list=attempted_jobs(deploy_conclusion="failure"),
+                )
+            ]
+        }
+    )
     stdout = io.StringIO()
     with patch.object(module.sys, "stdin", io.StringIO(payload)):
         with patch.object(module.sys, "stdout", stdout):
@@ -197,24 +295,172 @@ def test_deploy_workflow_fails_fast_before_migrations() -> None:
     assert "override_freeze:" in workflow
     assert "name: Red-deploy freeze gate" in workflow
     assert "needs: freeze" in workflow
+    assert "github.repository_owner" in workflow
+    assert "github.actor" in workflow
+    assert "--paginate" not in workflow.split("factory_deploy_freeze.py")[0][-800:]
+    assert f"per_page={load_module().RUNS_PAGE_SIZE}" in workflow
+    assert "needs.freeze.outputs.proceed == 'true'" in workflow
+    assert 'echo "proceed=false"' in workflow
+    assert "::warning::Unable to read completed Deploy Production runs; failing open." in workflow
 
 
 def test_merge_drains_respect_deploy_freeze() -> None:
-    """Factory auto-merge pauses while the last Deploy Production run is red."""
+    """Factory auto-merge pauses while red, except PRs labeled deploy-fix."""
     names = ("factory-ready-merge-drain.yml", "fixed-model-factory-dispatch.yml")
     for name in names:
         source = (WORKFLOWS / name).read_text(encoding="utf-8")
         assert "factory_deploy_freeze.py" in source
         assert "deploy_freeze" in source
-        assert "steps.deploy_freeze.outputs.frozen != 'true'" in source
-        assert "--override" not in source.split("factory_deploy_freeze.py")[1][:400]
+        assert "DEPLOY_FROZEN" in source
+        assert "deploy-fix" in source
+        assert "--paginate --slurp" not in source.split("Check Deploy Production freeze")[1][
+            :800
+        ]
+        assert f"per_page={load_module().RUNS_PAGE_SIZE}" in source.split(
+            "Check Deploy Production freeze"
+        )[1][:800]
+        assert "failing open" in source
+        freeze_invoke = source.split("factory_deploy_freeze.py")[1][:400]
+        assert "--override" not in freeze_invoke
+        assert "--fetch-jobs" in freeze_invoke
 
 
 def test_runbook_documents_freeze_and_override() -> None:
-    """Operators can find the freeze policy and the maintainer override."""
+    """Operators can find the freeze policy and the owner override."""
     deploy = DEPLOY_DOCS.read_text(encoding="utf-8")
     vercel = VERCEL_DOCS.read_text(encoding="utf-8")
     for text in (deploy, vercel):
         assert "override_freeze" in text
         assert "Deploy Production" in text
         assert "frozen" in text.lower() or "freeze" in text.lower()
+        assert "deploy-fix" in text
+        assert "repository owner" in text.lower() or "github.actor" in text
+
+
+def test_gate_blocked_run_does_not_latch_or_replace_the_root_cause() -> None:
+    """A freeze-gate skip after a real failure still points at the real failure."""
+    module = load_module()
+    payload = {
+        "workflow_runs": [
+            run(
+                1,
+                conclusion="failure",
+                updated_at="2026-10-12T18:00:00Z",
+                html_url=RED_RUN_URL,
+                job_list=attempted_jobs(deploy_conclusion="failure"),
+            ),
+            run(
+                2,
+                conclusion="success",
+                updated_at="2026-10-12T18:05:00Z",
+                html_url="https://github.com/JoshCLWren/comic-pile/actions/runs/2",
+                job_list=gate_blocked_jobs(),
+            ),
+            run(
+                3,
+                conclusion="failure",
+                updated_at="2026-10-12T18:10:00Z",
+                html_url="https://github.com/JoshCLWren/comic-pile/actions/runs/3",
+                job_list=gate_blocked_jobs(freeze_conclusion="failure"),
+            ),
+        ]
+    }
+
+    decision = module.evaluate_freeze(payload)
+
+    assert decision["blocked"] is True
+    assert decision["run_id"] == 1
+    assert decision["run_url"] == RED_RUN_URL
+
+
+def test_cancelled_run_does_not_lift_the_freeze() -> None:
+    """A cancelled run after a red attempted deploy leaves the freeze in place."""
+    module = load_module()
+    payload = {
+        "workflow_runs": [
+            run(
+                1,
+                conclusion="failure",
+                updated_at="2026-10-12T18:00:00Z",
+                html_url=RED_RUN_URL,
+                job_list=attempted_jobs(deploy_conclusion="failure"),
+            ),
+            run(
+                2,
+                conclusion="cancelled",
+                updated_at="2026-10-12T18:06:00Z",
+                job_list=attempted_jobs(deploy_conclusion="cancelled"),
+            ),
+            run(
+                3,
+                conclusion="skipped",
+                updated_at="2026-10-12T18:07:00Z",
+            ),
+        ]
+    }
+
+    decision = module.evaluate_freeze(payload)
+
+    assert decision["blocked"] is True
+    assert decision["run_id"] == 1
+    assert decision["run_url"] == RED_RUN_URL
+
+
+def test_success_without_job_data_does_not_lift_the_freeze() -> None:
+    """A green conclusion with no jobs might be a gate skip; it must not unfreeze."""
+    module = load_module()
+    payload = {
+        "workflow_runs": [
+            run(
+                1,
+                conclusion="failure",
+                updated_at="2026-10-12T18:00:00Z",
+                html_url=RED_RUN_URL,
+                job_list=attempted_jobs(deploy_conclusion="failure"),
+            ),
+            run(2, conclusion="success", updated_at="2026-10-12T18:05:00Z"),
+        ]
+    }
+
+    decision = module.evaluate_freeze(payload)
+
+    assert decision["blocked"] is True
+    assert decision["run_id"] == 1
+
+
+def test_jobs_loader_stops_after_the_latest_attempted_run() -> None:
+    """Jobs are fetched newest-first only until an attempted deploy is found."""
+    module = load_module()
+    fetched: list[int] = []
+
+    def loader(run_id: int) -> list[dict[str, str]]:
+        fetched.append(run_id)
+        if run_id == 2:
+            return attempted_jobs(deploy_conclusion="failure")
+        return gate_blocked_jobs()
+
+    payload = {
+        "workflow_runs": [
+            run(1, conclusion="failure", updated_at="2026-10-12T17:00:00Z"),
+            run(3, conclusion="success", updated_at="2026-10-12T19:00:00Z"),
+            run(2, conclusion="failure", updated_at="2026-10-12T18:00:00Z", html_url=RED_RUN_URL),
+        ]
+    }
+
+    decision = module.evaluate_freeze(payload, jobs_loader=loader)
+
+    assert fetched == [3, 2]
+    assert decision["blocked"] is True
+    assert decision["run_id"] == 2
+
+
+def test_red_without_job_data_still_freezes() -> None:
+    """Unknown jobs on a red run fail closed so a real deploy failure still freezes."""
+    module = load_module()
+    payload = {"workflow_runs": [run(99, conclusion="failure", html_url=RED_RUN_URL)]}
+
+    decision = module.evaluate_freeze(payload)
+
+    assert decision["blocked"] is True
+    assert decision["run_id"] == 99
+    assert "deploy-fix" in str(decision["reason"])

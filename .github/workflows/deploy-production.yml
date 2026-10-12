@@ -16,8 +16,8 @@ on:
     inputs:
       override_freeze:
         description: >
-          Bypass the red-deploy freeze after a fix is on main. Maintainers
-          only; factory workers must not use this.
+          Bypass the red-deploy freeze after a fix is on main. Repository
+          owner only (github.actor must match github.repository_owner).
         type: boolean
         default: false
       reason:
@@ -43,6 +43,9 @@ jobs:
     name: Red-deploy freeze gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+      frozen: ${{ steps.check.outputs.frozen }}
     steps:
       - name: Check out current main
         uses: actions/checkout@v7
@@ -51,23 +54,37 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Fail fast if the last Deploy Production run is red
+      - name: Skip deploy when the last attempted run is red
+        id: check
         env:
           GH_TOKEN: ${{ github.token }}
           OVERRIDE_FREEZE: ${{ github.event.inputs.override_freeze || 'false' }}
           OVERRIDE_REASON: ${{ github.event.inputs.reason || '' }}
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           runs_file="$RUNNER_TEMP/deploy-production-runs.json"
-          if ! gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=20" \
+          if ! gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=100" \
             > "$runs_file"; then
-            echo "Unable to read completed Deploy Production runs; failing closed." >&2
-            exit 1
+            echo "::warning::Unable to read completed Deploy Production runs; failing open."
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "frozen=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Deploy freeze"
+              echo
+              echo "Runs API error; failing open. This run will not count as a deploy failure."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-          extra=()
+          extra=(--fetch-jobs)
           if [[ "$OVERRIDE_FREEZE" == "true" ]]; then
-            extra+=(--override --reason "$OVERRIDE_REASON")
+            if [[ "$ACTOR" != "$OWNER" ]]; then
+              echo "::warning::Ignoring override_freeze from ${ACTOR}; only repository owner ${OWNER} may override."
+            else
+              extra+=(--override --reason "$OVERRIDE_REASON")
+            fi
           fi
           set +e
           decision="$(python3 .github/scripts/factory_deploy_freeze.py "${extra[@]}" \
@@ -76,18 +93,40 @@ jobs:
           set -e
           echo "$decision"
           cat "$RUNNER_TEMP/freeze.err" >&2
-          if [[ -n "$decision" ]]; then
+          if [[ "$status" -eq 2 || -z "$decision" ]]; then
+            echo "::warning::Invalid Deploy Production run payload; failing open."
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "frozen=false" >> "$GITHUB_OUTPUT"
             {
               echo "## Deploy freeze"
               echo
-              python3 -c "import json,sys; print(json.load(sys.stdin)['reason'])" <<< "$decision"
+              echo "Invalid runs payload; failing open. This run will not count as a deploy failure."
             } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-          exit "$status"
+          reason="$(python3 -c "import json,sys; print(json.load(sys.stdin)['reason'])" <<< "$decision")"
+          frozen="$(python3 -c "import json,sys; print('true' if json.load(sys.stdin)['blocked'] else 'false')" <<< "$decision")"
+          {
+            echo "## Deploy freeze"
+            echo
+            echo "$reason"
+            echo
+            echo "Actor: ${ACTOR}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$frozen" == "true" ]]; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "frozen=true" >> "$GITHUB_OUTPUT"
+            echo "Last attempted Deploy Production run is red; skipping this deploy." >&2
+            echo "This run is gate-blocked and will not count as a deploy failure." >&2
+            exit 0
+          fi
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          echo "frozen=false" >> "$GITHUB_OUTPUT"
 
   preflight:
     name: Deduplicate exact main SHA
     needs: freeze
+    if: needs.freeze.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:

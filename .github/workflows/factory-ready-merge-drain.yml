@@ -224,35 +224,37 @@ jobs:
         run: |
           set -euo pipefail
           runs_file="$RUNNER_TEMP/deploy-production-runs.json"
-          if ! gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=20" \
+          if ! gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=100" \
             > "$runs_file"; then
-            echo "Unable to read completed Deploy Production runs; blocking factory merges" >&2
-            echo "frozen=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Unable to read completed Deploy Production runs; failing open."
+            echo "frozen=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           set +e
-          decision="$(python3 .github/scripts/factory_deploy_freeze.py < "$runs_file" 2>"$RUNNER_TEMP/freeze.err")"
+          decision="$(python3 .github/scripts/factory_deploy_freeze.py --fetch-jobs \
+            < "$runs_file" 2>"$RUNNER_TEMP/freeze.err")"
           status=$?
           set -e
           echo "$decision"
           cat "$RUNNER_TEMP/freeze.err" >&2
-          if [[ "$status" -eq 2 ]]; then
-            echo "Invalid Deploy Production run payload; blocking factory merges" >&2
-            echo "frozen=true" >> "$GITHUB_OUTPUT"
+          if [[ "$status" -eq 2 || -z "$decision" ]]; then
+            echo "::warning::Invalid Deploy Production run payload; failing open."
+            echo "frozen=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           frozen="$(python3 -c "import json,sys; print('true' if json.load(sys.stdin)['blocked'] else 'false')" <<< "$decision")"
           echo "frozen=$frozen" >> "$GITHUB_OUTPUT"
           if [[ "$frozen" == "true" ]]; then
-            echo "Factory merges are frozen while Deploy Production is red" >&2
+            echo "Factory merges are frozen while Deploy Production is red; PRs labeled deploy-fix may still merge." >&2
           fi
 
       - name: Drain exact-head ready factory PRs
-        if: steps.main_health.outputs.main_red != 'true' && steps.deploy_freeze.outputs.frozen != 'true'
+        if: steps.main_health.outputs.main_red != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOY_FROZEN: ${{ steps.deploy_freeze.outputs.frozen }}
         run: |
           set -Eeuo pipefail
           review_controller='.github/scripts/factory-review-controller.py'
@@ -273,11 +275,11 @@ jobs:
 
           mapfile -t ready_prs < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
-              --jq '.[] | select(.labels | map(.name) | contains(["factory:ready"])) | [.number, .head.sha] | @tsv' 2>/dev/null \
+              --jq '.[] | select(.labels | map(.name) | contains(["factory:ready"])) | [.number, .head.sha, ([.labels[].name] | join(","))] | @tsv' 2>/dev/null \
               || gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
                 --label 'factory:ready' \
-                --json number,headRefOid \
-                --jq '.[] | [.number, .headRefOid] | @tsv'
+                --json number,headRefOid,labels \
+                --jq '.[] | [.number, .headRefOid, ([.labels[].name] | join(","))] | @tsv'
           )
 
           if (( ${#ready_prs[@]} == 0 )); then
@@ -286,8 +288,19 @@ jobs:
           fi
 
           for candidate in "${ready_prs[@]}"; do
-            IFS=$'\t' read -r pr expected_head <<< "$candidate"
+            IFS=$'\t' read -r pr expected_head pr_labels <<< "$candidate"
             [[ -n "$pr" && -n "$expected_head" ]] || continue
+            if [[ "${DEPLOY_FROZEN}" == "true" ]]; then
+              case ",${pr_labels}," in
+                *,deploy-fix,*)
+                  echo "PR #${pr} is labeled deploy-fix; merging while Deploy Production is red"
+                  ;;
+                *)
+                  echo "PR #${pr} skipped: factory merges are frozen while Deploy Production is red (label deploy-fix to land a factory fix)"
+                  continue
+                  ;;
+              esac
+            fi
 
             authorization="$(python3 "$review_controller" authorized --pr "$pr")" || {
               echo "Unable to verify semantic authorization for PR #${pr}; leaving it open" >&2
