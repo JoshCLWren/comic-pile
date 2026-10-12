@@ -14,7 +14,10 @@ from httpx import AsyncClient
 
 from app.models import Issue, Thread
 
-CONTINUITY_GRAPH_PROBE_TABLES = (
+# After the #2553 cutover, blocked-state refresh joins canonical Dependency
+# rows rather than materializing ContinuityRule / DependencyGroup snapshots.
+CANONICAL_BLOCKING_PROBE = "join dependencies"
+LEGACY_CONTINUITY_GRAPH_PROBES = (
     "from dependency_groups",
     "from dependency_group_memberships",
     "from continuity_rules",
@@ -118,16 +121,15 @@ async def test_rate_endpoint_loads_the_continuity_graph_once(
     db_engine: AsyncEngine,
     rating: float,
 ) -> None:
-    """Blocked-state refresh must materialize the continuity graph exactly once.
+    """Blocked-state refresh must join canonical Dependencies exactly once.
 
-    Issue #3388 budgeted POST /api/v1/rate at 1000 ms. A "targeted" blocked-state
-    refresh was attempted that first loaded the continuity snapshot to find
-    affected threads and then loaded it again to evaluate blocked state. Because
-    ``refresh_user_blocked_status`` invalidates the session-local snapshot first,
-    the "targeted" path paid for two complete graph materializations and seven
-    extra round trips on every rate call instead of one. Both rate branches are
-    covered because the safe-position branch runs on low ratings and the
-    move-to-front branch on high ratings.
+    Issue #3388 budgeted POST /api/v1/rate at 1000 ms after a "targeted"
+    ContinuityRule snapshot refresh rebuilt the graph twice. The #2553 cutover
+    replaced that snapshot with a single canonical Dependency join; this probe
+    still fails if refresh runs twice, and it also fails if the rate path
+    regresses onto the legacy ContinuityRule / DependencyGroup snapshot.
+    Both rate branches are covered because the safe-position branch runs on
+    low ratings and the move-to-front branch on high ratings.
     """
     from tests.conftest import get_or_create_user_async
 
@@ -157,10 +159,18 @@ async def test_rate_endpoint_loads_the_continuity_graph_once(
 
     assert rate_resp.status_code == 200, rate_resp.text
 
-    for probe in CONTINUITY_GRAPH_PROBE_TABLES:
+    canonical_matches = [
+        statement for statement in statements if CANONICAL_BLOCKING_PROBE in statement
+    ]
+    assert len(canonical_matches) == 1, (
+        "Expected exactly one canonical Dependency join per rate call, got "
+        f"{len(canonical_matches)}. A refresh that evaluates blocked state twice "
+        "regressed POST /api/v1/rate round trips."
+    )
+    for probe in LEGACY_CONTINUITY_GRAPH_PROBES:
         matches = [statement for statement in statements if probe in statement]
-        assert len(matches) == 1, (
-            f"Expected exactly one continuity graph probe for {probe!r} per rate "
-            f"call, got {len(matches)}. A refresh that rebuilds the graph twice "
-            f"regressed POST /api/v1/rate round trips."
+        assert not matches, (
+            f"Rate path still loaded legacy continuity graph table {probe!r} "
+            f"({len(matches)} times); blocked-state refresh must use canonical "
+            "Dependencies after the #2553 cutover."
         )

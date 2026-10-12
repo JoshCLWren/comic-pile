@@ -25,6 +25,12 @@ from app.schemas.continuity_rule import (
     ContinuityRuleResponse,
     ConvergenceTarget,
 )
+from app.services.canonical_constraint_compiler import (
+    compile_rule_edges,
+    retire_rule_edges,
+    rule_edge_pairs,
+    validate_rule_compiles,
+)
 from app.services.continuity import _refresh_blocked_state, _to_response
 
 router = APIRouter(tags=["continuity"])
@@ -39,6 +45,59 @@ async def _get_owned_rule(db: AsyncSession, user_id: int, rule_id: int) -> Conti
             detail=f"Continuity rule {rule_id} not found",
         )
     return rule
+
+
+def _transient_rule_from_payload(user_id: int, payload: ContinuityRuleCreate) -> ContinuityRule:
+    """Build an unattached ContinuityRule for compile validation.
+
+    Args:
+        user_id: Owning user id.
+        payload: Incoming create/replace request.
+
+    Returns:
+        A transient ContinuityRule that is not added to the session.
+    """
+    return ContinuityRule(
+        user_id=user_id,
+        source_type=payload.source_type,
+        source_id=payload.source_id,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+        satisfaction_type=payload.satisfaction_type,
+        checkpoint_issue_id=payload.checkpoint_issue_id,
+        convergence_targets=[
+            {"type": target.type, "id": target.id}
+            for target in payload.convergence_targets
+        ]
+        or None,
+        note=payload.note,
+        selected_members=[
+            ContinuityRuleSelectedMember(issue_id=issue_id)
+            for issue_id in payload.selected_member_issue_ids
+        ],
+    )
+
+
+def _require_compilable_payload(user_id: int, payload: ContinuityRuleCreate) -> None:
+    """Reject a payload that would not compile to canonical Dependency edges.
+
+    Validation runs against a transient rule so a 400 cannot dirty a persisted
+    ORM instance (or its identity-mapped copy in the shared test session).
+
+    Args:
+        user_id: Owning user id.
+        payload: Incoming create/replace request.
+
+    Raises:
+        HTTPException: If the payload does not compile to canonical edges.
+    """
+    try:
+        validate_rule_compiles(_transient_rule_from_payload(user_id, payload))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "continuity_rule_not_compilable", "message": str(exc)},
+        ) from exc
 
 
 async def _would_create_convergence_cycle(
@@ -185,26 +244,21 @@ async def create_continuity_rule(
     ):
         raise _cycle_conflict(payload)
 
-    rule = ContinuityRule(
-        user_id=current_user.id,
-        source_type=payload.source_type,
-        source_id=payload.source_id,
-        target_type=payload.target_type,
-        target_id=payload.target_id,
-        satisfaction_type=payload.satisfaction_type,
-        checkpoint_issue_id=payload.checkpoint_issue_id,
-        convergence_targets=[
-            {"type": target.type, "id": target.id}
-            for target in payload.convergence_targets
-        ]
-        or None,
-        note=payload.note,
-        selected_members=[
-            ContinuityRuleSelectedMember(issue_id=issue_id)
-            for issue_id in payload.selected_member_issue_ids
-        ],
-    )
+    _require_compilable_payload(current_user.id, payload)
+    rule = _transient_rule_from_payload(current_user.id, payload)
     db.add(rule)
+    await db.flush()
+    # Compile the authored hard constraint into canonical Dependency edges in
+    # the same transaction (#2553). The edge is the Roll authority; the rule
+    # remains the authoring record.
+    try:
+        await compile_rule_edges(db, rule)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "continuity_cbl_collision", "message": str(exc)},
+        ) from exc
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -246,6 +300,7 @@ async def update_continuity_rule(
     await lock_continuity_graph(db, user_id=current_user.id)
     rule = await _get_owned_rule(db, current_user.id, rule_id)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
+    old_pairs = rule_edge_pairs(rule)
     if await _would_create_cycle(
         db,
         user_id=current_user.id,
@@ -267,6 +322,10 @@ async def update_continuity_rule(
     ):
         raise _cycle_conflict(payload)
 
+    # Validate the replacement shape before mutating the persisted rule so a
+    # non-compilable PUT cannot leak in-session writes into later reads (#2553).
+    _require_compilable_payload(current_user.id, payload)
+
     rule.source_type = payload.source_type
     rule.source_id = payload.source_id
     rule.target_type = payload.target_type
@@ -282,6 +341,24 @@ async def update_continuity_rule(
         ContinuityRuleSelectedMember(issue_id=issue_id)
         for issue_id in payload.selected_member_issue_ids
     ]
+    await db.flush()
+    new_pairs = rule_edge_pairs(rule)
+    # Retire edges the old shape compiled to (unless still intended), then
+    # compile the new shape (#2553).
+    await retire_rule_edges(
+        db,
+        user_id=current_user.id,
+        pairs=[pair for pair in old_pairs if pair not in new_pairs],
+        exclude_rule_id=rule.id,
+    )
+    try:
+        await compile_rule_edges(db, rule)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "continuity_cbl_collision", "message": str(exc)},
+        ) from exc
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -320,7 +397,14 @@ async def delete_continuity_rule(
     user_id = current_user.id
     await lock_continuity_graph(db, user_id=user_id)
     rule = await _get_owned_rule(db, user_id, rule_id)
+    retired_pairs = rule_edge_pairs(rule)
     await db.delete(rule)
+    await db.flush()
+    # Retire the deleted rule's compiled edges unless another rule still
+    # intends them (#2553).
+    await retire_rule_edges(
+        db, user_id=user_id, pairs=retired_pairs, exclude_rule_id=rule_id
+    )
     await db.commit()
     await _refresh_blocked_state(user_id, db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

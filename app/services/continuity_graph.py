@@ -31,6 +31,13 @@ MAX_GRAPH_SELECTED_MEMBERS = 10_000
 SNAPSHOT_SESSION_KEY = "continuity_graph_snapshot"
 
 
+def invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
+    """Discard the session-local continuity graph snapshot for a user."""
+    session_cache = db.info.get(SNAPSHOT_SESSION_KEY)
+    if isinstance(session_cache, dict):
+        session_cache.pop(user_id, None)
+
+
 @dataclass(frozen=True)
 class GraphSnapshot:
     """User-owned continuity data loaded in a bounded set of queries.

@@ -53,6 +53,7 @@ from app.services.migration_shared import (
     rule_descriptor as _rule_descriptor,
     rule_snapshot as _rule_snapshot,
     rules_fingerprint as _rules_fingerprint,
+    retire_plan_compiled_edges as _retire_plan_compiled_edges,
     stable_hash as _stable_hash,
 )
 from comic_pile.dependencies import _get_blocked_thread_ids_uncached
@@ -714,9 +715,15 @@ async def build_ultimate_universe_dry_run(
             "planned representation loses source protection for next-unread issues: "
             f"{sorted(lost_source_protection)}"
         )
-    if future_affected_eligible != current_affected_eligible:
+    # #2553: in the canonical runtime, historical cbl-order rows are inert, so
+    # a migration may newly block a thread by enforcing order through the
+    # plan (eligible -> blocked). Only error when protection is lost
+    # (blocked -> eligible), which the lost_source_protection check above
+    # already guards; this guards the Roll-eligibility view of the same.
+    newly_eligible = set(future_affected_eligible) - set(current_affected_eligible)
+    if newly_eligible:
         errors.append(
-            "affected Roll-eligible thread set would change: "
+            "affected Roll-eligible thread set would gain eligibility: "
             f"before={current_affected_eligible}, after={future_affected_eligible}"
         )
 
@@ -928,7 +935,7 @@ async def apply_ultimate_universe_migration(
         user_id=spec.user_id,
         plan=plan,
         nodes=nodes,
-        ordering_mode="strict_sequential",
+        ordering_mode="strict_sequential"
     )
     await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
@@ -1038,7 +1045,12 @@ async def apply_ultimate_universe_migration(
 
     factual = await _factual_snapshot(db, spec=spec, ordered_issue_ids=issue_ids)
     before_factual = snapshot["factual"]
-    for key in ("issue_state_hash", "thread_state_hash", "event_state_hash", "identity_state_hash"):
+    # #2553: thread_state_hash is intentionally excluded. The dry-run's
+    # Roll-eligibility gate already approves the blocked-state transition
+    # (it allows eligible->blocked enforcement but forbids losing
+    # protection). Requiring hash equality here would forbid the very
+    # enforcement the migration exists to provide.
+    for key in ("issue_state_hash", "event_state_hash", "identity_state_hash"):
         if factual[key] != before_factual[key]:
             raise MigrationInvariantError(
                 f"cutover changed protected factual state: {key}"
@@ -1050,13 +1062,17 @@ async def apply_ultimate_universe_migration(
     }
     roll_ids = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
     affected_eligible = sorted(roll_ids & affected_thread_ids)
-    preflight_eligible = snapshot["runtime_behavior"][
-        "current_affected_roll_eligible_thread_ids"
+    # #2553: compare against the dry-run's simulated future, not the
+    # preflight. The dry-run already approved the eligible->blocked
+    # transition (plan enforcement); the apply verifies the prediction
+    # came true.
+    predicted_eligible = snapshot["runtime_behavior"][
+        "simulated_future_eligible_thread_ids"
     ]
-    if affected_eligible != preflight_eligible:
+    if affected_eligible != predicted_eligible:
         raise MigrationInvariantError(
             "affected Roll-eligible thread set changed after cutover: "
-            f"preflight={preflight_eligible}, now={affected_eligible}"
+            f"predicted={predicted_eligible}, now={affected_eligible}"
         )
 
     return {
@@ -1165,9 +1181,14 @@ async def rollback_ultimate_universe_migration(
                 "refusing automatic rollback"
             )
 
+    # #2553: retire the plan's compiled canonical edges before the freeness
+    # check. The cutover compiles plan rules into Dependencies, so the legacy
+    # pairs are legitimately occupied until the plan's rules are removed.
+    plan_rule_ids = [rule.id for rule in plan_rules]
     for rule in plan_rules:
         await db.delete(rule)
     await db.flush()
+    await _retire_plan_compiled_edges(db, rule_ids=plan_rule_ids)
     remaining_plan_rule_ids = list(
         (
             await db.execute(
