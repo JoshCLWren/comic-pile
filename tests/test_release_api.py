@@ -259,6 +259,7 @@ async def test_public_release_payload_rejects_placeholder_content(
     ("field", "offending", "fragment"),
     [
         ("title", "incomplete #1551 fix for roll recovery", "#1551"),
+        ("summary", "Fixes #1234 for the release", "#1234"),
         ("title", "Roll history now loads instantly (Phase 2 and 3)", "Phase 2"),
         ("summary", "Added source_roll_event_id instrumentation detail.", "source_roll_event_id"),
         ("summary", "This update is still incomplete but shipped anyway.", "incomplete"),
@@ -527,3 +528,34 @@ async def test_public_release_payload_rejects_capability_claim_without_path(
         "provenance_json.reader_reachable_path must be a string" in error["message"]
         for error in response.json()["errors"]
     )
+
+
+@pytest.mark.asyncio
+async def test_release_publication_with_capability_claim_and_path(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reader capability language publishes once the shipped path is recorded.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1223, merge_sha="d" * 40)
+    payload["category"] = "You can now save queue filters"
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 200
+    published = response.json()
+    assert published["category"] == "You can now save queue filters"
+    provenance = published["provenance_json"]
+    assert isinstance(provenance, dict)
+    assert provenance["reader_reachable_path"] == "Queue page at /queue"
+
+
