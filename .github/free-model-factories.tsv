@@ -16,7 +16,6 @@
 55	ollama-cloud	nemotron-3-nano:30b	25	dispatcher	Ollama Cloud Nemotron 3 Nano 30B
 56	openrouter-free	dots-studio/dots-3-note-preview:free	30	dispatcher	OpenRouter Dots 3 Note Preview Free
 58	opencode-free	muse-spark-1.3-contributor-free	40	dispatcher	OpenCode Muse Spark 1.3 Contributor Free
-59	opencode-free	ling-3.0-flash-fin-free	45	dispatcher	OpenCode Ling 3.0 Flash Fin Free
 60	openrouter-free	cohere/north-mini-code:free	5	dispatcher	OpenRouter Cohere North Mini Code Free
 61	openrouter-free	google/gemma-4-31b-it:free	55	dispatcher	OpenRouter Gemma 4 31B Free
 62	openrouter-free	google/gemma-4-26b-a4b-it:free	0	dispatcher	OpenRouter Gemma 4 26B Free
@@ -34,3 +33,7 @@
 80	nvidia	z-ai/glm-5.3-flash	40	dispatcher	NVIDIA GLM 5.3 Flash
 81	nvidia	deepseek-ai/deepseek-v4.1-flash	50	dispatcher	NVIDIA DeepSeek V4.1 Flash
 82	z-ai	glm-4.7-flash	55	dispatcher	Z.AI GLM 4.7 Flash
+83	nvidia	nvidia/nemotron-3-super-120b-a12b	45	dispatcher	NVIDIA Nemotron 3 Super
+84	nvidia	nvidia/nemotron-3-ultra-550b-a55b	0	dispatcher	NVIDIA Nemotron 3 Ultra
+85	nvidia	nvidia/nemotron-3.5-lightning-30b-a3b	45	dispatcher	NVIDIA Nemotron 3.5 Lightning
+86	nvidia	meta/muse-glimmer-30b	15	dispatcher	NVIDIA Muse Glimmer 30B

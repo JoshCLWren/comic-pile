@@ -210,3 +210,32 @@ def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
         row["source"] == "openrouter-free" and row["worker"] in {"79", "80", "81", "82"}
         for row in rows
     )
+
+
+def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None:
+    """Workers 83-86 are debian OpenCode NVIDIA smokes; worker 59 is retired."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    by_worker = {row["worker"]: row for row in rows}
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["48"]["source"] == "mistral"
+    assert by_worker["48"]["model"] == "codestral-latest"
+    assert by_worker["55"]["source"] == "ollama-cloud"
+    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
+    assert "59" not in by_worker
+    assert "ling-3.0-flash-fin-free" not in {row["model"] for row in rows}
+    assert by_worker["75"]["model"] == "ling-3.1-flash-free"
+    assert by_worker["83"]["source"] == "nvidia"
+    assert by_worker["83"]["model"] == "nvidia/nemotron-3-super-120b-a12b"
+    assert by_worker["83"]["minute"] == "45"
+    assert by_worker["84"]["source"] == "nvidia"
+    assert by_worker["84"]["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
+    assert by_worker["84"]["minute"] == "0"
+    assert by_worker["85"]["source"] == "nvidia"
+    assert by_worker["85"]["model"] == "nvidia/nemotron-3.5-lightning-30b-a3b"
+    assert by_worker["85"]["minute"] == "45"
+    assert by_worker["86"]["source"] == "nvidia"
+    assert by_worker["86"]["model"] == "meta/muse-glimmer-30b"
+    assert by_worker["86"]["minute"] == "15"
+    assert by_worker["80"]["source"] == "nvidia"
+    assert by_worker["81"]["source"] == "nvidia"

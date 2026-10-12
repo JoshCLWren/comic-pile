@@ -1160,13 +1160,15 @@ def test_same_plan_retire_and_add_reuses_freed_worker(tmp_path: Path) -> None:
 
 
 def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -> None:
-    """CLI apply pins missing live free models on a production-shaped TSV.
+    """CLI apply re-pins live unused free models and keeps lock-retired ids off.
 
-    Copies the committed roster, forces the two target models off it (back
-    to big-pickle), then applies so the proof is the add path rather than a
-    hand-edit. Safe after the committed TSV already contains those pins.
+    Copies the committed roster, forces ``muse-spark-1.3-contributor-free``
+    off it (back to big-pickle), then applies so the proof is the add path
+    rather than a hand-edit. ``ling-3.0-flash-fin-free`` is lock-retired, so
+    apply must not silently re-pin it even though keep-present still lists
+    the id for synthetic add-path tests.
     """
-    target = {"ling-3.0-flash-fin-free", "muse-spark-1.3-contributor-free"}
+    target = {"muse-spark-1.3-contributor-free"}
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     rewritten = []
     for row in rows:
@@ -1192,6 +1194,7 @@ def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -
     ROSTER.sync_roster_lock(rewritten, lock_path=lock_path)
     before = {row["model"] for row in ROSTER.load_roster_rows(roster)}
     assert before.isdisjoint(target)
+    assert "ling-3.0-flash-fin-free" not in before
 
     status = RETIRE.run(
         [
@@ -1211,7 +1214,8 @@ def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -
     lock = ROSTER.load_roster_lock(lock_path)
 
     assert status == 0
-    assert "ling-3.0-flash-fin-free" in models
+    assert "ling-3.0-flash-fin-free" not in models
+    assert "ling-3.0-flash-fin-free" in lock["retired_models"]
     assert "muse-spark-1.3-contributor-free" in models
     assert "deepseek-v4-flash" not in models
     assert ROSTER.schedule_is_balanced(remaining)
@@ -1220,13 +1224,26 @@ def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -
 
 
 def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
-    """The factory TSV must pin the live unused free models this change adds."""
+    """Worker 59's Zen Ling 3.0 pin is retired; Muse Spark 1.3 stays.
+
+    ``ling-3.0-flash-fin-free`` left the live Zen catalog (``Model is
+    unavailable``). Worker 75 already pins the successor
+    ``ling-3.1-flash-free``, so the freed slot is not reused.
+    """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    by_worker = {row["worker"]: row for row in rows}
     models = {row["model"] for row in rows}
 
-    assert "ling-3.0-flash-fin-free" in models
+    assert 59 not in lock["expected_workers"]
+    assert 59 in lock["retired_workers"]
+    assert "59" not in by_worker
+    assert "ling-3.0-flash-fin-free" in lock["retired_models"]
+    assert "ling-3.0-flash-fin-free" not in models
+    assert by_worker["75"]["model"] == "ling-3.1-flash-free"
     assert "muse-spark-1.3-contributor-free" in models
     assert "deepseek-v4-flash" not in models
+    assert by_worker["46"]["model"] == "kilo-auto/free"
     assert ROSTER.schedule_is_balanced(rows)
 
 
@@ -1417,6 +1434,43 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "scheduler": "dispatcher",
         "display_name": "Z.AI GLM 4.7 Flash",
     }
+    assert "59" not in by_worker
+    assert 59 not in lock["expected_workers"]
+    assert 59 in lock["retired_workers"]
+    assert "ling-3.0-flash-fin-free" in lock["retired_models"]
+    assert "ling-3.0-flash-fin-free" not in {row["model"] for row in remaining}
+    assert by_worker["83"] == {
+        "worker": "83",
+        "source": "nvidia",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "minute": "45",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA Nemotron 3 Super",
+    }
+    assert by_worker["84"] == {
+        "worker": "84",
+        "source": "nvidia",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b",
+        "minute": "0",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA Nemotron 3 Ultra",
+    }
+    assert by_worker["85"] == {
+        "worker": "85",
+        "source": "nvidia",
+        "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "minute": "45",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA Nemotron 3.5 Lightning",
+    }
+    assert by_worker["86"] == {
+        "worker": "86",
+        "source": "nvidia",
+        "model": "meta/muse-glimmer-30b",
+        "minute": "15",
+        "scheduler": "dispatcher",
+        "display_name": "NVIDIA Muse Glimmer 30B",
+    }
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in remaining}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in remaining}
     assert by_worker["49"]["display_name"] == ROSTER.opencode_free_display_name(
@@ -1466,7 +1520,9 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     assert by_worker["51"]["model"] not in lock["retired_models"]
     assert by_worker["52"]["model"] not in lock["retired_models"]
     assert by_worker["53"]["model"] not in lock["retired_models"]
-    assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
+    assert by_worker["84"]["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
+    assert by_worker["84"]["source"] == "nvidia"
+    assert "nvidia/nemotron-3-ultra-550b-a55b" not in lock["retired_models"]
     assert "thinkingmachines/inkling" in lock["retired_models"]
     assert ROSTER.openrouter_model_is_free(by_worker["51"]["model"])
     assert ROSTER.openrouter_model_is_free(by_worker["52"]["model"])
