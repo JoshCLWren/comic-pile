@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
@@ -11,6 +11,8 @@ import {
   type CBLAdoptionPreviewEntry,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
+import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
+import { displayCblRepository, displayCblSourcePath } from '../utils/cblSourceDisplay'
 
 interface ReadingPlanAddMaterialProps {
   planId: number
@@ -76,24 +78,15 @@ export default function ReadingPlanAddMaterial({
     queryFn: () => cblSourcesApi.discover(submittedQuery),
     enabled: open && hasSearched,
   })
-  const hasChoices =
-    Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
   const previewQuery = useQuery({
     queryKey: selectedSource
-      ? queryKeys.cblSources.adoptionPlan(
-          selectedSource.id,
-          seriesDecisions,
-          entryDecisions,
-        )
+      ? queryKeys.cblSources.preview(selectedSource.id)
       : queryKeys.cblSources.preview(0),
     queryFn: () => {
       if (!selectedSource) throw new Error('Choose a CBL source first.')
-      return hasChoices
-        ? cblSourcesApi.plan(selectedSource.id, { series_decisions: seriesDecisions, entry_decisions: entryDecisions })
-        : cblSourcesApi.preview(selectedSource.id)
+      return cblSourcesApi.preview(selectedSource.id)
     },
     enabled: selectedSource !== null,
-    placeholderData: (previous) => previous,
   })
   const commitMutation = useMutation({
     mutationFn: ({
@@ -118,7 +111,17 @@ export default function ReadingPlanAddMaterial({
   })
 
   const sources = sourcesQuery.data ?? []
-  const preview = previewQuery.data ?? null
+  const hasChoices =
+    Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
+  const preview = useMemo(
+    () => {
+      if (!previewQuery.data) return null
+      return hasChoices
+        ? applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
+        : previewQuery.data
+    },
+    [previewQuery.data, seriesDecisions, entryDecisions, hasChoices],
+  )
   const result: CBLAdoptionCommitResult | undefined = commitMutation.data
   const isSearching = sourcesQuery.isFetching
   const isPreviewing = previewQuery.isFetching
@@ -266,7 +269,14 @@ export default function ReadingPlanAddMaterial({
 
           {sources.length > 0 && (
             <div className="grid gap-2" aria-label="Source candidates">
-              {sources.map((source) => (
+              {sources.map((source) => {
+                const publicPath = displayCblSourcePath(source.source_path)
+                const publicRepo = displayCblRepository(source.source_repository)
+                const meta = [
+                  publicRepo,
+                  source.declared_issue_count !== null ? `${source.declared_issue_count} issues` : null,
+                ].filter(Boolean)
+                return (
                 <button
                   key={source.id}
                   type="button"
@@ -275,12 +285,15 @@ export default function ReadingPlanAddMaterial({
                   className={`rounded-xl border p-3 text-left disabled:opacity-50 ${selectedSource?.id === source.id ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'} hover:bg-white/5`}
                 >
                   <span className="block text-sm font-bold text-[var(--theme-text-primary)]">{source.name}</span>
-                  <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">{source.source_path}</span>
-                  <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
-                    {source.source_repository}{source.declared_issue_count !== null ? ` · ${source.declared_issue_count} issues` : ''}
-                  </span>
+                  {publicPath && (
+                    <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">{publicPath}</span>
+                  )}
+                  {meta.length > 0 && (
+                    <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">{meta.join(' · ')}</span>
+                  )}
                 </button>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -304,8 +317,20 @@ export default function ReadingPlanAddMaterial({
             <section className="space-y-3 rounded-xl border border-[var(--theme-border)] p-3" aria-labelledby="source-preview-heading">
               <div>
                 <h3 id="source-preview-heading" className="text-sm font-black text-[var(--theme-text-primary)]">{selectedSource.name}</h3>
-                <p className="mt-1 text-xs text-[var(--theme-text-muted)]">{preview.source.source_path}</p>
-                <p className="mt-1 text-xs text-[var(--theme-text-dim)]">{preview.source.source_repository} · revision {preview.source.revision_sha.slice(0, 8)}</p>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs font-bold text-[var(--theme-text-muted)]">
+                    Source details
+                  </summary>
+                  <div className="mt-2 space-y-1 text-xs text-[var(--theme-text-dim)]">
+                    {displayCblSourcePath(preview.source.source_path) && (
+                      <p>{displayCblSourcePath(preview.source.source_path)}</p>
+                    )}
+                    {displayCblRepository(preview.source.source_repository) && (
+                      <p>{displayCblRepository(preview.source.source_repository)}</p>
+                    )}
+                    <p>Revision {preview.source.revision_sha.slice(0, 8)}</p>
+                  </div>
+                </details>
               </div>
 
               <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
@@ -350,7 +375,8 @@ export default function ReadingPlanAddMaterial({
                         <input
                           type="checkbox"
                           checked={entry.adopted}
-                          disabled={isPreviewing || isCommitting}
+                          disabled={isCommitting}
+                          aria-label={`Include ${entry.series_name} #${entry.issue_number}`}
                           onChange={(event) => chooseEntry(entry, event.target.checked)}
                         />
                         Include

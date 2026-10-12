@@ -87,50 +87,76 @@ async def test_materialized_series_uses_thread_local_positions_and_rollable_stat
 
 
 @pytest.mark.asyncio
-async def test_materialization_appends_to_existing_thread_and_recomputes_tracking(
+async def test_materialization_inserts_missing_issues_in_natural_order(
     async_db: AsyncSession,
 ) -> None:
-    """Appending missing material reactivates and recomputes an existing thread."""
+    """Missing issues join an owned thread in natural number order (#3483)."""
     user = await get_or_create_user_async(async_db, "cbl-existing-series")
     thread = Thread(
         user_id=user.id,
-        title="CBL: B.P.R.D.: The Universal Machine (2006)",
+        title="CBL: Ultimate Spider-Man (2024)",
         format="comic",
         queue_position=2,
-        status="completed",
-        total_issues=1,
-        issues_remaining=0,
-        reading_progress="completed",
+        status="active",
+        total_issues=2,
+        issues_remaining=1,
+        reading_progress="in_progress",
         created_at=datetime.now(UTC),
     )
     async_db.add(thread)
     await async_db.flush()
-    async_db.add(
-        Issue(
-            thread_id=thread.id,
-            issue_number="1",
-            position=7,
-            status="read",
-            read_at=datetime.now(UTC),
-        )
+    later = Issue(
+        thread_id=thread.id,
+        issue_number="3",
+        position=1,
+        status="unread",
     )
+    last = Issue(
+        thread_id=thread.id,
+        issue_number="24",
+        position=2,
+        status="unread",
+    )
+    async_db.add_all([later, last])
+    await async_db.flush()
+    thread.next_unread_issue_id = later.id
     await async_db.flush()
 
-    created = (
+    first = (
         await _ensure_missing_issue_created(
             async_db,
             user.id,
-            fact=_fact("B.P.R.D.: The Universal Machine", "2"),
-            volume_year=2006,
+            fact=_fact("Ultimate Spider-Man", "1"),
+            volume_year=2024,
+        )
+    ).issue
+    second = (
+        await _ensure_missing_issue_created(
+            async_db,
+            user.id,
+            fact=_fact("Ultimate Spider-Man", "2"),
+            volume_year=2024,
         )
     ).issue
 
-    assert created.thread_id == thread.id
-    assert created.position == 8
-    assert thread.total_issues == 2
-    assert thread.issues_remaining == 1
-    assert thread.next_unread_issue_id == created.id
-    assert thread.reading_progress == "in_progress"
+    issues = list(
+        (
+            await async_db.execute(
+                select(Issue)
+                .where(Issue.thread_id == thread.id)
+                .order_by(Issue.position, Issue.id)
+            )
+        ).scalars().all()
+    )
+    assert [issue.issue_number for issue in issues] == ["1", "2", "3", "24"]
+    assert [issue.position for issue in issues] == [1, 2, 3, 4]
+    assert issues[0].id == first.id
+    assert issues[1].id == second.id
+    await async_db.refresh(thread)
+    assert thread.total_issues == 4
+    assert thread.issues_remaining == 4
+    assert thread.next_unread_issue_id == first.id
+    assert thread.reading_progress == "not_started"
     assert thread.status == "active"
 
 

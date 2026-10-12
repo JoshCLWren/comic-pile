@@ -1,4 +1,5 @@
 import GlossaryLink from '../../components/GlossaryLink'
+import { displayCblSourcePath } from '../../utils/cblSourceDisplay'
 import type { ContinuityPlannerEditor } from './useContinuityPlannerEditor'
 
 interface PlannerHeaderProps {
@@ -60,9 +61,10 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
             </p>
           </div>
           <ul className="mt-2 space-y-1 text-xs text-[var(--theme-text-primary)]">
-            {editor.sourcePaths.map((path) => (
-              <li key={path}>Source: {path}</li>
-            ))}
+            {editor.sourcePaths.map((path) => {
+              const displayed = displayCblSourcePath(path)
+              return displayed ? <li key={path}>Source: {displayed}</li> : null
+            })}
           </ul>
         </section>
       )}

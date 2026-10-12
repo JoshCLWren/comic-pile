@@ -176,17 +176,21 @@ describe('cblSourcesApi.commitNew', () => {
       excluded_positions: [3],
       unresolved_positions: [4],
     })
-    expect(client.post).toHaveBeenCalledWith('/v1/cbl/42/adoption-commit', {
-      entry_decisions: {},
-      series_decisions: [],
-      series_overrides: [
-        { cbl_position: 1, decision: 'exclude' },
-        { cbl_position: 2, decision: 'include' },
-        { cbl_position: 3, decision: 'exclude' },
-        { cbl_position: 4, decision: 'exclude' },
-      ],
-      content_hash: 'hash-42',
-      revision_sha: 'abcdef1234567890',
-    })
+    expect(client.post).toHaveBeenCalledWith(
+      '/v1/cbl/42/adoption-commit',
+      {
+        entry_decisions: {},
+        series_decisions: [],
+        series_overrides: [
+          { cbl_position: 1, decision: 'exclude' },
+          { cbl_position: 2, decision: 'include' },
+          { cbl_position: 3, decision: 'exclude' },
+          { cbl_position: 4, decision: 'exclude' },
+        ],
+        content_hash: 'hash-42',
+        revision_sha: 'abcdef1234567890',
+      },
+      { timeout: 60_000 },
+    )
   })
 })

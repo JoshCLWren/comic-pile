@@ -1,15 +1,21 @@
 import axios from 'axios'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import Modal from '../components/Modal'
+import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
-import { isObject, isString } from '../utils/runtimeChecks'
+import { continuityPlansApi } from '../services/api-continuity-plans'
 import {
   cblSourcesApi,
   type CBLAdoptionPreviewEntry,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
+import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
+import { identityResolutionReason } from '../utils/cblResolutionReason'
+import { displayCblRepository, displayCblSourcePath } from '../utils/cblSourceDisplay'
+import { isObject, isString } from '../utils/runtimeChecks'
 
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
   switch (entry.adoption_decision) {
@@ -47,6 +53,39 @@ function errorMessage(error: Error, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
+function countPhrase(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+function choiceButtonClass(selected: boolean, muted = false): string {
+  if (selected) {
+    return (
+      'min-h-9 rounded-lg border border-[var(--theme-continuity-accent)] ' +
+      'bg-[var(--theme-continuity-accent)]/15 px-2 text-xs font-bold ' +
+      'text-[var(--theme-text-primary)] disabled:opacity-50'
+    )
+  }
+  return (
+    `min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs ` +
+    `${muted ? 'text-[var(--theme-text-muted)]' : 'text-[var(--theme-text-primary)]'} ` +
+    'disabled:opacity-50'
+  )
+}
+
+async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
+  const plans = await continuityPlansApi.list()
+  const match = plans.find((plan) =>
+    plan.source_paths.some(
+      (path) =>
+        path === source.source_path ||
+        path.endsWith(`/${source.source_path}`) ||
+        source.source_path.endsWith(`/${path}`),
+    ),
+  )
+  if (!match) return null
+  return continuityPlansApi.get(match.id)
+}
+
 /**
  * Standalone CBL browser: find a trusted reading-order source, preview its
  * consequences without mutation, then adopt it into a canonical Reading Plan
@@ -61,9 +100,11 @@ export default function CblBrowserPage() {
   const [hasSearched, setHasSearched] = useState(false)
   const [selectedSource, setSelectedSource] = useState<CBLSourceListDiscoveryItem | null>(null)
   const [customizing, setCustomizing] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [staleReview, setStaleReview] = useState(false)
+  const [ambiguousCommit, setAmbiguousCommit] = useState(false)
 
   const sourcesQuery = useQuery({
     queryKey: queryKeys.cblSources.search(submittedQuery),
@@ -71,23 +112,15 @@ export default function CblBrowserPage() {
     enabled: hasSearched,
   })
 
-  const hasChoices =
-    Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
   const previewQuery = useQuery({
     queryKey: selectedSource
-      ? queryKeys.cblSources.adoptionPlan(selectedSource.id, seriesDecisions, entryDecisions)
+      ? queryKeys.cblSources.preview(selectedSource.id)
       : queryKeys.cblSources.preview(0),
     queryFn: () => {
       if (!selectedSource) throw new Error('Choose a CBL source first.')
-      return hasChoices
-        ? cblSourcesApi.plan(selectedSource.id, {
-            series_decisions: seriesDecisions,
-            entry_decisions: entryDecisions,
-          })
-        : cblSourcesApi.preview(selectedSource.id)
+      return cblSourcesApi.preview(selectedSource.id)
     },
     enabled: selectedSource !== null,
-    placeholderData: (previous) => previous,
   })
 
   const commitMutation = useMutation({
@@ -103,27 +136,57 @@ export default function CblBrowserPage() {
         entry_decisions: entryDecisions,
       }),
     onSuccess: async (committed) => {
+      setAmbiguousCommit(false)
       await applyCommittedReadingPlan(queryClient, committed)
       navigate(`/continuity-plans/${committed.id}`)
     },
-    onError: (commitError) => {
+    onError: async (commitError, variables) => {
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
         setStaleReview(true)
+        return
       }
+      if (!isAmbiguousNetworkFailure(commitError)) return
+      try {
+        const recovered = await recoverAdoptedPlan(variables.source)
+        if (recovered) {
+          setAmbiguousCommit(false)
+          await applyCommittedReadingPlan(queryClient, recovered)
+          navigate(`/continuity-plans/${recovered.id}`)
+          return
+        }
+      } catch {
+        // Surface the timeout guidance below when recovery cannot confirm a plan.
+      }
+      setAmbiguousCommit(true)
     },
   })
 
   const sources = sourcesQuery.data ?? []
-  const preview = previewQuery.data ?? null
+  const hasChoices =
+    Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
+  const preview = useMemo(
+    () => {
+      if (!previewQuery.data) return null
+      return hasChoices
+        ? applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
+        : previewQuery.data
+    },
+    [previewQuery.data, seriesDecisions, entryDecisions, hasChoices],
+  )
   const isSearching = sourcesQuery.isFetching
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
-  const activeError = commitMutation.error ?? previewQuery.error ?? sourcesQuery.error
-  const error = staleReview
+  const listError = previewQuery.error ?? sourcesQuery.error
+  const commitError = staleReview
     ? 'This source changed after you reviewed it. Refresh the preview before adding it.'
-    : activeError
-      ? errorMessage(activeError, 'Unable to complete the CBL workflow.')
-      : null
+    : ambiguousCommit
+      ? 'ComicPile did not confirm the new plan in time. Check Reading Plans before adding again.'
+      : commitMutation.error && !isAmbiguousNetworkFailure(commitMutation.error)
+        ? errorMessage(commitMutation.error, 'Unable to complete the CBL workflow.')
+        : null
+  const pageError = listError
+    ? errorMessage(listError, 'Unable to complete the CBL workflow.')
+    : null
 
   const search = (event?: FormEvent) => {
     event?.preventDefault()
@@ -132,9 +195,11 @@ export default function CblBrowserPage() {
     setSubmittedQuery(query.trim())
     setSelectedSource(null)
     setCustomizing(false)
+    setConfirmOpen(false)
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(false)
+    setAmbiguousCommit(false)
     commitMutation.reset()
   }
 
@@ -143,9 +208,11 @@ export default function CblBrowserPage() {
     const reloadSelectedSource = selectedSource?.id === source.id
     setSelectedSource(source)
     setCustomizing(false)
+    setConfirmOpen(false)
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(false)
+    setAmbiguousCommit(false)
     commitMutation.reset()
     if (reloadSelectedSource) void previewQuery.refetch()
   }
@@ -157,12 +224,14 @@ export default function CblBrowserPage() {
       [String(entry.cbl_entry_id)]: include,
     }))
     commitMutation.reset()
+    setAmbiguousCommit(false)
   }
 
   const chooseSeries = (seriesId: string, include: boolean) => {
     if (isCommitting) return
     setSeriesDecisions((current) => ({ ...current, [seriesId]: include }))
     commitMutation.reset()
+    setAmbiguousCommit(false)
   }
 
   const chooseAllSeries = (include: boolean) => {
@@ -170,11 +239,7 @@ export default function CblBrowserPage() {
     setSeriesDecisions(Object.fromEntries(seriesGroups.map((series) => [series.id, include])))
     setEntryDecisions({})
     commitMutation.reset()
-  }
-
-  const commit = () => {
-    if (!selectedSource || !preview || isCommitting) return
-    commitMutation.mutate({ source: selectedSource, preview })
+    setAmbiguousCommit(false)
   }
 
   const seriesGroups = preview
@@ -191,17 +256,35 @@ export default function CblBrowserPage() {
   const summary = preview?.summary
   const needsAttentionCount =
     (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0)
-  const commitBlocked =
-    !preview ||
-    needsAttentionCount > 0 ||
-    (summary?.final_adopted_count ?? 0) === 0 ||
-    staleReview ||
-    isCommitting ||
-    isPreviewing
+  const commitBlockedReason = !preview
+    ? 'Preview this source before adding it.'
+    : isPreviewing
+      ? 'Wait for the preview to finish.'
+      : staleReview
+        ? 'Refresh the preview before adding it.'
+        : needsAttentionCount > 0
+          ? `${countPhrase(needsAttentionCount, 'entry still needs', 'entries still need')} attention before this source can be added.`
+          : (summary?.final_adopted_count ?? 0) === 0
+            ? 'Nothing is selected to add.'
+            : isCommitting
+              ? null
+              : null
+  const commitBlocked = commitBlockedReason !== null || isCommitting || !preview
   const consequenceLine =
     preview && summary
-      ? `${preview.total_positions} entries · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${needsAttentionCount} need attention` : ''}`
+      ? `${countPhrase(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhrase(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
+
+  const openConfirm = () => {
+    if (!selectedSource || !preview || commitBlocked) return
+    setConfirmOpen(true)
+  }
+
+  const confirmCommit = () => {
+    if (!selectedSource || !preview || isCommitting) return
+    setConfirmOpen(false)
+    commitMutation.mutate({ source: selectedSource, preview })
+  }
 
   return (
     <section className="space-y-5" aria-labelledby="cbl-browser-heading">
@@ -237,44 +320,53 @@ export default function CblBrowserPage() {
         </button>
       </form>
 
-      {error && (
-        <p role="alert" className="text-sm text-red-300">
-          {error}
+      {pageError && (
+        <p role="alert" className="text-sm text-[var(--theme-danger)]">
+          {pageError}
         </p>
       )}
 
-      {!isSearching && hasSearched && sources.length === 0 && !error && (
+      {!isSearching && hasSearched && sources.length === 0 && !pageError && (
         <p className="text-sm text-[var(--theme-text-muted)]">No matching source lists found.</p>
       )}
 
       {sources.length > 0 && (
         <div className="grid gap-2" aria-label="Source candidates">
-          {sources.map((source) => (
-            <button
-              key={source.id}
-              type="button"
-              onClick={() => loadPreview(source)}
-              disabled={isCommitting}
-              className={`rounded-xl border p-3 text-left disabled:opacity-50 ${
-                selectedSource?.id === source.id
-                  ? 'border-[var(--theme-continuity-accent)]'
-                  : 'border-[var(--theme-border)]'
-              } hover:bg-white/5`}
-            >
-              <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
-                {source.name}
-              </span>
-              <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">
-                {source.source_path}
-              </span>
-              <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
-                {source.source_repository}
-                {source.declared_issue_count !== null
-                  ? ` · ${source.declared_issue_count} issues`
-                  : ''}
-              </span>
-            </button>
-          ))}
+          {sources.map((source) => {
+            const publicPath = displayCblSourcePath(source.source_path)
+            const publicRepo = displayCblRepository(source.source_repository)
+            const meta = [
+              publicRepo,
+              source.declared_issue_count !== null ? `${source.declared_issue_count} issues` : null,
+            ].filter(Boolean)
+            return (
+              <button
+                key={source.id}
+                type="button"
+                onClick={() => loadPreview(source)}
+                disabled={isCommitting}
+                className={`rounded-xl border p-3 text-left disabled:opacity-50 ${
+                  selectedSource?.id === source.id
+                    ? 'border-[var(--theme-continuity-accent)]'
+                    : 'border-[var(--theme-border)]'
+                } hover:bg-white/5`}
+              >
+                <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
+                  {source.name}
+                </span>
+                {publicPath && (
+                  <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">
+                    {publicPath}
+                  </span>
+                )}
+                {meta.length > 0 && (
+                  <span className="mt-1 block text-xs text-[var(--theme-text-dim)]">
+                    {meta.join(' · ')}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -310,12 +402,20 @@ export default function CblBrowserPage() {
             >
               {selectedSource.name}
             </h2>
-            <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
-              {preview.source.source_path}
-            </p>
-            <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
-              {preview.source.source_repository} · revision {preview.source.revision_sha.slice(0, 8)}
-            </p>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-bold text-[var(--theme-text-muted)]">
+                Source details
+              </summary>
+              <div className="mt-2 space-y-1 text-xs text-[var(--theme-text-dim)]">
+                {displayCblSourcePath(preview.source.source_path) && (
+                  <p>{displayCblSourcePath(preview.source.source_path)}</p>
+                )}
+                {displayCblRepository(preview.source.source_repository) && (
+                  <p>{displayCblRepository(preview.source.source_repository)}</p>
+                )}
+                <p>Revision {preview.source.revision_sha.slice(0, 8)}</p>
+              </div>
+            </details>
           </div>
 
           {consequenceLine && (
@@ -327,7 +427,9 @@ export default function CblBrowserPage() {
           {summary && (
             <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
               <div>
-                <dt className="text-[var(--theme-text-dim)]">Entries</dt>
+                <dt className="text-[var(--theme-text-dim)]">
+                  {preview.total_positions === 1 ? 'Entry' : 'Entries'}
+                </dt>
                 <dd className="font-bold text-[var(--theme-text-primary)]">
                   {preview.total_positions}
                 </dd>
@@ -373,15 +475,29 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={commit}
-              disabled={commitBlocked}
-              className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
-            >
-              {isCommitting ? 'Adding reading order…' : 'Add this reading order'}
-            </button>
+          <div className="flex flex-wrap items-start gap-2">
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={openConfirm}
+                disabled={commitBlocked}
+                aria-disabled={commitBlocked}
+                title={commitBlockedReason ?? undefined}
+                className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+              >
+                {isCommitting ? 'Adding reading order…' : 'Add this reading order'}
+              </button>
+              {commitBlockedReason && (
+                <p className="max-w-xs text-xs text-[var(--theme-text-muted)]">
+                  {commitBlockedReason}
+                </p>
+              )}
+              {commitError && (
+                <p role="alert" className="max-w-md text-sm text-[var(--theme-danger)]">
+                  {commitError}
+                </p>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setCustomizing((current) => !current)}
@@ -406,7 +522,7 @@ export default function CblBrowserPage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      disabled={isCommitting || isPreviewing}
+                      disabled={isCommitting}
                       onClick={() => chooseAllSeries(true)}
                       className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
                     >
@@ -414,7 +530,7 @@ export default function CblBrowserPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={isCommitting || isPreviewing}
+                      disabled={isCommitting}
                       onClick={() => chooseAllSeries(false)}
                       className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50"
                     >
@@ -423,40 +539,43 @@ export default function CblBrowserPage() {
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {seriesGroups.map((series) => (
-                    <div
-                      key={series.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] p-2"
-                    >
-                      <span className="min-w-0 truncate text-xs font-bold text-[var(--theme-text-primary)]">
-                        {series.name}
-                      </span>
+                  {seriesGroups.map((series) => {
+                    const included = seriesDecisions[series.id] !== false
+                    return (
                       <div
-                        className="flex shrink-0 gap-1"
-                        role="group"
-                        aria-label={`${series.name} series choice`}
+                        key={series.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] p-2"
                       >
-                        <button
-                          type="button"
-                          disabled={isCommitting || isPreviewing}
-                          aria-pressed={seriesDecisions[series.id] === true}
-                          onClick={() => chooseSeries(series.id, true)}
-                          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs text-[var(--theme-text-primary)] disabled:opacity-50"
+                        <span className="min-w-0 truncate text-xs font-bold text-[var(--theme-text-primary)]">
+                          {series.name}
+                        </span>
+                        <div
+                          className="flex shrink-0 gap-1"
+                          role="group"
+                          aria-label={`${series.name} series choice`}
                         >
-                          Include
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isCommitting || isPreviewing}
-                          aria-pressed={seriesDecisions[series.id] === false}
-                          onClick={() => chooseSeries(series.id, false)}
-                          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs text-[var(--theme-text-muted)] disabled:opacity-50"
-                        >
-                          Exclude
-                        </button>
+                          <button
+                            type="button"
+                            disabled={isCommitting}
+                            aria-pressed={included}
+                            onClick={() => chooseSeries(series.id, true)}
+                            className={choiceButtonClass(included)}
+                          >
+                            Include
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isCommitting}
+                            aria-pressed={!included}
+                            onClick={() => chooseSeries(series.id, false)}
+                            className={choiceButtonClass(!included, true)}
+                          >
+                            Exclude
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
                 <p className="text-xs text-[var(--theme-text-dim)]">
                   Excluding a series affects this Reading Plan only — it never deletes comics from
@@ -465,52 +584,91 @@ export default function CblBrowserPage() {
               </section>
 
               <ol className="max-h-[28rem] space-y-1 overflow-y-auto pr-1" aria-label="Reconciled source order">
-                {preview.entries.map((entry) => (
-                  <li
-                    key={entry.cbl_entry_id}
-                    className="flex gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2 text-sm"
-                  >
-                    <span className="w-7 shrink-0 text-right font-mono text-xs text-[var(--theme-text-dim)]">
-                      {entry.cbl_position}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-bold text-[var(--theme-text-primary)]">
-                        {entry.series_name} #{entry.issue_number}
+                {preview.entries.map((entry) => {
+                  const comicName = `${entry.series_name} #${entry.issue_number}`
+                  const resolutionReason = identityResolutionReason(entry)
+                  return (
+                    <li
+                      key={entry.cbl_entry_id}
+                      className="flex gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2 text-sm"
+                    >
+                      <span className="w-7 shrink-0 text-right font-mono text-xs text-[var(--theme-text-dim)]">
+                        {entry.cbl_position}
                       </span>
-                      <span className={`block text-xs ${statusClass(entry)}`}>
-                        {statusLabel(entry)}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-bold text-[var(--theme-text-primary)]">
+                          {comicName}
+                        </span>
+                        <span className={`block text-xs ${statusClass(entry)}`}>
+                          {statusLabel(entry)}
+                        </span>
+                        {resolutionReason && (
+                          <span className="mt-1 block text-xs text-amber-200">{resolutionReason}</span>
+                        )}
                       </span>
-                    </span>
-                    {entry.adoption_class !== 'ambiguous_unresolved' && (
-                      <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--theme-text-primary)]">
-                        <input
-                          type="checkbox"
-                          checked={entry.adopted}
-                          disabled={isPreviewing || isCommitting}
-                          onChange={(event) => chooseEntry(entry, event.target.checked)}
-                        />
-                        Include
-                      </label>
-                    )}
-                    {entry.adoption_class === 'ambiguous_unresolved' && (
-                      <button
-                        type="button"
-                        disabled={isPreviewing || isCommitting}
-                        onClick={() =>
-                          chooseEntry(entry, entry.adoption_decision === 'excluded')
-                        }
-                        className="min-h-9 shrink-0 rounded-lg border border-[var(--theme-border)] px-2 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50"
-                      >
-                        {entry.adoption_decision === 'excluded' ? 'Unskip' : 'Skip'}
-                      </button>
-                    )}
-                  </li>
-                ))}
+                      {entry.adoption_class !== 'ambiguous_unresolved' && (
+                        <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--theme-text-primary)]">
+                          <input
+                            type="checkbox"
+                            checked={entry.adopted}
+                            disabled={isCommitting}
+                            aria-label={`Include ${comicName}`}
+                            onChange={(event) => chooseEntry(entry, event.target.checked)}
+                          />
+                          Include
+                        </label>
+                      )}
+                      {entry.adoption_class === 'ambiguous_unresolved' && (
+                        <button
+                          type="button"
+                          disabled={isCommitting}
+                          onClick={() =>
+                            chooseEntry(entry, entry.adoption_decision === 'excluded')
+                          }
+                          className="min-h-9 shrink-0 rounded-lg border border-[var(--theme-border)] px-2 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50"
+                        >
+                          {entry.adoption_decision === 'excluded' ? 'Unskip' : 'Skip'}
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
               </ol>
             </div>
           )}
         </section>
       )}
+
+      <Modal
+        isOpen={confirmOpen}
+        title="Add this reading order?"
+        onClose={() => setConfirmOpen(false)}
+      >
+        <p className="text-sm text-[var(--theme-text-muted)]">
+          {selectedSource
+            ? `Add ${selectedSource.name} as a Reading Plan? Cancel creates nothing.`
+            : 'Add this source as a Reading Plan? Cancel creates nothing.'}
+        </p>
+        {consequenceLine && (
+          <p className="mt-3 text-sm font-bold text-[var(--theme-text-primary)]">{consequenceLine}</p>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={confirmCommit}
+            className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black"
+          >
+            Add reading order
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(false)}
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
     </section>
   )
 }

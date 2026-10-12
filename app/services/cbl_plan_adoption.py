@@ -63,6 +63,8 @@ from app.repositories import issue_repository, thread_repository
 from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
+from app.services.continuity_plan_labels import issue_step_label
+from app.services.issue_insertion import create_issue_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
 
@@ -377,23 +379,16 @@ async def _ensure_missing_issue_created(
             await _confirm_comicvine_issue_mapping(db, existing_by_number, comicvine_id)
         return MaterializedIssue(existing_by_number, False)
 
-    issue_position = max((item.position for item in existing_issues), default=0) + 1
-    issue = Issue(
-        thread_id=thread.id,
-        issue_number=issue_number,
-        position=issue_position,
-        status="unread",
-    )
-    db.add(issue)
     try:
-        await db.flush()
+        issue = await create_issue_in_natural_order(db, thread.id, issue_number)
     except IntegrityError as exc:
         raise AdoptionCommitError(
             f"Could not add {series_name} #{issue_number} to the library; "
             "it collides with an issue that is already owned."
         ) from exc
 
-    apply_thread_issue_tracking_state(thread, [*existing_issues, issue])
+    tracked_issues = await issue_repository.get_issues_by_thread(db, thread.id)
+    apply_thread_issue_tracking_state(thread, tracked_issues)
     thread.status = "active"
 
     if comicvine_id is not None:
@@ -529,6 +524,53 @@ def _default_lane() -> list[dict[str, object]]:
     return [{"id": "default", "name": "Default", "order": 0}]
 
 
+def _step_label(entry: CBLSourceEntry, fact: dict[str, object]) -> str:
+    """Return the planner label for one adopted CBL entry.
+
+    Args:
+        entry: CBL source entry.
+        fact: Reconciliation facts for the entry.
+
+    Returns:
+        ``Series #N`` from CBL series name and issue number.
+    """
+    series_name = str(fact.get("series_name") or entry.series_name or "")
+    issue_number = str(fact.get("issue_number") or getattr(entry, "issue_number", "") or "")
+    return issue_step_label(series_name, issue_number)
+
+
+def _record_node_provenance(
+    node: dict[str, object],
+    *,
+    source_path: str,
+    placement: dict[str, object],
+    label: str,
+) -> None:
+    """Attach CBL provenance and a display label to one plan node.
+
+    Args:
+        node: Mutable plan node dict.
+        source_path: CBL source path for this adoption.
+        placement: Placement dict for ``source_cbl_placements``.
+        label: Series + issue display label.
+    """
+    placements = _placement_list(node.get("source_cbl_placements"))
+    if not _has_placement(placements, source_path):
+        placements.append(placement)
+        node["source_cbl_placements"] = placements
+    stored_paths = node.get("source_paths")
+    paths = (
+        [str(path) for path in stored_paths if isinstance(path, str)]
+        if isinstance(stored_paths, list | tuple)
+        else []
+    )
+    if source_path not in paths:
+        paths.append(source_path)
+    node["source_paths"] = paths
+    if not str(node.get("label") or "").strip():
+        node["label"] = label
+
+
 def _node_ref_id(node: dict[str, object]) -> int | None:
     """Return the issue ref id of an issue-type plan node when available.
 
@@ -653,11 +695,11 @@ async def _merge_adopted_nodes(
             "source_path": source_path,
             "position": entry.position,
         }
+        label = _step_label(entry, fact)
         if node is not None:
-            placements = _placement_list(node.get("source_cbl_placements"))
-            if not _has_placement(placements, source_path):
-                placements.append(placement)
-                node["source_cbl_placements"] = placements
+            _record_node_provenance(
+                node, source_path=source_path, placement=placement, label=label
+            )
             issues_by_id.setdefault(existing_issue_id, node)
             if not created_now:
                 reused_positions.append(entry.position)
@@ -671,6 +713,8 @@ async def _merge_adopted_nodes(
             "position": next_position,
             "is_checkpoint": False,
             "convergence_gate": [],
+            "label": label,
+            "source_paths": [source_path],
             "source_cbl_placements": [placement],
         }
         existing_nodes.append(new_node)
