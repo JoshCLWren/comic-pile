@@ -216,8 +216,40 @@ jobs:
           echo "Main $sha is green (total=$total failing=$failing)"
           echo "main_red=false" >> "$GITHUB_OUTPUT"
 
+      - name: Check Deploy Production freeze
+        id: deploy_freeze
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          runs_file="$RUNNER_TEMP/deploy-production-runs.json"
+          if ! gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=20" \
+            > "$runs_file"; then
+            echo "Unable to read completed Deploy Production runs; blocking factory merges" >&2
+            echo "frozen=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          decision="$(python3 .github/scripts/factory_deploy_freeze.py < "$runs_file" 2>"$RUNNER_TEMP/freeze.err")"
+          status=$?
+          set -e
+          echo "$decision"
+          cat "$RUNNER_TEMP/freeze.err" >&2
+          if [[ "$status" -eq 2 ]]; then
+            echo "Invalid Deploy Production run payload; blocking factory merges" >&2
+            echo "frozen=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          frozen="$(python3 -c "import json,sys; print('true' if json.load(sys.stdin)['blocked'] else 'false')" <<< "$decision")"
+          echo "frozen=$frozen" >> "$GITHUB_OUTPUT"
+          if [[ "$frozen" == "true" ]]; then
+            echo "Factory merges are frozen while Deploy Production is red" >&2
+          fi
+
       - name: Drain exact-head ready factory PRs
-        if: steps.main_health.outputs.main_red != 'true'
+        if: steps.main_health.outputs.main_red != 'true' && steps.deploy_freeze.outputs.frozen != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

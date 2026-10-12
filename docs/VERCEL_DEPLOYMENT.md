@@ -20,6 +20,18 @@ preflight against Vercel. Once a `READY` production deployment exists for the cu
 later automatic triggers exit without rerunning migrations or creating another deployment.
 `workflow_dispatch` deliberately bypasses this deduplication as the explicit force-recovery path.
 
+## Red-deploy freeze
+
+Deploy Production starts with a freeze gate. If the last completed Deploy
+Production run on `main` is red, the job fails immediately and does not run
+migrations. Factory merge drains honor the same freeze so more changes cannot
+land on a broken production deploy.
+
+Maintainers unfreeze a red deploy by dispatching Deploy Production with
+`override_freeze=true` and a required `reason` after the fix is on `main`.
+The reason is logged in the run summary. Factory workers must not use that
+override. See [Deployment](DEPLOYMENT.md#red-deploy-freeze).
+
 ## Deployment retention
 
 Hobby Functions Storage is charged per retained deployment. After a successful

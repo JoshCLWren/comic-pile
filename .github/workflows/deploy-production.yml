@@ -13,12 +13,24 @@ on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      override_freeze:
+        description: >
+          Bypass the red-deploy freeze after a fix is on main. Maintainers
+          only; factory workers must not use this.
+        type: boolean
+        default: false
+      reason:
+        description: Required when override_freeze is true. Logged in the run summary.
+        type: string
+        required: false
 
 concurrency:
   group: vercel-production
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -27,8 +39,55 @@ env:
   VERCEL_TEAM_SLUG: joshclwrens-projects
 
 jobs:
+  freeze:
+    name: Red-deploy freeze gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Fail fast if the last Deploy Production run is red
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OVERRIDE_FREEZE: ${{ github.event.inputs.override_freeze || 'false' }}
+          OVERRIDE_REASON: ${{ github.event.inputs.reason || '' }}
+        run: |
+          set -euo pipefail
+          runs_file="$RUNNER_TEMP/deploy-production-runs.json"
+          if ! gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=20" \
+            > "$runs_file"; then
+            echo "Unable to read completed Deploy Production runs; failing closed." >&2
+            exit 1
+          fi
+          extra=()
+          if [[ "$OVERRIDE_FREEZE" == "true" ]]; then
+            extra+=(--override --reason "$OVERRIDE_REASON")
+          fi
+          set +e
+          decision="$(python3 .github/scripts/factory_deploy_freeze.py "${extra[@]}" \
+            < "$runs_file" 2>"$RUNNER_TEMP/freeze.err")"
+          status=$?
+          set -e
+          echo "$decision"
+          cat "$RUNNER_TEMP/freeze.err" >&2
+          if [[ -n "$decision" ]]; then
+            {
+              echo "## Deploy freeze"
+              echo
+              python3 -c "import json,sys; print(json.load(sys.stdin)['reason'])" <<< "$decision"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
+
   preflight:
     name: Deduplicate exact main SHA
+    needs: freeze
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:

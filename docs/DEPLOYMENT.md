@@ -126,6 +126,25 @@ The core application remains portable PostgreSQL software. Neon is the maintaine
 
 Merges to `main` are the production source. The production workflow runs the required database migration against Neon before deploying the application to Vercel.
 
+### Red-deploy freeze
+
+While the most recent completed **Deploy Production** run on `main` is red
+(`failure`, `timed_out`, or `startup_failure`), ComicPile freezes further
+factory merges and fails new Deploy Production runs before migrations.
+
+This exists so a broken production deploy cannot keep accumulating merges
+(#3509). There is no P1-issue freeze.
+
+**Override (maintainers only).** After the fix is on `main`, a maintainer
+re-runs **Deploy Production** with `workflow_dispatch`:
+
+1. Set `override_freeze` to `true`.
+2. Provide a non-empty `reason`. The reason is written to the run summary.
+3. Factory workers must not use the override. The merge drain has no override
+   input; humans merge the fix, then a maintainer dispatches the deploy.
+
+Once that overridden run completes successfully, the freeze lifts.
+
 Do not add Fly.io, Railway, or another maintained hosting target without a new product decision and an explicit migration plan. Historical references in the changelog describe past deployments and are not active operating instructions.
 
 ## Local development
