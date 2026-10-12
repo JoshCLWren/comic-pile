@@ -130,6 +130,28 @@ describe('tag chips (issue #3032)', () => {
       .toBeInTheDocument()
   })
 
+  it('keeps the tag name visually dominant over state markers (issue #3391)', () => {
+    render(
+      <MemoryRouter>
+        <TagChips data={chipData()} />
+      </MemoryRouter>,
+    )
+
+    // The tag name is the primary readout in both direct and inherited chips:
+    // bold primary-text at body size, while state markers stay dim and tiny.
+    for (const name of ['Physical', 'Horror']) {
+      const nameEl = screen.getByText(name)
+      expect(nameEl.className).toContain('font-bold')
+      expect(nameEl.className).toContain('text-sm')
+      const chip = nameEl.closest('span')?.parentElement
+      expect(chip?.className).toContain('--theme-text-primary')
+    }
+    for (const marker of ['Inherited', 'via 2 sources']) {
+      const markerEl = screen.getByText(marker)
+      expect(markerEl.className).toMatch(/--theme-text-(dim|muted)/)
+    }
+  })
+
   it('exposes every inheritance source with navigation to each source object', async () => {
     const user = userEvent.setup()
     render(

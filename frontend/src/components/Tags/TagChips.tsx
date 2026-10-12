@@ -26,7 +26,7 @@ function ColorDot({ color, label }: { color: string; label: string }) {
     <span
       aria-hidden="true"
       title={label}
-      className="inline-block h-2 w-2 shrink-0 rounded-full"
+      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
       style={{ backgroundColor: color }}
     />
   )
@@ -77,9 +77,9 @@ function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
 
   return (
     <li className="min-w-0 max-w-full">
-      <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 py-1 text-xs font-semibold text-[var(--theme-text-primary)]">
+      <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 py-1 text-[var(--theme-text-primary)]">
         <ColorDot color={tag.color} label={tag.name} />
-        <span className="min-w-0 truncate">{tag.name}</span>
+        <span className="min-w-0 truncate text-sm font-bold">{tag.name}</span>
         {tag.scope === 'global' && (
           <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">
             Global
@@ -131,9 +131,9 @@ function InheritedChip({ entry }: InheritedChipProps) {
 
   return (
     <li className="min-w-0 max-w-full">
-      <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-dashed border-[var(--theme-border)] px-2.5 py-1 text-xs font-medium text-[var(--theme-text-muted)]">
+      <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-dashed border-[var(--theme-border)] px-2.5 py-1 text-[var(--theme-text-primary)]">
         <ColorDot color={tag.color} label={tag.name} />
-        <span className="min-w-0 truncate">{tag.name}</span>
+        <span className="min-w-0 truncate text-sm font-bold">{tag.name}</span>
         <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">
           Inherited
         </span>
@@ -142,7 +142,7 @@ function InheritedChip({ entry }: InheritedChipProps) {
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
           aria-label={`${expanded ? 'Hide' : 'Show'} sources for inherited tag ${tag.name}`}
-          className="shrink-0 rounded-full px-1 underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+          className="shrink-0 rounded-full px-1 text-[11px] text-[var(--theme-text-muted)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
         >
           via {sources.length} {sources.length === 1 ? 'source' : 'sources'}
         </button>
