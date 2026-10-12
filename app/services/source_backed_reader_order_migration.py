@@ -24,7 +24,7 @@ from app.services.continuity_graph import issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
 from app.services.strict_plan_constraints import (
     load_issue_thread_index,
-    strict_plan_reading_order_pairs,
+    strict_plan_item_read_pairs,
 )
 from app.services.explicit_reader_order_migration import (
     _explicit_classifications,
@@ -50,7 +50,6 @@ from app.services.ultimate_universe_production_migration import (
     _build_plan,
     _derive_gap_bridges,
     _factual_snapshot,
-    _planned_rules,
     _resolved_entries,
 )
 from comic_pile.dependencies import _get_blocked_thread_ids_uncached
@@ -101,7 +100,6 @@ PRODUCTION_SOURCE_BACKED_SPECS: dict[str, SourceBackedReaderOrderSpec] = {
         expected_positions=288,
         plan_name="Fantastic Four 001 - Early Years",
         classification_family_keys=("lee_kirby_fantastic_four",),
-        inferred_gate_kind="reading_order",
     ),
     "ultimate-universe": SourceBackedReaderOrderSpec(
         user_id=1,
@@ -122,7 +120,6 @@ PRODUCTION_SOURCE_BACKED_SPECS: dict[str, SourceBackedReaderOrderSpec] = {
             "xmen_chronology_reader_order",
             "xmen_hunt_setup_reader_order",
         ),
-        inferred_gate_kind="reading_order",
     ),
     "wolverine": SourceBackedReaderOrderSpec(
         user_id=1,
@@ -147,14 +144,12 @@ PRODUCTION_SOURCE_BACKED_SPECS: dict[str, SourceBackedReaderOrderSpec] = {
         expected_content_hash="8fc8087894488c1899712d0fdb4195ab403747a57903b30d3cecf100fa906084",
         expected_positions=129,
         plan_name="America's Best Comics",
-        inferred_gate_kind="reading_order",
     ),
     "doom-patrol": SourceBackedReaderOrderSpec(
         user_id=1,
         expected_content_hash="3c28f4701b5f8d19e6c100253e97099c42088fc9412b83893551daace246c1c4",
         expected_positions=273,
         plan_name="Doom Patrol 1",
-        inferred_gate_kind="reading_order",
     ),
     "teen-titans": SourceBackedReaderOrderSpec(
         user_id=1,
@@ -177,7 +172,6 @@ PRODUCTION_SOURCE_BACKED_SPECS: dict[str, SourceBackedReaderOrderSpec] = {
         dependency_group_id=16,
         expected_source_path="Image/Events/CBH/The Unnamed Universe Reading Order.cbl",
         classification_family_keys=("unnamed_universe_reader_order",),
-        inferred_gate_kind="reading_order",
     ),
 }
 
@@ -195,51 +189,67 @@ READING_ORDER_SOURCE_BACKED_MANIFESTS: frozenset[str] = frozenset(
 
 @dataclass(frozen=True)
 class CblOrderOnlyRollFrontier:
-    """One user-1 Roll frontier blocked today only by unread ``cbl-order`` edges."""
+    """One user-1 Roll frontier blocked today only by unread ``cbl-order`` edges.
+
+    ``crossover_gate`` is true when the frontier is a Thread natural first
+    issue (miniseries, annual, volume start, or other series-entry) that a
+    strict plan compiles as a hard prerequisite. False means mid-run list
+    adjacency: after cutover the thread is released and series may run
+    side by side until the next crossover point.
+    """
 
     thread_id: int
     issue_id: int
     label: str
     manifest_key: str
+    crossover_gate: bool
 
 
 JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS: tuple[CblOrderOnlyRollFrontier, ...] = (
-    CblOrderOnlyRollFrontier(98, 1634, "X-Men #80", "x-men-era-ten"),
-    CblOrderOnlyRollFrontier(305, 2028, "Uncanny X-Men #360", "x-men-era-ten"),
-    CblOrderOnlyRollFrontier(3152, 22883, "Magneto Rex #1", "x-men-era-ten"),
+    CblOrderOnlyRollFrontier(98, 1634, "X-Men #80", "x-men-era-ten", False),
+    CblOrderOnlyRollFrontier(305, 2028, "Uncanny X-Men #360", "x-men-era-ten", False),
+    CblOrderOnlyRollFrontier(3152, 22883, "Magneto Rex #1", "x-men-era-ten", True),
     CblOrderOnlyRollFrontier(
-        18595, 115903, "X-Men Unlimited (2000) #26", "x-men-era-ten"
+        18595, 115903, "X-Men Unlimited (2000) #26", "x-men-era-ten", True
     ),
     CblOrderOnlyRollFrontier(
-        18646, 116465, "Generation X Holiday Special (1998) #1", "x-men-era-ten"
-    ),
-    CblOrderOnlyRollFrontier(18655, 116492, "Cable 1999 (1999) #1", "x-men-era-ten"),
-    CblOrderOnlyRollFrontier(
-        18660, 116519, "X-Men: Magneto War (1999) #1", "x-men-era-ten"
-    ),
-    CblOrderOnlyRollFrontier(18673, 116564, "X-Force 1999 (1999) #1", "x-men-era-ten"),
-    CblOrderOnlyRollFrontier(
-        18689, 116603, "X-Men / Dr. Doom '98 (1998) #1", "x-men-era-ten"
+        18646, 116465, "Generation X Holiday Special (1998) #1", "x-men-era-ten", True
     ),
     CblOrderOnlyRollFrontier(
-        18699, 116642, "X-Force / Champions '98 (1998) #1", "x-men-era-ten"
+        18655, 116492, "Cable 1999 (1999) #1", "x-men-era-ten", True
     ),
     CblOrderOnlyRollFrontier(
-        18719, 116773, "Generation X / Dracula '98 (1998) #1", "x-men-era-ten"
+        18660, 116519, "X-Men: Magneto War (1999) #1", "x-men-era-ten", True
     ),
     CblOrderOnlyRollFrontier(
-        18720, 116774, "Generation X 1999 (1999) #1", "x-men-era-ten"
-    ),
-    CblOrderOnlyRollFrontier(18721, 116775, "X-Men 1999 (1999) #1", "x-men-era-ten"),
-    CblOrderOnlyRollFrontier(
-        18722, 116776, "Uncanny X-Men 1999 (2000) #1", "x-men-era-ten"
+        18673, 116564, "X-Force 1999 (1999) #1", "x-men-era-ten", True
     ),
     CblOrderOnlyRollFrontier(
-        18560, 115395, "Fantastic Four (1970) #103", "fantastic-four-early-years"
+        18689, 116603, "X-Men / Dr. Doom '98 (1998) #1", "x-men-era-ten", True
     ),
-    CblOrderOnlyRollFrontier(3177, 23393, "Promethea #13", "americas-best-comics"),
-    CblOrderOnlyRollFrontier(114, 1075, "Doom Patrol #9", "doom-patrol"),
-    CblOrderOnlyRollFrontier(3171, 23128, "Geiger #5", "unnamed-universe"),
+    CblOrderOnlyRollFrontier(
+        18699, 116642, "X-Force / Champions '98 (1998) #1", "x-men-era-ten", True
+    ),
+    CblOrderOnlyRollFrontier(
+        18719, 116773, "Generation X / Dracula '98 (1998) #1", "x-men-era-ten", True
+    ),
+    CblOrderOnlyRollFrontier(
+        18720, 116774, "Generation X 1999 (1999) #1", "x-men-era-ten", True
+    ),
+    CblOrderOnlyRollFrontier(
+        18721, 116775, "X-Men 1999 (1999) #1", "x-men-era-ten", True
+    ),
+    CblOrderOnlyRollFrontier(
+        18722, 116776, "Uncanny X-Men 1999 (2000) #1", "x-men-era-ten", True
+    ),
+    CblOrderOnlyRollFrontier(
+        18560, 115395, "Fantastic Four (1970) #103", "fantastic-four-early-years", True
+    ),
+    CblOrderOnlyRollFrontier(
+        3177, 23393, "Promethea #13", "americas-best-comics", False
+    ),
+    CblOrderOnlyRollFrontier(114, 1075, "Doom Patrol #9", "doom-patrol", False),
+    CblOrderOnlyRollFrontier(3171, 23128, "Geiger #5", "unnamed-universe", False),
 )
 
 
@@ -578,40 +588,33 @@ async def build_source_backed_reader_order_dry_run(
         source_path=report.source_path or source.source_path,
         bridges=bridges,
     )
-    if spec.inferred_gate_kind == "reading_order":
-        lanes = [
-            lane.model_copy(update={"inferred_gate_kind": "reading_order"})
-            for lane in lanes
-        ]
-        issue_index = await load_issue_thread_index(db, issue_ids)
-        inferred_pairs = strict_plan_reading_order_pairs(nodes, issue_index)
-        planned_rules = [
+    issue_index = await load_issue_thread_index(db, issue_ids)
+    inferred_pairs = strict_plan_item_read_pairs(nodes, issue_index)
+    planned_rules = [
+        {
+            "kind": "adjacent",
+            "source_type": "issue",
+            "source_id": source_id,
+            "target_type": "issue",
+            "target_id": target_id,
+            "satisfaction_type": "item_read",
+        }
+        for source_id, target_id in inferred_pairs
+    ]
+    for bridge in bridges:
+        planned_rules.append(
             {
-                "kind": "adjacent",
+                "kind": "historical_gap",
                 "source_type": "issue",
-                "source_id": source_id,
+                "source_id": bridge["target_issue_id"],
                 "target_type": "issue",
-                "target_id": target_id,
-                "satisfaction_type": "item_read",
+                "target_id": bridge["target_issue_id"],
+                "satisfaction_type": "converged",
+                "convergence_targets": [
+                    {"type": "issue", "id": bridge["source_issue_id"]}
+                ],
             }
-            for source_id, target_id in inferred_pairs
-        ]
-        for bridge in bridges:
-            planned_rules.append(
-                {
-                    "kind": "historical_gap",
-                    "source_type": "issue",
-                    "source_id": bridge["target_issue_id"],
-                    "target_type": "issue",
-                    "target_id": bridge["target_issue_id"],
-                    "satisfaction_type": "converged",
-                    "convergence_targets": [
-                        {"type": "issue", "id": bridge["source_issue_id"]}
-                    ],
-                }
-            )
-    else:
-        planned_rules = _planned_rules(nodes, bridges)
+        )
     adjacency = {
         (int(rule["source_id"]), int(rule["target_id"]))
         for rule in planned_rules
@@ -736,7 +739,11 @@ async def build_source_backed_reader_order_dry_run(
         blocked = bool(other or existing or planned)
         if blocked:
             future_blocked.add(thread.id)
-        if removed and not blocked:
+        next_meta = issue_index.get(next_issue_id)
+        is_crossover_gate = (
+            next_meta is not None and next_meta.is_thread_natural_start
+        )
+        if removed and not blocked and is_crossover_gate:
             errors.append(
                 f"planned representation loses protection for next issue {next_issue_id}"
             )
@@ -754,16 +761,23 @@ async def build_source_backed_reader_order_dry_run(
 
     future_eligible = sorted(affected_ids - future_blocked)
     newly_eligible = sorted(set(future_eligible) - set(current_eligible))
-    if newly_eligible:
+    unexpected_release: list[int] = []
+    for thread_id in newly_eligible:
+        matching = next(
+            (row for row in behavior if int(row["thread_id"]) == thread_id),
+            None,
+        )
+        if matching is None:
+            continue
+        meta = issue_index.get(int(matching["next_unread_issue_id"]))
+        if meta is not None and meta.is_thread_natural_start:
+            unexpected_release.append(thread_id)
+    if unexpected_release:
         errors.append(
             "affected Roll-eligible thread set would gain eligibility: "
             f"before={current_eligible}, after={future_eligible}"
         )
-    adjacent_count = (
-        sum(1 for rule in planned_rules if rule["kind"] == "adjacent")
-        if spec.inferred_gate_kind == "reading_order"
-        else max(len(nodes) - 1, 0)
-    )
+    adjacent_count = sum(1 for rule in planned_rules if rule["kind"] == "adjacent")
 
     plan_payload = {
         "name": spec.plan_name,

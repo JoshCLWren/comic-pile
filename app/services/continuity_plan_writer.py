@@ -7,10 +7,12 @@ module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
 The compiler's hard-edge semantics (#2553 Phase B):
-  1. ``strict_sequential`` plans compile inferred ``item_read`` gates
-     selected by the plan's durable ``inferred_gate_kind`` (thread-entry
-     by default; reading-order for stamped CBL reading lists), never
-     same-thread adjacency;
+  1. ``strict_sequential`` plans compile inferred ``item_read`` gates only
+     at crossover points (Thread natural first issues waiting on a prior
+     required issue from a different Thread). Series run side by side
+     between those points. List adjacency is not a chain. Same-thread
+     adjacency is never compiled. ``inferred_gate_kind`` is provenance
+     only and does not change which pairs are emitted;
   2. checkpoint nodes block the next node in the same lane;
   3. convergence gates compile ``converged`` self-loop rules;
   4. plan-level cycles and persisted-rule conflicts keep their stable codes;
@@ -36,7 +38,6 @@ from app.schemas.continuity_plan import (
     ContinuityPlanLane,
     ContinuityPlanListItem,
     ContinuityPlanNode,
-    PlanInferredGateKind,
     PlanOrderingMode,
 )
 from app.schemas.continuity_rule import ContinuityNodeType
@@ -50,7 +51,6 @@ from app.services.reading_plan_normalization import rebuild_plan_membership
 from app.services.strict_plan_constraints import (
     load_issue_thread_index,
     strict_plan_item_read_pairs,
-    strict_plan_reading_order_pairs,
 )
 
 
@@ -91,29 +91,6 @@ def preserve_server_lane_metadata(
                 row["inferred_gate_kind"] = existing_kind
         serialized.append(row)
     return serialized
-
-
-def inferred_gate_kind_from_lanes(
-    lanes: Sequence[ContinuityPlanLane] | Sequence[dict[str, object]] | None,
-) -> PlanInferredGateKind:
-    """Return the durable inferred-gate kind stamped on a plan's lanes.
-
-    Args:
-        lanes: Persisted ``lanes_json`` rows or validated lane models.
-
-    Returns:
-        ``reading_order`` when any lane carries that stamp; otherwise
-        ``thread_entry``, the default for live planner creates.
-    """
-    for lane in lanes or ():
-        kind = (
-            lane.inferred_gate_kind
-            if isinstance(lane, ContinuityPlanLane)
-            else lane.get("inferred_gate_kind")
-        )
-        if kind == "reading_order":
-            return "reading_order"
-    return "thread_entry"
 
 
 def plan_rule_marker(plan_id: int) -> str:
@@ -265,8 +242,8 @@ async def replace_compiled_rules(
         plan: The persisted (or to-be-persisted) plan owning the compiled rules.
         nodes: Canonical node set to compile from.
         ordering_mode: Plan ordering mode; only ``strict_sequential`` creates
-            inferred gates. Thread-entry is the default; ``reading_order``
-            stamped on ``lanes_json`` compiles mid-run cross-thread hops.
+            inferred crossover / thread-entry gates. Mid-run list adjacency
+            is not compiled.
         sync_canonical_edges: When True (default), retire this plan's stale
             compiled edges and compile the new rules into canonical
             Dependencies (#2553). Only pairs that actually changed are
@@ -334,11 +311,7 @@ async def replace_compiled_rules(
         issue_ids = [node.ref_id for node in nodes if node.node_type == "issue"]
         issue_index = await load_issue_thread_index(db, issue_ids)
         compiled_item_read: set[tuple[int, int]] = set()
-        inferred_pairs = (
-            strict_plan_reading_order_pairs(nodes, issue_index)
-            if inferred_gate_kind_from_lanes(plan.lanes_json) == "reading_order"
-            else strict_plan_item_read_pairs(nodes, issue_index)
-        )
+        inferred_pairs = strict_plan_item_read_pairs(nodes, issue_index)
         for source_id, target_id in inferred_pairs:
             edges_to_add.append((
                 "issue", source_id,

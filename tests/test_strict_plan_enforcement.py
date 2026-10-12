@@ -43,7 +43,6 @@ from app.services.strict_plan_constraints import (
     IssueThreadIndex,
     load_issue_thread_index,
     strict_plan_item_read_pairs,
-    strict_plan_reading_order_pairs,
 )
 from comic_pile.dependencies import (
     _get_blocked_thread_ids_uncached,
@@ -208,13 +207,29 @@ def test_in_progress_series_omitted_earlier_issues_are_not_starts() -> None:
     assert strict_plan_item_read_pairs(nodes, index) == [(203, 301)]
 
 
-def test_reading_order_pairs_gate_mid_run_frontiers() -> None:
-    """Reading-order stamps compile nearest different-thread hops for every required issue."""
+def test_crossover_point_blocks_later_series_start() -> None:
+    """Starman #55 before JSA #1 is a crossover point and compiles a hard gate."""
+    nodes = _nodes_from_ids([55, 1])
+    index = {
+        55: IssueThreadIndex(1, 55, False),
+        1: IssueThreadIndex(2, 1, True),
+    }
+    assert strict_plan_item_read_pairs(nodes, index) == [(55, 1)]
+
+
+def test_non_crossover_list_adjacency_is_not_compiled() -> None:
+    """Mid-run hops between series are list adjacency, not crossover points."""
+    nodes = _nodes_from_ids([45, 360])
+    index = {
+        45: IssueThreadIndex(1, 45, False),
+        360: IssueThreadIndex(2, 360, False),
+    }
+    assert strict_plan_item_read_pairs(nodes, index) == []
     killing_ground = [101, 102]
     wild_hunt = [201, 202, 203]
     later_start = [301]
-    nodes = _nodes_from_ids(killing_ground + wild_hunt + later_start)
-    index = {
+    mixed = _nodes_from_ids(killing_ground + wild_hunt + later_start)
+    mixed_index = {
         101: IssueThreadIndex(1, 1, True),
         102: IssueThreadIndex(1, 2, False),
         201: IssueThreadIndex(2, 1, True),
@@ -222,17 +237,14 @@ def test_reading_order_pairs_gate_mid_run_frontiers() -> None:
         203: IssueThreadIndex(2, 3, False),
         301: IssueThreadIndex(3, 1, True),
     }
-    assert strict_plan_reading_order_pairs(nodes, index) == [
-        (102, 201),
-        (102, 202),
-        (102, 203),
-        (203, 301),
-    ]
-    assert (102, 203) not in strict_plan_item_read_pairs(nodes, index)
+    compiled = strict_plan_item_read_pairs(mixed, mixed_index)
+    assert compiled == [(102, 201), (203, 301)]
+    assert (102, 202) not in compiled
+    assert (102, 203) not in compiled
 
 
-def test_josh_cbl_order_only_frontiers_map_to_reading_order_plans() -> None:
-    """The 18 cbl-order-only frontiers belong to five strict reading-order manifests."""
+def test_josh_cbl_order_only_frontiers_classify_crossover_gates() -> None:
+    """The 18 cbl-order-only frontiers stay blocked only at real crossover points."""
     assert len(JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS) == 18
     assert {row.manifest_key for row in JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS} == (
         READING_ORDER_SOURCE_BACKED_MANIFESTS
@@ -251,9 +263,31 @@ def test_josh_cbl_order_only_frontiers_map_to_reading_order_plans() -> None:
     assert by_thread[3177].manifest_key == "americas-best-comics"
     assert by_thread[114].manifest_key == "doom-patrol"
     assert by_thread[3171].manifest_key == "unnamed-universe"
+    released = {
+        row.thread_id
+        for row in JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS
+        if not row.crossover_gate
+    }
+    blocked = {
+        row.thread_id
+        for row in JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS
+        if row.crossover_gate
+    }
+    assert released == {98, 305, 3177, 114, 3171}
+    assert blocked == {
+        3152, 18595, 18646, 18655, 18660, 18673,
+        18689, 18699, 18719, 18720, 18721, 18722, 18560,
+    }
+    assert by_thread[98].label == "X-Men #80"
+    assert by_thread[305].label == "Uncanny X-Men #360"
+    assert by_thread[3152].label == "Magneto Rex #1"
+    assert by_thread[18560].label == "Fantastic Four (1970) #103"
+    assert by_thread[3177].label == "Promethea #13"
+    assert by_thread[114].label == "Doom Patrol #9"
+    assert by_thread[3171].label == "Geiger #5"
     for key in READING_ORDER_SOURCE_BACKED_MANIFESTS:
         spec = PRODUCTION_SOURCE_BACKED_SPECS[key]
-        assert spec.inferred_gate_kind == "reading_order"
+        assert spec.inferred_gate_kind == "thread_entry"
         assert spec.plan_name
     assert PRODUCTION_SOURCE_BACKED_SPECS["absolute-universe"].inferred_gate_kind == (
         "thread_entry"
@@ -359,11 +393,11 @@ async def test_starman_jsa_shared_prerequisite_survives_independent_plans(
 
 
 @pytest.mark.asyncio
-async def test_xmen_cable_xforce_reading_order_enforces_list_order(
+async def test_xmen_crossover_start_blocks_interleaved_adjacency_does_not(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Josh's UXRO list compiles mid-run hops so later titles are not Roll-eligible."""
+    """Magneto Rex #1 is a crossover start; Uncanny/Cable mid-run hops are not."""
     user = await get_or_create_user_async(async_db)
     uncanny, uncanny_all = await _make_series(
         async_db,
@@ -381,23 +415,15 @@ async def test_xmen_cable_xforce_reading_order_enforces_list_order(
         queue_position=2,
         read_through=1,
     )
-    xforce, xforce_all = await _make_series(
+    magneto_rex, rex_issues = await _make_series(
         async_db,
         user_id=user.id,
-        title="X-Force",
-        numbers=["90", "101", "102"],
+        title="Magneto Rex",
+        numbers=["1"],
         queue_position=3,
-        read_through=1,
     )
     uncanny_issues = uncanny_all[1:]
     cable_issues = cable_all[1:]
-    xforce_issues = xforce_all[1:]
-    genuine = Dependency(
-        source_issue_id=cable_issues[2].id,
-        target_issue_id=xforce_issues[0].id,
-        note="UXRO Era Ten: Cable #78 -> X-Force #101",
-    )
-    async_db.add(genuine)
     await async_db.commit()
 
     interleaved = [
@@ -407,60 +433,40 @@ async def test_xmen_cable_xforce_reading_order_enforces_list_order(
         cable_issues[1],
         uncanny_issues[2],
         cable_issues[2],
-        xforce_issues[0],
-        xforce_issues[1],
+        rex_issues[0],
     ]
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
-        json=_plan_payload(
-            "Late-90s X-Men Reading Order",
-            interleaved,
-            inferred_gate_kind="reading_order",
-        ),
+        json=_plan_payload("Late-90s X-Men Reading Order", interleaved),
     )
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
     compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
-    assert compiled == {
-        (uncanny_issues[0].id, cable_issues[0].id),
-        (cable_issues[0].id, uncanny_issues[1].id),
-        (uncanny_issues[1].id, cable_issues[1].id),
-        (cable_issues[1].id, uncanny_issues[2].id),
-        (uncanny_issues[2].id, cable_issues[2].id),
-        (cable_issues[2].id, xforce_issues[0].id),
-        (cable_issues[2].id, xforce_issues[1].id),
-    }
-    note = (
-        await async_db.execute(
-            select(Dependency.note).where(
-                Dependency.source_issue_id == cable_issues[2].id,
-                Dependency.target_issue_id == xforce_issues[0].id,
-            )
-        )
-    ).scalar_one()
-    assert note == "UXRO Era Ten: Cable #78 -> X-Force #101"
+    assert compiled == {(cable_issues[2].id, rex_issues[0].id)}
+    assert (uncanny_issues[0].id, cable_issues[0].id) not in compiled
+    assert (cable_issues[0].id, uncanny_issues[1].id) not in compiled
 
     roll_ids = await _roll_ids(user.id, async_db)
     assert uncanny.id in roll_ids
-    assert cable.id not in roll_ids
-    assert xforce.id not in roll_ids
+    assert cable.id in roll_ids
+    assert magneto_rex.id not in roll_ids
 
     saved = await auth_client.put(
         f"/api/v1/continuity-plans/{plan_id}",
         json=_plan_payload("Late-90s X-Men Reading Order", interleaved),
     )
     assert saved.status_code == 200, saved.text
-    assert saved.json()["lanes"][0]["inferred_gate_kind"] == "reading_order"
     assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == compiled
-    assert cable.id not in await _roll_ids(user.id, async_db)
+    assert cable.id in await _roll_ids(user.id, async_db)
+    assert magneto_rex.id not in await _roll_ids(user.id, async_db)
 
 
 @pytest.mark.asyncio
-async def test_mid_series_cbl_order_frontier_stays_blocked_by_reading_order_plan(
+async def test_mid_series_list_adjacency_does_not_block_after_strict_compile(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """After cutover, a mid-run frontier blocked only by cbl-order stays blocked by the plan."""
+    """Uncanny #360 after Generation X is list adjacency and stays Roll-eligible."""
     user = await get_or_create_user_async(async_db)
     pred, pred_issues = await _make_series(
         async_db,
@@ -495,17 +501,16 @@ async def test_mid_series_cbl_order_frontier_stays_blocked_by_reading_order_plan
         json=_plan_payload(
             "Late-90s X-Men Reading Order",
             pred_issues + mid_issues,
-            inferred_gate_kind="reading_order",
         ),
     )
     assert created.status_code == 201, created.text
     compiled = await _compiled_pairs(
         async_db, user_id=user.id, plan_id=created.json()["id"]
     )
-    assert (pred_issues[0].id, mid_issues[2].id) in compiled
+    assert (pred_issues[0].id, mid_issues[2].id) not in compiled
     roll_after = await _roll_ids(user.id, async_db)
     assert pred.id in roll_after
-    assert mid.id not in roll_after
+    assert mid.id in roll_after
 
 
 @pytest.mark.asyncio

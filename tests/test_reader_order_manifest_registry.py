@@ -52,13 +52,8 @@ def test_production_source_manifests_cover_every_step14_cbl_source() -> None:
     }
 
 
-def test_josh_reading_order_manifests_are_stamped_reading_order() -> None:
-    """The five CBL lists covering Josh's 18 cbl-order-only frontiers compile mid-run hops."""
+def test_josh_cbl_order_manifests_use_crossover_thread_entry_gates() -> None:
+    """The five CBL lists covering Josh's 18 frontiers compile crossover points only."""
     assert READING_ORDER_SOURCE_BACKED_MANIFESTS <= set(PRODUCTION_SOURCE_BACKED_SPECS)
     for key, spec in PRODUCTION_SOURCE_BACKED_SPECS.items():
-        expected = (
-            "reading_order"
-            if key in READING_ORDER_SOURCE_BACKED_MANIFESTS
-            else "thread_entry"
-        )
-        assert spec.inferred_gate_kind == expected, key
+        assert spec.inferred_gate_kind == "thread_entry", key

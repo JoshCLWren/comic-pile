@@ -1,37 +1,34 @@
 """Strict Reading Plan hard-constraint selection (#2553 Phase B).
 
 A strict plan promises that Roll will honor its *selected* hard restrictions.
-It does not promise that every imported or suggested-order adjacency is a
-blocker. Natural Thread sequence remains ``Issue.position`` /
-``Thread.next_unread_issue_id``; same-thread adjacent pairs are never
+Josh's definition: only key crossover points block; series can run side by
+side between them. It does not compile the entire list order into a chain.
+Within a series, issue order applies as usual (``Issue.position`` /
+``Thread.next_unread_issue_id``). Same-thread adjacent pairs are never
 compiled into Dependencies.
 
-The durable inferred restriction for ``strict_sequential`` defaults to a
-*thread-entry gate*: the natural first issue of a Thread (minimum
+The durable inferred restriction for ``strict_sequential`` is a *crossover
+point* / thread-entry gate: the natural first issue of a Thread (minimum
 ``Issue.position`` on that Thread, whether or not earlier issues appear in
 the plan) waits on the nearest preceding required plan issue from a
-different Thread.
-
-Plans stamped ``inferred_gate_kind=reading_order`` additionally compile that
-nearest different-thread predecessor for *every* required issue, not only
-series starts. That is how Josh's CBL reading lists (Late-90s X-Men, Fantastic
-Four Early Years, America's Best Comics, Doom Patrol 1, The Unnamed Universe)
-keep mid-run frontiers blocked after historical ``cbl-order`` rows become
-inert. The stamp is the durable selector; titles are never special-cased.
+different Thread. Mid-run list hops — Uncanny #360 after Generation X in a
+CBL, Promethea #13 after Tom Strong, and other non-start adjacency — are
+not crossover points and compile no blocker.
 
 That representation is title-agnostic:
 
-- Starman #55 before a JSA series start is a thread-entry (or standalone) gate.
+- Starman #55 before a JSA series start is a crossover / thread-entry gate.
+- Magneto Rex #1, annuals, and other one-shot or volume starts are crossover
+  points because they are Thread natural first issues.
 - Wild Hunt #3 is never a thread-entry while #1 exists on the Thread, so an
-  in-progress Wild Hunt stays Roll-eligible after earlier unread plan material
-  when the plan uses the default thread-entry kind.
-- A reading-order stamp on the same geometry would gate Wild Hunt #3; Mignolaverse
-  therefore stays thread-entry.
+  in-progress Wild Hunt stays Roll-eligible after earlier unread plan material.
 - Absolute Universe later titles whose #1 is in the plan are gated, closing
   the "later material is Roll-eligible" leak without blanketing every hop.
 
 Informational plans compile no inferred gates. Explicit checkpoints,
 convergence gates, and caller-supplied selected pairs remain separate.
+``inferred_gate_kind`` on a lane is provenance only; it never changes which
+pairs this module emits.
 """
 
 from __future__ import annotations
@@ -76,23 +73,20 @@ def is_required_issue_node(node: ContinuityPlanNode) -> bool:
     return True
 
 
-def _strict_cross_thread_pairs(
+def strict_plan_item_read_pairs(
     nodes: Sequence[ContinuityPlanNode],
     index: Mapping[int, IssueThreadIndex],
-    *,
-    natural_starts_only: bool,
 ) -> list[tuple[int, int]]:
-    """Return inferred ``item_read`` pairs from plan order and Thread geometry.
+    """Return inferred crossover / thread-entry ``item_read`` pairs.
 
-    Same-thread adjacency is omitted. When ``natural_starts_only`` is true, a
-    pair is emitted only when the target is the Thread's natural first issue.
-    Otherwise every required issue waits on the nearest preceding required
-    issue from a different Thread.
+    Same-thread adjacency is omitted. A pair is emitted only when the target
+    is the Thread's natural first issue and a required predecessor on a
+    different Thread exists earlier in plan order. Mid-run list adjacency
+    between continuing series is not a crossover point.
 
     Args:
         nodes: Plan nodes in any order; display ``position`` is the sort key.
         index: Runtime Thread metadata for every referenced Issue.
-        natural_starts_only: Restrict targets to Thread natural first issues.
 
     Returns:
         Ordered ``(source_issue_id, target_issue_id)`` pairs with no
@@ -110,7 +104,7 @@ def _strict_cross_thread_pairs(
     seen: set[tuple[int, int]] = set()
     for offset, target in enumerate(ordered):
         target_meta = index[target.ref_id]
-        if natural_starts_only and not target_meta.is_thread_natural_start:
+        if not target_meta.is_thread_natural_start:
             continue
         predecessor_id: int | None = None
         for source in reversed(ordered[:offset]):
@@ -125,48 +119,6 @@ def _strict_cross_thread_pairs(
         seen.add(pair)
         pairs.append(pair)
     return pairs
-
-
-def strict_plan_item_read_pairs(
-    nodes: Sequence[ContinuityPlanNode],
-    index: Mapping[int, IssueThreadIndex],
-) -> list[tuple[int, int]]:
-    """Return inferred thread-entry ``item_read`` pairs for one plan node list.
-
-    Same-thread adjacency is omitted. A pair is emitted only when the target
-    is the Thread's natural first issue and a required predecessor on a
-    different Thread exists earlier in plan order.
-
-    Args:
-        nodes: Plan nodes in any order; display ``position`` is the sort key.
-        index: Runtime Thread metadata for every referenced Issue.
-
-    Returns:
-        Ordered ``(source_issue_id, target_issue_id)`` pairs with no
-        duplicates. Missing index entries are skipped rather than guessed.
-    """
-    return _strict_cross_thread_pairs(nodes, index, natural_starts_only=True)
-
-
-def strict_plan_reading_order_pairs(
-    nodes: Sequence[ContinuityPlanNode],
-    index: Mapping[int, IssueThreadIndex],
-) -> list[tuple[int, int]]:
-    """Return inferred reading-order ``item_read`` pairs for one plan node list.
-
-    Same-thread adjacency is omitted. Every required issue waits on the
-    nearest preceding required issue from a different Thread, including
-    mid-run frontiers that are not series starts.
-
-    Args:
-        nodes: Plan nodes in any order; display ``position`` is the sort key.
-        index: Runtime Thread metadata for every referenced Issue.
-
-    Returns:
-        Ordered ``(source_issue_id, target_issue_id)`` pairs with no
-        duplicates. Missing index entries are skipped rather than guessed.
-    """
-    return _strict_cross_thread_pairs(nodes, index, natural_starts_only=False)
 
 
 async def load_issue_thread_index(

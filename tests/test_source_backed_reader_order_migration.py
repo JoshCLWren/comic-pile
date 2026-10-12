@@ -285,10 +285,10 @@ async def test_source_backed_migration_accepts_group_superset_and_replaces_live_
 
 
 @pytest.mark.asyncio
-async def test_reading_order_source_backed_keeps_mid_series_frontier_blocked(
+async def test_source_backed_mid_series_frontier_is_released_after_cbl_order_delete(
     async_db: AsyncSession,
 ) -> None:
-    """Reading-order compile replaces cbl-order and still blocks a mid-run frontier."""
+    """Crossover-only compile replaces cbl-order and releases a mid-run frontier."""
     user = await get_or_create_user_async(async_db)
     pred_thread, pred_issue = await _thread_issue(
         async_db,
@@ -391,15 +391,11 @@ async def test_reading_order_source_backed_keeps_mid_series_frontier_blocked(
         expected_positions=2,
         plan_name="Late-90s X-Men Reading Order",
         expected_source_path=source_list.source_path,
-        inferred_gate_kind="reading_order",
     )
     snapshot = await build_source_backed_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
-    assert snapshot["manifest"]["inferred_gate_kind"] == "reading_order"
-    assert snapshot["planned"]["plan"]["lanes"][0]["inferred_gate_kind"] == (
-        "reading_order"
-    )
-    assert mid_thread.id not in snapshot["runtime_behavior"][
+    assert snapshot["manifest"]["inferred_gate_kind"] == "thread_entry"
+    assert mid_thread.id in snapshot["runtime_behavior"][
         "simulated_future_eligible_thread_ids"
     ]
 
@@ -412,10 +408,9 @@ async def test_reading_order_source_backed_keeps_mid_series_frontier_blocked(
     assert await async_db.get(Dependency, cbl_dependency.id) is None
     plan = await async_db.get(ContinuityPlan, receipt["plan_id"])
     assert plan is not None
-    assert plan.lanes_json[0]["inferred_gate_kind"] == "reading_order"
     blocked_after = await _get_blocked_thread_ids_uncached(user.id, async_db)
     assert pred_thread.id not in blocked_after
-    assert mid_thread.id in blocked_after
+    assert mid_thread.id not in blocked_after
 
 
 @pytest.mark.asyncio
