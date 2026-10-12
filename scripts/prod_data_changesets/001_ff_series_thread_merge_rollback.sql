@@ -9,15 +9,24 @@
 --   INSERT column lists); restored rows are asserted equal to the receipt
 --
 -- Refuses if intervening writes (reads, position changes, extra issues, a
--- drifted 3166 frontier, or new dependencies / reading_plan_issues / events
--- on the moved issue ids) would make restoration overwrite progress.
+-- drifted 3166 frontier, or drifted dependencies / reading_plan_issues /
+-- events vs the merge-time baseline) would make restoration overwrite
+-- progress. Pre-existing cbl-order dependencies on the moved issue ids are
+-- part of that baseline and are not themselves a reason to refuse.
 
 BEGIN;
+
+SET LOCAL TimeZone = 'UTC';
 
 DO $$
 DECLARE
     lock_rec RECORD;
+    live_deps jsonb;
+    live_plan_issues jsonb;
+    live_events jsonb;
+    live_refs jsonb;
     recorded_canonical jsonb := $rec_canonical${"id":3166,"title":"Fantastic Four (1961)","format":"Comics","reading_progress":"in_progress","next_unread_issue_id":23029,"total_issues":102,"queue_position":205,"status":"active","user_id":1}$rec_canonical$::jsonb;
+    recorded_refs jsonb := $rec_refs${"dependencies":{"count":23625,"ids_md5":"51cab31505d01e2f1be31a7e2a45761f","fingerprint_md5":"b52d3718b10796674b8b7c3db1145be7"},"reading_plan_issues":{"count":0,"ids_md5":"d41d8cd98f00b204e9800998ecf8427e","fingerprint_md5":"d41d8cd98f00b204e9800998ecf8427e"},"events":{"count":0,"ids_md5":"d41d8cd98f00b204e9800998ecf8427e","fingerprint_md5":"d41d8cd98f00b204e9800998ecf8427e"}}$rec_refs$::jsonb;
 BEGIN
     FOR lock_rec IN
         SELECT id FROM threads WHERE id = 3166 ORDER BY id FOR UPDATE
@@ -28,6 +37,37 @@ BEGIN
         SELECT id
         FROM issues
         WHERE id BETWEEN 115395 AND 115519 OR thread_id = 3166
+        ORDER BY id
+        FOR UPDATE
+    LOOP
+        NULL;
+    END LOOP;
+
+    FOR lock_rec IN
+        SELECT id
+        FROM dependencies
+        WHERE source_issue_id BETWEEN 115395 AND 115519
+           OR target_issue_id BETWEEN 115395 AND 115519
+        ORDER BY id
+        FOR UPDATE
+    LOOP
+        NULL;
+    END LOOP;
+
+    FOR lock_rec IN
+        SELECT plan_id, occurrence_id
+        FROM reading_plan_issues
+        WHERE issue_id BETWEEN 115395 AND 115519
+        ORDER BY plan_id, occurrence_id
+        FOR UPDATE
+    LOOP
+        NULL;
+    END LOOP;
+
+    FOR lock_rec IN
+        SELECT id
+        FROM events
+        WHERE issue_id BETWEEN 115395 AND 115519
         ORDER BY id
         FOR UPDATE
     LOOP
@@ -77,27 +117,72 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'issue_number overlap appeared after merge; refuse rollback';
     END IF;
-    IF EXISTS (
-        SELECT 1 FROM dependencies
-        WHERE source_issue_id BETWEEN 115395 AND 115519
-           OR target_issue_id BETWEEN 115395 AND 115519
-    ) THEN
+    SELECT jsonb_build_object(
+        'count', COUNT(*)::bigint,
+        'ids_md5', md5(COALESCE(string_agg(id::text, ',' ORDER BY id), '')),
+        'fingerprint_md5', md5(COALESCE(string_agg(
+            concat_ws(
+                CHR(31),
+                id::text,
+                source_issue_id::text,
+                target_issue_id::text,
+                COALESCE(note, '')
+            ),
+            CHR(10) ORDER BY id
+        ), ''))
+    )
+    INTO live_deps
+    FROM dependencies
+    WHERE source_issue_id BETWEEN 115395 AND 115519
+       OR target_issue_id BETWEEN 115395 AND 115519;
+
+    SELECT jsonb_build_object(
+        'count', COUNT(*)::bigint,
+        'ids_md5', md5(COALESCE(string_agg(
+            plan_id::text || ':' || occurrence_id, ',' ORDER BY plan_id, occurrence_id
+        ), '')),
+        'fingerprint_md5', md5(COALESCE(string_agg(
+            concat_ws(
+                CHR(31),
+                plan_id::text,
+                occurrence_id,
+                issue_id::text,
+                display_position::text
+            ),
+            CHR(10) ORDER BY plan_id, occurrence_id
+        ), ''))
+    )
+    INTO live_plan_issues
+    FROM reading_plan_issues
+    WHERE issue_id BETWEEN 115395 AND 115519;
+
+    SELECT jsonb_build_object(
+        'count', COUNT(*)::bigint,
+        'ids_md5', md5(COALESCE(string_agg(id::text, ',' ORDER BY id), '')),
+        'fingerprint_md5', md5(COALESCE(string_agg(
+            concat_ws(
+                CHR(31),
+                id::text,
+                type,
+                COALESCE(issue_id::text, ''),
+                COALESCE(issue_number, '')
+            ),
+            CHR(10) ORDER BY id
+        ), ''))
+    )
+    INTO live_events
+    FROM events
+    WHERE issue_id BETWEEN 115395 AND 115519;
+
+    live_refs := jsonb_build_object(
+        'dependencies', live_deps,
+        'reading_plan_issues', live_plan_issues,
+        'events', live_events
+    );
+    IF live_refs IS DISTINCT FROM recorded_refs THEN
         RAISE EXCEPTION
-            'new dependencies reference moved issues after merge; refuse unsafe restoration';
-    END IF;
-    IF EXISTS (
-        SELECT 1 FROM reading_plan_issues
-        WHERE issue_id BETWEEN 115395 AND 115519
-    ) THEN
-        RAISE EXCEPTION
-            'new reading_plan_issues reference moved issues after merge; refuse unsafe restoration';
-    END IF;
-    IF EXISTS (
-        SELECT 1 FROM events
-        WHERE issue_id BETWEEN 115395 AND 115519
-    ) THEN
-        RAISE EXCEPTION
-            'new events reference moved issues after merge; refuse unsafe restoration';
+            'moved-issue references drifted from merge baseline: %',
+            live_refs;
     END IF;
 END $$;
 

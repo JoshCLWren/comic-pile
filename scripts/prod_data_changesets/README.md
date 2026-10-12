@@ -91,10 +91,15 @@ mapping 378 with `jsonb_populate_record` from that receipt, then asserts
 `row_to_json` of the restored rows equals the recorded JSON. Split issues use
 the deterministic mapping (`id BETWEEN 115395 AND 115519`, original
 `position = id - 115394`). 3166 `reading_progress` is restored from the
-recorded canonical receipt, not hard-coded. It **refuses** if intervening
-writes (reads, `read_at`, position/thread drift, extra 3166 issues, a drifted
-3166 frontier, or new dependencies / `reading_plan_issues` / events on the
-moved issue ids) would overwrite progress.
+recorded canonical receipt, not hard-coded. Both scripts `SET LOCAL TimeZone
+= 'UTC'` so timestamptz receipts compare as `+00:00`.
+
+Moved-issue references (dependencies, `reading_plan_issues`, events on ids
+115395–115519) are snapshotted at merge time into `moved_issue_refs`: count,
+md5 of sorted ids, and a content fingerprint. Prod already has **23,625**
+`cbl-order` dependency rows on those ids; those rows are the baseline, not a
+blocker. Rollback **refuses only on drift** from that baseline (new, removed,
+or changed rows), not on the mere presence of rows.
 
 Out of scope: thread 3145 `Fantastic Four` (next ~#600) and completed
 16706/16707 **(a)**.

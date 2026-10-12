@@ -4,9 +4,12 @@
 --
 -- Goal: one series thread. SQL: one guarded transaction, no backup tables.
 -- Recorded change set: 001_ff_series_thread_merge_recorded.json
--- (live row_to_json of thread 18560, mapping 378, and 3166 restore fields).
+-- (live row_to_json of thread 18560, mapping 378, 3166 restore fields, and
+-- the moved-issue dependency / reading_plan_issues / events baseline).
 -- Rollback restores via jsonb_populate_record from that receipt, not
--- hard-coded INSERT column lists.
+-- hard-coded INSERT column lists. Rollback refuses only if those refs
+-- drift from the baseline (new, removed, or changed rows), not merely
+-- because the 23,625 existing cbl-order dependencies are present.
 --
 -- Proven by source data (Neon 2026-10-12, single SELECTs):
 --   threads 3166 and 18560 both map to ComicVine series 2045
@@ -32,6 +35,8 @@
 
 BEGIN;
 
+SET LOCAL TimeZone = 'UTC';
+
 DO $$
 DECLARE
     rec RECORD;
@@ -41,9 +46,14 @@ DECLARE
     live_split jsonb;
     live_mapping jsonb;
     live_canonical jsonb;
+    live_deps jsonb;
+    live_plan_issues jsonb;
+    live_events jsonb;
+    live_refs jsonb;
     recorded_split jsonb := $rec_split${"id":18560,"title":"Fantastic Four (1970)","format":"Comic","issues_remaining":125,"queue_position":208,"status":"active","last_rating":null,"last_activity_at":null,"created_at":"2026-08-31T11:26:07.658653+00:00","user_id":1,"notes":"Broad saved-CBL representation; ComicVine volume 2045.","is_test":false,"is_blocked":true,"total_issues":125,"next_unread_issue_id":115395,"reading_progress":"not_started","blocked_by_thread_ids":null,"blocked_by_issue_ids":null,"manual_creator_credits":[],"catalog_series_id":null}$rec_split$::jsonb;
     recorded_mapping jsonb := $rec_mapping${"id":378,"thread_id":18560,"external_identity_id":12970,"status":"confirmed","evidence_source":"broad_cbl_volume_representation","confidence":0.95,"created_at":"2026-08-31T11:26:07.658653+00:00","updated_at":"2026-08-31T11:26:07.658653+00:00"}$rec_mapping$::jsonb;
     recorded_canonical jsonb := $rec_canonical${"id":3166,"title":"Fantastic Four (1961)","format":"Comics","reading_progress":"in_progress","next_unread_issue_id":23029,"total_issues":102,"queue_position":205,"status":"active","user_id":1}$rec_canonical$::jsonb;
+    recorded_refs jsonb := $rec_refs${"dependencies":{"count":23625,"ids_md5":"51cab31505d01e2f1be31a7e2a45761f","fingerprint_md5":"b52d3718b10796674b8b7c3db1145be7"},"reading_plan_issues":{"count":0,"ids_md5":"d41d8cd98f00b204e9800998ecf8427e","fingerprint_md5":"d41d8cd98f00b204e9800998ecf8427e"},"events":{"count":0,"ids_md5":"d41d8cd98f00b204e9800998ecf8427e","fingerprint_md5":"d41d8cd98f00b204e9800998ecf8427e"}}$rec_refs$::jsonb;
 BEGIN
     -- (1) Locks before any guard. Parents first, then children, stable id order.
     FOR lock_rec IN
@@ -165,6 +175,37 @@ BEGIN
         NULL;
     END LOOP;
 
+    FOR lock_rec IN
+        SELECT id
+        FROM dependencies
+        WHERE source_issue_id BETWEEN 115395 AND 115519
+           OR target_issue_id BETWEEN 115395 AND 115519
+        ORDER BY id
+        FOR UPDATE
+    LOOP
+        NULL;
+    END LOOP;
+
+    FOR lock_rec IN
+        SELECT plan_id, occurrence_id
+        FROM reading_plan_issues
+        WHERE issue_id BETWEEN 115395 AND 115519
+        ORDER BY plan_id, occurrence_id
+        FOR UPDATE
+    LOOP
+        NULL;
+    END LOOP;
+
+    FOR lock_rec IN
+        SELECT id
+        FROM events
+        WHERE issue_id BETWEEN 115395 AND 115519
+        ORDER BY id
+        FOR UPDATE
+    LOOP
+        NULL;
+    END LOOP;
+
     -- Record live rows and assert they match the change-set receipt.
     SELECT row_to_json(t)::jsonb INTO live_split FROM threads t WHERE id = 18560;
     SELECT row_to_json(m)::jsonb INTO live_mapping
@@ -196,6 +237,74 @@ BEGIN
         RAISE EXCEPTION
             'canonical thread 3166 restore fields do not match recorded change set: %',
             live_canonical;
+    END IF;
+
+    SELECT jsonb_build_object(
+        'count', COUNT(*)::bigint,
+        'ids_md5', md5(COALESCE(string_agg(id::text, ',' ORDER BY id), '')),
+        'fingerprint_md5', md5(COALESCE(string_agg(
+            concat_ws(
+                CHR(31),
+                id::text,
+                source_issue_id::text,
+                target_issue_id::text,
+                COALESCE(note, '')
+            ),
+            CHR(10) ORDER BY id
+        ), ''))
+    )
+    INTO live_deps
+    FROM dependencies
+    WHERE source_issue_id BETWEEN 115395 AND 115519
+       OR target_issue_id BETWEEN 115395 AND 115519;
+
+    SELECT jsonb_build_object(
+        'count', COUNT(*)::bigint,
+        'ids_md5', md5(COALESCE(string_agg(
+            plan_id::text || ':' || occurrence_id, ',' ORDER BY plan_id, occurrence_id
+        ), '')),
+        'fingerprint_md5', md5(COALESCE(string_agg(
+            concat_ws(
+                CHR(31),
+                plan_id::text,
+                occurrence_id,
+                issue_id::text,
+                display_position::text
+            ),
+            CHR(10) ORDER BY plan_id, occurrence_id
+        ), ''))
+    )
+    INTO live_plan_issues
+    FROM reading_plan_issues
+    WHERE issue_id BETWEEN 115395 AND 115519;
+
+    SELECT jsonb_build_object(
+        'count', COUNT(*)::bigint,
+        'ids_md5', md5(COALESCE(string_agg(id::text, ',' ORDER BY id), '')),
+        'fingerprint_md5', md5(COALESCE(string_agg(
+            concat_ws(
+                CHR(31),
+                id::text,
+                type,
+                COALESCE(issue_id::text, ''),
+                COALESCE(issue_number, '')
+            ),
+            CHR(10) ORDER BY id
+        ), ''))
+    )
+    INTO live_events
+    FROM events
+    WHERE issue_id BETWEEN 115395 AND 115519;
+
+    live_refs := jsonb_build_object(
+        'dependencies', live_deps,
+        'reading_plan_issues', live_plan_issues,
+        'events', live_events
+    );
+    IF live_refs IS DISTINCT FROM recorded_refs THEN
+        RAISE EXCEPTION
+            'moved-issue references drifted from merge baseline: %',
+            live_refs;
     END IF;
 
     IF (SELECT COUNT(*) FROM issues WHERE thread_id = 3166) <> 102 THEN

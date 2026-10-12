@@ -43,5 +43,22 @@
     "queue_position": 205,
     "status": "active",
     "user_id": 1
+  },
+  "moved_issue_refs": {
+    "dependencies": {
+      "count": 23625,
+      "ids_md5": "51cab31505d01e2f1be31a7e2a45761f",
+      "fingerprint_md5": "b52d3718b10796674b8b7c3db1145be7"
+    },
+    "reading_plan_issues": {
+      "count": 0,
+      "ids_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "fingerprint_md5": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "events": {
+      "count": 0,
+      "ids_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "fingerprint_md5": "d41d8cd98f00b204e9800998ecf8427e"
+    }
   }
 }
