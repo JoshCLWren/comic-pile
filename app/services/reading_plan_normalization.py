@@ -16,22 +16,26 @@ Scope notes (``docs/READING_GRAPH_PERSISTENCE_DESIGN.md``, Chunk 1):
 
 from __future__ import annotations
 
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
+from app.models.continuity_rule import ContinuityRule
 from app.models.custom_cbl import CustomCBLList
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.reading_plan_membership import (
+    ReadingPlanDependency,
     ReadingPlanIssue,
     ReadingPlanSource,
     ReadingPlanSourcePlacement,
 )
+from app.models.thread import Thread
 from app.repositories import continuity_repository, reading_plan_repository
 from app.schemas.continuity_plan import ContinuityPlanNode
 from app.services.cbl_source_public import public_cbl_repository, public_cbl_source_path
@@ -76,13 +80,32 @@ def ensure_plan_issue_uniqueness(nodes: list[ContinuityPlanNode]) -> None:
 
 
 @dataclass(frozen=True, slots=True)
-class MembershipReconcileReport:
-    """Outcome of rebuilding membership from ``nodes_json`` without mutating it.
+class PlanConstraintSnapshot:
+    """Membership and blocker identity for one plan at one moment.
 
-    Production apply of this report is a separate authorization gate. The
-    function itself is the local/test repair primitive for plans whose JSON
-    nodes drifted away from ``reading_plan_issues`` (Absolute Universe 29-gap,
-    dangling test-copy nodes).
+    ``roll_blocking_pairs`` are canonical (non-``cbl-order``) Dependencies
+    whose unread source currently blocks a member Thread's next unread issue.
+    Plan-owned ContinuityRules are authoring records; after the Roll cutover
+    they do not block unless compiled to a Dependency.
+    """
+
+    membership_issue_ids: tuple[int, ...]
+    plan_owned_item_read_pairs: tuple[tuple[int, int], ...]
+    plan_linked_dependency_pairs: tuple[tuple[int, int], ...]
+    roll_blocking_pairs: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MembershipReconcileReport:
+    """Outcome of aligning membership to ``nodes_json`` without compiling rules.
+
+    ``nodes_json`` is the intended membership and presentation order (#3486).
+    ``reading_plan_issues`` is the derived membership table. This repair
+    copies existing Issue refs from JSON into the table and never calls the
+    strict compiler, so a drifted strict plan is not re-saved into a blanket
+    of adjacent blockers.
+
+    Production apply of this report is a separate authorization gate.
     """
 
     plan_id: int
@@ -90,6 +113,50 @@ class MembershipReconcileReport:
     skipped_missing_issue_ids: tuple[int, ...]
     skipped_non_issue_nodes: int
     invalid_node_count: int
+    inserted_issue_ids: tuple[int, ...]
+    removed_issue_ids: tuple[int, ...]
+    before: PlanConstraintSnapshot
+    after: PlanConstraintSnapshot
+    projected_thread_entry_pairs: tuple[tuple[int, int], ...]
+
+
+def _snapshot_to_dict(snapshot: PlanConstraintSnapshot) -> dict[str, object]:
+    """Serialize one constraint snapshot for dry-run reports."""
+    return {
+        "membership_issue_ids": list(snapshot.membership_issue_ids),
+        "plan_owned_item_read_pairs": [list(pair) for pair in snapshot.plan_owned_item_read_pairs],
+        "plan_linked_dependency_pairs": [
+            list(pair) for pair in snapshot.plan_linked_dependency_pairs
+        ],
+        "roll_blocking_pairs": [list(pair) for pair in snapshot.roll_blocking_pairs],
+    }
+
+
+def membership_report_to_dict(report: MembershipReconcileReport) -> dict[str, object]:
+    """Serialize a membership reconcile report as JSON-ready data.
+
+    Args:
+        report: Apply or dry-run result.
+
+    Returns:
+        Plain mapping with list-encoded tuples.
+    """
+    return {
+        "plan_id": report.plan_id,
+        "json_is_authoritative": True,
+        "membership_count": report.membership_count,
+        "skipped_missing_issue_ids": list(report.skipped_missing_issue_ids),
+        "skipped_non_issue_nodes": report.skipped_non_issue_nodes,
+        "invalid_node_count": report.invalid_node_count,
+        "inserted_issue_ids": list(report.inserted_issue_ids),
+        "removed_issue_ids": list(report.removed_issue_ids),
+        "before": _snapshot_to_dict(report.before),
+        "after": _snapshot_to_dict(report.after),
+        "projected_thread_entry_pairs": [
+            list(pair) for pair in report.projected_thread_entry_pairs
+        ],
+        "compiled_rules": False,
+    }
 
 
 def parse_plan_nodes_json(nodes_json: object) -> tuple[list[ContinuityPlanNode], int]:
@@ -113,6 +180,231 @@ def parse_plan_nodes_json(nodes_json: object) -> tuple[list[ContinuityPlanNode],
     return nodes, invalid
 
 
+def _dedupe_existing_issue_nodes(
+    nodes: Sequence[ContinuityPlanNode],
+    existing_ids: set[int],
+) -> list[ContinuityPlanNode]:
+    """Keep first occurrence of each existing Issue; drop dangling issue refs."""
+    deduped: list[ContinuityPlanNode] = []
+    seen_issue_ids: set[int] = set()
+    for node in nodes:
+        if node.node_type == "issue":
+            if node.ref_id not in existing_ids or node.ref_id in seen_issue_ids:
+                continue
+            seen_issue_ids.add(node.ref_id)
+        deduped.append(node)
+    return deduped
+
+
+async def _existing_issue_ids(
+    db: AsyncSession, issue_ids: Collection[int]
+) -> set[int]:
+    """Return the subset of ``issue_ids`` that exist as Issue rows."""
+    unique_ids = sorted({issue_id for issue_id in issue_ids if issue_id > 0})
+    if not unique_ids:
+        return set()
+    return set(
+        (await db.execute(select(Issue.id).where(Issue.id.in_(unique_ids)))).scalars().all()
+    )
+
+
+async def _roll_blocking_pairs_for_issues(
+    db: AsyncSession,
+    issue_ids: Collection[int],
+) -> tuple[tuple[int, int], ...]:
+    """Return live Roll-blocking pairs for Threads that own the given Issues."""
+    if not issue_ids:
+        return ()
+    thread_ids = set(
+        (
+            await db.execute(
+                select(Issue.thread_id).where(Issue.id.in_(list(issue_ids))).distinct()
+            )
+        ).scalars().all()
+    )
+    if not thread_ids:
+        return ()
+    rows = (
+        await db.execute(
+            select(Dependency.source_issue_id, Dependency.target_issue_id)
+            .join(Thread, Thread.next_unread_issue_id == Dependency.target_issue_id)
+            .join(Issue, Issue.id == Dependency.source_issue_id)
+            .where(
+                Thread.id.in_(list(thread_ids)),
+                Issue.status != "read",
+                or_(Dependency.note.is_(None), Dependency.note.not_like("cbl-order:%")),
+            )
+            .distinct()
+        )
+    ).all()
+    return tuple(sorted((int(source_id), int(target_id)) for source_id, target_id in rows))
+
+
+async def snapshot_plan_constraint_sets(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    membership_issue_ids: Collection[int] | None = None,
+) -> PlanConstraintSnapshot:
+    """Snapshot membership and blocker identity for one plan.
+
+    Args:
+        db: Async database session.
+        plan: Plan to inspect.
+        membership_issue_ids: Override the membership set (dry-run of an
+            intended JSON membership without writing ``reading_plan_issues``).
+
+    Returns:
+        Frozen membership and blocker tuples.
+    """
+    if membership_issue_ids is None:
+        member_ids = tuple(
+            await reading_plan_repository.distinct_plan_issue_ids(db, plan_id=plan.id)
+        )
+    else:
+        member_ids = tuple(sorted(membership_issue_ids))
+    marker = f"continuity-plan:{plan.id}"
+    owned = tuple(
+        sorted(
+            (int(rule.source_id), int(rule.target_id))
+            for rule in (
+                await db.execute(
+                    select(ContinuityRule).where(
+                        ContinuityRule.note == marker,
+                        ContinuityRule.satisfaction_type == "item_read",
+                    )
+                )
+            ).scalars().all()
+        )
+    )
+    linked = tuple(
+        sorted(
+            (int(source_id), int(target_id))
+            for source_id, target_id in (
+                await db.execute(
+                    select(Dependency.source_issue_id, Dependency.target_issue_id)
+                    .join(
+                        ReadingPlanDependency,
+                        ReadingPlanDependency.dependency_id == Dependency.id,
+                    )
+                    .where(ReadingPlanDependency.plan_id == plan.id)
+                )
+            ).all()
+        )
+    )
+    return PlanConstraintSnapshot(
+        membership_issue_ids=member_ids,
+        plan_owned_item_read_pairs=owned,
+        plan_linked_dependency_pairs=linked,
+        roll_blocking_pairs=await _roll_blocking_pairs_for_issues(db, member_ids),
+    )
+
+
+async def _projected_thread_entry_pairs(
+    db: AsyncSession,
+    nodes: list[ContinuityPlanNode],
+) -> tuple[tuple[int, int], ...]:
+    """Return thread-entry pairs JSON would compile, without compiling them."""
+    from app.services.strict_plan_constraints import (
+        load_issue_thread_index,
+        strict_plan_item_read_pairs,
+    )
+
+    issue_ids = [node.ref_id for node in nodes if node.node_type == "issue"]
+    index = await load_issue_thread_index(db, issue_ids)
+    return tuple(strict_plan_item_read_pairs(nodes, index))
+
+
+async def _membership_reconcile_inputs(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+) -> tuple[list[ContinuityPlanNode], set[int], tuple[int, ...], int, int]:
+    """Parse JSON membership intent and classify missing Issue refs.
+
+    Returns:
+        Deduped nodes for existing Issues, those Issue ids, dangling refs,
+        skipped non-issue node count, and invalid JSON row count.
+    """
+    nodes, invalid_node_count = parse_plan_nodes_json(plan.nodes_json)
+    skipped_non_issue = sum(1 for node in nodes if node.node_type != "issue")
+    issue_ids = sorted({node.ref_id for node in nodes if node.node_type == "issue"})
+    existing_ids = await _existing_issue_ids(db, issue_ids)
+    skipped_missing = tuple(
+        issue_id for issue_id in issue_ids if issue_id not in existing_ids
+    )
+    deduped = _dedupe_existing_issue_nodes(nodes, existing_ids)
+    return (
+        deduped,
+        existing_ids,
+        skipped_missing,
+        skipped_non_issue,
+        invalid_node_count,
+    )
+
+
+def _build_membership_report(
+    *,
+    plan_id: int,
+    before: PlanConstraintSnapshot,
+    after: PlanConstraintSnapshot,
+    skipped_missing: tuple[int, ...],
+    skipped_non_issue: int,
+    invalid_node_count: int,
+    projected_thread_entry_pairs: tuple[tuple[int, int], ...],
+) -> MembershipReconcileReport:
+    """Assemble a before/after membership report from two snapshots."""
+    before_set = set(before.membership_issue_ids)
+    after_set = set(after.membership_issue_ids)
+    return MembershipReconcileReport(
+        plan_id=plan_id,
+        membership_count=len(after.membership_issue_ids),
+        skipped_missing_issue_ids=skipped_missing,
+        skipped_non_issue_nodes=skipped_non_issue,
+        invalid_node_count=invalid_node_count,
+        inserted_issue_ids=tuple(sorted(after_set - before_set)),
+        removed_issue_ids=tuple(sorted(before_set - after_set)),
+        before=before,
+        after=after,
+        projected_thread_entry_pairs=projected_thread_entry_pairs,
+    )
+
+
+async def dry_run_plan_membership_reconcile(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+) -> MembershipReconcileReport:
+    """Report the JSON-vs-membership gap without writing any rows.
+
+    Args:
+        db: Async database session.
+        plan: Persisted plan to inspect.
+
+    Returns:
+        The same report shape as apply, with ``after`` projected from JSON.
+    """
+    before = await snapshot_plan_constraint_sets(db, plan=plan)
+    deduped, existing_ids, skipped_missing, skipped_non_issue, invalid = (
+        await _membership_reconcile_inputs(db, plan=plan)
+    )
+    after = await snapshot_plan_constraint_sets(
+        db,
+        plan=plan,
+        membership_issue_ids=existing_ids,
+    )
+    projected = await _projected_thread_entry_pairs(db, deduped)
+    return _build_membership_report(
+        plan_id=plan.id,
+        before=before,
+        after=after,
+        skipped_missing=skipped_missing,
+        skipped_non_issue=skipped_non_issue,
+        invalid_node_count=invalid,
+        projected_thread_entry_pairs=projected,
+    )
+
+
 async def reconcile_plan_membership_from_nodes(
     db: AsyncSession,
     *,
@@ -120,56 +412,33 @@ async def reconcile_plan_membership_from_nodes(
 ) -> MembershipReconcileReport:
     """Rebuild one plan's membership from persisted nodes, skipping missing Issues.
 
-    ``nodes_json`` is not rewritten. Issue nodes whose ``ref_id`` does not
-    exist cannot become membership rows (the Issue FK would fail) and are
-    reported so an authorized production repair can drop or rematerialize
-    them separately.
+    ``nodes_json`` is not rewritten and strict rules are not compiled. Issue
+    nodes whose ``ref_id`` does not exist cannot become membership rows (the
+    Issue FK would fail) and are reported so an authorized production repair
+    can drop or rematerialize them separately.
 
     Args:
         db: Async database session.
         plan: Persisted plan whose JSON membership may have drifted.
 
     Returns:
-        Counts of rebuilt membership rows and skipped/dangling node refs.
+        Before/after membership and blocker sets plus dangling node refs.
     """
-    nodes, invalid_node_count = parse_plan_nodes_json(plan.nodes_json)
-    skipped_non_issue = sum(1 for node in nodes if node.node_type != "issue")
-    issue_ids = sorted({node.ref_id for node in nodes if node.node_type == "issue"})
-    existing_ids: set[int] = set()
-    if issue_ids:
-        existing_ids = set(
-            (
-                await db.execute(select(Issue.id).where(Issue.id.in_(issue_ids)))
-            ).scalars().all()
-        )
-    skipped_missing = tuple(
-        issue_id for issue_id in issue_ids if issue_id not in existing_ids
+    before = await snapshot_plan_constraint_sets(db, plan=plan)
+    deduped, _existing_ids, skipped_missing, skipped_non_issue, invalid = (
+        await _membership_reconcile_inputs(db, plan=plan)
     )
-    valid_nodes = [
-        node
-        for node in nodes
-        if node.node_type != "issue" or node.ref_id in existing_ids
-    ]
-    # Duplicate issue refs in legacy JSON must not crash repair; keep the
-    # first occurrence so #3037 uniqueness still holds after rebuild.
-    deduped: list[ContinuityPlanNode] = []
-    seen_issue_ids: set[int] = set()
-    for node in valid_nodes:
-        if node.node_type == "issue":
-            if node.ref_id in seen_issue_ids:
-                continue
-            seen_issue_ids.add(node.ref_id)
-        deduped.append(node)
     await rebuild_plan_membership(db, plan_id=plan.id, nodes=deduped)
-    membership_ids = await reading_plan_repository.distinct_plan_issue_ids(
-        db, plan_id=plan.id
-    )
-    return MembershipReconcileReport(
+    after = await snapshot_plan_constraint_sets(db, plan=plan)
+    projected = await _projected_thread_entry_pairs(db, deduped)
+    return _build_membership_report(
         plan_id=plan.id,
-        membership_count=len(membership_ids),
-        skipped_missing_issue_ids=skipped_missing,
-        skipped_non_issue_nodes=skipped_non_issue,
-        invalid_node_count=invalid_node_count,
+        before=before,
+        after=after,
+        skipped_missing=skipped_missing,
+        skipped_non_issue=skipped_non_issue,
+        invalid_node_count=invalid,
+        projected_thread_entry_pairs=projected,
     )
 
 

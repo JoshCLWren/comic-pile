@@ -23,7 +23,10 @@ from app.models.reading_plan_membership import ReadingPlanIssue
 from app.models.thread import Thread
 from app.schemas.continuity_plan import ContinuityPlanNode
 from app.services.continuity_plan_writer import plan_rule_marker, replace_compiled_rules
-from app.services.reading_plan_normalization import reconcile_plan_membership_from_nodes
+from app.services.reading_plan_normalization import (
+    dry_run_plan_membership_reconcile,
+    reconcile_plan_membership_from_nodes,
+)
 from app.services.strict_plan_constraints import (
     IssueThreadIndex,
     load_issue_thread_index,
@@ -745,10 +748,25 @@ async def test_absolute_universe_membership_gap_and_dangling_node_reconcile(
     await async_db.commit()
     await async_db.refresh(plan)
 
+    dry = await dry_run_plan_membership_reconcile(async_db, plan=plan)
+    assert dry.inserted_issue_ids == (issues[1].id, issues[2].id)
+    assert dry.skipped_missing_issue_ids == (dangling_id,)
+    membership_before_dry = (
+        await async_db.execute(
+            select(ReadingPlanIssue.issue_id).where(ReadingPlanIssue.plan_id == plan.id)
+        )
+    ).scalars().all()
+    assert list(membership_before_dry) == [issues[0].id]
+
     report = await reconcile_plan_membership_from_nodes(async_db, plan=plan)
     await async_db.commit()
     assert report.skipped_missing_issue_ids == (dangling_id,)
     assert report.membership_count == 3
+    assert report.inserted_issue_ids == (issues[1].id, issues[2].id)
+    assert report.removed_issue_ids == ()
+    assert report.before.plan_owned_item_read_pairs == ()
+    assert report.after.plan_owned_item_read_pairs == ()
+    assert report.before.roll_blocking_pairs == report.after.roll_blocking_pairs
     rows = (
         await async_db.execute(
             select(ReadingPlanIssue.issue_id)
@@ -771,6 +789,177 @@ async def test_absolute_universe_membership_gap_and_dangling_node_reconcile(
     )
     await async_db.commit()
     assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan.id) == set()
+
+
+@pytest.mark.asyncio
+async def test_absolute_universe_membership_repair_does_not_compile_restrictions(
+    async_db: AsyncSession,
+) -> None:
+    """#3486: JSON is intended membership; repair must not re-save into blockers.
+
+    Production plan 20 has 105 JSON issue nodes and 76 membership rows. The
+    missing 29 are the tail, including later series starts. Re-saving the
+    whole JSON through the old adjacent compiler would emit a blocker per
+    hop. This repair copies existing Issue refs into membership only.
+    """
+    user = await get_or_create_user_async(async_db)
+    batman, batman_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Batman",
+        numbers=["18", "19", "20"],
+        queue_position=1,
+        read_through=3,
+    )
+    green_arrow, ga_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Green Arrow",
+        numbers=["1", "2", "3"],
+        queue_position=2,
+        read_through=1,
+    )
+    catwoman, catwoman_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Catwoman",
+        numbers=["1", "2", "3"],
+        queue_position=3,
+    )
+    cassandra, cassandra_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Cassandra Cain: The Shadow's Hand",
+        numbers=["1"],
+        queue_position=4,
+    )
+    genuine = Dependency(
+        source_issue_id=catwoman_issues[2].id,
+        target_issue_id=cassandra_issues[0].id,
+        note="Read Absolute Catwoman #3 before Absolute Cassandra Cain #1.",
+    )
+    async_db.add(genuine)
+    await async_db.flush()
+    # First 76 analog: only Batman is in the membership table.
+    json_issues = batman_issues + ga_issues + catwoman_issues + cassandra_issues
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Absolute Universe",
+        ordering_mode="strict_sequential",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[
+            {
+                "id": f"issue-{issue.id}",
+                "node_type": "issue",
+                "ref_id": issue.id,
+                "lane_id": "main",
+                "position": position,
+            }
+            for position, issue in enumerate(json_issues)
+        ],
+    )
+    async_db.add(plan)
+    await async_db.flush()
+    for position, issue in enumerate(batman_issues):
+        async_db.add(
+            ReadingPlanIssue(
+                plan_id=plan.id,
+                occurrence_id=f"issue-{issue.id}",
+                issue_id=issue.id,
+                lane_id="main",
+                display_position=position,
+                is_checkpoint=False,
+            )
+        )
+    adjacent = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=batman_issues[0].id,
+        target_type="issue",
+        target_id=batman_issues[1].id,
+        satisfaction_type="item_read",
+        note=plan_rule_marker(plan.id),
+    )
+    async_db.add(adjacent)
+    await async_db.commit()
+    await async_db.refresh(plan)
+    await refresh_user_blocked_status(user.id, async_db)
+
+    roll_before = await _roll_ids(user.id, async_db)
+    assert green_arrow.id in roll_before
+    assert catwoman.id in roll_before
+    assert cassandra.id not in roll_before
+    assert batman.id not in roll_before or batman.issues_remaining == 0
+
+    dry = await dry_run_plan_membership_reconcile(async_db, plan=plan)
+    assert dry.before.membership_issue_ids == tuple(
+        issue.id for issue in batman_issues
+    )
+    missing = tuple(issue.id for issue in ga_issues + catwoman_issues + cassandra_issues)
+    assert dry.inserted_issue_ids == missing
+    assert dry.after.plan_owned_item_read_pairs == dry.before.plan_owned_item_read_pairs
+    assert dry.after.plan_owned_item_read_pairs == (
+        (batman_issues[0].id, batman_issues[1].id),
+    )
+    assert dry.after.roll_blocking_pairs == (
+        (catwoman_issues[2].id, cassandra_issues[0].id),
+    )
+    assert dry.before.roll_blocking_pairs == ()
+    still_one_member_row = (
+        await async_db.execute(
+            select(ReadingPlanIssue).where(ReadingPlanIssue.plan_id == plan.id)
+        )
+    ).scalars().all()
+    assert len(still_one_member_row) == 3
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan.id) == {
+        (batman_issues[0].id, batman_issues[1].id),
+    }
+
+    report = await reconcile_plan_membership_from_nodes(async_db, plan=plan)
+    await async_db.commit()
+    assert report.inserted_issue_ids == missing
+    assert report.removed_issue_ids == ()
+    assert report.membership_count == 10
+    assert report.after.plan_owned_item_read_pairs == report.before.plan_owned_item_read_pairs
+    assert report.after.plan_linked_dependency_pairs == ()
+    assert report.after.roll_blocking_pairs == (
+        (catwoman_issues[2].id, cassandra_issues[0].id),
+    )
+    refreshed = await async_db.get(ContinuityPlan, plan.id)
+    assert refreshed is not None
+    assert len(refreshed.nodes_json) == 10
+    assert refreshed.ordering_mode == "strict_sequential"
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan.id) == {
+        (batman_issues[0].id, batman_issues[1].id),
+    }
+
+    roll_after = await _roll_ids(user.id, async_db)
+    assert green_arrow.id in roll_after
+    assert catwoman.id in roll_after
+    assert cassandra.id not in roll_after
+    # Projected compile is thread-entry, not one blocker per JSON hop.
+    assert (ga_issues[0].id, ga_issues[1].id) not in report.projected_thread_entry_pairs
+    assert (catwoman_issues[0].id, cassandra_issues[0].id) not in (
+        report.projected_thread_entry_pairs
+    )
+    assert (batman_issues[-1].id, ga_issues[0].id) in report.projected_thread_entry_pairs
+    assert (ga_issues[-1].id, catwoman_issues[0].id) in report.projected_thread_entry_pairs
+
+    await replace_compiled_rules(
+        async_db,
+        user_id=user.id,
+        plan=plan,
+        nodes=_nodes(json_issues),
+        ordering_mode="strict_sequential",
+    )
+    await async_db.commit()
+    compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan.id)
+    assert (ga_issues[0].id, ga_issues[1].id) not in compiled
+    assert (batman_issues[0].id, batman_issues[1].id) not in compiled
+    assert compiled == set(report.projected_thread_entry_pairs)
+    roll_compiled = await _roll_ids(user.id, async_db)
+    assert green_arrow.id in roll_compiled
+    assert cassandra.id not in roll_compiled
 
 
 @pytest.mark.asyncio
