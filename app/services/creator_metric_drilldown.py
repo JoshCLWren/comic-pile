@@ -30,6 +30,7 @@ from app.repositories.creator_detail import (
 from app.repositories.creator_summary import load_creator_summary_inputs
 from app.services.creator_detail import resolve_creator_issues
 from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
+from app.services.read_without_rating_audit import classify_issue_ids
 
 
 async def _load_creator_issue_dicts(
@@ -67,6 +68,16 @@ async def _load_creator_issue_dicts(
     timestamps = await load_latest_rating_timestamps(
         db, issue_ids=[issue_id for issue_id, _, _, _, _ in rows]
     )
+    causes = await classify_issue_ids(
+        db,
+        user_id,
+        [
+            issue_id
+            for issue_id, _, _, _, status in rows
+            if status == "read" and inputs.effective_ratings.get(issue_id) is None
+        ],
+        inputs=inputs,
+    )
     issue_dicts: list[dict] = []
     for issue_id, issue_number, thread_id, thread_title, status in rows:
         credits = inputs.issue_creator_credits.get(issue_id, ())
@@ -85,6 +96,7 @@ async def _load_creator_issue_dicts(
             for role in credit.roles
         )
         timestamp = timestamps.get(issue_id)
+        cause = causes.get(issue_id)
         issue_dicts.append(
             {
                 "issue_id": issue_id,
@@ -97,6 +109,7 @@ async def _load_creator_issue_dicts(
                 "effective_rating_timestamp": timestamp.isoformat() if timestamp else None,
                 "creator_roles": roles,
                 "headline_eligible": headline_eligible,
+                "missing_rating_cause": cause.cause if cause is not None else None,
             }
         )
     return issue_dicts
@@ -917,4 +930,6 @@ def _create_metric_issue(issue_data: dict, exclusion_reason: str | None = None) 
         effective_rating_timestamp=issue_data.get("effective_rating_timestamp"),
         creator_roles=issue_data.get("creator_roles", []),
         exclusion_reason=exclusion_reason,
+        missing_rating_cause=issue_data.get("missing_rating_cause"),
     )
+
