@@ -1222,9 +1222,9 @@ async def roll_bootstrap(
                     RollBootstrapThread(id=row.id, title=row.title, format=normalized_format)
                 )
             
-            # Check for stale threads
+            # Check for stale threads (exclude snoozed/skipped)
             thread_activity = row.last_activity_at or row.created_at
-            if thread_activity and thread_activity < stale_cutoff:
+            if thread_activity and thread_activity < stale_cutoff and row.id not in effective_snoozed_ids and row.id not in skipped_ids:
                 stale_thread_ids.append(row.id)
                 
         elif row.status == "completed":
