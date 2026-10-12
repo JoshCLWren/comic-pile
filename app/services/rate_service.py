@@ -8,6 +8,7 @@ mapping lives in routers.
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_rating_settings
@@ -16,7 +17,6 @@ from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.repositories.issue_repository import (
     exists_read_at_or_after,
-    first_unread,
     find_in_thread_by_number,
     get_issue,
     issues_for_threads,
@@ -451,40 +451,48 @@ async def rate_thread(
 
     if thread.uses_issue_tracking():
         if thread.next_unread_issue_id:
-            issue = await get_issue(db, thread.next_unread_issue_id)
-            if issue and issue.status == "unread":
-                issue.status = "read"
-                issue.read_at = datetime.now(UTC)
-                rated_issue_id = issue.id
-                rated_issue_number = issue.issue_number
-                issues_read = 1
+            result = await db.execute(
+                select(Issue)
+                .where(Issue.thread_id == thread.id, Issue.status == "unread")
+                .order_by(Issue.position)
+                .limit(2)
+            )
+            issues = result.scalars().all()
+            if issues:
+                issue = issues[0]
+                if issue.id == thread.next_unread_issue_id:
+                    issue.status = "read"
+                    issue.read_at = datetime.now(UTC)
+                    rated_issue_id = issue.id
+                    rated_issue_number = issue.issue_number
+                    issues_read = 1
 
-                next_issue = await first_unread(db, thread.id)
-                if next_issue:
-                    thread.next_unread_issue_id = next_issue.id
-                    thread.reading_progress = "in_progress"
-                    # Positional shortcut: count remaining from the next
-                    # unread's position. It is sound only while every issue
-                    # at positions >= next_issue.position is unread. A manual
-                    # reorder can seat a read issue above unread ones
-                    # (issue #3104), so probe the invariant and fall back
-                    # to the exact unread COUNT when it does not hold.
-                    if (
-                        thread.total_issues is not None
-                        and not await exists_read_at_or_after(
-                            db, thread.id, next_issue.position
-                        )
-                    ):
-                        thread.issues_remaining = (
-                            thread.total_issues - next_issue.position + 1
-                        )
+                    next_issue = issues[1] if len(issues) > 1 else None
+                    if next_issue:
+                        thread.next_unread_issue_id = next_issue.id
+                        thread.reading_progress = "in_progress"
+                        # Positional shortcut: count remaining from the next
+                        # unread's position. It is sound only while every issue
+                        # at positions >= next_issue.position is unread. A manual
+                        # reorder can seat a read issue above unread ones
+                        # (issue #3104), so probe the invariant and fall back
+                        # to the exact unread COUNT when it does not hold.
+                        if (
+                            thread.total_issues is not None
+                            and not await exists_read_at_or_after(
+                                db, thread.id, next_issue.position
+                            )
+                        ):
+                            thread.issues_remaining = (
+                                thread.total_issues - next_issue.position + 1
+                            )
+                        else:
+                            thread.issues_remaining = await thread.get_issues_remaining(db)
                     else:
-                        thread.issues_remaining = await thread.get_issues_remaining(db)
-                else:
-                    thread.next_unread_issue_id = None
-                    thread.reading_progress = "completed"
-                    thread.status = "completed"
-                    thread.issues_remaining = 0
+                        thread.next_unread_issue_id = None
+                        thread.reading_progress = "completed"
+                        thread.status = "completed"
+                        thread.issues_remaining = 0
 
         thread_issues_remaining = thread.issues_remaining
     else:
