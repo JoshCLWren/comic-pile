@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -74,6 +75,10 @@ class CreatorSummaryInputs:
             confirmed creator credit.
         effective_ratings: Mapping of owned issue id to its latest effective
             ``rate`` event rating (latest event by timestamp/id wins).
+        effective_rating_timestamps: Mapping of the same owned issue id to the
+            timestamp of that same winning ``rate`` event. Both mappings are
+            projected from one ``DISTINCT ON`` read so a rating can never be
+            paired with another event's timestamp (issue #3247).
     """
 
     owned_issues: dict[int, str] = field(default_factory=dict)
@@ -81,6 +86,7 @@ class CreatorSummaryInputs:
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = field(default_factory=dict)
     issues_with_creator_metadata: frozenset[int] = field(default_factory=frozenset)
     effective_ratings: dict[int, float] = field(default_factory=dict)
+    effective_rating_timestamps: dict[int, datetime] = field(default_factory=dict)
 
 
 def _coerce_creator_id(value: object) -> int | None:
@@ -280,7 +286,7 @@ async def load_creator_summary_inputs(
 ) -> CreatorSummaryInputs:
     """Load every user-scoped input needed for one bounded batch aggregation.
 
-    The batch is served by exactly four queries no matter how many creator
+    The batch is served by exactly three queries no matter how many creator
     keys are requested:
 
     1. the authenticated user's owned issues, their read/unread status, and
@@ -288,8 +294,11 @@ async def load_creator_summary_inputs(
     2. the confirmed ``creator_credits`` key of ComicVine issue metadata for
        those issues, projected in SQL so the retained raw provider payload is
        never hydrated for a creator read (issue #3244);
-    3. manual thread-level creator credits for threads without issue metadata;
-    4. the latest effective ``rate`` event rating per owned issue.
+    3. the latest effective ``rate`` event rating *and* its timestamp per owned
+       issue, collapsed to one row per issue in SQL.
+
+    Manual thread-level creator credits are folded into the owned-issue read in
+    Python, so they add no round trip.
 
     Args:
         db: Async database session.
@@ -374,9 +383,11 @@ async def load_creator_summary_inputs(
     # owned issue inside the database. ``distinct(Event.issue_id)`` would render
     # the same SQL but is deprecated on SQLAlchemy 2.1 and emits
     # ``SADeprecationWarning``; ``postgresql.distinct_on`` applied as a
-    # statement extension is the supported spelling.
+    # statement extension is the supported spelling. The winning event's
+    # timestamp rides along on the same row so detail collections never need a
+    # second rating-timestamp round trip (issue #3247).
     rate_result = await db.execute(
-        select(Event.issue_id, Event.rating)
+        select(Event.issue_id, Event.rating, Event.timestamp)
         .join(Issue, Issue.id == Event.issue_id)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
@@ -386,9 +397,14 @@ async def load_creator_summary_inputs(
         .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
         .ext(distinct_on(Event.issue_id))
     )
-    effective_ratings: dict[int, float] = {
-        int(issue_id): float(rating) for issue_id, rating in rate_result.all() if issue_id is not None
-    }
+    effective_ratings: dict[int, float] = {}
+    effective_rating_timestamps: dict[int, datetime] = {}
+    for issue_id, rating, rating_timestamp in rate_result.all():
+        if issue_id is None:
+            continue
+        effective_ratings[int(issue_id)] = float(rating)
+        if rating_timestamp is not None:
+            effective_rating_timestamps[int(issue_id)] = rating_timestamp
 
     return CreatorSummaryInputs(
         owned_issues=owned_issues,
@@ -396,145 +412,8 @@ async def load_creator_summary_inputs(
         issue_creator_credits=issue_creator_credits,
         issues_with_creator_metadata=frozenset(issues_with_creator_metadata),
         effective_ratings=effective_ratings,
+        effective_rating_timestamps=effective_rating_timestamps,
     )
-
-
-async def load_creator_summary_inputs_optimized(
-    db: AsyncSession,
-    user_id: int,
-    creator_id: int | None = None,
-) -> tuple[CreatorSummaryInputs, frozenset[int], set[str], str]:
-    """Optimized version that loads inputs and resolves creator issues in fewer queries.
-    
-    This optimized version consolidates the creator issue resolution into the
-    main query flow to reduce database round trips.
-    
-    Args:
-        db: Async database session.
-        user_id: Authenticated user whose library is aggregated.
-        creator_id: Optional specific creator ID to resolve issues for.
-        
-    Returns:
-        Tuple of (CreatorSummaryInputs, creator_issue_ids, creator_roles, display_name).
-    """
-    # 1. Owned issues, statuses, and stable local series identity - same as before
-    issue_result = await db.execute(
-        select(Issue.id, Issue.status, Issue.thread_id, Thread.title, Thread.manual_creator_credits)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(Thread.user_id == user_id)
-    )
-    owned_issues: dict[int, str] = {}
-    owned_issue_series: dict[int, OwnedIssueSeries] = {}
-    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
-    for issue_id, status, thread_id, thread_title, manual_credits in issue_result.all():
-        owned_issue_id = int(issue_id)
-        owned_issues[owned_issue_id] = str(status)
-        owned_issue_series[owned_issue_id] = OwnedIssueSeries(
-            thread_id=int(thread_id),
-            thread_title=str(thread_title),
-        )
-        thread_id_int = int(thread_id)
-        if manual_credits and thread_id_int not in thread_manual_credits:
-            thread_manual_credits[thread_id_int] = manual_credits
-
-    # 2. Confirmed creator credits per owned issue (ComicVine)
-    metadata_result = await db.execute(
-        select(Issue.id, ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY])
-        .join(Thread, Thread.id == Issue.thread_id)
-        .join(
-            IssueExternalIdentityMapping,
-            IssueExternalIdentityMapping.issue_id == Issue.id,
-        )
-        .join(
-            ExternalIdentity,
-            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
-        )
-        .where(Thread.user_id == user_id)
-        .where(IssueExternalIdentityMapping.status == "confirmed")
-        .where(ExternalIdentity.provider == COMICVINE_PROVIDER)
-    )
-    per_issue_credits: dict[int, dict[tuple[int, tuple[str, ...]], CreatorCredit]] = {}
-    issues_with_creator_metadata: set[int] = set()
-    for issue_id, raw_credits in metadata_result.all():
-        credits = extract_creator_credit_list(raw_credits)
-        owned_issue_id = int(issue_id)
-        if credits:
-            issues_with_creator_metadata.add(owned_issue_id)
-        by_key = per_issue_credits.setdefault(owned_issue_id, {})
-        for credit in credits:
-            by_key.setdefault((credit.external_id, credit.roles), credit)
-
-    # 3. Manual thread-level creator credits for issues without ComicVine metadata
-    for issue_id, series in owned_issue_series.items():
-        if issue_id in issues_with_creator_metadata:
-            continue
-        manual_credits = thread_manual_credits.get(series.thread_id, [])
-        if manual_credits:
-            credits = extract_manual_creator_credits(manual_credits)
-            if credits:
-                issues_with_creator_metadata.add(issue_id)
-                by_key = per_issue_credits.setdefault(issue_id, {})
-                for credit in credits:
-                    by_key.setdefault((credit.external_id, credit.roles), credit)
-
-    issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = {
-        issue_id: tuple(
-            sorted(by_key.values(), key=lambda credit: (credit.external_id, credit.roles))
-        )
-        for issue_id, by_key in per_issue_credits.items()
-    }
-
-    # 4. Latest effective rating per owned issue
-    rate_result = await db.execute(
-        select(Event.issue_id, Event.rating)
-        .join(Issue, Issue.id == Event.issue_id)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(Thread.user_id == user_id)
-        .where(Event.type == "rate")
-        .where(Event.issue_id.is_not(None))
-        .where(Event.rating.is_not(None))
-        .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
-        .ext(distinct_on(Event.issue_id))
-    )
-    effective_ratings: dict[int, float] = {
-        int(issue_id): float(rating) for issue_id, rating in rate_result.all() if issue_id is not None
-    }
-
-    # 5. Resolve creator issues if creator_id is provided
-    creator_issue_ids: frozenset[int] = frozenset()
-    creator_roles: set[str] = set()
-    display_name: str = ""
-    
-    if creator_id is not None:
-        issue_ids_temp: set[int] = set()
-        roles_temp: set[str] = set()
-        display_name_temp: str | None = None
-        
-        for issue_id, credits in issue_creator_credits.items():
-            for credit in credits:
-                if credit.external_id != creator_id:
-                    continue
-                issue_ids_temp.add(issue_id)
-                roles_temp.update(credit.roles)
-                if display_name_temp is None:
-                    display_name_temp = credit.display_name
-        
-        if display_name_temp is None:
-            raise KeyError(f"Creator {creator_id} not found in user's library")
-            
-        creator_issue_ids = frozenset(issue_ids_temp)
-        creator_roles = roles_temp
-        display_name = display_name_temp
-
-    inputs = CreatorSummaryInputs(
-        owned_issues=owned_issues,
-        owned_issue_series=owned_issue_series,
-        issue_creator_credits=issue_creator_credits,
-        issues_with_creator_metadata=frozenset(issues_with_creator_metadata),
-        effective_ratings=effective_ratings,
-    )
-    
-    return inputs, creator_issue_ids, creator_roles, display_name
 
 
 __all__ = [
@@ -548,6 +427,5 @@ __all__ = [
     "extract_creator_credits",
     "extract_manual_creator_credits",
     "load_creator_summary_inputs",
-    "load_creator_summary_inputs_optimized",
     "manual_creator_id",
 ]
