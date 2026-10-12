@@ -902,9 +902,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                     },
                 )
             finally:
-                # Auto-file startup performance incidents (issue #3245) whether
-                # or not the hard budget fails initialization. Evaluation is
-                # synchronous and filing is bounded background work.
+                # Startup readiness samples are evaluated for telemetry but do
+                # not file issues (issue #3552). Cold-start work is tracked
+                # separately.
                 try:
                     from app.services import performance_issue_service as perf_issues
 

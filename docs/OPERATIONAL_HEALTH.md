@@ -25,3 +25,14 @@ Structured logs emit the aggregate status, each dependency status, each dependen
 ## Regression thresholds
 
 Investigate repeated database or cache probe durations above 500 ms while warm. A timeout always warrants investigation. Cold invocations may be slower, but the endpoint remains bounded and identifies the dependency responsible rather than allowing one hung provider to consume the whole monitoring request.
+
+## Performance alarm
+
+Production request timings can open factory GitHub issues through `app/services/performance_issue_service.py` (issues #3245 and #3552). The alarm is noise-controlled:
+
+- **Fingerprint.** One open issue per `kind + method + route template`. Warm/cold, workload class (db-heavy / app-heavy / mixed), and dominant phase are sample evidence, not separate issues. A new over-budget sample on an existing open issue adds a comment (duration, warm/cold, DB queries/time, request id, deployment) and increments the occurrence count.
+- **Never file under budget.** Timings at or under the 1000 ms route budget never open an issue. 500-999 ms warnings are recorded locally only. Issue titles never show a duration below the budget.
+- **Ignore cold starts.** `warm/cold: cold` requests and `startup.*` readiness samples do not count toward filing. They are logged separately for the cold-start work tracked in issues 3479 and 3480.
+- **Daily breach threshold.** A route files only after **N** warm over-budget hits in the same UTC day. N defaults to **3** and is set with `PERF_ALARM_DAILY_BREACH_THRESHOLD` (1-100). Closed-issue regressions use the same threshold: a previously fixed route must breach N times again before a new issue is filed.
+
+Readiness-critical coroutine hard timeouts still file immediately unless that coroutine signature already has an open issue. GitHub API failure is logged and never fails the user request.

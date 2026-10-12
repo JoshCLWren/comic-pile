@@ -11,44 +11,20 @@ from app.services import performance_issue_service as perf_issues
 @pytest.fixture(autouse=True)
 def _clean_tracker():
     """Isolate process-local performance issue state between tests."""
+    from app.config import clear_settings_cache
+
     perf_issues.reset_for_tests()
+    clear_settings_cache()
     yield
     perf_issues.reset_for_tests()
+    clear_settings_cache()
 
 
-class TestImmediateViolationFiling:
-    """Warm requests at or above 1000 ms file immediately."""
-
-    def test_violation_files_immediately(self) -> None:
-        """A >=1 s warm request returns a high-priority file decision."""
-        decision = perf_issues.evaluate_request_event(
-            method="GET",
-            route_template="/api/v1/creators",
-            duration_ms=1472.44,
-            cold=False,
-        )
-
-        assert decision is not None
-        assert decision.action == "file"
-        assert decision.high_priority is True
-        assert "1000" in decision.reason or "immediately" in decision.reason
-
-    def test_sub_violation_warning_does_not_file_immediately(self) -> None:
-        """A single 500-999 ms warning only accumulates."""
-        decision = perf_issues.evaluate_request_event(
-            method="GET",
-            route_template="/api/v1/creators",
-            duration_ms=750.0,
-            cold=False,
-            now=1_000_000.0,
-        )
-
-        assert decision is not None
-        assert decision.action == "accumulate"
-        assert decision.high_priority is False
+class TestNeverFileUnderBudget:
+    """Measurements at or under the route budget never open an issue."""
 
     def test_healthy_request_returns_no_decision(self) -> None:
-        """A request inside budget produces no filing decision."""
+        """A request inside the warning band produces no filing decision."""
         assert (
             perf_issues.evaluate_request_event(
                 method="GET",
@@ -59,87 +35,313 @@ class TestImmediateViolationFiling:
             is None
         )
 
-
-class TestWarningAccumulation:
-    """Repeated 500-999 ms warnings file at the defined frequency thresholds."""
-
-    def test_three_warnings_within_ten_minutes_file(self) -> None:
-        """3 warnings on the same route within 10 minutes file an issue."""
-        base = 2_000_000.0
+    def test_warning_under_budget_never_files(self) -> None:
+        """500-999 ms warnings accumulate only, even after many repeats."""
+        base = 1_000_000.0
         actions = [
             perf_issues.evaluate_request_event(
                 method="GET",
                 route_template="/api/v1/creators",
-                duration_ms=600.0,
+                duration_ms=575.0,
                 cold=False,
-                now=base + offset,
+                now=base + i,
             )
-            for offset in (0.0, 120.0, 240.0)
+            for i in range(10)
         ]
 
-        assert [d.action if d else None for d in actions] == [
-            "accumulate",
-            "accumulate",
-            "file",
-        ]
-        assert actions[2] is not None and actions[2].high_priority is False
+        assert all(d is not None and d.action == "accumulate" for d in actions)
 
-    def test_five_warnings_within_one_hour_file(self) -> None:
-        """5 warnings on the same route within 1 hour file an issue."""
-        base = 3_000_000.0
-        # Spaced 12 minutes apart: never 3 within 10 minutes, but 5 within 1 hour.
+    def test_at_budget_never_files(self) -> None:
+        """A timing exactly at the 1000 ms budget never opens an issue."""
+        base = 1_100_000.0
         actions = [
             perf_issues.evaluate_request_event(
                 method="GET",
-                route_template="/api/v1/threads",
-                duration_ms=600.0,
+                route_template="/api/v1/identity-inbox",
+                duration_ms=1000.0,
                 cold=False,
-                now=base + i * 720.0,
+                now=base + i,
             )
             for i in range(5)
         ]
 
+        assert all(d is not None and d.action == "accumulate" for d in actions)
+
+    def test_title_never_shows_duration_below_budget(self) -> None:
+        """Issue titles clamp displayed duration to at least the route budget."""
+        title = perf_issues.build_issue_title(
+            kind="request",
+            method="GET",
+            route_template="/api/v1/roll/bootstrap",
+            duration_ms=575.0,
+        )
+
+        assert "575" not in title
+        assert "budget 1000ms" in title
+        assert "took 1000ms" in title
+
+
+class TestColdStartsIgnored:
+    """Cold-start and startup readiness samples never count toward filing."""
+
+    def test_cold_over_budget_is_ignored(self) -> None:
+        """Cold over-budget hits do not file even after N repeats."""
+        base = 2_000_000.0
+        actions = [
+            perf_issues.evaluate_request_event(
+                method="GET",
+                route_template="/api/v1/roll/bootstrap",
+                duration_ms=3500.0,
+                cold=True,
+                now=base + i,
+            )
+            for i in range(5)
+        ]
+
+        assert all(d is not None and d.action == "ignore" for d in actions)
+
+    def test_cold_hits_do_not_count_toward_warm_threshold(self) -> None:
+        """Cold samples do not advance the warm daily breach counter."""
+        base = 2_100_000.0
+        for i in range(5):
+            perf_issues.evaluate_request_event(
+                method="GET",
+                route_template="/api/v1/roll/bootstrap",
+                duration_ms=2500.0,
+                cold=True,
+                now=base + i,
+            )
+        first_warm = perf_issues.evaluate_request_event(
+            method="GET",
+            route_template="/api/v1/roll/bootstrap",
+            duration_ms=1500.0,
+            cold=False,
+            now=base + 10,
+        )
+
+        assert first_warm is not None
+        assert first_warm.action == "accumulate"
+
+    def test_startup_readiness_is_ignored(self) -> None:
+        """startup.* readiness samples never file, however slow."""
+        slow = perf_issues.evaluate_startup_event(
+            duration_ms=72420.56, operation="startup.readiness"
+        )
+        warning = perf_issues.evaluate_startup_event(
+            duration_ms=2100.0, operation="startup.readiness", now=6_000_000.0
+        )
+
+        assert slow is not None and slow.action == "ignore"
+        assert warning is not None and warning.action == "ignore"
+
+    def test_handle_startup_telemetry_does_not_schedule(self) -> None:
+        """Startup telemetry logs and never schedules a GitHub issue."""
+        with patch.object(perf_issues, "schedule_filing", new=MagicMock()) as mock_schedule:
+            perf_issues.handle_startup_telemetry(
+                duration_ms=72420.56,
+                operation="startup.readiness",
+                deployment_id="dpl_1",
+            )
+
+        mock_schedule.assert_not_called()
+
+
+class TestDailyBreachThreshold:
+    """A route files only after N warm over-budget hits in a UTC day."""
+
+    def test_n_minus_one_breaches_do_not_file(self) -> None:
+        """Default N=3: the first two over-budget hits only accumulate."""
+        base = 3_000_000.0
+        actions = [
+            perf_issues.evaluate_request_event(
+                method="GET",
+                route_template="/api/v1/creators",
+                duration_ms=1472.44,
+                cold=False,
+                now=base + i,
+            )
+            for i in range(2)
+        ]
+
         assert [d.action if d else None for d in actions] == [
             "accumulate",
             "accumulate",
+        ]
+
+    def test_nth_breach_files(self) -> None:
+        """Default N=3: the third warm over-budget hit files."""
+        base = 3_100_000.0
+        actions = [
+            perf_issues.evaluate_request_event(
+                method="GET",
+                route_template="/api/v1/creators",
+                duration_ms=1500.0,
+                cold=False,
+                now=base + i,
+            )
+            for i in range(3)
+        ]
+
+        assert [d.action if d else None for d in actions] == [
             "accumulate",
             "accumulate",
             "file",
         ]
+        assert actions[2] is not None and actions[2].high_priority is True
 
-    def test_warnings_on_different_routes_do_not_combine(self) -> None:
-        """Warnings accumulate per normalized route, not globally."""
-        base = 4_000_000.0
+    def test_new_utc_day_resets_threshold(self) -> None:
+        """Hits from yesterday do not count toward today's N."""
+        from datetime import UTC, datetime
+
+        day1 = datetime(2026, 10, 12, tzinfo=UTC).timestamp()
+        day2 = datetime(2026, 10, 13, tzinfo=UTC).timestamp()
         for i in range(2):
             decision = perf_issues.evaluate_request_event(
                 method="GET",
                 route_template="/api/v1/creators",
-                duration_ms=600.0,
+                duration_ms=1500.0,
                 cold=False,
-                now=base + i * 60.0,
+                now=day1 + i,
+            )
+            assert decision is not None and decision.action == "accumulate"
+        first_new_day = perf_issues.evaluate_request_event(
+            method="GET",
+            route_template="/api/v1/creators",
+            duration_ms=1500.0,
+            cold=False,
+            now=day2,
+        )
+        assert first_new_day is not None and first_new_day.action == "accumulate"
+        actions = [
+            perf_issues.evaluate_request_event(
+                method="GET",
+                route_template="/api/v1/creators",
+                duration_ms=1500.0,
+                cold=False,
+                now=day2 + i,
+            )
+            for i in range(1, 3)
+        ]
+        assert [d.action if d else None for d in actions] == ["accumulate", "file"]
+
+    def test_different_routes_do_not_combine(self) -> None:
+        """Daily hits accumulate per method+route fingerprint, not globally."""
+        base = 3_200_000.0
+        for i in range(2):
+            decision = perf_issues.evaluate_request_event(
+                method="GET",
+                route_template="/api/v1/creators",
+                duration_ms=1500.0,
+                cold=False,
+                now=base + i,
             )
             assert decision is not None and decision.action == "accumulate"
         other = perf_issues.evaluate_request_event(
             method="GET",
             route_template="/api/v1/threads",
-            duration_ms=600.0,
+            duration_ms=1500.0,
             cold=False,
-            now=base + 120.0,
+            now=base + 2,
         )
         assert other is not None and other.action == "accumulate"
 
+    def test_closed_issue_regression_uses_same_threshold(self) -> None:
+        """After a close, a route must hit N warm over-budget samples again."""
+        base = 3_300_000.0
+        filed = None
+        for i in range(3):
+            filed = perf_issues.evaluate_request_event(
+                method="GET",
+                route_template="/api/v1/creators",
+                duration_ms=1600.0,
+                cold=False,
+                now=base + i,
+            )
+        assert filed is not None and filed.action == "file"
+        tracker = perf_issues.get_tracker()
+        tracker.mark_open(filed.fingerprint, 111)
+        tracker.mark_closed(filed.fingerprint, 111)
 
-class TestFingerprintDedupe:
-    """Identical repeated events update evidence instead of duplicating issues."""
-
-    def test_repeat_violation_for_open_fingerprint_updates(self) -> None:
-        """A repeat violation for a known open issue updates instead of filing."""
-        first = perf_issues.evaluate_request_event(
+        first_after_close = perf_issues.evaluate_request_event(
             method="GET",
             route_template="/api/v1/creators",
-            duration_ms=1500.0,
+            duration_ms=1700.0,
             cold=False,
+            now=base + 10,
         )
+        assert first_after_close is not None
+        assert first_after_close.action == "accumulate"
+
+        body = perf_issues.build_issue_body(
+            kind="request",
+            fingerprint=filed.fingerprint,
+            canonical=filed.canonical,
+            method="GET",
+            route_template="/api/v1/creators",
+            duration_ms=1700.0,
+            threshold_ms=1000.0,
+            event_label="violation",
+            prior_issue=111,
+        )
+        assert "#111" in body
+        assert "Regression" in body
+
+
+class TestConfigOverride:
+    """PERF_ALARM_DAILY_BREACH_THRESHOLD changes the filing threshold."""
+
+    def test_default_threshold_is_three(self) -> None:
+        """Documented default N is 3."""
+        assert perf_issues.daily_breach_threshold() == 3
+        assert perf_issues.DEFAULT_DAILY_BREACH_THRESHOLD == 3
+
+    def test_env_override_requires_five_hits(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """N=5 via env: four over-budget hits do not file, the fifth does."""
+        monkeypatch.setenv("PERF_ALARM_DAILY_BREACH_THRESHOLD", "5")
+        from app.config import clear_settings_cache
+
+        clear_settings_cache()
+        try:
+            assert perf_issues.daily_breach_threshold() == 5
+            base = 4_000_000.0
+            actions = [
+                perf_issues.evaluate_request_event(
+                    method="GET",
+                    route_template="/api/v1/creators",
+                    duration_ms=1500.0,
+                    cold=False,
+                    now=base + i,
+                )
+                for i in range(5)
+            ]
+            assert [d.action if d else None for d in actions] == [
+                "accumulate",
+                "accumulate",
+                "accumulate",
+                "accumulate",
+                "file",
+            ]
+        finally:
+            clear_settings_cache()
+
+
+class TestFingerprintDedupe:
+    """Dedupe key is kind plus method+route, not warm/cold or subsystem."""
+
+    def test_repeat_over_budget_for_open_issue_updates(self) -> None:
+        """A repeat over-budget hit comments on the existing open issue."""
+        first = None
+        base = 5_000_000.0
+        for i in range(3):
+            first = perf_issues.evaluate_request_event(
+                method="GET",
+                route_template="/api/v1/creators",
+                duration_ms=1500.0,
+                cold=False,
+                now=base + i,
+            )
         assert first is not None and first.action == "file"
         perf_issues.get_tracker().mark_open(first.fingerprint, 1234)
 
@@ -148,11 +350,33 @@ class TestFingerprintDedupe:
             route_template="/api/v1/creators",
             duration_ms=1700.0,
             cold=False,
+            now=base + 10,
         )
 
         assert repeat is not None
         assert repeat.action == "update"
         assert repeat.fingerprint == first.fingerprint
+
+    def test_occurrence_comment_includes_sample_evidence(self) -> None:
+        """Update comments carry duration, warm/cold, DB, request, deployment."""
+        comment = perf_issues.build_occurrence_comment(
+            duration_ms=1637.97,
+            cold=False,
+            db_queries=12,
+            db_time_ms=900.0,
+            request_id="req-9",
+            deployment_id="dpl_1",
+            occurrence_count=4,
+            reason="repeat over-budget hit for known open fingerprint",
+        )
+
+        assert "1637.97" in comment
+        assert "warm" in comment
+        assert "DB queries: 12" in comment
+        assert "DB time: 900.00 ms" in comment
+        assert "req-9" in comment
+        assert "dpl_1" in comment
+        assert "Occurrence count: 4" in comment
 
     def test_occurrence_evidence_aggregates(self) -> None:
         """Repeated events aggregate count, timings, and request ids."""
@@ -161,7 +385,6 @@ class TestFingerprintDedupe:
         fp, canonical = perf_issues.fingerprint_for_request(
             method="GET",
             route_template="/api/v1/creators",
-            cold=False,
         )
         for i in range(3):
             tracker.record_occurrence(
@@ -182,142 +405,57 @@ class TestFingerprintDedupe:
         assert evidence.recent_request_ids == ["req-0", "req-1", "req-2"]
         assert evidence.latest_deployment_id == "dpl_1"
 
-
-class TestIndependentSignatureSplitting:
-    """Distinct signatures on the same route can produce separate issues."""
-
-    def test_dominant_phase_splits_signatures(self) -> None:
-        """SQL-dominated vs serialization-dominated reads get own fingerprints."""
-        sql_fp, _ = perf_issues.fingerprint_for_request(
+    def test_phase_and_workload_share_one_fingerprint(self) -> None:
+        """SQL-heavy and app-heavy samples on one route share an issue."""
+        fp, canonical = perf_issues.fingerprint_for_request(
             method="GET",
             route_template="/api/v1/creators",
-            cold=False,
-            dominant_phase="sql-aggregation",
-            db_time_ms=1400.0,
-            duration_ms=1500.0,
-            db_queries=40,
         )
-        serial_fp, _ = perf_issues.fingerprint_for_request(
+        again, again_canonical = perf_issues.fingerprint_for_request(
             method="GET",
             route_template="/api/v1/creators",
-            cold=False,
-            dominant_phase="serialization",
-            db_time_ms=50.0,
-            duration_ms=1500.0,
-            db_queries=2,
         )
 
-        assert sql_fp != serial_fp
-
-    def test_workload_classification_splits_signatures(self) -> None:
-        """DB-heavy and app-heavy events on one route are distinct signatures."""
-        db_fp, _ = perf_issues.fingerprint_for_request(
-            method="GET",
-            route_template="/api/v1/creators",
-            cold=False,
-            db_time_ms=1400.0,
-            duration_ms=1500.0,
-            db_queries=40,
-        )
-        app_fp, _ = perf_issues.fingerprint_for_request(
-            method="GET",
-            route_template="/api/v1/creators",
-            cold=False,
-            db_time_ms=50.0,
-            duration_ms=1500.0,
-            db_queries=2,
-        )
-
-        assert db_fp != app_fp
+        assert fp == again
+        assert canonical == "request|GET|/api/v1/creators"
+        assert again_canonical == canonical
         assert perf_issues.classify_workload(1500.0, 1400.0, 40) == "db-heavy"
         assert perf_issues.classify_workload(1500.0, 50.0, 2) == "app-heavy"
 
-    def test_cold_and_warm_split_signatures(self) -> None:
-        """Cold-start and warm events on one route are distinct signatures."""
-        warm_fp, _ = perf_issues.fingerprint_for_request(
+    def test_method_and_route_distinguish_fingerprints(self) -> None:
+        """Different methods or routes remain independent issues."""
+        get_fp, _ = perf_issues.fingerprint_for_request(
             method="GET",
-            route_template="/api/v1/roll/bootstrap",
-            cold=False,
+            route_template="/api/v1/creators",
         )
-        cold_fp, _ = perf_issues.fingerprint_for_request(
+        post_fp, _ = perf_issues.fingerprint_for_request(
+            method="POST",
+            route_template="/api/v1/creators",
+        )
+        other_fp, _ = perf_issues.fingerprint_for_request(
             method="GET",
-            route_template="/api/v1/roll/bootstrap",
-            cold=True,
+            route_template="/api/v1/threads",
         )
 
-        assert warm_fp != cold_fp
+        assert get_fp != post_fp
+        assert get_fp != other_fp
 
     def test_deployment_is_not_the_dedupe_key(self) -> None:
-        """The same signature across deployments shares one fingerprint."""
+        """The same route across deployments shares one fingerprint."""
         first, _ = perf_issues.fingerprint_for_request(
             method="GET",
             route_template="/api/v1/creators",
-            cold=False,
         )
         second, _ = perf_issues.fingerprint_for_request(
             method="GET",
             route_template="/api/v1/creators",
-            cold=False,
         )
 
         assert first == second
 
 
-class TestClosedIssueRegression:
-    """A regression after a closed issue opens a new referencing issue."""
-
-    def test_regression_opens_new_issue_referencing_prior(self) -> None:
-        """A repeat signature after close files with a regression reference."""
-        decision = perf_issues.evaluate_request_event(
-            method="GET",
-            route_template="/api/v1/creators",
-            duration_ms=1500.0,
-            cold=False,
-        )
-        assert decision is not None
-        tracker = perf_issues.get_tracker()
-        tracker.mark_open(decision.fingerprint, 111)
-        tracker.mark_closed(decision.fingerprint, 111)
-
-        assert tracker.open_issue_for(decision.fingerprint) is None
-        assert tracker.closed_issue_for(decision.fingerprint) == 111
-
-        body = perf_issues.build_issue_body(
-            kind="request",
-            fingerprint=decision.fingerprint,
-            canonical=decision.canonical,
-            method="GET",
-            route_template="/api/v1/creators",
-            duration_ms=1500.0,
-            threshold_ms=1000.0,
-            event_label="violation",
-            prior_issue=111,
-        )
-
-        assert "#111" in body
-        assert "Regression" in body
-
-    def test_startup_hard_failure_files_immediately(self) -> None:
-        """Startup at or above 2.5 s files immediately with high priority."""
-        decision = perf_issues.evaluate_startup_event(
-            duration_ms=72420.56, operation="startup.readiness"
-        )
-
-        assert decision is not None
-        assert decision.action == "file"
-        assert decision.high_priority is True
-
-    def test_startup_warnings_file_on_second_within_hour(self) -> None:
-        """Two 2.0-2.5 s startups within 1 hour file an issue."""
-        first = perf_issues.evaluate_startup_event(
-            duration_ms=2100.0, operation="startup.readiness", now=6_000_000.0
-        )
-        second = perf_issues.evaluate_startup_event(
-            duration_ms=2200.0, operation="startup.readiness", now=6_001_800.0
-        )
-
-        assert first is not None and first.action == "accumulate"
-        assert second is not None and second.action == "file"
+class TestCoroutineTimeout:
+    """Readiness-critical coroutine timeouts still file immediately."""
 
     def test_coroutine_timeout_files_immediately(self) -> None:
         """A readiness-critical coroutine timeout files immediately."""
@@ -374,7 +512,7 @@ class TestIssueContentAndLabels:
         body = perf_issues.build_issue_body(
             kind="request",
             fingerprint="abc123",
-            canonical="request|GET|/api/v1/creators|warm|unknown|mixed",
+            canonical="request|GET|/api/v1/creators",
             method="GET",
             route_template="/api/v1/creators",
             duration_ms=1637.97,
@@ -409,7 +547,7 @@ class TestIssueContentAndLabels:
         body = perf_issues.build_issue_body(
             kind="request",
             fingerprint="abc123",
-            canonical="request|GET|/x|warm|unknown|mixed",
+            canonical="request|GET|/x",
             method="GET",
             route_template="/x",
             duration_ms=1500.0,
@@ -448,7 +586,7 @@ class TestBackgroundFiling:
         decision = perf_issues.FilingDecision(
             action="file",
             fingerprint="fp1",
-            canonical="request|GET|/a|warm|unknown|mixed",
+            canonical="request|GET|/a",
             high_priority=True,
             reason="test",
         )
@@ -486,14 +624,14 @@ class TestBackgroundFiling:
         decision = perf_issues.FilingDecision(
             action="update",
             fingerprint="fp2",
-            canonical="request|GET|/a|warm|unknown|mixed",
+            canonical="request|GET|/a",
             high_priority=True,
             reason="repeat violation",
         )
         with (
             patch(
                 "app.services.github_service.add_performance_issue_comment",
-                new=AsyncMock(),
+                new=AsyncMock(return_value="open"),
             ) as mock_comment,
             patch(
                 "app.services.github_service.create_performance_issue",
@@ -518,7 +656,7 @@ class TestBackgroundFiling:
         decision = perf_issues.FilingDecision(
             action="update",
             fingerprint="fp-closed",
-            canonical="request|GET|/a|warm|unknown|mixed",
+            canonical="request|GET|/a",
             high_priority=True,
             reason="repeat violation",
         )
@@ -563,7 +701,7 @@ class TestBackgroundFiling:
         decision = perf_issues.FilingDecision(
             action="file",
             fingerprint="fp3",
-            canonical="request|GET|/a|warm|unknown|mixed",
+            canonical="request|GET|/a",
             high_priority=True,
             reason="test",
         )
@@ -589,25 +727,69 @@ class TestBackgroundFiling:
         assert perf_issues.get_tracker().open_issue_for("fp3") is None
 
     def test_handle_request_telemetry_schedules_without_blocking(self) -> None:
-        """The request entry point delegates to bounded background work."""
+        """The Nth over-budget hit delegates to bounded background work."""
 
         async def _run() -> None:
             with patch.object(
                 perf_issues, "schedule_filing", new=MagicMock()
             ) as mock_schedule:
-                perf_issues.handle_request_telemetry(
-                    method="GET",
-                    route_template="/api/v1/creators",
-                    duration_ms=1637.97,
-                    cold=False,
-                    db_queries=12,
-                    db_time_ms=900.0,
-                    request_id="req-9",
-                    deployment_id="dpl_1",
-                    server_timing="app;dur=1637.97",
-                )
+                for _ in range(3):
+                    perf_issues.handle_request_telemetry(
+                        method="GET",
+                        route_template="/api/v1/creators",
+                        duration_ms=1637.97,
+                        cold=False,
+                        db_queries=12,
+                        db_time_ms=900.0,
+                        request_id="req-9",
+                        deployment_id="dpl_1",
+                        server_timing="app;dur=1637.97",
+                    )
                 await asyncio.sleep(0)
                 mock_schedule.assert_called_once()
+                comment = mock_schedule.call_args.kwargs["comment"]
+                assert comment is not None
+                assert "1637.97" in comment
+                assert "req-9" in comment
+                assert "dpl_1" in comment
+
+        asyncio.run(_run())
+
+    def test_handle_request_telemetry_ignores_cold_starts(self) -> None:
+        """Cold over-budget requests never schedule filing."""
+
+        async def _run() -> None:
+            with patch.object(
+                perf_issues, "schedule_filing", new=MagicMock()
+            ) as mock_schedule:
+                for _ in range(5):
+                    perf_issues.handle_request_telemetry(
+                        method="GET",
+                        route_template="/api/v1/roll/bootstrap",
+                        duration_ms=3500.0,
+                        cold=True,
+                    )
+                await asyncio.sleep(0)
+                mock_schedule.assert_not_called()
+
+        asyncio.run(_run())
+
+    def test_handle_request_telemetry_ignores_under_budget_warnings(self) -> None:
+        """Under-budget warnings never schedule filing."""
+
+        async def _run() -> None:
+            with patch.object(
+                perf_issues, "schedule_filing", new=MagicMock()
+            ) as mock_schedule:
+                for _ in range(5):
+                    perf_issues.handle_request_telemetry(
+                        method="GET",
+                        route_template="/api/v1/creators",
+                        duration_ms=575.0,
+                        cold=False,
+                    )
+                await asyncio.sleep(0)
+                mock_schedule.assert_not_called()
 
         asyncio.run(_run())
 

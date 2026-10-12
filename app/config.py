@@ -159,6 +159,26 @@ class AppSettings(BaseSettings):
         description="Enable internal operations routes",
         json_schema_extra={"env": "ENABLE_INTERNAL_OPS_ROUTES"},
     )
+    perf_alarm_daily_breach_threshold: int = Field(
+        default=3,
+        description=(
+            "Warm over-budget hits per UTC day required before a route files a "
+            "performance issue (1-100). Default is 3."
+        ),
+        json_schema_extra={"env": "PERF_ALARM_DAILY_BREACH_THRESHOLD"},
+    )
+
+    @field_validator("perf_alarm_daily_breach_threshold")
+    @classmethod
+    def validate_perf_alarm_daily_breach_threshold(cls, v: int) -> int:
+        """Ensure the daily breach threshold is a positive bounded integer."""
+        if not 1 <= v <= 100:
+            raise ValueError(
+                "PERF_ALARM_DAILY_BREACH_THRESHOLD must be between 1 and 100, "
+                f"got {v}"
+            )
+        return v
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Get CORS origins as a list."""

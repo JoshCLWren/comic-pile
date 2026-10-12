@@ -375,3 +375,37 @@ class TestAppSettingsCorsValidation:
 
         origins = settings.cors_origins_list
         assert origins == ["https://example.com"]
+
+
+class TestPerfAlarmDailyBreachThreshold:
+    """Validate PERF_ALARM_DAILY_BREACH_THRESHOLD (issue #3552)."""
+
+    def test_default_is_three(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Default daily breach threshold is 3."""
+        monkeypatch.delenv("PERF_ALARM_DAILY_BREACH_THRESHOLD", raising=False)
+        clear_settings_cache()
+        settings = AppSettings()
+        assert settings.perf_alarm_daily_breach_threshold == 3
+
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Environment override is accepted within 1-100."""
+        monkeypatch.setenv("PERF_ALARM_DAILY_BREACH_THRESHOLD", "5")
+        clear_settings_cache()
+        settings = AppSettings()
+        assert settings.perf_alarm_daily_breach_threshold == 5
+
+    def test_rejects_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Threshold below 1 raises ValidationError."""
+        monkeypatch.setenv("PERF_ALARM_DAILY_BREACH_THRESHOLD", "0")
+        clear_settings_cache()
+        with pytest.raises(ValidationError) as exc_info:
+            AppSettings()
+        assert "perf_alarm_daily_breach_threshold" in str(exc_info.value).lower()
+
+    def test_rejects_too_high(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Threshold above 100 raises ValidationError."""
+        monkeypatch.setenv("PERF_ALARM_DAILY_BREACH_THRESHOLD", "101")
+        clear_settings_cache()
+        with pytest.raises(ValidationError) as exc_info:
+            AppSettings()
+        assert "perf_alarm_daily_breach_threshold" in str(exc_info.value).lower()

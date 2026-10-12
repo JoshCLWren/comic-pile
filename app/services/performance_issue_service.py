@@ -1,25 +1,26 @@
 """Automatic GitHub issue filing for production performance violations.
 
-Implements issue #3245: production performance telemetry becomes factory work
-automatically. The unit of issue creation is a distinct actionable performance
-signature (fingerprint), not a raw request event.
+Implements issue #3245 filing plus the #3552 noise-control contract.
 
-Policy implemented here (thresholds frozen by the issue contract):
+Policy:
 
-- Warm request 500-999 ms: file when the same normalized route records 3
-  warnings within 10 minutes or 5 warnings within 1 hour.
-- Warm request >= 1000 ms: file immediately unless the same fingerprint
-  already has an open issue.
-- Startup >= 2.0 s but < 2.5 s: file when it happens twice within 1 hour.
-- Startup >= 2.5 s: file immediately with phase/operation attribution.
-- Readiness-critical coroutine hard timeout: file immediately unless the same
-  signature already has an open issue.
-
-Deduplication is by deterministic fingerprint built from the dimensions that
-describe the likely independent defect (normalized route template, warm vs
-cold, performance class, dominant phase/operation, DB-heavy vs app-heavy,
-timeout/exception type). Deployment/commit is evidence only, never the
-primary dedupe key.
+- Dedupe fingerprint is kind plus route identity: for requests that is
+  ``method + route template``. Warm/cold, workload class, and dominant
+  phase are evidence on the sample, never separate issues.
+- Measurements at or under the route budget never open an issue. Warning
+  samples (500-999 ms) are recorded or aggregated only. An issue title
+  never shows a duration below its budget.
+- Cold-start requests and ``startup.*`` readiness samples do not count
+  toward filing. They are logged separately for cold-start work.
+- A route files only after N warm over-budget hits in the same UTC day.
+  N defaults to 3 and is configurable via
+  ``PERF_ALARM_DAILY_BREACH_THRESHOLD``. Closed-issue regressions use
+  the same daily threshold.
+- If an open issue already exists for the fingerprint, a new over-budget
+  sample comments with duration, warm/cold, DB diagnostics, request id,
+  and deployment, and increments the occurrence count.
+- Readiness-critical coroutine hard timeouts still file immediately
+  unless the same coroutine signature already has an open issue.
 
 Issue creation never blocks the user request: callers use the ``handle_*``
 entry points, which evaluate synchronously and dispatch bounded background
@@ -43,23 +44,15 @@ from app.performance_budgets import (
     REQUEST_TIMEOUT_MS,
     REQUEST_WARNING_MS,
     STARTUP_TIMEOUT_MS,
-    STARTUP_WARNING_MS,
 )
 
 logger = logging.getLogger(__name__)
 
-# Warning accumulation windows (issue #3245 contract).
-WARNING_BURST_COUNT = 3
-WARNING_BURST_WINDOW_S = 10 * 60
-WARNING_SUSTAINED_COUNT = 5
-WARNING_SUSTAINED_WINDOW_S = 60 * 60
-
-# Startup warning aggregation: twice within 1 hour files an issue.
-STARTUP_WARNING_COUNT = 2
-STARTUP_WARNING_WINDOW_S = 60 * 60
+# Daily over-budget threshold (issue #3552). Overridable via AppSettings.
+DEFAULT_DAILY_BREACH_THRESHOLD = 3
 
 # Retention ceilings so one slow route cannot grow process memory without bound.
-MAX_WARNING_ROUTES = 500
+MAX_DAILY_ROUTES = 500
 MAX_RECENT_DURATIONS = 5
 MAX_RECENT_REQUEST_IDS = 5
 MAX_FINGERPRINTS_TRACKED = 1000
@@ -163,36 +156,22 @@ def fingerprint_for_request(
     *,
     method: str,
     route_template: str,
-    cold: bool,
-    dominant_phase: str | None = None,
-    db_time_ms: float = 0.0,
-    duration_ms: float = 0.0,
-    db_queries: int = 0,
 ) -> tuple[str, str]:
-    """Build the actionable fingerprint for a warm/cold request violation.
+    """Build the actionable fingerprint for a request performance event.
+
+    The #3552 dedupe key is kind plus route identity (HTTP method and
+    normalized route template). Warm/cold and subsystem/workload are
+    sample evidence, not fingerprint dimensions.
 
     Args:
         method: HTTP method of the request.
         route_template: Normalized route template (not concrete IDs).
-        cold: Whether this was a cold-start request.
-        dominant_phase: Dominant timing phase/operation when known
-            (e.g. ``"sql-aggregation"`` vs ``"serialization"``). Distinct
-            phases on the same route produce distinct fingerprints because
-            they plausibly require independent fixes.
-        db_time_ms: Database execution time in milliseconds.
-        duration_ms: Total request duration in milliseconds.
-        db_queries: SQL query count for workload classification.
 
     Returns:
         Tuple of (fingerprint hash, canonical signature string).
     """
     route = normalize_route_template(route_template)
-    warmth = "cold" if cold else "warm"
-    phase = (dominant_phase or "unknown").strip().lower() or "unknown"
-    workload = classify_workload(duration_ms, db_time_ms, db_queries)
-    canonical = (
-        f"request|{method.upper()}|{route}|{warmth}|{phase}|{workload}"
-    )
+    canonical = f"request|{method.upper()}|{route}"
     return _hash_canonical(canonical), canonical
 
 
@@ -260,16 +239,15 @@ class FilingDecision:
 class PerformanceIssueTracker:
     """Process-local accumulator for performance-to-issue policy decisions.
 
-    Tracks warning timestamps per normalized route, startup warning
-    timestamps, known open fingerprints (dedupe), known closed fingerprints
-    (regression detection), and per-fingerprint occurrence evidence.
+    Tracks warm over-budget hits per fingerprint per UTC day, known open
+    fingerprints (dedupe), known closed fingerprints (regression
+    detection), and per-fingerprint occurrence evidence.
     """
 
     def __init__(self) -> None:
         """Initialize empty bounded tracking state."""
         self._lock = threading.Lock()
-        self._warning_hits: dict[str, deque[float]] = {}
-        self._startup_warnings: deque[float] = deque()
+        self._daily_breaches: dict[str, deque[float]] = {}
         self._open_fingerprints: dict[str, int] = {}
         self._closed_fingerprints: dict[str, int] = {}
         self._occurrences: dict[str, OccurrenceEvidence] = {}
@@ -277,8 +255,7 @@ class PerformanceIssueTracker:
     def reset_for_tests(self) -> None:
         """Clear all tracking state. Intended for test isolation only."""
         with self._lock:
-            self._warning_hits.clear()
-            self._startup_warnings.clear()
+            self._daily_breaches.clear()
             self._open_fingerprints.clear()
             self._closed_fingerprints.clear()
             self._occurrences.clear()
@@ -304,6 +281,7 @@ class PerformanceIssueTracker:
         with self._lock:
             self._closed_fingerprints[fingerprint] = issue_number
             self._open_fingerprints.pop(fingerprint, None)
+            self._daily_breaches.pop(fingerprint, None)
 
     def record_filed(self, fingerprint: str, issue_number: int) -> None:
         """Record a newly filed issue as the open incident for a fingerprint.
@@ -401,61 +379,77 @@ class PerformanceIssueTracker:
         with self._lock:
             return self._occurrences.get(fingerprint)
 
-    def evaluate_warning_hit(self, *, route_key: str, now: float) -> bool:
-        """Record a 500-999 ms warning and decide whether it files an issue.
+    def evaluate_daily_breach(
+        self,
+        *,
+        fingerprint: str,
+        now: float,
+        threshold: int,
+    ) -> bool:
+        """Record a warm over-budget hit and decide whether it files an issue.
 
-        Files when the same normalized route records 3 warnings within
-        10 minutes or 5 warnings within 1 hour.
+        Files when the same fingerprint records ``threshold`` warm
+        over-budget hits in the current UTC day.
 
         Args:
-            route_key: Normalized ``METHOD route-template`` key.
+            fingerprint: Deterministic performance signature hash.
             now: Current epoch timestamp in seconds.
+            threshold: Required warm over-budget hits in the UTC day.
 
         Returns:
-            True when the accumulation threshold is crossed.
+            True when the daily threshold is crossed.
         """
+        day_start = _utc_day_start(now)
         with self._lock:
-            hits = self._warning_hits.get(route_key)
+            hits = self._daily_breaches.get(fingerprint)
             if hits is None:
-                if len(self._warning_hits) >= MAX_WARNING_ROUTES:
+                if len(self._daily_breaches) >= MAX_DAILY_ROUTES:
                     oldest_key = min(
-                        self._warning_hits,
-                        key=lambda k: self._warning_hits[k][-1]
-                        if self._warning_hits[k]
+                        self._daily_breaches,
+                        key=lambda k: self._daily_breaches[k][-1]
+                        if self._daily_breaches[k]
                         else 0.0,
                     )
-                    del self._warning_hits[oldest_key]
+                    del self._daily_breaches[oldest_key]
                 hits = deque()
-                self._warning_hits[route_key] = hits
+                self._daily_breaches[fingerprint] = hits
             hits.append(now)
-            while hits and hits[0] < now - WARNING_SUSTAINED_WINDOW_S:
+            while hits and hits[0] < day_start:
                 hits.popleft()
-            burst = sum(1 for ts in hits if ts >= now - WARNING_BURST_WINDOW_S)
-            sustained = len(hits)
-            return burst >= WARNING_BURST_COUNT or sustained >= WARNING_SUSTAINED_COUNT
-
-    def evaluate_startup_warning(self, *, now: float) -> bool:
-        """Record a 2.0-2.5 s startup warning and decide whether to file.
-
-        Files when startup warnings happen twice within 1 hour.
-
-        Args:
-            now: Current epoch timestamp in seconds.
-
-        Returns:
-            True when the aggregation threshold is crossed.
-        """
-        with self._lock:
-            self._startup_warnings.append(now)
-            while (
-                self._startup_warnings
-                and self._startup_warnings[0] < now - STARTUP_WARNING_WINDOW_S
-            ):
-                self._startup_warnings.popleft()
-            return len(self._startup_warnings) >= STARTUP_WARNING_COUNT
+            return len(hits) >= threshold
 
 
 _tracker = PerformanceIssueTracker()
+
+
+def _utc_day_start(now: float) -> float:
+    """Return the UTC midnight epoch for the day containing ``now``.
+
+    Args:
+        now: Epoch timestamp in seconds.
+
+    Returns:
+        Epoch timestamp of 00:00:00 UTC on that day.
+    """
+    current = datetime.fromtimestamp(now, UTC)
+    midnight = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight.timestamp()
+
+
+def daily_breach_threshold() -> int:
+    """Return the configured daily over-budget hit count required to file.
+
+    Reads ``PERF_ALARM_DAILY_BREACH_THRESHOLD`` via AppSettings.
+
+    Returns:
+        Positive integer threshold (default 3).
+    """
+    from app.config import get_app_settings
+
+    configured = get_app_settings().perf_alarm_daily_breach_threshold
+    if configured < 1:
+        return DEFAULT_DAILY_BREACH_THRESHOLD
+    return configured
 
 
 def get_tracker() -> PerformanceIssueTracker:
@@ -478,9 +472,6 @@ def evaluate_request_event(
     route_template: str,
     duration_ms: float,
     cold: bool,
-    dominant_phase: str | None = None,
-    db_time_ms: float = 0.0,
-    db_queries: int = 0,
     now: float | None = None,
 ) -> FilingDecision | None:
     """Decide whether a request timing event should file or update an issue.
@@ -490,68 +481,66 @@ def evaluate_request_event(
         route_template: Normalized route template.
         duration_ms: Observed duration in milliseconds.
         cold: Whether this was a cold-start request.
-        dominant_phase: Dominant timing phase when known.
-        db_time_ms: Database execution time in milliseconds.
-        db_queries: SQL query count.
         now: Epoch timestamp override for tests.
 
     Returns:
-        A filing decision when the event crosses the policy threshold
-        (immediate violation, accumulated warnings, or occurrence update
-        for a known open fingerprint), otherwise None.
+        A filing decision when the event is actionable (file, update,
+        accumulate, or ignore), otherwise None for healthy in-budget
+        requests.
     """
     current = now if now is not None else time.time()
     fingerprint, canonical = fingerprint_for_request(
         method=method,
         route_template=route_template,
-        cold=cold,
-        dominant_phase=dominant_phase,
-        db_time_ms=db_time_ms,
-        duration_ms=duration_ms,
-        db_queries=db_queries,
     )
-    if duration_ms >= REQUEST_TIMEOUT_MS:
-        if _tracker.open_issue_for(fingerprint) is not None:
+    if cold:
+        return FilingDecision(
+            action="ignore",
+            fingerprint=fingerprint,
+            canonical=canonical,
+            high_priority=False,
+            reason="cold-start samples do not count toward filing",
+        )
+    if duration_ms <= REQUEST_TIMEOUT_MS:
+        if duration_ms >= REQUEST_WARNING_MS:
             return FilingDecision(
-                action="update",
+                action="accumulate",
                 fingerprint=fingerprint,
                 canonical=canonical,
-                high_priority=True,
-                reason="repeat violation for known open fingerprint",
+                high_priority=False,
+                reason="warning recorded at or under route budget; never files",
             )
+        return None
+    if _tracker.open_issue_for(fingerprint) is not None:
+        return FilingDecision(
+            action="update",
+            fingerprint=fingerprint,
+            canonical=canonical,
+            high_priority=True,
+            reason="repeat over-budget hit for known open fingerprint",
+        )
+    threshold = daily_breach_threshold()
+    if _tracker.evaluate_daily_breach(
+        fingerprint=fingerprint,
+        now=current,
+        threshold=threshold,
+    ):
         return FilingDecision(
             action="file",
             fingerprint=fingerprint,
             canonical=canonical,
             high_priority=True,
-            reason="warm violation >=1000ms files immediately",
+            reason=(
+                f"warm over-budget hits reached daily threshold ({threshold})"
+            ),
         )
-    if duration_ms >= REQUEST_WARNING_MS:
-        route_key = f"{method.upper()} {normalize_route_template(route_template)}"
-        if _tracker.open_issue_for(fingerprint) is not None:
-            return FilingDecision(
-                action="update",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=False,
-                reason="repeat warning for known open fingerprint",
-            )
-        if _tracker.evaluate_warning_hit(route_key=route_key, now=current):
-            return FilingDecision(
-                action="file",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=False,
-                reason="warning accumulation threshold crossed",
-            )
-        return FilingDecision(
-            action="accumulate",
-            fingerprint=fingerprint,
-            canonical=canonical,
-            high_priority=False,
-            reason="warning recorded below filing threshold",
-        )
-    return None
+    return FilingDecision(
+        action="accumulate",
+        fingerprint=fingerprint,
+        canonical=canonical,
+        high_priority=False,
+        reason="over-budget hit recorded below daily threshold",
+    )
 
 
 def evaluate_startup_event(
@@ -568,52 +557,20 @@ def evaluate_startup_event(
         now: Epoch timestamp override for tests.
 
     Returns:
-        A filing decision when the policy threshold is crossed,
-        otherwise None.
+        An ignore decision: startup readiness samples never file.
     """
-    current = now if now is not None else time.time()
     fingerprint, canonical = fingerprint_for_startup(operation=operation)
-    if duration_ms >= STARTUP_TIMEOUT_MS:
-        if _tracker.open_issue_for(fingerprint) is not None:
-            return FilingDecision(
-                action="update",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=True,
-                reason="repeat hard startup failure for known open fingerprint",
-            )
-        return FilingDecision(
-            action="file",
-            fingerprint=fingerprint,
-            canonical=canonical,
-            high_priority=True,
-            reason="hard startup failure >=2.5s files immediately",
-        )
-    if duration_ms >= STARTUP_WARNING_MS:
-        if _tracker.open_issue_for(fingerprint) is not None:
-            return FilingDecision(
-                action="update",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=False,
-                reason="repeat startup warning for known open fingerprint",
-            )
-        if _tracker.evaluate_startup_warning(now=current):
-            return FilingDecision(
-                action="file",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=False,
-                reason="startup warnings twice within 1 hour",
-            )
-        return FilingDecision(
-            action="accumulate",
-            fingerprint=fingerprint,
-            canonical=canonical,
-            high_priority=False,
-            reason="startup warning recorded below filing threshold",
-        )
-    return None
+    return FilingDecision(
+        action="ignore",
+        fingerprint=fingerprint,
+        canonical=canonical,
+        high_priority=False,
+        reason=(
+            "startup readiness samples do not count toward filing "
+            f"({duration_ms:.0f}ms)"
+            + (f" at {now}" if now is not None else "")
+        ),
+    )
 
 
 def evaluate_coroutine_timeout(
@@ -703,17 +660,21 @@ def build_issue_title(
     """
     if kind == "startup":
         operation_name = operation or "startup.readiness"
+        display_ms = max(duration_ms, float(STARTUP_TIMEOUT_MS))
         return (
             f"Performance: startup {operation_name} "
-            f"took {duration_ms:.0f}ms (budget {STARTUP_TIMEOUT_MS}ms)"
+            f"took {display_ms:.0f}ms (budget {STARTUP_TIMEOUT_MS}ms)"
         )
     if kind == "coroutine":
         operation_name = operation or "unknown"
         return f"Performance: coroutine timeout in {operation_name}"
     route = normalize_route_template(route_template or "__unmatched__")
+    display_ms = (
+        duration_ms if duration_ms > REQUEST_TIMEOUT_MS else float(REQUEST_TIMEOUT_MS)
+    )
     return (
         f"Performance: {(method or 'GET').upper()} {route} "
-        f"took {duration_ms:.0f}ms (budget {REQUEST_TIMEOUT_MS}ms)"
+        f"took {display_ms:.0f}ms (budget {REQUEST_TIMEOUT_MS}ms)"
     )
 
 
@@ -830,12 +791,56 @@ def build_issue_body(
     return "\n".join(lines)
 
 
+def build_occurrence_comment(
+    *,
+    duration_ms: float,
+    cold: bool,
+    db_queries: int = 0,
+    db_time_ms: float = 0.0,
+    request_id: str | None = None,
+    deployment_id: str | None = None,
+    occurrence_count: int = 1,
+    reason: str | None = None,
+) -> str:
+    """Build a recurrence comment with the new sample's evidence.
+
+    Args:
+        duration_ms: Observed duration in milliseconds.
+        cold: Warm/cold classification for the sample.
+        db_queries: SQL query count.
+        db_time_ms: Database execution time in milliseconds.
+        request_id: Request correlation id, when available.
+        deployment_id: Deployment/commit identifier, when available.
+        occurrence_count: Aggregated occurrence count after this sample.
+        reason: Policy reason for the update.
+
+    Returns:
+        Markdown comment body with redacted evidence.
+    """
+    lines = [
+        "Performance incident recurred.",
+        f"- Duration: {duration_ms:.2f} ms",
+        f"- Warm/cold: {'cold' if cold else 'warm'}",
+        f"- DB queries: {db_queries}",
+        f"- DB time: {db_time_ms:.2f} ms",
+        f"- Occurrence count: {occurrence_count}",
+    ]
+    if request_id:
+        lines.append(f"- Request id: {sanitize_evidence_text(request_id)}")
+    if deployment_id:
+        lines.append(f"- Deployment/commit: {sanitize_evidence_text(deployment_id)}")
+    if reason:
+        lines.append(f"- Reason: {sanitize_evidence_text(reason)}")
+    return "\n".join(lines)
+
+
 async def _file_decision_background(
     *,
     decision: FilingDecision,
     title: str,
     body: str,
     labels: list[str],
+    comment: str | None = None,
 ) -> None:
     """File or update a GitHub issue in bounded background work.
 
@@ -847,6 +852,7 @@ async def _file_decision_background(
         title: Issue title for new issues.
         body: Issue body with evidence and fingerprint marker.
         labels: Factory intake labels.
+        comment: Occurrence comment used when updating an open issue.
     """
     try:
         from app.services import github_service as gh
@@ -860,7 +866,8 @@ async def _file_decision_background(
                 try:
                     state = await gh.add_performance_issue_comment(
                         known,
-                        f"Performance incident recurred ({decision.reason}).",
+                        comment
+                        or f"Performance incident recurred ({decision.reason}).",
                     )
                 except RuntimeError as exc:
                     logger.warning(
@@ -882,7 +889,7 @@ async def _file_decision_background(
             try:
                 await gh.add_performance_issue_comment(
                     existing,
-                    f"Performance incident recurred ({decision.reason}).",
+                    comment or f"Performance incident recurred ({decision.reason}).",
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -939,6 +946,7 @@ def schedule_filing(
     title: str,
     body: str,
     labels: list[str],
+    comment: str | None = None,
 ) -> None:
     """Schedule non-blocking background filing for a filing decision.
 
@@ -951,8 +959,9 @@ def schedule_filing(
         title: Issue title for new issues.
         body: Issue body with evidence and fingerprint marker.
         labels: Factory intake labels.
+        comment: Occurrence comment used when updating an open issue.
     """
-    if decision.action == "accumulate":
+    if decision.action in {"accumulate", "ignore"}:
         return
     try:
         loop = asyncio.get_running_loop()
@@ -964,7 +973,11 @@ def schedule_filing(
         return
     loop.create_task(
         _file_decision_background(
-            decision=decision, title=title, body=body, labels=labels
+            decision=decision,
+            title=title,
+            body=body,
+            labels=labels,
+            comment=comment,
         )
     )
 
@@ -1001,11 +1014,24 @@ def handle_request_telemetry(
         route_template=route_template,
         duration_ms=duration_ms,
         cold=cold,
-        dominant_phase=dominant_phase,
-        db_time_ms=db_time_ms,
-        db_queries=db_queries,
     )
     if decision is None:
+        return
+    if decision.action == "ignore":
+        logger.info(
+            "Performance alarm ignored cold-start sample: %s %s took %.2f ms",
+            method.upper(),
+            normalize_route_template(route_template),
+            duration_ms,
+            extra={
+                "event": "performance_alarm_ignored_cold_start",
+                "method": method.upper(),
+                "route_template": normalize_route_template(route_template),
+                "duration_ms": duration_ms,
+                "request_id": request_id,
+                "deployment_id": deployment_id,
+            },
+        )
         return
     _tracker.record_occurrence(
         fingerprint=decision.fingerprint,
@@ -1029,17 +1055,28 @@ def handle_request_telemetry(
         else None
     )
     occurrence_count = occurrence.count if occurrence is not None else 1
-    event_label = "violation" if duration_ms >= REQUEST_TIMEOUT_MS else "warning"
-    threshold = REQUEST_TIMEOUT_MS if event_label == "violation" else REQUEST_WARNING_MS
+    title_duration = (
+        occurrence.max_duration_ms if occurrence is not None else duration_ms
+    )
     app_time = max(duration_ms - db_time_ms, 0.0)
     workload = classify_workload(duration_ms, db_time_ms, db_queries)
     likely = "database" if workload == "db-heavy" else None
     prior = _tracker.closed_issue_for(decision.fingerprint)
+    comment = build_occurrence_comment(
+        duration_ms=duration_ms,
+        cold=cold,
+        db_queries=db_queries,
+        db_time_ms=db_time_ms,
+        request_id=request_id,
+        deployment_id=deployment_id,
+        occurrence_count=occurrence_count,
+        reason=decision.reason,
+    )
     title = build_issue_title(
         kind="request",
         method=method,
         route_template=route_template,
-        duration_ms=duration_ms,
+        duration_ms=title_duration,
     )
     body = build_issue_body(
         kind="request",
@@ -1047,13 +1084,14 @@ def handle_request_telemetry(
         canonical=decision.canonical,
         method=method,
         route_template=route_template,
-        duration_ms=duration_ms,
-        threshold_ms=float(threshold),
-        event_label=event_label,
+        duration_ms=title_duration,
+        threshold_ms=float(REQUEST_TIMEOUT_MS),
+        event_label="violation",
         cold=cold,
         db_queries=db_queries,
         db_time_ms=db_time_ms,
         app_time_ms=app_time,
+        phases=dominant_phase,
         request_ids=[request_id] if request_id else None,
         deployment_id=deployment_id,
         first_seen=first_seen,
@@ -1068,6 +1106,7 @@ def handle_request_telemetry(
         title=title,
         body=body,
         labels=build_labels(high_priority=decision.high_priority, subsystem="backend"),
+        comment=comment,
     )
 
 
@@ -1084,39 +1123,17 @@ def handle_startup_telemetry(
         operation: Named startup phase/operation attribution.
         deployment_id: Deployment/commit identifier.
     """
-    decision = evaluate_startup_event(duration_ms=duration_ms, operation=operation)
-    if decision is None or decision.action == "accumulate":
-        return
-    event_label = (
-        "startup failure" if duration_ms >= STARTUP_TIMEOUT_MS else "warning"
-    )
-    threshold = (
-        STARTUP_TIMEOUT_MS if duration_ms >= STARTUP_TIMEOUT_MS else STARTUP_WARNING_MS
-    )
-    prior = _tracker.closed_issue_for(decision.fingerprint)
-    title = build_issue_title(
-        kind="startup", operation=operation, duration_ms=duration_ms
-    )
-    body = build_issue_body(
-        kind="startup",
-        fingerprint=decision.fingerprint,
-        canonical=decision.canonical,
-        duration_ms=duration_ms,
-        threshold_ms=float(threshold),
-        event_label=event_label,
-        deployment_id=deployment_id,
-        occurrence_count=1,
-        operation=operation,
-        likely_subsystem="infrastructure",
-        prior_issue=prior,
-    )
-    schedule_filing(
-        decision=decision,
-        title=title,
-        body=body,
-        labels=build_labels(
-            high_priority=decision.high_priority, subsystem="infrastructure"
-        ),
+    evaluate_startup_event(duration_ms=duration_ms, operation=operation)
+    logger.info(
+        "Performance alarm ignored startup sample: %s took %.2f ms",
+        operation,
+        duration_ms,
+        extra={
+            "event": "performance_alarm_ignored_startup",
+            "operation": operation,
+            "duration_ms": duration_ms,
+            "deployment_id": deployment_id,
+        },
     )
 
 
@@ -1140,7 +1157,7 @@ def handle_coroutine_timeout(
     decision = evaluate_coroutine_timeout(
         operation=operation, exception_type=exception_type
     )
-    if decision.action == "accumulate":
+    if decision.action in {"accumulate", "ignore"}:
         return
     prior = _tracker.closed_issue_for(decision.fingerprint)
     title = build_issue_title(kind="coroutine", operation=operation)

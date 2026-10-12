@@ -377,9 +377,10 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 )
 
             # Auto-file actionable GitHub issues from performance violations
-            # (issue #3245). Evaluation is synchronous and filing is bounded
-            # background work, so a GitHub outage never delays or fails the
-            # production request that triggered the telemetry.
+            # (issues #3245 / #3552). Evaluation is synchronous and filing is
+            # bounded background work, so a GitHub outage never delays or fails
+            # the production request that triggered the telemetry. Under-budget
+            # and cold-start samples never open an issue.
             if process_time_ms >= slow_request_threshold:
                 try:
                     from app.services import performance_issue_service as perf_issues
