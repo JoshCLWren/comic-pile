@@ -287,7 +287,9 @@ async def load_creator_summary_inputs(
        their stable local thread/series identity;
     2. the confirmed ``creator_credits`` key of ComicVine issue metadata for
        those issues, projected in SQL so the retained raw provider payload is
-       never hydrated for a creator read (issue #3244);
+       never hydrated for a creator read (issue #3244), out of a ``jsonb``
+       column so the projection is a key lookup rather than a parse of every
+       stored document (issue #3387);
     3. manual thread-level creator credits for threads without issue metadata;
     4. the latest effective ``rate`` event rating per owned issue.
 
@@ -323,6 +325,12 @@ async def load_creator_summary_inputs(
     # metadata also retains the complete raw ComicVine provider payload, and
     # hydrating that payload for every owned issue on every creator read is what
     # pushed this route into multi-second responses (issue #3244).
+    #
+    # The projection itself used to be the whole remaining cost: on a ``json``
+    # column ``->`` re-parses the entire stored document per row, so a warm
+    # request spent 1438 ms of its 1915 ms budget reparsing ``raw_provider_payload``
+    # bytes it never reads (issue #3387). ``metadata_json`` is ``jsonb``, where
+    # the same expression is a lookup into an already-parsed document.
     metadata_result = await db.execute(
         select(Issue.id, ExternalIdentity.metadata_json[CREATOR_CREDITS_KEY])
         .join(Thread, Thread.id == Issue.thread_id)

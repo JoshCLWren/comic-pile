@@ -31,7 +31,7 @@ Coverage semantics:
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +53,31 @@ from app.schemas.creator_summary import (
 HEADLINE_ROLES: frozenset[str] = frozenset(
     {"writer", "artist", "penciler", "inker", "colorist", "letterer"}
 )
+
+
+@dataclass(frozen=True)
+class _CreatorAggregates:
+    """Personal statistics aggregated for one requested creator.
+
+    Kept separate from :class:`CreatorSummaryItem` so the aggregation stage can
+    be bounded by the requested creator ids while the response stage still
+    echoes each requested key exactly as the client spelled it (issue #3387).
+
+    Attributes:
+        display_name: Provider display name first seen on a confirmed credit.
+        roles: Sorted distinct normalized roles across the creator's credits.
+        average_rating: Rounded headline average, or ``None`` with no ratings.
+        ratings_count: Distinct headline-eligible rated issues attributed.
+        read_unrated_count: Attributed read-but-unrated owned issues.
+        upcoming_count: Attributed unread owned issues.
+    """
+
+    display_name: str
+    roles: list[str]
+    average_rating: float | None
+    ratings_count: int
+    read_unrated_count: int
+    upcoming_count: int
 
 
 def parse_creator_key(key: str) -> int | None:
@@ -119,6 +144,92 @@ def _build_coverage(
     )
 
 
+def requested_creator_ids(requested_keys: list[str]) -> frozenset[int]:
+    """Resolve the canonical creator ids a batch request can possibly return.
+
+    A batch request names at most ``MAX_CREATOR_KEYS`` creators and only those
+    can appear in the response, so the aggregation never has to build
+    statistics for the rest of the library. Keys that are not canonical parse
+    to nothing and are simply absent from the set, which leaves the
+    silently-omitted unknown/foreign key behavior unchanged.
+
+    Args:
+        requested_keys: Bounded list of canonical creator keys from the request.
+
+    Returns:
+        The distinct stable external person ids named by canonical keys.
+    """
+    return frozenset(
+        creator_id
+        for key in requested_keys
+        if (creator_id := parse_creator_key(key)) is not None
+    )
+
+
+def aggregate_creators(
+    inputs: CreatorSummaryInputs,
+    *,
+    wanted_creator_ids: frozenset[int],
+    read_unrated_issue_ids: frozenset[int],
+    unread_issue_ids: frozenset[int],
+) -> dict[int, _CreatorAggregates]:
+    """Aggregate personal statistics for exactly the requested creator ids.
+
+    A mature library can credit thousands of creators while one batch request
+    names at most ``MAX_CREATOR_KEYS`` of them. Aggregating every creator and
+    then discarding all but the requested ones made this stage scale with library
+    size instead of with request size, so credits outside ``wanted_creator_ids``
+    are skipped while they are walked rather than aggregated and filtered
+    afterwards (issue #3387). The returned statistics are identical either way.
+
+    Args:
+        inputs: User-scoped aggregation inputs.
+        wanted_creator_ids: Stable external person ids the request can return.
+        read_unrated_issue_ids: Owned issues that are read and not rated.
+        unread_issue_ids: Owned unread issues.
+
+    Returns:
+        Personal aggregates keyed by requested creator id.
+    """
+    creator_issues: dict[int, set[int]] = defaultdict(set)
+    creator_headline_issues: dict[int, set[int]] = defaultdict(set)
+    creator_roles: dict[int, set[str]] = defaultdict(set)
+    creator_names: dict[int, str] = {}
+    for issue_id, credits in inputs.issue_creator_credits.items():
+        for credit in credits:
+            creator_id = credit.external_id
+            if creator_id not in wanted_creator_ids:
+                continue
+            creator_issues[creator_id].add(issue_id)
+            creator_names.setdefault(creator_id, credit.display_name)
+            creator_roles[creator_id].update(credit.roles)
+            if any(role in HEADLINE_ROLES for role in credit.roles):
+                creator_headline_issues[creator_id].add(issue_id)
+
+    creator_stats: dict[int, _CreatorAggregates] = {}
+    for creator_id, issue_ids in creator_issues.items():
+        headline_ratings = [
+            inputs.effective_ratings[issue_id]
+            for issue_id in issue_ids
+            if issue_id in creator_headline_issues[creator_id]
+            and issue_id in inputs.effective_ratings
+        ]
+        ratings_count = len(headline_ratings)
+        creator_stats[creator_id] = _CreatorAggregates(
+            display_name=creator_names[creator_id],
+            roles=sorted(creator_roles[creator_id]),
+            average_rating=(
+                round(sum(headline_ratings) / ratings_count, 2) if ratings_count else None
+            ),
+            ratings_count=ratings_count,
+            read_unrated_count=sum(
+                1 for issue_id in issue_ids if issue_id in read_unrated_issue_ids
+            ),
+            upcoming_count=sum(1 for issue_id in issue_ids if issue_id in unread_issue_ids),
+        )
+    return creator_stats
+
+
 async def get_creator_summaries(
     db: AsyncSession,
     user_id: int,
@@ -150,6 +261,9 @@ async def get_creator_summaries(
         issue_id for issue_id, status in inputs.owned_issues.items() if status == "unread"
     )
 
+    # Coverage is deliberately library-wide: it reports how much of the owned
+    # library carries confirmed creator metadata, so it must not shrink or shift
+    # when a caller asks about fewer creators.
     coverage = _build_coverage(
         inputs,
         rated_issue_ids=rated_issue_ids,
@@ -157,55 +271,29 @@ async def get_creator_summaries(
         unread_issue_ids=unread_issue_ids,
     )
 
-    creator_issues: dict[int, set[int]] = defaultdict(set)
-    creator_headline_issues: dict[int, set[int]] = defaultdict(set)
-    creator_roles: dict[int, set[str]] = defaultdict(set)
-    creator_names: dict[int, str] = {}
-    for issue_id, credits in inputs.issue_creator_credits.items():
-        for credit in credits:
-            creator_issues[credit.external_id].add(issue_id)
-            creator_names.setdefault(credit.external_id, credit.display_name)
-            creator_roles[credit.external_id].update(credit.roles)
-            if any(role in HEADLINE_ROLES for role in credit.roles):
-                creator_headline_issues[credit.external_id].add(issue_id)
+    creator_stats = aggregate_creators(
+        inputs,
+        wanted_creator_ids=requested_creator_ids(requested_keys),
+        read_unrated_issue_ids=read_unrated_issue_ids,
+        unread_issue_ids=unread_issue_ids,
+    )
 
-    # Precompute per-creator statistics to avoid repeated large loops
-    creator_stats: dict[int, dict[str, Any]] = {
-        creator_id: {}
-        for creator_id in creator_issues
-    }
-    for creator_id, issue_ids in creator_issues.items():
-        headline_ratings = [
-            inputs.effective_ratings[issue_id]
-            for issue_id in issue_ids
-            if issue_id in creator_headline_issues[creator_id]
-            and issue_id in inputs.effective_ratings
-        ]
-        creator_stats[creator_id] = {
-            "ratings": headline_ratings,
-            "read_unrated": sum(1 for issue_id in issue_ids if issue_id in read_unrated_issue_ids),
-            "upcoming": sum(1 for issue_id in issue_ids if issue_id in unread_issue_ids),
-            "display_name": creator_names[creator_id],
-            "roles": sorted(creator_roles[creator_id]),
-        }
-
+    # ``canonical_creator_key`` echoes the requested key verbatim, so the key
+    # spelling the client sent is what the response reports back.
     summaries: dict[str, CreatorSummaryItem] = {}
     for key in requested_keys:
         creator_id = parse_creator_key(key)
         if creator_id is None or creator_id not in creator_stats:
             continue
-        data = creator_stats[creator_id]
-        ratings = data["ratings"]
-        ratings_count = len(ratings)
-        average_rating = round(sum(ratings) / ratings_count, 2) if ratings_count else None
+        aggregates = creator_stats[creator_id]
         summaries[key] = CreatorSummaryItem(
             canonical_creator_key=key,
-            display_name=data["display_name"],
-            normalized_roles=data["roles"],
-            average_rating=average_rating,
-            ratings_count=ratings_count,
-            read_unrated_count=data["read_unrated"],
-            upcoming_count=data["upcoming"],
+            display_name=aggregates.display_name,
+            normalized_roles=aggregates.roles,
+            average_rating=aggregates.average_rating,
+            ratings_count=aggregates.ratings_count,
+            read_unrated_count=aggregates.read_unrated_count,
+            upcoming_count=aggregates.upcoming_count,
         )
 
     return CreatorSummariesResponse(summaries=summaries, coverage=coverage)
@@ -213,6 +301,8 @@ async def get_creator_summaries(
 
 __all__ = [
     "HEADLINE_ROLES",
+    "aggregate_creators",
     "get_creator_summaries",
     "parse_creator_key",
+    "requested_creator_ids",
 ]
