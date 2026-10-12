@@ -740,21 +740,7 @@ async def get_session_details(
     )
     events = events_result.scalars().all()
 
-    thread_ids = set()
-    for event in events:
-        if event.type == "roll":
-            thread_id = event.selected_thread_id
-        else:
-            thread_id = event.thread_id
-        if thread_id:
-            thread_ids.add(thread_id)
-
-    threads_dict = {}
-    if thread_ids:
-        threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
-        threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
-
-    formatted_events = await build_session_event_details(db, session_id, events, threads_dict)
+    formatted_events = await build_session_event_details(db, session_id, events)
 
     return SessionDetailsResponse(
         session_id=session_obj.id,

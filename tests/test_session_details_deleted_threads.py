@@ -178,3 +178,50 @@ async def test_undo_of_roll_preserves_selected_thread_reference(
 
     assert undo_event.type == "undo"
     assert undo_event.selected_thread_id == thread.id
+
+
+@pytest.mark.asyncio
+async def test_timeline_resolves_live_thread_for_undo_of_roll(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """A restored roll names its live thread instead of flagging it deleted.
+
+    ``create_undo_event`` preserves the roll's ``selected_thread_id``, so the
+    details endpoint must resolve that reference with the same rule the
+    timeline uses; otherwise a live thread would be reported as deleted
+    (#3265).
+    """
+    session, thread = await _make_session_and_thread(async_db, default_user)
+
+    roll_event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=thread.id,
+        die=6,
+        result=4,
+        selection_method="random",
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+    await async_db.refresh(roll_event)
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=roll_event.id,
+        thread_states={str(thread.id): {"title": "Saga", "queue_position": 1}},
+        session_state={"current_die": 6},
+        description="Before roll",
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+    await async_db.refresh(snapshot)
+
+    await UndoSnapshotRepository(async_db).create_undo_event(session.id, snapshot)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    undo_events = [event for event in response.json()["events"] if event["type"] == "undo"]
+    assert len(undo_events) == 1
+    assert undo_events[0]["thread_title"] == "Saga"
+    assert undo_events[0]["thread_deleted"] is False

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
-from app.repositories import reading_session_repository
+from app.repositories import reading_session_repository, thread_repository
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import (
     EventDetail,
@@ -340,30 +340,32 @@ async def build_session_event_details(
     db: AsyncSession,
     session_id: int,
     events: Sequence[Event],
-    threads_by_id: dict[int, Thread],
 ) -> list[EventDetail]:
     """Format session events for the history timeline.
 
-    Events that reference a deleted thread resolve their title from the
-    session's snapshots when possible and are flagged with ``thread_deleted``
-    so the timeline can render a graceful placeholder instead of an
-    error-like missing state (#3265).
+    Live threads are loaded with the same thread-id resolution the timeline
+    uses, so an event can never be flagged ``thread_deleted`` just because a
+    caller forgot to prefetch its reference. Events that reference a deleted
+    thread resolve their title from the session's snapshots when possible and
+    are flagged with ``thread_deleted`` so the timeline can render a graceful
+    placeholder instead of an error-like missing state (#3265).
 
     Args:
         db: Database session.
         session_id: Session whose snapshots provide last-known titles.
         events: Session events in display order.
-        threads_by_id: Live threads keyed by ID.
 
     Returns:
         EventDetail list with titles, deletion flags, and reader-language
         descriptions.
     """
-    missing_ids = {
-        thread_id
-        for event in events
-        if (thread_id := _event_thread_id(event)) is not None and thread_id not in threads_by_id
-    }
+    thread_ids: set[int] = set()
+    for event in events:
+        thread_id = _event_thread_id(event)
+        if thread_id is not None:
+            thread_ids.add(thread_id)
+    threads_by_id = await thread_repository.threads_by_ids(db, thread_ids)
+    missing_ids = {thread_id for thread_id in thread_ids if thread_id not in threads_by_id}
     snapshot_titles: dict[int, str] = {}
     if missing_ids:
         recovered = await reading_session_repository.snapshot_thread_titles(db, session_id)

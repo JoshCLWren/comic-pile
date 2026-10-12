@@ -364,9 +364,11 @@ async def snapshot_thread_titles(db: AsyncSession, reading_session_id: int) -> d
     """Recover last-known thread titles from a session's snapshots.
 
     Snapshots persist each thread's title at capture time, so a thread that
-    was later deleted can still be named on the history timeline. Delta
-    snapshots only cover rated threads, so recovery is best-effort: threads
-    with no snapshot coverage are simply absent from the mapping.
+    was later deleted can still be named on the history timeline. Snapshots
+    are scanned newest first, so the first title recorded for a thread is the
+    most recent one available. Delta snapshots only cover rated threads, so
+    recovery is best-effort: threads with no snapshot coverage are simply
+    absent from the mapping.
 
     Args:
         db: Database session.
@@ -376,7 +378,9 @@ async def snapshot_thread_titles(db: AsyncSession, reading_session_id: int) -> d
         Mapping of thread ID to its last-known title.
     """
     result = await db.execute(
-        select(Snapshot.thread_states).where(Snapshot.session_id == reading_session_id)
+        select(Snapshot.thread_states)
+        .where(Snapshot.session_id == reading_session_id)
+        .order_by(Snapshot.created_at.desc(), Snapshot.id.desc())
     )
     titles: dict[int, str] = {}
     for (states,) in result.all():
