@@ -4402,6 +4402,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tags/effective/thread/{thread_id}/issues/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Thread Issues Effective Tags
+         * @description Return direct and effective tags for every issue in one owned thread.
+         *
+         *     Bulk read for the thread detail issue rows (issue #3422): each issue's
+         *     effective tags union its direct tags, its thread's tags, and the tags of
+         *     every Reading Plan owned by the viewer that contains the issue. Issues
+         *     without any visible tag appear with empty tag lists so the client can
+         *     distinguish "no tags" from missing data without fallback requests.
+         *
+         *     Args:
+         *         thread_id: Primary key of the thread.
+         *         current_user: The authenticated user; must own the thread.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Per-issue direct and effective tags in canonical position order.
+         *
+         *     Raises:
+         *         HTTPException 404: When the thread does not exist or is not owned.
+         */
+        get: operations["get_thread_issues_effective_tags_api_v1_tags_effective_thread__thread_id__issues__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags/{tag_id}/": {
         parameters: {
             query?: never;
@@ -12983,76 +13020,6 @@ export interface components {
             verdict: "confirmed" | "sometimes" | "rejected";
         };
         /**
-         * TestCblSourceCreate
-         * @description Request body for seeding one discoverable CBL source list.
-         */
-        TestCblSourceCreate: {
-            /** Content Hash */
-            content_hash?: string | null;
-            /** Entries */
-            entries: components["schemas"]["TestCblSourceEntryCreate"][];
-            /** Name */
-            name?: string | null;
-            /** Repository */
-            repository?: string | null;
-            /** Revision Sha */
-            revision_sha?: string | null;
-            /** Source Path */
-            source_path?: string | null;
-        };
-        /**
-         * TestCblSourceEntryCreate
-         * @description One CBL source entry seeded for browser golden-path coverage.
-         */
-        TestCblSourceEntryCreate: {
-            /** Comicvine Issue Id */
-            comicvine_issue_id?: string | null;
-            /** Issue Id */
-            issue_id?: number | null;
-            /** Issue Number */
-            issue_number?: string | null;
-            /** Position */
-            position?: number | null;
-            /** Series Name */
-            series_name?: string | null;
-            /** Volume Year */
-            volume_year?: number | null;
-        };
-        /**
-         * TestCblSourceEntryResponse
-         * @description Persisted fixture entry returned to Playwright/API tests.
-         */
-        TestCblSourceEntryResponse: {
-            /** Comicvine Issue Id */
-            comicvine_issue_id: string;
-            /** Issue Id */
-            issue_id?: number | null;
-            /** Issue Number */
-            issue_number: string;
-            /** Position */
-            position: number;
-            /** Series Name */
-            series_name: string;
-        };
-        /**
-         * TestCblSourceResponse
-         * @description Persisted fixture source list returned to Playwright/API tests.
-         */
-        TestCblSourceResponse: {
-            /** Content Hash */
-            content_hash: string;
-            /** Entries */
-            entries: components["schemas"]["TestCblSourceEntryResponse"][];
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Revision Sha */
-            revision_sha: string;
-            /** Source Path */
-            source_path: string;
-        };
-        /**
          * ThreadConnectedResponse
          * @description Schema for thread dependency connectivity info.
          */
@@ -13210,6 +13177,27 @@ export interface components {
         ThreadIssueDependenciesResponse: {
             /** Issues */
             issues: components["schemas"]["IssueDependenciesResponse"][];
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * ThreadIssuesEffectiveTagsResponse
+         * @description Direct and effective tags for every issue in one thread.
+         *
+         *     Bulk read for surfaces that render many issues at once (the thread
+         *     detail issue rows in issue #3422): one response carries each issue's
+         *     effective tags so the client never issues one request per issue.
+         *
+         *     Attributes:
+         *         thread_id: Primary key of the thread.
+         *         issues: Per-issue direct and effective tags in canonical position
+         *             order. Issues without any visible tag still appear with empty
+         *             tag lists so clients can distinguish "no tags" from missing
+         *             data without fallback requests.
+         */
+        ThreadIssuesEffectiveTagsResponse: {
+            /** Issues */
+            issues: components["schemas"]["EffectiveTagsResponse"][];
             /** Thread Id */
             thread_id: number;
         };
@@ -19071,6 +19059,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EffectiveTagsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thread_issues_effective_tags_api_v1_tags_effective_thread__thread_id__issues__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssuesEffectiveTagsResponse"];
                 };
             };
             /** @description Validation Error */

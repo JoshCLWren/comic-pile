@@ -16131,236 +16131,6 @@
         "title": "TasteVerdictRequest",
         "type": "object"
       },
-      "TestCblSourceCreate": {
-        "description": "Request body for seeding one discoverable CBL source list.",
-        "properties": {
-          "content_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Hash"
-          },
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/TestCblSourceEntryCreate"
-            },
-            "minItems": 1,
-            "title": "Entries",
-            "type": "array"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "repository": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Repository"
-          },
-          "revision_sha": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revision Sha"
-          },
-          "source_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Path"
-          }
-        },
-        "required": [
-          "entries"
-        ],
-        "title": "TestCblSourceCreate",
-        "type": "object"
-      },
-      "TestCblSourceEntryCreate": {
-        "description": "One CBL source entry seeded for browser golden-path coverage.",
-        "properties": {
-          "comicvine_issue_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comicvine Issue Id"
-          },
-          "issue_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
-          },
-          "issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Number"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
-          },
-          "series_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Series Name"
-          },
-          "volume_year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Volume Year"
-          }
-        },
-        "title": "TestCblSourceEntryCreate",
-        "type": "object"
-      },
-      "TestCblSourceEntryResponse": {
-        "description": "Persisted fixture entry returned to Playwright/API tests.",
-        "properties": {
-          "comicvine_issue_id": {
-            "title": "Comicvine Issue Id",
-            "type": "string"
-          },
-          "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
-          },
-          "issue_number": {
-            "title": "Issue Number",
-            "type": "string"
-          },
-          "position": {
-            "title": "Position",
-            "type": "integer"
-          },
-          "series_name": {
-            "title": "Series Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "position",
-          "series_name",
-          "issue_number",
-          "comicvine_issue_id"
-        ],
-        "title": "TestCblSourceEntryResponse",
-        "type": "object"
-      },
-      "TestCblSourceResponse": {
-        "description": "Persisted fixture source list returned to Playwright/API tests.",
-        "properties": {
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          },
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/TestCblSourceEntryResponse"
-            },
-            "title": "Entries",
-            "type": "array"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "revision_sha": {
-            "title": "Revision Sha",
-            "type": "string"
-          },
-          "source_path": {
-            "title": "Source Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "source_path",
-          "content_hash",
-          "revision_sha",
-          "entries"
-        ],
-        "title": "TestCblSourceResponse",
-        "type": "object"
-      },
       "ThreadConnectedResponse": {
         "description": "Schema for thread dependency connectivity info.",
         "properties": {
@@ -16806,6 +16576,28 @@
           "issues"
         ],
         "title": "ThreadIssueDependenciesResponse",
+        "type": "object"
+      },
+      "ThreadIssuesEffectiveTagsResponse": {
+        "description": "Direct and effective tags for every issue in one thread.\n\nBulk read for surfaces that render many issues at once (the thread\ndetail issue rows in issue #3422): one response carries each issue's\neffective tags so the client never issues one request per issue.\n\nAttributes:\n    thread_id: Primary key of the thread.\n    issues: Per-issue direct and effective tags in canonical position\n        order. Issues without any visible tag still appear with empty\n        tag lists so clients can distinguish \"no tags\" from missing\n        data without fallback requests.",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/EffectiveTagsResponse"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "issues"
+        ],
+        "title": "ThreadIssuesEffectiveTagsResponse",
         "type": "object"
       },
       "ThreadReadingOrdersResponse": {
@@ -26904,6 +26696,54 @@
           }
         ],
         "summary": "Get Thread Effective Tags",
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v1/tags/effective/thread/{thread_id}/issues/": {
+      "get": {
+        "description": "Return direct and effective tags for every issue in one owned thread.\n\nBulk read for the thread detail issue rows (issue #3422): each issue's\neffective tags union its direct tags, its thread's tags, and the tags of\nevery Reading Plan owned by the viewer that contains the issue. Issues\nwithout any visible tag appear with empty tag lists so the client can\ndistinguish \"no tags\" from missing data without fallback requests.\n\nArgs:\n    thread_id: Primary key of the thread.\n    current_user: The authenticated user; must own the thread.\n    db: Database session.\n\nReturns:\n    Per-issue direct and effective tags in canonical position order.\n\nRaises:\n    HTTPException 404: When the thread does not exist or is not owned.",
+        "operationId": "get_thread_issues_effective_tags_api_v1_tags_effective_thread__thread_id__issues__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssuesEffectiveTagsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Thread Issues Effective Tags",
         "tags": [
           "tags"
         ]

@@ -1,7 +1,7 @@
 """Add checkpoint flag to custom CBL entries.
 
 Revision ID: c34990000001
-Revises: c25530000001
+Revises: c35520000001
 Create Date: 2026-10-12
 
 Narrow extension of custom CBL authoring (#2553 / #3499): a CBL entry may
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 
 
 revision: str = "c34990000001"
-down_revision: str | Sequence[str] | None = "c25530000001"
+down_revision: str | Sequence[str] | None = "c35520000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

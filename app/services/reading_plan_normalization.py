@@ -511,8 +511,16 @@ async def editor_plan_response(
         API response whose issue nodes match normalized membership.
     """
     from app.services.continuity import _to_plan_response
+    from app.services.continuity_plan_labels import labeled_plan_nodes
 
-    return _to_plan_response(plan, await editor_nodes_for_plan(db, plan))
+    labeled = await labeled_plan_nodes(
+        db,
+        [node.model_dump() for node in await editor_nodes_for_plan(db, plan)],
+    )
+    return _to_plan_response(
+        plan,
+        [ContinuityPlanNode.model_validate(node) for node in labeled],
+    )
 
 
 def drop_issue_nodes_from_plan_json(
