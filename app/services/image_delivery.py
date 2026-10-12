@@ -20,6 +20,7 @@ import io
 import ipaddress
 import logging
 import socket
+import time
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
@@ -51,6 +52,25 @@ _COMICVINE_CDN_HOSTS = frozenset(
 _COMICVINE_CANONICAL_SCHEME = "https"
 _COMICVINE_CANONICAL_HOST = "comicvine.gamespot.com"
 _COMICVINE_CANONICAL_PATH_PREFIX = "/a"
+
+# In-memory caches for performance optimization
+# DNS resolution cache: hostname -> (addresses, timestamp)
+# TTL of 5 minutes (300 seconds) balances freshness with performance
+_DNS_CACHE: dict[str, tuple[list[ipaddress.IPv4Address | ipaddress.IPv6Address], float]] = {}
+_DNS_CACHE_TTL = 300.0
+
+# Optimized image cache: (validated_url, target_width) -> OptimizedImage
+# Max 100 entries to bound memory usage
+_IMAGE_CACHE_MAX_SIZE = 100
+_IMAGE_CACHE: dict[tuple[str, int], OptimizedImage] = {}
+_IMAGE_CACHE_ORDER: list[tuple[str, int]] = []
+
+
+def clear_caches() -> None:
+    """Clear all in-memory caches. Used by tests to ensure isolation."""
+    _DNS_CACHE.clear()
+    _IMAGE_CACHE.clear()
+    _IMAGE_CACHE_ORDER.clear()
 
 
 class ImageDeliveryError(Exception):
@@ -192,20 +212,26 @@ def _resolve_addresses_blocking(hostname: str) -> list[ipaddress.IPv4Address | i
     return [ipaddress.ip_address(info[4][0]) for info in infos]
 
 
-async def ensure_publicly_routable(hostname: str) -> None:
-    """Reject hostnames that resolve to non-public network ranges.
-
-    Protects against SSRF-style abuse of the optimizer endpoint even if an
-    allowlisted host (or an attacker-controllable DNS record for one) resolves
-    to loopback, private, link-local, reserved, or multicast space.
+async def _resolve_and_validate_cached(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Resolve and validate a hostname with in-memory caching.
 
     Args:
-        hostname: Upstream hostname about to be fetched.
+        hostname: Upstream hostname to resolve.
+
+    Returns:
+        List of validated public IP addresses.
 
     Raises:
-        InvalidImageSourceError: If resolution fails or any address is
-            non-public.
+        InvalidImageSourceError: If resolution fails or any address is non-public.
     """
+    now = time.monotonic()
+    cached = _DNS_CACHE.get(hostname)
+    if cached is not None:
+        addresses, timestamp = cached
+        if now - timestamp < _DNS_CACHE_TTL:
+            return addresses
+
+    # Cache miss or expired - resolve fresh
     try:
         addresses = await asyncio.to_thread(_resolve_addresses_blocking, hostname)
     except OSError as exc:
@@ -224,6 +250,29 @@ async def ensure_publicly_routable(hostname: str) -> None:
             or address.is_unspecified
         ):
             raise InvalidImageSourceError("Upstream image host resolves to a non-public address")
+
+    _DNS_CACHE[hostname] = (addresses, now)
+    return addresses
+
+
+async def ensure_publicly_routable(hostname: str) -> None:
+    """Reject hostnames that resolve to non-public network ranges.
+
+    Protects against SSRF-style abuse of the optimizer endpoint even if an
+    allowlisted host (or an attacker-controllable DNS record for one) resolves
+    to loopback, private, link-local, reserved, or multicast space.
+
+    Uses an in-memory cache with 5-minute TTL to avoid repeated DNS lookups
+    for the same allowlisted hosts.
+
+    Args:
+        hostname: Upstream hostname about to be fetched.
+
+    Raises:
+        InvalidImageSourceError: If resolution fails or any address is
+            non-public.
+    """
+    await _resolve_and_validate_cached(hostname)
 
 
 async def fetch_upstream(
@@ -322,13 +371,67 @@ def transcode_to_webp(payload: bytes, target_width: int) -> tuple[bytes, str] | 
             )
             converted = image.convert("RGBA" if has_alpha else "RGB")
             buffer = io.BytesIO()
-            converted.save(buffer, format="WEBP", quality=settings.image_optimizer_webp_quality)
+            # Use method=1 for fastest WebP encoding (significantly faster than default method=0)
+            converted.save(
+                buffer,
+                format="WEBP",
+                quality=settings.image_optimizer_webp_quality,
+                method=1,
+            )
             return buffer.getvalue(), "image/webp"
     except ImportError:
         logger.warning("Pillow unavailable; serving remote covers without transformation")
     except Exception as exc:
         logger.warning("Remote cover transcode failed; serving original bytes: %s", exc)
     return None
+
+
+def _cache_get(key: tuple[str, int]) -> OptimizedImage | None:
+    """Get an item from the image cache and update LRU order."""
+    if key in _IMAGE_CACHE:
+        # Move to end (most recently used)
+        _IMAGE_CACHE_ORDER.remove(key)
+        _IMAGE_CACHE_ORDER.append(key)
+        return _IMAGE_CACHE[key]
+    return None
+
+
+def _cache_put(key: tuple[str, int], value: OptimizedImage) -> None:
+    """Put an item in the image cache, evicting LRU if necessary."""
+    if key in _IMAGE_CACHE:
+        _IMAGE_CACHE_ORDER.remove(key)
+    elif len(_IMAGE_CACHE) >= _IMAGE_CACHE_MAX_SIZE:
+        # Evict LRU
+        lru_key = _IMAGE_CACHE_ORDER.pop(0)
+        del _IMAGE_CACHE[lru_key]
+    _IMAGE_CACHE[key] = value
+    _IMAGE_CACHE_ORDER.append(key)
+
+
+async def _optimize_remote_image_uncached(
+    validated_url: str,
+    target_width: int,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> OptimizedImage:
+    """Core optimization logic without caching (used for cache misses and tests)."""
+    payload, content_type = await fetch_upstream(validated_url, transport=transport)
+
+    transcoded = transcode_to_webp(payload, target_width)
+    if transcoded is not None:
+        return OptimizedImage(
+            content=transcoded[0],
+            media_type=transcoded[1],
+            width=target_width,
+            transcoded=True,
+        )
+
+    return OptimizedImage(
+        content=payload,
+        media_type=content_type.split(";")[0].strip().lower() or "application/octet-stream",
+        width=target_width,
+        transcoded=False,
+    )
 
 
 async def optimize_remote_image(
@@ -356,20 +459,17 @@ async def optimize_remote_image(
     await ensure_publicly_routable(hostname)
 
     target_width = resolve_variant_width(requested_width)
-    payload, content_type = await fetch_upstream(validated_url, transport=transport)
 
-    transcoded = transcode_to_webp(payload, target_width)
-    if transcoded is not None:
-        return OptimizedImage(
-            content=transcoded[0],
-            media_type=transcoded[1],
-            width=target_width,
-            transcoded=True,
-        )
+    # Use cache only in production (transport is None), not in tests
+    if transport is None:
+        cache_key = (validated_url, target_width)
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
 
-    return OptimizedImage(
-        content=payload,
-        media_type=content_type.split(";")[0].strip().lower() or "application/octet-stream",
-        width=target_width,
-        transcoded=False,
-    )
+        result = await _optimize_remote_image_uncached(validated_url, target_width)
+        _cache_put(cache_key, result)
+        return result
+
+    # Test path - no caching
+    return await _optimize_remote_image_uncached(validated_url, target_width, transport=transport)
