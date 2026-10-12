@@ -216,12 +216,11 @@ def _plan_lanes() -> list[ContinuityPlanLane]:
 async def _planned_edges(
     db: AsyncSession, spec: BPRDMigrationSpec
 ) -> list[tuple[int, int]]:
-    """Return inferred thread-entry and series-resume gates plus classified edges.
+    """Return inferred thread-entry gates plus classified B.P.R.D. prerequisites.
 
     Same-thread adjacency is not compiled. The five reviewed legacy edges remain
-    selected hard restrictions, including the two interleave pairs that series
-    resume now infers as well (War on Frogs #4 before Black Flame #2, Black
-    Flame #6 before War on Frogs #3).
+    selected hard restrictions, including the two interleave pairs that are not
+    series starts.
     """
     nodes = _plan_nodes(spec)
     index = await load_issue_thread_index(db, spec.issue_ids)

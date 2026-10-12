@@ -7,8 +7,8 @@ module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
 The compiler's hard-edge semantics (#2553 Phase B):
-  1. ``strict_sequential`` plans compile thread-entry and series-resume
-     ``item_read`` gates, not every adjacent imported/suggested-order pair;
+  1. ``strict_sequential`` plans compile thread-entry ``item_read`` gates,
+     not every adjacent imported/suggested-order pair;
   2. checkpoint nodes block the next node in the same lane;
   3. convergence gates compile ``converged`` self-loop rules;
   4. plan-level cycles and persisted-rule conflicts keep their stable codes;
@@ -209,7 +209,7 @@ async def replace_compiled_rules(
     """Replace only rules owned by this plan and compile plan semantics into rules.
 
     This compiles:
-    1. Strict-sequential thread-entry and series-resume gates (Phase B of #2553)
+    1. Strict-sequential thread-entry gates (Phase B of #2553)
     2. Checkpoint rules from nodes with ``is_checkpoint=True``
     3. Converged rules from nodes with ``convergence_gate`` entries
     4. Caller-supplied selected ``item_read`` pairs that are still in the plan
@@ -229,17 +229,16 @@ async def replace_compiled_rules(
         plan: The persisted (or to-be-persisted) plan owning the compiled rules.
         nodes: Canonical node set to compile from.
         ordering_mode: Plan ordering mode; only ``strict_sequential`` creates
-            inferred thread-entry and series-resume gates.
+            inferred thread-entry gates.
         sync_canonical_edges: When True (default), retire this plan's stale
             compiled edges and compile the new rules into canonical
             Dependencies (#2553). Only pairs that actually changed are
             retired/compiled, so re-saving an unchanged plan is a no-op
             for the Dependency table.
         extra_item_read_pairs: Explicit selected hard restrictions to compile
-            in addition to inferred thread-entry and series-resume gates.
-            Same-thread pairs are ignored. Live plan create/update omit this;
-            migrations may pass classified genuine prerequisites that the
-            inferred selector does not already emit.
+            in addition to inferred thread-entry gates. Same-thread pairs are
+            ignored. Live plan create/update omit this; migrations pass
+            classified genuine prerequisites that are not series starts.
 
     Returns:
         True when all rules compiled without cycle conflicts.
@@ -293,7 +292,7 @@ async def replace_compiled_rules(
         tuple[str, int, str, int, str, int | list[convergence_target] | None]
     ] = []
 
-    # 1. Strict-sequential thread-entry and series-resume gates, plus extras.
+    # 1. Strict-sequential thread-entry gates, plus selected extra pairs.
     if ordering_mode == "strict_sequential":
         issue_ids = [node.ref_id for node in nodes if node.node_type == "issue"]
         issue_index = await load_issue_thread_index(db, issue_ids)

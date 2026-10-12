@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
+from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
@@ -215,6 +216,29 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
     wof2 = await _add_issue(async_db, thread=war_on_frogs, issue_number="2", position=3, read=True)
     wof4 = await _add_issue(async_db, thread=war_on_frogs, issue_number="4", position=4, read=True)
     wof3 = await _add_issue(async_db, thread=war_on_frogs, issue_number="3", position=5, read=False)
+    # Recorded interleave edges (PRODUCTION_BPRD_SPEC 1575 / 1576). These are
+    # standalone prerequisites, not compiler inferences. Thread-entry compile
+    # must leave them in place the same way UXRO and Starman/JSA edges survive.
+    async_db.add(
+        Dependency(
+            source_issue_id=wof4.id,
+            target_issue_id=bf[1].id,
+            note=(
+                "B.P.R.D. Plague of Frogs omnibus interleave: "
+                "War on Frogs #4 before The Black Flame #2"
+            ),
+        )
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=bf[5].id,
+            target_issue_id=wof3.id,
+            note=(
+                "B.P.R.D. Plague of Frogs omnibus interleave: "
+                "The Black Flame #6 before War on Frogs #3"
+            ),
+        )
+    )
     await async_db.commit()
 
     current_order = [
@@ -248,8 +272,19 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
         issue.id for issue in current_order
     ]
 
+    recorded_wof3 = (
+        await async_db.execute(
+            select(Dependency).where(
+                Dependency.source_issue_id == bf[5].id,
+                Dependency.target_issue_id == wof3.id,
+            )
+        )
+    ).scalar_one()
+    assert recorded_wof3.note is not None
+    assert "Black Flame #6 before War on Frogs #3" in recorded_wof3.note
+
     initial_pool = await _bprd_pool(user.id, async_db)
-    # Recorded interleave: Black Flame #6 before War on Frogs #3. At this
+    # Recorded edge 1576: Black Flame #6 before War on Frogs #3. At this
     # frontier Black Flame #2-6 are unread, so Roll offers only Black Flame.
     assert [thread.id for thread in initial_pool] == [black_flame.id]
     assert black_flame.next_unread_issue_id == bf[1].id

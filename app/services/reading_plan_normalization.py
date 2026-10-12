@@ -552,7 +552,7 @@ async def _projected_thread_entry_pairs(
     db: AsyncSession,
     nodes: list[ContinuityPlanNode],
 ) -> tuple[tuple[int, int], ...]:
-    """Return inferred strict pairs JSON would compile, without compiling them."""
+    """Return thread-entry pairs JSON would compile, without compiling them."""
     from app.services.strict_plan_constraints import (
         load_issue_thread_index,
         strict_plan_item_read_pairs,
