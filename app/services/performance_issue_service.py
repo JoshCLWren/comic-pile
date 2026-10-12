@@ -1,30 +1,37 @@
 """Automatic GitHub issue filing for production performance violations.
 
-Implements issue #3245: production performance telemetry becomes factory work
-automatically. The unit of issue creation is a distinct actionable performance
-signature (fingerprint), not a raw request event.
+Implements issue #3245 filing plus the #3552 noise-control contract.
 
-Policy implemented here (thresholds frozen by the issue contract):
+Policy:
 
-- Warm request 500-999 ms: file when the same normalized route records 3
-  warnings within 10 minutes or 5 warnings within 1 hour.
-- Warm request >= 1000 ms: file immediately unless the same fingerprint
-  already has an open issue.
-- Startup >= 2.0 s but < 2.5 s: file when it happens twice within 1 hour.
-- Startup >= 2.5 s: file immediately with phase/operation attribution.
-- Readiness-critical coroutine hard timeout: file immediately unless the same
-  signature already has an open issue.
-
-Deduplication is by deterministic fingerprint built from the dimensions that
-describe the likely independent defect (normalized route template, warm vs
-cold, performance class, dominant phase/operation, DB-heavy vs app-heavy,
-timeout/exception type). Deployment/commit is evidence only, never the
-primary dedupe key.
+- Dedupe fingerprint is kind plus route identity: for requests that is
+  ``method + route template``. Warm/cold, workload class, and dominant
+  phase are evidence on the sample, never separate issues.
+- Measurements at or under the route budget never open an issue. Warning
+  samples (500-999 ms) are recorded or aggregated only. An issue title
+  never shows a duration below its budget.
+- Cold-start requests and ``startup.*`` readiness samples do not count
+  toward filing. They are logged separately for cold-start work. Hard
+  startup failures (2.5s or more) log at WARNING; issues #3479 and #3480
+  do not consume ``performance_alarm_ignored_startup``.
+- A route files only after N warm over-budget hits in the same UTC day.
+  N defaults to 3 and is configurable via
+  ``PERF_ALARM_DAILY_BREACH_THRESHOLD``. Closed-issue regressions use
+  the same daily threshold.
+- Daily counts and open-issue identity live in shared durable storage
+  (Postgres ``perf_alarm_counters`` / ``perf_alarm_incidents``) so
+  Vercel serverless instances share one counter. Process memory is not
+  the production store.
+- If an open issue already exists for the fingerprint, a new over-budget
+  sample comments at most once per fingerprint per hour, and never
+  comments on a closed issue.
+- Readiness-critical coroutine hard timeouts still file immediately
+  unless the same coroutine signature already has an open issue.
 
 Issue creation never blocks the user request: callers use the ``handle_*``
-entry points, which evaluate synchronously and dispatch bounded background
-work. GitHub API failure is logged and observable but never fails the
-original request.
+entry points, which dispatch bounded background work. GitHub API calls
+run in a worker thread. GitHub API failure is logged and observable but
+never fails the original request.
 """
 
 from __future__ import annotations
@@ -35,31 +42,29 @@ import logging
 import re
 import threading
 import time
-from collections import deque
+from collections.abc import Coroutine
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.performance_budgets import (
     REQUEST_TIMEOUT_MS,
     REQUEST_WARNING_MS,
     STARTUP_TIMEOUT_MS,
-    STARTUP_WARNING_MS,
+)
+from app.services.perf_alarm_store import (
+    InMemoryPerfAlarmStore,
+    PerfAlarmStore,
+    PostgresPerfAlarmStore,
 )
 
 logger = logging.getLogger(__name__)
 
-# Warning accumulation windows (issue #3245 contract).
-WARNING_BURST_COUNT = 3
-WARNING_BURST_WINDOW_S = 10 * 60
-WARNING_SUSTAINED_COUNT = 5
-WARNING_SUSTAINED_WINDOW_S = 60 * 60
-
-# Startup warning aggregation: twice within 1 hour files an issue.
-STARTUP_WARNING_COUNT = 2
-STARTUP_WARNING_WINDOW_S = 60 * 60
+# Daily over-budget threshold (issue #3552). Overridable via AppSettings.
+DEFAULT_DAILY_BREACH_THRESHOLD = 3
 
 # Retention ceilings so one slow route cannot grow process memory without bound.
-MAX_WARNING_ROUTES = 500
 MAX_RECENT_DURATIONS = 5
 MAX_RECENT_REQUEST_IDS = 5
 MAX_FINGERPRINTS_TRACKED = 1000
@@ -68,6 +73,10 @@ FINGERPRINT_MARKER_PREFIX = "performance-fingerprint:v1:"
 
 VALID_SUBSYSTEM_LABELS = frozenset({"backend", "api", "frontend", "infrastructure"})
 HIGH_PRIORITY_LABEL = "ralph-priority:high"
+
+_LEGACY_WARMTH = ("warm", "cold")
+_LEGACY_PHASES = ("unknown",)
+_LEGACY_WORKLOADS = ("db-heavy", "app-heavy", "mixed")
 
 _SENSITIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)(authorization\s*:\s*)(.+)"),
@@ -163,37 +172,54 @@ def fingerprint_for_request(
     *,
     method: str,
     route_template: str,
-    cold: bool,
-    dominant_phase: str | None = None,
-    db_time_ms: float = 0.0,
-    duration_ms: float = 0.0,
-    db_queries: int = 0,
 ) -> tuple[str, str]:
-    """Build the actionable fingerprint for a warm/cold request violation.
+    """Build the actionable fingerprint for a request performance event.
+
+    The #3552 dedupe key is kind plus route identity (HTTP method and
+    normalized route template). Warm/cold and subsystem/workload are
+    sample evidence, not fingerprint dimensions.
 
     Args:
         method: HTTP method of the request.
         route_template: Normalized route template (not concrete IDs).
-        cold: Whether this was a cold-start request.
-        dominant_phase: Dominant timing phase/operation when known
-            (e.g. ``"sql-aggregation"`` vs ``"serialization"``). Distinct
-            phases on the same route produce distinct fingerprints because
-            they plausibly require independent fixes.
-        db_time_ms: Database execution time in milliseconds.
-        duration_ms: Total request duration in milliseconds.
-        db_queries: SQL query count for workload classification.
 
     Returns:
         Tuple of (fingerprint hash, canonical signature string).
     """
     route = normalize_route_template(route_template)
-    warmth = "cold" if cold else "warm"
-    phase = (dominant_phase or "unknown").strip().lower() or "unknown"
-    workload = classify_workload(duration_ms, db_time_ms, db_queries)
-    canonical = (
-        f"request|{method.upper()}|{route}|{warmth}|{phase}|{workload}"
-    )
+    canonical = f"request|{method.upper()}|{route}"
     return _hash_canonical(canonical), canonical
+
+
+def legacy_request_fingerprints(*, method: str, route_template: str) -> tuple[str, ...]:
+    """Return pre-#3552 fingerprint hashes for the same method and route.
+
+    Production issues opened before this change used
+    ``request|METHOD|route|warmth|phase|workload``. Middleware never passed
+    ``dominant_phase``, so live markers used ``unknown``. Matching those
+    hashes (and method-plus-route text) reuses today's open issues.
+
+    Args:
+        method: HTTP method of the request.
+        route_template: Normalized route template.
+
+    Returns:
+        Unique legacy fingerprint hashes for this method and route.
+    """
+    route = normalize_route_template(route_template)
+    hashes: list[str] = []
+    seen: set[str] = set()
+    for warmth in _LEGACY_WARMTH:
+        for phase in _LEGACY_PHASES:
+            for workload in _LEGACY_WORKLOADS:
+                canonical = (
+                    f"request|{method.upper()}|{route}|{warmth}|{phase}|{workload}"
+                )
+                digest = _hash_canonical(canonical)
+                if digest not in seen:
+                    seen.add(digest)
+                    hashes.append(digest)
+    return tuple(hashes)
 
 
 def fingerprint_for_startup(*, operation: str) -> tuple[str, str]:
@@ -255,90 +281,29 @@ class FilingDecision:
     canonical: str
     high_priority: bool
     reason: str
+    method: str | None = None
+    route_template: str | None = None
+    open_issue_number: int | None = None
+    legacy_fingerprints: tuple[str, ...] = ()
 
 
 class PerformanceIssueTracker:
-    """Process-local accumulator for performance-to-issue policy decisions.
+    """Process-local occurrence evidence for the next GitHub comment.
 
-    Tracks warning timestamps per normalized route, startup warning
-    timestamps, known open fingerprints (dedupe), known closed fingerprints
-    (regression detection), and per-fingerprint occurrence evidence.
+    Daily breach counts and open-issue identity are not stored here.
+    Production uses :class:`PostgresPerfAlarmStore`; tests share an
+    :class:`InMemoryPerfAlarmStore`.
     """
 
     def __init__(self) -> None:
         """Initialize empty bounded tracking state."""
         self._lock = threading.Lock()
-        self._warning_hits: dict[str, deque[float]] = {}
-        self._startup_warnings: deque[float] = deque()
-        self._open_fingerprints: dict[str, int] = {}
-        self._closed_fingerprints: dict[str, int] = {}
         self._occurrences: dict[str, OccurrenceEvidence] = {}
 
     def reset_for_tests(self) -> None:
-        """Clear all tracking state. Intended for test isolation only."""
+        """Clear occurrence evidence. Intended for test isolation only."""
         with self._lock:
-            self._warning_hits.clear()
-            self._startup_warnings.clear()
-            self._open_fingerprints.clear()
-            self._closed_fingerprints.clear()
             self._occurrences.clear()
-
-    def mark_open(self, fingerprint: str, issue_number: int) -> None:
-        """Record that a fingerprint already has an open issue.
-
-        Args:
-            fingerprint: Deterministic performance signature hash.
-            issue_number: GitHub issue number holding the open incident.
-        """
-        with self._lock:
-            self._open_fingerprints[fingerprint] = issue_number
-            self._closed_fingerprints.pop(fingerprint, None)
-
-    def mark_closed(self, fingerprint: str, issue_number: int) -> None:
-        """Record that a fingerprint's issue was closed (fix deployed).
-
-        Args:
-            fingerprint: Deterministic performance signature hash.
-            issue_number: GitHub issue number that was closed.
-        """
-        with self._lock:
-            self._closed_fingerprints[fingerprint] = issue_number
-            self._open_fingerprints.pop(fingerprint, None)
-
-    def record_filed(self, fingerprint: str, issue_number: int) -> None:
-        """Record a newly filed issue as the open incident for a fingerprint.
-
-        Args:
-            fingerprint: Deterministic performance signature hash.
-            issue_number: GitHub issue number of the newly filed incident.
-        """
-        with self._lock:
-            self._open_fingerprints[fingerprint] = issue_number
-            self._closed_fingerprints.pop(fingerprint, None)
-
-    def open_issue_for(self, fingerprint: str) -> int | None:
-        """Return the known open issue number for a fingerprint, if any.
-
-        Args:
-            fingerprint: Deterministic performance signature hash.
-
-        Returns:
-            The open issue number, or None when no open issue is known.
-        """
-        with self._lock:
-            return self._open_fingerprints.get(fingerprint)
-
-    def closed_issue_for(self, fingerprint: str) -> int | None:
-        """Return the prior closed issue number for a fingerprint, if any.
-
-        Args:
-            fingerprint: Deterministic performance signature hash.
-
-        Returns:
-            The prior closed issue number, or None.
-        """
-        with self._lock:
-            return self._closed_fingerprints.get(fingerprint)
 
     def record_occurrence(
         self,
@@ -401,65 +366,40 @@ class PerformanceIssueTracker:
         with self._lock:
             return self._occurrences.get(fingerprint)
 
-    def evaluate_warning_hit(self, *, route_key: str, now: float) -> bool:
-        """Record a 500-999 ms warning and decide whether it files an issue.
-
-        Files when the same normalized route records 3 warnings within
-        10 minutes or 5 warnings within 1 hour.
-
-        Args:
-            route_key: Normalized ``METHOD route-template`` key.
-            now: Current epoch timestamp in seconds.
-
-        Returns:
-            True when the accumulation threshold is crossed.
-        """
-        with self._lock:
-            hits = self._warning_hits.get(route_key)
-            if hits is None:
-                if len(self._warning_hits) >= MAX_WARNING_ROUTES:
-                    oldest_key = min(
-                        self._warning_hits,
-                        key=lambda k: self._warning_hits[k][-1]
-                        if self._warning_hits[k]
-                        else 0.0,
-                    )
-                    del self._warning_hits[oldest_key]
-                hits = deque()
-                self._warning_hits[route_key] = hits
-            hits.append(now)
-            while hits and hits[0] < now - WARNING_SUSTAINED_WINDOW_S:
-                hits.popleft()
-            burst = sum(1 for ts in hits if ts >= now - WARNING_BURST_WINDOW_S)
-            sustained = len(hits)
-            return burst >= WARNING_BURST_COUNT or sustained >= WARNING_SUSTAINED_COUNT
-
-    def evaluate_startup_warning(self, *, now: float) -> bool:
-        """Record a 2.0-2.5 s startup warning and decide whether to file.
-
-        Files when startup warnings happen twice within 1 hour.
-
-        Args:
-            now: Current epoch timestamp in seconds.
-
-        Returns:
-            True when the aggregation threshold is crossed.
-        """
-        with self._lock:
-            self._startup_warnings.append(now)
-            while (
-                self._startup_warnings
-                and self._startup_warnings[0] < now - STARTUP_WARNING_WINDOW_S
-            ):
-                self._startup_warnings.popleft()
-            return len(self._startup_warnings) >= STARTUP_WARNING_COUNT
-
 
 _tracker = PerformanceIssueTracker()
+_test_store: InMemoryPerfAlarmStore | None = None
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _utc_day(now: float) -> date:
+    """Return the UTC calendar day containing ``now``.
+
+    Args:
+        now: Epoch timestamp in seconds.
+
+    Returns:
+        UTC date of that timestamp.
+    """
+    return datetime.fromtimestamp(now, UTC).date()
+
+
+def daily_breach_threshold() -> int:
+    """Return the configured daily over-budget hit count required to file.
+
+    Reads ``PERF_ALARM_DAILY_BREACH_THRESHOLD`` via AppSettings. The
+    settings validator already rejects values outside 1-100.
+
+    Returns:
+        Positive integer threshold (default 3).
+    """
+    from app.config import get_app_settings
+
+    return get_app_settings().perf_alarm_daily_breach_threshold
 
 
 def get_tracker() -> PerformanceIssueTracker:
-    """Return the process-wide performance issue tracker.
+    """Return the process-wide occurrence-evidence tracker.
 
     Returns:
         The shared tracker instance.
@@ -467,21 +407,59 @@ def get_tracker() -> PerformanceIssueTracker:
     return _tracker
 
 
-def reset_for_tests() -> None:
-    """Clear process-local performance issue state for test isolation."""
+def get_test_store() -> InMemoryPerfAlarmStore:
+    """Return the in-memory store installed by :func:`reset_for_tests`.
+
+    Returns:
+        The shared in-memory alarm store for the current test.
+
+    Raises:
+        RuntimeError: If called before :func:`reset_for_tests`.
+    """
+    if _test_store is None:
+        raise RuntimeError("performance alarm test store is not initialized")
+    return _test_store
+
+
+def reset_for_tests(store: InMemoryPerfAlarmStore | None = None) -> None:
+    """Install an in-memory alarm store and clear occurrence evidence.
+
+    Args:
+        store: Shared store for multi-evaluator tests. When omitted, a
+            fresh in-memory store is created.
+    """
+    global _test_store
+    _test_store = store if store is not None else InMemoryPerfAlarmStore()
     _tracker.reset_for_tests()
 
 
-def evaluate_request_event(
+def _resolve_store(store: PerfAlarmStore | None) -> PerfAlarmStore:
+    """Return the explicit store, else the test store.
+
+    Args:
+        store: Caller-provided durable store.
+
+    Returns:
+        The store to use for this evaluation.
+
+    Raises:
+        RuntimeError: If neither a store nor the test store is available.
+    """
+    if store is not None:
+        return store
+    if _test_store is not None:
+        return _test_store
+    raise RuntimeError("performance alarm store is required")
+
+
+async def evaluate_request_event(
     *,
     method: str,
     route_template: str,
     duration_ms: float,
     cold: bool,
-    dominant_phase: str | None = None,
-    db_time_ms: float = 0.0,
-    db_queries: int = 0,
     now: float | None = None,
+    store: PerfAlarmStore | None = None,
 ) -> FilingDecision | None:
     """Decide whether a request timing event should file or update an issue.
 
@@ -490,68 +468,85 @@ def evaluate_request_event(
         route_template: Normalized route template.
         duration_ms: Observed duration in milliseconds.
         cold: Whether this was a cold-start request.
-        dominant_phase: Dominant timing phase when known.
-        db_time_ms: Database execution time in milliseconds.
-        db_queries: SQL query count.
         now: Epoch timestamp override for tests.
+        store: Durable counter/incident store. Tests omit this to use the
+            in-memory store installed by :func:`reset_for_tests`.
 
     Returns:
-        A filing decision when the event crosses the policy threshold
-        (immediate violation, accumulated warnings, or occurrence update
-        for a known open fingerprint), otherwise None.
+        A filing decision when the event is actionable (file, update,
+        accumulate, or ignore), otherwise None for healthy in-budget
+        requests.
     """
     current = now if now is not None else time.time()
     fingerprint, canonical = fingerprint_for_request(
         method=method,
         route_template=route_template,
-        cold=cold,
-        dominant_phase=dominant_phase,
-        db_time_ms=db_time_ms,
-        duration_ms=duration_ms,
-        db_queries=db_queries,
     )
-    if duration_ms >= REQUEST_TIMEOUT_MS:
-        if _tracker.open_issue_for(fingerprint) is not None:
+    legacy = legacy_request_fingerprints(method=method, route_template=route_template)
+    route = normalize_route_template(route_template)
+    if cold:
+        return FilingDecision(
+            action="ignore",
+            fingerprint=fingerprint,
+            canonical=canonical,
+            high_priority=False,
+            reason="cold-start samples do not count toward filing",
+            method=method.upper(),
+            route_template=route,
+            legacy_fingerprints=legacy,
+        )
+    if duration_ms <= REQUEST_TIMEOUT_MS:
+        if duration_ms >= REQUEST_WARNING_MS:
             return FilingDecision(
-                action="update",
+                action="accumulate",
                 fingerprint=fingerprint,
                 canonical=canonical,
-                high_priority=True,
-                reason="repeat violation for known open fingerprint",
+                high_priority=False,
+                reason="warning recorded at or under route budget; never files",
+                method=method.upper(),
+                route_template=route,
+                legacy_fingerprints=legacy,
             )
+        return None
+    alarm_store = _resolve_store(store)
+    open_issue = await alarm_store.get_open_issue(fingerprint)
+    if open_issue is not None:
+        return FilingDecision(
+            action="update",
+            fingerprint=fingerprint,
+            canonical=canonical,
+            high_priority=True,
+            reason="repeat over-budget hit for known open fingerprint",
+            method=method.upper(),
+            route_template=route,
+            open_issue_number=open_issue,
+            legacy_fingerprints=legacy,
+        )
+    threshold = daily_breach_threshold()
+    hit_count = await alarm_store.increment_daily_hit(fingerprint, _utc_day(current))
+    if hit_count >= threshold:
         return FilingDecision(
             action="file",
             fingerprint=fingerprint,
             canonical=canonical,
             high_priority=True,
-            reason="warm violation >=1000ms files immediately",
+            reason=(
+                f"warm over-budget hits reached daily threshold ({threshold})"
+            ),
+            method=method.upper(),
+            route_template=route,
+            legacy_fingerprints=legacy,
         )
-    if duration_ms >= REQUEST_WARNING_MS:
-        route_key = f"{method.upper()} {normalize_route_template(route_template)}"
-        if _tracker.open_issue_for(fingerprint) is not None:
-            return FilingDecision(
-                action="update",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=False,
-                reason="repeat warning for known open fingerprint",
-            )
-        if _tracker.evaluate_warning_hit(route_key=route_key, now=current):
-            return FilingDecision(
-                action="file",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=False,
-                reason="warning accumulation threshold crossed",
-            )
-        return FilingDecision(
-            action="accumulate",
-            fingerprint=fingerprint,
-            canonical=canonical,
-            high_priority=False,
-            reason="warning recorded below filing threshold",
-        )
-    return None
+    return FilingDecision(
+        action="accumulate",
+        fingerprint=fingerprint,
+        canonical=canonical,
+        high_priority=False,
+        reason="over-budget hit recorded below daily threshold",
+        method=method.upper(),
+        route_template=route,
+        legacy_fingerprints=legacy,
+    )
 
 
 def evaluate_startup_event(
@@ -565,61 +560,30 @@ def evaluate_startup_event(
     Args:
         duration_ms: Measured ping-ready startup duration in milliseconds.
         operation: Named startup phase/operation attribution.
-        now: Epoch timestamp override for tests.
+        now: Unused clock override retained for call-site compatibility.
 
     Returns:
-        A filing decision when the policy threshold is crossed,
-        otherwise None.
+        An ignore decision: startup readiness samples never file.
     """
-    current = now if now is not None else time.time()
+    del now
     fingerprint, canonical = fingerprint_for_startup(operation=operation)
-    if duration_ms >= STARTUP_TIMEOUT_MS:
-        if _tracker.open_issue_for(fingerprint) is not None:
-            return FilingDecision(
-                action="update",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=True,
-                reason="repeat hard startup failure for known open fingerprint",
-            )
-        return FilingDecision(
-            action="file",
-            fingerprint=fingerprint,
-            canonical=canonical,
-            high_priority=True,
-            reason="hard startup failure >=2.5s files immediately",
-        )
-    if duration_ms >= STARTUP_WARNING_MS:
-        if _tracker.open_issue_for(fingerprint) is not None:
-            return FilingDecision(
-                action="update",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=False,
-                reason="repeat startup warning for known open fingerprint",
-            )
-        if _tracker.evaluate_startup_warning(now=current):
-            return FilingDecision(
-                action="file",
-                fingerprint=fingerprint,
-                canonical=canonical,
-                high_priority=False,
-                reason="startup warnings twice within 1 hour",
-            )
-        return FilingDecision(
-            action="accumulate",
-            fingerprint=fingerprint,
-            canonical=canonical,
-            high_priority=False,
-            reason="startup warning recorded below filing threshold",
-        )
-    return None
+    return FilingDecision(
+        action="ignore",
+        fingerprint=fingerprint,
+        canonical=canonical,
+        high_priority=False,
+        reason=(
+            "startup readiness samples do not count toward filing "
+            f"({duration_ms:.0f}ms)"
+        ),
+    )
 
 
-def evaluate_coroutine_timeout(
+async def evaluate_coroutine_timeout(
     *,
     operation: str,
     exception_type: str | None = None,
+    store: PerfAlarmStore | None = None,
 ) -> FilingDecision:
     """Decide whether a readiness-critical coroutine timeout files an issue.
 
@@ -630,6 +594,8 @@ def evaluate_coroutine_timeout(
     Args:
         operation: Named operation that timed out.
         exception_type: Timeout/exception type name when known.
+        store: Durable incident store. Tests omit this to use the
+            in-memory store installed by :func:`reset_for_tests`.
 
     Returns:
         A filing decision (file or update).
@@ -637,13 +603,16 @@ def evaluate_coroutine_timeout(
     fingerprint, canonical = fingerprint_for_coroutine(
         operation=operation, exception_type=exception_type
     )
-    if _tracker.open_issue_for(fingerprint) is not None:
+    alarm_store = _resolve_store(store)
+    open_issue = await alarm_store.get_open_issue(fingerprint)
+    if open_issue is not None:
         return FilingDecision(
             action="update",
             fingerprint=fingerprint,
             canonical=canonical,
             high_priority=True,
             reason="repeat coroutine timeout for known open fingerprint",
+            open_issue_number=open_issue,
         )
     return FilingDecision(
         action="file",
@@ -703,17 +672,21 @@ def build_issue_title(
     """
     if kind == "startup":
         operation_name = operation or "startup.readiness"
+        display_ms = max(duration_ms, float(STARTUP_TIMEOUT_MS))
         return (
             f"Performance: startup {operation_name} "
-            f"took {duration_ms:.0f}ms (budget {STARTUP_TIMEOUT_MS}ms)"
+            f"took {display_ms:.0f}ms (budget {STARTUP_TIMEOUT_MS}ms)"
         )
     if kind == "coroutine":
         operation_name = operation or "unknown"
         return f"Performance: coroutine timeout in {operation_name}"
     route = normalize_route_template(route_template or "__unmatched__")
+    display_ms = (
+        duration_ms if duration_ms > REQUEST_TIMEOUT_MS else float(REQUEST_TIMEOUT_MS)
+    )
     return (
         f"Performance: {(method or 'GET').upper()} {route} "
-        f"took {duration_ms:.0f}ms (budget {REQUEST_TIMEOUT_MS}ms)"
+        f"took {display_ms:.0f}ms (budget {REQUEST_TIMEOUT_MS}ms)"
     )
 
 
@@ -830,12 +803,164 @@ def build_issue_body(
     return "\n".join(lines)
 
 
+def build_occurrence_comment(
+    *,
+    duration_ms: float,
+    cold: bool,
+    db_queries: int = 0,
+    db_time_ms: float = 0.0,
+    request_id: str | None = None,
+    deployment_id: str | None = None,
+    occurrence_count: int = 1,
+    reason: str | None = None,
+) -> str:
+    """Build a recurrence comment with the new sample's evidence.
+
+    Args:
+        duration_ms: Observed duration in milliseconds.
+        cold: Warm/cold classification for the sample.
+        db_queries: SQL query count.
+        db_time_ms: Database execution time in milliseconds.
+        request_id: Request correlation id, when available.
+        deployment_id: Deployment/commit identifier, when available.
+        occurrence_count: Aggregated occurrence count after this sample.
+        reason: Policy reason for the update.
+
+    Returns:
+        Markdown comment body with redacted evidence.
+    """
+    lines = [
+        "Performance incident recurred.",
+        f"- Duration: {duration_ms:.2f} ms",
+        f"- Warm/cold: {'cold' if cold else 'warm'}",
+        f"- DB queries: {db_queries}",
+        f"- DB time: {db_time_ms:.2f} ms",
+        f"- Occurrence count: {occurrence_count}",
+    ]
+    if request_id:
+        lines.append(f"- Request id: {sanitize_evidence_text(request_id)}")
+    if deployment_id:
+        lines.append(f"- Deployment/commit: {sanitize_evidence_text(deployment_id)}")
+    if reason:
+        lines.append(f"- Reason: {sanitize_evidence_text(reason)}")
+    return "\n".join(lines)
+
+
+async def _comment_if_throttled(
+    *,
+    store: PerfAlarmStore,
+    fingerprint: str,
+    issue_number: int,
+    comment: str,
+) -> str | None:
+    """Comment on an open issue at most once per fingerprint per hour.
+
+    Args:
+        store: Durable incident store.
+        fingerprint: Deterministic performance signature hash.
+        issue_number: GitHub issue number to comment on.
+        comment: Recurrence comment body.
+
+    Returns:
+        GitHub issue state after the attempt, or None when throttled or
+        GitHub is unavailable.
+    """
+    from app.services import github_service as gh
+
+    if not await store.try_claim_comment(fingerprint):
+        await store.commit()
+        return "open"
+    await store.commit()
+    try:
+        return await gh.add_performance_issue_comment(issue_number, comment)
+    except RuntimeError as exc:
+        logger.warning(
+            "Performance occurrence update failed for #%s: %s", issue_number, exc
+        )
+        return None
+
+
+async def _file_new_issue(
+    *,
+    store: PerfAlarmStore,
+    decision: FilingDecision,
+    title: str,
+    body: str,
+    labels: list[str],
+) -> None:
+    """Create a GitHub issue after winning the durable filing claim.
+
+    Args:
+        store: Durable incident store.
+        decision: Filing decision for the event.
+        title: Issue title for the new issue.
+        body: Issue body with evidence and fingerprint marker.
+        labels: Factory intake labels.
+    """
+    from app.services import github_service as gh
+
+    if not await store.try_claim_filing(decision.fingerprint):
+        await store.commit()
+        existing = await store.get_open_issue(decision.fingerprint)
+        if existing is not None:
+            return
+        try:
+            opened = await gh.find_open_issue_by_fingerprint(
+                decision.fingerprint,
+                extra_fingerprints=decision.legacy_fingerprints,
+                method=decision.method,
+                route_template=decision.route_template,
+            )
+        except RuntimeError as exc:
+            logger.warning("Performance issue lookup failed: %s", exc)
+            return
+        if opened is not None:
+            await store.mark_open(decision.fingerprint, opened)
+            await store.commit()
+        return
+    await store.commit()
+    prior = await store.get_closed_issue(decision.fingerprint)
+    if prior is None:
+        try:
+            prior = await gh.find_closed_issue_by_fingerprint(
+                decision.fingerprint,
+                extra_fingerprints=decision.legacy_fingerprints,
+                method=decision.method,
+                route_template=decision.route_template,
+            )
+        except RuntimeError as exc:
+            logger.warning("Performance regression lookup failed: %s", exc)
+            prior = None
+    filing_body = body
+    if prior is not None and f"#{prior}" not in filing_body:
+        filing_body = (
+            f"{filing_body}\n- Regression: this signature previously "
+            f"closed in #{prior}; opened as a new regression issue "
+            f"referencing #{prior}."
+        )
+    try:
+        url = await gh.create_performance_issue(
+            title=title, body=filing_body, labels=labels
+        )
+    except RuntimeError as exc:
+        logger.warning("Performance issue filing failed: %s", exc)
+        await store.clear_filing_claim(decision.fingerprint)
+        await store.commit()
+        return
+    issue_number = _issue_number_from_url(url)
+    if issue_number is not None:
+        await store.mark_open(decision.fingerprint, issue_number)
+        await store.commit()
+
+
 async def _file_decision_background(
     *,
     decision: FilingDecision,
     title: str,
     body: str,
     labels: list[str],
+    comment: str | None = None,
+    store: PerfAlarmStore | None = None,
 ) -> None:
     """File or update a GitHub issue in bounded background work.
 
@@ -843,10 +968,12 @@ async def _file_decision_background(
     a GitHub outage must not turn a successful user request into a 5xx.
 
     Args:
-        decision: Synchronous filing decision for the event.
+        decision: Filing decision for the event.
         title: Issue title for new issues.
         body: Issue body with evidence and fingerprint marker.
         labels: Factory intake labels.
+        comment: Occurrence comment used when updating an open issue.
+        store: Durable store. Tests omit this to use the in-memory store.
     """
     try:
         from app.services import github_service as gh
@@ -854,66 +981,82 @@ async def _file_decision_background(
         logger.warning("Performance issue filing skipped: GitHub client unavailable: %s", exc)
         return
     try:
+        alarm_store = _resolve_store(store)
+        recurrence = comment or f"Performance incident recurred ({decision.reason})."
         if decision.action == "update":
-            known = _tracker.open_issue_for(decision.fingerprint)
+            known = decision.open_issue_number
+            if known is None:
+                known = await alarm_store.get_open_issue(decision.fingerprint)
             if known is not None:
                 try:
-                    state = await gh.add_performance_issue_comment(
-                        known,
-                        f"Performance incident recurred ({decision.reason}).",
-                    )
+                    state = await gh.get_performance_issue_state(known)
                 except RuntimeError as exc:
                     logger.warning(
-                        "Performance occurrence update failed for #%s; "
-                        "falling back to server-side dedupe: %s",
+                        "Performance issue state lookup failed for #%s: %s",
                         known,
                         exc,
                     )
                     state = None
                 if state == "open":
+                    await _comment_if_throttled(
+                        store=alarm_store,
+                        fingerprint=decision.fingerprint,
+                        issue_number=known,
+                        comment=recurrence,
+                    )
                     return
-                # The known issue is closed (or unreachable): fall through
-                # to server-side dedupe so a regression opens a new issue
-                # referencing the prior one instead of silently appending
-                # recurrence notes to closed historical work.
-        existing = await gh.find_open_issue_by_fingerprint(decision.fingerprint)
-        if existing is not None:
-            _tracker.mark_open(decision.fingerprint, existing)
-            try:
-                await gh.add_performance_issue_comment(
-                    existing,
-                    f"Performance incident recurred ({decision.reason}).",
-                )
-            except RuntimeError as exc:
-                logger.warning(
-                    "Performance occurrence update failed for #%s: %s", existing, exc
-                )
-            return
-        prior = _tracker.closed_issue_for(decision.fingerprint)
-        if prior is None:
-            try:
-                prior = await gh.find_closed_issue_by_fingerprint(decision.fingerprint)
-            except RuntimeError as exc:
-                logger.warning("Performance regression lookup failed: %s", exc)
-                prior = None
-        issue_number: int | None = None
+                if state == "closed":
+                    await alarm_store.mark_closed(decision.fingerprint, known)
+                    await alarm_store.commit()
+                    hit_count = await alarm_store.increment_daily_hit(
+                        decision.fingerprint,
+                        _utc_day(time.time()),
+                    )
+                    await alarm_store.commit()
+                    if hit_count < daily_breach_threshold():
+                        return
+                    decision = FilingDecision(
+                        action="file",
+                        fingerprint=decision.fingerprint,
+                        canonical=decision.canonical,
+                        high_priority=True,
+                        reason=(
+                            "warm over-budget hits reached daily threshold "
+                            f"({daily_breach_threshold()}) after close"
+                        ),
+                        method=decision.method,
+                        route_template=decision.route_template,
+                        legacy_fingerprints=decision.legacy_fingerprints,
+                    )
+                else:
+                    return
+        existing = None
         try:
-            filing_body = body
-            if prior is not None and f"#{prior}" not in filing_body:
-                filing_body = (
-                    f"{filing_body}\n- Regression: this signature previously "
-                    f"closed in #{prior}; opened as a new regression issue "
-                    f"referencing #{prior}."
-                )
-            url = await gh.create_performance_issue(
-                title=title, body=filing_body, labels=labels
+            existing = await gh.find_open_issue_by_fingerprint(
+                decision.fingerprint,
+                extra_fingerprints=decision.legacy_fingerprints,
+                method=decision.method,
+                route_template=decision.route_template,
             )
-            issue_number = _issue_number_from_url(url)
         except RuntimeError as exc:
-            logger.warning("Performance issue filing failed: %s", exc)
+            logger.warning("Performance issue lookup failed: %s", exc)
+        if existing is not None:
+            await alarm_store.mark_open(decision.fingerprint, existing)
+            await alarm_store.commit()
+            await _comment_if_throttled(
+                store=alarm_store,
+                fingerprint=decision.fingerprint,
+                issue_number=existing,
+                comment=recurrence,
+            )
             return
-        if issue_number is not None:
-            _tracker.record_filed(decision.fingerprint, issue_number)
+        await _file_new_issue(
+            store=alarm_store,
+            decision=decision,
+            title=title,
+            body=body,
+            labels=labels,
+        )
     except Exception as exc:
         logger.warning("Performance issue background filing failed: %s", exc)
 
@@ -933,12 +1076,38 @@ def _issue_number_from_url(url: str) -> int | None:
         return None
 
 
+def _spawn_background(coro: Coroutine[object, object, None]) -> None:
+    """Keep a background task referenced until it finishes.
+
+    Args:
+        coro: Background coroutine to schedule on the running loop.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning("Performance issue filing skipped: no running event loop")
+        coro.close()
+        return
+    task = loop.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+async def drain_background_tasks() -> None:
+    """Await in-flight alarm tasks. Intended for tests."""
+    while _background_tasks:
+        pending = list(_background_tasks)
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
 def schedule_filing(
     *,
     decision: FilingDecision,
     title: str,
     body: str,
     labels: list[str],
+    comment: str | None = None,
+    store: PerfAlarmStore | None = None,
 ) -> None:
     """Schedule non-blocking background filing for a filing decision.
 
@@ -947,26 +1116,163 @@ def schedule_filing(
     logged and dropped rather than raising.
 
     Args:
-        decision: Synchronous filing decision for the event.
+        decision: Filing decision for the event.
         title: Issue title for new issues.
         body: Issue body with evidence and fingerprint marker.
         labels: Factory intake labels.
+        comment: Occurrence comment used when updating an open issue.
+        store: Durable store captured by the background task.
     """
-    if decision.action == "accumulate":
+    if decision.action in {"accumulate", "ignore"}:
         return
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        logger.warning(
-            "Performance issue filing skipped: no running event loop (%s)",
-            decision.reason,
-        )
-        return
-    loop.create_task(
+    _spawn_background(
         _file_decision_background(
-            decision=decision, title=title, body=body, labels=labels
+            decision=decision,
+            title=title,
+            body=body,
+            labels=labels,
+            comment=comment,
+            store=store,
         )
     )
+
+
+async def _open_production_store() -> tuple[PerfAlarmStore, AsyncSession | None]:
+    """Bind a durable store for a background alarm evaluation.
+
+    Returns:
+        Tuple of (store, session-to-close). The session is None when the
+        in-memory test store is installed.
+    """
+    if _test_store is not None:
+        return _test_store, None
+    from app.database import AsyncSessionLocal
+
+    db = AsyncSessionLocal()
+    return PostgresPerfAlarmStore(db), db
+
+
+async def _handle_request_background(
+    *,
+    method: str,
+    route_template: str,
+    duration_ms: float,
+    cold: bool,
+    dominant_phase: str | None,
+    db_queries: int,
+    db_time_ms: float,
+    request_id: str | None,
+    deployment_id: str | None,
+    server_timing: str | None,
+) -> None:
+    """Evaluate one over-budget request against durable state, then file.
+
+    Args:
+        method: HTTP method of the request.
+        route_template: Normalized route template.
+        duration_ms: Observed duration in milliseconds.
+        cold: Whether this was a cold-start request.
+        dominant_phase: Dominant timing phase when known.
+        db_queries: SQL query count.
+        db_time_ms: Database execution time in milliseconds.
+        request_id: Request correlation id.
+        deployment_id: Deployment/commit identifier.
+        server_timing: Representative Server-Timing header value.
+    """
+    db: AsyncSession | None = None
+    try:
+        store, db = await _open_production_store()
+        decision = await evaluate_request_event(
+            method=method,
+            route_template=route_template,
+            duration_ms=duration_ms,
+            cold=cold,
+            store=store,
+        )
+        await store.commit()
+        if decision is None or decision.action in {"accumulate", "ignore"}:
+            return
+        _tracker.record_occurrence(
+            fingerprint=decision.fingerprint,
+            canonical=decision.canonical,
+            duration_ms=duration_ms,
+            request_id=request_id,
+            deployment_id=deployment_id,
+            now=time.time(),
+        )
+        occurrence = _tracker.occurrence_for(decision.fingerprint)
+        first_seen = (
+            datetime.fromtimestamp(occurrence.first_seen, UTC).isoformat()
+            if occurrence is not None
+            else None
+        )
+        last_seen = (
+            datetime.fromtimestamp(occurrence.last_seen, UTC).isoformat()
+            if occurrence is not None
+            else None
+        )
+        occurrence_count = occurrence.count if occurrence is not None else 1
+        title_duration = (
+            occurrence.max_duration_ms if occurrence is not None else duration_ms
+        )
+        app_time = max(duration_ms - db_time_ms, 0.0)
+        workload = classify_workload(duration_ms, db_time_ms, db_queries)
+        likely = "database" if workload == "db-heavy" else None
+        prior = await store.get_closed_issue(decision.fingerprint)
+        comment = build_occurrence_comment(
+            duration_ms=duration_ms,
+            cold=cold,
+            db_queries=db_queries,
+            db_time_ms=db_time_ms,
+            request_id=request_id,
+            deployment_id=deployment_id,
+            occurrence_count=occurrence_count,
+            reason=decision.reason,
+        )
+        title = build_issue_title(
+            kind="request",
+            method=method,
+            route_template=route_template,
+            duration_ms=title_duration,
+        )
+        body = build_issue_body(
+            kind="request",
+            fingerprint=decision.fingerprint,
+            canonical=decision.canonical,
+            method=method,
+            route_template=route_template,
+            duration_ms=title_duration,
+            threshold_ms=float(REQUEST_TIMEOUT_MS),
+            event_label="violation",
+            cold=cold,
+            db_queries=db_queries,
+            db_time_ms=db_time_ms,
+            app_time_ms=app_time,
+            phases=dominant_phase,
+            request_ids=[request_id] if request_id else None,
+            deployment_id=deployment_id,
+            first_seen=first_seen,
+            last_seen=last_seen,
+            occurrence_count=occurrence_count,
+            server_timing=server_timing,
+            likely_subsystem=likely,
+            prior_issue=prior,
+        )
+        await _file_decision_background(
+            decision=decision,
+            title=title,
+            body=body,
+            labels=build_labels(
+                high_priority=decision.high_priority, subsystem="backend"
+            ),
+            comment=comment,
+            store=store,
+        )
+    except Exception as exc:
+        logger.warning("Performance issue background evaluation failed: %s", exc)
+    finally:
+        if db is not None:
+            await db.close()
 
 
 def handle_request_telemetry(
@@ -984,6 +1290,10 @@ def handle_request_telemetry(
 ) -> None:
     """Evaluate request telemetry and schedule filing without blocking.
 
+    Cold-start and under-budget samples return immediately without
+    touching durable storage. Over-budget warm samples are evaluated in
+    a background task against the shared Postgres counter.
+
     Args:
         method: HTTP method of the request.
         route_template: Normalized route template.
@@ -996,78 +1306,37 @@ def handle_request_telemetry(
         deployment_id: Deployment/commit identifier.
         server_timing: Representative Server-Timing header value.
     """
-    decision = evaluate_request_event(
-        method=method,
-        route_template=route_template,
-        duration_ms=duration_ms,
-        cold=cold,
-        dominant_phase=dominant_phase,
-        db_time_ms=db_time_ms,
-        db_queries=db_queries,
-    )
-    if decision is None:
+    if cold:
+        logger.info(
+            "Performance alarm ignored cold-start sample: %s %s took %.2f ms",
+            method.upper(),
+            normalize_route_template(route_template),
+            duration_ms,
+            extra={
+                "event": "performance_alarm_ignored_cold_start",
+                "method": method.upper(),
+                "route_template": normalize_route_template(route_template),
+                "duration_ms": duration_ms,
+                "request_id": request_id,
+                "deployment_id": deployment_id,
+            },
+        )
         return
-    _tracker.record_occurrence(
-        fingerprint=decision.fingerprint,
-        canonical=decision.canonical,
-        duration_ms=duration_ms,
-        request_id=request_id,
-        deployment_id=deployment_id,
-        now=time.time(),
-    )
-    if decision.action == "accumulate":
+    if duration_ms <= REQUEST_TIMEOUT_MS:
         return
-    occurrence = _tracker.occurrence_for(decision.fingerprint)
-    first_seen = (
-        datetime.fromtimestamp(occurrence.first_seen, UTC).isoformat()
-        if occurrence is not None
-        else None
-    )
-    last_seen = (
-        datetime.fromtimestamp(occurrence.last_seen, UTC).isoformat()
-        if occurrence is not None
-        else None
-    )
-    occurrence_count = occurrence.count if occurrence is not None else 1
-    event_label = "violation" if duration_ms >= REQUEST_TIMEOUT_MS else "warning"
-    threshold = REQUEST_TIMEOUT_MS if event_label == "violation" else REQUEST_WARNING_MS
-    app_time = max(duration_ms - db_time_ms, 0.0)
-    workload = classify_workload(duration_ms, db_time_ms, db_queries)
-    likely = "database" if workload == "db-heavy" else None
-    prior = _tracker.closed_issue_for(decision.fingerprint)
-    title = build_issue_title(
-        kind="request",
-        method=method,
-        route_template=route_template,
-        duration_ms=duration_ms,
-    )
-    body = build_issue_body(
-        kind="request",
-        fingerprint=decision.fingerprint,
-        canonical=decision.canonical,
-        method=method,
-        route_template=route_template,
-        duration_ms=duration_ms,
-        threshold_ms=float(threshold),
-        event_label=event_label,
-        cold=cold,
-        db_queries=db_queries,
-        db_time_ms=db_time_ms,
-        app_time_ms=app_time,
-        request_ids=[request_id] if request_id else None,
-        deployment_id=deployment_id,
-        first_seen=first_seen,
-        last_seen=last_seen,
-        occurrence_count=occurrence_count,
-        server_timing=server_timing,
-        likely_subsystem=likely,
-        prior_issue=prior,
-    )
-    schedule_filing(
-        decision=decision,
-        title=title,
-        body=body,
-        labels=build_labels(high_priority=decision.high_priority, subsystem="backend"),
+    _spawn_background(
+        _handle_request_background(
+            method=method,
+            route_template=route_template,
+            duration_ms=duration_ms,
+            cold=cold,
+            dominant_phase=dominant_phase,
+            db_queries=db_queries,
+            db_time_ms=db_time_ms,
+            request_id=request_id,
+            deployment_id=deployment_id,
+            server_timing=server_timing,
+        )
     )
 
 
@@ -1077,47 +1346,89 @@ def handle_startup_telemetry(
     operation: str = "startup.readiness",
     deployment_id: str | None = None,
 ) -> None:
-    """Evaluate startup telemetry and schedule filing without blocking.
+    """Evaluate startup telemetry without filing a GitHub issue.
+
+    Startup readiness samples never file. Hard failures at or above
+    ``STARTUP_TIMEOUT_MS`` (2.5s) log at WARNING because issues #3479
+    and #3480 do not consume ``performance_alarm_ignored_startup``.
 
     Args:
         duration_ms: Measured ping-ready startup duration in milliseconds.
         operation: Named startup phase/operation attribution.
         deployment_id: Deployment/commit identifier.
     """
-    decision = evaluate_startup_event(duration_ms=duration_ms, operation=operation)
-    if decision is None or decision.action == "accumulate":
-        return
-    event_label = (
-        "startup failure" if duration_ms >= STARTUP_TIMEOUT_MS else "warning"
+    evaluate_startup_event(duration_ms=duration_ms, operation=operation)
+    hard_failure = duration_ms >= STARTUP_TIMEOUT_MS
+    log = logger.warning if hard_failure else logger.info
+    log(
+        "Performance alarm ignored startup sample: %s took %.2f ms",
+        operation,
+        duration_ms,
+        extra={
+            "event": "performance_alarm_ignored_startup",
+            "operation": operation,
+            "duration_ms": duration_ms,
+            "deployment_id": deployment_id,
+            "startup_performance_violation": hard_failure,
+        },
     )
-    threshold = (
-        STARTUP_TIMEOUT_MS if duration_ms >= STARTUP_TIMEOUT_MS else STARTUP_WARNING_MS
-    )
-    prior = _tracker.closed_issue_for(decision.fingerprint)
-    title = build_issue_title(
-        kind="startup", operation=operation, duration_ms=duration_ms
-    )
-    body = build_issue_body(
-        kind="startup",
-        fingerprint=decision.fingerprint,
-        canonical=decision.canonical,
-        duration_ms=duration_ms,
-        threshold_ms=float(threshold),
-        event_label=event_label,
-        deployment_id=deployment_id,
-        occurrence_count=1,
-        operation=operation,
-        likely_subsystem="infrastructure",
-        prior_issue=prior,
-    )
-    schedule_filing(
-        decision=decision,
-        title=title,
-        body=body,
-        labels=build_labels(
-            high_priority=decision.high_priority, subsystem="infrastructure"
-        ),
-    )
+
+
+async def _handle_coroutine_background(
+    *,
+    operation: str,
+    elapsed_ms: float,
+    deadline_ms: float,
+    exception_type: str | None,
+    deployment_id: str | None,
+) -> None:
+    """Evaluate a coroutine timeout against durable state, then file.
+
+    Args:
+        operation: Named operation that timed out.
+        elapsed_ms: Measured elapsed time in milliseconds.
+        deadline_ms: Configured hard deadline in milliseconds.
+        exception_type: Timeout/exception type name when known.
+        deployment_id: Deployment/commit identifier.
+    """
+    db: AsyncSession | None = None
+    try:
+        store, db = await _open_production_store()
+        decision = await evaluate_coroutine_timeout(
+            operation=operation,
+            exception_type=exception_type,
+            store=store,
+        )
+        await store.commit()
+        if decision.action in {"accumulate", "ignore"}:
+            return
+        prior = await store.get_closed_issue(decision.fingerprint)
+        title = build_issue_title(kind="coroutine", operation=operation)
+        body = build_issue_body(
+            kind="coroutine",
+            fingerprint=decision.fingerprint,
+            canonical=decision.canonical,
+            duration_ms=elapsed_ms,
+            threshold_ms=deadline_ms,
+            event_label="coroutine timeout",
+            deployment_id=deployment_id,
+            occurrence_count=1,
+            operation=operation,
+            likely_subsystem="infrastructure",
+            prior_issue=prior,
+        )
+        await _file_decision_background(
+            decision=decision,
+            title=title,
+            body=body,
+            labels=build_labels(high_priority=True, subsystem="infrastructure"),
+            store=store,
+        )
+    except Exception as exc:
+        logger.warning("Coroutine timeout background evaluation failed: %s", exc)
+    finally:
+        if db is not None:
+            await db.close()
 
 
 def handle_coroutine_timeout(
@@ -1137,29 +1448,12 @@ def handle_coroutine_timeout(
         exception_type: Timeout/exception type name when known.
         deployment_id: Deployment/commit identifier.
     """
-    decision = evaluate_coroutine_timeout(
-        operation=operation, exception_type=exception_type
-    )
-    if decision.action == "accumulate":
-        return
-    prior = _tracker.closed_issue_for(decision.fingerprint)
-    title = build_issue_title(kind="coroutine", operation=operation)
-    body = build_issue_body(
-        kind="coroutine",
-        fingerprint=decision.fingerprint,
-        canonical=decision.canonical,
-        duration_ms=elapsed_ms,
-        threshold_ms=deadline_ms,
-        event_label="coroutine timeout",
-        deployment_id=deployment_id,
-        occurrence_count=1,
-        operation=operation,
-        likely_subsystem="infrastructure",
-        prior_issue=prior,
-    )
-    schedule_filing(
-        decision=decision,
-        title=title,
-        body=body,
-        labels=build_labels(high_priority=True, subsystem="infrastructure"),
+    _spawn_background(
+        _handle_coroutine_background(
+            operation=operation,
+            elapsed_ms=elapsed_ms,
+            deadline_ms=deadline_ms,
+            exception_type=exception_type,
+            deployment_id=deployment_id,
+        )
     )

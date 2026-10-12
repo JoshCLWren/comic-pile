@@ -25,3 +25,16 @@ Structured logs emit the aggregate status, each dependency status, each dependen
 ## Regression thresholds
 
 Investigate repeated database or cache probe durations above 500 ms while warm. A timeout always warrants investigation. Cold invocations may be slower, but the endpoint remains bounded and identifies the dependency responsible rather than allowing one hung provider to consume the whole monitoring request.
+
+## Performance alarm
+
+Production request timings can open factory GitHub issues through `app/services/performance_issue_service.py` (issues #3245 and #3552). The alarm is noise-controlled:
+
+- **Fingerprint.** One open issue per `kind + method + route template`. Warm/cold, workload class (db-heavy / app-heavy / mixed), and dominant phase are sample evidence, not separate issues. Lookup is rollout-compatible: it matches the current hash, the pre-#3552 `request|METHOD|route|warmth|phase|workload` hashes, and the `- Method + route:` / title identity so issues already open today are reused.
+- **Durable counters.** Daily breach counts and open-issue identity live in Postgres (`perf_alarm_counters` keyed by fingerprint + UTC day, `perf_alarm_incidents` for open/closed issue numbers, comment throttle, and filing claims). Process memory cannot implement N-hit filing on Vercel serverless. Concurrent instances increment with an atomic upsert and claim filing before creating an issue.
+- **Never file under budget.** Timings at or under the 1000 ms route budget never open an issue. 500-999 ms warnings are recorded locally only. Issue titles never show a duration below the budget.
+- **Ignore cold starts.** `warm/cold: cold` requests and `startup.*` readiness samples do not count toward filing. They are logged separately for the cold-start work tracked in issues 3479 and 3480. Those issues do not consume `performance_alarm_ignored_startup`, so a hard startup failure (2.5s or more) still logs at WARNING.
+- **Daily breach threshold.** A route files only after **N** warm over-budget hits in the same UTC day, counted in Postgres across instances. N defaults to **3** and is set with `PERF_ALARM_DAILY_BREACH_THRESHOLD` (1-100). Closed-issue regressions use the same threshold: the alarm reads `issue.state` before commenting, never comments on a closed issue, and a previously fixed route must breach N times again before a new issue is filed.
+- **Comment throttle.** At most one GitHub comment per fingerprint per hour. GitHub calls run in a worker thread and never block the user request.
+
+Readiness-critical coroutine hard timeouts still file immediately unless that coroutine signature already has an open issue. GitHub API failure is logged and never fails the user request.

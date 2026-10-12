@@ -268,9 +268,9 @@ async def run_bounded[T](
         )
         if budget_type == "startup":
             # Readiness-critical coroutine hard timeout (issue #3245): file an
-            # actionable issue immediately. Evaluation is synchronous and
-            # filing is bounded background work, so this never blocks the
-            # caller; any failure is logged inside the handler.
+            # actionable issue immediately. Evaluation and GitHub calls run in
+            # bounded background work, so this never blocks the caller; any
+            # failure is logged inside the handler.
             try:
                 from app.services import performance_issue_service as perf_issues
 

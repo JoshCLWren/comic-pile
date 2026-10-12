@@ -21,6 +21,7 @@ from app.models.external_identity import (
 from app.models.failed_login_attempt import FailedLoginAttempt
 from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
+from app.models.perf_alarm import PerfAlarmCounter, PerfAlarmIncident
 from app.models.performance_metric import PerformanceMetric
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.reading_plan_membership import (
@@ -64,6 +65,8 @@ __all__ = [
     "Issue",
     "IssueExternalIdentityMapping",
     "IssueMetadataCorrection",
+    "PerfAlarmCounter",
+    "PerfAlarmIncident",
     "PerformanceMetric",
     "ReadingOrder",
     "ReadingOrderItem",
