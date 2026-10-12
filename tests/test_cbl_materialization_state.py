@@ -43,18 +43,22 @@ async def test_materialized_series_uses_thread_local_positions_and_rollable_stat
     )
     await async_db.flush()
 
-    first = await _ensure_missing_issue_created(
-        async_db,
-        user.id,
-        fact=_fact("B.P.R.D.: Garden of Souls", "1"),
-        volume_year=2007,
-    )
-    second = await _ensure_missing_issue_created(
-        async_db,
-        user.id,
-        fact=_fact("B.P.R.D.: Garden of Souls", "2"),
-        volume_year=2007,
-    )
+    first = (
+        await _ensure_missing_issue_created(
+            async_db,
+            user.id,
+            fact=_fact("B.P.R.D.: Garden of Souls", "1"),
+            volume_year=2007,
+        )
+    ).issue
+    second = (
+        await _ensure_missing_issue_created(
+            async_db,
+            user.id,
+            fact=_fact("B.P.R.D.: Garden of Souls", "2"),
+            volume_year=2007,
+        )
+    ).issue
 
     thread = await async_db.scalar(
         select(Thread).where(
@@ -112,12 +116,14 @@ async def test_materialization_appends_to_existing_thread_and_recomputes_trackin
     )
     await async_db.flush()
 
-    created = await _ensure_missing_issue_created(
-        async_db,
-        user.id,
-        fact=_fact("B.P.R.D.: The Universal Machine", "2"),
-        volume_year=2006,
-    )
+    created = (
+        await _ensure_missing_issue_created(
+            async_db,
+            user.id,
+            fact=_fact("B.P.R.D.: The Universal Machine", "2"),
+            volume_year=2006,
+        )
+    ).issue
 
     assert created.thread_id == thread.id
     assert created.position == 8

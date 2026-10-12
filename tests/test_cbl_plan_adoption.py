@@ -453,7 +453,7 @@ async def test_approved_missing_issue_materialized_and_node_added() -> None:
     with patch(
         "app.services.cbl_plan_adoption._ensure_missing_issue_created",
         new_callable=AsyncMock,
-        return_value=fake_issue,
+        return_value=(fake_issue, True),
     ):
         result = await _adopt(
             _FakeDB(),
@@ -469,6 +469,36 @@ async def test_approved_missing_issue_materialized_and_node_added() -> None:
     assert node["id"] == "cbl-20"
     assert result.created_positions == [0]
     assert result.reused_positions == []
+
+
+@pytest.mark.asyncio
+async def test_reused_library_issue_is_not_reported_as_created() -> None:
+    """An owned issue new to the plan is reused, not reported as created."""
+    entry = _FakeEntry(id=21, position=4, series_name="Y")
+    fact = _make_fact(
+        resolved_issue_id=None,
+        resolution_status="no_owned_issue_for_comicvine_id",
+        position=4,
+        cbl_entry_id=21,
+    )
+    fake_issue = MagicMock()
+    fake_issue.id = 201
+
+    with patch(
+        "app.services.cbl_plan_adoption._ensure_missing_issue_created",
+        new_callable=AsyncMock,
+        return_value=(fake_issue, False),
+    ):
+        result = await _adopt(
+            _FakeDB(),
+            entries=[entry],
+            facts=[fact],
+            entry_decisions={4: SourceBackedDecision.INCLUDE},
+        )
+
+    assert result.created_positions == []
+    assert result.reused_positions == [4]
+    assert result.plan.nodes_json[0]["ref_id"] == 201
 
 
 @pytest.mark.asyncio
@@ -490,7 +520,7 @@ async def test_missing_issue_defaults_to_included_without_explicit_decision() ->
     with patch(
         "app.services.cbl_plan_adoption._ensure_missing_issue_created",
         new_callable=AsyncMock,
-        return_value=fake_issue,
+        return_value=(fake_issue, True),
     ) as mock_create:
         result = await _adopt(
             _FakeDB(),
@@ -558,7 +588,7 @@ async def test_zero_override_commit_creates_missing_and_retains_source_positions
     with patch(
         "app.services.cbl_plan_adoption._ensure_missing_issue_created",
         new_callable=AsyncMock,
-        return_value=fake_issue,
+        return_value=(fake_issue, True),
     ):
         result = await _adopt(
             _FakeDB(),
@@ -1039,7 +1069,7 @@ async def test_cbl_source_provenance_survives_without_dependency_group_sequence_
     ), patch(
         "app.services.cbl_plan_adoption._ensure_missing_issue_created",
         new_callable=AsyncMock,
-        return_value=fake_issue,
+        return_value=(fake_issue, True),
     ), patch(
         "app.services.cbl_plan_adoption.validate_node_ownership",
         new_callable=AsyncMock,
