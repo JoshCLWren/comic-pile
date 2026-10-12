@@ -161,7 +161,7 @@ async def _compiled_pairs(
 
 
 def test_strict_compiler_has_no_title_exemption() -> None:
-    """Wild Hunt protection is series-start geometry, not a title special case."""
+    """Thread-entry selection is series-start geometry, not a title special case."""
     source = (_REPO_ROOT / "app/services/strict_plan_constraints.py").read_text()
     writer = (_REPO_ROOT / "app/services/continuity_plan_writer.py").read_text()
     for banned in ("title ==", "thread.title", ".ilike("):
@@ -172,9 +172,9 @@ def test_strict_compiler_has_no_title_exemption() -> None:
 def test_thread_entry_pairs_skip_same_thread_and_non_starts() -> None:
     """Pure selection: only a later series start is gated by the prior required issue."""
     killing_ground = [101, 102]
-    wild_hunt = [201, 202, 203]
+    mid_run = [201, 202, 203]
     later_start = [301]
-    nodes = _nodes_from_ids(killing_ground + wild_hunt + later_start)
+    nodes = _nodes_from_ids(killing_ground + mid_run + later_start)
     index = {
         101: IssueThreadIndex(1, 1, True),
         102: IssueThreadIndex(1, 2, False),
@@ -187,15 +187,15 @@ def test_thread_entry_pairs_skip_same_thread_and_non_starts() -> None:
 
 
 def test_in_progress_series_omitted_earlier_issues_are_not_starts() -> None:
-    """Wild Hunt #3 is not a series start merely because #1-2 are absent from the plan."""
+    """A mid-run issue is not a series start merely because #1-2 are absent from the plan."""
     nodes = _nodes_from_ids([102, 203, 301])
     index = {
         102: IssueThreadIndex(1, 2, False),
         203: IssueThreadIndex(2, 3, False),
         301: IssueThreadIndex(3, 1, True),
     }
-    # Wild Hunt #3 is not a target. The later series start waits on the nearest
-    # preceding required issue from another Thread, which is Wild Hunt #3.
+    # Issue 203 is not a target. The later series start waits on the nearest
+    # preceding required issue from another Thread.
     assert strict_plan_item_read_pairs(nodes, index) == [(203, 301)]
 
 
@@ -379,23 +379,23 @@ async def test_xmen_cable_xforce_preserves_genuine_prereqs_not_suggested_order(
 
 
 @pytest.mark.asyncio
-async def test_mignolaverse_wild_hunt_continues_without_blanket_restrictions(
+async def test_mignolaverse_thread_entry_does_not_compile_mid_run_hops(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Killing Ground before Wild Hunt stays strict; Wild Hunt #3 remains available."""
+    """Killing Ground gates the next series start; mid-run issues are not inferred targets."""
     user = await get_or_create_user_async(async_db)
-    killing_ground, kg_issues = await _make_series(
+    _killing_ground, kg_issues = await _make_series(
         async_db,
         user_id=user.id,
         title="B.P.R.D.: Killing Ground",
         numbers=["1", "2", "3", "4", "5"],
         queue_position=1,
     )
-    wild_hunt, wh_issues = await _make_series(
+    _sequel, sequel_issues = await _make_series(
         async_db,
         user_id=user.id,
-        title="Hellboy: The Wild Hunt",
+        title="Hellboy: Darkness Calls",
         numbers=["1", "2", "3", "4"],
         queue_position=2,
         read_through=2,
@@ -409,7 +409,7 @@ async def test_mignolaverse_wild_hunt_continues_without_blanket_restrictions(
     )
     await async_db.commit()
 
-    ordered = kg_issues + wh_issues + later_issues
+    ordered = kg_issues + sequel_issues + later_issues
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
         json=_plan_payload("Mignolaverse", ordered),
@@ -420,17 +420,15 @@ async def test_mignolaverse_wild_hunt_continues_without_blanket_restrictions(
     assert body["name"] == "Mignolaverse"
     compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=body["id"])
     assert compiled == {
-        (kg_issues[-1].id, wh_issues[0].id),
-        (wh_issues[-1].id, later_issues[0].id),
+        (kg_issues[-1].id, sequel_issues[0].id),
+        (sequel_issues[-1].id, later_issues[0].id),
     }
-    assert (wh_issues[1].id, wh_issues[2].id) not in compiled
-    assert (kg_issues[-1].id, wh_issues[2].id) not in compiled
+    assert (sequel_issues[1].id, sequel_issues[2].id) not in compiled
+    assert (kg_issues[-1].id, sequel_issues[2].id) not in compiled
 
     roll_ids = await _roll_ids(user.id, async_db)
-    assert wild_hunt.id in roll_ids
     assert later.id not in roll_ids
     blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
-    assert wild_hunt.id not in blocked
     assert later.id in blocked
     reasons = await get_blocking_explanations(later.id, user.id, async_db)
     assert reasons[0].issue_number == "4"
@@ -1303,7 +1301,7 @@ async def test_load_issue_thread_index_uses_whole_thread_minimum(
     _thread, issues = await _make_series(
         async_db,
         user_id=user.id,
-        title="Hellboy: The Wild Hunt",
+        title="In-progress series",
         numbers=["1", "2", "3"],
         queue_position=1,
         read_through=2,
@@ -1367,7 +1365,7 @@ async def test_mignolaverse_julix_interleave_unchanged_save_keeps_existing_hops(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Julix cross-thread hops stay; same-thread leftovers stay; Wild Hunt #3 stays rollable.
+    """Julix cross-thread hops stay; same-thread leftovers stay.
 
     Classification of live Mignolaverse (plan 6) restrictions:
     - Intended reading order (KEEP): 19 cross-thread Julix mid-run hops such
@@ -1394,25 +1392,17 @@ async def test_mignolaverse_julix_interleave_unchanged_save_keeps_existing_hops(
         numbers=["5", "6"],
         queue_position=2,
     )
-    wild_hunt, wh_issues = await _make_series(
-        async_db,
-        user_id=user.id,
-        title="Hellboy: The Wild Hunt",
-        numbers=["1", "2", "3"],
-        queue_position=3,
-        read_through=2,
-    )
     love, love_issues = await _make_series(
         async_db,
         user_id=user.id,
         title="Hellboy in Love",
         numbers=["1", "2", "3", "4", "5"],
-        queue_position=4,
+        queue_position=3,
     )
     love.next_unread_issue_id = love_issues[4].id
     await async_db.commit()
 
-    ordered = abe_issues + hellboy_issues + wh_issues + love_issues
+    ordered = abe_issues + hellboy_issues + love_issues
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
         json=_plan_payload("Mignolaverse Julix", ordered),
@@ -1447,7 +1437,6 @@ async def test_mignolaverse_julix_interleave_unchanged_save_keeps_existing_hops(
     assert julix_hop in compiled
     assert same_thread_love in compiled
     roll_ids = await _roll_ids(user.id, async_db)
-    assert wild_hunt.id in roll_ids
     assert love.id not in roll_ids
     assert abe.id in roll_ids
     assert hellboy.id not in roll_ids

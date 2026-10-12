@@ -16,8 +16,8 @@ That representation is title-agnostic:
 - Starman #55 before a JSA series start is a thread-entry (or standalone) gate.
 - X-Men / Cable / X-Force mid-run suggested-order hops are not inferred;
   genuine crossover Dependencies remain the blockers.
-- Wild Hunt #3 is never a thread-entry while #1 exists on the Thread, so an
-  in-progress Wild Hunt stays Roll-eligible after earlier unread plan material.
+- A mid-run issue is never a thread-entry while an earlier issue exists on
+  the Thread; that is series-start geometry, not a title exemption.
 - Absolute Universe later titles whose #1 is in the plan are gated, closing
   the "later material is Roll-eligible" leak without blanketing every hop.
 
@@ -140,9 +140,9 @@ async def load_issue_thread_index(
     """Load Thread identity and natural-start flags for one Issue id set.
 
     Natural start is the minimum ``Issue.position`` among *all* issues of the
-    Thread, not merely those present in the plan. That keeps an in-progress
-    series (Wild Hunt #3 while #1-2 exist on the Thread) from being treated
-    as a series start just because earlier issues were omitted from the plan.
+    Thread, not merely those present in the plan. An in-progress issue whose
+    earlier Thread issues exist but are omitted from the plan is not treated
+    as a series start.
 
     Args:
         db: Async database session.
