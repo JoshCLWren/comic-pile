@@ -158,6 +158,45 @@ async def get_plan_effective_tags(
     return effective_tags_to_response(result)
 
 
+@router.get(
+    "/effective/thread/{thread_id}/issues/",
+    response_model=tag_schemas.ThreadIssuesEffectiveTagsResponse,
+)
+async def get_thread_issues_effective_tags(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> tag_schemas.ThreadIssuesEffectiveTagsResponse:
+    """Return direct and effective tags for every issue in one owned thread.
+
+    Bulk read for the thread detail issue rows (issue #3422): each issue's
+    effective tags union its direct tags, its thread's tags, and the tags of
+    every Reading Plan owned by the viewer that contains the issue. Issues
+    without any visible tag appear with empty tag lists so the client can
+    distinguish "no tags" from missing data without fallback requests.
+
+    Args:
+        thread_id: Primary key of the thread.
+        current_user: The authenticated user; must own the thread.
+        db: Database session.
+
+    Returns:
+        Per-issue direct and effective tags in canonical position order.
+
+    Raises:
+        HTTPException 404: When the thread does not exist or is not owned.
+    """
+    service = TagInheritanceService(db)
+    try:
+        results = await service.get_thread_issues_effective_tags(current_user, thread_id)
+    except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
+        raise _map_error(exc) from exc
+    return tag_schemas.ThreadIssuesEffectiveTagsResponse(
+        thread_id=thread_id,
+        issues=[effective_tags_to_response(result) for result in results],
+    )
+
+
 @router.get("/{tag_id}/", response_model=tag_schemas.TagResponse)
 async def get_tag(
     tag_id: int,

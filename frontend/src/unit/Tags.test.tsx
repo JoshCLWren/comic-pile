@@ -51,6 +51,19 @@ describe('tag query keys (issue #3032)', () => {
       queryKeys.tags.effective('Issue', 7),
     )
   })
+
+  it('keys bulk thread-issue effective tags under the tags prefix (#3422)', () => {
+    expect(queryKeys.tags.effectiveForThreadIssues(4)).toEqual([
+      'tags',
+      'effective',
+      'thread',
+      4,
+      'issues',
+    ])
+    // Tag mutations invalidate the whole `tags` prefix, so row chips refresh
+    // alongside every other effective-tags read.
+    expect(queryKeys.tags.effectiveForThreadIssues(4)[0]).toBe(queryKeys.tags.all[0])
+  })
 })
 
 describe('tag error messages (issue #3032)', () => {

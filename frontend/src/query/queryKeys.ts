@@ -267,6 +267,14 @@ export const queryKeys = {
      */
     effective: (targetType: string, targetId: number) =>
       ['tags', 'effective', targetType, targetId] as const,
+    /**
+     * Canonical bulk effective-tags key for every issue in one thread
+     * (issue #3422). It sits under the `tags` prefix so
+     * `invalidateAfterTagMutation` refreshes row chips alongside every other
+     * effective-tags read.
+     */
+    effectiveForThreadIssues: (threadId: number) =>
+      ['tags', 'effective', 'thread', threadId, 'issues'] as const,
   },
   identityInbox: {
     all: ['identityInbox'] as const,

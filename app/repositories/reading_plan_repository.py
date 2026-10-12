@@ -351,6 +351,46 @@ async def plans_containing_issue_for_user(
     return list(result.scalars().all())
 
 
+async def plans_containing_issues_for_user(
+    db: AsyncSession, *, issue_ids: list[int], user_id: int
+) -> dict[int, list[ContinuityPlan]]:
+    """Return the viewer's own plans containing each of several Issues.
+
+    Bulk variant of :func:`plans_containing_issue_for_user` for surfaces that
+    render many issues at once (for example the thread detail issue rows in
+    issue #3422): one round trip maps every requested issue to its containing
+    plans instead of one query per issue. The same privacy boundary applies —
+    only plans owned by ``user_id`` are returned, so another user's plan
+    existence never leaks through inheritance sources.
+
+    Args:
+        db: Database session.
+        issue_ids: Canonical Issues to inspect.
+        user_id: Owner whose plans are included.
+
+    Returns:
+        Map from each requested issue ID to its owned containing plans in
+        ascending plan ID order. Issues with no containing plans map to an
+        empty list.
+    """
+    unique_ids = list(dict.fromkeys(issue_ids))
+    if not unique_ids:
+        return {}
+    result = await db.execute(
+        select(ContinuityPlan, ReadingPlanIssue.issue_id)
+        .join(ReadingPlanIssue, ReadingPlanIssue.plan_id == ContinuityPlan.id)
+        .where(
+            ReadingPlanIssue.issue_id.in_(unique_ids),
+            ContinuityPlan.user_id == user_id,
+        )
+        .order_by(ContinuityPlan.id)
+    )
+    mapping: dict[int, list[ContinuityPlan]] = {issue_id: [] for issue_id in unique_ids}
+    for plan, member_issue_id in result.all():
+        mapping.setdefault(member_issue_id, []).append(plan)
+    return mapping
+
+
 async def list_plan_sources(
     db: AsyncSession, *, plan_id: int
 ) -> list[ReadingPlanSource]:

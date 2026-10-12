@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
@@ -9,6 +9,7 @@ import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import { useThread, useUpdateThread } from '../hooks/useThread'
 import { useConnectedThreads } from '../hooks/useReaderContext'
 import { useThreadIssuePages } from '../hooks/useThreadIssues'
+import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
 import {
   applyEditedThreadToQueuePages,
   applyIssueReadSnapshotToCache,
@@ -22,6 +23,7 @@ import DependencyBuilder from '../components/DependencyBuilder'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { TagEditor } from '../components/Tags/TagEditor'
 import { TagSection } from '../components/Tags/TagSection'
+import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
@@ -70,6 +72,14 @@ export default function ThreadDetailView() {
 
   const issuesQuery = useThreadIssuePages(threadId, { enabled: issuesExpanded })
   const issues = issuesQuery.issues
+  // Row-level tag chips (issue #3422): one bulk read covers every visible
+  // issue so rows render direct (solid) and inherited (dashed, read-only)
+  // chips without opening an editor and without one request per issue.
+  const rowTagsQuery = useThreadIssuesEffectiveTags(thread?.id ?? null, issuesExpanded)
+  const rowTagsByIssueId = useMemo(() => {
+    const entries = rowTagsQuery.data?.issues ?? []
+    return new Map(entries.map((entry) => [entry.target_id, entry]))
+  }, [rowTagsQuery.data])
   const issuesTotal = issuesQuery.totalCount
   const issuesLoading = issuesQuery.isPending
   const issuesError = issuesQuery.isError
@@ -467,61 +477,72 @@ export default function ThreadDetailView() {
 
                 {issuesLoaded && issues.length > 0 && (
                   <div className="space-y-2">
-                    {issues.map((issue) => (
-                      <div
-                        key={issue.id}
-                        className={`flex items-center justify-between gap-3 p-2 rounded-lg border ${
-                          issue.status === 'read'
-                            ? 'bg-green-500/10 border-green-500/20'
-                            : 'bg-white/5 border-white/10'
-                        }`}
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          {bulkSelectMode && (
-                            <input
-                              type="checkbox"
-                              checked={selectedIssueIds.has(issue.id)}
-                              onChange={() => handleToggleIssueSelection(issue.id)}
-                              aria-label={`Select issue #${issue.issue_number}`}
-                              className="h-4 w-4 shrink-0 accent-amber-400"
+                    {issues.map((issue) => {
+                      const rowTags = rowTagsByIssueId.get(issue.id)
+                      return (
+                        <div
+                          key={issue.id}
+                          className={`space-y-1.5 p-2 rounded-lg border ${
+                            issue.status === 'read'
+                              ? 'bg-green-500/10 border-green-500/20'
+                              : 'bg-white/5 border-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="flex min-w-0 items-center gap-2">
+                              {bulkSelectMode && (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIssueIds.has(issue.id)}
+                                  onChange={() => handleToggleIssueSelection(issue.id)}
+                                  aria-label={`Select issue #${issue.issue_number}`}
+                                  className="h-4 w-4 shrink-0 accent-amber-400"
+                                />
+                              )}
+                              <span className="text-sm font-medium text-stone-300">
+                                #{issue.issue_number}
+                              </span>
+                            </span>
+                            <div className="flex items-center gap-3">
+                              {bulkSelectMode && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTagEditorIssue({
+                                      id: issue.id,
+                                      issue_number: issue.issue_number,
+                                    })
+                                  }
+                                  aria-label={`Edit tags for issue #${issue.issue_number}`}
+                                  title={`Edit tags for issue #${issue.issue_number}`}
+                                  className="text-xs font-black uppercase tracking-widest text-stone-500 hover:text-amber-300"
+                                >
+                                  Tags
+                                </button>
+                              )}
+                              <span className="text-xs font-black uppercase tracking-widest">
+                                {issue.status === 'read' ? (
+                                  <span className="text-green-400">Read</span>
+                                ) : (
+                                  <span className="text-stone-500">Unread</span>
+                                )}
+                              </span>
+                              <IssueReadStatusButton
+                                issue={issue}
+                                snapshot={{ issues, thread }}
+                                onSnapshotChange={handleIssueSnapshotChange}
+                              />
+                            </div>
+                          </div>
+                          {rowTags && (
+                            <IssueTagRowChips
+                              data={rowTags}
+                              issueNumber={issue.issue_number}
                             />
                           )}
-                          <span className="text-sm font-medium text-stone-300">
-                            #{issue.issue_number}
-                          </span>
-                        </span>
-                        <div className="flex items-center gap-3">
-                          {bulkSelectMode && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setTagEditorIssue({
-                                  id: issue.id,
-                                  issue_number: issue.issue_number,
-                                })
-                              }
-                              aria-label={`Edit tags for issue #${issue.issue_number}`}
-                              title={`Edit tags for issue #${issue.issue_number}`}
-                              className="text-xs font-black uppercase tracking-widest text-stone-500 hover:text-amber-300"
-                            >
-                              Tags
-                            </button>
-                          )}
-                          <span className="text-xs font-black uppercase tracking-widest">
-                            {issue.status === 'read' ? (
-                              <span className="text-green-400">Read</span>
-                            ) : (
-                              <span className="text-stone-500">Unread</span>
-                            )}
-                          </span>
-                          <IssueReadStatusButton
-                            issue={issue}
-                            snapshot={{ issues, thread }}
-                            onSnapshotChange={handleIssueSnapshotChange}
-                          />
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
 
