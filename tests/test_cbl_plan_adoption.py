@@ -181,6 +181,7 @@ async def _adopt(
     cbl_list_content_hash: str = "hash",
     cbl_list_revision_sha: str = "rev",
     patch_writer: bool = True,
+    refresh_blocked: AsyncMock | None = None,
 ) -> AdoptionCommitResult:
     """Run adopt_cbl_material_into_reading_plan with mocked DB seams."""
     cbl_list = _FakeCBLList(
@@ -219,6 +220,12 @@ async def _adopt(
                 return_value=True,
             )
         )
+    patches.append(
+        patch(
+            "app.services.cbl_plan_adoption.refresh_user_blocked_status",
+            refresh_blocked if refresh_blocked is not None else AsyncMock(),
+        )
+    )
     with ExitStack() as stack:
         for item in patches:
             stack.enter_context(item)
@@ -410,6 +417,37 @@ async def test_new_plan_created_when_no_existing_plan() -> None:
     assert result.created_positions == []
     assert result.excluded_positions == []
     assert result.unresolved_positions == []
+
+
+@pytest.mark.asyncio
+async def test_adoption_commit_refreshes_blocked_status_before_commit() -> None:
+    """Successful CBL adoption must refresh stored is_blocked before commit."""
+    entry = _FakeEntry(id=10, position=0, series_name="X")
+    fact = _make_fact(
+        resolved_issue_id=100,
+        resolution_status="existing",
+        position=0,
+        cbl_entry_id=10,
+    )
+    db = _FakeDB()
+    refresh = AsyncMock()
+
+    async def _refresh(_user_id: int, _db: object) -> dict[int, bool]:
+        assert db.commit_count == 0
+        return {}
+
+    refresh.side_effect = _refresh
+    await _adopt(
+        db,
+        user_id=7,
+        entries=[entry],
+        facts=[fact],
+        entry_decisions={0: SourceBackedDecision.INCLUDE},
+        refresh_blocked=refresh,
+    )
+
+    refresh.assert_awaited_once_with(7, db)
+    assert db.commit_count == 1
 
 
 @pytest.mark.asyncio
@@ -1076,6 +1114,9 @@ async def test_already_read_entries_preserve_factual_state() -> None:
         "app.services.cbl_plan_adoption.replace_compiled_rules",
         new_callable=AsyncMock,
         return_value=True,
+    ), patch(
+        "app.services.cbl_plan_adoption.refresh_user_blocked_status",
+        new_callable=AsyncMock,
     ):
         result = await adopt_cbl_material_into_reading_plan(
             db,
@@ -1142,6 +1183,9 @@ async def test_cbl_source_provenance_survives_without_dependency_group_sequence_
         "app.services.cbl_plan_adoption.replace_compiled_rules",
         new_callable=AsyncMock,
         return_value=True,
+    ), patch(
+        "app.services.cbl_plan_adoption.refresh_user_blocked_status",
+        new_callable=AsyncMock,
     ):
         result = await adopt_cbl_material_into_reading_plan(
             db,
@@ -1218,7 +1262,10 @@ async def test_strict_plan_hard_constraints_use_canonical_dependency_semantics()
         "app.services.cbl_plan_adoption.replace_compiled_rules",
         new_callable=AsyncMock,
         return_value=True,
-    ) as mock_writer:
+    ) as mock_writer, patch(
+        "app.services.cbl_plan_adoption.refresh_user_blocked_status",
+        new_callable=AsyncMock,
+    ):
         result = await adopt_cbl_material_into_reading_plan(
             db,
             user_id=1,
