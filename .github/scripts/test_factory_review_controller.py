@@ -308,6 +308,12 @@ def configure_review_handoff(
         ),
     )
     monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(controller, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        controller,
+        "roster_model_for_worker",
+        lambda worker: f"roster-model-{worker}",
+    )
     monkeypatch.setattr(
         controller,
         "mechanical_merge_gate",
@@ -674,6 +680,8 @@ def test_review_comment_bodies_accept_owner_markers(monkeypatch):
     )
     bodies = controller.review_comment_bodies(2269)
     assert bodies == [marker + "\n\nnote", "bot body"]
+    model_bodies = controller.model_comment_bodies(2269)
+    assert model_bodies == ["bot body"]
 
 
 def test_gh_pr_view_counts_as_diff_inspection_evidence(monkeypatch):

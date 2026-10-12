@@ -157,12 +157,30 @@ There are no extra pre-merge QA, preview, smoke, or migration-rehearsal
 steps. Do not add a `factory:approved` label; controller provenance is the
 authority.
 
-Record models as trusted GitHub issue comments on the PR:
+The review controller writes those models as `github-actions[bot]` comments.
+It records the author model from the factory roster when the producing worker
+records the head, and the reviewer model when it launches and interprets an
+independent factory review. Cursor cloud-agent ids (`bc-…`) in a PR footer
+are a distinct identity token, not a substitute for the controller marker.
 
-- Author (entire comment body):
-  `<!-- comic-pile-agent-model-author-v1:pr-<n>:head-<sha>:model-<model> -->`
-- Reviewer (first line of the review comment):
-  `<!-- comic-pile-agent-model-review-v1:pr-<n>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:verdict-approve -->`
+Only `github-actions[bot]` model markers count. OWNER/MEMBER/COLLABORATOR
+comments — including Cursor agents posting as the repository owner — cannot
+satisfy the gate. A missing author marker, or two author markers that disagree,
+fails closed.
+
+Markers (entire comment body, written only by the controller):
+
+- Author:
+  `<!-- comic-pile-agent-model-author-v1:pr-<n>:head-<sha>:model-<model>:agent-<author-id> -->`
+- Reviewer:
+  `<!-- comic-pile-agent-model-review-v1:pr-<n>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:author-agent-<author-id>:reviewer-agent-<reviewer-id>:verdict-approve -->`
+
+The reviewer agent id must differ from the author agent id. Model comparison
+uses the model family: a leading `cursor-` prefix and effort/speed suffixes
+(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `thinking`,
+`fast`) are stripped, so `cursor-grok-4.6-high-fast` and `cursor-grok-4.6-low`
+are the same model.
 
 The factory merge drain refuses the PR when those markers are missing, the
-models match, the review SHA is stale, or required CI is red.
+author record is missing or conflicting, the models match, the reviewer is
+the authoring agent, the review SHA is stale, or required CI is red.
