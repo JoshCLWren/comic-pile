@@ -347,16 +347,32 @@ async def test_github_service_escapes_backticks_in_diagnostics(
         errors=[{"message": "error with `backtick`", "timestamp": "2024-01-01T00:00:00.000Z"}],
     )
 
+    captured_body = {}
+
+    class MockAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, headers, json):
+            captured_body["body"] = json["body"]
+            mock_response = MagicMock()
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json.return_value = {"html_url": mock_issue_url}
+            return mock_response
+
     with (
-        patch("app.api.bug_report.get_github_settings") as mock_get_settings,
-        patch("app.services.github_service.Github") as mock_github,
+        patch("app.api.bug_report.get_github_settings") as mock_get_settings_api,
+        patch("app.services.github_service.get_github_settings") as mock_get_settings_service,
+        patch("app.services.github_service.httpx.AsyncClient", MockAsyncClient),
     ):
-        mock_get_settings.return_value = mock_settings
-        mock_repo = MagicMock()
-        mock_issue = MagicMock()
-        mock_issue.html_url = mock_issue_url
-        mock_repo.create_issue.return_value = mock_issue
-        mock_github.return_value.get_repo.return_value = mock_repo
+        mock_get_settings_api.return_value = mock_settings
+        mock_get_settings_service.return_value = mock_settings
 
         response = await auth_client.post(
             "/api/bug-reports/",
@@ -369,8 +385,7 @@ async def test_github_service_escapes_backticks_in_diagnostics(
 
     assert response.status_code == 201
     assert response.json()["issue_url"] == mock_issue_url
-    mock_repo.create_issue.assert_called_once()
-    issue_body = mock_repo.create_issue.call_args.kwargs["body"]
+    issue_body = captured_body["body"]
     # Unescaped backticks should NOT appear in diagnostic values
     assert "```injected```" not in issue_body
     assert "error with `backtick`" not in issue_body

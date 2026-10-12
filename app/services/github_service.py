@@ -2,7 +2,7 @@
 
 import logging
 
-from github import Github, GithubException
+import httpx
 
 from app.config import get_github_settings
 from app.schemas.bug_report import BugReportDiagnostics, ReportType
@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 PERFORMANCE_FINGERPRINT_PREFIX = "performance-fingerprint:v1:"
 PERFORMANCE_ISSUE_SEARCH_LIMIT = 100
+
+GITHUB_API_BASE = "https://api.github.com"
+GITHUB_API_VERSION = "2022-11-28"
 
 
 def _escape_markdown_code(value: str) -> str:
@@ -23,6 +26,20 @@ def _labels_for_report_type(report_type: ReportType) -> list[str]:
     if report_type == "feature":
         return ["enhancement", "user-reported"]
     return ["bug", "user-reported"]
+
+
+def _github_headers(settings) -> dict[str, str]:
+    """Build common GitHub API headers."""
+    return {
+        "Authorization": f"Bearer {settings.github_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+    }
+
+
+def _repo_url(settings) -> str:
+    """Build the repository API URL."""
+    return f"{GITHUB_API_BASE}/repos/{settings.github_repo_owner}/{settings.github_repo_name}"
 
 
 async def create_bug_report_issue(
@@ -43,13 +60,13 @@ async def create_bug_report_issue(
 
     Returns:
         The HTML URL of the newly created GitHub issue.
+
+    Raises:
+        RuntimeError: If GitHub integration is not configured or issue creation fails.
     """
     settings = get_github_settings()
-    g = Github(settings.github_token)
-    try:
-        repo = g.get_repo(f"{settings.github_repo_owner}/{settings.github_repo_name}")
-    except GithubException as e:
-        raise RuntimeError(f"Failed to access GitHub repository: {e.data}") from e
+    if not settings.is_configured:
+        raise RuntimeError("GitHub integration not configured")
 
     report_label = "Feature request" if report_type == "feature" else "Bug report"
     body = (
@@ -111,35 +128,13 @@ async def create_bug_report_issue(
 {errors_str}
 </details>"""
 
-    try:
-        issue = repo.create_issue(
-            title=title,
-            body=body,
-            labels=_labels_for_report_type(report_type),
-        )
-    except GithubException as e:
-        raise RuntimeError(f"Failed to create GitHub issue: {e.data}") from e
-    return issue.html_url
+    payload = {
+        "title": title,
+        "body": body,
+        "labels": _labels_for_report_type(report_type),
+    }
 
-
-def _performance_repo():
-    """Resolve the configured GitHub repository for performance incidents.
-
-    Returns:
-        The PyGithub repository object.
-
-    Raises:
-        RuntimeError: If GitHub integration is not configured or the
-            repository cannot be accessed.
-    """
-    settings = get_github_settings()
-    if not settings.is_configured:
-        raise RuntimeError("GitHub integration not configured")
-    g = Github(settings.github_token)
-    try:
-        return g.get_repo(f"{settings.github_repo_owner}/{settings.github_repo_name}")
-    except GithubException as e:
-        raise RuntimeError(f"Failed to access GitHub repository: {e.data}") from e
+    return await _post_issue(settings, payload)
 
 
 async def create_performance_issue(
@@ -166,15 +161,35 @@ async def create_performance_issue(
     """
     if "user-reported" in labels:
         raise RuntimeError("Machine-generated performance issues must not use user-reported")
+
+    settings = get_github_settings()
+    if not settings.is_configured:
+        raise RuntimeError("GitHub integration not configured")
+
+    payload = {
+        "title": title,
+        "body": body,
+        "labels": labels,
+    }
+
+    return await _post_issue(settings, payload)
+
+
+async def _post_issue(settings, payload: dict) -> str:
+    """Post an issue to GitHub and return the HTML URL."""
+    url = f"{_repo_url(settings)}/issues"
+    headers = _github_headers(settings)
+
     try:
-        repo = _performance_repo()
-    except RuntimeError:
-        raise
-    try:
-        issue = repo.create_issue(title=title, body=body, labels=labels)
-    except GithubException as e:
-        raise RuntimeError(f"Failed to create performance issue: {e.data}") from e
-    return issue.html_url
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            return data["html_url"]
+    except httpx.HTTPStatusError as e:
+        raise RuntimeError(f"Failed to create GitHub issue: {e.response.text}") from e
+    except httpx.RequestError as e:
+        raise RuntimeError(f"Failed to create GitHub issue: {e}") from e
 
 
 def _issue_matches_fingerprint(issue_body: str | None, fingerprint: str) -> bool:
@@ -192,6 +207,38 @@ def _issue_matches_fingerprint(issue_body: str | None, fingerprint: str) -> bool
     return f"{PERFORMANCE_FINGERPRINT_PREFIX}{fingerprint}" in issue_body
 
 
+async def _search_issues(
+    settings,
+    state: str,
+    fingerprint: str,
+) -> int | None:
+    """Search for issues matching a fingerprint."""
+    url = f"{_repo_url(settings)}/issues"
+    headers = _github_headers(settings)
+    params = {"state": state, "labels": "performance", "per_page": 100}
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            issues = response.json()
+
+            checked = 0
+            for issue in issues:
+                if checked >= PERFORMANCE_ISSUE_SEARCH_LIMIT:
+                    break
+                checked += 1
+                if issue.get("pull_request") is not None:
+                    continue
+                if _issue_matches_fingerprint(issue.get("body"), fingerprint):
+                    return issue["number"]
+            return None
+    except httpx.HTTPStatusError as e:
+        raise RuntimeError(f"Failed to search performance issues: {e.response.text}") from e
+    except httpx.RequestError as e:
+        raise RuntimeError(f"Failed to search performance issues: {e}") from e
+
+
 async def find_open_issue_by_fingerprint(fingerprint: str) -> int | None:
     """Find an open performance issue for a fingerprint, if one exists.
 
@@ -204,24 +251,10 @@ async def find_open_issue_by_fingerprint(fingerprint: str) -> int | None:
     Raises:
         RuntimeError: If the GitHub lookup fails.
     """
-    try:
-        repo = _performance_repo()
-    except RuntimeError:
-        raise
-    try:
-        issues = repo.get_issues(state="open", labels=["performance"])
-        checked = 0
-        for issue in issues:
-            if checked >= PERFORMANCE_ISSUE_SEARCH_LIMIT:
-                break
-            checked += 1
-            if getattr(issue, "pull_request", None) is not None:
-                continue
-            if _issue_matches_fingerprint(getattr(issue, "body", None), fingerprint):
-                return issue.number
-        return None
-    except GithubException as e:
-        raise RuntimeError(f"Failed to search performance issues: {e.data}") from e
+    settings = get_github_settings()
+    if not settings.is_configured:
+        raise RuntimeError("GitHub integration not configured")
+    return await _search_issues(settings, "open", fingerprint)
 
 
 async def find_closed_issue_by_fingerprint(fingerprint: str) -> int | None:
@@ -240,24 +273,10 @@ async def find_closed_issue_by_fingerprint(fingerprint: str) -> int | None:
     Raises:
         RuntimeError: If the GitHub lookup fails.
     """
-    try:
-        repo = _performance_repo()
-    except RuntimeError:
-        raise
-    try:
-        issues = repo.get_issues(state="closed", labels=["performance"])
-        checked = 0
-        for issue in issues:
-            if checked >= PERFORMANCE_ISSUE_SEARCH_LIMIT:
-                break
-            checked += 1
-            if getattr(issue, "pull_request", None) is not None:
-                continue
-            if _issue_matches_fingerprint(getattr(issue, "body", None), fingerprint):
-                return issue.number
-        return None
-    except GithubException as e:
-        raise RuntimeError(f"Failed to search closed performance issues: {e.data}") from e
+    settings = get_github_settings()
+    if not settings.is_configured:
+        raise RuntimeError("GitHub integration not configured")
+    return await _search_issues(settings, "closed", fingerprint)
 
 
 async def add_performance_issue_comment(issue_number: int, comment: str) -> str | None:
@@ -277,15 +296,30 @@ async def add_performance_issue_comment(issue_number: int, comment: str) -> str 
     Raises:
         RuntimeError: If the comment cannot be posted.
     """
+    settings = get_github_settings()
+    if not settings.is_configured:
+        raise RuntimeError("GitHub integration not configured")
+
+    url = f"{_repo_url(settings)}/issues/{issue_number}/comments"
+    headers = _github_headers(settings)
+    payload = {"body": comment}
+
     try:
-        repo = _performance_repo()
-    except RuntimeError:
-        raise
-    try:
-        issue = repo.get_issue(number=issue_number)
-        issue.create_comment(comment)
-        return issue.state
-    except GithubException as e:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+
+            # Fetch the issue to get its state
+            issue_url = f"{_repo_url(settings)}/issues/{issue_number}"
+            issue_response = await client.get(issue_url, headers=headers)
+            issue_response.raise_for_status()
+            issue_data = issue_response.json()
+            return issue_data["state"]
+    except httpx.HTTPStatusError as e:
         raise RuntimeError(
-            f"Failed to update performance issue #{issue_number}: {e.data}"
+            f"Failed to update performance issue #{issue_number}: {e.response.text}"
+        ) from e
+    except httpx.RequestError as e:
+        raise RuntimeError(
+            f"Failed to update performance issue #{issue_number}: {e}"
         ) from e
