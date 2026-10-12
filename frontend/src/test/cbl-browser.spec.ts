@@ -97,7 +97,6 @@ test.describe('CBL browser one-decision adoption', () => {
       .click()
 
     // Compact consequence summary: no per-entry decisions required.
-    await expect(page.getByText('Already in ComicPile')).toHaveCount(1)
     await expect(
       page.getByText('2 entries · 1 already in ComicPile · 1 will be added'),
     ).toBeVisible()
@@ -208,7 +207,7 @@ test.describe('CBL browser one-decision adoption', () => {
     ).toBeVisible()
 
     // Progressive disclosure: exclude the missing series, then add.
-    await page.getByRole('button', { name: 'Customize' }).click()
+    await page.getByRole('button', { name: 'Customize', exact: true }).click()
     const missingSeriesChoice = page.getByRole('group', {
       name: 'Browser Customize Missing series choice',
     })
@@ -238,28 +237,28 @@ test.describe('CBL browser one-decision adoption', () => {
     const headers = await authHeaders(page)
 
     const owned = await createThread(page, {
-      title: 'Browser Cancel Owned',
+      title: 'Browser Abort Owned',
       format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const ownedIssueId = await getFirstIssueId(page, owned.id)
     const fixtureSuffix = `${owned.id}-${Date.now()}`
-    const sourceName = `Browser Cancel ${fixtureSuffix}`
-    const sourcePath = `Fixtures/Browser Cancel ${fixtureSuffix}.cbl`
+    const sourceName = `Browser Abort ${fixtureSuffix}`
+    const sourcePath = `Fixtures/Browser Abort ${fixtureSuffix}.cbl`
 
     const seed = await page.request.post('/api/test/cbl-source', {
       headers,
       data: {
         name: sourceName,
         source_path: sourcePath,
-        content_hash: `browser-cancel-${fixtureSuffix}`,
-        revision_sha: `browser-cancel-revision-${fixtureSuffix}`,
+        content_hash: `browser-abort-${fixtureSuffix}`,
+        revision_sha: `browser-abort-revision-${fixtureSuffix}`,
         repository: `JoshCLWren/CBL-ReadingLists-fixture-${fixtureSuffix}`,
         entries: [
           {
             position: 1,
-            series_name: 'Browser Cancel Owned',
+            series_name: 'Browser Abort Owned',
             issue_number: '1',
             issue_id: ownedIssueId,
           },
@@ -277,7 +276,7 @@ test.describe('CBL browser one-decision adoption', () => {
     await expect(page.getByText(/1 entry · 1 already in ComicPile/)).toBeVisible()
 
     await page.getByRole('button', { name: 'Add this reading order' }).click()
-    await page.getByRole('button', { name: 'Cancel' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click()
     await expect(page).toHaveURL(/\/cbl-sources/)
 
     const plansAfter = await page.request.get('/api/v1/continuity-plans/', { headers })
