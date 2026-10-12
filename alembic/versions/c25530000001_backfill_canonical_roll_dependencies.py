@@ -9,11 +9,13 @@ docs/READING_GRAPH_RUNTIME_AUDIT.md section 7 step 1):
 
 1. Validates that every rule-native ContinuityRule (no legacy_dependency_id
    mirror) compiles to issue-level Dependency edges, and that those edges
-   plus existing canonical Dependencies do not form a cycle. Rules whose
-   source or target issue no longer exists are skipped, logged, and left
-   unchanged (they cannot be enforced). Genuinely ambiguous or invalid rows
-   (cycles, non-issue endpoints, cross-user references, unhandled types)
-   still abort with the offending rule IDs.
+   plus existing canonical Dependencies do not form a cycle. A reviewed
+   allowlist of six test-user ContinuityRule ids may dangle: those rows
+   are reported (owner, rule id, missing issue ids, missing side) and left
+   unchanged. Any other dangling rule — especially a user-owned
+   prerequisite — aborts with an investigation-grade error. Cycles,
+   non-issue endpoints, cross-user references, and unhandled types still
+   abort with the offending rule IDs.
 2. Drops the Dependency -> ContinuityRule mirroring trigger before the
    backfill so backfilled edges are not claimed back into mirrored rules.
 3. Persists one canonical Dependency edge per rule-native item_read rule and
@@ -21,9 +23,9 @@ docs/READING_GRAPH_RUNTIME_AUDIT.md section 7 step 1):
    touched; they stay inert via the evaluator's note predicate.
 4. Links each backfilled edge to its owning Reading Plan through
    reading_plan_dependencies, but only when the plan exists and is owned by
-   the same user as the rule. Cross-user / missing plan notes and rules
-   whose source or target issue no longer exists are skipped and reported
-   the same way, never aborted and never blindly translated.
+   the same user as the rule. Cross-user / missing plan notes are skipped
+   and reported. Allowlisted dangling item_read rows are skipped the same
+   way; any other missing endpoint aborts.
 
 The heavy lifting lives in app.services.canonical_backfill so it is unit
 testable without an Alembic context.
@@ -38,6 +40,7 @@ from pathlib import Path
 from alembic import op
 
 from app.services.canonical_backfill import (
+    DanglingRuleReport,
     backfill_converged_edges,
     backfill_item_read_edges,
     drop_mirror_trigger,
@@ -53,8 +56,20 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _print_dangling_skipped(skipped: list[DanglingRuleReport]) -> None:
+    """Report each reviewed dangling skip with owner, rule, issues, and side."""
+    if not skipped:
+        return
+    print(
+        f"[c25530000001] WARNING: {len(skipped)} reviewed dangling rule(s) "
+        "skipped (left unchanged, not compiled):"
+    )
+    for row in skipped:
+        print(f"[c25530000001]   {row.report()}")
+
+
 def _print_skipped(kind: str, skipped: list[tuple[int, str]]) -> None:
-    """Report skipped rules the same way for dangling endpoints and plan notes."""
+    """Report skipped plan-note translations."""
     if not skipped:
         return
     print(f"[c25530000001] WARNING: {len(skipped)} {kind}:")
@@ -73,10 +88,7 @@ def upgrade() -> None:
     conv_inserted, conv_existing, conv_self_skipped = backfill_converged_edges(bind)
     links_created, links_skipped = link_plan_provenance(bind)
 
-    _print_skipped(
-        "rules skipped (missing source or target issues, left unchanged)",
-        skipped_dangling,
-    )
+    _print_dangling_skipped(skipped_dangling)
     print(f"[c25530000001] item_read edges: {item_inserted} inserted, {item_existing} already present")
     print(
         f"[c25530000001] converged edges: {conv_inserted} inserted, "
