@@ -10,7 +10,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import Text, and_, func, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
