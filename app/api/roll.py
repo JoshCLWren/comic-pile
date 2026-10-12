@@ -1116,41 +1116,15 @@ async def roll_bootstrap(
             Thread.format,
             Thread.next_unread_issue_id.label("issue_id"),
             Issue.issue_number,
-            func.array_agg(func.distinct(DependencyGroup.name)).label("route_labels"),
         )
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .outerjoin(
-            DependencyGroupMembership,
-            or_(
-                DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
-            ),
-        )
-        .outerjoin(
-            DependencyGroup,
-            and_(
-                DependencyGroup.id == DependencyGroupMembership.group_id,
-                DependencyGroup.user_id == user_id,
-            ),
-        )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
         .where(Thread.is_blocked.is_(False))
         .order_by(Thread.queue_position)
         .limit(die_size)
-        .group_by(Thread.id, Issue.issue_number)
     )
-
-    snoozed_ids = list(current_session.snoozed_thread_ids or [])
-    skipped_ids = list(current_session.skipped_thread_ids or [])
-    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
-    effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
-    if effective_snoozed_ids:
-        pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
-    if skipped_ids:
-        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
-
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()
 
@@ -1161,10 +1135,40 @@ async def roll_bootstrap(
             format=normalize_format_value(row.format),
             issue_id=row.issue_id,
             issue_number=row.issue_number,
-            route_labels=list(row.route_labels or []),
+            route_labels=[
+                dg.name
+                for dg in (
+                    await db.execute(
+                        select(DependencyGroup)
+                        .join(
+                            DependencyGroupMembership,
+                            and_(
+                                DependencyGroupMembership.group_id == DependencyGroup.id,
+                                or_(
+                                    DependencyGroupMembership.thread_id == row.id,
+                                    DependencyGroupMembership.issue_id == row.issue_id,
+                                ),
+                            ),
+                        )
+                        .where(DependencyGroup.user_id == user_id)
+                        .where(DependencyGroup.name.isnot(None))
+                    )
+                )
+                .scalars()
+                .all()
+            ],
         )
         for row in pool_rows
     ]
+
+    snoozed_ids = list(current_session.snoozed_thread_ids or [])
+    skipped_ids = list(current_session.skipped_thread_ids or [])
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+    effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
+    if effective_snoozed_ids:
+        pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
+    if skipped_ids:
+        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
 
     snoozed_threads: list[RollBootstrapThread] = []
     if snoozed_ids:
