@@ -4,13 +4,22 @@ Data-migration logic for the Roll cutover: validates that every rule-native
 ContinuityRule compiles to issue-level edges, persists those edges, and links
 them to their owning Reading Plans with ownership validation. The Alembic
 migration ``c25530000001`` is a thin wrapper around these functions.
+
+Dangling source/target issues abort the migration except for a reviewed
+allowlist of six test-user ContinuityRule ids. Those rows are reported with
+owner, rule id, missing issue ids, and missing side, then left unchanged.
+Any other dangling rule — especially a real user's prerequisite — aborts
+with an investigation-grade error. Cycles, non-issue endpoints, cross-user
+references, and unhandled types still abort.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import defaultdict, deque
+from dataclasses import dataclass
 
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
@@ -20,119 +29,243 @@ from sqlalchemy.engine import Connection
 # both prefixes via rule_compiled_note_filter().
 from app.services.canonical_constraint_compiler import BACKFILL_EDGE_NOTE_PREFIX
 
+logger = logging.getLogger(__name__)
+
 _PLAN_NOTE_RE = re.compile(r"^continuity-plan:(\d+)$")
 _MAX_REPORTED_IDS = 50
+_NATIVE = "legacy_dependency_id IS NULL"
+_ITEM_READ_ENDPOINTS_EXIST = (
+    "EXISTS (SELECT 1 FROM issues s WHERE s.id = r.source_id) "
+    "AND EXISTS (SELECT 1 FROM issues t WHERE t.id = r.target_id)"
+)
+
+# Reviewed 2026-10-12 production finding: these six item_read rules are the
+# only dangling ContinuityRules in prod. All are owned by test user 23199.
+# Any other missing-endpoint rule must abort rather than drop a prerequisite.
+REVIEWED_DANGLING_OWNER_USER_ID = 23199
+DANGLING_RULE_ALLOWLIST: frozenset[tuple[int, int]] = frozenset(
+    {
+        (1715192, REVIEWED_DANGLING_OWNER_USER_ID),
+        (1715241, REVIEWED_DANGLING_OWNER_USER_ID),
+        (1715291, REVIEWED_DANGLING_OWNER_USER_ID),
+        (1715333, REVIEWED_DANGLING_OWNER_USER_ID),
+        (1715578, REVIEWED_DANGLING_OWNER_USER_ID),
+        (1715620, REVIEWED_DANGLING_OWNER_USER_ID),
+    }
+)
 
 
-def abort_with_rule_ids(rule_ids: list[int], reason: str) -> None:
-    """Abort the migration with an actionable error listing the bad rules."""
+@dataclass(frozen=True)
+class DanglingRuleReport:
+    """One dangling ContinuityRule, with enough detail to investigate or skip."""
+
+    rule_id: int
+    user_id: int
+    source_id: int
+    target_id: int
+    missing_source: bool
+    missing_target: bool
+
+    def missing_sides(self) -> list[str]:
+        """Return which endpoint sides no longer exist."""
+        sides: list[str] = []
+        if self.missing_source:
+            sides.append("source")
+        if self.missing_target:
+            sides.append("target")
+        return sides
+
+    def missing_issue_ids(self) -> list[int]:
+        """Return the issue ids that no longer exist."""
+        missing: list[int] = []
+        if self.missing_source:
+            missing.append(self.source_id)
+        if self.missing_target:
+            missing.append(self.target_id)
+        return missing
+
+    def report(self) -> str:
+        """Return an investigation-grade one-line description of this row."""
+        sides = " and ".join(self.missing_sides()) or "unknown"
+        ids = ", ".join(str(issue_id) for issue_id in self.missing_issue_ids())
+        return (
+            f"user_id={self.user_id} rule_id={self.rule_id} "
+            f"missing {sides} issue id(s) {ids}"
+        )
+
+    def is_allowlisted(self) -> bool:
+        """Return True when this row is the reviewed test-user exception."""
+        return (self.rule_id, self.user_id) in DANGLING_RULE_ALLOWLIST
+
+
+def _format_rule_ids(rule_ids: list[int]) -> str:
+    """Return a compact, sorted id list for abort and skip messages."""
     shown = ", ".join(str(i) for i in sorted(rule_ids)[:_MAX_REPORTED_IDS])
     extra = (
         f" (and {len(rule_ids) - _MAX_REPORTED_IDS} more)"
         if len(rule_ids) > _MAX_REPORTED_IDS
         else ""
     )
+    return f"{shown}{extra}"
+
+
+def abort_with_rule_ids(rule_ids: list[int], reason: str) -> None:
+    """Abort the migration with an actionable error listing the bad rules."""
     raise RuntimeError(
         f"Cannot backfill canonical Dependencies: {len(rule_ids)} rule(s) {reason}: "
-        f"{shown}{extra}. Resolve or remove these rules, then re-run the migration."
+        f"{_format_rule_ids(rule_ids)}. Resolve or remove these rules, then re-run "
+        "the migration."
     )
 
 
-def validate_compilable_rules(bind: Connection) -> None:
-    """Ensure every rule-native ContinuityRule reduces to issue-level edges."""
-    native = "legacy_dependency_id IS NULL"
+def _query_rule_ids(bind: Connection, sql: str) -> list[int]:
+    """Return integer rule ids from a single-column SELECT."""
+    return [int(row[0]) for row in bind.execute(sa.text(sql)).all()]
 
-    bad_types = [
-        row[0]
-        for row in bind.execute(
-            sa.text(
-                "SELECT id FROM continuity_rules "
-                f"WHERE {native} AND satisfaction_type NOT IN ('item_read', 'converged')"
-            )
-        ).all()
+
+def _load_item_read_dangling(bind: Connection) -> list[DanglingRuleReport]:
+    """Return item_read native rules whose source or target issue is gone."""
+    rows = bind.execute(
+        sa.text(
+            "SELECT r.id, r.user_id, r.source_id, r.target_id, "
+            "s.id IS NULL AS missing_source, t.id IS NULL AS missing_target "
+            "FROM continuity_rules r "
+            "LEFT JOIN issues s ON s.id = r.source_id "
+            "LEFT JOIN issues t ON t.id = r.target_id "
+            f"WHERE r.{_NATIVE} AND r.satisfaction_type = 'item_read' "
+            "AND (s.id IS NULL OR t.id IS NULL) "
+            "ORDER BY r.id"
+        )
+    ).all()
+    return [
+        DanglingRuleReport(
+            rule_id=int(row[0]),
+            user_id=int(row[1]),
+            source_id=int(row[2]),
+            target_id=int(row[3]),
+            missing_source=bool(row[4]),
+            missing_target=bool(row[5]),
+        )
+        for row in rows
     ]
+
+
+def abort_unknown_dangling_rules(unknown: list[DanglingRuleReport]) -> None:
+    """Abort when dangling rules are not on the reviewed allowlist.
+
+    Skipping an unreviewed dangling rule would silently drop a user's
+    prerequisite from the compiled graph. That is never a warning.
+    """
+    if not unknown:
+        return
+    allowlist_ids = ", ".join(
+        str(rule_id) for rule_id, _owner in sorted(DANGLING_RULE_ALLOWLIST)
+    )
+    details = "; ".join(row.report() for row in unknown[:_MAX_REPORTED_IDS])
+    extra = (
+        f" (and {len(unknown) - _MAX_REPORTED_IDS} more)"
+        if len(unknown) > _MAX_REPORTED_IDS
+        else ""
+    )
+    raise RuntimeError(
+        "Cannot backfill canonical Dependencies: "
+        f"{len(unknown)} dangling ContinuityRule(s) are not on the reviewed "
+        f"allowlist of test-user {REVIEWED_DANGLING_OWNER_USER_ID} rule ids "
+        f"({allowlist_ids}). Skipping them would silently weaken a user's "
+        "prerequisites. Investigate: restore the missing issues, remove the "
+        "rules, or explicitly expand the allowlist after review. "
+        f"Offending rows: {details}{extra}."
+    )
+
+
+def _log_skipped_dangling(skipped: list[DanglingRuleReport]) -> None:
+    """Log each reviewed dangling skip; the rows themselves are left unchanged."""
+    for row in skipped:
+        logger.warning(
+            "Skipping reviewed dangling ContinuityRule "
+            "(left unchanged, not compiled): %s",
+            row.report(),
+        )
+
+
+def validate_compilable_rules(bind: Connection) -> list[DanglingRuleReport]:
+    """Ensure compilable rule-native ContinuityRules reduce to issue-level edges.
+
+    Dangling item_read rows on the reviewed allowlist are reported and left
+    unchanged. Any other missing source, target, or prerequisite aborts with
+    an investigation-grade error. Cycles, non-issue endpoints, cross-user
+    references, and unhandled types still abort.
+
+    Args:
+        bind: Synchronous SQLAlchemy connection used by Alembic.
+
+    Returns:
+        Allowlisted dangling rows that were skipped (never mutated).
+    """
+    native = _NATIVE
+
+    bad_types = _query_rule_ids(
+        bind,
+        "SELECT id FROM continuity_rules "
+        f"WHERE {native} AND satisfaction_type NOT IN ('item_read', 'converged')",
+    )
     if bad_types:
         abort_with_rule_ids(bad_types, "have unhandled satisfaction_type values")
 
-    non_issue = [
-        row[0]
-        for row in bind.execute(
-            sa.text(
-                "SELECT id FROM continuity_rules "
-                f"WHERE {native} AND satisfaction_type = 'item_read' "
-                "AND (source_type <> 'issue' OR target_type <> 'issue')"
-            )
-        ).all()
-    ]
+    non_issue = _query_rule_ids(
+        bind,
+        "SELECT id FROM continuity_rules "
+        f"WHERE {native} AND satisfaction_type = 'item_read' "
+        "AND (source_type <> 'issue' OR target_type <> 'issue')",
+    )
     if non_issue:
         abort_with_rule_ids(non_issue, "are item_read rules with non-issue endpoints")
 
-    dangling = [
-        row[0]
-        for row in bind.execute(
-            sa.text(
-                "SELECT r.id FROM continuity_rules r "
-                "LEFT JOIN issues s ON s.id = r.source_id "
-                "LEFT JOIN issues t ON t.id = r.target_id "
-                f"WHERE r.{native} AND r.satisfaction_type = 'item_read' "
-                "AND (s.id IS NULL OR t.id IS NULL)"
-            )
-        ).all()
-    ]
-    if dangling:
-        abort_with_rule_ids(dangling, "reference missing source or target issues")
+    dangling_item_read = _load_item_read_dangling(bind)
+    allowlisted = [row for row in dangling_item_read if row.is_allowlisted()]
+    abort_unknown_dangling_rules(
+        [row for row in dangling_item_read if not row.is_allowlisted()]
+    )
 
-    cross_user = [
-        row[0]
-        for row in bind.execute(
-            sa.text(
-                "SELECT r.id FROM continuity_rules r "
-                "JOIN issues s ON s.id = r.source_id "
-                "JOIN issues t ON t.id = r.target_id "
-                "JOIN threads st ON st.id = s.thread_id "
-                "JOIN threads tt ON tt.id = t.thread_id "
-                f"WHERE r.{native} AND r.satisfaction_type = 'item_read' "
-                "AND (st.user_id <> r.user_id OR tt.user_id <> r.user_id)"
-            )
-        ).all()
-    ]
+    cross_user = _query_rule_ids(
+        bind,
+        "SELECT r.id FROM continuity_rules r "
+        "JOIN issues s ON s.id = r.source_id "
+        "JOIN issues t ON t.id = r.target_id "
+        "JOIN threads st ON st.id = s.thread_id "
+        "JOIN threads tt ON tt.id = t.thread_id "
+        f"WHERE r.{native} AND r.satisfaction_type = 'item_read' "
+        "AND (st.user_id <> r.user_id OR tt.user_id <> r.user_id)",
+    )
     if cross_user:
         abort_with_rule_ids(cross_user, "reference issues owned by a different user than the rule")
 
-    bad_converged_target = [
-        row[0]
-        for row in bind.execute(
-            sa.text(
-                "SELECT r.id FROM continuity_rules r "
-                "LEFT JOIN issues t ON t.id = r.target_id "
-                "LEFT JOIN threads tt ON tt.id = t.thread_id "
-                f"WHERE r.{native} AND r.satisfaction_type = 'converged' "
-                "AND (r.target_type <> 'issue' OR t.id IS NULL OR tt.user_id <> r.user_id)"
-            )
-        ).all()
-    ]
+    bad_converged_target = _query_rule_ids(
+        bind,
+        "SELECT r.id FROM continuity_rules r "
+        "LEFT JOIN issues t ON t.id = r.target_id "
+        "LEFT JOIN threads tt ON tt.id = t.thread_id "
+        f"WHERE r.{native} AND r.satisfaction_type = 'converged' "
+        "AND (r.target_type <> 'issue' OR t.id IS NULL OR tt.user_id <> r.user_id)",
+    )
     if bad_converged_target:
         abort_with_rule_ids(
             bad_converged_target,
             "are converged rules with a non-issue, missing, or cross-user target",
         )
 
-    bad_prereq = [
-        row[0]
-        for row in bind.execute(
-            sa.text(
-                # NB: the issues join compares on text so a malformed id is
-                # reported by this validation instead of raising a cast error.
-                "SELECT DISTINCT r.id FROM continuity_rules r, "
-                "LATERAL json_array_elements(r.convergence_targets) AS elem "
-                "LEFT JOIN issues i ON i.id::text = elem->>'id' "
-                "LEFT JOIN threads th ON th.id = i.thread_id "
-                f"WHERE r.{native} AND r.satisfaction_type = 'converged' "
-                "AND (elem->>'id' !~ '^[0-9]+$' OR elem->>'type' <> 'issue' "
-                "OR i.id IS NULL OR th.user_id <> r.user_id)"
-            )
-        ).all()
-    ]
+    bad_prereq = _query_rule_ids(
+        bind,
+        # NB: the issues join compares on text so a malformed id is
+        # reported by this validation instead of raising a cast error.
+        "SELECT DISTINCT r.id FROM continuity_rules r, "
+        "LATERAL json_array_elements(r.convergence_targets) AS elem "
+        "LEFT JOIN issues i ON i.id::text = elem->>'id' "
+        "LEFT JOIN threads th ON th.id = i.thread_id "
+        f"WHERE r.{native} AND r.satisfaction_type = 'converged' "
+        "AND (elem->>'id' !~ '^[0-9]+$' OR elem->>'type' <> 'issue' "
+        "OR i.id IS NULL OR th.user_id <> r.user_id)",
+    )
     if bad_prereq:
         abort_with_rule_ids(
             bad_prereq,
@@ -140,7 +273,9 @@ def validate_compilable_rules(bind: Connection) -> None:
             "owned by the rule's user",
         )
 
+    _log_skipped_dangling(allowlisted)
     _abort_on_cycles(bind)
+    return allowlisted
 
 
 def drop_mirror_trigger(bind: Connection) -> None:
@@ -206,21 +341,29 @@ def _abort_on_converged_cbl_collisions(bind: Connection) -> None:
 
 
 def _rule_native_pairs(bind: Connection) -> list[tuple[int, int, int]]:
-    """Return (rule_id, source_issue_id, target_issue_id) the backfill would persist."""
+    """Return (rule_id, source_issue_id, target_issue_id) the backfill would persist.
+
+    Dangling rules (missing source, target, or converged prerequisite issues)
+    are omitted so they cannot participate in cycle detection or compilation.
+    """
     item_read = bind.execute(
         sa.text(
             "SELECT r.id, r.source_id, r.target_id FROM continuity_rules r "
             "WHERE r.legacy_dependency_id IS NULL "
             "AND r.satisfaction_type = 'item_read' "
             "AND r.source_type = 'issue' AND r.target_type = 'issue' "
-            "AND r.source_id <> r.target_id"
+            "AND r.source_id <> r.target_id "
+            f"AND {_ITEM_READ_ENDPOINTS_EXIST}"
         )
     ).all()
     converged = bind.execute(
         sa.text(
             "SELECT r.id, (elem->>'id')::int, r.target_id "
-            "FROM continuity_rules r, "
-            "LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "FROM continuity_rules r "
+            "JOIN LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "ON elem->>'id' ~ '^[0-9]+$' "
+            "JOIN issues prereq ON prereq.id = (elem->>'id')::int "
+            "JOIN issues target ON target.id = r.target_id "
             "WHERE r.legacy_dependency_id IS NULL "
             "AND r.satisfaction_type = 'converged' "
             "AND (elem->>'id')::int <> r.target_id"
@@ -318,14 +461,18 @@ def backfill_item_read_edges(bind: Connection) -> tuple[int, int]:
             "FROM continuity_rules r "
             "WHERE r.legacy_dependency_id IS NULL "
             "AND r.satisfaction_type = 'item_read' "
+            "AND r.source_type = 'issue' AND r.target_type = 'issue' "
+            f"AND {_ITEM_READ_ENDPOINTS_EXIST} "
             "ON CONFLICT (source_issue_id, target_issue_id) DO NOTHING"
         )
     )
     after = bind.execute(sa.text("SELECT COUNT(*) FROM dependencies")).scalar_one()
     distinct_pairs = bind.execute(
         sa.text(
-            "SELECT COUNT(DISTINCT (source_id, target_id)) FROM continuity_rules "
-            "WHERE legacy_dependency_id IS NULL AND satisfaction_type = 'item_read'"
+            "SELECT COUNT(DISTINCT (r.source_id, r.target_id)) FROM continuity_rules r "
+            "WHERE r.legacy_dependency_id IS NULL AND r.satisfaction_type = 'item_read' "
+            "AND r.source_type = 'issue' AND r.target_type = 'issue' "
+            f"AND {_ITEM_READ_ENDPOINTS_EXIST}"
         )
     ).scalar_one()
     inserted = after - before
@@ -337,8 +484,11 @@ def backfill_converged_edges(bind: Connection) -> tuple[int, int, int]:
     _abort_on_converged_cbl_collisions(bind)
     self_edges = bind.execute(
         sa.text(
-            "SELECT COUNT(DISTINCT (elem->>'id')::int) FROM continuity_rules r, "
-            "LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "SELECT COUNT(DISTINCT (elem->>'id')::int) FROM continuity_rules r "
+            "JOIN LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "ON elem->>'id' ~ '^[0-9]+$' "
+            "JOIN issues prereq ON prereq.id = (elem->>'id')::int "
+            "JOIN issues target ON target.id = r.target_id "
             "WHERE r.legacy_dependency_id IS NULL "
             "AND r.satisfaction_type = 'converged' "
             "AND (elem->>'id')::int = r.target_id"
@@ -350,8 +500,11 @@ def backfill_converged_edges(bind: Connection) -> tuple[int, int, int]:
             "INSERT INTO dependencies (source_issue_id, target_issue_id, note, created_at) "
             "SELECT DISTINCT (elem->>'id')::int, r.target_id, "
             f"'{BACKFILL_EDGE_NOTE_PREFIX}' || r.id, now() "
-            "FROM continuity_rules r, "
-            "LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "FROM continuity_rules r "
+            "JOIN LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "ON elem->>'id' ~ '^[0-9]+$' "
+            "JOIN issues prereq ON prereq.id = (elem->>'id')::int "
+            "JOIN issues target ON target.id = r.target_id "
             "WHERE r.legacy_dependency_id IS NULL "
             "AND r.satisfaction_type = 'converged' "
             "AND (elem->>'id')::int <> r.target_id "
@@ -362,8 +515,11 @@ def backfill_converged_edges(bind: Connection) -> tuple[int, int, int]:
     prereq_count = bind.execute(
         sa.text(
             "SELECT COUNT(DISTINCT ((elem->>'id')::int, r.target_id)) "
-            "FROM continuity_rules r, "
-            "LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "FROM continuity_rules r "
+            "JOIN LATERAL json_array_elements(r.convergence_targets) AS elem "
+            "ON elem->>'id' ~ '^[0-9]+$' "
+            "JOIN issues prereq ON prereq.id = (elem->>'id')::int "
+            "JOIN issues target ON target.id = r.target_id "
             "WHERE r.legacy_dependency_id IS NULL "
             "AND r.satisfaction_type = 'converged' "
             "AND (elem->>'id')::int <> r.target_id"
@@ -371,6 +527,20 @@ def backfill_converged_edges(bind: Connection) -> tuple[int, int, int]:
     ).scalar_one()
     inserted = after - before
     return inserted, prereq_count - inserted, self_edges
+
+
+def _issue_exists(bind: Connection, issue_id: int) -> bool:
+    """Return True when ``issue_id`` exists in the issues table."""
+    found = bind.execute(
+        sa.text("SELECT 1 FROM issues WHERE id = :issue_id"),
+        {"issue_id": issue_id},
+    ).first()
+    return found is not None
+
+
+def _issues_exist(bind: Connection, issue_ids: list[int]) -> bool:
+    """Return True when every id exists in the issues table."""
+    return all(_issue_exists(bind, issue_id) for issue_id in dict.fromkeys(issue_ids))
 
 
 def rule_edge_pairs(
@@ -404,6 +574,9 @@ def link_plan_provenance(bind: Connection) -> tuple[int, list[tuple[int, str]]]:
     note so that several rules compiling to the same edge each get their plan
     link. Returns (links_created, skipped) where skipped is a list of
     (rule_id, reason) for plan notes that could not be safely translated.
+    Allowlisted dangling item_read rows are skip-and-reported with owner,
+    rule id, missing issue ids, and missing side. Any other missing
+    endpoint — especially a user-owned prerequisite — aborts.
     """
     links_created = 0
     skipped: list[tuple[int, str]] = []
@@ -436,6 +609,34 @@ def link_plan_provenance(bind: Connection) -> tuple[int, list[tuple[int, str]]]:
             )
             continue
         pairs = rule_edge_pairs(satisfaction_type, source_id, target_id, convergence_targets)
+        endpoint_ids = [issue_id for pair in pairs for issue_id in pair]
+        if satisfaction_type == "item_read":
+            report = DanglingRuleReport(
+                rule_id=int(rule_id),
+                user_id=int(user_id),
+                source_id=int(source_id),
+                target_id=int(target_id),
+                missing_source=not _issue_exists(bind, int(source_id)),
+                missing_target=not _issue_exists(bind, int(target_id)),
+            )
+            if report.missing_source or report.missing_target:
+                if report.is_allowlisted():
+                    skipped.append((int(rule_id), report.report()))
+                    continue
+                abort_unknown_dangling_rules([report])
+        elif not _issues_exist(bind, endpoint_ids):
+            missing = [
+                issue_id
+                for issue_id in dict.fromkeys(endpoint_ids)
+                if not _issue_exists(bind, issue_id)
+            ]
+            abort_with_rule_ids(
+                [int(rule_id)],
+                "have a missing target or prerequisite issue "
+                f"(user_id={int(user_id)}, missing issue id(s) "
+                f"{', '.join(str(issue_id) for issue_id in missing)}); "
+                "skipping would silently weaken a user's prerequisites",
+            )
         for src_id, tgt_id in pairs:
             result = bind.execute(
                 sa.text(

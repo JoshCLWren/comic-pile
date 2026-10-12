@@ -3,11 +3,15 @@
 The migration persists one canonical Dependency edge per rule-native
 ContinuityRule (item_read directly, converged expanded per prerequisite),
 links edges to their owning Reading Plans with ownership validation, and
-aborts on any rule that cannot compile to issue-level edges.
+aborts on genuinely invalid rows (cycles, cross-user issues, non-issue
+endpoints). A reviewed allowlist of six test-user ContinuityRule ids may
+dangle: those rows are reported and left unchanged. Any other dangling
+rule aborts with an investigation-grade error.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import UTC, datetime
 
@@ -27,6 +31,12 @@ from app.services.canonical_constraint_compiler import (
     BACKFILL_EDGE_NOTE_PREFIX,
     EDGE_NOTE_PREFIX,
 )
+from comic_pile.dependencies import _get_blocked_thread_ids_uncached
+
+_PROD_MISSING_ISSUES = (1117318, 1117522, 1117685)
+_ALLOWLISTED_RULE_IDS = tuple(
+    sorted(rule_id for rule_id, _owner in mig.DANGLING_RULE_ALLOWLIST)
+)
 
 
 def _sync_connection() -> sa.Connection:
@@ -41,6 +51,36 @@ async def _user(db: AsyncSession, username: str) -> User:
     db.add(user)
     await db.flush()
     return user
+
+
+async def _reviewed_dangling_owner(db: AsyncSession) -> User:
+    """Return the reviewed test user (id 23199), creating it when absent."""
+    existing = await db.get(User, mig.REVIEWED_DANGLING_OWNER_USER_ID)
+    if existing is not None:
+        return existing
+    user = User(
+        id=mig.REVIEWED_DANGLING_OWNER_USER_ID,
+        username=f"reviewed-dangling-owner-{mig.REVIEWED_DANGLING_OWNER_USER_ID}",
+        created_at=datetime.now(UTC),
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+def _allowlisted_dangling_specs(
+    surviving_source_id: int, surviving_target_id: int
+) -> list[tuple[int, int, int]]:
+    """Return (rule_id, source_id, target_id) for the six reviewed prod rows."""
+    missing_a, missing_b, missing_c = _PROD_MISSING_ISSUES
+    return [
+        (_ALLOWLISTED_RULE_IDS[0], missing_a, surviving_target_id),
+        (_ALLOWLISTED_RULE_IDS[1], surviving_source_id, missing_b),
+        (_ALLOWLISTED_RULE_IDS[2], missing_c, surviving_target_id),
+        (_ALLOWLISTED_RULE_IDS[3], surviving_source_id, missing_c),
+        (_ALLOWLISTED_RULE_IDS[4], missing_a, missing_b),
+        (_ALLOWLISTED_RULE_IDS[5], missing_b, missing_c),
+    ]
 
 
 async def _thread_with_issues(
@@ -260,29 +300,361 @@ async def test_backfill_creates_edges_and_validated_plan_links(
 
 
 @pytest.mark.asyncio
-async def test_validation_aborts_on_dangling_rule(_isolated_migration_data: AsyncSession) -> None:
-    """A rule referencing a missing issue aborts the migration with its ID."""
+async def test_backfill_skips_allowlisted_dangling_rules_and_reports_them(
+    _isolated_migration_data: AsyncSession,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Reviewed test-user dangling rules skip, report, and stay unchanged.
+
+    Production deploy of c25530000001 aborted on six ContinuityRules owned
+    by test user 23199. Those exact (rule_id, user_id) pairs may skip; every
+    skip must name the owner, rule, missing issue ids, and missing side.
+    """
     db = _isolated_migration_data
 
-    user = await _user(db, "cutover-dangling-user")
-    _, (a1, _) = await _thread_with_issues(db, user.id, "Delta", ["1", "2"])
-    bad = ContinuityRule(
+    user = await _reviewed_dangling_owner(db)
+    plan = await _plan(db, user.id, "Dangling Owner Plan")
+    source_thread, (valid_source,) = await _thread_with_issues(
+        db, user.id, "Delta Source", ["1"]
+    )
+    target_thread, (valid_target,) = await _thread_with_issues(
+        db, user.id, "Delta Target", ["1"]
+    )
+    dangling_target_thread, (surviving_target,) = await _thread_with_issues(
+        db, user.id, "Delta Dangling Target", ["1"]
+    )
+    dangling_source_thread, (surviving_source,) = await _thread_with_issues(
+        db, user.id, "Delta Dangling Source", ["1"]
+    )
+    valid = ContinuityRule(
         user_id=user.id,
         source_type="issue",
-        source_id=a1.id,
+        source_id=valid_source.id,
         target_type="issue",
-        target_id=999999,
+        target_id=valid_target.id,
         satisfaction_type="item_read",
     )
-    db.add(bad)
+    specs = _allowlisted_dangling_specs(surviving_source.id, surviving_target.id)
+    dangling_rules = [
+        ContinuityRule(
+            id=rule_id,
+            user_id=user.id,
+            source_type="issue",
+            source_id=source_id,
+            target_type="issue",
+            target_id=target_id,
+            satisfaction_type="item_read",
+            note=f"continuity-plan:{plan.id}",
+        )
+        for rule_id, source_id, target_id in specs
+    ]
+    db.add_all([valid, *dangling_rules])
+    await db.commit()
+    original_fields = {
+        rule_id: (source_id, target_id, f"continuity-plan:{plan.id}")
+        for rule_id, source_id, target_id in specs
+    }
+
+    conn = _sync_connection()
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.services.canonical_backfill"):
+            skipped = mig.validate_compilable_rules(conn)
+        inserted, _skipped_existing = mig.backfill_item_read_edges(conn)
+        _links, plan_skipped = mig.link_plan_provenance(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert len(skipped) == 6
+    skipped_ids = {row.rule_id for row in skipped}
+    assert skipped_ids == set(_ALLOWLISTED_RULE_IDS)
+    for row in skipped:
+        assert row.user_id == mig.REVIEWED_DANGLING_OWNER_USER_ID
+        assert row.is_allowlisted()
+        assert row.missing_sides()
+        assert row.missing_issue_ids()
+        report = row.report()
+        assert f"user_id={row.user_id}" in report
+        assert f"rule_id={row.rule_id}" in report
+        assert "missing" in report
+        for side in row.missing_sides():
+            assert side in report
+        for issue_id in row.missing_issue_ids():
+            assert str(issue_id) in report
+        assert report in caplog.text
+    plan_by_id = dict(plan_skipped)
+    for row in skipped:
+        assert plan_by_id[row.rule_id] == row.report()
+    assert inserted == 1
+
+    edges = {
+        (source_issue_id, target_issue_id)
+        for source_issue_id, target_issue_id in await db.execute(
+            sa.select(Dependency.source_issue_id, Dependency.target_issue_id)
+        )
+    }
+    assert (valid_source.id, valid_target.id) in edges
+    for _rule_id, source_id, target_id in specs:
+        assert (source_id, target_id) not in edges
+
+    remaining_rules = {
+        rule_id: (source_id, target_id, note)
+        for rule_id, source_id, target_id, note in await db.execute(
+            sa.select(
+                ContinuityRule.id,
+                ContinuityRule.source_id,
+                ContinuityRule.target_id,
+                ContinuityRule.note,
+            )
+        )
+    }
+    for rule_id, fields in original_fields.items():
+        assert remaining_rules[rule_id] == fields
+
+    blocked = await _get_blocked_thread_ids_uncached(user.id, db)
+    assert target_thread.id in blocked
+    assert dangling_target_thread.id not in blocked
+    assert dangling_source_thread.id not in blocked
+    assert source_thread.id not in blocked
+
+    conn = _sync_connection()
+    try:
+        removed = mig.revert_backfilled_edges(conn)
+        conn.commit()
+    finally:
+        conn.close()
+    assert removed == 1
+    still_present = {
+        rule_id
+        for (rule_id,) in await db.execute(
+            sa.select(ContinuityRule.id).where(
+                ContinuityRule.id.in_(list(_ALLOWLISTED_RULE_IDS))
+            )
+        )
+    }
+    assert still_present == set(_ALLOWLISTED_RULE_IDS)
+
+
+@pytest.mark.asyncio
+async def test_validation_aborts_on_unknown_dangling_rule(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """A dangling rule outside the reviewed allowlist aborts, not warns."""
+    db = _isolated_migration_data
+
+    user = await _user(db, "cutover-unknown-dangling-user")
+    _, (surviving_target,) = await _thread_with_issues(
+        db, user.id, "Unknown Dangling Target", ["1"]
+    )
+    unknown = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=999999,
+        target_type="issue",
+        target_id=surviving_target.id,
+        satisfaction_type="item_read",
+        note="user-owned prerequisite",
+    )
+    db.add(unknown)
+    await db.commit()
+    unknown_id = unknown.id
+    original = (unknown.source_id, unknown.target_id, unknown.note, unknown.user_id)
+
+    conn = _sync_connection()
+    try:
+        with pytest.raises(RuntimeError, match="not on the reviewed allowlist") as captured:
+            mig.validate_compilable_rules(conn)
+        message = str(captured.value)
+        assert "silently weaken a user's prerequisites" in message
+        assert f"user_id={user.id}" in message
+        assert f"rule_id={unknown_id}" in message
+        assert "missing source" in message
+        assert "999999" in message
+        assert "Offending rows:" in message
+    finally:
+        conn.close()
+
+    remaining = (
+        await db.execute(
+            sa.select(
+                ContinuityRule.source_id,
+                ContinuityRule.target_id,
+                ContinuityRule.note,
+                ContinuityRule.user_id,
+            ).where(ContinuityRule.id == unknown_id)
+        )
+    ).one()
+    assert remaining == original
+    edge_count = (
+        await db.execute(sa.select(sa.func.count()).select_from(Dependency))
+    ).scalar_one()
+    assert edge_count == 0
+
+
+@pytest.mark.asyncio
+async def test_validation_aborts_when_allowlist_rule_id_has_wrong_owner(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """An allowlisted rule id owned by anyone other than user 23199 aborts."""
+    db = _isolated_migration_data
+
+    other = await _user(db, "cutover-stolen-allowlist-user")
+    _, (surviving_target,) = await _thread_with_issues(
+        db, other.id, "Stolen Allowlist Target", ["1"]
+    )
+    stolen_id = _ALLOWLISTED_RULE_IDS[0]
+    stolen = ContinuityRule(
+        id=stolen_id,
+        user_id=other.id,
+        source_type="issue",
+        source_id=999999,
+        target_type="issue",
+        target_id=surviving_target.id,
+        satisfaction_type="item_read",
+    )
+    db.add(stolen)
     await db.commit()
 
     conn = _sync_connection()
     try:
-        with pytest.raises(RuntimeError, match="missing source or target issues"):
+        with pytest.raises(RuntimeError, match="not on the reviewed allowlist") as captured:
             mig.validate_compilable_rules(conn)
+        message = str(captured.value)
+        assert f"user_id={other.id}" in message
+        assert f"rule_id={stolen_id}" in message
+        assert f"user_id={mig.REVIEWED_DANGLING_OWNER_USER_ID}" not in message.split(
+            "Offending rows:"
+        )[1]
     finally:
         conn.close()
+
+
+@pytest.mark.asyncio
+async def test_dangling_issue_and_unmatched_plan_skips_do_not_abort_each_other(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """Allowlisted dangling skips and unmatched plan notes are independent.
+
+    Prod had six item_read ``continuity-plan:N`` rules on missing issues, and
+    859 rules whose ``continuity-plan:N`` note does not match a same-user
+    plan. #3359 already skip-and-reports the latter. Neither check may abort
+    on the other's allowlisted/plan-note cases, in either call order.
+    """
+    db = _isolated_migration_data
+
+    owner = await _reviewed_dangling_owner(db)
+    other = await _user(db, "cutover-skip-other")
+    owner_plan = await _plan(db, owner.id, "Owner Plan")
+    other_plan = await _plan(db, other.id, "Other Plan")
+    _, (owned_source,) = await _thread_with_issues(db, owner.id, "Owned Source", ["1"])
+    _, (owned_target,) = await _thread_with_issues(db, owner.id, "Owned Target", ["1"])
+    _, (unmatched_source,) = await _thread_with_issues(
+        db, owner.id, "Unmatched Source", ["1"]
+    )
+    _, (unmatched_target,) = await _thread_with_issues(
+        db, owner.id, "Unmatched Target", ["1"]
+    )
+    _, (surviving_target,) = await _thread_with_issues(
+        db, owner.id, "Surviving Target", ["1"]
+    )
+
+    dangling_id = _ALLOWLISTED_RULE_IDS[0]
+    dangling_source_id = _PROD_MISSING_ISSUES[0]
+    valid = ContinuityRule(
+        user_id=owner.id,
+        source_type="issue",
+        source_id=owned_source.id,
+        target_type="issue",
+        target_id=owned_target.id,
+        satisfaction_type="item_read",
+        note=f"continuity-plan:{owner_plan.id}",
+    )
+    unmatched_plan = ContinuityRule(
+        user_id=owner.id,
+        source_type="issue",
+        source_id=unmatched_source.id,
+        target_type="issue",
+        target_id=unmatched_target.id,
+        satisfaction_type="item_read",
+        note=f"continuity-plan:{other_plan.id}",
+    )
+    dangling = ContinuityRule(
+        id=dangling_id,
+        user_id=owner.id,
+        source_type="issue",
+        source_id=dangling_source_id,
+        target_type="issue",
+        target_id=surviving_target.id,
+        satisfaction_type="item_read",
+        note=f"continuity-plan:{owner_plan.id}",
+    )
+    db.add_all([valid, unmatched_plan, dangling])
+    await db.commit()
+    unmatched_id, valid_id = unmatched_plan.id, valid.id
+    expected_report = mig.DanglingRuleReport(
+        rule_id=dangling_id,
+        user_id=owner.id,
+        source_id=dangling_source_id,
+        target_id=surviving_target.id,
+        missing_source=True,
+        missing_target=False,
+    ).report()
+
+    conn = _sync_connection()
+    try:
+        # Plan-note skip first: allowlisted dangling endpoints must not abort it.
+        _links, plan_first_skipped = mig.link_plan_provenance(conn)
+        plan_first_by_id = dict(plan_first_skipped)
+        assert unmatched_id in plan_first_by_id
+        assert "owned by user" in plan_first_by_id[unmatched_id]
+        assert plan_first_by_id[dangling_id] == expected_report
+        assert valid_id not in plan_first_by_id
+
+        # Issue-existence skip second: unmatched plan notes must not abort it.
+        dangling_skipped = mig.validate_compilable_rules(conn)
+        skipped_ids = {row.rule_id for row in dangling_skipped}
+        assert skipped_ids == {dangling_id}
+        assert dangling_skipped[0].report() == expected_report
+        assert unmatched_id not in skipped_ids
+        assert valid_id not in skipped_ids
+
+        inserted, _already = mig.backfill_item_read_edges(conn)
+        links_created, plan_second_skipped = mig.link_plan_provenance(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert inserted == 2
+    plan_second_by_id = dict(plan_second_skipped)
+    assert unmatched_id in plan_second_by_id
+    assert "owned by user" in plan_second_by_id[unmatched_id]
+    assert plan_second_by_id[dangling_id] == expected_report
+    assert links_created == 1
+
+    edges = {
+        (source_id, target_id)
+        for source_id, target_id in await db.execute(
+            sa.select(Dependency.source_issue_id, Dependency.target_issue_id)
+        )
+    }
+    assert (owned_source.id, owned_target.id) in edges
+    assert (unmatched_source.id, unmatched_target.id) in edges
+    assert (dangling_source_id, surviving_target.id) not in edges
+
+    remaining = (
+        await db.execute(
+            sa.select(
+                ContinuityRule.source_id,
+                ContinuityRule.target_id,
+                ContinuityRule.note,
+            ).where(ContinuityRule.id == dangling_id)
+        )
+    ).one()
+    assert remaining == (
+        dangling_source_id,
+        surviving_target.id,
+        f"continuity-plan:{owner_plan.id}",
+    )
 
 
 @pytest.mark.asyncio
