@@ -233,6 +233,8 @@ export function useRollRating({
     navigator.vibrate?.(20)
     if (rating >= RATING_THRESHOLD) createExplosion()
 
+    suppressPendingAutoOpenRef.current = true
+
     const freshTotalIssues =
       bootstrap?.active_thread?.id === activeRatingThread?.id
         ? bootstrap?.active_thread?.total_issues ?? activeRatingThread?.total_issues
