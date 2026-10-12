@@ -203,7 +203,7 @@ async def get_reading_plan_reader(
         db, plan_id=plan_id_value
     )
     incoming_rows = await reading_plan_repository.list_canonical_incoming_blockers(
-        db, issue_ids=[row.issue_id for row in identities]
+        db, user_id=user_id, issue_ids=[row.issue_id for row in identities]
     )
     incoming: dict[int, list[CanonicalIncomingBlocker]] = defaultdict(list)
     for row in incoming_rows:

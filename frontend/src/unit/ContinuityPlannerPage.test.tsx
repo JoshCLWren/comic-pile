@@ -235,7 +235,9 @@ describe('ContinuityPlannerPage', () => {
     expect(strict).not.toBeChecked()
 
     expect(screen.getByText(/Informational plans keep source reading order as a reference/i)).toBeVisible()
-    expect(screen.getByText(/Strict plans enforce selected hard prerequisites/i)).toBeVisible()
+    expect(
+      screen.getByText(/Strict records that intent; selected hard prerequisites are not compiled/i),
+    ).toBeVisible()
 
     const glossaryLink = screen.getByRole('link', { name: 'What is an ordering mode?' })
     expect(glossaryLink).toHaveAttribute('href', '/glossary#ordering-mode')

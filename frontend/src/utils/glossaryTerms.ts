@@ -93,12 +93,12 @@ const DEFINITIONS: GlossaryTermDefinition[] = [
   },
   {
     term: 'Reading Plan',
-    def: 'Your named reading project: membership, presentation order, optionality, source reading order, and any selected hard prerequisites. Progress comes from each comic’s read state everywhere it appears.',
+    def: 'Your named reading project: membership, presentation order, optionality, and source reading order. Prerequisites already on the comics still apply; compiling selected hard prerequisites from plan order is not active yet. Progress comes from each comic’s read state everywhere it appears.',
     aliases: ['continuity-plan'],
   },
   {
     term: 'Ordering mode',
-    def: 'Informational plans keep source reading order as a reference and add no hard blockers. Strict plans enforce selected hard prerequisites — source reading order is not a blocker by itself.',
+    def: 'Informational plans keep source reading order as a reference and add no hard blockers. Strict records the intent to compile selected hard prerequisites from plan order — that compilation is not active yet. Existing prerequisites on the comics still apply. Source reading order is not a blocker by itself.',
   },
   {
     term: 'Lane',

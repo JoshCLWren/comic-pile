@@ -160,7 +160,7 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByText('Informational')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Available now' })).toBeInTheDocument()
     expect(screen.getAllByText('X-Men #95').length).toBeGreaterThan(0)
-    expect(screen.getByRole('heading', { name: 'Blocked by' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Blocked next' })).toBeInTheDocument()
     expect(within(screen.getByTestId('blocked-next')).getByText('Blocked by X-Men: #95')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Upcoming' })).toBeInTheDocument()
     expect(within(screen.getByTestId('upcoming-material')).getByText('Cable #76')).toBeInTheDocument()

@@ -474,16 +474,18 @@ async def list_plan_issue_identities(
 
 
 async def list_canonical_incoming_blockers(
-    db: AsyncSession, *, issue_ids: list[int]
+    db: AsyncSession, *, user_id: int, issue_ids: list[int]
 ) -> list[CanonicalIncomingBlocker]:
     """Return unread canonical Dependency sources targeting the given Issues.
 
     Historical ``cbl-order:`` materialization notes are excluded: they record
     source order, not hard prerequisites. Genuine Dependency edges remain the
-    runtime blocking authority.
+    runtime blocking authority. Source threads must belong to ``user_id``,
+    matching the canonical evaluator's owner filter.
 
     Args:
         db: Database session.
+        user_id: Owning user; foreign source threads are ignored.
         issue_ids: Target Issue IDs to inspect.
 
     Returns:
@@ -504,6 +506,7 @@ async def list_canonical_incoming_blockers(
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
         .where(Dependency.target_issue_id.in_(issue_ids))
+        .where(source_thread.c.user_id == user_id)
         .where(source_issue.c.status != "read")
         .where(
             or_(

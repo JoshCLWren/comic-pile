@@ -22,8 +22,9 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
               {planId ? `Edit ${editor.name || 'Reading Plan'}` : 'New Reading Plan'}
             </h1>
             <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
-              Arrange issues in source reading order or your own order. Strict is a plan setting for
-              selected hard prerequisites; source reading order is not a blocker by itself.{' '}
+              Arrange issues in source reading order or your own order. Strict records intent for
+              selected hard prerequisites; compiling them from plan order is not active yet. Source
+              reading order is not a blocker by itself.{' '}
               <GlossaryLink id="reading-plan">Reading Plan</GlossaryLink>,{' '}
               <GlossaryLink id="lane">Lane</GlossaryLink>, and{' '}
               <GlossaryLink id="crossover">Crossover</GlossaryLink> definitions.
@@ -92,7 +93,8 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
         </legend>
         <p id="ordering-mode-help" className="mt-1 text-sm text-[var(--theme-text-muted)]">
           Informational plans keep source reading order as a reference and add no hard blockers.
-          Strict plans enforce selected hard prerequisites.{' '}
+          Strict records that intent; selected hard prerequisites are not compiled from plan order
+          yet.{' '}
           <GlossaryLink id="ordering-mode">What is an ordering mode?</GlossaryLink>
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -137,7 +139,7 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
             <span className="text-sm">
               <span className="font-bold text-[var(--theme-text-primary)]">Strict</span>
               <span className="ml-1.5 text-xs text-[var(--theme-text-dim)]">
-                Selected hard prerequisites are enforced.
+                Records intent — plan-order blockers are not compiled yet.
               </span>
             </span>
           </label>

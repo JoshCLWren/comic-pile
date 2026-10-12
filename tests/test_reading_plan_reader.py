@@ -178,6 +178,37 @@ async def test_blocked_next_uses_canonical_dependency_not_cbl_order(
 
 
 @pytest.mark.asyncio
+async def test_reader_ignores_foreign_owned_incoming_blockers(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Foreign source threads are not blockers, matching the canonical evaluator."""
+    user = await get_or_create_user_async(async_db)
+    other = await get_or_create_user_async(async_db, username=f"foreign_blocker_{user.id}")
+    later = await _make_issue(
+        async_db, user_id=user.id, title="Cable", issue_number="75"
+    )
+    foreign = await _make_issue(
+        async_db, user_id=other.id, title="Foreign Prelude", issue_number="1"
+    )
+    async_db.add(Dependency(source_issue_id=foreign.id, target_issue_id=later.id))
+    await async_db.commit()
+    plan_id = await _create_plan(
+        auth_client,
+        "Age of Apocalypse",
+        [_node("c75", later.id, 0)],
+    )
+
+    response = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [row["issue_id"] for row in body["available_now"]] == [later.id]
+    assert body["blocked_next"] == []
+    available = body["available_now"][0]
+    assert available["availability"] == "available"
+    assert available["blockers"] == []
+
+
+@pytest.mark.asyncio
 async def test_later_unread_is_neither_available_nor_blocked_next(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

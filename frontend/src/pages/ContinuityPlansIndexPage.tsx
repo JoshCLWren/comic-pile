@@ -48,8 +48,8 @@ export default function ContinuityPlansIndexPage() {
           <h1 id="plans-heading" className="text-2xl font-black text-[var(--theme-text-primary)]">Reading Plans</h1>
           <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
             Your reading projects: progress, next unread issues, and the real blockers holding later
-            comics back. Informational plans are a reference; Strict plans enforce selected
-            prerequisites.
+            comics back. Informational plans are a reference; Strict records intent for selected
+            hard prerequisites, which are not compiled from plan order yet.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -2,12 +2,18 @@ import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
 import { createThread, getAuthToken } from './helpers'
 
+type JsonRequestHeaders = {
+  'Content-Type': string
+  'X-CSRF-Token': string
+  Authorization?: string
+}
+
 async function getCsrf(page: Page, token: string | null): Promise<string> {
-  const headers: Record<string, string> = {}
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  const response = await page.request.get('/api/auth/csrf', { headers })
+  const response = token
+    ? await page.request.get('/api/auth/csrf', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    : await page.request.get('/api/auth/csrf')
   expect(response.ok()).toBeTruthy()
   // SAFETY: the test reads only csrf_token from the response body
   const data = await response.json() as { csrf_token?: string }
@@ -15,20 +21,20 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
   return data.csrf_token!
 }
 
-async function authHeaders(page: Page): Promise<Record<string, string>> {
+async function authHeaders(page: Page): Promise<JsonRequestHeaders> {
   const token = await getAuthToken(page)
   const csrf = await getCsrf(page, token)
-  const headers: Record<string, string> = {
+  const headers = {
     'Content-Type': 'application/json',
     'X-CSRF-Token': csrf,
-  }
+  } satisfies JsonRequestHeaders
   if (token) {
-    headers.Authorization = `Bearer ${token}`
+    return { ...headers, Authorization: `Bearer ${token}` }
   }
   return headers
 }
 
-async function firstIssueId(page: Page, headers: Record<string, string>, threadId: number): Promise<number> {
+async function firstIssueId(page: Page, headers: JsonRequestHeaders, threadId: number): Promise<number> {
   const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, { headers })
   expect(response.ok(), await response.text()).toBeTruthy()
   // SAFETY: the test reads only the issue ids listed here
@@ -96,12 +102,12 @@ test.describe('Reading Plan reader surface', () => {
       await expect(page.getByText('Informational', { exact: true })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Available now' })).toBeVisible()
       await expect(page.getByTestId('available-now')).toContainText('Reader X-Men')
-      await expect(page.getByRole('heading', { name: 'Blocked by' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Blocked next' })).toBeVisible()
       await expect(page.getByTestId('blocked-next')).toContainText('Blocked by Reader X-Men: #1')
       await expect(page.getByRole('button', { name: 'Edit plan' })).toBeVisible()
       await expect(page.getByRole('link', { name: /crossovers page/i })).toHaveCount(0)
       await page.screenshot({
-        path: `/opt/cursor/artifacts/screenshots/reading-plan-reader-${viewport.label}.png`,
+        path: `test-results/reading-plan-reader-${viewport.label}.png`,
         fullPage: true,
       })
     }
@@ -119,7 +125,7 @@ test.describe('Reading Plan reader surface', () => {
     ]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.screenshot({
-        path: `/opt/cursor/artifacts/screenshots/reading-plans-index-${viewport.label}.png`,
+        path: `test-results/reading-plans-index-${viewport.label}.png`,
         fullPage: true,
       })
     }

@@ -162,7 +162,7 @@ export default function ReadingPlanDetailPage() {
           </h1>
           <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
             {isStrict
-              ? 'Strict: selected hard prerequisites are enforced. Source reading order is not a blocker by itself.'
+              ? 'Strict records intent for selected hard prerequisites; compiling them from plan order is not active yet. Source reading order is not a blocker by itself.'
               : 'Informational: this is a reading reference. Source reading order adds no hard blockers.'}
           </p>
         </div>
@@ -222,7 +222,7 @@ export default function ReadingPlanDetailPage() {
               ? 'This plan has no issues yet. Add material from a source reading order or edit the plan.'
               : remaining === 0
                 ? 'Every issue in this plan is read.'
-                : 'Nothing in this plan is currently available. Check Blocked by for the comics holding the rest back.'}
+                : 'Nothing in this plan is currently available. Check Blocked next for the comics holding the rest back.'}
           </p>
         ) : (
           <ul className="mt-3 space-y-2">
@@ -233,9 +233,9 @@ export default function ReadingPlanDetailPage() {
         )}
       </section>
 
-      <section aria-labelledby="blocked-by-heading" data-testid="blocked-next">
-        <h2 id="blocked-by-heading" className="text-lg font-bold text-[var(--theme-text-primary)]">
-          Blocked by
+      <section aria-labelledby="blocked-next-heading" data-testid="blocked-next">
+        <h2 id="blocked-next-heading" className="text-lg font-bold text-[var(--theme-text-primary)]">
+          Blocked next
         </h2>
         <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
           Next unread issues waiting on a hard prerequisite. Source reading order is not a blocker by
