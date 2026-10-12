@@ -29,7 +29,9 @@
       {"id": "moonshotai/kimi-k3"},
       {"id": "z-ai/glm-5.3"},
       {"id": "z-ai/glm-5.3-flash"},
-      {"id": "deepseek-ai/deepseek-v4.1-flash"}
+      {"id": "deepseek-ai/deepseek-v4.1-flash"},
+      {"id": "nvidia/nemotron-3.5-lightning-30b-a3b"},
+      {"id": "meta/muse-glimmer-30b"}
     ],
     "openrouter": [
       {"id": "cohere/north-mini-code:free"},
