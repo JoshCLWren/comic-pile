@@ -1,7 +1,7 @@
 """Add shared catalog identity tables and nullable reader-library links.
 
 Revision ID: m5d300000001
-Revises: n6e300000001
+Revises: f2a3b4c5d6e7
 Create Date: 2026-10-12 00:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "m5d300000001"
-down_revision: str | Sequence[str] | None = "n6e300000001"
+down_revision: str | Sequence[str] | None = "f2a3b4c5d6e7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

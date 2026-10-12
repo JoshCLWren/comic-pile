@@ -583,7 +583,12 @@ async def get_or_create_catalog_series(
 
     if inserted_id is not None:
         # We inserted the row; fetch it to get all columns
-        return await db.get(CatalogSeries, inserted_id)
+        created = await db.get(CatalogSeries, inserted_id)
+        if created is None:
+            raise RuntimeError(
+                f"CatalogSeries not found after insert for external_identity_id={canonical_external_identity_id}"
+            )
+        return created
 
     # Concurrent insert won the race; fetch the existing row
     existing = await get_catalog_series_by_external_identity(db, canonical_external_identity_id)
@@ -625,7 +630,12 @@ async def get_or_create_catalog_issue(
     inserted_id = result.scalar_one_or_none()
 
     if inserted_id is not None:
-        return await db.get(CatalogIssue, inserted_id)
+        created = await db.get(CatalogIssue, inserted_id)
+        if created is None:
+            raise RuntimeError(
+                f"CatalogIssue not found after insert for external_identity_id={canonical_external_identity_id}"
+            )
+        return created
 
     existing = await get_catalog_issue_by_external_identity(db, canonical_external_identity_id)
     if existing is None:
@@ -656,7 +666,7 @@ async def link_catalog_issue_to_series(
         The updated CatalogIssue if the link was applied, None if the issue
         was not found or already had a series link.
     """
-    from sqlalchemy import update
+    from sqlalchemy import select, update
 
     stmt = (
         update(CatalogIssue)
@@ -670,7 +680,15 @@ async def link_catalog_issue_to_series(
     if updated_id is None:
         return None
 
-    return await db.get(CatalogIssue, updated_id)
+    # The Core UPDATE bypasses the ORM identity map, so a session that already
+    # holds this CatalogIssue would otherwise return a stale instance with the
+    # pre-update catalog_series_id. populate_existing forces a reload.
+    refreshed = await db.execute(
+        select(CatalogIssue)
+        .execution_options(populate_existing=True)
+        .where(CatalogIssue.id == updated_id)
+    )
+    return refreshed.scalar_one_or_none()
 
 
 async def get_catalog_series_by_id(
