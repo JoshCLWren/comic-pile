@@ -73,6 +73,7 @@ from app.services.continuity_plan_labels import issue_step_label
 from app.services.issue_insertion import create_issue_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from comic_pile.dependencies import refresh_user_blocked_status
 
 
 class AdoptionCommitError(Exception):
@@ -1118,6 +1119,7 @@ async def adopt_cbl_material_into_reading_plan(
             await cbl_adoption_receipt_repository.update_receipt_fingerprint(
                 db, receipt, fingerprint
             )
+        await refresh_user_blocked_status(user_id, db)
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
