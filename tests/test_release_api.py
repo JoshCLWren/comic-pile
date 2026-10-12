@@ -716,7 +716,7 @@ async def test_release_publication_with_internal_artifacts_rejected(
     assert response.status_code == 422
     errors = response.json()["errors"]
     assert any(
-        "category must use reader-facing product language" in error["message"]
+        "summary must use reader-facing product language" in error["message"]
         for error in errors
     )
 
