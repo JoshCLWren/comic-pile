@@ -81,6 +81,26 @@ it never deletes or rewrites personal rows. Personal reading state (read
 status, notes, ratings, queue position, plan intent) is never stored in catalog
 tables and is never shared across readers.
 
+## Read-surface compatibility (v1)
+
+v1 is additive: it introduces new tables and new nullable columns only. It must
+not narrow or otherwise change any existing read surface. In particular
+`search_catalog_series` and `search_catalog_issues` in
+`app/repositories/catalog_repository.py` keep their pre-v1 `external_identities`
+semantics, and `series_external_id` stays an existence gate rather than a scope
+filter.
+
+Requiring `catalog_series`/`catalog_issues` membership in those searches would
+be a wire-contract change and would contradict acceptance criterion 3: nothing in
+v1 backfills catalog rows or calls the catalog service, so every pre-existing
+library identity would disappear from `/api/v1/catalog/series` and
+`/api/v1/catalog/issues`. A later campaign issue that populates catalog rows may
+introduce catalog-scoped search behind a separate, explicitly reviewed change.
+
+`tests/test_catalog_repository.py` pins this contract with
+`test_search_catalog_series_includes_identities_without_catalog_row` and
+`test_search_catalog_issues_includes_identities_without_catalog_row`.
+
 ## Non-goals (v1)
 
 - No alias or cross-provider auto-merging.

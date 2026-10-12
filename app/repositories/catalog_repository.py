@@ -34,24 +34,27 @@ async def search_catalog_series(
         limit: Maximum number of results to return (hard capped at 50).
 
     Returns:
-        List of external identities for matching catalog series.
+        List of matching external identities for series.
     """
-    from app.models.external_identity import ExternalIdentity
-
-    query = (
-        select(ExternalIdentity)
-        .join(CatalogSeries, CatalogSeries.canonical_external_identity_id == ExternalIdentity.id)
-        .where(
-            ExternalIdentity.entity_type == "series",
-            ExternalIdentity.provider == provider.strip().lower(),
-        )
+    # Issue #3220 is additive, so this search surface keeps its pre-v1
+    # `external_identities` semantics. It is deliberately NOT narrowed to rows
+    # that already have a `catalog_series` entry: acceptance criterion 3
+    # requires existing libraries to keep working with no backfill and no
+    # catalog service calls, so requiring catalog membership here would hide
+    # every pre-existing identity until a later campaign issue populates the
+    # catalog.
+    query = select(ExternalIdentity).where(
+        ExternalIdentity.entity_type == "series",
+        ExternalIdentity.provider == provider.strip().lower(),
     )
 
     if search:
         normalized = search.strip().lower()
         query = query.where(ExternalIdentity.external_id.ilike(f"%{normalized}%"))
 
+    # Apply hard limit
     query = query.limit(limit)
+
     result = await db.execute(query)
     return list(result.scalars().unique().all())
 
@@ -74,47 +77,37 @@ async def search_catalog_issues(
         limit: Maximum number of results to return (hard capped at 50).
 
     Returns:
-        List of external identities for matching catalog issues.
+        List of matching external identities for issues.
     """
-    from app.models.external_identity import ExternalIdentity
-
-    query = (
-        select(ExternalIdentity)
-        .join(CatalogIssue, CatalogIssue.canonical_external_identity_id == ExternalIdentity.id)
-        .where(
-            ExternalIdentity.entity_type == "issue",
-            ExternalIdentity.provider == provider.strip().lower(),
-        )
+    # `series_external_id` remains an existence gate rather than a scope
+    # filter, matching the pre-v1 behavior of this endpoint. Scoping issue
+    # search through `catalog_issues.catalog_series_id` would change the
+    # existing wire contract and would return nothing until catalog rows are
+    # populated, which acceptance criterion 3 forbids.
+    query = select(ExternalIdentity).where(
+        ExternalIdentity.entity_type == "issue",
+        ExternalIdentity.provider == provider.strip().lower(),
     )
 
     # If series_external_id is provided, filter by series first
     if series_external_id:
-        series_ext_result = await db.execute(
-            select(ExternalIdentity.id).where(
+        series_result = await db.execute(
+            select(ExternalIdentity).where(
                 ExternalIdentity.entity_type == "series",
                 ExternalIdentity.external_id == series_external_id,
             )
         )
-        series_ext_id = series_ext_result.scalar_one_or_none()
-        if series_ext_id is not None:
-            series_catalog_result = await db.execute(
-                select(CatalogSeries.id).where(CatalogSeries.canonical_external_identity_id == series_ext_id)
-            )
-            catalog_series_id = series_catalog_result.scalar_one_or_none()
-            if catalog_series_id is not None:
-                query = query.join(CatalogSeries, CatalogSeries.id == CatalogIssue.catalog_series_id).where(
-                    CatalogSeries.id == catalog_series_id
-                )
-            else:
-                return []
-        else:
+        series_identity = series_result.scalar_one_or_none()
+        if series_identity is None:
             return []
 
     if search:
         normalized = search.strip().lower()
         query = query.where(ExternalIdentity.external_id.ilike(f"%{normalized}%"))
 
+    # Apply hard limit
     query = query.limit(limit)
+
     result = await db.execute(query)
     return list(result.scalars().unique().all())
 
