@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
-import type { BlockingDependency, Thread } from '../types'
+import type { BlockingDependency, ThreadListItem } from '../types'
+import type { components } from '../generated/openapi'
+type ComicVineMappingHealth = components['schemas']['ComicVineMappingHealth']
 
 vi.mock('../components/Tooltip', () => ({
   default: ({ children, content }: { children: React.ReactNode; content?: string }) => (
@@ -31,7 +33,7 @@ vi.mock('../components/PositionMenu', () => ({
     onMoveToBack: () => void
     onEdit: () => void
     onDelete: () => void
-    onSnooze?: (thread: Thread) => void
+    onSnooze?: (thread: ThreadListItem) => void
     snoozeLabel?: string
     snoozeDisabled?: boolean
   }) => (
@@ -50,7 +52,7 @@ vi.mock('../components/PositionMenu', () => ({
           type="button"
           data-testid="mock-position-snooze"
           // SAFETY: the card forwards the thread to onSnooze without reading its fields
-          onClick={onSnooze ? () => onSnooze({} as Thread) : undefined}
+          onClick={onSnooze ? () => onSnooze({} as ThreadListItem) : undefined}
           disabled={snoozeDisabled}
         >
           {snoozeLabel}
@@ -66,30 +68,52 @@ vi.mock('../components/PositionMenu', () => ({
   ),
 }))
 
-function createMockThread(overrides: Partial<Thread> = {}): Thread {
+vi.mock('../components/QueueMapSeriesDialog', () => ({
+  default: ({
+    isOpen,
+    threadTitle,
+    onClose,
+    onMapped,
+  }: {
+    isOpen: boolean
+    threadTitle: string
+    onClose: () => void
+    onMapped: (ids: number[]) => void
+  }) =>
+    isOpen ? (
+      <div data-testid="mock-map-series-dialog">
+        <span data-testid="mock-map-series-thread">{threadTitle}</span>
+        <button type="button" data-testid="mock-map-series-close" onClick={onClose}>
+          Close
+        </button>
+        <button type="button" data-testid="mock-map-series-done" onClick={() => onMapped([7])}>
+          Done
+        </button>
+      </div>
+    ) : null,
+}))
+
+function createMockThread(overrides: Partial<ThreadListItem> = {}): ThreadListItem {
   return {
     id: 1,
     title: 'Test Thread',
     format: 'Comic',
     issues_remaining: 5,
     total_issues: 10,
-    next_unread_issue_id: null,
     next_unread_issue_number: null,
-    reading_progress: '50.0',
     queue_position: 1,
     status: 'active',
     is_blocked: false,
     blocking_reasons: [],
     notes: null,
     last_activity_at: null,
-    last_rating: null,
-    is_test: false,
     created_at: '2024-01-01T00:00:00.000Z',
+    comicvine_mapping: null,
     ...overrides,
   }
 }
 
-function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueThreadCard>[0]> = {}) {
+function renderCard(thread: ThreadListItem, overrides: Partial<Parameters<typeof QueueThreadCard>[0]> = {}) {
   const defaults = {
     thread,
     index: 0,
@@ -770,5 +794,69 @@ describe('QueueThreadCard', () => {
 
       const snoozeButton = screen.getByTestId('mock-position-snooze')
       expect(snoozeButton).not.toBeDisabled()
+    })
+
+    it('opens the Map series repair dialog from an unresolved mapping indicator', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      const threadWithMapping: ThreadListItem = {
+        ...createMockThread(),
+        comicvine_mapping: {
+          status: 'unresolved',
+          tracked_issue_count: 4,
+          confirmed_issue_count: 0,
+          needs_mapping_count: 4,
+          needs_review_count: 0,
+        },
+      }
+      renderCard(threadWithMapping, { onCardClick })
+
+      expect(screen.getByText('4 issues need mapping')).toBeInTheDocument()
+      expect(screen.queryByTestId('mock-map-series-dialog')).not.toBeInTheDocument()
+
+      await user.click(screen.getByTestId('queue-map-series-btn'))
+
+      expect(screen.getByTestId('mock-map-series-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('mock-map-series-thread')).toHaveTextContent('Test Thread')
+      expect(onCardClick).not.toHaveBeenCalled()
+
+      await user.click(screen.getByTestId('mock-map-series-done'))
+
+      expect(screen.queryByTestId('mock-map-series-dialog')).not.toBeInTheDocument()
+    })
+
+    it('stays quiet without a Map series action for fully mapped series', () => {
+      const threadWithMapping: ThreadListItem = {
+        ...createMockThread(),
+        comicvine_mapping: {
+          status: 'fully_mapped',
+          tracked_issue_count: 5,
+          confirmed_issue_count: 5,
+          needs_mapping_count: 0,
+          needs_review_count: 0,
+        },
+      }
+      renderCard(threadWithMapping)
+
+      expect(screen.queryByTestId('queue-map-series-btn')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('mock-map-series-dialog')).not.toBeInTheDocument()
+    })
+
+    it('distinguishes review-needed indicator from an ordinary unmapped pill', () => {
+      const threadWithMapping: ThreadListItem = {
+        ...createMockThread(),
+        comicvine_mapping: {
+          status: 'needs_review',
+          tracked_issue_count: 3,
+          confirmed_issue_count: 1,
+          needs_mapping_count: 0,
+          needs_review_count: 2,
+        },
+      }
+      renderCard(threadWithMapping)
+
+      expect(screen.getByText('2 issues need review')).toBeInTheDocument()
+      expect(screen.queryByText(/need mapping/)).toBeNull()
+      expect(screen.getByTestId('queue-map-series-btn')).toBeInTheDocument()
     })
   })
