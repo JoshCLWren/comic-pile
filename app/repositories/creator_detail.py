@@ -236,7 +236,7 @@ async def load_creator_detail_data_optimized(
         Tuple of (recent_rows, upcoming_rows, rating_timestamps).
     """
     if not creator_issue_ids:
-        return [], {}, {}
+        return [], [], {}
     
     # Load recent and upcoming data in a single query each
     recent_result = await db.execute(

@@ -34,7 +34,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.creator_detail import (
     load_latest_rating_timestamps,
     load_recent_creator_issue_rows,
-    load_upcoming_creator_issue_rows,
     load_creator_detail_data_optimized,
     RecentCreatorIssueRow,
     UpcomingCreatorIssueRow,
@@ -76,15 +75,15 @@ async def _load_creator_detail_collection_optimized(
         return [], {}
     
     if upcoming:
-        rows, _, timestamps = await load_creator_detail_data_optimized(
+        _, upcoming_rows, timestamps = await load_creator_detail_data_optimized(
             db, user_id=user_id, creator_issue_ids=creator_issue_ids, limit=limit, offset=offset
         )
-        return rows, timestamps
+        return upcoming_rows, timestamps
     else:
-        rows, _, timestamps = await load_creator_detail_data_optimized(
+        recent_rows, _, timestamps = await load_creator_detail_data_optimized(
             db, user_id=user_id, creator_issue_ids=creator_issue_ids, limit=limit, offset=offset
         )
-        return rows, timestamps
+        return recent_rows, timestamps
 
 
 def resolve_creator_issues(

@@ -897,7 +897,7 @@ async def test_creator_detail_performance_with_multiple_creators(
         # Add ratings to some issues
         for i, issue in enumerate(issues[:10]):
             rating = 4.0 + (i % 3) * 0.5
-            timestamp = D1.replace(day=thread_num * 10 + i)
+            timestamp = D1.replace(day=(thread_num * 10 + i) % 28 + 1)
             await _rate(async_db, issue, rating=rating, timestamp=timestamp)
     
     # Test performance for each creator
