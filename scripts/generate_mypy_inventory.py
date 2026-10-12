@@ -18,7 +18,7 @@ import json
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 # Canonical strict-mypy invocation used by the repository gate and by this
