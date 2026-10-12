@@ -277,6 +277,7 @@ async def test_backfill_skips_dangling_rule_and_leaves_it_unchanged(
     db = _isolated_migration_data
 
     user = await _user(db, "cutover-dangling-user")
+    plan = await _plan(db, user.id, "Dangling Owner Plan")
     source_thread, (valid_source,) = await _thread_with_issues(
         db, user.id, "Delta Source", ["1"]
     )
@@ -304,6 +305,7 @@ async def test_backfill_skips_dangling_rule_and_leaves_it_unchanged(
         target_type="issue",
         target_id=dangling_target.id,
         satisfaction_type="item_read",
+        note=f"continuity-plan:{plan.id}",
     )
     missing_target = ContinuityRule(
         user_id=user.id,
@@ -312,6 +314,7 @@ async def test_backfill_skips_dangling_rule_and_leaves_it_unchanged(
         target_type="issue",
         target_id=999998,
         satisfaction_type="item_read",
+        note=f"continuity-plan:{plan.id}",
     )
     db.add_all([valid, missing_source, missing_target])
     await db.commit()
@@ -340,10 +343,12 @@ async def test_backfill_skips_dangling_rule_and_leaves_it_unchanged(
     finally:
         conn.close()
 
-    assert dangling_ids <= set(skipped)
+    skipped_ids = {rule_id for rule_id, _reason in skipped}
+    assert dangling_ids <= skipped_ids
+    assert all(reason == mig.SKIP_MISSING_ENDPOINTS for _rule_id, reason in skipped)
     assert str(missing_source.id) in caplog.text
     assert str(missing_target.id) in caplog.text
-    assert "missing source or target issues" in caplog.text
+    assert mig.SKIP_MISSING_ENDPOINTS in caplog.text
     assert inserted == 1
 
     edges = {
@@ -391,6 +396,118 @@ async def test_backfill_skips_dangling_rule_and_leaves_it_unchanged(
         )
     }
     assert still_present == dangling_ids
+
+
+@pytest.mark.asyncio
+async def test_dangling_issue_and_unmatched_plan_skips_do_not_abort_each_other(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """Issue-existence and plan-note skips are independent skip-and-report paths.
+
+    Prod had six item_read ``continuity-plan:6`` rules on missing issues, and
+    859 rules whose ``continuity-plan:N`` note does not match a same-user
+    plan. #3359 already skip-and-reports the latter. Neither check may abort
+    on the other's cases, in either call order.
+    """
+    db = _isolated_migration_data
+
+    owner = await _user(db, "cutover-skip-owner")
+    other = await _user(db, "cutover-skip-other")
+    owner_plan = await _plan(db, owner.id, "Owner Plan")
+    other_plan = await _plan(db, other.id, "Other Plan")
+    _, (owned_source,) = await _thread_with_issues(db, owner.id, "Owned Source", ["1"])
+    _, (owned_target,) = await _thread_with_issues(db, owner.id, "Owned Target", ["1"])
+    _, (unmatched_source,) = await _thread_with_issues(
+        db, owner.id, "Unmatched Source", ["1"]
+    )
+    _, (unmatched_target,) = await _thread_with_issues(
+        db, owner.id, "Unmatched Target", ["1"]
+    )
+    _, (surviving_target,) = await _thread_with_issues(
+        db, owner.id, "Surviving Target", ["1"]
+    )
+
+    valid = ContinuityRule(
+        user_id=owner.id,
+        source_type="issue",
+        source_id=owned_source.id,
+        target_type="issue",
+        target_id=owned_target.id,
+        satisfaction_type="item_read",
+        note=f"continuity-plan:{owner_plan.id}",
+    )
+    unmatched_plan = ContinuityRule(
+        user_id=owner.id,
+        source_type="issue",
+        source_id=unmatched_source.id,
+        target_type="issue",
+        target_id=unmatched_target.id,
+        satisfaction_type="item_read",
+        note=f"continuity-plan:{other_plan.id}",
+    )
+    dangling = ContinuityRule(
+        user_id=owner.id,
+        source_type="issue",
+        source_id=999999,
+        target_type="issue",
+        target_id=surviving_target.id,
+        satisfaction_type="item_read",
+        note=f"continuity-plan:{owner_plan.id}",
+    )
+    db.add_all([valid, unmatched_plan, dangling])
+    await db.commit()
+    dangling_id, unmatched_id, valid_id = dangling.id, unmatched_plan.id, valid.id
+
+    conn = _sync_connection()
+    try:
+        # Plan-note skip first: dangling endpoints must not abort it.
+        _links, plan_first_skipped = mig.link_plan_provenance(conn)
+        plan_first_by_id = dict(plan_first_skipped)
+        assert unmatched_id in plan_first_by_id
+        assert "owned by user" in plan_first_by_id[unmatched_id]
+        assert plan_first_by_id[dangling_id] == mig.SKIP_MISSING_ENDPOINTS
+        assert valid_id not in plan_first_by_id
+
+        # Issue-existence skip second: unmatched plan notes must not abort it.
+        dangling_skipped = mig.validate_compilable_rules(conn)
+        dangling_by_id = dict(dangling_skipped)
+        assert dangling_by_id[dangling_id] == mig.SKIP_MISSING_ENDPOINTS
+        assert unmatched_id not in dangling_by_id
+        assert valid_id not in dangling_by_id
+
+        inserted, _already = mig.backfill_item_read_edges(conn)
+        links_created, plan_second_skipped = mig.link_plan_provenance(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert inserted == 2
+    plan_second_by_id = dict(plan_second_skipped)
+    assert unmatched_id in plan_second_by_id
+    assert "owned by user" in plan_second_by_id[unmatched_id]
+    assert plan_second_by_id[dangling_id] == mig.SKIP_MISSING_ENDPOINTS
+    assert links_created == 1
+
+    edges = {
+        (source_id, target_id)
+        for source_id, target_id in await db.execute(
+            sa.select(Dependency.source_issue_id, Dependency.target_issue_id)
+        )
+    }
+    assert (owned_source.id, owned_target.id) in edges
+    assert (unmatched_source.id, unmatched_target.id) in edges
+    assert (999999, surviving_target.id) not in edges
+
+    remaining = (
+        await db.execute(
+            sa.select(
+                ContinuityRule.source_id,
+                ContinuityRule.target_id,
+                ContinuityRule.note,
+            ).where(ContinuityRule.id == dangling_id)
+        )
+    ).one()
+    assert remaining == (999999, surviving_target.id, f"continuity-plan:{owner_plan.id}")
 
 
 @pytest.mark.asyncio

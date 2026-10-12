@@ -6,9 +6,10 @@ them to their owning Reading Plans with ownership validation. The Alembic
 migration ``c25530000001`` is a thin wrapper around these functions.
 
 Rules whose source or target issue no longer exists cannot be enforced.
-They are skipped, logged, and left unchanged. Genuinely ambiguous or invalid
-rows (cycles, non-issue endpoints, cross-user references, unhandled types)
-still abort the migration.
+They are skipped, reported as ``(rule_id, reason)`` pairs (the same contract
+as unmatched ``continuity-plan:N`` notes), and left unchanged. Genuinely
+ambiguous or invalid rows (cycles, non-issue endpoints, cross-user
+references, unhandled types) still abort the migration.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ _ITEM_READ_ENDPOINTS_EXIST = (
     "EXISTS (SELECT 1 FROM issues s WHERE s.id = r.source_id) "
     "AND EXISTS (SELECT 1 FROM issues t WHERE t.id = r.target_id)"
 )
+SKIP_MISSING_ENDPOINTS = "missing source or target issues"
 
 
 def _format_rule_ids(rule_ids: list[int]) -> str:
@@ -62,30 +64,32 @@ def _query_rule_ids(bind: Connection, sql: str) -> list[int]:
     return [int(row[0]) for row in bind.execute(sa.text(sql)).all()]
 
 
-def _log_skipped_missing_endpoints(rule_ids: list[int]) -> None:
+def _log_skipped_missing_endpoints(skipped: list[tuple[int, str]]) -> None:
     """Log skipped dangling-rule ids; the rows themselves are left unchanged."""
-    if not rule_ids:
+    if not skipped:
         return
     logger.warning(
         "Skipping %s rule(s) that reference missing source or target issues "
         "(left unchanged, not compiled): %s",
-        len(rule_ids),
-        _format_rule_ids(rule_ids),
+        len(skipped),
+        _format_rule_ids([rule_id for rule_id, _reason in skipped]),
     )
 
 
-def validate_compilable_rules(bind: Connection) -> list[int]:
+def validate_compilable_rules(bind: Connection) -> list[tuple[int, str]]:
     """Ensure compilable rule-native ContinuityRules reduce to issue-level edges.
 
     Rules whose source or target issue no longer exists are skipped and
-    returned so the caller can report them. Cycles, non-issue endpoints,
-    cross-user references, and unhandled satisfaction types still abort.
+    returned as ``(rule_id, reason)`` pairs, matching ``link_plan_provenance``
+    skip-and-report. Cycles, non-issue endpoints, cross-user references, and
+    unhandled satisfaction types still abort.
 
     Args:
         bind: Synchronous SQLAlchemy connection used by Alembic.
 
     Returns:
-        Sorted unique ids of rules skipped because an endpoint issue is gone.
+        Sorted ``(rule_id, reason)`` pairs for rules skipped because an
+        endpoint issue is gone.
     """
     native = _NATIVE
 
@@ -186,10 +190,12 @@ def validate_compilable_rules(bind: Connection) -> list[int]:
         )
     )
 
-    skipped_ids = sorted(skipped)
-    _log_skipped_missing_endpoints(skipped_ids)
+    skipped_rows = [
+        (rule_id, SKIP_MISSING_ENDPOINTS) for rule_id in sorted(skipped)
+    ]
+    _log_skipped_missing_endpoints(skipped_rows)
     _abort_on_cycles(bind)
-    return skipped_ids
+    return skipped_rows
 
 
 def drop_mirror_trigger(bind: Connection) -> None:
@@ -443,6 +449,19 @@ def backfill_converged_edges(bind: Connection) -> tuple[int, int, int]:
     return inserted, prereq_count - inserted, self_edges
 
 
+def _issues_exist(bind: Connection, issue_ids: list[int]) -> bool:
+    """Return True when every id exists in the issues table."""
+    unique_ids = list(dict.fromkeys(issue_ids))
+    for issue_id in unique_ids:
+        found = bind.execute(
+            sa.text("SELECT 1 FROM issues WHERE id = :issue_id"),
+            {"issue_id": issue_id},
+        ).first()
+        if found is None:
+            return False
+    return True
+
+
 def rule_edge_pairs(
     satisfaction_type: str,
     source_id: int,
@@ -473,7 +492,10 @@ def link_plan_provenance(bind: Connection) -> tuple[int, list[tuple[int, str]]]:
     Edges are resolved by (source, target) issue pair rather than by backfill
     note so that several rules compiling to the same edge each get their plan
     link. Returns (links_created, skipped) where skipped is a list of
-    (rule_id, reason) for plan notes that could not be safely translated.
+    (rule_id, reason) for plan notes that could not be safely translated and
+    for rules whose source or target issue no longer exists. Missing-issue
+    rows are skip-and-reported the same way as unmatched ``continuity-plan:N``
+    notes; neither case aborts the other.
     """
     links_created = 0
     skipped: list[tuple[int, str]] = []
@@ -506,6 +528,10 @@ def link_plan_provenance(bind: Connection) -> tuple[int, list[tuple[int, str]]]:
             )
             continue
         pairs = rule_edge_pairs(satisfaction_type, source_id, target_id, convergence_targets)
+        endpoint_ids = [issue_id for pair in pairs for issue_id in pair]
+        if not _issues_exist(bind, endpoint_ids):
+            skipped.append((rule_id, SKIP_MISSING_ENDPOINTS))
+            continue
         for src_id, tgt_id in pairs:
             result = bind.execute(
                 sa.text(
