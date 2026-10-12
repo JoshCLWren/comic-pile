@@ -10,6 +10,7 @@ from app.services.explicit_reader_order_migration import (
     _load_step14_index,
 )
 from app.services.source_backed_reader_order_migration import (
+    INFORMATIONAL_CBL_ADOPTION_PLAN_NAMES,
     PRODUCTION_SOURCE_BACKED_SPECS,
     READING_ORDER_SOURCE_BACKED_MANIFESTS,
 )
@@ -52,8 +53,12 @@ def test_production_source_manifests_cover_every_step14_cbl_source() -> None:
     }
 
 
-def test_josh_cbl_order_manifests_use_crossover_thread_entry_gates() -> None:
-    """The five CBL lists covering Josh's 18 frontiers compile crossover points only."""
+def test_source_backed_manifests_keep_thread_entry_provenance() -> None:
+    """Lane inferred_gate_kind is provenance only; every spec stays thread-entry."""
     assert READING_ORDER_SOURCE_BACKED_MANIFESTS <= set(PRODUCTION_SOURCE_BACKED_SPECS)
     for key, spec in PRODUCTION_SOURCE_BACKED_SPECS.items():
         assert spec.inferred_gate_kind == "thread_entry", key
+    assert {
+        PRODUCTION_SOURCE_BACKED_SPECS["x-men-era-ten"].plan_name,
+        PRODUCTION_SOURCE_BACKED_SPECS["fantastic-four-early-years"].plan_name,
+    } == INFORMATIONAL_CBL_ADOPTION_PLAN_NAMES

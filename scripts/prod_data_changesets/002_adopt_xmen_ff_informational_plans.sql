@@ -1,0 +1,59 @@
+-- Adopt user 1's imported X-Men and Fantastic Four CBL lists as informational
+-- Reading Plans. NOT APPLIED. Josh approves before this runs.
+--
+-- Why these have no ContinuityPlan today (proven by source data, Neon 2026-10-12):
+--   CBL lists 9 and 22 were ingested 2026-08-31 as cbl-order:source:* rows
+--   and DependencyGroups 4 / 187. reading_plan_sources has no row for those
+--   list ids. Absolute Universe (plan 20) and Ultimate Universe (plan 19) did
+--   pass CBL adoption commit. User 1 plans include Hickman FF Stage 1 (plan 25,
+--   informational) which is a different project.
+--
+-- Ordering mode is informational: CBL adjacency is source order, not a hard
+-- gate. Do NOT INSERT dependencies. Do NOT call the strict compiler.
+-- Already-recorded canonical Dependencies stay the Roll authority:
+--   Magneto War 1577-1581, Hunt for Xavier 1848-1852, UXRO semantic notes,
+--   Lee/Kirby spine 2678 (FF Annual stays its own thread).
+--
+-- Optional entries: none recorded (no plan membership existed; CBL entries
+-- have no optional flag). Unmapped CBL positions are omitted, not guessed.
+--
+-- Run AFTER 001_ff_series_thread_merge.sql so FF #103-231 live on thread 3166.
+-- Do NOT run scripts/reader_order_migration.py apply for x-men-era-ten or
+-- fantastic-four-early-years; apply_source_backed_reader_order_migration
+-- refuses those plan names.
+--
+-- Application path (preferred over hand-written JSON):
+--   python scripts/adopt_cbl_informational_plan.py dry-run \
+--     --database-url "$CLONE_DATABASE_URL" \
+--     --user-id 1 \
+--     --source-list-id 9 \
+--     --plan-name "Late-90s X-Men Reading Order"
+--   python scripts/adopt_cbl_informational_plan.py apply \
+--     --database-url "$CLONE_DATABASE_URL" \
+--     --user-id 1 \
+--     --source-list-id 9 \
+--     --plan-name "Late-90s X-Men Reading Order" \
+--     --confirm ADOPT-CBL-INFORMATIONAL-NO-INFERRED-GATES
+--   python scripts/adopt_cbl_informational_plan.py dry-run \
+--     --database-url "$CLONE_DATABASE_URL" \
+--     --user-id 1 \
+--     --source-list-id 22 \
+--     --plan-name "Fantastic Four 001 - Early Years"
+--   python scripts/adopt_cbl_informational_plan.py apply \
+--     --database-url "$CLONE_DATABASE_URL" \
+--     --user-id 1 \
+--     --source-list-id 22 \
+--     --plan-name "Fantastic Four 001 - Early Years" \
+--     --confirm ADOPT-CBL-INFORMATIONAL-NO-INFERRED-GATES
+--
+-- Rollback (cascades to reading_plan_issues / sources / placements only;
+-- Shared Issues and canonical Dependencies are not touched):
+--   BEGIN;
+--   DELETE FROM continuity_plans
+--   WHERE user_id = 1
+--     AND name IN (
+--       'Late-90s X-Men Reading Order',
+--       'Fantastic Four 001 - Early Years'
+--     )
+--     AND ordering_mode = 'informational';
+--   COMMIT;

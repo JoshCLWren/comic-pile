@@ -77,8 +77,13 @@ async def _thread_issue(
 @pytest.mark.asyncio
 async def test_source_backed_migration_accepts_group_superset_and_replaces_live_order(
     async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ignore extra group members while replacing live legacy order authority."""
+    monkeypatch.setattr(
+        "app.services.source_backed_reader_order_migration._explicit_classifications",
+        lambda _index: ({}, {}),
+    )
     user = await get_or_create_user_async(async_db)
     rows = [
         await _thread_issue(
@@ -287,8 +292,13 @@ async def test_source_backed_migration_accepts_group_superset_and_replaces_live_
 @pytest.mark.asyncio
 async def test_source_backed_mid_series_frontier_is_released_after_cbl_order_delete(
     async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Crossover-only compile replaces cbl-order and releases a mid-run frontier."""
+    """Thread-entry compile replaces cbl-order and releases a mid-run frontier."""
+    monkeypatch.setattr(
+        "app.services.source_backed_reader_order_migration._explicit_classifications",
+        lambda _index: ({}, {}),
+    )
     user = await get_or_create_user_async(async_db)
     pred_thread, pred_issue = await _thread_issue(
         async_db,
@@ -335,7 +345,7 @@ async def test_source_backed_mid_series_frontier_is_released_after_cbl_order_del
     source_list = CBLSourceList(
         source_id=source.id,
         source_path="Marvel/X-Men/UXRO.cbl",
-        name="Late-90s X-Men Reading Order",
+        name="UXRO mid-series fixture",
         declared_issue_count=2,
         content_hash="r" * 64,
         revision_sha="b" * 40,
@@ -389,7 +399,7 @@ async def test_source_backed_mid_series_frontier_is_released_after_cbl_order_del
         source_list_id=source_list.id,
         expected_content_hash=source_list.content_hash,
         expected_positions=2,
-        plan_name="Late-90s X-Men Reading Order",
+        plan_name="UXRO mid-series fixture",
         expected_source_path=source_list.source_path,
     )
     snapshot = await build_source_backed_reader_order_dry_run(async_db, spec)

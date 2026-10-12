@@ -7,13 +7,8 @@ module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
 The compiler's hard-edge semantics (#2553 Phase B):
-  1. ``strict_sequential`` plans compile inferred ``item_read`` gates only
-     at crossover points (Thread natural first issues waiting on a prior
-     required issue from a different Thread, plus parent-anchored annual /
-     special / one-shot / Giant-Size side Threads). Series run side by side
-     between those points. List adjacency is not a chain. Same-thread
-     adjacency is never compiled. ``inferred_gate_kind`` is provenance
-     only and does not change which pairs are emitted;
+  1. ``strict_sequential`` plans compile thread-entry ``item_read`` gates,
+     not every adjacent imported/suggested-order pair;
   2. checkpoint nodes block the next node in the same lane;
   3. convergence gates compile ``converged`` self-loop rules;
   4. plan-level cycles and persisted-rule conflicts keep their stable codes;
@@ -75,21 +70,12 @@ def preserve_server_lane_metadata(
         for lane in existing_lanes
         if lane.get("migration_contract") is not None
     }
-    gate_kinds = {
-        str(lane.get("id")): lane["inferred_gate_kind"]
-        for lane in existing_lanes
-        if lane.get("inferred_gate_kind") is not None
-    }
     serialized: list[dict[str, object]] = []
     for lane in lanes:
         row = lane.model_dump(exclude={"migration_contract"})
         contract = contracts.get(lane.id)
         if contract is not None:
             row["migration_contract"] = contract
-        if row.get("inferred_gate_kind") is None:
-            existing_kind = gate_kinds.get(lane.id)
-            if existing_kind is not None:
-                row["inferred_gate_kind"] = existing_kind
         serialized.append(row)
     return serialized
 
@@ -243,17 +229,16 @@ async def replace_compiled_rules(
         plan: The persisted (or to-be-persisted) plan owning the compiled rules.
         nodes: Canonical node set to compile from.
         ordering_mode: Plan ordering mode; only ``strict_sequential`` creates
-            inferred crossover / thread-entry gates. Mid-run list adjacency
-            is not compiled.
+            inferred thread-entry gates.
         sync_canonical_edges: When True (default), retire this plan's stale
             compiled edges and compile the new rules into canonical
             Dependencies (#2553). Only pairs that actually changed are
             retired/compiled, so re-saving an unchanged plan is a no-op
             for the Dependency table.
         extra_item_read_pairs: Explicit selected hard restrictions to compile
-            in addition to inferred gates. Same-thread pairs are ignored.
-            Live plan create/update omit this; migrations pass classified
-            genuine prerequisites that are not series starts.
+            in addition to inferred thread-entry gates. Same-thread pairs are
+            ignored. Live plan create/update omit this; migrations pass
+            classified genuine prerequisites that are not series starts.
 
     Returns:
         True when all rules compiled without cycle conflicts.
@@ -307,13 +292,12 @@ async def replace_compiled_rules(
         tuple[str, int, str, int, str, int | list[convergence_target] | None]
     ] = []
 
-    # 1. Strict-sequential inferred gates, plus selected extra pairs.
+    # 1. Strict-sequential thread-entry gates, plus selected extra pairs.
     if ordering_mode == "strict_sequential":
         issue_ids = [node.ref_id for node in nodes if node.node_type == "issue"]
         issue_index = await load_issue_thread_index(db, issue_ids)
         compiled_item_read: set[tuple[int, int]] = set()
-        inferred_pairs = strict_plan_item_read_pairs(nodes, issue_index)
-        for source_id, target_id in inferred_pairs:
+        for source_id, target_id in strict_plan_item_read_pairs(nodes, issue_index):
             edges_to_add.append((
                 "issue", source_id,
                 "issue", target_id,

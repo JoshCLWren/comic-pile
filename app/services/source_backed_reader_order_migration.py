@@ -186,127 +186,14 @@ READING_ORDER_SOURCE_BACKED_MANIFESTS: frozenset[str] = frozenset(
     }
 )
 
-
-@dataclass(frozen=True)
-class CblOrderOnlyRollFrontier:
-    """One user-1 Roll frontier blocked today only by unread ``cbl-order`` edges.
-
-    ``crossover_gate`` is true when a strict plan compiles a hard
-    prerequisite for this frontier. ``anchor_label`` is the parent-series
-    (or immediate plan-predecessor) issue that blocks it. False / None
-    means mid-run list adjacency: after cutover the thread is released.
-    """
-
-    thread_id: int
-    issue_id: int
-    label: str
-    manifest_key: str
-    crossover_gate: bool
-    anchor_label: str | None = None
-
-
-JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS: tuple[CblOrderOnlyRollFrontier, ...] = (
-    CblOrderOnlyRollFrontier(98, 1634, "X-Men #80", "x-men-era-ten", False),
-    CblOrderOnlyRollFrontier(305, 2028, "Uncanny X-Men #360", "x-men-era-ten", False),
-    CblOrderOnlyRollFrontier(
-        3152, 22883, "Magneto Rex #1", "x-men-era-ten", True, "X-Men #90"
-    ),
-    CblOrderOnlyRollFrontier(
-        18595,
-        115903,
-        "X-Men Unlimited (2000) #26",
-        "x-men-era-ten",
-        True,
-        "Cable #77",
-    ),
-    CblOrderOnlyRollFrontier(
-        18646,
-        116465,
-        "Generation X Holiday Special (1998) #1",
-        "x-men-era-ten",
-        True,
-        "Cable #64",
-    ),
-    CblOrderOnlyRollFrontier(
-        18655,
-        116492,
-        "Cable 1999 (1999) #1",
-        "x-men-era-ten",
-        True,
-        "Generation X #58",
-    ),
-    CblOrderOnlyRollFrontier(
-        18660,
-        116519,
-        "X-Men: Magneto War (1999) #1",
-        "x-men-era-ten",
-        True,
-        "X-Men #85",
-    ),
-    CblOrderOnlyRollFrontier(
-        18673,
-        116564,
-        "X-Force 1999 (1999) #1",
-        "x-men-era-ten",
-        True,
-        "Uncanny X-Men #380",
-    ),
-    CblOrderOnlyRollFrontier(
-        18689,
-        116603,
-        "X-Men / Dr. Doom '98 (1998) #1",
-        "x-men-era-ten",
-        True,
-        "X-Men Unlimited #22",
-    ),
-    CblOrderOnlyRollFrontier(
-        18699,
-        116642,
-        "X-Force / Champions '98 (1998) #1",
-        "x-men-era-ten",
-        True,
-        "X-Men / Dr. Doom '98 #1",
-    ),
-    CblOrderOnlyRollFrontier(
-        18719,
-        116773,
-        "Generation X / Dracula '98 (1998) #1",
-        "x-men-era-ten",
-        True,
-        "Generation X 1999 #1",
-    ),
-    CblOrderOnlyRollFrontier(
-        18720,
-        116774,
-        "Generation X 1999 (1999) #1",
-        "x-men-era-ten",
-        True,
-        "Wolverine #145",
-    ),
-    CblOrderOnlyRollFrontier(
-        18721, 116775, "X-Men 1999 (1999) #1", "x-men-era-ten", True, "X-Men #91"
-    ),
-    CblOrderOnlyRollFrontier(
-        18722,
-        116776,
-        "Uncanny X-Men 1999 (2000) #1",
-        "x-men-era-ten",
-        True,
-        "Cable #76",
-    ),
-    CblOrderOnlyRollFrontier(
-        18560,
-        115395,
-        "Fantastic Four (1970) #103",
-        "fantastic-four-early-years",
-        True,
-        "Fantastic Four (1961) #102",
-    ),
-    CblOrderOnlyRollFrontier(
-        3177, 23393, "Promethea #13", "americas-best-comics", False
-    ),
-    CblOrderOnlyRollFrontier(114, 1075, "Doom Patrol #9", "doom-patrol", False),
-    CblOrderOnlyRollFrontier(3171, 23128, "Geiger #5", "unnamed-universe", False),
+# These two CBL lists were imported as cbl-order rows and never adopted as
+# ContinuityPlans. They are reconciled by informational membership adoption,
+# not by compiling inferred gates through this strict source-backed apply path.
+INFORMATIONAL_CBL_ADOPTION_PLAN_NAMES: frozenset[str] = frozenset(
+    {
+        "Late-90s X-Men Reading Order",
+        "Fantastic Four 001 - Early Years",
+    }
 )
 
 
@@ -917,6 +804,11 @@ async def apply_source_backed_reader_order_migration(
     spec: SourceBackedReaderOrderSpec,
 ) -> dict[str, Any]:
     """Apply one reviewed snapshot inside the caller-owned transaction."""
+    if spec.plan_name in INFORMATIONAL_CBL_ADOPTION_PLAN_NAMES:
+        raise MigrationInvariantError(
+            f"{spec.plan_name!r} is informational CBL adoption only; "
+            "do not compile inferred gates"
+        )
     require_clean_snapshot(snapshot)
     current = await build_source_backed_reader_order_dry_run(db, spec)
     if (
