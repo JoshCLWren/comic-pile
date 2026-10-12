@@ -95,11 +95,14 @@ recorded canonical receipt, not hard-coded. Both scripts `SET LOCAL TimeZone
 = 'UTC'` so timestamptz receipts compare as `+00:00`.
 
 Moved-issue references (dependencies, `reading_plan_issues`, events on ids
-115395–115519) are snapshotted at merge time into `moved_issue_refs`: count,
-md5 of sorted ids, and a content fingerprint. Prod already has **23,625**
-`cbl-order` dependency rows on those ids; those rows are the baseline, not a
-blocker. Rollback **refuses only on drift** from that baseline (new, removed,
-or changed rows), not on the mere presence of rows.
+115395–115519) are fingerprinted from locked live rows at merge execution
+and persisted into `prod_changeset_001_ff_moved_refs_receipt`. The
+2026-10-12 preflight snapshot in `001_ff_series_thread_merge_recorded.json`
+(`moved_issue_refs`, 23,625 `cbl-order` rows) is documentation only.
+Rollback **reads that merge-time receipt** and refuses only on drift from
+it (new, removed, or changed rows), not on the mere presence of the
+pre-existing `cbl-order` rows. The receipt table is a one-row fingerprint,
+not an issue backup.
 
 Out of scope: thread 3145 `Fantastic Four` (next ~#600) and completed
 16706/16707 **(a)**.

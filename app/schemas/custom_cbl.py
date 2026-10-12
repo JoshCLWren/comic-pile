@@ -89,6 +89,13 @@ class CustomCBLApplyRequest(BaseModel):
     """Options for explicitly applying a custom CBL to an existing Reading Plan."""
 
     lane_id: str | None = Field(default=None, min_length=1, max_length=80)
+    expected_updated_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Optimistic-concurrency token from GET ``updated_at``. When present, "
+            "a mismatch returns 409 ``plan_version_conflict``, matching PUT."
+        ),
+    )
 
 
 class CustomCBLApplyResponse(ContinuityPlanResponse):

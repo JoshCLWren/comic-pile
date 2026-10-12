@@ -433,6 +433,65 @@ async def test_mignolaverse_strict_create_does_not_infer_thread_entry(
 
 
 @pytest.mark.asyncio
+async def test_mignolaverse_wild_hunt_3_remains_available(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Wild Hunt #3 is mid-run, so it stays Roll-eligible after create and identity save."""
+    user = await get_or_create_user_async(async_db)
+    _killing_ground, kg_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="B.P.R.D.: Killing Ground",
+        numbers=["1", "2", "3", "4", "5"],
+        queue_position=1,
+    )
+    wild_hunt, wh_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Hellboy: The Wild Hunt",
+        numbers=["1", "2", "3", "4"],
+        queue_position=2,
+        read_through=2,
+    )
+    later, later_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Hellboy in Hell",
+        numbers=["1", "2"],
+        queue_position=3,
+    )
+    await async_db.commit()
+
+    ordered = kg_issues + wh_issues + later_issues
+    created = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload("Mignolaverse Wild Hunt", ordered),
+    )
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+    compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
+    assert compiled == set()
+    assert (wh_issues[1].id, wh_issues[2].id) not in compiled
+    assert (kg_issues[-1].id, wh_issues[2].id) not in compiled
+
+    roll_ids = await _roll_ids(user.id, async_db)
+    assert wild_hunt.id in roll_ids
+    blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert wild_hunt.id not in blocked
+
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    saved = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json=_write_payload_from_get(fetched.json()),
+    )
+    assert saved.status_code == 200, saved.text
+    roll_after = await _roll_ids(user.id, async_db)
+    assert wild_hunt.id in roll_after
+    assert later.id in roll_after
+
+
+@pytest.mark.asyncio
 async def test_absolute_universe_cbl_order_stays_inert_without_explicit_gates(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -1584,6 +1643,150 @@ async def test_absolute_leftover_nodes_json_ignored_and_stale_put_conflicted(
     )
     assert conflicted.status_code == 409, conflicted.text
     assert conflicted.json()["detail"]["code"] == "plan_version_conflict"
+
+
+@pytest.mark.asyncio
+async def test_absolute_shaped_custom_cbl_apply_ignores_leftover_nodes(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Apply uses 76 memberships, not 105 leftover JSON, so Catwoman #1 cannot return."""
+    user = await get_or_create_user_async(async_db)
+    membership_specs = (
+        ("Absolute Batman", 20),
+        ("Absolute Superman", 16),
+        ("Absolute Wonder Woman", 16),
+        ("Absolute Flash", 12),
+        ("Absolute Green Lantern", 12),
+    )
+    membership_issues: list[Issue] = []
+    queue_position = 1
+    for title, count in membership_specs:
+        _thread, issues = await _make_series(
+            async_db,
+            user_id=user.id,
+            title=title,
+            numbers=[str(number) for number in range(1, count + 1)],
+            queue_position=queue_position,
+        )
+        membership_issues.extend(issues)
+        queue_position += 1
+    catwoman, catwoman_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Catwoman",
+        numbers=["1"],
+        queue_position=queue_position,
+    )
+    leftover_named = [catwoman_issues[0]]
+    for title in ("Absolute Green Arrow", "Absolute Cassandra Cain"):
+        queue_position += 1
+        _thread, issues = await _make_series(
+            async_db,
+            user_id=user.id,
+            title=title,
+            numbers=["1"],
+            queue_position=queue_position,
+        )
+        leftover_named.extend(issues)
+    queue_position += 1
+    _filler, filler_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute leftover filler",
+        numbers=[str(number) for number in range(1, 27)],
+        queue_position=queue_position,
+    )
+    leftover_issues = leftover_named + filler_issues
+    queue_position += 1
+    _bridge, bridge_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Martian Manhunter",
+        numbers=["1"],
+        queue_position=queue_position,
+    )
+    await async_db.commit()
+    assert len(membership_issues) == 76
+    assert len(leftover_issues) == 29
+
+    created = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload("Absolute Universe", membership_issues),
+    )
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+    plan = await async_db.get(ContinuityPlan, plan_id)
+    assert plan is not None
+    leftover_json = [
+        _issue_node_dict(issue, position)
+        for position, issue in enumerate(membership_issues + leftover_issues)
+    ]
+    assert len(leftover_json) == 105
+    plan.nodes_json = leftover_json
+    await async_db.commit()
+
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200, fetched.text
+    fetched_ids = [node["ref_id"] for node in fetched.json()["nodes"]]
+    assert fetched_ids == [issue.id for issue in membership_issues]
+    leftover_ids = {issue.id for issue in leftover_issues}
+    assert leftover_ids.isdisjoint(fetched_ids)
+    before_roll = await _roll_ids(user.id, async_db)
+    assert catwoman.id in before_roll
+
+    custom = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Absolute membership order",
+            "issue_ids": [
+                membership_issues[0].id,
+                membership_issues[1].id,
+                bridge_issues[0].id,
+            ],
+        },
+    )
+    assert custom.status_code == 201, custom.text
+
+    stale_apply = await auth_client.post(
+        f"/api/v1/custom-cbls/{custom.json()['id']}/reading-plans/{plan_id}:apply",
+        json={"expected_updated_at": "2000-01-01T00:00:00+00:00"},
+    )
+    assert stale_apply.status_code == 409, stale_apply.text
+    assert stale_apply.json()["detail"]["code"] == "plan_version_conflict"
+
+    applied = await auth_client.post(
+        f"/api/v1/custom-cbls/{custom.json()['id']}/reading-plans/{plan_id}:apply",
+        json={"expected_updated_at": fetched.json()["updated_at"]},
+    )
+    assert applied.status_code == 200, applied.text
+    applied_ids = [node["ref_id"] for node in applied.json()["nodes"] if node["node_type"] == "issue"]
+    assert leftover_ids.isdisjoint(applied_ids)
+    assert catwoman_issues[0].id not in applied_ids
+    assert bridge_issues[0].id in applied_ids
+    assert len(applied_ids) == 77
+
+    stored = await async_db.get(ContinuityPlan, plan_id)
+    assert stored is not None
+    stored_ids = {
+        node["ref_id"]
+        for node in stored.nodes_json
+        if node.get("node_type") == "issue"
+    }
+    assert leftover_ids.isdisjoint(stored_ids)
+    member_ids = set(
+        (
+            await async_db.execute(
+                select(ReadingPlanIssue.issue_id).where(ReadingPlanIssue.plan_id == plan_id)
+            )
+        ).scalars().all()
+    )
+    assert leftover_ids.isdisjoint(member_ids)
+    assert len(member_ids) == 77
+    compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
+    assert (membership_issues[-1].id, catwoman_issues[0].id) not in compiled
+    after_roll = await _roll_ids(user.id, async_db)
+    assert catwoman.id in after_roll
 
 
 @pytest.mark.asyncio

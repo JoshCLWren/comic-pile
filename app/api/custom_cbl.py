@@ -159,4 +159,5 @@ async def apply_custom_cbl(
         list_id=list_id,
         plan_id=plan_id,
         lane_id=payload.lane_id,
+        expected_updated_at=payload.expected_updated_at,
     )

@@ -4,12 +4,12 @@
 --
 -- Goal: one series thread. SQL: one guarded transaction, no backup tables.
 -- Recorded change set: 001_ff_series_thread_merge_recorded.json
--- (live row_to_json of thread 18560, mapping 378, 3166 restore fields, and
--- the moved-issue dependency / reading_plan_issues / events baseline).
--- Rollback restores via jsonb_populate_record from that receipt, not
--- hard-coded INSERT column lists. Rollback refuses only if those refs
--- drift from the baseline (new, removed, or changed rows), not merely
--- because the 23,625 existing cbl-order dependencies are present.
+-- (live row_to_json of thread 18560, mapping 378, and 3166 restore fields).
+-- The moved-issue dependency / reading_plan_issues / events fingerprint is
+-- captured from locked live rows at execution time and persisted into
+-- prod_changeset_001_ff_moved_refs_receipt. Rollback consumes that receipt,
+-- not the 2026-10-12 preflight constant. Pre-existing cbl-order rows are
+-- part of the live fingerprint, not a reason to refuse.
 --
 -- Proven by source data (Neon 2026-10-12, single SELECTs):
 --   threads 3166 and 18560 both map to ComicVine series 2045
@@ -37,6 +37,13 @@ BEGIN;
 
 SET LOCAL TimeZone = 'UTC';
 
+-- One-row merge-time receipt. Not an issue backup table.
+CREATE TABLE IF NOT EXISTS prod_changeset_001_ff_moved_refs_receipt (
+    changeset_id text PRIMARY KEY,
+    captured_at timestamptz NOT NULL,
+    moved_refs jsonb NOT NULL
+);
+
 DO $$
 DECLARE
     rec RECORD;
@@ -53,7 +60,6 @@ DECLARE
     recorded_split jsonb := $rec_split${"id":18560,"title":"Fantastic Four (1970)","format":"Comic","issues_remaining":125,"queue_position":208,"status":"active","last_rating":null,"last_activity_at":null,"created_at":"2026-08-31T11:26:07.658653+00:00","user_id":1,"notes":"Broad saved-CBL representation; ComicVine volume 2045.","is_test":false,"is_blocked":true,"total_issues":125,"next_unread_issue_id":115395,"reading_progress":"not_started","blocked_by_thread_ids":null,"blocked_by_issue_ids":null,"manual_creator_credits":[],"catalog_series_id":null}$rec_split$::jsonb;
     recorded_mapping jsonb := $rec_mapping${"id":378,"thread_id":18560,"external_identity_id":12970,"status":"confirmed","evidence_source":"broad_cbl_volume_representation","confidence":0.95,"created_at":"2026-08-31T11:26:07.658653+00:00","updated_at":"2026-08-31T11:26:07.658653+00:00"}$rec_mapping$::jsonb;
     recorded_canonical jsonb := $rec_canonical${"id":3166,"title":"Fantastic Four (1961)","format":"Comics","reading_progress":"in_progress","next_unread_issue_id":23029,"total_issues":102,"queue_position":205,"status":"active","user_id":1}$rec_canonical$::jsonb;
-    recorded_refs jsonb := $rec_refs${"dependencies":{"count":23625,"ids_md5":"51cab31505d01e2f1be31a7e2a45761f","fingerprint_md5":"b52d3718b10796674b8b7c3db1145be7"},"reading_plan_issues":{"count":0,"ids_md5":"d41d8cd98f00b204e9800998ecf8427e","fingerprint_md5":"d41d8cd98f00b204e9800998ecf8427e"},"events":{"count":0,"ids_md5":"d41d8cd98f00b204e9800998ecf8427e","fingerprint_md5":"d41d8cd98f00b204e9800998ecf8427e"}}$rec_refs$::jsonb;
 BEGIN
     -- (1) Locks before any guard. Parents first, then children, stable id order.
     FOR lock_rec IN
@@ -301,11 +307,18 @@ BEGIN
         'reading_plan_issues', live_plan_issues,
         'events', live_events
     );
-    IF live_refs IS DISTINCT FROM recorded_refs THEN
-        RAISE EXCEPTION
-            'moved-issue references drifted from merge baseline: %',
-            live_refs;
-    END IF;
+    INSERT INTO prod_changeset_001_ff_moved_refs_receipt (
+        changeset_id,
+        captured_at,
+        moved_refs
+    ) VALUES (
+        '001_ff_series_thread_merge',
+        clock_timestamp(),
+        live_refs
+    )
+    ON CONFLICT (changeset_id) DO UPDATE
+    SET captured_at = EXCLUDED.captured_at,
+        moved_refs = EXCLUDED.moved_refs;
 
     IF (SELECT COUNT(*) FROM issues WHERE thread_id = 3166) <> 102 THEN
         RAISE EXCEPTION 'canonical thread 3166 expected 102 issues';

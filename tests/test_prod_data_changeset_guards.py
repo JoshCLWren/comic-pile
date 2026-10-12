@@ -23,6 +23,9 @@ RECORDED_PATH = CHANGESET_DIR.joinpath("001_ff_series_thread_merge_recorded.json
 _MOVED_ISSUE_LO = 115395
 _MOVED_ISSUE_HI = 115519
 _REF_GUARD_EXCEPTION = "moved-issue references drifted from merge baseline"
+_RECEIPT_TABLE = "prod_changeset_001_ff_moved_refs_receipt"
+_RECEIPT_CHANGESET_ID = "001_ff_series_thread_merge"
+_PREFLIGHT_DEP_COUNT = 23625
 
 
 def _quoted_json_all(sql: str, tag: str) -> list[object]:
@@ -51,8 +54,9 @@ def test_changeset_files_forbid_clone_urls_and_backup_tables() -> None:
         if path.is_file()
     )
     assert "CLONE_DATABASE_URL" not in all_blob
-    assert "CREATE TABLE" not in sql_blob
     assert "prod_changeset_001_ff_issue_backup" not in sql_blob
+    assert sql_blob.count("CREATE TABLE") == 1
+    assert "CREATE TABLE IF NOT EXISTS prod_changeset_001_ff_moved_refs_receipt" in sql_blob
     assert CHANGESET_DIR.joinpath("stale_blocked_no_live_dep.json").exists() is False
     merge_sql = CHANGESET_DIR.joinpath("001_ff_series_thread_merge.sql").read_text()
     rollback_sql = CHANGESET_DIR.joinpath("001_ff_series_thread_merge_rollback.sql").read_text()
@@ -96,7 +100,6 @@ def test_ff_rollback_restores_from_recorded_json_not_hardcoded_columns() -> None
     assert "new dependencies reference moved issues" not in rollback_sql
     assert "new reading_plan_issues reference moved issues" not in rollback_sql
     assert "new events reference moved issues" not in rollback_sql
-    assert _REF_GUARD_EXCEPTION in merge_sql
     assert _REF_GUARD_EXCEPTION in rollback_sql
     assert recorded["moved_issue_refs"]["dependencies"]["count"] == 23625
     assert f"BETWEEN {_MOVED_ISSUE_LO} AND {_MOVED_ISSUE_HI}" in merge_sql
@@ -109,8 +112,26 @@ def test_ff_rollback_restores_from_recorded_json_not_hardcoded_columns() -> None
             assert parsed == recorded["mapping"]
         for parsed in _quoted_json_all(sql, "rec_canonical"):
             assert parsed == recorded["canonical_thread"]
-        for parsed in _quoted_json_all(sql, "rec_refs"):
-            assert parsed == recorded["moved_issue_refs"]
+        assert "$rec_refs$" not in sql
+        assert "51cab31505d01e2f1be31a7e2a45761f" not in sql
+
+
+def test_ff_merge_persists_live_refs_receipt_that_rollback_consumes() -> None:
+    """Rollback baseline is the merge-time receipt, not the preflight constant."""
+    merge_sql = CHANGESET_DIR.joinpath("001_ff_series_thread_merge.sql").read_text()
+    rollback_sql = CHANGESET_DIR.joinpath("001_ff_series_thread_merge_rollback.sql").read_text()
+    recorded = json.loads(RECORDED_PATH.read_text())
+    assert recorded["moved_issue_refs"]["dependencies"]["count"] == _PREFLIGHT_DEP_COUNT
+    assert f"CREATE TABLE IF NOT EXISTS {_RECEIPT_TABLE}" in merge_sql
+    assert f"INSERT INTO {_RECEIPT_TABLE}" in merge_sql
+    assert "live_refs" in merge_sql
+    persist_idx = merge_sql.index(f"INSERT INTO {_RECEIPT_TABLE}")
+    assert "live_refs" in merge_sql[persist_idx : persist_idx + 400]
+    assert "recorded_refs" not in merge_sql[persist_idx : persist_idx + 400]
+    assert f"FROM {_RECEIPT_TABLE}" in rollback_sql
+    assert f"changeset_id = '{_RECEIPT_CHANGESET_ID}'" in rollback_sql
+    assert "missing merge-time moved-refs receipt" in rollback_sql
+    assert merge_sql.find("FOR UPDATE") < merge_sql.find("INSERT INTO prod_changeset_001_ff_moved_refs_receipt")
 
 
 def test_held_sql_is_not_wired_into_deploy_or_migrations() -> None:
@@ -213,24 +234,68 @@ def _moved_issue_refs_sql(lo: int, hi: int) -> str:
     """
 
 
-def _ref_guard_sql(recorded: object, lo: int, hi: int) -> str:
-    """Return a DO block that refuses when live refs drift from ``recorded``.
+def _receipt_ddl() -> str:
+    """Return the merge script's one-row receipt table DDL."""
+    return f"""
+    CREATE TABLE IF NOT EXISTS {_RECEIPT_TABLE} (
+        changeset_id text PRIMARY KEY,
+        captured_at timestamptz NOT NULL,
+        moved_refs jsonb NOT NULL
+    )
+    """
+
+
+def _persist_live_refs_sql(lo: int, hi: int) -> str:
+    """Return the merge script's persist statement for one issue-id window.
 
     Args:
-        recorded: Baseline JSON object captured at merge time.
         lo: Inclusive low issue id.
         hi: Inclusive high issue id.
 
     Returns:
-        PL/pgSQL DO block matching the rollback drift guard.
+        SQL that writes the locked live fingerprint into the merge receipt.
     """
-    payload = json.dumps(recorded, separators=(",", ":")).replace(":", r"\:")
+    return f"""
+    INSERT INTO {_RECEIPT_TABLE} (
+        changeset_id,
+        captured_at,
+        moved_refs
+    ) VALUES (
+        '{_RECEIPT_CHANGESET_ID}',
+        clock_timestamp(),
+        {_moved_issue_refs_sql(lo, hi)}
+    )
+    ON CONFLICT (changeset_id) DO UPDATE
+    SET captured_at = EXCLUDED.captured_at,
+        moved_refs = EXCLUDED.moved_refs
+    """
+
+
+def _rollback_consume_guard_sql(lo: int, hi: int) -> str:
+    """Return the rollback script's receipt-consuming drift guard.
+
+    Args:
+        lo: Inclusive low issue id.
+        hi: Inclusive high issue id.
+
+    Returns:
+        PL/pgSQL DO block matching the rollback receipt consume path.
+    """
     return f"""
     DO $guard$
     DECLARE
-        recorded_refs jsonb := $rec_refs${payload}$rec_refs$::jsonb;
+        recorded_refs jsonb;
         live_refs jsonb;
     BEGIN
+        IF to_regclass('public.{_RECEIPT_TABLE}') IS NULL THEN
+            RAISE EXCEPTION 'missing merge-time moved-refs receipt table; refuse rollback';
+        END IF;
+        SELECT moved_refs INTO recorded_refs
+        FROM {_RECEIPT_TABLE}
+        WHERE changeset_id = '{_RECEIPT_CHANGESET_ID}';
+        IF recorded_refs IS NULL THEN
+            RAISE EXCEPTION 'missing merge-time moved-refs receipt; refuse rollback';
+        END IF;
         SELECT {_moved_issue_refs_sql(lo, hi)} INTO live_refs;
         IF live_refs IS DISTINCT FROM recorded_refs THEN
             RAISE EXCEPTION '{_REF_GUARD_EXCEPTION}: %', live_refs;
@@ -238,24 +303,6 @@ def _ref_guard_sql(recorded: object, lo: int, hi: int) -> str:
     END;
     $guard$;
     """
-
-
-async def _fetch_moved_issue_refs(db: AsyncSession, lo: int, hi: int) -> object:
-    """Load the merge-time reference baseline for one issue-id window.
-
-    Args:
-        db: Async database session.
-        lo: Inclusive low issue id.
-        hi: Inclusive high issue id.
-
-    Returns:
-        JSON object with dependency, reading_plan_issues, and events fingerprints.
-    """
-    row = (await db.execute(text(f"SELECT {_moved_issue_refs_sql(lo, hi)} AS refs"))).one()
-    refs = row.refs
-    if isinstance(refs, str):
-        return json.loads(refs)
-    return refs
 
 
 async def _seed_moved_issue_pair(db: AsyncSession) -> tuple[Issue, Issue, Dependency]:
@@ -311,17 +358,32 @@ async def _seed_moved_issue_pair(db: AsyncSession) -> tuple[Issue, Issue, Depend
 async def test_ff_rollback_ref_baseline_allows_preexisting_deps_and_refuses_drift(
     async_db: AsyncSession,
 ) -> None:
-    """Pre-existing deps match the baseline; new, removed, or changed rows refuse."""
+    """Merge persists the live fingerprint; rollback consumes that receipt."""
     first, second, existing = await _seed_moved_issue_pair(async_db)
     lo = min(first.id, second.id)
     hi = max(first.id, second.id)
-    baseline = await _fetch_moved_issue_refs(async_db, lo, hi)
-    assert isinstance(baseline, dict)
-    assert baseline["dependencies"]["count"] == 1
-    assert baseline["reading_plan_issues"]["count"] == 0
-    assert baseline["events"]["count"] == 0
+    merge_sql = CHANGESET_DIR.joinpath("001_ff_series_thread_merge.sql").read_text()
+    rollback_sql = CHANGESET_DIR.joinpath("001_ff_series_thread_merge_rollback.sql").read_text()
+    assert f"CREATE TABLE IF NOT EXISTS {_RECEIPT_TABLE}" in merge_sql
+    assert "INSERT INTO prod_changeset_001_ff_moved_refs_receipt" in merge_sql
+    assert "SELECT moved_refs INTO recorded_refs" in rollback_sql
 
-    await async_db.execute(text(_ref_guard_sql(baseline, lo, hi)))
+    await async_db.execute(text(_receipt_ddl()))
+    await async_db.execute(text(_persist_live_refs_sql(lo, hi)))
+    stored = (
+        await async_db.execute(
+            text(f"SELECT moved_refs FROM {_RECEIPT_TABLE} WHERE changeset_id = :cid"),
+            {"cid": _RECEIPT_CHANGESET_ID},
+        )
+    ).scalar_one()
+    if isinstance(stored, str):
+        stored = json.loads(stored)
+    assert stored["dependencies"]["count"] == 1
+    assert stored["dependencies"]["count"] != _PREFLIGHT_DEP_COUNT
+    assert stored["reading_plan_issues"]["count"] == 0
+    assert stored["events"]["count"] == 0
+
+    await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
 
     extra = Dependency(
         source_issue_id=second.id,
@@ -332,33 +394,47 @@ async def test_ff_rollback_ref_baseline_allows_preexisting_deps_and_refuses_drif
     await async_db.flush()
     with pytest.raises(DBAPIError, match=_REF_GUARD_EXCEPTION):
         async with async_db.begin_nested():
-            await async_db.execute(text(_ref_guard_sql(baseline, lo, hi)))
+            await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
     await async_db.delete(extra)
     await async_db.flush()
-    await async_db.execute(text(_ref_guard_sql(baseline, lo, hi)))
+    await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
 
     original_note = existing.note
     existing.note = "cbl-order:source:ff-early-years:changed"
     await async_db.flush()
     with pytest.raises(DBAPIError, match=_REF_GUARD_EXCEPTION):
         async with async_db.begin_nested():
-            await async_db.execute(text(_ref_guard_sql(baseline, lo, hi)))
+            await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
     existing.note = original_note
     await async_db.flush()
-    await async_db.execute(text(_ref_guard_sql(baseline, lo, hi)))
+    await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
 
     extra_event = Event(type="rate", issue_id=first.id, issue_number=first.issue_number)
     async_db.add(extra_event)
     await async_db.flush()
     with pytest.raises(DBAPIError, match=_REF_GUARD_EXCEPTION):
         async with async_db.begin_nested():
-            await async_db.execute(text(_ref_guard_sql(baseline, lo, hi)))
+            await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
     await async_db.delete(extra_event)
     await async_db.flush()
-    await async_db.execute(text(_ref_guard_sql(baseline, lo, hi)))
+    await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
+
+    recorded = json.loads(RECORDED_PATH.read_text())
+    await async_db.execute(
+        text(
+            f"UPDATE {_RECEIPT_TABLE} SET moved_refs = CAST(:refs AS jsonb) "
+            f"WHERE changeset_id = :cid"
+        ),
+        {"refs": json.dumps(recorded["moved_issue_refs"]), "cid": _RECEIPT_CHANGESET_ID},
+    )
+    with pytest.raises(DBAPIError, match=_REF_GUARD_EXCEPTION):
+        async with async_db.begin_nested():
+            await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
+    await async_db.execute(text(_persist_live_refs_sql(lo, hi)))
+    await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))
 
     await async_db.delete(existing)
     await async_db.flush()
     with pytest.raises(DBAPIError, match=_REF_GUARD_EXCEPTION):
         async with async_db.begin_nested():
-            await async_db.execute(text(_ref_guard_sql(baseline, lo, hi)))
+            await async_db.execute(text(_rollback_consume_guard_sql(lo, hi)))

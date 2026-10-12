@@ -115,18 +115,23 @@ def _aware_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-async def guard_plan_update(
+async def guard_plan_write(
     db: AsyncSession,
     *,
     plan: ContinuityPlan,
-    payload: ContinuityPlanWrite,
+    incoming_ids: set[int],
+    expected_updated_at: datetime | None,
 ) -> set[int]:
     """Reject stale leftover JSON and conflicting versions before a plan write.
+
+    Shared by ordinary PUT and custom-CBL apply so neither path can rebuild
+    membership from leftover ``nodes_json`` or clobber a newer plan version.
 
     Args:
         db: Async database session.
         plan: Owned plan being replaced.
-        payload: Incoming editor payload.
+        incoming_ids: Issue ids the writer is about to persist.
+        expected_updated_at: Optional optimistic-concurrency token.
 
     Returns:
         Current normalized membership issue ids, snapshotted before rebuild.
@@ -134,11 +139,11 @@ async def guard_plan_update(
     Raises:
         HTTPException: 409 ``plan_version_conflict`` when ``expected_updated_at``
             does not match ``plan.updated_at``. 409 ``stale_plan_nodes`` when
-            the payload issue set equals leftover ``nodes_json`` and not
+            the incoming issue set equals leftover ``nodes_json`` and not
             membership.
     """
-    if payload.expected_updated_at is not None:
-        if _aware_utc(payload.expected_updated_at) != _aware_utc(plan.updated_at):
+    if expected_updated_at is not None:
+        if _aware_utc(expected_updated_at) != _aware_utc(plan.updated_at):
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -147,7 +152,6 @@ async def guard_plan_update(
                 },
             )
     membership_ids = set(await distinct_plan_issue_ids(db, plan_id=plan.id))
-    incoming_ids = payload_issue_ids(payload.nodes)
     json_ids = issue_ids_from_plan_json(plan.nodes_json)
     if membership_ids and incoming_ids == json_ids and incoming_ids != membership_ids:
         raise HTTPException(
@@ -159,6 +163,33 @@ async def guard_plan_update(
             },
         )
     return membership_ids
+
+
+async def guard_plan_update(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    payload: ContinuityPlanWrite,
+) -> set[int]:
+    """Reject stale leftover JSON and conflicting versions before a PUT write.
+
+    Args:
+        db: Async database session.
+        plan: Owned plan being replaced.
+        payload: Incoming editor payload.
+
+    Returns:
+        Current normalized membership issue ids, snapshotted before rebuild.
+
+    Raises:
+        HTTPException: 409 ``plan_version_conflict`` or ``stale_plan_nodes``.
+    """
+    return await guard_plan_write(
+        db,
+        plan=plan,
+        incoming_ids=payload_issue_ids(payload.nodes),
+        expected_updated_at=payload.expected_updated_at,
+    )
 
 
 def _detect_plan_cycles(

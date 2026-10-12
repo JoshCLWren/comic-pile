@@ -5450,6 +5450,19 @@
       "CustomCBLApplyRequest": {
         "description": "Options for explicitly applying a custom CBL to an existing Reading Plan.",
         "properties": {
+          "expected_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optimistic-concurrency token from GET ``updated_at``. When present, a mismatch returns 409 ``plan_version_conflict``, matching PUT.",
+            "title": "Expected Updated At"
+          },
           "lane_id": {
             "anyOf": [
               {

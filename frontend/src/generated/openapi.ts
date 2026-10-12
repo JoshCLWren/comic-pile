@@ -8354,6 +8354,11 @@ export interface components {
          * @description Options for explicitly applying a custom CBL to an existing Reading Plan.
          */
         CustomCBLApplyRequest: {
+            /**
+             * Expected Updated At
+             * @description Optimistic-concurrency token from GET ``updated_at``. When present, a mismatch returns 409 ``plan_version_conflict``, matching PUT.
+             */
+            expected_updated_at?: string | null;
             /** Lane Id */
             lane_id?: string | null;
         };

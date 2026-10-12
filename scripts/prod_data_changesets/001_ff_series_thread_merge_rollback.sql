@@ -10,9 +10,11 @@
 --
 -- Refuses if intervening writes (reads, position changes, extra issues, a
 -- drifted 3166 frontier, or drifted dependencies / reading_plan_issues /
--- events vs the merge-time baseline) would make restoration overwrite
--- progress. Pre-existing cbl-order dependencies on the moved issue ids are
--- part of that baseline and are not themselves a reason to refuse.
+-- events vs the merge-time receipt) would make restoration overwrite
+-- progress. The moved-refs baseline is the locked live fingerprint
+-- persisted by 001_ff_series_thread_merge.sql, not the preflight constant.
+-- Pre-existing cbl-order dependencies on the moved issue ids are part of
+-- that receipt and are not themselves a reason to refuse.
 
 BEGIN;
 
@@ -25,9 +27,18 @@ DECLARE
     live_plan_issues jsonb;
     live_events jsonb;
     live_refs jsonb;
+    recorded_refs jsonb;
     recorded_canonical jsonb := $rec_canonical${"id":3166,"title":"Fantastic Four (1961)","format":"Comics","reading_progress":"in_progress","next_unread_issue_id":23029,"total_issues":102,"queue_position":205,"status":"active","user_id":1}$rec_canonical$::jsonb;
-    recorded_refs jsonb := $rec_refs${"dependencies":{"count":23625,"ids_md5":"51cab31505d01e2f1be31a7e2a45761f","fingerprint_md5":"b52d3718b10796674b8b7c3db1145be7"},"reading_plan_issues":{"count":0,"ids_md5":"d41d8cd98f00b204e9800998ecf8427e","fingerprint_md5":"d41d8cd98f00b204e9800998ecf8427e"},"events":{"count":0,"ids_md5":"d41d8cd98f00b204e9800998ecf8427e","fingerprint_md5":"d41d8cd98f00b204e9800998ecf8427e"}}$rec_refs$::jsonb;
 BEGIN
+    IF to_regclass('public.prod_changeset_001_ff_moved_refs_receipt') IS NULL THEN
+        RAISE EXCEPTION 'missing merge-time moved-refs receipt table; refuse rollback';
+    END IF;
+    SELECT moved_refs INTO recorded_refs
+    FROM prod_changeset_001_ff_moved_refs_receipt
+    WHERE changeset_id = '001_ff_series_thread_merge';
+    IF recorded_refs IS NULL THEN
+        RAISE EXCEPTION 'missing merge-time moved-refs receipt; refuse rollback';
+    END IF;
     FOR lock_rec IN
         SELECT id FROM threads WHERE id = 3166 ORDER BY id FOR UPDATE
     LOOP
