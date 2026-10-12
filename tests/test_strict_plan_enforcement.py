@@ -313,6 +313,74 @@ def _nodes_from_ids(issue_ids: list[int]) -> list[ContinuityPlanNode]:
 
 
 @pytest.mark.asyncio
+async def test_strict_plan_crossover_keeps_jsa_off_roll_until_starman_55_is_read(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A crossover point blocks the whole downstream JSA thread, not a later issue.
+
+    Josh's acceptance example: in one strict plan, JSA is not Roll-eligible at
+    all until Starman #55 is read. Starman itself stays rollable throughout.
+    After #55, both series may run side by side.
+    """
+    user = await get_or_create_user_async(async_db)
+    starman, starman_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Starman",
+        numbers=["54", "55", "56"],
+        queue_position=1,
+        read_through=1,
+    )
+    jsa, jsa_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="JSA (Robinson / Goyer / Johns)",
+        numbers=["1", "2"],
+        queue_position=2,
+    )
+    starman_55 = starman_issues[1]
+    await async_db.commit()
+
+    created = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload(
+            "Starman into JSA",
+            [starman_issues[0], starman_55, *jsa_issues, starman_issues[2]],
+        ),
+    )
+    assert created.status_code == 201, created.text
+    compiled = await _compiled_pairs(
+        async_db, user_id=user.id, plan_id=created.json()["id"]
+    )
+    assert compiled == {(starman_55.id, jsa_issues[0].id)}
+    assert (starman_55.id, jsa_issues[1].id) not in compiled
+
+    roll_before = await _roll_ids(user.id, async_db)
+    assert starman.id in roll_before
+    assert jsa.id not in roll_before
+    blocked_before = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert starman.id not in blocked_before
+    assert jsa.id in blocked_before
+    reasons = await get_blocking_explanations(jsa.id, user.id, async_db)
+    assert [reason.label for reason in reasons] == ["Blocked by Starman: #55"]
+
+    starman_55.status = "read"
+    starman_55.read_at = datetime.now(UTC)
+    starman.next_unread_issue_id = starman_issues[2].id
+    starman.issues_remaining = 1
+    await async_db.flush()
+
+    roll_after = await _roll_ids(user.id, async_db)
+    assert starman.id in roll_after
+    assert jsa.id in roll_after
+    blocked_after = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert starman.id not in blocked_after
+    assert jsa.id not in blocked_after
+    assert await get_blocking_explanations(jsa.id, user.id, async_db) == []
+
+
+@pytest.mark.asyncio
 async def test_starman_jsa_shared_prerequisite_survives_independent_plans(
     auth_client: AsyncClient,
     async_db: AsyncSession,
