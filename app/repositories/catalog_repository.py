@@ -8,8 +8,10 @@ boundaries.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.external_identity import ExternalIdentity
 
 if TYPE_CHECKING:
@@ -504,3 +506,200 @@ async def get_issue_by_id(
         "external_id": identity.external_id if identity is not None else None,
         "confidence": mapping.confidence if mapping is not None else None,
     }
+
+
+async def get_catalog_series_by_external_identity(
+    db: AsyncSession,
+    external_identity_id: int,
+) -> CatalogSeries | None:
+    """Get a catalog series by its canonical external identity ID.
+
+    Args:
+        db: Database session.
+        external_identity_id: The ExternalIdentity ID to look up.
+
+    Returns:
+        The CatalogSeries if found, None otherwise.
+    """
+    result = await db.execute(
+        select(CatalogSeries).where(
+            CatalogSeries.canonical_external_identity_id == external_identity_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_catalog_issue_by_external_identity(
+    db: AsyncSession,
+    external_identity_id: int,
+) -> CatalogIssue | None:
+    """Get a catalog issue by its canonical external identity ID.
+
+    Args:
+        db: Database session.
+        external_identity_id: The ExternalIdentity ID to look up.
+
+    Returns:
+        The CatalogIssue if found, None otherwise.
+    """
+    result = await db.execute(
+        select(CatalogIssue).where(
+            CatalogIssue.canonical_external_identity_id == external_identity_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_or_create_catalog_series(
+    db: AsyncSession,
+    *,
+    canonical_external_identity_id: int,
+) -> CatalogSeries:
+    """Concurrency-safe get-or-create for a catalog series.
+
+    Uses PostgreSQL ON CONFLICT DO NOTHING with a unique constraint on
+    canonical_external_identity_id, followed by a SELECT to fetch the
+    existing row if a concurrent insert occurred.
+
+    Args:
+        db: Database session.
+        canonical_external_identity_id: The confirmed ExternalIdentity ID.
+
+    Returns:
+        The existing or newly created CatalogSeries.
+    """
+    # Try to insert; the unique constraint on canonical_external_identity_id
+    # ensures at most one row per external identity.
+    stmt = (
+        pg_insert(CatalogSeries)
+        .values(canonical_external_identity_id=canonical_external_identity_id)
+        .on_conflict_do_nothing(
+            index_elements=[CatalogSeries.canonical_external_identity_id]
+        )
+        .returning(CatalogSeries.id)
+    )
+    result = await db.execute(stmt)
+    inserted_id = result.scalar_one_or_none()
+
+    if inserted_id is not None:
+        # We inserted the row; fetch it to get all columns
+        return await db.get(CatalogSeries, inserted_id)
+
+    # Concurrent insert won the race; fetch the existing row
+    existing = await get_catalog_series_by_external_identity(db, canonical_external_identity_id)
+    if existing is None:
+        # Should not happen, but guard against it
+        raise RuntimeError(
+            f"CatalogSeries not found after insert conflict for external_identity_id={canonical_external_identity_id}"
+        )
+    return existing
+
+
+async def get_or_create_catalog_issue(
+    db: AsyncSession,
+    *,
+    canonical_external_identity_id: int,
+) -> CatalogIssue:
+    """Concurrency-safe get-or-create for a catalog issue.
+
+    Uses PostgreSQL ON CONFLICT DO NOTHING with a unique constraint on
+    canonical_external_identity_id, followed by a SELECT to fetch the
+    existing row if a concurrent insert occurred.
+
+    Args:
+        db: Database session.
+        canonical_external_identity_id: The confirmed ExternalIdentity ID.
+
+    Returns:
+        The existing or newly created CatalogIssue.
+    """
+    stmt = (
+        pg_insert(CatalogIssue)
+        .values(canonical_external_identity_id=canonical_external_identity_id)
+        .on_conflict_do_nothing(
+            index_elements=[CatalogIssue.canonical_external_identity_id]
+        )
+        .returning(CatalogIssue.id)
+    )
+    result = await db.execute(stmt)
+    inserted_id = result.scalar_one_or_none()
+
+    if inserted_id is not None:
+        return await db.get(CatalogIssue, inserted_id)
+
+    existing = await get_catalog_issue_by_external_identity(db, canonical_external_identity_id)
+    if existing is None:
+        raise RuntimeError(
+            f"CatalogIssue not found after insert conflict for external_identity_id={canonical_external_identity_id}"
+        )
+    return existing
+
+
+async def link_catalog_issue_to_series(
+    db: AsyncSession,
+    *,
+    catalog_issue_id: int,
+    catalog_series_id: int,
+) -> CatalogIssue | None:
+    """Link a catalog issue to a catalog series (additive only).
+
+    Updates the catalog_issue's catalog_series_id only if it is currently NULL.
+    Never overwrites an existing series link. This ensures the series link
+    is additive and never rewrites reader ownership.
+
+    Args:
+        db: Database session.
+        catalog_issue_id: The CatalogIssue ID to link.
+        catalog_series_id: The CatalogSeries ID to link to.
+
+    Returns:
+        The updated CatalogIssue if the link was applied, None if the issue
+        was not found or already had a series link.
+    """
+    from sqlalchemy import update
+
+    stmt = (
+        update(CatalogIssue)
+        .where(CatalogIssue.id == catalog_issue_id, CatalogIssue.catalog_series_id.is_(None))
+        .values(catalog_series_id=catalog_series_id)
+        .returning(CatalogIssue.id)
+    )
+    result = await db.execute(stmt)
+    updated_id = result.scalar_one_or_none()
+
+    if updated_id is None:
+        return None
+
+    return await db.get(CatalogIssue, updated_id)
+
+
+async def get_catalog_series_by_id(
+    db: AsyncSession,
+    catalog_series_id: int,
+) -> CatalogSeries | None:
+    """Get a catalog series by its ID.
+
+    Args:
+        db: Database session.
+        catalog_series_id: The CatalogSeries ID.
+
+    Returns:
+        The CatalogSeries if found, None otherwise.
+    """
+    return await db.get(CatalogSeries, catalog_series_id)
+
+
+async def get_catalog_issue_by_id(
+    db: AsyncSession,
+    catalog_issue_id: int,
+) -> CatalogIssue | None:
+    """Get a catalog issue by its ID.
+
+    Args:
+        db: Database session.
+        catalog_issue_id: The CatalogIssue ID.
+
+    Returns:
+        The CatalogIssue if found, None otherwise.
+    """
+    return await db.get(CatalogIssue, catalog_issue_id)

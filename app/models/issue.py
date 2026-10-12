@@ -31,6 +31,9 @@ class Issue(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+    catalog_issue_id: Mapped[int | None] = mapped_column(
+        ForeignKey("catalog_issues.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Indexes for performance
     __table_args__ = (
@@ -45,6 +48,7 @@ class Issue(Base):
         Index("ix_issue_thread_id", "thread_id"),
         Index("ix_issue_thread_is_read", "thread_id", "status"),
         Index("ix_issue_thread_position", "thread_id", "position"),
+        Index("ix_issue_catalog_issue", "catalog_issue_id"),
     )
 
     thread: Mapped[Thread] = relationship(
