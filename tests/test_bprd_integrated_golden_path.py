@@ -249,10 +249,13 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
     ]
 
     initial_pool = await _bprd_pool(user.id, async_db)
-    assert [thread.id for thread in initial_pool] == [black_flame.id]
+    # War on Frogs #3 is mid-thread (natural start is #1, already read), so
+    # thread-entry compile does not gate it. Black Flame #2 is that title's
+    # current frontier and stays in the pool beside it.
+    assert [thread.id for thread in initial_pool] == [black_flame.id, war_on_frogs.id]
     assert black_flame.next_unread_issue_id == bf[1].id
     assert war_on_frogs.next_unread_issue_id == wof3.id
-    assert war_on_frogs.is_blocked is True
+    assert war_on_frogs.is_blocked is False
 
     universal_machine = await _make_thread(
         async_db,
@@ -353,14 +356,18 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
     assert groups_after == groups_before
 
     pool_after_adoption = await _bprd_pool(user.id, async_db)
-    assert [thread.id for thread in pool_after_adoption] == [black_flame.id]
-    assert war_on_frogs.is_blocked is True
+    assert [thread.id for thread in pool_after_adoption] == [
+        black_flame.id,
+        war_on_frogs.id,
+    ]
+    assert war_on_frogs.is_blocked is False
     assert universal_machine.is_blocked is True
     assert garden_of_souls.is_blocked is True
     assert killing_ground.is_blocked is True
 
     # Finish the active Black Flame boundary through the same supported issue API
-    # used by the reader.  War on Frogs #3 must then become the Roll candidate.
+    # used by the reader. War on Frogs #3 is already the other Roll candidate;
+    # completing Black Flame leaves it as the only B.P.R.D. frontier.
     for issue in bf[1:]:
         marked = await auth_client.post(f"/api/v1/issues/{issue.id}:markRead")
         assert marked.status_code == 204, marked.text
