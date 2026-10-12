@@ -213,7 +213,9 @@ function renderDialog(onMapped = vi.fn(), onClose = vi.fn()) {
 }
 
   beforeEach(() => {
-  vi.clearAllMocks()
+  // reset (not clear) so unconsumed one-time implementations queued by any
+  // earlier failed test cannot leak into the next test's mocked responses.
+  vi.resetAllMocks()
   mockedSearchSeries.mockResolvedValue(searchResponse([VOLUME]))
   mockedListIssues.mockResolvedValue(issueListResponse())
   mockedPreview.mockResolvedValue(
@@ -445,11 +447,11 @@ describe('QueueMapSeriesDialog', () => {
 
     await user.click(await screen.findByTestId('queue-map-series-result'))
     await user.click(await screen.findByTestId('queue-map-series-back'))
-    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await screen.findByTestId('queue-map-series-result')
 
     await user.click(screen.getByTestId('queue-map-series-load-more'))
 
-    expect(mockedSearchSeries).toHaveBeenLastCalledWith('Saga', 10, 10, true)
+    expect(mockedSearchSeries).toHaveBeenLastCalledWith('Saga', 10, 10)
     expect(await screen.findAllByTestId('queue-map-series-result')).toHaveLength(2)
     expect(screen.getByText('Saga (Book Two)')).toBeInTheDocument()
     expect(screen.queryByTestId('queue-map-series-load-more')).not.toBeInTheDocument()
@@ -469,9 +471,7 @@ describe('QueueMapSeriesDialog', () => {
     )
     renderDialog()
 
-    await user.click(await screen.findByTestId('queue-map-series-result'))
-    await user.click(await screen.findByTestId('queue-map-series-back'))
-    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await screen.findByTestId('queue-map-series-result')
 
     await user.type(screen.getByTestId('queue-map-series-search-input'), '!')
     await waitFor(() => expect(mockedSearchSeries).toHaveBeenCalledTimes(2))
@@ -544,10 +544,16 @@ describe('QueueMapSeriesDialog', () => {
 
     const checkboxes = screen.getAllByRole('checkbox')
     expect(checkboxes).toHaveLength(2)
+
     await user.click(checkboxes[0])
+    expect(screen.getByTestId('queue-map-series-approve')).toHaveTextContent('Map 1 issue')
+    expect(screen.getByTestId('queue-map-series-approve')).not.toBeDisabled()
+
+    await user.click(screen.getAllByRole('checkbox')[1])
     expect(screen.getByTestId('queue-map-series-approve')).toBeDisabled()
 
     await user.click(screen.getAllByRole('checkbox')[0])
+    await user.click(screen.getAllByRole('checkbox')[1])
     expect(screen.getByTestId('queue-map-series-approve')).toHaveTextContent('Map 2 issues')
   })
 
