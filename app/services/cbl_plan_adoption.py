@@ -554,12 +554,17 @@ async def _ensure_missing_issue_created(
     if thread.queue_position < 1:
         thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1
 
-    existing_issues = await issue_repository.locked_issues(db, thread.id)
-    existing_by_number = next(
-        (item for item in existing_issues if item.issue_number == issue_number),
+    existing_rows = await issue_repository.locked_issue_rows(db, thread.id)
+    existing_by_number_row = next(
+        (item for item in existing_rows if item[1] == issue_number),
         None,
     )
-    if existing_by_number is not None:
+    if existing_by_number_row is not None:
+        existing_by_number = await issue_repository.get_issue(db, existing_by_number_row[0])
+        if existing_by_number is None:
+            raise AdoptionCommitError(
+                f"Could not load {series_name} #{issue_number} after locking the thread."
+            )
         confirmed_ids = await _confirmed_comicvine_issue_ids(db, existing_by_number.id)
         if comicvine_id is None:
             if confirmed_ids:
@@ -579,7 +584,9 @@ async def _ensure_missing_issue_created(
 
     try:
         async with db.begin_nested():
-            issue = await create_issue_in_natural_order(db, thread.id, issue_number)
+            issue = await create_issue_in_natural_order(
+                db, thread.id, issue_number, existing_rows=existing_rows
+            )
     except IntegrityError as exc:
         existing = await issue_repository.find_in_thread_by_number(db, thread.id, issue_number)
         if existing is None:

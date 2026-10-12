@@ -18,11 +18,10 @@ from app.models import Event, Issue, Thread
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.repositories import issue_repository
 from app.schemas.tags import TagTargetType
-from app.services.issue_insertion import _insert_new_issues_in_natural_order
+from app.services.issue_insertion import create_issues_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from app.services.provider_issue_adoption import adopt_comicvine_issue
-from app.utils.issue_natural_order import natural_issue_order
 from app.services.tag_service import purge_target_assignments
 from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
@@ -90,6 +89,8 @@ async def create_issues(
     current_user_id: int,
     issue_range: str,
     insert_after_issue_id: int | None,
+    *,
+    append_to_end: bool = False,
 ) -> tuple[list[Issue], int]:
     """Create issues from a range and integrate them into the thread order.
 
@@ -98,10 +99,10 @@ async def create_issues(
     ``#2, #33, #34, #35`` instead of appending ``#2`` at the end.
 
     Placement stays append-only whenever automatic ordering would be ambiguous:
-    an explicit ``insert_after_issue_id`` anchor, irregular numbering such as
-    ``Annual 1``, ``0``, or fractions, or a series the reader already reordered
-    by hand. In those cases the existing canonical order is preserved so the
-    reader can correct it through the thread reorder path.
+    an explicit ``insert_after_issue_id`` anchor, ``append_to_end`` (explicit
+    JSON ``null`` / UI "At the end"), or irregular numbering such as
+    ``Annual 1``, ``0``, or fractions. Ordinary numeric series are seated in
+    natural number order even when an earlier append left the thread messy.
 
     Args:
         db: Database session.
@@ -109,6 +110,9 @@ async def create_issues(
         current_user_id: User owning the thread.
         issue_range: Range string to parse.
         insert_after_issue_id: Optional anchor for insertion.
+        append_to_end: When True, append after the last issue even if
+            ``insert_after_issue_id`` is ``None``. Distinguishes the wire
+            contract for explicit null from an omitted placement field.
 
     Returns:
         A tuple of (newly_created_issues, total_issue_count).
@@ -130,7 +134,6 @@ async def create_issues(
         )
 
     existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
-    existing_issue_numbers = [row[1] for row in existing_rows]
     existing_issues = {row[1]: row[2] for row in existing_rows}
 
     max_position = max((row[2] for row in existing_rows), default=0)
@@ -158,17 +161,13 @@ async def create_issues(
 
     new_issues_count = len(new_issue_numbers)
 
-    natural_order = (
-        natural_issue_order(existing_issue_numbers, new_issue_numbers)
-        if insert_after_issue_id is None
-        else None
-    )
-
-    if natural_order is not None:
-        new_issues = await _insert_new_issues_in_natural_order(
-            db, thread_id, new_issue_numbers, natural_order
+    new_issues: list[Issue] | None = None
+    if insert_after_issue_id is None and not append_to_end:
+        new_issues = await create_issues_in_natural_order(
+            db, thread_id, new_issue_numbers, existing_rows=existing_rows
         )
-    else:
+
+    if new_issues is None:
         if insert_after_issue_id is not None:
             await issue_repository.defer_position_unique_constraint(db)
             await issue_repository.shift_positions_after(

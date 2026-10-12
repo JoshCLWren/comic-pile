@@ -1,6 +1,7 @@
 """Tests for performance budget middleware integration."""
 
 import os
+from collections.abc import Callable
 from dataclasses import replace
 from unittest.mock import MagicMock, patch
 
@@ -19,6 +20,34 @@ from app.performance_budgets import (
     get_performance_budget_manager,
 )
 from app.startup_diagnostics import StartupSnapshot, startup_event_snapshot
+
+
+def _measured_request_duration(elapsed_seconds: float) -> Callable[[], float]:
+    """Return a ``time.perf_counter`` stand-in with a fixed request duration.
+
+    The request-logging middleware records start and end with two
+    ``perf_counter`` reads. Extra reads after those two keep the same end
+    timestamp so classification stays on the supplied duration, not CI
+    wall-clock jitter.
+
+    Args:
+        elapsed_seconds: Measured request duration to report.
+
+    Returns:
+        A zero-argument clock function suitable as a ``perf_counter`` mock.
+    """
+    times = iter((0.0, elapsed_seconds))
+    last = 0.0
+
+    def _now() -> float:
+        nonlocal last
+        try:
+            last = next(times)
+        except StopIteration:
+            pass
+        return last
+
+    return _now
 
 
 class TestPerformanceBudgetMiddleware:
@@ -44,8 +73,12 @@ class TestPerformanceBudgetMiddleware:
         @self.app.get("/fast")
         async def fast_endpoint():
             return {"message": "fast response"}
-        
-        response = self.client.get("/fast")
+
+        with patch(
+            "app.middleware.request_logging.time.perf_counter",
+            side_effect=_measured_request_duration(0.01),
+        ):
+            response = self.client.get("/fast")
         
         assert response.status_code == 200
         assert response.json() == {"message": "fast response"}
@@ -164,7 +197,11 @@ class TestPerformanceBudgetAppIntegration:
     
     def test_ping_endpoint_fast(self):
         """Test that the ping endpoint is fast and doesn't trigger budgets."""
-        response = self.client.get("/api/ping")
+        with patch(
+            "app.middleware.request_logging.time.perf_counter",
+            side_effect=_measured_request_duration(0.01),
+        ):
+            response = self.client.get("/api/ping")
         
         # Ping should be very fast, no warnings or violations
         budget_manager = get_performance_budget_manager()
