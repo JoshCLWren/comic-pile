@@ -9,7 +9,7 @@ export interface CustomCBLEntry {
   series_name: string
   issue_number: string
   status: string
-  is_checkpoint: boolean
+  is_checkpoint?: boolean
 }
 
 export interface CustomCBLListItem {

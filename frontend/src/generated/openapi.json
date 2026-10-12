@@ -9760,9 +9760,24 @@
             "title": "Last Activity At"
           },
           "manual_creator_credits": {
-            "default": [],
             "items": {
-              "additionalProperties": true,
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name",
+                "roles"
+              ],
+              "title": "ManualCreatorCredit",
               "type": "object"
             },
             "title": "Manual Creator Credits",
@@ -9957,9 +9972,24 @@
             "title": "Last Rating"
           },
           "manual_creator_credits": {
-            "default": [],
             "items": {
-              "additionalProperties": true,
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name",
+                "roles"
+              ],
+              "title": "ManualCreatorCredit",
               "type": "object"
             },
             "title": "Manual Creator Credits",
@@ -16360,7 +16390,23 @@
           },
           "manual_creator_credits": {
             "items": {
-              "additionalProperties": true,
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name",
+                "roles"
+              ],
+              "title": "ManualCreatorCredit",
               "type": "object"
             },
             "title": "Manual Creator Credits",
@@ -16512,9 +16558,24 @@
             "title": "Last Rating"
           },
           "manual_creator_credits": {
-            "default": [],
             "items": {
-              "additionalProperties": true,
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name",
+                "roles"
+              ],
+              "title": "ManualCreatorCredit",
               "type": "object"
             },
             "title": "Manual Creator Credits",
@@ -16812,9 +16873,24 @@
             "title": "Last Rating"
           },
           "manual_creator_credits": {
-            "default": [],
             "items": {
-              "additionalProperties": true,
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name",
+                "roles"
+              ],
+              "title": "ManualCreatorCredit",
               "type": "object"
             },
             "title": "Manual Creator Credits",
@@ -17060,7 +17136,23 @@
             "anyOf": [
               {
                 "items": {
-                  "additionalProperties": true,
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "roles"
+                  ],
+                  "title": "ManualCreatorCredit",
                   "type": "object"
                 },
                 "type": "array"

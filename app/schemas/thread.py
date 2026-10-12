@@ -2,9 +2,10 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.json_schema import WithJsonSchema
 
 #: Upper bound on manually entered creator credits stored on one thread.
 MAX_MANUAL_CREATOR_CREDITS = 50
@@ -59,6 +60,23 @@ def normalize_manual_creator_credits(
     return normalized
 
 
+ManualCreatorCredit = Annotated[
+    dict[str, object],
+    WithJsonSchema(
+        {
+            "type": "object",
+            "title": "ManualCreatorCredit",
+            "properties": {
+                "name": {"type": "string"},
+                "roles": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["name", "roles"],
+            "additionalProperties": False,
+        }
+    ),
+]
+
+
 class ThreadCreate(BaseModel):
     """Schema for creating a new thread."""
 
@@ -67,7 +85,7 @@ class ThreadCreate(BaseModel):
     issues_remaining: int = Field(..., ge=0)
     total_issues: int | None = Field(None, ge=1)
     notes: str | None = None
-    manual_creator_credits: list[dict[str, Any]] = Field(default_factory=list)
+    manual_creator_credits: list[ManualCreatorCredit] = Field(default_factory=list)
     is_test: bool = False
 
     @field_validator("manual_creator_credits")
@@ -91,7 +109,7 @@ class ThreadUpdate(BaseModel):
     format: str | None = Field(None, min_length=1)
     issues_remaining: int | None = Field(None, ge=0)
     notes: str | None = None
-    manual_creator_credits: list[dict[str, Any]] | None = None
+    manual_creator_credits: list[ManualCreatorCredit] | None = None
     is_test: bool | None = None
 
     @field_validator("manual_creator_credits")
@@ -135,7 +153,7 @@ class ThreadResponse(BaseModel):
     reading_progress: str | None = None
     next_unread_issue_id: int | None = None
     next_unread_issue_number: str | None = None
-    manual_creator_credits: list[dict[str, object]] = []
+    manual_creator_credits: list[ManualCreatorCredit] = Field(default_factory=list)
 
 
 class ThreadDetail(ThreadResponse):
@@ -197,7 +215,7 @@ class QueueThreadListItem(BaseModel):
     notes: str | None = None
     created_at: datetime
     comicvine_mapping: ComicVineMappingHealth | None = None
-    manual_creator_credits: list[dict[str, object]] = []
+    manual_creator_credits: list[ManualCreatorCredit] = Field(default_factory=list)
 
 
 class ReactivateRequest(BaseModel):

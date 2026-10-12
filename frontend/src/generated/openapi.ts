@@ -10284,12 +10284,10 @@ export interface components {
             issues_remaining: number;
             /** Last Activity At */
             last_activity_at: string | null;
-            /**
-             * Manual Creator Credits
-             * @default []
-             */
-            manual_creator_credits: {
-                [key: string]: unknown;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
             }[];
             /** Next Unread Issue Number */
             next_unread_issue_number?: string | null;
@@ -10378,12 +10376,10 @@ export interface components {
             last_activity_at: string | null;
             /** Last Rating */
             last_rating: number | null;
-            /**
-             * Manual Creator Credits
-             * @default []
-             */
-            manual_creator_credits: {
-                [key: string]: unknown;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
             }[];
             /** Next Unread Issue Id */
             next_unread_issue_id?: number | null;
@@ -13077,7 +13073,8 @@ export interface components {
             issues_remaining: number;
             /** Manual Creator Credits */
             manual_creator_credits?: {
-                [key: string]: unknown;
+                name: string;
+                roles: string[];
             }[];
             /** Notes */
             notes?: string | null;
@@ -13138,12 +13135,10 @@ export interface components {
             last_activity_at: string | null;
             /** Last Rating */
             last_rating: number | null;
-            /**
-             * Manual Creator Credits
-             * @default []
-             */
-            manual_creator_credits: {
-                [key: string]: unknown;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
             }[];
             /** Next Unread Issue Id */
             next_unread_issue_id?: number | null;
@@ -13253,12 +13248,10 @@ export interface components {
             last_activity_at: string | null;
             /** Last Rating */
             last_rating: number | null;
-            /**
-             * Manual Creator Credits
-             * @default []
-             */
-            manual_creator_credits: {
-                [key: string]: unknown;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
             }[];
             /** Next Unread Issue Id */
             next_unread_issue_id?: number | null;
@@ -13357,7 +13350,8 @@ export interface components {
             issues_remaining?: number | null;
             /** Manual Creator Credits */
             manual_creator_credits?: {
-                [key: string]: unknown;
+                name: string;
+                roles: string[];
             }[] | null;
             /** Notes */
             notes?: string | null;

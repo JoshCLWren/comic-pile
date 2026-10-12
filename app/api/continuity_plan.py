@@ -40,8 +40,10 @@ from app.services.continuity_plan_writer import (
     validate_node_ownership,
 )
 from app.services.reading_plan_normalization import (
+    editor_nodes_for_plan,
     editor_plan_response,
     get_plan_membership,
+    is_identity_editor_payload,
     link_dependency_to_plan,
     unlink_dependency_from_plan,
 )
@@ -236,9 +238,14 @@ async def update_continuity_plan(
         list(plan.lanes_json or []),
         payload.lanes,
     )
-    # Unchanged membership leaves leftover nodes_json in storage and ignores
-    # it on GET, so an ordinary save is not a real-data JSON rewrite.
-    if payload_issue_ids(payload.nodes) != membership_ids:
+    # An ordinary GET-then-save of the membership overlay must not collapse
+    # leftover nodes_json. A real editor change (lane, order, checkpoint,
+    # convergence, or membership) rewrites stored JSON.
+    current_editor = await editor_nodes_for_plan(db, plan)
+    if (
+        payload_issue_ids(payload.nodes) != membership_ids
+        or not is_identity_editor_payload(current_editor, payload.nodes)
+    ):
         plan.nodes_json = [node.model_dump() for node in payload.nodes]
     try:
         await replace_compiled_rules(

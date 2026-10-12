@@ -575,3 +575,29 @@ async def test_membership_rebuild_rejects_duplicate_issue_occurrences(
     assert rows == []
     links = await reading_plan_repository.list_plan_dependencies(async_db, plan_id=plan.id)
     assert all(isinstance(link, ReadingPlanDependency) for link in links)
+
+
+def test_identity_editor_payload_ignores_source_annotations() -> None:
+    """GET-then-save stays identity even when source overlay fields differ."""
+    current = ContinuityPlanNode(
+        id="issue-1",
+        node_type="issue",
+        ref_id=1,
+        lane_id="main",
+        position=0,
+        is_checkpoint=False,
+        source_paths=("custom-cbl:9",),
+        convergence_gate=[],
+    )
+    incoming = ContinuityPlanNode(
+        id="issue-1",
+        node_type="issue",
+        ref_id=1,
+        lane_id="main",
+        position=0,
+        is_checkpoint=False,
+        convergence_gate=[],
+    )
+    assert reading_plan_normalization.is_identity_editor_payload([current], [incoming])
+    moved = incoming.model_copy(update={"lane_id": "side"})
+    assert not reading_plan_normalization.is_identity_editor_payload([current], [moved])

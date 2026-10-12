@@ -464,6 +464,39 @@ async def editor_nodes_for_plan(
     return overlay_membership_editor_nodes(members, plan.nodes_json)
 
 
+def editor_node_identity_key(node: ContinuityPlanNode) -> tuple[object, ...]:
+    """Return the editor fields that distinguish an identity save from a real edit.
+
+    Lane, position, checkpoint, and convergence changes are real edits even
+    when the issue set is unchanged. Leftover ``nodes_json`` annotations that
+    GET overlays are ignored so an ordinary GET-then-save stays identity.
+    """
+    gates = tuple(
+        (target.node_type, target.node_id) for target in (node.convergence_gate or [])
+    )
+    return (
+        node.id,
+        node.node_type,
+        node.ref_id,
+        node.lane_id,
+        node.position,
+        node.is_checkpoint,
+        gates,
+    )
+
+
+def is_identity_editor_payload(
+    current: Sequence[ContinuityPlanNode],
+    incoming: Sequence[ContinuityPlanNode],
+) -> bool:
+    """Return whether incoming editor nodes match the current GET overlay."""
+    if len(current) != len(incoming):
+        return False
+    return sorted(editor_node_identity_key(node) for node in current) == sorted(
+        editor_node_identity_key(node) for node in incoming
+    )
+
+
 async def editor_plan_response(
     db: AsyncSession,
     plan: ContinuityPlan,
