@@ -578,8 +578,8 @@ export default function CblBrowserPage() {
                   })}
                 </div>
                 <p className="text-xs text-[var(--theme-text-dim)]">
-                  Excluding a series affects this Reading Plan only — it never deletes comics from
-                  ComicPile.
+                  Exclude a whole series, or uncheck Include on one owned issue, to leave it out of
+                  this Reading Plan. Comics stay in ComicPile.
                 </p>
               </section>
 

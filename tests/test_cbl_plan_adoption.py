@@ -69,6 +69,16 @@ class _FakePlan:
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
+class _AsyncNullContext:
+    """No-op async context manager standing in for ``session.begin_nested()``."""
+
+    async def __aenter__(self) -> _AsyncNullContext:
+        return self
+
+    async def __aexit__(self, *_exc: object) -> bool:
+        return False
+
+
 class _Rows:
     """Fake SQLAlchemy result sequence for scalar/scalars()."""
 
@@ -80,6 +90,9 @@ class _Rows:
 
     def scalars(self) -> _Rows:
         return self
+
+    def first(self) -> object | None:
+        return self._rows[0] if self._rows else None
 
     def all(self) -> list[object]:
         return self._rows
@@ -101,11 +114,16 @@ class _FakeDB:
         self.rollback_count = 0
 
     async def execute(self, _query: object) -> _Rows:
+        if self._call_count >= len(self._execute_results):
+            return _Rows([])
         result = self._execute_results[self._call_count]
         self._call_count += 1
         return result
 
-    async def add(self, obj: object) -> None:
+    def begin_nested(self) -> _AsyncNullContext:
+        return _AsyncNullContext()
+
+    def add(self, obj: object) -> None:
         self.added.append(obj)
 
     async def flush(self) -> None:

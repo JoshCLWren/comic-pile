@@ -494,6 +494,36 @@ describe('CblBrowserPage', () => {
     })
   })
 
+  it('unchecking Include on an owned issue excludes it from the committed plan', async () => {
+    const user = userEvent.setup()
+    mockCommitNew.mockResolvedValue({
+      id: 88,
+      reused_positions: [],
+      created_positions: [2],
+      excluded_positions: [1],
+      unresolved_positions: [],
+    })
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    const owned = screen.getByRole('checkbox', { name: 'Include Ultimate Spider-Man #1' })
+    expect(owned).toBeChecked()
+    await user.click(owned)
+    expect(owned).not.toBeChecked()
+    await waitFor(() => {
+      expect(
+        screen.getByText('2 entries · 0 already in ComicPile · 1 will be added'),
+      ).toBeInTheDocument()
+    })
+    await confirmAdd(user)
+    await waitFor(() => {
+      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+    })
+    const [, , choices] = mockCommitNew.mock.calls[0]
+    expect(choices.entry_decisions).toEqual({ '101': false })
+  })
+
   it('a 409 on commit surfaces the stale-review message and refresh recovers', async () => {
     const user = userEvent.setup()
     const conflict = Object.assign(new Error('Conflict'), {

@@ -359,7 +359,10 @@ export default function ReadingPlanAddMaterial({
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-[var(--theme-text-dim)]">Individual choices below override a series choice.</p>
+                <p className="text-xs text-[var(--theme-text-dim)]">
+                  Uncheck Include on an owned issue to leave it out of this plan. Individual choices
+                  override a series choice. Comics stay in ComicPile.
+                </p>
               </section>
 
               <ol className="max-h-[28rem] space-y-1 overflow-y-auto pr-1" aria-label="Reconciled source order">

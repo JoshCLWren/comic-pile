@@ -127,6 +127,21 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     expect(await screen.findByText(/Added material to this Reading Plan · created 1 · reused 1/)).toBeInTheDocument()
   })
 
+  it('lets the reader exclude one owned issue individually and keep the missing selection', async () => {
+    render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
+    await openSource()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Universal Machine #1' }))
+    const ownedBox = screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Black Flame #6' })
+    expect(ownedBox).toBeChecked()
+    fireEvent.click(ownedBox)
+    expect(ownedBox).not.toBeChecked()
+    expect(mocks.plan).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected material' }))
+    await waitFor(() => expect(mocks.commit).toHaveBeenCalledTimes(1))
+    const [, , , choices] = mocks.commit.mock.calls[0]
+    expect(choices.entry_decisions).toEqual({ '102': true, '101': false })
+  })
+
   it('lets the reader exclude missing material and commits the remaining reviewed selection', async () => {
     mocks.plan
       .mockResolvedValueOnce(preview([existingEntry, missingSelected]))

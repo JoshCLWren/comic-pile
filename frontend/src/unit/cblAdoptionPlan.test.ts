@@ -80,4 +80,14 @@ describe('applyCblAdoptionChoices', () => {
     expect(next.summary.reused_existing_count).toBe(1)
     expect(next.summary.excluded_count).toBe(1)
   })
+
+  it('excludes one owned entry individually without dropping the missing issue', () => {
+    const next = applyCblAdoptionChoices(preview, {}, { '101': false })
+    expect(next.entries[0]?.adoption_decision).toBe('excluded')
+    expect(next.entries[0]?.adopted).toBe(false)
+    expect(next.entries[1]?.adopted).toBe(true)
+    expect(next.summary.reused_existing_count).toBe(0)
+    expect(next.summary.missing_would_create_count).toBe(1)
+    expect(next.summary.excluded_positions).toEqual([1])
+  })
 })
