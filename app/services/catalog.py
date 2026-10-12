@@ -20,6 +20,7 @@ from app.external_identities import (
     link_thread_external_series,
     upsert_external_identity,
 )
+from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 
 
@@ -426,7 +427,13 @@ async def search_catalog_issues(
     """
     from app.repositories.catalog_repository import search_catalog_issues as repo_search
     
-    return await repo_search(db, search=search, provider=provider, series_external_id=series_external_id, limit=limit)
+    return await repo_search(
+        db,
+        search=search,
+        provider=provider,
+        series_external_id=series_external_id,
+        limit=limit
+    )
 
 
 async def list_series_mappings(
@@ -571,7 +578,11 @@ async def build_series_mapping_plan(
     origin_mapping_provider = origin_issue.get("provider")
     origin_mapping_external_id = origin_issue.get("external_id")
     origin_mapping_status = origin_issue.get("current_mapping_status")
-    if (origin_mapping_provider and origin_mapping_external_id and origin_mapping_status == "confirmed"):
+    if (
+        origin_mapping_provider
+        and origin_mapping_external_id
+        and origin_mapping_status == "confirmed"
+    ):
         # Check if origin issue is already in the list (by issue_id)
         origin_in_list = any(
             info.get("issue_id") == origin_issue.get("issue_id")
@@ -618,7 +629,11 @@ async def build_series_mapping_plan(
         counts = _empty_preview_counts()
         classified_rows = []
 
-    issue_numbers = [str(row.get("issue_number", "")) for row in classified_rows if row.get("issue_number")]
+    issue_numbers = [
+        str(row.get("issue_number", "")) 
+        for row in classified_rows 
+        if row.get("issue_number")
+    ]
     state_digest = _plan_state_digest(
         provider=provider,
         provider_series_external_id=provider_series_external_id,
@@ -1295,3 +1310,246 @@ def verify_preview_token(
         )
 
     return payload
+
+
+# =============================================================================
+# v1 Shared Catalog Identity Service
+# =============================================================================
+
+async def ensure_catalog_series(
+    db: AsyncSession,
+    *,
+    external_identity_id: int,
+) -> CatalogSeries:
+    """Ensure a CatalogSeries exists for a confirmed series ExternalIdentity.
+
+    Validates that the external identity is a confirmed series before creating
+    or returning the catalog entry. This is the single entry point for creating
+    CatalogSeries rows; no public write API is exposed.
+
+    Args:
+        db: Database session.
+        external_identity_id: The ExternalIdentity ID (must be entity_type='series'
+            and have a confirmed mapping).
+
+    Returns:
+        The existing or newly created CatalogSeries.
+
+    Raises:
+        ValueError: If the external identity is not a series or not confirmed.
+    """
+    from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
+    from app.repositories.catalog_repository import get_or_create_catalog_series
+
+    # Validate the external identity exists and is a series
+    identity = await db.get(ExternalIdentity, external_identity_id)
+    if identity is None:
+        raise ValueError(f"ExternalIdentity {external_identity_id} not found")
+    if identity.entity_type != "series":
+        raise ValueError(f"ExternalIdentity {external_identity_id} is not a series (entity_type={identity.entity_type})")
+
+    # Verify at least one confirmed thread-series mapping exists for this identity
+    confirmed_mapping = await db.scalar(
+        select(ThreadExternalSeriesMapping.id).where(
+            ThreadExternalSeriesMapping.external_identity_id == external_identity_id,
+            ThreadExternalSeriesMapping.status == "confirmed",
+        )
+    )
+    if confirmed_mapping is None:
+        raise ValueError(f"ExternalIdentity {external_identity_id} has no confirmed series mapping")
+
+    # Concurrency-safe get-or-create
+    return await get_or_create_catalog_series(db, canonical_external_identity_id=external_identity_id)
+
+
+async def ensure_catalog_issue(
+    db: AsyncSession,
+    *,
+    external_identity_id: int,
+) -> CatalogIssue:
+    """Ensure a CatalogIssue exists for a confirmed issue ExternalIdentity.
+
+    Validates that the external identity is a confirmed issue before creating
+    or returning the catalog entry. This is the single entry point for creating
+    CatalogIssue rows; no public write API is exposed.
+
+    Args:
+        db: Database session.
+        external_identity_id: The ExternalIdentity ID (must be entity_type='issue'
+            and have a confirmed mapping).
+
+    Returns:
+        The existing or newly created CatalogIssue.
+
+    Raises:
+        ValueError: If the external identity is not an issue or not confirmed.
+    """
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+    from app.repositories.catalog_repository import get_or_create_catalog_issue
+
+    # Validate the external identity exists and is an issue
+    identity = await db.get(ExternalIdentity, external_identity_id)
+    if identity is None:
+        raise ValueError(f"ExternalIdentity {external_identity_id} not found")
+    if identity.entity_type != "issue":
+        raise ValueError(f"ExternalIdentity {external_identity_id} is not an issue (entity_type={identity.entity_type})")
+
+    # Verify at least one confirmed issue-external-identity mapping exists for this identity
+    confirmed_mapping = await db.scalar(
+        select(IssueExternalIdentityMapping.id).where(
+            IssueExternalIdentityMapping.external_identity_id == external_identity_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+        )
+    )
+    if confirmed_mapping is None:
+        raise ValueError(f"ExternalIdentity {external_identity_id} has no confirmed issue mapping")
+
+    # Concurrency-safe get-or-create
+    return await get_or_create_catalog_issue(db, canonical_external_identity_id=external_identity_id)
+
+
+async def link_catalog_issue_to_series(
+    db: AsyncSession,
+    *,
+    catalog_issue_id: int,
+    catalog_series_id: int,
+) -> CatalogIssue | None:
+    """Link a catalog issue to a catalog series (additive only).
+
+    Validates both catalog entries exist, then links them if the issue
+    doesn't already have a series link. Never overwrites an existing link.
+
+    Args:
+        db: Database session.
+        catalog_issue_id: The CatalogIssue ID to link.
+        catalog_series_id: The CatalogSeries ID to link to.
+
+    Returns:
+        The updated CatalogIssue if the link was applied, None if the issue
+        was not found or already had a series link.
+    """
+    from app.repositories.catalog_repository import (
+        get_catalog_issue_by_id,
+        get_catalog_series_by_id,
+        link_catalog_issue_to_series as repo_link,
+    )
+
+    # Validate both catalog entries exist
+    issue = await get_catalog_issue_by_id(db, catalog_issue_id)
+    if issue is None:
+        raise ValueError(f"CatalogIssue {catalog_issue_id} not found")
+
+    series = await get_catalog_series_by_id(db, catalog_series_id)
+    if series is None:
+        raise ValueError(f"CatalogSeries {catalog_series_id} not found")
+
+    # Attempt additive link (only if issue.catalog_series_id is NULL)
+    return await repo_link(db, catalog_issue_id=catalog_issue_id, catalog_series_id=catalog_series_id)
+
+
+async def get_catalog_series_for_thread(
+    db: AsyncSession,
+    thread_id: int,
+) -> CatalogSeries | None:
+    """Get the catalog series linked to a thread.
+
+    Args:
+        db: Database session.
+        thread_id: The Thread ID.
+
+    Returns:
+        The linked CatalogSeries, or None if not linked.
+    """
+    from app.models.thread import Thread
+
+    thread = await db.get(Thread, thread_id)
+    if thread is None or thread.catalog_series_id is None:
+        return None
+    return await db.get(CatalogSeries, thread.catalog_series_id)
+
+
+async def get_catalog_issue_for_issue(
+    db: AsyncSession,
+    issue_id: int,
+) -> CatalogIssue | None:
+    """Get the catalog issue linked to a reader issue.
+
+    Args:
+        db: Database session.
+        issue_id: The Issue ID.
+
+    Returns:
+        The linked CatalogIssue, or None if not linked.
+    """
+    from app.models.issue import Issue
+
+    issue = await db.get(Issue, issue_id)
+    if issue is None or issue.catalog_issue_id is None:
+        return None
+    return await db.get(CatalogIssue, issue.catalog_issue_id)
+
+
+async def set_thread_catalog_series(
+    db: AsyncSession,
+    *,
+    thread_id: int,
+    catalog_series_id: int,
+) -> bool:
+    """Set the catalog series for a thread.
+
+    Args:
+        db: Database session.
+        thread_id: The Thread ID.
+        catalog_series_id: The CatalogSeries ID to link.
+
+    Returns:
+        True if the thread was updated, False if not found.
+    """
+    from app.models.thread import Thread
+    from app.models.catalog import CatalogSeries
+
+    # Validate catalog series exists
+    series = await db.get(CatalogSeries, catalog_series_id)
+    if series is None:
+        raise ValueError(f"CatalogSeries {catalog_series_id} not found")
+
+    thread = await db.get(Thread, thread_id)
+    if thread is None:
+        return False
+
+    thread.catalog_series_id = catalog_series_id
+    await db.flush()
+    return True
+
+
+async def set_issue_catalog_issue(
+    db: AsyncSession,
+    *,
+    issue_id: int,
+    catalog_issue_id: int,
+) -> bool:
+    """Set the catalog issue for a reader issue.
+
+    Args:
+        db: Database session.
+        issue_id: The Issue ID.
+        catalog_issue_id: The CatalogIssue ID to link.
+
+    Returns:
+        True if the issue was updated, False if not found.
+    """
+    from app.models.issue import Issue
+    from app.models.catalog import CatalogIssue
+
+    # Validate catalog issue exists
+    catalog_issue = await db.get(CatalogIssue, catalog_issue_id)
+    if catalog_issue is None:
+        raise ValueError(f"CatalogIssue {catalog_issue_id} not found")
+
+    issue = await db.get(Issue, issue_id)
+    if issue is None:
+        return False
+
+    issue.catalog_issue_id = catalog_issue_id
+    await db.flush()
+    return True
