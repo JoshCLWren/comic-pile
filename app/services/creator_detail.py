@@ -38,7 +38,7 @@ from app.repositories.creator_detail import (
     RecentCreatorIssueRow,
     UpcomingCreatorIssueRow,
 )
-from app.repositories.creator_summary import CreatorSummaryInputs, load_creator_summary_inputs, load_creator_summary_inputs_optimized
+from app.repositories.creator_summary import CreatorSummaryInputs, load_creator_summary_inputs, load_creator_summary_inputs_optimized, resolve_creator_issues
 from app.schemas.creator_detail import (
     CreatorDetailResponse,
     CreatorIssueRow,
@@ -84,40 +84,6 @@ async def _load_creator_detail_collection_optimized(
             db, user_id=user_id, creator_issue_ids=creator_issue_ids, limit=limit, offset=offset
         )
         return recent_rows, timestamps
-
-
-def resolve_creator_issues(
-    inputs: CreatorSummaryInputs,
-    *,
-    creator_id: int,
-) -> tuple[frozenset[int], set[str], str]:
-    """Resolve one creator's attributed issues, roles, and display name.
-
-    Args:
-        inputs: User-scoped creator summary inputs.
-        creator_id: Stable external provider person id for the creator.
-
-    Returns:
-        Tuple of attributed issue ids, the creator's distinct roles, and the
-        provider display name.
-
-    Raises:
-        KeyError: When the creator is not present in the user's own library.
-    """
-    issue_ids: set[int] = set()
-    roles: set[str] = set()
-    display_name: str | None = None
-    for issue_id, credits in inputs.issue_creator_credits.items():
-        for credit in credits:
-            if credit.external_id != creator_id:
-                continue
-            issue_ids.add(issue_id)
-            roles.update(credit.roles)
-            if display_name is None:
-                display_name = credit.display_name
-    if display_name is None:
-        raise KeyError(f"Creator {creator_id} not found in user's library")
-    return frozenset(issue_ids), roles, display_name
 
 
 def _build_issue_row(
@@ -519,5 +485,4 @@ async def get_creator_series_issues(
 __all__ = [
     "get_creator_detail",
     "get_creator_series_issues",
-    "resolve_creator_issues",
 ]

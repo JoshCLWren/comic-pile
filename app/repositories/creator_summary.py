@@ -416,6 +416,70 @@ async def load_creator_summary_inputs(
     )
 
 
+async def load_creator_summary_inputs_optimized(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    creator_id: int,
+) -> tuple[CreatorSummaryInputs, frozenset[int], set[str], str]:
+    """Load creator summary inputs and resolve creator issues in one call.
+
+    This optimized version combines loading the full user-scoped inputs with
+    resolving the specific creator's attributed issues, roles, and display name,
+    avoiding a separate Python pass over all credits when only one creator is needed.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated user whose library is aggregated.
+        creator_id: Stable external provider person id for the creator.
+
+    Returns:
+        Tuple of (inputs, creator_issue_ids, creator_roles, display_name).
+
+    Raises:
+        KeyError: When the creator is not present in the user's own library.
+    """
+    inputs = await load_creator_summary_inputs(db, user_id)
+    creator_id_set, creator_roles_all, display_name = resolve_creator_issues(
+        inputs, creator_id=creator_id
+    )
+    return inputs, creator_id_set, creator_roles_all, display_name
+
+
+def resolve_creator_issues(
+    inputs: CreatorSummaryInputs,
+    *,
+    creator_id: int,
+) -> tuple[frozenset[int], set[str], str]:
+    """Resolve one creator's attributed issues, roles, and display name.
+
+    Args:
+        inputs: User-scoped creator summary inputs.
+        creator_id: Stable external provider person id for the creator.
+
+    Returns:
+        Tuple of attributed issue ids, the creator's distinct roles, and the
+        provider display name.
+
+    Raises:
+        KeyError: When the creator is not present in the user's own library.
+    """
+    issue_ids: set[int] = set()
+    roles: set[str] = set()
+    display_name: str | None = None
+    for issue_id, credits in inputs.issue_creator_credits.items():
+        for credit in credits:
+            if credit.external_id != creator_id:
+                continue
+            issue_ids.add(issue_id)
+            roles.update(credit.roles)
+            if display_name is None:
+                display_name = credit.display_name
+    if display_name is None:
+        raise KeyError(f"Creator {creator_id} not found in user's library")
+    return frozenset(issue_ids), roles, display_name
+
+
 __all__ = [
     "COMICVINE_PROVIDER",
     "CREATOR_CREDITS_KEY",
@@ -427,5 +491,7 @@ __all__ = [
     "extract_creator_credits",
     "extract_manual_creator_credits",
     "load_creator_summary_inputs",
+    "load_creator_summary_inputs_optimized",
     "manual_creator_id",
+    "resolve_creator_issues",
 ]
