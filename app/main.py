@@ -272,9 +272,6 @@ def _register_core_routers(app: FastAPI) -> None:
     # ``app.api.dependency.mount_subrouters``.
     dependency.mount_subrouters()
 
-    # Releases API - What's New release management
-    from app.api import releases
-
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     # Roll v2: versioned-only, no unversioned alias per #2716
@@ -310,7 +307,6 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(
         recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
     )
-    app.include_router(releases.router, prefix="/api/v1/releases", tags=["releases"])
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     # Versioned-only new client resources (e.g. the #2744 correction-sheet
     # examples) have no bare /api/* twin. The v1 router is registered before the
