@@ -6,10 +6,18 @@ blocker. Natural Thread sequence remains ``Issue.position`` /
 ``Thread.next_unread_issue_id``; same-thread adjacent pairs are never
 compiled into Dependencies.
 
-The durable inferred restriction for ``strict_sequential`` is a *thread-entry
-gate*: the natural first issue of a Thread (minimum ``Issue.position`` on that
-Thread, whether or not earlier issues appear in the plan) waits on the nearest
-preceding required plan issue from a different Thread.
+Roll offers each Thread's next unread issue unless a recorded prerequisite
+blocks it. Series run side by side between those points. The durable inferred
+restrictions for ``strict_sequential`` are:
+
+- A *thread-entry gate*: the natural first issue of a Thread (minimum
+  ``Issue.position`` on that Thread, whether or not earlier issues appear in
+  the plan) waits on the nearest preceding required plan issue from a
+  different Thread.
+- A *series-resume gate*: when plan order returns to a Thread after a
+  contiguous required run of a different Thread of two or more issues, the
+  last issue of that foreign run is a recorded prerequisite of the resumed
+  issue. One-issue ping-pong is side-by-side, not a resume gate.
 
 That representation is title-agnostic:
 
@@ -18,6 +26,9 @@ That representation is title-agnostic:
   genuine crossover Dependencies remain the blockers.
 - Wild Hunt #3 is never a thread-entry while #1 exists on the Thread, so an
   in-progress Wild Hunt stays Roll-eligible after earlier unread plan material.
+- A recorded interleave that returns to a Thread after a multi-issue foreign
+  run is a series-resume, so the resumed issue waits on that foreign run
+  without compiling same-thread hops.
 - Absolute Universe later titles whose #1 is in the plan are gated, closing
   the "later material is Roll-eligible" leak without blanketing every hop.
 
@@ -67,15 +78,44 @@ def is_required_issue_node(node: ContinuityPlanNode) -> bool:
     return True
 
 
+def _add_item_read_pair(
+    pairs: list[tuple[int, int]],
+    seen: set[tuple[int, int]],
+    source_id: int,
+    target_id: int,
+) -> None:
+    """Append one inferred pair when it is new and not a self-edge.
+
+    Args:
+        pairs: Ordered output list to extend.
+        seen: Pair identity set used to skip duplicates.
+        source_id: Prerequisite issue id.
+        target_id: Dependent issue id.
+    """
+    if source_id == target_id:
+        return
+    pair = (source_id, target_id)
+    if pair in seen:
+        return
+    seen.add(pair)
+    pairs.append(pair)
+
+
 def strict_plan_item_read_pairs(
     nodes: Sequence[ContinuityPlanNode],
     index: Mapping[int, IssueThreadIndex],
 ) -> list[tuple[int, int]]:
     """Return inferred strict ``item_read`` pairs for one plan node list.
 
-    Same-thread adjacency is omitted. A pair is emitted only when the target
-    is the Thread's natural first issue and a required predecessor on a
-    different Thread exists earlier in plan order.
+    Same-thread adjacency is omitted. A pair is emitted when:
+
+    - the target is the Thread's natural first issue and a required
+      predecessor on a different Thread exists earlier in plan order, or
+    - plan order resumes a previously seen Thread after a contiguous
+      required run of a different Thread of two or more issues.
+
+    One-issue ping-pong is not a resume gate. Series run side by side
+    between those recorded points.
 
     Args:
         nodes: Plan nodes in any order; display ``position`` is the sort key.
@@ -104,13 +144,31 @@ def strict_plan_item_read_pairs(
             if index[source.ref_id].thread_id != target_meta.thread_id:
                 predecessor_id = source.ref_id
                 break
-        if predecessor_id is None or predecessor_id == target.ref_id:
+        if predecessor_id is None:
             continue
-        pair = (predecessor_id, target.ref_id)
-        if pair in seen:
-            continue
-        seen.add(pair)
-        pairs.append(pair)
+        _add_item_read_pair(pairs, seen, predecessor_id, target.ref_id)
+
+    seen_threads: set[int] = set()
+    run_start = 0
+    while run_start < len(ordered):
+        run_thread = index[ordered[run_start].ref_id].thread_id
+        seen_threads.add(run_thread)
+        run_end = run_start + 1
+        while (
+            run_end < len(ordered)
+            and index[ordered[run_end].ref_id].thread_id == run_thread
+        ):
+            run_end += 1
+        if run_end < len(ordered) and (run_end - run_start) >= 2:
+            resumed = ordered[run_end]
+            if index[resumed.ref_id].thread_id in seen_threads:
+                _add_item_read_pair(
+                    pairs,
+                    seen,
+                    ordered[run_end - 1].ref_id,
+                    resumed.ref_id,
+                )
+        run_start = run_end
     return pairs
 
 

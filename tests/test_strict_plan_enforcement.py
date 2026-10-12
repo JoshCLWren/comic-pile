@@ -169,7 +169,7 @@ def test_strict_compiler_has_no_title_exemption() -> None:
 
 
 def test_thread_entry_pairs_skip_same_thread_and_non_starts() -> None:
-    """Pure selection: only a later series start is gated by the prior required issue."""
+    """Pure selection: later series starts gate; same-thread and mid-run hops do not."""
     killing_ground = [101, 102]
     wild_hunt = [201, 202, 203]
     later_start = [301]
@@ -196,6 +196,49 @@ def test_in_progress_series_omitted_earlier_issues_are_not_starts() -> None:
     # Wild Hunt #3 is not a target. The later series start waits on the nearest
     # preceding required issue from another Thread, which is Wild Hunt #3.
     assert strict_plan_item_read_pairs(nodes, index) == [(203, 301)]
+
+
+def test_series_resume_after_multi_issue_foreign_run() -> None:
+    """Returning after a 2+ issue foreign run is a recorded resume gate, not thread-entry."""
+    # B.P.R.D. Plague of Frogs omnibus geometry: BF #1, WoF 1/R/2/4, BF #2-6, WoF #3.
+    plague = [101, 102, 103, 104, 105]
+    dead = [201, 202, 203, 204, 205, 206]
+    black_flame = [301, 302, 303, 304, 305, 306]
+    war_on_frogs = [401, 402, 403, 404, 405]
+    nodes = _nodes_from_ids(
+        plague + dead + [301, 401, 402, 403, 404] + black_flame[1:] + [405]
+    )
+    index = {
+        issue_id: IssueThreadIndex(thread_id, position, position == 1)
+        for thread_id, numbers in enumerate(
+            (plague, dead, black_flame, war_on_frogs),
+            start=1,
+        )
+        for position, issue_id in enumerate(numbers, start=1)
+    }
+    assert strict_plan_item_read_pairs(nodes, index) == [
+        (105, 201),
+        (206, 301),
+        (301, 401),
+        (404, 302),
+        (306, 405),
+    ]
+
+
+def test_one_issue_ping_pong_is_not_a_resume_gate() -> None:
+    """One-issue suggested-order hops stay side by side; they are not resume gates."""
+    nodes = _nodes_from_ids([377, 76, 378, 77, 379, 78, 101, 102])
+    index = {
+        377: IssueThreadIndex(1, 2, False),
+        378: IssueThreadIndex(1, 3, False),
+        379: IssueThreadIndex(1, 4, False),
+        76: IssueThreadIndex(2, 2, False),
+        77: IssueThreadIndex(2, 3, False),
+        78: IssueThreadIndex(2, 4, False),
+        101: IssueThreadIndex(3, 2, False),
+        102: IssueThreadIndex(3, 3, False),
+    }
+    assert strict_plan_item_read_pairs(nodes, index) == []
 
 
 def _nodes_from_ids(issue_ids: list[int]) -> list[ContinuityPlanNode]:
