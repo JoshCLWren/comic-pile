@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Backup production user data and restore it into local dev.
 
-Exports the authenticated user's data (threads, issues, sessions, etc.)
-from a production PostgreSQL database into a structured JSON file, then
-restores it into the local development database with ID remapping.
+Exports the authenticated user's data (threads, issues, sessions,
+continuity rules/plans, etc.) from a production PostgreSQL database into
+a structured JSON file, then restores it into the local development
+database with ID remapping.
 
 Never mutates production data. Never exports password hashes or auth tokens.
 
@@ -29,6 +30,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import stat
 import sys
 from datetime import UTC, datetime
@@ -40,11 +42,15 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import (
+    ContinuityPlan,
+    ContinuityRule,
+    ContinuityRuleSelectedMember,
     Dependency,
     Event,
     Issue,
     ReadingOrder,
     ReadingOrderItem,
+    ReadingPlanDependency,
     ReadingSession,
     Snapshot,
     Thread,
@@ -66,7 +72,16 @@ EXPORT_TABLES = [
     "sessions",
     "events",
     "snapshots",
+    "continuity_plans",
+    "continuity_rules",
+    "continuity_rule_selected_members",
+    "reading_plan_dependencies",
 ]
+
+# Plan notes of the form "continuity-plan:<id>" carry a plan reference that
+# must be rewritten to the remapped plan id on import so the migration's
+# plan-provenance linking keeps working against cloned data.
+_PLAN_NOTE_PATTERN = re.compile(r"^continuity-plan:(\d+)$")
 
 type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
 
@@ -200,6 +215,53 @@ class ExportSnapshotRecord(TypedDict, total=False):
     schema_version: int | None
 
 
+class ExportContinuityPlanRecord(TypedDict, total=False):
+    """Serialized continuity plan record for export."""
+
+    id: int
+    user_id: int
+    name: str
+    ordering_mode: str
+    nodes_json: list[dict[str, object]]
+    lanes_json: list[dict[str, object]]
+    created_at: str | None
+    updated_at: str | None
+
+
+class ExportContinuityRuleRecord(TypedDict, total=False):
+    """Serialized continuity rule record for export."""
+
+    id: int
+    user_id: int
+    legacy_dependency_id: int | None
+    source_type: str
+    source_id: int
+    target_type: str
+    target_id: int
+    satisfaction_type: str
+    checkpoint_issue_id: int | None
+    convergence_targets: list[dict[str, object]] | None
+    note: str | None
+    created_at: str | None
+    updated_at: str | None
+
+
+class ExportContinuityRuleSelectedMemberRecord(TypedDict, total=False):
+    """Serialized continuity rule selected-member record for export."""
+
+    id: int
+    rule_id: int
+    issue_id: int
+
+
+class ExportReadingPlanDependencyRecord(TypedDict, total=False):
+    """Serialized reading-plan-to-dependency link record for export."""
+
+    plan_id: int
+    dependency_id: int
+    explanation: str | None
+
+
 class ExportDocument(TypedDict):
     """Top-level versioned export document."""
 
@@ -216,6 +278,10 @@ class ExportDocument(TypedDict):
     sessions: list[ExportSessionRecord]
     events: list[ExportEventRecord]
     snapshots: list[ExportSnapshotRecord]
+    continuity_plans: list[ExportContinuityPlanRecord]
+    continuity_rules: list[ExportContinuityRuleRecord]
+    continuity_rule_selected_members: list[ExportContinuityRuleSelectedMemberRecord]
+    reading_plan_dependencies: list[ExportReadingPlanDependencyRecord]
 
 
 type ExportRecord = (
@@ -227,6 +293,10 @@ type ExportRecord = (
     | ExportSessionRecord
     | ExportEventRecord
     | ExportSnapshotRecord
+    | ExportContinuityPlanRecord
+    | ExportContinuityRuleRecord
+    | ExportContinuityRuleSelectedMemberRecord
+    | ExportReadingPlanDependencyRecord
 )
 
 
@@ -378,6 +448,57 @@ def _export_snapshot(snapshot: Snapshot) -> ExportSnapshotRecord:
     })
 
 
+def _export_continuity_plan(plan: ContinuityPlan) -> ExportContinuityPlanRecord:
+    return ExportContinuityPlanRecord(**{
+        "id": plan.id,
+        "user_id": plan.user_id,
+        "name": plan.name,
+        "ordering_mode": plan.ordering_mode,
+        "nodes_json": plan.nodes_json,
+        "lanes_json": plan.lanes_json,
+        "created_at": _datetime_to_iso(plan.created_at),
+        "updated_at": _datetime_to_iso(plan.updated_at),
+    })
+
+
+def _export_continuity_rule(rule: ContinuityRule) -> ExportContinuityRuleRecord:
+    return ExportContinuityRuleRecord(**{
+        "id": rule.id,
+        "user_id": rule.user_id,
+        "legacy_dependency_id": rule.legacy_dependency_id,
+        "source_type": rule.source_type,
+        "source_id": rule.source_id,
+        "target_type": rule.target_type,
+        "target_id": rule.target_id,
+        "satisfaction_type": rule.satisfaction_type,
+        "checkpoint_issue_id": rule.checkpoint_issue_id,
+        "convergence_targets": rule.convergence_targets,
+        "note": rule.note,
+        "created_at": _datetime_to_iso(rule.created_at),
+        "updated_at": _datetime_to_iso(rule.updated_at),
+    })
+
+
+def _export_continuity_rule_selected_member(
+    member: ContinuityRuleSelectedMember,
+) -> ExportContinuityRuleSelectedMemberRecord:
+    return ExportContinuityRuleSelectedMemberRecord(**{
+        "id": member.id,
+        "rule_id": member.rule_id,
+        "issue_id": member.issue_id,
+    })
+
+
+def _export_reading_plan_dependency(
+    link: ReadingPlanDependency,
+) -> ExportReadingPlanDependencyRecord:
+    return ExportReadingPlanDependencyRecord(**{
+        "plan_id": link.plan_id,
+        "dependency_id": link.dependency_id,
+        "explanation": link.explanation,
+    })
+
+
 def _records_for_table(export: ExportDocument, table: str) -> list[ExportRecord]:
     """Return typed records for a non-user export table."""
     records: object
@@ -398,6 +519,14 @@ def _records_for_table(export: ExportDocument, table: str) -> list[ExportRecord]
             records = export["events"]
         case "snapshots":
             records = export["snapshots"]
+        case "continuity_plans":
+            records = export["continuity_plans"]
+        case "continuity_rules":
+            records = export["continuity_rules"]
+        case "continuity_rule_selected_members":
+            records = export["continuity_rule_selected_members"]
+        case "reading_plan_dependencies":
+            records = export["reading_plan_dependencies"]
         case _:
             raise ValueError(f"Unsupported export table {table!r}")
     return cast(list[ExportRecord], records)
@@ -444,6 +573,10 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
             "sessions": [],
             "events": [],
             "snapshots": [],
+            "continuity_plans": [],
+            "continuity_rules": [],
+            "continuity_rule_selected_members": [],
+            "reading_plan_dependencies": [],
         }
 
         result = await db.execute(
@@ -510,6 +643,41 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
             )
             export["snapshots"] = [_export_snapshot(snap) for snap in result.scalars().all()]
 
+        result = await db.execute(
+            select(ContinuityPlan).where(ContinuityPlan.user_id == user_id).order_by(ContinuityPlan.id)
+        )
+        plans = list(result.scalars().all())
+        export["continuity_plans"] = [_export_continuity_plan(plan) for plan in plans]
+        plan_ids = {plan.id for plan in plans}
+
+        result = await db.execute(
+            select(ContinuityRule).where(ContinuityRule.user_id == user_id).order_by(ContinuityRule.id)
+        )
+        rules = list(result.scalars().all())
+        export["continuity_rules"] = [_export_continuity_rule(rule) for rule in rules]
+        rule_ids = {rule.id for rule in rules}
+
+        if rule_ids:
+            result = await db.execute(
+                select(ContinuityRuleSelectedMember)
+                .where(ContinuityRuleSelectedMember.rule_id.in_(rule_ids))
+                .order_by(ContinuityRuleSelectedMember.id)
+            )
+            export["continuity_rule_selected_members"] = [
+                _export_continuity_rule_selected_member(member)
+                for member in result.scalars().all()
+            ]
+
+        if plan_ids:
+            result = await db.execute(
+                select(ReadingPlanDependency)
+                .where(ReadingPlanDependency.plan_id.in_(plan_ids))
+                .order_by(ReadingPlanDependency.plan_id, ReadingPlanDependency.dependency_id)
+            )
+            export["reading_plan_dependencies"] = [
+                _export_reading_plan_dependency(link) for link in result.scalars().all()
+            ]
+
     await engine.dispose()
     return export
 
@@ -541,10 +709,25 @@ def _validate_export(export: ExportDocument) -> None:
 
     ids: dict[str, set[int]] = {key: set() for key in list_keys}
     for key in list_keys:
+        if key == "reading_plan_dependencies":
+            seen_links: set[tuple[int, int]] = set()
+            for record in _records_for_table(export, key):
+                plan_id = record.get("plan_id")
+                dependency_id = record.get("dependency_id")
+                if not isinstance(plan_id, int) or not isinstance(dependency_id, int):
+                    raise ValueError(
+                        "Every reading_plan_dependencies record must have integer "
+                        "plan_id and dependency_id"
+                    )
+                link = (plan_id, dependency_id)
+                if link in seen_links:
+                    raise ValueError(f"Duplicate reading_plan_dependencies link {link}")
+                seen_links.add(link)
+            continue
         for record in _records_for_table(export, key):
-            if not isinstance(record, dict) or not isinstance(record.get("id"), int):
+            record_id = record.get("id") if isinstance(record, dict) else None
+            if not isinstance(record_id, int):
                 raise ValueError(f"Every {key} record must have an integer id")
-            record_id = record["id"]
             if record_id in ids[key]:
                 raise ValueError(f"Duplicate {key} id {record_id}")
             ids[key].add(record_id)
@@ -573,6 +756,20 @@ def _validate_export(export: ExportDocument) -> None:
             ("issue_id", "issues"),
         ],
         "snapshots": [("session_id", "sessions"), ("event_id", "events")],
+        "continuity_plans": [("user_id", "user")],
+        "continuity_rules": [
+            ("user_id", "user"),
+            ("legacy_dependency_id", "dependencies"),
+            ("checkpoint_issue_id", "issues"),
+        ],
+        "continuity_rule_selected_members": [
+            ("rule_id", "continuity_rules"),
+            ("issue_id", "issues"),
+        ],
+        "reading_plan_dependencies": [
+            ("plan_id", "continuity_plans"),
+            ("dependency_id", "dependencies"),
+        ],
     }
     for table, fields in checks.items():
         for record in _records_for_table(export, table):
@@ -600,16 +797,78 @@ def _remap(value: int | None, mapping: dict[int, int]) -> int | None:
     return mapping.get(value) if value is not None else None
 
 
+def _remap_convergence_targets(
+    targets: list[dict[str, object]] | None,
+    issue_map: dict[int, int],
+) -> list[dict[str, object]] | None:
+    """Remap issue ids inside a rule's convergence_targets JSON.
+
+    Unrecognized entries are kept verbatim so the migration's own validation
+    still sees (and reports) malformed prerequisites instead of silently
+    dropping them.
+    """
+    if not targets:
+        return targets
+    remapped: list[dict[str, object]] = []
+    for element in targets:
+        if not isinstance(element, dict):
+            remapped.append(element)
+            continue
+        raw_id = element.get("id")
+        if element.get("type") == "issue" and isinstance(raw_id, (str, int)):
+            try:
+                numeric = int(raw_id)
+            except (TypeError, ValueError):
+                remapped.append(element)
+                continue
+            if numeric in issue_map:
+                new_element = dict(element)
+                new_element["id"] = (
+                    str(issue_map[numeric]) if isinstance(raw_id, str) else issue_map[numeric]
+                )
+                remapped.append(new_element)
+                continue
+        remapped.append(element)
+    return remapped
+
+
+def _remap_plan_note(note: str | None, plan_map: dict[int, int]) -> str | None:
+    """Rewrite a continuity-plan note to the remapped plan id.
+
+    Only notes that exactly match the plan-note shape are rewritten; every
+    other note passes through untouched.
+    """
+    if note is None:
+        return None
+    match = _PLAN_NOTE_PATTERN.match(note)
+    if match is None:
+        return note
+    new_plan_id = plan_map.get(int(match.group(1)))
+    if new_plan_id is None:
+        return note
+    return f"continuity-plan:{new_plan_id}"
+
+
 async def _delete_local_user_data(db: AsyncSession, user_id: int) -> None:
     """Delete the local user's imported data in foreign-key-safe order."""
     thread_ids = select(Thread.id).where(Thread.user_id == user_id)
     issue_ids = select(Issue.id).where(Issue.thread_id.in_(thread_ids))
     session_ids = select(ReadingSession.id).where(ReadingSession.user_id == user_id)
     order_ids = select(ReadingOrder.id).where(ReadingOrder.user_id == user_id)
+    plan_ids = select(ContinuityPlan.id).where(ContinuityPlan.user_id == user_id)
+    rule_ids = select(ContinuityRule.id).where(ContinuityRule.user_id == user_id)
     await db.execute(delete(Snapshot).where(Snapshot.session_id.in_(session_ids)))
     await db.execute(delete(Event).where(Event.session_id.in_(session_ids)))
     await db.execute(delete(ReadingOrderItem).where(ReadingOrderItem.reading_order_id.in_(order_ids)))
     await db.execute(delete(ReadingOrder).where(ReadingOrder.user_id == user_id))
+    await db.execute(delete(ReadingPlanDependency).where(ReadingPlanDependency.plan_id.in_(plan_ids)))
+    await db.execute(
+        delete(ContinuityRuleSelectedMember).where(
+            ContinuityRuleSelectedMember.rule_id.in_(rule_ids)
+        )
+    )
+    await db.execute(delete(ContinuityRule).where(ContinuityRule.user_id == user_id))
+    await db.execute(delete(ContinuityPlan).where(ContinuityPlan.user_id == user_id))
     await db.execute(delete(Dependency).where(
         Dependency.source_issue_id.in_(issue_ids) | Dependency.target_issue_id.in_(issue_ids)
     ))
@@ -630,6 +889,9 @@ async def _sync_id_sequences(db: AsyncSession) -> None:
         "sessions",
         "events",
         "snapshots",
+        "continuity_plans",
+        "continuity_rules",
+        "continuity_rule_selected_members",
     )
     for table in tables:
         await db.execute(
@@ -738,10 +1000,78 @@ async def _import_document(
                     thread_models[record["id"]].next_unread_issue_id = _remap(record.get("next_unread_issue_id"), issue_map)
                 await db.flush()
 
+                dependency_map: dict[int, int] = {}
                 for record in export["dependencies"]:
-                    db.add(Dependency(
+                    item = Dependency(
                         source_issue_id=issue_map[record["source_issue_id"]], target_issue_id=issue_map[record["target_issue_id"]],
                         created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC), note=record.get("note"),
+                    )
+                    db.add(item)
+                    await db.flush()
+                    dependency_map[record["id"]] = item.id
+                await db.flush()
+
+                plan_map: dict[int, int] = {}
+                for record in export["continuity_plans"]:
+                    item = ContinuityPlan(
+                        name=record["name"], ordering_mode=record.get("ordering_mode", "informational"),
+                        nodes_json=record.get("nodes_json") or [], lanes_json=record.get("lanes_json") or [],
+                        created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
+                        updated_at=_parse_datetime(record.get("updated_at")) or datetime.now(UTC),
+                        user_id=local_user.id,
+                    )
+                    db.add(item)
+                    await db.flush()
+                    plan_map[record["id"]] = item.id
+
+                rule_map: dict[int, int] = {}
+                for record in export["continuity_rules"]:
+                    source_id = record["source_id"]
+                    if record.get("source_type") == "issue":
+                        mapped_source = issue_map.get(source_id)
+                        if mapped_source is None:
+                            raise ValueError(
+                                f"continuity_rules.source_id references missing issue id {source_id!r}"
+                            )
+                        source_id = mapped_source
+                    target_id = record["target_id"]
+                    if record.get("target_type") == "issue":
+                        mapped_target = issue_map.get(target_id)
+                        if mapped_target is None:
+                            raise ValueError(
+                                f"continuity_rules.target_id references missing issue id {target_id!r}"
+                            )
+                        target_id = mapped_target
+                    item = ContinuityRule(
+                        user_id=local_user.id,
+                        legacy_dependency_id=_remap(record.get("legacy_dependency_id"), dependency_map),
+                        source_type=record["source_type"], source_id=source_id,
+                        target_type=record["target_type"], target_id=target_id,
+                        satisfaction_type=record["satisfaction_type"],
+                        checkpoint_issue_id=_remap(record.get("checkpoint_issue_id"), issue_map),
+                        convergence_targets=_remap_convergence_targets(
+                            record.get("convergence_targets"), issue_map
+                        ),
+                        note=_remap_plan_note(record.get("note"), plan_map),
+                        created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
+                        updated_at=_parse_datetime(record.get("updated_at")) or datetime.now(UTC),
+                    )
+                    db.add(item)
+                    await db.flush()
+                    rule_map[record["id"]] = item.id
+
+                for record in export["continuity_rule_selected_members"]:
+                    db.add(ContinuityRuleSelectedMember(
+                        rule_id=rule_map[record["rule_id"]],
+                        issue_id=issue_map[record["issue_id"]],
+                    ))
+                await db.flush()
+
+                for record in export["reading_plan_dependencies"]:
+                    db.add(ReadingPlanDependency(
+                        plan_id=plan_map[record["plan_id"]],
+                        dependency_id=dependency_map[record["dependency_id"]],
+                        explanation=record.get("explanation"),
                     ))
                 await db.flush()
 

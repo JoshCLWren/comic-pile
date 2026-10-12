@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / ".github" / "scripts"
 
-EXPECTED_OWNER_RE = r"^factory:(unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$"
+EXPECTED_OWNER_RE = r"^factory:(unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$"
 
 OWNER_RE_SCRIPTS = (
     SCRIPTS / "omniroute-factory-worker.sh",
@@ -65,10 +65,12 @@ def test_roster_workers_are_recognized_as_owned() -> None:
         assert pattern.fullmatch(label), f"{label} must be a recognized factory owner"
 
 
-def test_factory_80_and_above_remain_out_of_scope() -> None:
-    """The recognition boundary stops at factory:79, not factory:80+."""
+def test_factory_100_and_above_remain_out_of_scope() -> None:
+    """The recognition boundary covers factory:80-99 (roster workers 80-82) but stops before factory:100."""
     pattern = re.compile(EXPECTED_OWNER_RE)
-    for label in ("factory:80", "factory:99", "factory:100", "factory:abc", "factory:"):
+    for label in ("factory:80", "factory:82", "factory:99"):
+        assert pattern.fullmatch(label), f"{label} must be a recognized owner"
+    for label in ("factory:100", "factory:999", "factory:abc", "factory:"):
         assert not pattern.fullmatch(label), (
             f"{label} must remain outside the shared owner boundary"
         )

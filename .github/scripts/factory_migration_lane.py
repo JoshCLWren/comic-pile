@@ -38,8 +38,8 @@ STAGE_LABELS = {
     "factory:ready",
     "factory:blocked",
 }
-OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-7][0-9])$")
-ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-7][0-9])$")
+OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-9][0-9])$")
+ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-9][0-9])$")
 RALPH_STATUS_RE = re.compile(r"^ralph-status:")
 BRANCH_ISSUE_RE = re.compile(r"^factory/\d+-(\d+)-")
 

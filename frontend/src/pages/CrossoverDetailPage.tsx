@@ -15,8 +15,8 @@ export default function CrossoverDetailPage() {
       <div className="px-4">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">Crossover Detail</h1>
-          <Link to="/crossovers" className="text-sm text-[var(--theme-text-muted)]">
-            ← Back to Crossovers
+          <Link to="/continuity-plans" className="text-sm text-[var(--theme-text-muted)]">
+            ← Back to Reading Plans
           </Link>
         </div>
         <div className="text-center text-[var(--theme-text-muted)] mt-8">
@@ -33,8 +33,8 @@ export default function CrossoverDetailPage() {
       <div className="px-4">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">Crossover Detail</h1>
-          <Link to="/crossovers" className="text-sm text-[var(--theme-text-muted)]">
-            ← Back to Crossovers
+          <Link to="/continuity-plans" className="text-sm text-[var(--theme-text-muted)]">
+            ← Back to Reading Plans
           </Link>
         </div>
         <div className="text-center text-[var(--theme-danger)] mt-8">
@@ -56,17 +56,17 @@ export default function CrossoverDetailPage() {
       <div className="px-4">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">Crossover Detail</h1>
-          <Link to="/crossovers" className="text-sm text-[var(--theme-text-muted)]">
-            ← Back to Crossovers
+          <Link to="/continuity-plans" className="text-sm text-[var(--theme-text-muted)]">
+            ← Back to Reading Plans
           </Link>
         </div>
         <div className="text-center text-[var(--theme-danger)] mt-8">
           <p className="text-lg font-medium">Crossover not found</p>
           <Link
-            to="/crossovers"
+            to="/continuity-plans"
             className="mt-4 inline-block rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 font-bold text-[var(--theme-text-primary)]"
           >
-            Back to Crossovers
+            Back to Reading Plans
           </Link>
         </div>
       </div>
@@ -88,22 +88,34 @@ export default function CrossoverDetailPage() {
     <div className="space-y-6 md:space-y-8 px-4 pb-6">
       <div className="space-y-3">
         <Breadcrumbs
-          items={[{ label: 'Crossovers', to: '/crossovers' }, { label: 'Crossover' }]}
+          items={[
+            { label: 'Reading plans', to: '/continuity-plans' },
+            { label: 'Crossover events', to: '/continuity-plans/events' },
+            { label: crossover.name },
+          ]}
         />
-        <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">Crossover Detail</h1>
+        <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">{crossover.name}</h1>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-[var(--theme-text-primary)]">{crossover.name}</h2>
-          <p className="text-sm text-[var(--theme-text-dim)]">ID: {crossover.id} • {crossover.memberships.length} member{crossover.memberships.length !== 1 ? 's' : ''}</p>
-        </div>
-        <Link
-          to={'/thread/' + (nextUnread?.thread?.id ?? sortedMembers[0]?.thread?.id)}
-          className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
-        >
-          Continue Reading
-        </Link>
+        <p className="text-sm text-[var(--theme-text-dim)]">
+          {crossover.memberships.length} member{crossover.memberships.length !== 1 ? 's' : ''} · event context, not a reading order
+        </p>
+        {linkedPlans[0] ? (
+          <Link
+            to={`/continuity-plans/${linkedPlans[0].id}`}
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-black hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+          >
+            Open Reading Plan: {linkedPlans[0].name}
+          </Link>
+        ) : nextUnread?.thread || sortedMembers[0]?.thread ? (
+          <Link
+            to={'/thread/' + (nextUnread?.thread?.id ?? sortedMembers[0]?.thread?.id)}
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-black hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+          >
+            Continue Reading
+          </Link>
+        ) : null}
       </div>
 
       <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 sm:px-6 sm:py-4">
@@ -155,7 +167,7 @@ export default function CrossoverDetailPage() {
       )}
 
       <div className="border-t border-[var(--theme-border)] pt-6">
-        <h3 className="text-lg font-bold text-[var(--theme-text-primary)] mb-4">Reading Order</h3>
+        <h3 className="text-lg font-bold text-[var(--theme-text-primary)] mb-4">Comics in this event</h3>
         {sortedMembers.length === 0 ? (
           <p className="text-[var(--theme-text-muted)] text-center py-8">No members in this crossover yet.</p>
         ) : (
@@ -219,16 +231,16 @@ export default function CrossoverDetailPage() {
           <h3 className="text-lg font-bold text-[var(--theme-text-primary)] mb-4">Actions</h3>
           <div className="flex flex-wrap gap-3">
             <Link
-              to="/crossovers"
+              to="/continuity-plans/events"
               className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-2 text-sm font-medium text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]"
             >
-              ← Back to Crossovers
+              ← Crossover events
             </Link>
             {linkedPlans.length > 0 && linkedPlans.map((plan) => (
               <Link
                 key={plan.id}
                 to={`/continuity-plans/${plan.id}`}
-                className="rounded-lg bg-[var(--theme-continuity-accent)] px-4 py-2 text-sm font-bold text-[var(--theme-text-primary)]"
+                className="rounded-lg bg-[var(--theme-continuity-accent)] px-4 py-2 text-sm font-bold text-black"
               >
                 Reading Plan: {plan.name}
               </Link>
@@ -242,14 +254,10 @@ export default function CrossoverDetailPage() {
               </Link>
             )}
             <Link
-              to={`/crossovers`}
+              to="/continuity-plans"
               className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-2 text-sm font-medium text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]"
-              onClick={(e) => {
-                e.preventDefault()
-                window.history.back()
-              }}
             >
-              Back
+              Reading Plans
             </Link>
           </div>
         </div>

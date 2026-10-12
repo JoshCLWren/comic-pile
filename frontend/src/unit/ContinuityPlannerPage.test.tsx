@@ -202,7 +202,7 @@ describe('ContinuityPlannerPage', () => {
 
     await user.clear(await screen.findByLabelText('Plan name'))
     await user.type(screen.getByLabelText('Plan name'), 'Kirby lane')
-    await user.click(screen.getByRole('radio', { name: /Strict sequential/ }))
+    await user.click(screen.getByRole('radio', { name: /Strict/ }))
     await user.type(screen.getByLabelText('Comic series'), 'Mister')
     await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
@@ -230,12 +230,14 @@ describe('ContinuityPlannerPage', () => {
     expect(group).toBeVisible()
 
     const informational = screen.getByRole('radio', { name: /Informational/ })
-    const strict = screen.getByRole('radio', { name: /Strict sequential/ })
+    const strict = screen.getByRole('radio', { name: /Strict/ })
     expect(informational).toBeChecked()
     expect(strict).not.toBeChecked()
 
-    expect(screen.getByText(/Informational plans are a reading reference only/i)).toBeVisible()
-    expect(screen.getByText(/Strict sequential plans keep each later step out of Roll/i)).toBeVisible()
+    expect(screen.getByText(/Informational plans keep source reading order as a reference/i)).toBeVisible()
+    expect(
+      screen.getByText(/Strict records that intent; selected hard prerequisites are not compiled/i),
+    ).toBeVisible()
 
     const glossaryLink = screen.getByRole('link', { name: 'What is an ordering mode?' })
     expect(glossaryLink).toHaveAttribute('href', '/glossary#ordering-mode')
@@ -270,8 +272,8 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add issue' }))
     await user.click(screen.getByRole('button', { name: 'Add lane' }))
 
-    expect(screen.getByRole('radio', { name: /Strict sequential/ })).toBeDisabled()
-    expect(screen.getByText(/Strict sequential requires exactly one lane/i)).toBeVisible()
+    expect(screen.getByRole('radio', { name: /Strict/ })).toBeDisabled()
+    expect(screen.getByText(/Strict requires exactly one lane/i)).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
@@ -1963,7 +1965,7 @@ describe('ContinuityPlannerPage', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible())
     // Modal content is portaled to document.body
-    expect(await screen.findByRole('heading', { name: 'Projection plan', level: 1 })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Edit Projection plan', level: 1 })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Close modal' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

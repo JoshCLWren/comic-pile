@@ -75,8 +75,8 @@ CHECKBOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.*)$")
 CHILD_ITEM_RE = re.compile(r"^[ \t]*-[ \t]*\[[ xX]\][ \t]*#(\d+)\b", re.MULTILINE)
 CHILD_REF_RE = re.compile(r"^#\d+\b")
 
-OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
-ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
+OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$")
+ACTIVE_OWNER_RE = re.compile(r"^factory:(?:local|[1-9]|[1-3][0-9]|[4-9][0-9])$")
 STAGE_LABELS = frozenset(
     {
         "factory:building",

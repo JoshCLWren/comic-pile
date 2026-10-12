@@ -69,7 +69,7 @@ test('renders recognizable icon primitives in the mobile footer', async () => {
   expect(within(mobileNav).getByText('Roll')).toBeVisible()
   expect(within(mobileNav).getByText('Queue')).toBeVisible()
   expect(within(mobileNav).getByText('History')).toBeVisible()
-  expect(within(mobileNav).getByText('Crossovers')).toBeVisible()
+  expect(within(mobileNav).getByText('Reading plans')).toBeVisible()
 
   const rollIcon = within(mobileNav).getByRole('link', { name: /roll page/i })
     .querySelector('svg[data-nav-icon="roll"]')
@@ -88,10 +88,10 @@ test('renders recognizable icon primitives in the mobile footer', async () => {
   expect(historyIcon?.querySelector('path[d^="M3 12a9 9"]')).not.toBeNull()
   expect(historyIcon?.querySelector('path[d="M12 7v5l4 2"]')).not.toBeNull()
 
-  const crossoversIcon = within(mobileNav).getByRole('link', { name: /crossovers page/i })
-    .querySelector('svg[data-nav-icon="crossovers"]')
-  expect(crossoversIcon?.querySelector('path[d="m17 14 3 3-3 3"]')).not.toBeNull()
-  expect(crossoversIcon?.querySelector('path[d="m17 4 3 3-3 3"]')).not.toBeNull()
+  const plansIcon = within(mobileNav).getByRole('link', { name: /reading plans page/i })
+    .querySelector('svg[data-nav-icon="planner"]')
+  expect(plansIcon?.querySelector('circle[cx="12"]')).not.toBeNull()
+  expect(plansIcon?.querySelector('path[d="m15.5 8.5-2 5-5 2 2-5 5-2Z"]')).not.toBeNull()
 
   const moreIcon = within(mobileNav).getByRole('button', { name: /more pages/i })
     .querySelector('svg[data-nav-icon="more"]')

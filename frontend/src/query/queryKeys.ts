@@ -222,6 +222,7 @@ export const queryKeys = {
     all: ['readingPlans'] as const,
     list: () => ['readingPlans', 'list'] as const,
     detail: (planId: number) => ['readingPlans', 'detail', planId] as const,
+    reader: (planId: number) => ['readingPlans', 'reader', planId] as const,
   },
   cblSources: {
     all: ['cblSources'] as const,

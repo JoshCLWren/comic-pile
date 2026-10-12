@@ -162,7 +162,7 @@ export default function QueueThreadCard({
               <MarqueeTitle title={thread.title} />
             </button>
             {isBlocked && (
-              <Tooltip content={blockerLabels.length > 0 ? blockerLabels.join('\n') : 'Blocked by dependency'}>
+              <Tooltip content={blockerLabels.length > 0 ? blockerLabels.join('\n') : 'Blocked by a prerequisite'}>
                 <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
@@ -216,7 +216,7 @@ export default function QueueThreadCard({
                   onClick={onDependencies}
                   aria-label={`View dependencies for ${thread.title}`}
                 >
-                  <span aria-hidden="true">🔒 </span>Blocked by dependency
+                  <span aria-hidden="true">🔒 </span>Blocked by a prerequisite
                 </button>
               )}
               {extraBlockerCount > 0 && (

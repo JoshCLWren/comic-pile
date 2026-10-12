@@ -230,10 +230,17 @@ async def adopt_crossover_template(
             ordering_mode=payload.ordering_mode,
         )
         await db.commit()
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "continuity_cbl_collision", "message": str(exc)},
+        ) from exc
     except Exception:
         await db.rollback()
         raise
     await db.refresh(plan)
-    if request.ordering_mode == "strict_sequential":
-        await _refresh_blocked_state(current_user.id, db)
+    # Always refresh: informational plans with checkpoint/convergence gates
+    # also compile canonical edges via the write-path hook (#2553).
+    await _refresh_blocked_state(current_user.id, db)
     return _to_response(plan)

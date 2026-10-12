@@ -32,7 +32,8 @@ const LEGACY_ANCHORS: Array<[string, string]> = [
   ['die-ladder', 'Die size'],
   ['autoladder', 'Auto'],
   ['position', 'Pos'],
-  ['dependency', 'Dependency rule'],
+  ['dependency', 'Prerequisite'],
+  ['continuity-plan', 'Reading Plan'],
   ['readiness', 'Blocked'],
 ]
 
@@ -42,7 +43,7 @@ const REPORTED_DEEP_LINKS: Array<[string, string]> = [
   ['auto-adjust', 'Auto-adjust'],
   ['auto', 'Auto'],
   ['pos', 'Pos'],
-  ['dependency-rule', 'Dependency rule'],
+  ['dependency-rule', 'Prerequisite'],
   ['blocked', 'Blocked'],
   ['die-size', 'Die size'],
 ]

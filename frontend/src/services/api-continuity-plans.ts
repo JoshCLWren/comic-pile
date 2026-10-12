@@ -4,6 +4,13 @@ export type ContinuityPlanNodeType = 'issue' | 'crossover' | 'thread'
 
 export type ContinuityPlanOrderingMode = 'strict_sequential' | 'informational'
 
+/** Reader-facing label for a plan's ordering mode. */
+export function readingPlanModeLabel(
+  mode: ContinuityPlanOrderingMode | string,
+): 'Strict' | 'Informational' {
+  return mode === 'strict_sequential' ? 'Strict' : 'Informational'
+}
+
 export interface ExplicitReaderOrderMigrationContract {
   kind: 'explicit_reader_order'
   classification_family_keys: string[]
@@ -70,6 +77,63 @@ export interface ContinuityPlanListItem {
   updated_at: string
 }
 
+export type ReadingPlanIssueAvailability = 'read' | 'available' | 'blocked' | 'later'
+
+export interface ReadingPlanBlocker {
+  issue_id: number
+  thread_id: number
+  thread_title: string
+  issue_number: string
+  explanation: string
+}
+
+export interface ReadingPlanReaderIssue {
+  occurrence_id: string
+  issue_id: number
+  lane_id: string
+  display_position: number
+  label?: string | null
+  reader_role?: string | null
+  reader_optional?: boolean | null
+  is_checkpoint?: boolean
+  issue_number: string
+  thread_id: number
+  thread_title: string
+  status: string
+  availability: ReadingPlanIssueAvailability
+  blockers: ReadingPlanBlocker[]
+  source_paths: string[]
+}
+
+export interface ReadingPlanReaderLane {
+  id: string
+  name: string
+  order: number
+  issues: ReadingPlanReaderIssue[]
+}
+
+export interface ReadingPlanSourceSnapshot {
+  id: number
+  raw_source_path: string
+  repository: string | null
+  source_path: string | null
+  revision_sha: string | null
+  content_hash: string | null
+  adopted_at: string | null
+  recorded_at: string
+}
+
+export interface ReadingPlanReaderView {
+  plan_id: number
+  name: string
+  ordering_mode: ContinuityPlanOrderingMode
+  progress: { total_issues: number; read_issues: number }
+  available_now: ReadingPlanReaderIssue[]
+  blocked_next: ReadingPlanReaderIssue[]
+  lanes: ReadingPlanReaderLane[]
+  sources: ReadingPlanSourceSnapshot[]
+}
+
 
 /**
  * Build the continuity-plan service bound to an HTTP client.
@@ -85,6 +149,8 @@ export function createContinuityPlansApi(client: HttpClient) {
       client.post<ContinuityPlan, ContinuityPlanWrite>('/v1/continuity-plans/', payload),
     get: (planId: number) =>
       client.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
+    getReader: (planId: number) =>
+      client.get<ReadingPlanReaderView>(`/v1/continuity-plans/${planId}/reader`),
     update: (planId: number, payload: ContinuityPlanWrite) =>
       client.put<ContinuityPlan, ContinuityPlanWrite>(`/v1/continuity-plans/${planId}`, payload),
     delete: (planId: number) =>

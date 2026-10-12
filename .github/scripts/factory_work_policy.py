@@ -34,9 +34,9 @@ eligibility = importlib.import_module("factory_eligibility")
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->'
 
-OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$')
+OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$')
 
-FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|[4-7][0-9])$')
+FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|[4-9][0-9])$')
 
 STAGE_LABELS = {'factory:building', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:ready', 'factory:blocked'}
 STAGE_PRECEDENCE = ('factory:blocked', 'factory:ready', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:building')

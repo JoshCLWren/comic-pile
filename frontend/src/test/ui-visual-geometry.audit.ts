@@ -125,8 +125,8 @@ const SCENARIOS: Scenario[] = [
     checkBlankRegions: true,
   },
   {
-    name: 'crossovers',
-    route: '/crossovers',
+    name: 'crossover-events',
+    route: '/continuity-plans/events',
     checkBlankRegions: false,
   },
   {

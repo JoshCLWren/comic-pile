@@ -72,6 +72,8 @@ describe('CrossoversPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading crossovers')
 
     resolveList?.([])
+    expect(await screen.findByRole('heading', { name: 'Crossover events' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Reading plans' })).toHaveAttribute('href', '/continuity-plans')
     expect(await screen.findByText(/No crossovers yet/)).toBeInTheDocument()
   })
 

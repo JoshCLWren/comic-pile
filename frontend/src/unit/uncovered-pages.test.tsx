@@ -22,7 +22,7 @@ describe('HelpPage', () => {
     expect(screen.getByRole('heading', { name: 'Glossary' })).toBeInTheDocument()
     expect(screen.getAllByTestId('glossary-term')).toHaveLength(20)
     expect(
-      screen.getByText(/read X before Y/),
+      screen.getByText(/hard “read this first” requirement/),
     ).toBeInTheDocument()
     expect(screen.getByText('Dependency Builder')).toBeInTheDocument()
   })
@@ -31,7 +31,8 @@ describe('HelpPage', () => {
     renderRoute(<HelpPage />)
     for (const term of [
       'Crossover',
-      'Continuity Plan',
+      'Reading Plan',
+      'Prerequisite',
       'Lane',
       'Reading Order',
       'Blocked',
@@ -62,9 +63,11 @@ describe('HelpPage', () => {
       'pos',
       'reading-mode',
       'finished-series',
+      'prerequisite',
       'dependency-rule',
       'blocked',
       'crossover',
+      'reading-plan',
       'continuity-plan',
       'ordering-mode',
       'lane',

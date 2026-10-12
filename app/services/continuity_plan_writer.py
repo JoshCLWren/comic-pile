@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.continuity_rules import _would_create_cycle, ensure_owned_continuity_node
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
 from app.models.thread import Thread
 from app.schemas.continuity_plan import (
     ContinuityPlanLane,
@@ -33,6 +34,11 @@ from app.schemas.continuity_plan import (
 )
 from app.schemas.continuity_rule import ContinuityNodeType
 from app.repositories.continuity_repository import plans_for_user
+from app.services.canonical_constraint_compiler import (
+    compile_rule_edges,
+    retire_rule_edges,
+    rule_edge_pairs,
+)
 from app.services.reading_plan_normalization import rebuild_plan_membership
 
 
@@ -190,6 +196,7 @@ async def replace_compiled_rules(
     plan: ContinuityPlan,
     nodes: list[ContinuityPlanNode],
     ordering_mode: PlanOrderingMode,
+    sync_canonical_edges: bool = True,
 ) -> bool:
     """Replace only rules owned by this plan and compile plan semantics into rules.
 
@@ -214,6 +221,11 @@ async def replace_compiled_rules(
         nodes: Canonical node set to compile from.
         ordering_mode: Plan ordering mode; only ``strict_sequential`` creates
             adjacent order rules.
+        sync_canonical_edges: When True (default), retire this plan's stale
+            compiled edges and compile the new rules into canonical
+            Dependencies (#2553). Only pairs that actually changed are
+            retired/compiled, so re-saving an unchanged plan is a no-op
+            for the Dependency table.
 
     Returns:
         True when all rules compiled without cycle conflicts.
@@ -225,12 +237,34 @@ async def replace_compiled_rules(
     await rebuild_plan_membership(db, plan_id=plan.id, nodes=nodes)
 
     marker = plan_rule_marker(plan.id)
+    # Collect the compiled pairs of the outgoing rules before replacing them,
+    # so their canonical edges can be retired unless still intended (#2553).
+    # The backfill and this hook compile existing rule semantics only; they
+    # do not invent new strict constraints. Phase B (Wild Hunt exception
+    # decision) covers whether to ADD strict enforcement where none exists.
+    old_pairs: set[tuple[int, int]] = set()
+    if sync_canonical_edges:
+        old_plan_rules = (
+            (
+                await db.execute(
+                    select(ContinuityRule).where(
+                        ContinuityRule.user_id == user_id,
+                        ContinuityRule.note == marker,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for old_rule in old_plan_rules:
+            old_pairs.update(rule_edge_pairs(old_rule))
     await db.execute(
         delete(ContinuityRule).where(
             ContinuityRule.user_id == user_id,
             ContinuityRule.note == marker,
         )
     )
+    await db.flush()
 
     # Build node lookup for convergence gate resolution
     node_map: dict[str, ContinuityPlanNode] = {node.id: node for node in nodes}
@@ -301,6 +335,12 @@ async def replace_compiled_rules(
         ))
 
     if not edges_to_add:
+        if sync_canonical_edges:
+            # The new rule set is empty: retire all previously compiled
+            # pairs so orphaned edges don't keep blocking Roll (#2553).
+            await retire_rule_edges(
+                db, user_id=user_id, pairs=list(old_pairs), exclude_rule_id=-1
+            )
         return True
 
     # Check for plan-level cycles using in-memory graph
@@ -342,6 +382,8 @@ async def replace_compiled_rules(
         )
 
     # Persist the compiled rules
+    created_rules: list[ContinuityRule] = []
+    new_pairs: set[tuple[int, int]] = set()
     for (
         source_type, source_id,
         target_type, target_id,
@@ -405,8 +447,24 @@ async def replace_compiled_rules(
             rule_kwargs["checkpoint_issue_id"] = extra
         if satisfaction_type == "converged" and extra is not None:
             rule_kwargs["convergence_targets"] = extra
-        db.add(ContinuityRule(**rule_kwargs))
+        created_rule = ContinuityRule(**rule_kwargs)
+        db.add(created_rule)
+        created_rules.append(created_rule)
         await db.flush()
+        if sync_canonical_edges:
+            for pair in rule_edge_pairs(created_rule):
+                new_pairs.add(pair)
+    if sync_canonical_edges:
+        # Retire compiled edges the new rule set no longer intends, then
+        # (re)compile all intended pairs. The ON CONFLICT DO UPDATE in
+        # compile_rule_edges refreshes notes on unchanged pairs so they
+        # reference the new rule IDs (not the deleted ones).
+        await retire_rule_edges(
+            db, user_id=user_id, pairs=list(old_pairs - new_pairs), exclude_rule_id=-1
+        )
+        for created_rule in created_rules:
+            if rule_edge_pairs(created_rule):
+                await compile_rule_edges(db, created_rule, plan_id=plan.id)
     return True
 
 
@@ -450,3 +508,65 @@ async def list_continuity_plan_items(
         )
         for plan in ordered
     ]
+
+
+async def retire_plan_edges_for_deletion(
+    db: AsyncSession, *, user_id: int, plan_id: int
+) -> None:
+    """Retire canonical edges compiled by one plan before its rules are deleted.
+
+    After the Roll cutover (#2553) those Dependency rows are the only Roll
+    authority, so plan deletion must clean them up or orphaned rows keep
+    blocking. A pair is kept when another surviving rule still compiles to
+    it (shared-pair semantics from retire_rule_edges). Lives in the service
+    layer to keep routers free of queries.
+    """
+    from app.services.canonical_constraint_compiler import (
+        rule_compiled_note_filter,
+        rule_edge_pairs,
+    )
+
+    marker = plan_rule_marker(plan_id)
+    plan_rules = list(
+        (
+            await db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == user_id,
+                    ContinuityRule.note == marker,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not plan_rules:
+        return
+    deleted_ids = {r.id for r in plan_rules}
+    pairs = {p for rule in plan_rules for p in rule_edge_pairs(rule)}
+    if not pairs:
+        return
+    # Survivor check: any rule outside the deleted set that compiles to the pair.
+    survivors = list(
+        (
+            await db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == user_id,
+                    ContinuityRule.id.not_in(deleted_ids),
+                    ContinuityRule.satisfaction_type.in_(
+                        ("item_read", "checkpoint", "converged")
+                    ),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    survivor_pairs = {p for r in survivors for p in rule_edge_pairs(r)}
+    for source_id, target_id in pairs - survivor_pairs:
+        await db.execute(
+            delete(Dependency).where(
+                Dependency.source_issue_id == source_id,
+                Dependency.target_issue_id == target_id,
+                rule_compiled_note_filter(),
+            )
+        )

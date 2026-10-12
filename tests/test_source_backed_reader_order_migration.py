@@ -516,11 +516,14 @@ async def test_source_already_migrated_requires_legacy_debt_cleared(
     assert await _source_legacy_debt_cleared(async_db, spec) is True
 
     # Reintroduce legacy debt while leaving the canonical plan in place.
+    # #2553: use the reverse pair — the forward pair already has the plan's
+    # compiled canonical edge, and the unique constraint forbids duplicates.
+    # The debt check keys on the note prefix, not the pair direction.
     async_db.add(
         Dependency(
-            source_issue_id=issues[0].id,
-            target_issue_id=issues[1].id,
-            note=f"cbl-order:source:{source_list.content_hash}:1->2",
+            source_issue_id=issues[1].id,
+            target_issue_id=issues[0].id,
+            note=f"cbl-order:source:{source_list.content_hash}:2->1",
             created_at=datetime.now(UTC),
         )
     )

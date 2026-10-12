@@ -62,7 +62,9 @@ describe('canonical route indexability table', () => {
       '/crossovers/age-of-apocalypse',
       '/continuity-plans',
       '/continuity-plans/new',
+      '/continuity-plans/events',
       '/continuity-plans/7',
+      '/continuity-plans/7/edit',
       '/whats-new',
       '/glossary',
       '/identity-inbox',
@@ -76,7 +78,9 @@ describe('canonical route indexability table', () => {
 
   test('exact patterns win over param patterns', () => {
     expect(matchRouteSeo('/continuity-plans/new').title).toContain('New')
-    expect(matchRouteSeo('/continuity-plans/7').title).toContain('Continuity plan')
+    expect(matchRouteSeo('/continuity-plans/events').title).toContain('Crossover events')
+    expect(matchRouteSeo('/continuity-plans/7').title).toContain('Reading plan')
+    expect(matchRouteSeo('/continuity-plans/7/edit').title).toContain('Edit')
     expect(matchRouteSeo('/creators/compare').pattern).toBe('/creators/compare')
     expect(matchRouteSeo('/creators/creator%3A7').pattern).toBe('/creators/:creatorKey')
   })

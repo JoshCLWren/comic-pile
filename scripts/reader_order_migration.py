@@ -28,7 +28,6 @@ def _load_application_symbols():
         apply_explicit_reader_order_migration,
         build_explicit_reader_order_dry_run,
     )
-    from app.services.reader_order_cutover import build_reader_order_cutover_audit
     from app.services.legacy_reading_order_production_migration import (
         apply_legacy_reading_order_migration,
         build_legacy_reading_order_dry_run,
@@ -55,7 +54,6 @@ def _load_application_symbols():
         build_explicit_reader_order_dry_run,
         apply_legacy_reading_order_migration,
         build_legacy_reading_order_dry_run,
-        build_reader_order_cutover_audit,
         LEGACY_READING_ORDERS_MANIFEST,
         apply_explicit_reader_order_overlay,
         build_manifest_report,
@@ -74,7 +72,6 @@ def _load_application_symbols():
     build_explicit_reader_order_dry_run,
     apply_legacy_reading_order_migration,
     build_legacy_reading_order_dry_run,
-    build_reader_order_cutover_audit,
     LEGACY_READING_ORDERS_MANIFEST,
     apply_explicit_reader_order_overlay,
     build_manifest_report,
@@ -416,18 +413,10 @@ async def _batch_apply(
                     )
                 applied.append({"manifest": manifest, **result})
 
-            # Keep the cutover audit in the receipt for operators, but do not roll
-            # back clean applies when unrelated needs_review / identity debt remains.
-            cutover = await build_reader_order_cutover_audit(db, user_id=1)
             batch_receipt = {
                 "source_summary": str(summary_path),
                 "applied": applied,
                 "skipped": skipped,
-                "cutover_audit": cutover,
-                "runtime_switch_instruction": (
-                    "Set LEGACY_DEPENDENCY_BLOCKING_ENABLED=false only when "
-                    "cutover_audit.runtime_cutover_safe is true."
-                ),
             }
             pending_receipt = _stage_durable_json(receipt_path, batch_receipt)
             await db.commit()
@@ -489,12 +478,6 @@ def _parser() -> argparse.ArgumentParser:
     batch_apply.add_argument("--receipt", type=Path, required=True)
     batch_apply.add_argument("--confirm")
 
-    cutover = subparsers.add_parser(
-        "cutover-audit",
-        help="read-only release gate for raw Dependency Roll blocking",
-    )
-    cutover.add_argument("--user-id", type=int, default=1)
-    cutover.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -514,16 +497,6 @@ async def _main() -> int:
         )
     if args.command == "batch-apply":
         return await _batch_apply(args.summary, args.receipt, args.confirm)
-    if args.command == "cutover-audit":
-        async with AsyncSessionLocal() as db:
-            report = await build_reader_order_cutover_audit(
-                db,
-                user_id=args.user_id,
-            )
-            await db.rollback()
-        _write_json(args.output, report)
-        print(json.dumps(report, indent=2, sort_keys=True))
-        return 0 if report["runtime_cutover_safe"] is True else 2
     raise AssertionError(f"unhandled command {args.command}")
 
 

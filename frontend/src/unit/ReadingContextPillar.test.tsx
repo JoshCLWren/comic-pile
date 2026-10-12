@@ -135,7 +135,7 @@ describe('ReadingContextPillar dependency and continuity edges', () => {
     expect(screen.queryByText('Your Reading Boundaries')).not.toBeInTheDocument()
   })
 
-  it('labels mixed-direction dependency edges as Dependency edges', async () => {
+  it('labels mixed-direction dependency edges as Prerequisites', async () => {
     const context: ReaderContextResponse = {
       ...baseContext,
       local_chain: {
@@ -170,7 +170,7 @@ describe('ReadingContextPillar dependency and continuity edges', () => {
     renderPillar(context)
 
     await waitFor(() =>
-      expect(screen.getByText('Dependency edges:')).toBeInTheDocument(),
+      expect(screen.getByText('Prerequisites:')).toBeInTheDocument(),
     )
   })
 

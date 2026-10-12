@@ -230,7 +230,10 @@ jobs:
           if [[ -n "${PR_REBASE_TOKEN:-}" ]]; then
             git remote set-url origin "https://x-access-token:${PR_REBASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           fi
-          git push -u origin "$branch"
+          # The branch is regenerated from main on every run; workers may have
+          # advanced it, so replace it with an explicit lease on the observed tip.
+          remote_sha="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
+          git push -u --force-with-lease="refs/heads/$branch:${remote_sha}" origin "$branch"
           body="$(python3 - <<'PY'
           import json
           import os

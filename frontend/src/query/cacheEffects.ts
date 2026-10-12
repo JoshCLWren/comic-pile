@@ -258,6 +258,9 @@ export async function applyCommittedReadingPlan(
     queryKey: queryKeys.readingPlans.list(),
     exact: true,
   })
+  await client.invalidateQueries({
+    queryKey: queryKeys.readingPlans.reader(plan.id),
+  })
   await invalidateAfterQueueMovement(client)
 }
 
