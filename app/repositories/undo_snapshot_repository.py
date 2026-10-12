@@ -528,6 +528,11 @@ class UndoSnapshotRepository:
     ) -> Event:
         """Create an undo event for a snapshot.
 
+        Both thread references are preserved from the undone event: roll
+        targets live in ``selected_thread_id`` while other types use
+        ``thread_id``. Dropping the roll reference left undo-of-roll cards
+        without a thread on the history timeline (#3265).
+
         Args:
             session_id: Session ID to create event for.
             snapshot: Snapshot being undone.
@@ -550,6 +555,7 @@ class UndoSnapshotRepository:
             type="undo",
             session_id=session_id,
             thread_id=target_event.thread_id if target_event else None,
+            selected_thread_id=target_event.selected_thread_id if target_event else None,
             die=target_event.die_after if target_event else None,
             die_after=restored_die,
         )

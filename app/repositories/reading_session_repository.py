@@ -360,6 +360,44 @@ async def null_event_thread_references(db: AsyncSession, thread_ids: set[int]) -
     )
 
 
+async def snapshot_thread_titles(db: AsyncSession, reading_session_id: int) -> dict[int, str]:
+    """Recover last-known thread titles from a session's snapshots.
+
+    Snapshots persist each thread's title at capture time, so a thread that
+    was later deleted can still be named on the history timeline. Delta
+    snapshots only cover rated threads, so recovery is best-effort: threads
+    with no snapshot coverage are simply absent from the mapping.
+
+    Args:
+        db: Database session.
+        reading_session_id: Session whose snapshots should be searched.
+
+    Returns:
+        Mapping of thread ID to its last-known title.
+    """
+    result = await db.execute(
+        select(Snapshot.thread_states).where(Snapshot.session_id == reading_session_id)
+    )
+    titles: dict[int, str] = {}
+    for (states,) in result.all():
+        if not isinstance(states, dict):
+            continue
+        for key, state in states.items():
+            if isinstance(key, str) and key.startswith("_"):
+                continue
+            try:
+                thread_id = int(key)
+            except (TypeError, ValueError):
+                continue
+            if thread_id in titles:
+                continue
+            if isinstance(state, dict):
+                title = state.get("title")
+                if isinstance(title, str) and title.strip():
+                    titles[thread_id] = title
+    return titles
+
+
 async def restore_reading_session_start(
     db: AsyncSession,
     session: ReadingSession,

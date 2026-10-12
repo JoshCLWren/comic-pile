@@ -296,6 +296,13 @@ class EventDetail(BaseModel):
     type: str
     timestamp: datetime
     thread_title: str | None
+    thread_deleted: bool = Field(
+        default=False,
+        description=(
+            "True when the event referenced a thread that no longer exists. "
+            "The title is the last known snapshot title when recoverable."
+        ),
+    )
     issue_number: str | None = Field(
         default=None,
         description="Denormalized issue number captured at event time",

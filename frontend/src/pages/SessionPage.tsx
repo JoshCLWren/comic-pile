@@ -15,6 +15,7 @@ type DisplayEvent = {
   timestamp: string
   type: string
   thread_title?: string | null
+  thread_deleted?: boolean | null
   description?: string | null
   rating?: number | null
   result?: number | null
@@ -113,10 +114,26 @@ function EventRecord({ event }: { event: DisplayEvent }) {
         </span>
       </div>
       <p className="min-w-0 break-words text-sm font-bold text-stone-200">
-        {event.thread_title || 'Thread unavailable'}
-        {event.thread_title && event.issue_number ? (
-          <span className="text-stone-400"> · #{event.issue_number}</span>
-        ) : null}
+        {event.thread_title ? (
+          <>
+            {event.thread_title}
+            {event.issue_number ? (
+              <span className="text-stone-400"> · #{event.issue_number}</span>
+            ) : null}
+            {event.thread_deleted ? (
+              <span className="text-stone-400"> (deleted)</span>
+            ) : null}
+          </>
+        ) : event.thread_deleted ? (
+          <>
+            Deleted thread
+            {event.issue_number ? (
+              <span className="text-stone-400"> · #{event.issue_number}</span>
+            ) : null}
+          </>
+        ) : (
+          'Thread unavailable'
+        )}
       </p>
       {metadata.length > 0 ? (
         <ul className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-stone-400" aria-label="Event details">

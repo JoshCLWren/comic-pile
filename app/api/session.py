@@ -18,7 +18,6 @@ from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
     CorrectionSheetExamplesResponse,
-    EventDetail,
     SessionDetailsResponse,
     SessionHistoryListResponse,
     SessionListItem,
@@ -32,7 +31,7 @@ from app.schemas.session import (
     build_session_intent_state,
 )
 from app.services.ownership import get_owned_session_or_404
-from app.services.session_response import build_ladder_path
+from app.services.session_response import build_ladder_path, build_session_event_details
 from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
 from app.services.session_history_projection import project_session_history_events
@@ -47,34 +46,6 @@ router = APIRouter(tags=["sessions"])
 #: is never mounted under bare ``/api/*`` (see docs/API.md and the convention
 #: comment in app/main.py).
 v1_router = APIRouter(tags=["sessions"])
-
-
-EVENT_TYPE_DESCRIPTIONS: dict[str, str] = {
-    "skip": "Skipped",
-    "rolled_but_skipped": "Skipped",
-    "complete": "Completed",
-    "completion": "Completed",
-    "reorder": "Reordered",
-    "undo": "Restored",
-    "restore": "Restored",
-    "move": "Moved",
-    "shuffle": "Shuffled",
-    "roll": "Rolled",
-    "rate": "Rated",
-    "unsnooze": "Unsnoozed",
-}
-
-
-def _event_word(event_type: str) -> str:
-    """Return a reader-friendly verb for a session event type.
-
-    Args:
-        event_type: Raw event type identifier.
-
-    Returns:
-        Human-readable past-tense verb for timeline descriptions.
-    """
-    return EVENT_TYPE_DESCRIPTIONS.get(event_type, event_type.replace("_", " ").capitalize())
 
 
 def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
@@ -783,77 +754,7 @@ async def get_session_details(
         threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
         threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
 
-    formatted_events = []
-    for event in events:
-        thread_title = None
-        if event.type == "roll":
-            thread_id = event.selected_thread_id
-        else:
-            thread_id = event.thread_id
-
-        if thread_id:
-            thread = threads_dict.get(thread_id)
-            if thread:
-                thread_title = thread.title
-
-        event_data = EventDetail(
-            id=event.id,
-            type=event.type,
-            timestamp=event.timestamp,
-            thread_title=thread_title,
-            issue_number=event.issue_number,
-        )
-
-        if event.type == "roll":
-            event_data.die = event.die
-            event_data.result = event.result
-            event_data.selection_method = event.selection_method
-            event_data.description = f"Selected {thread_title or 'a thread'}"
-        elif event.type == "rate":
-            event_data.rating = event.rating
-            event_data.issues_read = event.issues_read
-            event_data.queue_move = event.queue_move
-            event_data.die_after = event.die_after
-            parts = ["Rated"]
-            if thread_title:
-                parts.append(thread_title)
-            if event.issues_read:
-                noun = "issue" if event.issues_read == 1 else "issues"
-                parts.append(f"{event.issues_read} {noun} read")
-            if event.rating is not None:
-                parts.append(f"{event.rating:.1f}/5")
-            event_data.description = " · ".join(parts)
-        elif event.type == "snooze":
-            event_data.die = event.die
-            event_data.die_after = event.die_after
-            event_data.description = f"Snoozed {thread_title or 'thread'}"
-        elif event.type == "unsnooze":
-            event_data.die = event.die
-            event_data.die_after = event.die_after
-            event_data.description = f"Unsnoozed {thread_title or 'thread'}"
-        elif event.type == "skip" or event.type == "rolled_but_skipped":
-            event_data.die = event.die
-            event_data.die_after = event.die_after
-            word = _event_word(event.type)
-            event_data.description = f"{word} {thread_title or 'thread'}"
-        elif event.type == "move":
-            event_data.die = event.die
-            event_data.die_after = event.die_after
-            event_data.description = f"Moved {thread_title or 'thread'}"
-        elif event.type == "shuffle":
-            event_data.die = event.die
-            event_data.die_after = event.die_after
-            event_data.description = f"Shuffled {thread_title or 'thread'}"
-        elif event.type in ("reorder", "undo", "restore"):
-            word = _event_word(event.type)
-            desc_parts = [f"{word} {thread_title or 'thread'}"]
-            if event.rating is not None:
-                desc_parts.append(f"rating {event.rating:.1f}")
-            if event.issue_number:
-                desc_parts.append(f"#{event.issue_number}")
-            event_data.description = " · ".join(desc_parts)
-
-        formatted_events.append(event_data)
+    formatted_events = await build_session_event_details(db, session_id, events, threads_dict)
 
     return SessionDetailsResponse(
         session_id=session_obj.id,
