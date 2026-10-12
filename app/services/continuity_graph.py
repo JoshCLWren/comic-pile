@@ -85,9 +85,7 @@ def _validate_convergence_rule(rule: ContinuityRule, snapshot: GraphSnapshot) ->
         snapshot: The loaded continuity graph snapshot.
 
     Raises:
-        ValueError: If the convergence targets are malformed, duplicated, or
-            use an unknown node type. Missing issue or crossover endpoints are
-            skipped because they cannot be enforced.
+        ValueError: If the convergence targets are malformed or reference unknown nodes.
     """
     if rule.satisfaction_type != "converged" or rule.convergence_targets is None:
         return
@@ -104,10 +102,12 @@ def _validate_convergence_rule(rule: ContinuityRule, snapshot: GraphSnapshot) ->
         seen.add((target_type, target_id))
         if target_type == "issue":
             if target_id not in snapshot.issues:
-                continue
+                raise ValueError(f"Convergence target issue {target_id} is unknown (rule {rule.id})")
         elif target_type == "crossover":
             if target_id not in snapshot.groups:
-                continue
+                raise ValueError(
+                    f"Convergence target crossover {target_id} is unknown (rule {rule.id})"
+                )
         else:
             raise ValueError(f"Unknown convergence target type '{target_type}' (rule {rule.id})")
 
@@ -351,20 +351,12 @@ def is_read(issue_id: int, snapshot: GraphSnapshot) -> bool:
 
 
 def _evaluate_rule(rule: ContinuityRule, snapshot: GraphSnapshot) -> ContinuityBlocker | None:
-    """Return a blocker when one direct rule's satisfaction policy is not met.
-
-    Rules whose source or target issue no longer exists cannot be enforced and
-    must not block Roll, chain traversal, or rule APIs.
-    """
-    if rule.target_type == "issue" and rule.target_id not in snapshot.issues:
-        return None
+    """Return a blocker when one direct rule's satisfaction policy is not met."""
     causing_issue_ids: list[int] = []
     causing_member_issue_ids: list[int] = []
 
     if rule.satisfaction_type == "item_read":
         if rule.source_type == "issue":
-            if rule.source_id not in snapshot.issues:
-                return None
             causing_issue_ids = [] if is_read(rule.source_id, snapshot) else [rule.source_id]
         else:
             member_ids = group_issue_ids(rule.source_id, snapshot)
@@ -378,8 +370,6 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: GraphSnapshot) -> ContinuityB
                 issue_id for issue_id in member_ids if not is_read(issue_id, snapshot)
             ]
         else:
-            if rule.source_id not in snapshot.issues:
-                return None
             causing_issue_ids = [] if is_read(rule.source_id, snapshot) else [rule.source_id]
     elif rule.satisfaction_type == "checkpoint":
         checkpoint_id = rule.checkpoint_issue_id
@@ -391,8 +381,6 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: GraphSnapshot) -> ContinuityB
             target_type = str(target_info["type"])
             target_id = int(target_info["id"])
             if target_type == "issue":
-                if target_id not in snapshot.issues:
-                    continue
                 if not is_read(target_id, snapshot):
                     causing_issue_ids.append(target_id)
             elif target_type == "crossover":

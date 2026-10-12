@@ -7,14 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.continuity_chains as chains
 from app.continuity_chains import resolve_continuity_chains
+from app.services.continuity_graph import SNAPSHOT_SESSION_KEY, load_snapshot as _load_snapshot
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
-from app.services.continuity_graph import (
-    SNAPSHOT_SESSION_KEY,
-    issue_readiness,
-    load_snapshot as _load_snapshot,
-)
 from tests.conftest import get_or_create_user_async
 
 
@@ -355,27 +351,3 @@ async def test_large_graph_query_count_does_not_grow_with_node_count(
     assert snapshot.query_count == 6
     # Rows loaded grows with data but query count is bounded
     assert snapshot.rows_loaded >= 52  # 50 issues + target + at least 1 thread
-
-
-@pytest.mark.asyncio
-async def test_dangling_rule_does_not_block_issue_readiness(
-    async_db: AsyncSession,
-) -> None:
-    """A rule whose source issue is gone must not block the surviving target."""
-    user = await get_or_create_user_async(async_db)
-    target = await _make_issue(async_db, user_id=user.id, suffix="dangling-ready")
-    async_db.add(
-        _item_rule(user_id=user.id, source_id=999999, target_id=target.id)
-    )
-    await async_db.commit()
-
-    snapshot = await _load_snapshot(async_db, user.id)
-    assert issue_readiness(target.id, snapshot) == []
-
-    result = await resolve_continuity_chains(
-        async_db,
-        user_id=user.id,
-        node_type="issue",
-        node_id=target.id,
-    )
-    assert result.direct_blockers == ()
