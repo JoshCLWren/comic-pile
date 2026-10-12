@@ -6,11 +6,16 @@ numbers to an existing series, those issues belong at their natural position
 rather than at the end of the series.
 
 Automatic placement is only applied when it is unambiguous: every number
-involved must be an ordinary positive integer, and the series must already read
-in ascending numeric order. Annuals, decimals and fractions, named specials,
-``0``, padded numbers such as ``007``, and any series the reader reordered by
-hand keep their existing canonical order so the reader can correct them
-explicitly through the thread reorder path instead.
+involved must be an ordinary positive integer. Annuals, decimals and
+fractions, named specials, ``0``, and padded numbers such as ``007`` keep
+their existing canonical order so the reader can correct them explicitly
+through the thread reorder path instead.
+
+Ordinary numeric series are seated from the set of numbers, even when an
+earlier append left the thread out of ascending order. Roll then follows
+that same ``Issue.position`` series progression plus explicitly recorded
+checkpoints; this helper does not invent a second ordering system or
+dependency edges.
 
 This module is pure so both the placement decision and its tests stay free of
 database and request concerns.
@@ -48,7 +53,9 @@ def natural_issue_order(
     """Merge new issue numbers into a series' natural order.
 
     The result depends only on the set of numbers, so the order they were typed
-    in never changes the saved thread order.
+    in never changes the saved thread order. Existing position order is ignored
+    for ordinary numbers so a previous append cannot force later inserts to the
+    end of the thread.
 
     Args:
         existing_issue_numbers: Issue numbers already in the thread, in canonical
@@ -62,27 +69,17 @@ def natural_issue_order(
         canonical order must be preserved instead.
     """
     ordered_numbers: list[tuple[int, str]] = []
-    previous_value: int | None = None
 
     for issue_number in existing_issue_numbers:
         value = parse_ordinary_issue_number(issue_number)
         if value is None:
             return None
-
-        # A series that does not already read in ascending numeric order has
-        # been ordered deliberately, so it must not be re-sorted behind the
-        # reader's back.
-        if previous_value is not None and value <= previous_value:
-            return None
-
-        previous_value = value
         ordered_numbers.append((value, issue_number))
 
     for issue_number in new_issue_numbers:
         value = parse_ordinary_issue_number(issue_number)
         if value is None:
             return None
-
         ordered_numbers.append((value, issue_number))
 
     ordered_numbers.sort(key=lambda entry: entry[0])

@@ -29,6 +29,22 @@ async def get_thread(db: AsyncSession, thread_id: int) -> Thread | None:
     return await db.get(Thread, thread_id)
 
 
+async def lock_thread(db: AsyncSession, thread_id: int) -> Thread | None:
+    """Lock one thread row for a reviewed repair or other writer.
+
+    Args:
+        db: Database session.
+        thread_id: Primary key of the thread.
+
+    Returns:
+        The locked thread, or None when it does not exist.
+    """
+    result = await db.execute(
+        select(Thread).where(Thread.id == thread_id).with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 async def find_owned(
     db: AsyncSession, user_id: int, thread_id: int, *, for_update: bool = False
 ) -> Thread | None:
@@ -336,6 +352,44 @@ async def delete_threads_by_ids(db: AsyncSession, thread_ids: set[int], user_id:
     await db.execute(
         delete(Thread).where(Thread.id.in_(thread_ids)).where(Thread.user_id == user_id)
     )
+
+
+async def fetch_threads_for_natural_order_scan(
+    db: AsyncSession,
+    *,
+    user_id: int | None = None,
+    thread_id: int | None = None,
+    limit: int | None = None,
+) -> list[Thread]:
+    """Return issue-tracking threads that own at least one issue row.
+
+    The reviewed natural-order repair preflight uses this scan. It does not
+    infer dependencies or change read state.
+
+    Args:
+        db: Database session.
+        user_id: Optional owner filter for a bounded, per-user pass.
+        thread_id: Optional single-thread filter.
+        limit: Optional maximum number of threads to return.
+
+    Returns:
+        Matching threads ordered by ID.
+    """
+    query = (
+        select(Thread)
+        .where(Thread.total_issues.is_not(None))
+        .where(Thread.id.in_(select(Issue.thread_id).distinct()))
+        .order_by(Thread.id)
+    )
+    if user_id is not None:
+        query = query.where(Thread.user_id == user_id)
+    if thread_id is not None:
+        query = query.where(Thread.id == thread_id)
+    if limit is not None:
+        query = query.limit(limit)
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
 
 
 async def fetch_threads_with_drifted_issue_tracking(

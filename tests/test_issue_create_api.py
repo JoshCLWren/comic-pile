@@ -818,10 +818,10 @@ async def test_create_issues_natural_placement_is_deterministic_for_ranges(
     assert [issue.issue_number for issue in issues_in_order] == ["1", "2", "33", "34", "35"]
     assert [issue.position for issue in issues_in_order] == [1, 2, 3, 4, 5]
 
-async def test_create_issues_preserves_manual_series_order(
+async def test_create_issues_restores_natural_order_on_messy_thread(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """A series the reader reordered by hand is not re-sorted on new additions."""
+    """Ordinary additions reseat a previously appended series into natural order."""
     user = await get_or_create_user_async(async_db)
 
     thread = Thread(
@@ -838,7 +838,7 @@ async def test_create_issues_preserves_manual_series_order(
     async_db.add(thread)
     await async_db.flush()
 
-    # Deliberately non-ascending: the reader ordered 3, 1, 2 by hand.
+    # Deliberately non-ascending: an earlier append left 3, 1, 2.
     issues = [
         Issue(thread_id=thread.id, issue_number="3", position=1, status="unread"),
         Issue(thread_id=thread.id, issue_number="1", position=2, status="unread"),
@@ -863,13 +863,13 @@ async def test_create_issues_preserves_manual_series_order(
         select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
     )
     issues_in_order = result.scalars().all()
-    assert [issue.issue_number for issue in issues_in_order] == ["3", "1", "2", "4"]
+    assert [issue.issue_number for issue in issues_in_order] == ["1", "2", "3", "4"]
     assert [issue.position for issue in issues_in_order] == [1, 2, 3, 4]
 
     await async_db.refresh(thread)
     assert thread.total_issues == 4
     assert thread.issues_remaining == 4
-    assert thread.next_unread_issue_id == issues[0].id
+    assert thread.next_unread_issue_id == issues_in_order[0].id
 
 
 async def test_create_issues_auto_maps_to_comicvine(

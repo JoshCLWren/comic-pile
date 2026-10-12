@@ -1,7 +1,8 @@
 """Shared issue insertion utilities.
 
 This module contains the natural-order insertion logic shared between
-the issue creation path and provider issue adoption to avoid circular imports.
+the issue creation path, CBL adoption, and provider issue adoption to
+avoid circular imports.
 """
 
 import logging
@@ -72,6 +73,40 @@ async def _insert_new_issues_in_natural_order(
     return new_issues
 
 
+async def create_issues_in_natural_order(
+    db: AsyncSession,
+    thread_id: int,
+    issue_numbers: list[str],
+) -> list[Issue] | None:
+    """Create unread issues through the shared natural-order path.
+
+    Args:
+        db: Database session.
+        thread_id: Thread receiving the issues.
+        issue_numbers: Issue numbers to create, already filtered against the
+            existing numbers.
+
+    Returns:
+        The newly created issues in persisted position order, or ``None`` when
+        automatic placement is ambiguous (irregular numbering) and the caller
+        must preserve the existing canonical order.
+    """
+    if not issue_numbers:
+        return []
+
+    existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
+    existing_issue_numbers = [row[1] for row in existing_rows]
+    natural_order = natural_issue_order(existing_issue_numbers, issue_numbers)
+    if natural_order is None:
+        return None
+
+    created = await _insert_new_issues_in_natural_order(
+        db, thread_id, issue_numbers, natural_order
+    )
+    await db.flush()
+    return created
+
+
 async def create_issue_in_natural_order(
     db: AsyncSession,
     thread_id: int,
@@ -79,9 +114,9 @@ async def create_issue_in_natural_order(
 ) -> Issue:
     """Create one unread issue through the existing natural-order path.
 
-    When automatic placement is ambiguous (irregular numbering or a
-    hand-reordered series), the issue is appended after the current last
-    position, mirroring the append-only fallback of the issue creation path.
+    When automatic placement is ambiguous (irregular numbering), the issue is
+    appended after the current last position, mirroring the append-only
+    fallback of the issue creation path.
 
     Args:
         db: Database session.
@@ -91,16 +126,11 @@ async def create_issue_in_natural_order(
     Returns:
         The newly created issue.
     """
-    existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
-    existing_issue_numbers = [row[1] for row in existing_rows]
-    natural_order = natural_issue_order(existing_issue_numbers, [issue_number])
-    if natural_order is not None:
-        created = await _insert_new_issues_in_natural_order(
-            db, thread_id, [issue_number], natural_order
-        )
-        await db.flush()
+    created = await create_issues_in_natural_order(db, thread_id, [issue_number])
+    if created is not None:
         return created[0]
 
+    existing_rows = await issue_repository.locked_issue_rows(db, thread_id)
     next_position = max((row[2] for row in existing_rows), default=0) + 1
     issue = Issue(
         thread_id=thread_id,
