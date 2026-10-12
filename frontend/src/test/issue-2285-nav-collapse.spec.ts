@@ -103,6 +103,9 @@ test.describe('Authenticated navigation collapse (#2285)', () => {
     await expect
       .poll(async () => (await shellGeometry(page)).mainWidth)
       .toBeLessThan(collapsedGeometry.mainWidth)
+    await expect
+      .poll(async () => (await shellGeometry(page)).navWidth)
+      .toBeGreaterThanOrEqual(EXPECTED_EXPANDED_RIGHT - TOLERANCE)
 
     const expandedGeometry = await shellGeometry(page)
     expect(approx(expandedGeometry.navWidth, EXPECTED_EXPANDED_RIGHT)).toBe(true)
@@ -123,6 +126,9 @@ test.describe('Authenticated navigation collapse (#2285)', () => {
     await expect
       .poll(async () => (await shellGeometry(page)).mainWidth)
       .toBeGreaterThan(expandedGeometry.mainWidth)
+    await expect
+      .poll(async () => (await shellGeometry(page)).navWidth)
+      .toBeLessThanOrEqual(EXPECTED_COLLAPSED_RIGHT + TOLERANCE)
 
     const collapsedAgain = await shellGeometry(page)
     expect(approx(collapsedAgain.navWidth, EXPECTED_COLLAPSED_RIGHT)).toBe(true)

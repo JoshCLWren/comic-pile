@@ -123,7 +123,7 @@ export function useContinuityPlannerEditor({
       setPlanHydrated(true)
       return
     }
-    if (planLoaded && groupsLoaded && !planHydrated && planData) {
+    if (planLoaded && groupsLoaded && !threadsPending && !planHydrated && planData) {
       const loadedLanes = (
         planData.lanes.length > 0
           ? planData.lanes

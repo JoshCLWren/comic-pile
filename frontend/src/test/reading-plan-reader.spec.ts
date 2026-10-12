@@ -93,17 +93,35 @@ test.describe('Reading Plan reader surface', () => {
       await expect(page.getByTestId('reading-plan-reader')).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Reader AoA Plan' })).toBeVisible()
       await expect(page.getByTestId('plan-progress')).toContainText('0%')
-      await expect(page.getByText('Informational')).toBeVisible()
+      await expect(page.getByText('Informational', { exact: true })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Available now' })).toBeVisible()
       await expect(page.getByTestId('available-now')).toContainText('Reader X-Men')
       await expect(page.getByRole('heading', { name: 'Blocked by' })).toBeVisible()
       await expect(page.getByTestId('blocked-next')).toContainText('Blocked by Reader X-Men: #1')
       await expect(page.getByRole('button', { name: 'Edit plan' })).toBeVisible()
       await expect(page.getByRole('link', { name: /crossovers page/i })).toHaveCount(0)
+      await page.screenshot({
+        path: `/opt/cursor/artifacts/screenshots/reading-plan-reader-${viewport.label}.png`,
+        fullPage: true,
+      })
     }
 
     await page.goto('/crossovers', { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveURL(/\/continuity-plans$/)
     await expect(page.getByRole('heading', { name: 'Reading Plans' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add from CBL' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Browse CBL sources' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Crossover events' })).toBeVisible()
+    for (const viewport of [
+      { width: 390, height: 844, label: 'phone' },
+      { width: 768, height: 1024, label: 'tablet' },
+      { width: 1280, height: 800, label: 'desktop' },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+      await page.screenshot({
+        path: `/opt/cursor/artifacts/screenshots/reading-plans-index-${viewport.label}.png`,
+        fullPage: true,
+      })
+    }
   })
 })

@@ -98,12 +98,12 @@ test.describe('Continuity plan checkpoint and convergence', () => {
     await expect(page.getByTestId('lane-lane-b')).toBeVisible()
 
     // Verify checkpoint badge is visible on the second node
-    await expect(page.getByText('Checkpoint')).toBeVisible()
+    await expect(page.getByText('Checkpoint', { exact: true })).toBeVisible()
 
     // Reload and verify persistence
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('lane-lane-a')).toBeVisible()
-    await expect(page.getByText('Checkpoint')).toBeVisible()
+    await expect(page.getByText('Checkpoint', { exact: true })).toBeVisible()
   })
 
   test('downstream issue remains blocked until convergence gate prerequisites are met', async ({ authenticatedPage }) => {
@@ -198,16 +198,16 @@ test.describe('Continuity plan checkpoint and convergence', () => {
     await expect(page.getByText('Convergence')).not.toBeVisible()
 
     // Open convergence editor on b-1
-    await page.getByRole('button', { name: /Edit convergence gate for Gate Edit #2/i }).click()
+    await page.getByTestId('lane-lane-b').getByRole('button', { name: /Edit convergence gate/ }).click()
     await expect(page.getByTestId('convergence-editor-b-1')).toBeVisible()
 
     // Select a-1 as a convergence target
-    const checkbox = page.getByTestId('convergence-editor-b-1').getByText('Gate Edit #1')
+    const checkbox = page.getByTestId('convergence-editor-b-1').getByRole('checkbox').first()
     await checkbox.click()
 
     // Save
     await page.getByRole('button', { name: 'Save plan' }).click()
-    await expect(page.getByRole('status', { name: 'Saved' })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
 
     // Reload and verify convergence persists
     await page.reload({ waitUntil: 'domcontentloaded' })
@@ -254,11 +254,11 @@ test.describe('Continuity plan checkpoint and convergence', () => {
     await expect(page.getByText('Convergence (1)')).toBeVisible()
 
     // Open convergence editor on b-1
-    await page.getByRole('button', { name: /Edit convergence gate for Gate Remove #2/i }).click()
+    await page.getByTestId('lane-lane-b').getByRole('button', { name: /Edit convergence gate/ }).click()
     await expect(page.getByTestId('convergence-editor-b-1')).toBeVisible()
 
     // Unselect a-1
-    const checkbox = page.getByTestId('convergence-editor-b-1').getByText('Gate Remove #1')
+    const checkbox = page.getByTestId('convergence-editor-b-1').getByRole('checkbox').first()
     await checkbox.click()
 
     // Done
@@ -266,7 +266,7 @@ test.describe('Continuity plan checkpoint and convergence', () => {
 
     // Save
     await page.getByRole('button', { name: 'Save plan' }).click()
-    await expect(page.getByRole('status', { name: 'Saved' })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
 
     // Verify no convergence badge
     await expect(page.getByText('Convergence')).not.toBeVisible()

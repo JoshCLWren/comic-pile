@@ -50,7 +50,7 @@ function IssueRow({ issue }: { issue: ReadingPlanReaderIssue }) {
         </p>
         <p className="truncate text-sm text-[var(--theme-text-muted)]">
           {issue.thread_title}
-          {isAvailable ? ' · Next unread issue ' : ' · Issue '}
+          {isAvailable ? ' · Next unread issue #' : ' · Issue #'}
           {issue.issue_number}
           {issue.is_checkpoint ? ' · Checkpoint' : ''}
         </p>

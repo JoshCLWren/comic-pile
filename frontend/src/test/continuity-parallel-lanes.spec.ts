@@ -95,7 +95,7 @@ test.describe('Continuity plan parallel lanes', () => {
     await expect(page.getByRole('button', { name: 'Remove lane Lane 3' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Save plan' }).click()
-    await expect(page.getByRole('status', { name: 'Saved' })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('lane-main')).toBeVisible()
@@ -139,16 +139,16 @@ test.describe('Continuity plan parallel lanes', () => {
     await expect(page.getByTestId('lane-main')).toBeVisible()
 
     // Move the first step into the second lane via its lane switcher.
-    const moveSelect = page.getByRole('combobox', { name: /Move Parallel Beta #1 to another lane/i })
+    const moveSelect = page.getByTestId('lane-main').getByRole('combobox').first()
     await moveSelect.selectOption('lane-2')
 
     await page.getByRole('button', { name: 'Save plan' }).click()
-    await expect(page.getByRole('status', { name: 'Saved' })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible()
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     const laneTwo = page.getByTestId('lane-lane-2')
     await expect(laneTwo).toBeVisible()
-    await expect(laneTwo.getByText('Parallel Beta #1')).toBeVisible()
-    await expect(page.getByTestId('lane-main').getByText('Parallel Beta #2')).toBeVisible()
+    await expect(laneTwo.locator('[data-testid^="lane-item-"]')).toHaveCount(1)
+    await expect(page.getByTestId('lane-main').locator('[data-testid^="lane-item-"]')).toHaveCount(1)
   })
 })

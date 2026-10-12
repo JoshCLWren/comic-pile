@@ -178,7 +178,7 @@ test.describe('Reading Plan CBL golden path', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByText('CBL-backed')).toBeVisible()
-    await expect(page.getByText(sourcePath)).toBeVisible()
+    await expect(page.getByText(sourcePath, { exact: true })).toBeVisible()
 
     const planId = Number(page.url().match(/\/continuity-plans\/(\d+)/)?.[1])
     expect(planId).toBeGreaterThan(0)
