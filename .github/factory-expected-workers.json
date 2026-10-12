@@ -62,6 +62,7 @@
   ],
   "retired_models": [
     "deepseek-v4-flash-free",
+    "exo-free",
     "fledge-alpha-free",
     "hy3-free",
     "inclusionai/ling-3.0-flash-fin:free",
