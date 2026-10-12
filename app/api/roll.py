@@ -10,8 +10,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import Text, func, or_, select
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import Text, and_, func, or_, select
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -1109,24 +1109,6 @@ async def roll_bootstrap(
         pending_thread_title=pending_thread_title,
     )
 
-    route_labels_subq = (
-        select(
-            func.array_agg(func.distinct(DependencyGroup.name)),
-        )
-        .select_from(DependencyGroupMembership)
-        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
-        .where(
-            or_(
-                DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
-            ),
-            DependencyGroup.user_id == user_id,
-        )
-        .correlate(Thread)
-        .scalar_subquery()
-        .cast(ARRAY(Text))
-    )
-
     pool_query = (
         select(
             Thread.id,
@@ -1134,15 +1116,30 @@ async def roll_bootstrap(
             Thread.format,
             Thread.next_unread_issue_id.label("issue_id"),
             Issue.issue_number,
-            route_labels_subq.label("route_labels"),
+            func.array_agg(func.distinct(DependencyGroup.name)).label("route_labels"),
         )
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .outerjoin(
+            DependencyGroupMembership,
+            or_(
+                DependencyGroupMembership.thread_id == Thread.id,
+                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+            ),
+        )
+        .outerjoin(
+            DependencyGroup,
+            and_(
+                DependencyGroup.id == DependencyGroupMembership.group_id,
+                DependencyGroup.user_id == user_id,
+            ),
+        )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
         .where(Thread.is_blocked.is_(False))
         .order_by(Thread.queue_position)
         .limit(die_size)
+        .group_by(Thread.id)
     )
 
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
