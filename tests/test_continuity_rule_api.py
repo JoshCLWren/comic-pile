@@ -530,3 +530,42 @@ async def test_put_rejects_converged_rule_with_crossover_prerequisite(
     fetched = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
     assert fetched.status_code == 200
     assert fetched.json()["satisfaction_type"] == "item_read"
+
+
+@pytest.mark.asyncio
+async def test_dangling_rules_are_readable_and_do_not_block_authoring(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Existing rules with missing issues stay readable and non-blocking."""
+    user = await get_or_create_user_async(async_db)
+    target = await _make_issue(async_db, user_id=user.id, suffix="dangling-target")
+    source = await _make_issue(async_db, user_id=user.id, suffix="valid-source")
+    new_target = await _make_issue(async_db, user_id=user.id, suffix="valid-target")
+    dangling = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=999999,
+        target_type="issue",
+        target_id=target.id,
+        satisfaction_type="item_read",
+    )
+    async_db.add(dangling)
+    await async_db.commit()
+
+    listed = await auth_client.get("/api/v1/continuity-rules/")
+    assert listed.status_code == 200, listed.text
+    assert any(rule["id"] == dangling.id for rule in listed.json())
+
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{dangling.id}")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["source_id"] == 999999
+    assert fetched.json()["target_id"] == target.id
+
+    created = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", source.id, "issue", new_target.id),
+    )
+    assert created.status_code == 201, created.text
+
+    deleted = await auth_client.delete(f"/api/v1/continuity-rules/{dangling.id}")
+    assert deleted.status_code == 204, deleted.text

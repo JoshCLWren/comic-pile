@@ -3,11 +3,14 @@
 The migration persists one canonical Dependency edge per rule-native
 ContinuityRule (item_read directly, converged expanded per prerequisite),
 links edges to their owning Reading Plans with ownership validation, and
-aborts on any rule that cannot compile to issue-level edges.
+aborts on genuinely invalid rows (cycles, cross-user issues, non-issue
+endpoints). Rules whose source or target issue no longer exists are skipped
+and left unchanged.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import UTC, datetime
 
@@ -27,6 +30,7 @@ from app.services.canonical_constraint_compiler import (
     BACKFILL_EDGE_NOTE_PREFIX,
     EDGE_NOTE_PREFIX,
 )
+from comic_pile.dependencies import _get_blocked_thread_ids_uncached
 
 
 def _sync_connection() -> sa.Connection:
@@ -260,29 +264,133 @@ async def test_backfill_creates_edges_and_validated_plan_links(
 
 
 @pytest.mark.asyncio
-async def test_validation_aborts_on_dangling_rule(_isolated_migration_data: AsyncSession) -> None:
-    """A rule referencing a missing issue aborts the migration with its ID."""
+async def test_backfill_skips_dangling_rule_and_leaves_it_unchanged(
+    _isolated_migration_data: AsyncSession,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A dangling rule no longer aborts deploy; valid siblings still compile.
+
+    Production deploy of c25530000001 aborted when six ContinuityRules
+    referenced deleted issues. Those rows cannot be enforced, so the backfill
+    must skip them, log their ids, and leave the ContinuityRule rows untouched.
+    """
     db = _isolated_migration_data
 
     user = await _user(db, "cutover-dangling-user")
-    _, (a1, _) = await _thread_with_issues(db, user.id, "Delta", ["1", "2"])
-    bad = ContinuityRule(
+    source_thread, (valid_source,) = await _thread_with_issues(
+        db, user.id, "Delta Source", ["1"]
+    )
+    target_thread, (valid_target,) = await _thread_with_issues(
+        db, user.id, "Delta Target", ["1"]
+    )
+    dangling_target_thread, (dangling_target,) = await _thread_with_issues(
+        db, user.id, "Delta Dangling Target", ["1"]
+    )
+    dangling_source_thread, (dangling_source,) = await _thread_with_issues(
+        db, user.id, "Delta Dangling Source", ["1"]
+    )
+    valid = ContinuityRule(
         user_id=user.id,
         source_type="issue",
-        source_id=a1.id,
+        source_id=valid_source.id,
         target_type="issue",
-        target_id=999999,
+        target_id=valid_target.id,
         satisfaction_type="item_read",
     )
-    db.add(bad)
+    missing_source = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=999999,
+        target_type="issue",
+        target_id=dangling_target.id,
+        satisfaction_type="item_read",
+    )
+    missing_target = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=dangling_source.id,
+        target_type="issue",
+        target_id=999998,
+        satisfaction_type="item_read",
+    )
+    db.add_all([valid, missing_source, missing_target])
     await db.commit()
+    dangling_ids = {missing_source.id, missing_target.id}
+    dangling_source_fields = (
+        missing_source.id,
+        missing_source.source_id,
+        missing_source.target_id,
+        missing_source.satisfaction_type,
+        missing_source.note,
+    )
+    dangling_target_fields = (
+        missing_target.id,
+        missing_target.source_id,
+        missing_target.target_id,
+        missing_target.satisfaction_type,
+        missing_target.note,
+    )
 
     conn = _sync_connection()
     try:
-        with pytest.raises(RuntimeError, match="missing source or target issues"):
-            mig.validate_compilable_rules(conn)
+        with caplog.at_level(logging.WARNING, logger="app.services.canonical_backfill"):
+            skipped = mig.validate_compilable_rules(conn)
+        inserted, _skipped_existing = mig.backfill_item_read_edges(conn)
+        conn.commit()
     finally:
         conn.close()
+
+    assert dangling_ids <= set(skipped)
+    assert str(missing_source.id) in caplog.text
+    assert str(missing_target.id) in caplog.text
+    assert "missing source or target issues" in caplog.text
+    assert inserted == 1
+
+    edges = {
+        (source_issue_id, target_issue_id)
+        for source_issue_id, target_issue_id in await db.execute(
+            sa.select(Dependency.source_issue_id, Dependency.target_issue_id)
+        )
+    }
+    assert (valid_source.id, valid_target.id) in edges
+    assert (999999, dangling_target.id) not in edges
+    assert (dangling_source.id, 999998) not in edges
+
+    remaining_rules = {
+        rule_id: (source_id, target_id, satisfaction_type, note)
+        for rule_id, source_id, target_id, satisfaction_type, note in await db.execute(
+            sa.select(
+                ContinuityRule.id,
+                ContinuityRule.source_id,
+                ContinuityRule.target_id,
+                ContinuityRule.satisfaction_type,
+                ContinuityRule.note,
+            )
+        )
+    }
+    assert remaining_rules[dangling_source_fields[0]] == dangling_source_fields[1:]
+    assert remaining_rules[dangling_target_fields[0]] == dangling_target_fields[1:]
+
+    blocked = await _get_blocked_thread_ids_uncached(user.id, db)
+    assert target_thread.id in blocked
+    assert dangling_target_thread.id not in blocked
+    assert dangling_source_thread.id not in blocked
+    assert source_thread.id not in blocked
+
+    conn = _sync_connection()
+    try:
+        removed = mig.revert_backfilled_edges(conn)
+        conn.commit()
+    finally:
+        conn.close()
+    assert removed == 1
+    still_present = {
+        rule_id
+        for (rule_id,) in await db.execute(
+            sa.select(ContinuityRule.id).where(ContinuityRule.id.in_(dangling_ids))
+        )
+    }
+    assert still_present == dangling_ids
 
 
 @pytest.mark.asyncio

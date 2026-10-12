@@ -9,9 +9,11 @@ docs/READING_GRAPH_RUNTIME_AUDIT.md section 7 step 1):
 
 1. Validates that every rule-native ContinuityRule (no legacy_dependency_id
    mirror) compiles to issue-level Dependency edges, and that those edges
-   plus existing canonical Dependencies do not form a cycle. Anything that
-   cannot compile (or would cycle) aborts with the offending rule IDs
-   instead of silently dropping constraints or blocking threads forever.
+   plus existing canonical Dependencies do not form a cycle. Rules whose
+   source or target issue no longer exists are skipped, logged, and left
+   unchanged (they cannot be enforced). Genuinely ambiguous or invalid rows
+   (cycles, non-issue endpoints, cross-user references, unhandled types)
+   still abort with the offending rule IDs.
 2. Drops the Dependency -> ContinuityRule mirroring trigger before the
    backfill so backfilled edges are not claimed back into mirrored rules.
 3. Persists one canonical Dependency edge per rule-native item_read rule and
@@ -54,13 +56,24 @@ def upgrade() -> None:
     """Validate, drop the mirror trigger, backfill canonical edges, link plans."""
     bind = op.get_bind()
 
-    validate_compilable_rules(bind)
+    skipped_dangling = validate_compilable_rules(bind)
     drop_mirror_trigger(bind)
 
     item_inserted, item_existing = backfill_item_read_edges(bind)
     conv_inserted, conv_existing, conv_self_skipped = backfill_converged_edges(bind)
     links_created, links_skipped = link_plan_provenance(bind)
 
+    if skipped_dangling:
+        shown = ", ".join(str(rule_id) for rule_id in skipped_dangling[:50])
+        extra = (
+            f" (and {len(skipped_dangling) - 50} more)"
+            if len(skipped_dangling) > 50
+            else ""
+        )
+        print(
+            f"[c25530000001] WARNING: skipped {len(skipped_dangling)} rule(s) "
+            f"with missing source or target issues (left unchanged): {shown}{extra}"
+        )
     print(f"[c25530000001] item_read edges: {item_inserted} inserted, {item_existing} already present")
     print(
         f"[c25530000001] converged edges: {conv_inserted} inserted, "
