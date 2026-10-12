@@ -1115,17 +1115,29 @@ async def roll_bootstrap(
     derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
     effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
 
-    # Optimized route labels query - replace complex correlated subquery with a more efficient approach
+    # Optimized route labels query - aggregate thread-level and issue-level memberships per thread
+    thread_memberships_cte = (
+        select(
+            Thread.id.label("thread_id"),
+            DependencyGroup.name.label("group_name"),
+        )
+        .select_from(Thread)
+        .join(DependencyGroupMembership, or_(
+            DependencyGroupMembership.thread_id == Thread.id,
+            DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+        ))
+        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
+        .where(Thread.user_id == user_id)
+        .where(DependencyGroup.user_id == user_id)
+        .cte("thread_memberships_cte")
+    )
+
     route_labels_cte = (
         select(
-            DependencyGroupMembership.thread_id,
-            DependencyGroupMembership.issue_id,
-            func.array_agg(func.distinct(DependencyGroup.name)).label("route_labels"),
+            thread_memberships_cte.c.thread_id,
+            func.array_agg(func.distinct(thread_memberships_cte.c.group_name)).label("route_labels"),
         )
-        .select_from(DependencyGroupMembership)
-        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
-        .where(DependencyGroup.user_id == user_id)
-        .group_by(DependencyGroupMembership.thread_id, DependencyGroupMembership.issue_id)
+        .group_by(thread_memberships_cte.c.thread_id)
         .cte("route_labels_cte")
     )
 
@@ -1145,10 +1157,7 @@ async def roll_bootstrap(
             route_labels_cte.c.route_labels,
         )
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .outerjoin(route_labels_cte, or_(
-            route_labels_cte.c.thread_id == Thread.id,
-            route_labels_cte.c.issue_id == Thread.next_unread_issue_id,
-        ))
+        .outerjoin(route_labels_cte, route_labels_cte.c.thread_id == Thread.id)
         .where(Thread.user_id == user_id)
     )
 
