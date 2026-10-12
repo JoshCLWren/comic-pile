@@ -78,9 +78,9 @@ const DEFINITIONS: GlossaryTermDefinition[] = [
     def: 'A series you have read to the end. Finished series stay out of the queue until you add new issues — use the "Add back to queue" action to bring one back.',
   },
   {
-    term: 'Dependency rule',
-    def: 'A reading order rule: "read X before Y". Create or manage them via the Dependency Builder (open from a series\'s Queue card or from the dependency dialog inside an issue list). Deleting a single rule does not require editing an entire plan.',
-    aliases: ['dependency'],
+    term: 'Prerequisite',
+    def: 'A hard “read this first” requirement. The next unread issue stays out of Roll while any unread prerequisite remains. Source reading order is not a prerequisite by itself.',
+    aliases: ['dependency', 'dependency-rule'],
   },
   {
     term: 'Blocked',
@@ -92,12 +92,13 @@ const DEFINITIONS: GlossaryTermDefinition[] = [
     def: 'A named group of comics or issues that share one story. Membership labels the group so its continuity is easy to recognize across ComicPile — it does not create a reading block by itself.',
   },
   {
-    term: 'Continuity Plan',
-    def: 'A saved arrangement of issues, series, and crossovers in one or more reading lanes. Saving creates only the continuity rules you chose — informational plans create none, strict sequential plans create one per step (see Ordering mode).',
+    term: 'Reading Plan',
+    def: 'Your named reading project: membership, presentation order, optionality, source reading order, and any selected hard prerequisites. Progress comes from each comic’s read state everywhere it appears.',
+    aliases: ['continuity-plan'],
   },
   {
     term: 'Ordering mode',
-    def: 'What saving a plan commits to. Informational plans create no blocking rules and cannot block anything. Strict sequential plans require you to read each step before the next, compiling one blocking rule per step just like the Dependency Builder. Plan ordering never mixes with the Queue\'s issue-level Dependency Builder unless you choose strict sequential.',
+    def: 'Informational plans keep source reading order as a reference and add no hard blockers. Strict plans enforce selected hard prerequisites — source reading order is not a blocker by itself.',
   },
   {
     term: 'Lane',

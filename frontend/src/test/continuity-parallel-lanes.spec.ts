@@ -86,7 +86,7 @@ test.describe('Continuity plan parallel lanes', () => {
       ],
     )
 
-    await page.goto(`/continuity-plans/${planId}`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`/continuity-plans/${planId}/edit`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('lane-main')).toBeVisible()
     await expect(page.getByTestId('lane-lane-2')).toBeVisible()
 
@@ -135,7 +135,7 @@ test.describe('Continuity plan parallel lanes', () => {
       ],
     )
 
-    await page.goto(`/continuity-plans/${planId}`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`/continuity-plans/${planId}/edit`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('lane-main')).toBeVisible()
 
     // Move the first step into the second lane via its lane switcher.

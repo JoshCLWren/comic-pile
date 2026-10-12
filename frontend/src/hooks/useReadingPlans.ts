@@ -24,6 +24,14 @@ export function useReadingPlans() {
   })
 }
 
+export function useReadingPlanReader(planId: number | null) {
+  return useQuery({
+    queryKey: planId ? queryKeys.readingPlans.reader(planId) : [],
+    queryFn: () => continuityPlansApi.getReader(planId!),
+    enabled: planId != null,
+  })
+}
+
 export function useDeleteReadingPlan() {
   const client = useQueryClient()
   return useMutation({

@@ -24,7 +24,7 @@ function toBlockingMap(response: BatchBlockingInfoResponse) {
  *
  * Queue cards only need blocker names when they render their locked state, so
  * an in-flight, empty, or failed load degrades to the plain
- * "Blocked by dependency" tooltip instead of blocking rendering.
+ * "Blocked by a prerequisite" tooltip instead of blocking rendering.
  *
  * @param threadIds - Queue threads whose blocker names should be batched.
  * @param api - Injectable batch blocking-info client (defaults to the real

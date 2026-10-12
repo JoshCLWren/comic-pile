@@ -162,7 +162,7 @@ describe('ReadingOrderGroups', () => {
 
     renderGroups(17)
 
-    expect(screen.getByRole('heading', { name: 'Crossovers' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Crossover events' })).toBeInTheDocument()
     expect(screen.getByRole('list')).toBeInTheDocument()
     expect(screen.getByText('Bwa Haha-era Justice League')).toBeInTheDocument()
     expect(

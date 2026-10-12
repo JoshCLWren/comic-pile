@@ -207,11 +207,11 @@ describe('QueuePage crossover batch loading', () => {
 
     expect(await screen.findByRole('link', { name: 'Rotworld' })).toHaveAttribute(
       'href',
-      '/crossovers?group=11',
+      '/continuity-plans/events?group=11',
     )
     expect(screen.getByRole('link', { name: 'Night of the Owls' })).toHaveAttribute(
       'href',
-      '/crossovers?group=12',
+      '/continuity-plans/events?group=12',
     )
     // Still one request total, even though two cards display crossover tags.
     expect(listForThreads).toHaveBeenCalledTimes(1)

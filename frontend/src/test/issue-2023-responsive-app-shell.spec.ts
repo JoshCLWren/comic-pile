@@ -28,7 +28,7 @@ const ROUTES = [
   { path: '/', label: 'Roll' },
   { path: '/queue', label: 'Queue' },
   { path: '/history', label: 'History' },
-  { path: '/crossovers', label: 'Crossovers' },
+  { path: '/continuity-plans/events', label: 'Crossover events' },
   { path: '/continuity-plans', label: 'Reading plans' },
   { path: '/whats-new', label: "What's new" },
   { path: '/glossary', label: 'Glossary' },

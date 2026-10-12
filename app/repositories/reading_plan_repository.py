@@ -17,7 +17,9 @@ Lifecycle contract (``docs/READING_GRAPH_PERSISTENCE_DESIGN.md`` section 2):
 
 from __future__ import annotations
 
-from sqlalchemy import delete, func, select
+from dataclasses import dataclass
+
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
@@ -29,6 +31,41 @@ from app.models.reading_plan_membership import (
     ReadingPlanSource,
     ReadingPlanSourcePlacement,
 )
+from app.models.thread import Thread
+
+#: Historical CBL materialization notes are provenance, not hard blockers.
+_CBL_ORDER_NOTE_PREFIX = "cbl-order:"
+
+
+@dataclass(frozen=True, slots=True)
+class ReadingPlanIssueIdentity:
+    """One plan occurrence joined to its canonical Issue and owning Thread."""
+
+    occurrence_id: str
+    issue_id: int
+    lane_id: str
+    display_position: int
+    label: str | None
+    reader_role: str | None
+    reader_optional: bool | None
+    is_checkpoint: bool
+    source_metadata: dict[str, object] | None
+    issue_number: str
+    issue_status: str
+    thread_id: int
+    thread_title: str
+    thread_next_unread_issue_id: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class CanonicalIncomingBlocker:
+    """One unread canonical Dependency source targeting a plan Issue."""
+
+    target_issue_id: int
+    source_issue_id: int
+    source_issue_number: str
+    source_thread_id: int
+    source_thread_title: str
 
 
 async def replace_plan_issues(
@@ -375,3 +412,114 @@ async def count_distinct_read_issues(
         .where(ReadingPlanIssue.plan_id == plan_id, Issue.status == "read")
     )
     return int(result.scalar_one())
+
+
+async def list_plan_issue_identities(
+    db: AsyncSession, *, plan_id: int
+) -> list[ReadingPlanIssueIdentity]:
+    """Return plan occurrences joined to Issue and Thread display fields.
+
+    Args:
+        db: Database session.
+        plan_id: Plan to inspect.
+
+    Returns:
+        Occurrence rows ordered by lane then display position, each carrying
+        the canonical Issue identity used by the reader surface.
+    """
+    result = await db.execute(
+        select(
+            ReadingPlanIssue.occurrence_id,
+            ReadingPlanIssue.issue_id,
+            ReadingPlanIssue.lane_id,
+            ReadingPlanIssue.display_position,
+            ReadingPlanIssue.label,
+            ReadingPlanIssue.reader_role,
+            ReadingPlanIssue.reader_optional,
+            ReadingPlanIssue.is_checkpoint,
+            ReadingPlanIssue.source_metadata_json,
+            Issue.issue_number,
+            Issue.status,
+            Thread.id.label("thread_id"),
+            Thread.title.label("thread_title"),
+            Thread.next_unread_issue_id.label("thread_next_unread_issue_id"),
+        )
+        .join(Issue, Issue.id == ReadingPlanIssue.issue_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(ReadingPlanIssue.plan_id == plan_id)
+        .order_by(ReadingPlanIssue.lane_id, ReadingPlanIssue.display_position)
+    )
+    rows: list[ReadingPlanIssueIdentity] = []
+    for row in result.all():
+        source_metadata = row.source_metadata_json
+        rows.append(
+            ReadingPlanIssueIdentity(
+                occurrence_id=row.occurrence_id,
+                issue_id=row.issue_id,
+                lane_id=row.lane_id,
+                display_position=row.display_position,
+                label=row.label,
+                reader_role=row.reader_role,
+                reader_optional=row.reader_optional,
+                is_checkpoint=row.is_checkpoint,
+                source_metadata=source_metadata if isinstance(source_metadata, dict) else None,
+                issue_number=row.issue_number,
+                issue_status=row.status,
+                thread_id=row.thread_id,
+                thread_title=row.thread_title,
+                thread_next_unread_issue_id=row.thread_next_unread_issue_id,
+            )
+        )
+    return rows
+
+
+async def list_canonical_incoming_blockers(
+    db: AsyncSession, *, issue_ids: list[int]
+) -> list[CanonicalIncomingBlocker]:
+    """Return unread canonical Dependency sources targeting the given Issues.
+
+    Historical ``cbl-order:`` materialization notes are excluded: they record
+    source order, not hard prerequisites. Genuine Dependency edges remain the
+    runtime blocking authority.
+
+    Args:
+        db: Database session.
+        issue_ids: Target Issue IDs to inspect.
+
+    Returns:
+        Incoming blocker rows ordered by target then source Issue ID.
+    """
+    if not issue_ids:
+        return []
+    source_issue = Issue.__table__.alias("source_issue")
+    source_thread = Thread.__table__.alias("source_thread")
+    result = await db.execute(
+        select(
+            Dependency.target_issue_id,
+            source_issue.c.id,
+            source_issue.c.issue_number,
+            source_thread.c.id,
+            source_thread.c.title,
+        )
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(Dependency.target_issue_id.in_(issue_ids))
+        .where(source_issue.c.status != "read")
+        .where(
+            or_(
+                Dependency.note.is_(None),
+                ~Dependency.note.startswith(_CBL_ORDER_NOTE_PREFIX),
+            )
+        )
+        .order_by(Dependency.target_issue_id, source_issue.c.id)
+    )
+    return [
+        CanonicalIncomingBlocker(
+            target_issue_id=row[0],
+            source_issue_id=row[1],
+            source_issue_number=row[2],
+            source_thread_id=row[3],
+            source_thread_title=row[4],
+        )
+        for row in result.all()
+    ]

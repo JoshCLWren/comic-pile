@@ -137,7 +137,7 @@ test.describe('Reading Plan CBL golden path', () => {
     await expect(page.getByRole('heading', { name: 'New Reading Plan' })).toBeVisible()
 
     await page.getByLabel('Plan name').fill(`Golden Path Browser Plan ${fixtureSuffix}`)
-    await page.getByRole('radio', { name: /Strict sequential/i }).check()
+    await page.getByRole('radio', { name: /^Strict/i }).check()
     await page.getByRole('button', { name: 'Save plan' }).click()
     await expect(page).toHaveURL(/\/continuity-plans\/\d+/)
 

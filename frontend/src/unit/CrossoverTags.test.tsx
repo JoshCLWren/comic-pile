@@ -31,11 +31,11 @@ describe('CrossoverTags', () => {
     expect(screen.getByRole('region', { name: 'Crossovers for Nova' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Annihilation' })).toHaveAttribute(
       'href',
-      '/crossovers?group=7',
+      '/continuity-plans/events?group=7',
     )
     expect(screen.getByRole('link', { name: 'War of Kings' })).toHaveAttribute(
       'href',
-      '/crossovers?group=12',
+      '/continuity-plans/events?group=12',
     )
   })
 

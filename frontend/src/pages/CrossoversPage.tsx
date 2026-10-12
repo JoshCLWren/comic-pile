@@ -8,6 +8,7 @@ import {
 } from '../components/continuity'
 import { type DependencyGroup, type DependencyGroupMember } from '../services/api-dependency-groups'
 import type { Issue } from '../types'
+import Breadcrumbs from '../components/Breadcrumbs'
 import GlossaryLink from '../components/GlossaryLink'
 import type { ThreadListItem } from '../types'
 import { isString } from '../utils/runtimeChecks'
@@ -279,24 +280,37 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
 
   return (
     <section className="space-y-6 pb-28" aria-labelledby="crossovers-heading">
-      <header className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-[0.25em] text-[var(--theme-continuity-accent)]">Continuity</p>
-        <h1 id="crossovers-heading" className="text-3xl font-black text-[var(--theme-text-primary)]">Crossovers</h1>
-        <p className="max-w-2xl text-sm text-[var(--theme-text-muted)]">
-          Name connected comics so their continuity is easy to recognize across ComicPile.
-          Membership labels the group — it does not create a reading block by itself.{' '}
-          <GlossaryLink id="crossover">What is a crossover?</GlossaryLink>
-        </p>
+      <Breadcrumbs
+        items={[{ label: 'Reading plans', to: '/continuity-plans' }, { label: 'Crossover events' }]}
+      />
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <h1 id="crossovers-heading" className="text-2xl font-black text-[var(--theme-text-primary)]">Crossover events</h1>
+          <p className="max-w-2xl text-sm text-[var(--theme-text-muted)]">
+            Labels for connected comics so you can recognize a story across series. Membership is not a
+            reading order — progress, next unread issues, and blockers live on a{' '}
+            <Link to="/continuity-plans" className="font-bold text-[var(--theme-continuity-accent)] underline underline-offset-2">
+              Reading Plan
+            </Link>
+            .{' '}
+            <GlossaryLink id="crossover">What is a crossover?</GlossaryLink>
+          </p>
+        </div>
       </header>
 
-      <form onSubmit={createGroup} className="max-w-xl space-y-2" aria-label="Create crossover">
-        <label htmlFor="crossover-name" className="block text-sm font-bold text-[var(--theme-text-primary)]">New crossover</label>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input id="crossover-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2.5 text-[var(--theme-text-primary)]" placeholder="Age of Apocalypse" disabled={createMutation.isPending || isLoadingGroups} />
-          <button type="submit" disabled={createMutation.isPending || isLoadingGroups} className="rounded-xl bg-[var(--theme-primary-action)] px-4 py-2.5 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{createMutation.isPending ? 'Creating…' : 'Create crossover'}</button>
-        </div>
-        {createError && <p role="alert" className="text-sm text-[var(--theme-danger)]">{createError}</p>}
-      </form>
+      <details className="max-w-xl rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
+        <summary className="min-h-11 cursor-pointer text-sm font-bold text-[var(--theme-text-primary)]">
+          Manage event labels
+        </summary>
+        <form onSubmit={createGroup} className="mt-3 space-y-2" aria-label="Create crossover">
+          <label htmlFor="crossover-name" className="block text-sm font-medium text-[var(--theme-text-primary)]">New crossover</label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input id="crossover-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2.5 text-[var(--theme-text-primary)]" placeholder="Age of Apocalypse" disabled={createMutation.isPending || isLoadingGroups} />
+            <button type="submit" disabled={createMutation.isPending || isLoadingGroups} className="rounded-xl bg-[var(--theme-primary-action)] px-4 py-2.5 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{createMutation.isPending ? 'Creating…' : 'Create crossover'}</button>
+          </div>
+          {createError && <p role="alert" className="text-sm text-[var(--theme-danger)]">{createError}</p>}
+        </form>
+      </details>
 
       {mutationError && <p role="alert" className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-danger)]/10 p-3 text-sm text-[var(--theme-danger)]">{mutationError}</p>}
       {isLoadingGroups ? <p role="status">Loading crossovers…</p> : groupsError ? <div role="alert"><p>{errorMessage(groupsError, 'Unable to load crossovers.')}</p><button type="button" onClick={() => void refetchGroups()}>Try again</button></div> : groups.length === 0 ? <p className="max-w-xl text-sm text-[var(--theme-text-dim)]">No crossovers yet. Create your first one above to get started.</p> : (

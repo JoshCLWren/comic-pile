@@ -114,14 +114,14 @@ test.describe('Issue #2104 zero readiness network requests', () => {
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     await page.goto(`/crossovers/${group.id}`, { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('heading', { name: 'Reading Order' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Comics in this event' })).toBeVisible()
     await expect(page.getByText('Zero Readiness Crossover')).toBeVisible()
     await expect(
       page.getByTestId('crossover-member-row').getByText('Zero Readiness Series'),
     ).toBeVisible()
 
     await page.goto(`/continuity-plans/${plan.id}`, { waitUntil: 'domcontentloaded' })
-    await expect(page.getByLabel('Plan name')).toHaveValue('Zero Readiness Plan')
+    await expect(page.getByRole('heading', { name: 'Zero Readiness Plan' })).toBeVisible()
     await expect(page.getByText('Zero Readiness Series #1')).toBeVisible()
 
     expect(hits, `deleted readiness paths were requested: ${hits.join(', ')}`).toEqual([])

@@ -282,7 +282,7 @@ describe('QueueThreadCard', () => {
     renderCard(createMockThread(), {
       isBlocked: true,
       readDisabled: true,
-      readDisabledReason: 'Blocked by dependency',
+      readDisabledReason: 'Blocked by a prerequisite',
       snoozeDisabled: true,
       snoozeLabel: 'Snooze',
       snoozeIcon: '😴',
@@ -311,7 +311,7 @@ describe('QueueThreadCard', () => {
     renderCard(createMockThread(), {
       isBlocked: true,
       readDisabled: true,
-      readDisabledReason: 'Blocked by dependency',
+      readDisabledReason: 'Blocked by a prerequisite',
       snoozeDisabled: false,
       snoozeLabel: 'Snooze',
       snoozeIcon: '😴',
@@ -355,7 +355,7 @@ describe('QueueThreadCard', () => {
     renderCard(createMockThread(), {
       isBlocked: true,
       readDisabled: true,
-      readDisabledReason: 'Blocked by dependency',
+      readDisabledReason: 'Blocked by a prerequisite',
     })
 
     expect(screen.getByRole('button', { name: 'Read & Rate' })).toBeDisabled()
@@ -440,7 +440,7 @@ describe('QueueThreadCard', () => {
       next_unread_issue_number: '5',
       is_blocked: true,
     })
-    renderCard(thread, { isBlocked: true, blockingDependencies: [{ thread_id: 2, thread_title: 'Prerequisite', issue_number: '4', label: 'Blocked by dependency' }] })
+    renderCard(thread, { isBlocked: true, blockingDependencies: [{ thread_id: 2, thread_title: 'Prerequisite', issue_number: '4', label: 'Blocked by a prerequisite' }] })
     expect(screen.queryByText(/Up next/)).not.toBeInTheDocument()
     expect(screen.getByText('3 issues remaining')).toBeInTheDocument()
   })
@@ -499,8 +499,8 @@ describe('QueueThreadCard', () => {
       ],
     })
 
-    expect(screen.getByRole('link', { name: 'Rotworld' })).toHaveAttribute('href', '/crossovers?group=11')
-    expect(screen.getByRole('link', { name: 'Night of the Owls' })).toHaveAttribute('href', '/crossovers?group=12')
+    expect(screen.getByRole('link', { name: 'Rotworld' })).toHaveAttribute('href', '/continuity-plans/events?group=11')
+    expect(screen.getByRole('link', { name: 'Night of the Owls' })).toHaveAttribute('href', '/continuity-plans/events?group=12')
   })
 
   it('renders exactly the memberships the parent resolved for this card', () => {

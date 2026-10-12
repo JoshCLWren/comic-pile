@@ -176,7 +176,7 @@
         "type": "object"
       },
       "BatchBlockingExplanationResponse": {
-        "description": "Schema for batch blocking-info response — keyed by thread ID.",
+        "description": "Schema for batch blocking-info response \u2014 keyed by thread ID.",
         "properties": {
           "threads": {
             "additionalProperties": {
@@ -11548,6 +11548,344 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "ReadingPlanBlocker": {
+        "description": "One unread canonical Dependency source holding a plan issue back.",
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "explanation"
+        ],
+        "title": "ReadingPlanBlocker",
+        "type": "object"
+      },
+      "ReadingPlanProgress": {
+        "description": "Plan progress derived from global Issue read state.",
+        "properties": {
+          "read_issues": {
+            "title": "Read Issues",
+            "type": "integer"
+          },
+          "total_issues": {
+            "title": "Total Issues",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_issues",
+          "read_issues"
+        ],
+        "title": "ReadingPlanProgress",
+        "type": "object"
+      },
+      "ReadingPlanSourceSnapshot": {
+        "description": "One preserved import snapshot referenced by a Reading Plan.",
+        "properties": {
+          "adopted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adopted At"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "raw_source_path": {
+            "title": "Raw Source Path",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository"
+          },
+          "revision_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Sha"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          }
+        },
+        "required": [
+          "id",
+          "raw_source_path",
+          "recorded_at"
+        ],
+        "title": "ReadingPlanSourceSnapshot",
+        "type": "object"
+      },
+      "ReadingPlanReaderIssue": {
+        "description": "One plan occurrence with display identity and canonical availability.",
+        "properties": {
+          "availability": {
+            "enum": [
+              "read",
+              "available",
+              "blocked",
+              "later"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanBlocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "display_position": {
+            "title": "Display Position",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "default": false,
+            "title": "Is Checkpoint",
+            "type": "boolean"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "lane_id": {
+            "title": "Lane Id",
+            "type": "string"
+          },
+          "occurrence_id": {
+            "title": "Occurrence Id",
+            "type": "string"
+          },
+          "reader_optional": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reader Optional"
+          },
+          "reader_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reader Role"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "occurrence_id",
+          "issue_id",
+          "lane_id",
+          "display_position",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "status",
+          "availability"
+        ],
+        "title": "ReadingPlanReaderIssue",
+        "type": "object"
+      },
+      "ReadingPlanReaderLane": {
+        "description": "One reading lane of ordered plan issues.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanReaderIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "order",
+          "issues"
+        ],
+        "title": "ReadingPlanReaderLane",
+        "type": "object"
+      },
+      "ReadingPlanReaderResponse": {
+        "description": "Primary reader view for one Reading Plan.",
+        "properties": {
+          "available_now": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanReaderIssue"
+            },
+            "title": "Available Now",
+            "type": "array"
+          },
+          "blocked_next": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanReaderIssue"
+            },
+            "title": "Blocked Next",
+            "type": "array"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanReaderLane"
+            },
+            "title": "Lanes",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ordering_mode": {
+            "title": "Ordering Mode",
+            "type": "string"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ReadingPlanProgress"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourceSnapshot"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_id",
+          "name",
+          "ordering_mode",
+          "progress",
+          "available_now",
+          "blocked_next",
+          "lanes",
+          "sources"
+        ],
+        "title": "ReadingPlanReaderResponse",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -13399,6 +13737,54 @@
         ]
       }
     },
+    "/api/v1/continuity-plans/{plan_id}/reader": {
+      "get": {
+        "description": "Return progress, available now, blocked next, and ordered lanes.\n\nBlocking uses canonical issue-level Dependencies only. The payload is the\nprimary reader view for a Reading Plan and does not change Roll eligibility.",
+        "operationId": "get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanReaderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Continuity Plan Reader",
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
       "post": {
         "description": "Apply a projection atomically after a successful preview.\n\nThe confirm endpoint re-computes the projection and rejects the request\nif any conflict is detected. A failed or cancelled projection leaves\nboth the plan and the reading order unchanged because all mutations are\nperformed in a single transaction that rolls back on any error.",
@@ -14398,7 +14784,7 @@
     },
     "/api/v1/debug/log": {
       "post": {
-        "description": "Receive client-side log messages and output to server terminal.\n\nGated by the ``enable_debug_routes`` flag via ``require_debug_routes`` —\nreturns 404 when the flag is off (default), regardless of environment.",
+        "description": "Receive client-side log messages and output to server terminal.\n\nGated by the ``enable_debug_routes`` flag via ``require_debug_routes`` \u2014\nreturns 404 when the flag is off (default), regardless of environment.",
         "operationId": "log_message_api_v1_debug_log_post",
         "responses": {
           "200": {
@@ -18705,7 +19091,7 @@
     },
     "/api/v1/threads/": {
       "get": {
-        "description": "List threads with deterministic cursor-based pagination.\n\nEvery retained sort has a deterministic cursor contract with stable\ntie-breakers so that search results remain correct across multiple pages.\nChanging ``search`` or ``sort`` invalidates any prior cursor.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order – ``position`` (default), ``title``, or ``created``.\n    page_size: Threads per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Paginated queue items plus ``next_page_token`` when more pages exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present,\n        the sort value is unsupported, or the page token is stale/malformed.",
+        "description": "List threads with deterministic cursor-based pagination.\n\nEvery retained sort has a deterministic cursor contract with stable\ntie-breakers so that search results remain correct across multiple pages.\nChanging ``search`` or ``sort`` invalidates any prior cursor.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order \u2013 ``position`` (default), ``title``, or ``created``.\n    page_size: Threads per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Paginated queue items plus ``next_page_token`` when more pages exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present,\n        the sort value is unsupported, or the page token is stale/malformed.",
         "operationId": "list_threads_api_v1_threads__get",
         "parameters": [
           {

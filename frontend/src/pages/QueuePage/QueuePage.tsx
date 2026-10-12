@@ -152,7 +152,7 @@ export default function QueuePage() {
       })
       const readDisabled = isBlocked
       const blockingReasons = blockingDependencies.map((dep) => dep.label)
-      const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'
+      const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by a prerequisite'
 
       return (
         <QueueThreadCard

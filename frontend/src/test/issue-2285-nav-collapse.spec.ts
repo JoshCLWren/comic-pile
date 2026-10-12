@@ -169,7 +169,7 @@ test.describe('Authenticated navigation collapse (#2285)', () => {
     await page.goto('/history', { waitUntil: 'domcontentloaded' })
     await expect(desktopNav).toHaveAttribute('data-nav-collapsed', 'true')
 
-    await page.goto('/crossovers', { waitUntil: 'domcontentloaded' })
+    await page.goto('/continuity-plans/events', { waitUntil: 'domcontentloaded' })
     await expect(desktopNav).toHaveAttribute('data-nav-collapsed', 'true')
 
     await page.goto('/continuity-plans', { waitUntil: 'domcontentloaded' })

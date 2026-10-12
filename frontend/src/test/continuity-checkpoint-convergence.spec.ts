@@ -93,7 +93,7 @@ test.describe('Continuity plan checkpoint and convergence', () => {
       ],
     )
 
-    await page.goto(`/continuity-plans/${planId}`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`/continuity-plans/${planId}/edit`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('lane-lane-a')).toBeVisible()
     await expect(page.getByTestId('lane-lane-b')).toBeVisible()
 
@@ -150,7 +150,7 @@ test.describe('Continuity plan checkpoint and convergence', () => {
       ],
     )
 
-    await page.goto(`/continuity-plans/${planId}`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`/continuity-plans/${planId}/edit`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('lane-lane-a')).toBeVisible()
     await expect(page.getByTestId('lane-lane-b')).toBeVisible()
 
@@ -191,7 +191,7 @@ test.describe('Continuity plan checkpoint and convergence', () => {
       ],
     )
 
-    await page.goto(`/continuity-plans/${planId}`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`/continuity-plans/${planId}/edit`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('lane-lane-a')).toBeVisible()
 
     // No convergence badge initially
@@ -250,7 +250,7 @@ test.describe('Continuity plan checkpoint and convergence', () => {
       ],
     )
 
-    await page.goto(`/continuity-plans/${planId}`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`/continuity-plans/${planId}/edit`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByText('Convergence (1)')).toBeVisible()
 
     // Open convergence editor on b-1
