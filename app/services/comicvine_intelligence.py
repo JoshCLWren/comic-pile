@@ -353,7 +353,9 @@ async def get_issue_intelligence(
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
     arc_ids = [arc_id for arc in arc_refs if (arc_id := _integer(arc.get("id"))) is not None]
-    related_rows = await _related_external_rows(db, arc_ids, identity.external_id)
+    related_rows, window_saturated = await _related_external_rows(
+        db, arc_ids, identity.external_id
+    )
     matches = await _comicpile_matches(
         db,
         [int(row["identity_id"]) for row in related_rows],
@@ -394,8 +396,11 @@ async def get_issue_intelligence(
             related_by_arc.get(arc_id, []),
             key=lambda item: (item.cover_date or "", item.series_name or "", item.issue_number or ""),
         )
-        total_count = len(all_related)
         related_issues = all_related[:MAX_RELATED_ISSUES_PER_ARC]
+        if window_saturated:
+            total_count = await _arc_related_total(db, arc_id, identity.external_id)
+        else:
+            total_count = len(all_related)
         story_arcs.append(
             ComicVineStoryArc(
                 comicvine_arc_id=arc_id,

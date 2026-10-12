@@ -296,8 +296,13 @@ async def test_warm_read_uses_bounded_database_work(
     assert len(related) == MAX_RELATED_ISSUES_PER_ARC
     assert all(item.comicvine_issue_id != "1001184" for item in related)
 
+    # The true arc total (80) is resolved from the DB because the window
+    # saturated, so the (N of M shown) indicator is exact.
+    assert result.story_arcs[0].total_related_count == 80
+
     # Bounded database work: confirmed identity, one capped arc-member scan,
-    # and one user-scoped match lookup.
+    # one user-scoped match lookup, and (since the window saturated) one exact
+    # arc-total count from _arc_related_total.
     assert len(ledger.statements) <= 4
     related_statements = [text for text in ledger.statements if "external_identities" in text]
     assert any("LIMIT" in text for text in related_statements)
