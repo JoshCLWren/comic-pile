@@ -17,6 +17,7 @@ Lifecycle contract (``docs/READING_GRAPH_PERSISTENCE_DESIGN.md`` section 2):
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from sqlalchemy import delete, func, or_, select
@@ -117,6 +118,49 @@ async def replace_plan_sources(
     for placement in placements:
         placement.plan_id = plan_id
         db.add(placement)
+    await db.flush()
+
+
+async def delete_plan_source_placements_for_occurrences(
+    db: AsyncSession,
+    *,
+    plan_id: int,
+    occurrence_ids: Collection[str],
+) -> None:
+    """Delete source placements whose occurrence is no longer in the plan record.
+
+    Args:
+        db: Database session.
+        plan_id: Plan owning the placements.
+        occurrence_ids: Plan node ids that were dropped from ``nodes_json``.
+    """
+    if not occurrence_ids:
+        return
+    await db.execute(
+        delete(ReadingPlanSourcePlacement).where(
+            ReadingPlanSourcePlacement.plan_id == plan_id,
+            ReadingPlanSourcePlacement.occurrence_id.in_(list(occurrence_ids)),
+        )
+    )
+    await db.flush()
+
+
+async def delete_orphan_plan_sources(db: AsyncSession, *, plan_id: int) -> None:
+    """Delete source snapshots that no remaining placement references.
+
+    Args:
+        db: Database session.
+        plan_id: Plan whose unused snapshots should be dropped.
+    """
+    used = select(ReadingPlanSourcePlacement.plan_source_id).where(
+        ReadingPlanSourcePlacement.plan_id == plan_id
+    )
+    await db.execute(
+        delete(ReadingPlanSource).where(
+            ReadingPlanSource.plan_id == plan_id,
+            ReadingPlanSource.id.not_in(used),
+        )
+    )
     await db.flush()
 
 

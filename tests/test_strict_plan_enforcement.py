@@ -9,23 +9,30 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.cbl_reference import CBLSourceEntry
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.issue import Issue
-from app.models.reading_plan_membership import ReadingPlanIssue
+from app.models.reading_plan_membership import ReadingPlanIssue, ReadingPlanSourcePlacement
 from app.models.thread import Thread
-from app.schemas.continuity_plan import ContinuityPlanNode
+from app.schemas.continuity_plan import CBLPlacement, ContinuityPlanNode
+from app.schemas.shared_types import SourceBackedDecision
+from app.services.cbl_plan_adoption import _merge_adopted_nodes
 from app.services.continuity_plan_writer import plan_rule_marker, replace_compiled_rules
 from app.services.reading_plan_normalization import (
+    drop_threads_from_plan_record,
     dry_run_plan_membership_reconcile,
-    reconcile_plan_membership_from_nodes,
+    reconcile_plan_record_to_membership,
+    restore_plan_record_from_backup,
 )
 from app.services.strict_plan_constraints import (
     IssueThreadIndex,
@@ -697,7 +704,7 @@ async def test_two_plans_share_prerequisite_and_deletion_is_plan_local(
 async def test_absolute_universe_membership_gap_and_dangling_node_reconcile(
     async_db: AsyncSession,
 ) -> None:
-    """Plan JSON with extra nodes and a missing issue id rebuilds only real memberships."""
+    """Leftover JSON issue nodes, including dangling refs, trim to membership."""
     user = await get_or_create_user_async(async_db)
     _thread, issues = await _make_series(
         async_db,
@@ -749,21 +756,26 @@ async def test_absolute_universe_membership_gap_and_dangling_node_reconcile(
     await async_db.refresh(plan)
 
     dry = await dry_run_plan_membership_reconcile(async_db, plan=plan)
-    assert dry.inserted_issue_ids == (issues[1].id, issues[2].id)
+    assert dry.inserted_issue_ids == ()
+    assert dry.dropped_json_issue_ids == (issues[1].id, issues[2].id, dangling_id)
     assert dry.skipped_missing_issue_ids == (dangling_id,)
+    assert dry.json_issue_count_before == 4
+    assert dry.json_issue_count_after == 1
     membership_before_dry = (
         await async_db.execute(
             select(ReadingPlanIssue.issue_id).where(ReadingPlanIssue.plan_id == plan.id)
         )
     ).scalars().all()
     assert list(membership_before_dry) == [issues[0].id]
+    assert len(plan.nodes_json) == 4
 
-    report = await reconcile_plan_membership_from_nodes(async_db, plan=plan)
+    report = await reconcile_plan_record_to_membership(async_db, plan=plan)
     await async_db.commit()
     assert report.skipped_missing_issue_ids == (dangling_id,)
-    assert report.membership_count == 3
-    assert report.inserted_issue_ids == (issues[1].id, issues[2].id)
+    assert report.membership_count == 1
+    assert report.inserted_issue_ids == ()
     assert report.removed_issue_ids == ()
+    assert report.dropped_json_issue_ids == (issues[1].id, issues[2].id, dangling_id)
     assert report.before.plan_owned_item_read_pairs == ()
     assert report.after.plan_owned_item_read_pairs == ()
     assert report.before.roll_blocking_pairs == report.after.roll_blocking_pairs
@@ -774,33 +786,34 @@ async def test_absolute_universe_membership_gap_and_dangling_node_reconcile(
             .order_by(ReadingPlanIssue.display_position)
         )
     ).scalars().all()
-    assert list(rows) == [issue.id for issue in issues]
+    assert list(rows) == [issues[0].id]
     refreshed = await async_db.get(ContinuityPlan, plan.id)
     assert refreshed is not None
-    assert len(refreshed.nodes_json) == 4
+    assert [node["ref_id"] for node in refreshed.nodes_json] == [issues[0].id]
     assert refreshed.ordering_mode == "strict_sequential"
 
-    await replace_compiled_rules(
-        async_db,
-        user_id=user.id,
-        plan=plan,
-        nodes=_nodes(issues),
-        ordering_mode="strict_sequential",
-    )
+    await restore_plan_record_from_backup(async_db, plan=plan, backup=report.backup)
     await async_db.commit()
-    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan.id) == set()
+    rolled_back = await async_db.get(ContinuityPlan, plan.id)
+    assert rolled_back is not None
+    assert len(rolled_back.nodes_json) == 4
+    membership_after_rollback = (
+        await async_db.execute(
+            select(ReadingPlanIssue.issue_id).where(ReadingPlanIssue.plan_id == plan.id)
+        )
+    ).scalars().all()
+    assert list(membership_after_rollback) == [issues[0].id]
 
 
 @pytest.mark.asyncio
 async def test_absolute_universe_membership_repair_does_not_compile_restrictions(
     async_db: AsyncSession,
 ) -> None:
-    """#3486: JSON is intended membership; repair must not re-save into blockers.
+    """#3486: membership is intended; leftover JSON must not be restored or compiled.
 
     Production plan 20 has 105 JSON issue nodes and 76 membership rows. The
-    missing 29 are the tail, including later series starts. Re-saving the
-    whole JSON through the old adjacent compiler would emit a blocker per
-    hop. This repair copies existing Issue refs into membership only.
+    extra 29 are stale leftovers from series Josh removed. Repair trims JSON
+    to the membership table and must not compile restrictions from leftovers.
     """
     user = await get_or_create_user_async(async_db)
     batman, batman_issues = await _make_series(
@@ -895,16 +908,21 @@ async def test_absolute_universe_membership_repair_does_not_compile_restrictions
     assert dry.before.membership_issue_ids == tuple(
         issue.id for issue in batman_issues
     )
-    missing = tuple(issue.id for issue in ga_issues + catwoman_issues + cassandra_issues)
-    assert dry.inserted_issue_ids == missing
+    leftover = tuple(issue.id for issue in ga_issues + catwoman_issues + cassandra_issues)
+    assert dry.inserted_issue_ids == ()
+    assert dry.dropped_json_issue_ids == leftover
+    assert {series.title for series in dry.dropped_series} == {
+        "Absolute Green Arrow",
+        "Absolute Catwoman",
+        "Absolute Cassandra Cain: The Shadow's Hand",
+    }
+    assert dry.json_issue_count_before == 10
+    assert dry.json_issue_count_after == 3
     assert dry.after.plan_owned_item_read_pairs == dry.before.plan_owned_item_read_pairs
     assert dry.after.plan_owned_item_read_pairs == (
         (batman_issues[0].id, batman_issues[1].id),
     )
-    assert dry.after.roll_blocking_pairs == (
-        (catwoman_issues[2].id, cassandra_issues[0].id),
-    )
-    assert dry.before.roll_blocking_pairs == ()
+    assert dry.after.roll_blocking_pairs == dry.before.roll_blocking_pairs
     still_one_member_row = (
         await async_db.execute(
             select(ReadingPlanIssue).where(ReadingPlanIssue.plan_id == plan.id)
@@ -915,19 +933,20 @@ async def test_absolute_universe_membership_repair_does_not_compile_restrictions
         (batman_issues[0].id, batman_issues[1].id),
     }
 
-    report = await reconcile_plan_membership_from_nodes(async_db, plan=plan)
+    report = await reconcile_plan_record_to_membership(async_db, plan=plan)
     await async_db.commit()
-    assert report.inserted_issue_ids == missing
+    assert report.inserted_issue_ids == ()
     assert report.removed_issue_ids == ()
-    assert report.membership_count == 10
+    assert report.dropped_json_issue_ids == leftover
+    assert report.membership_count == 3
     assert report.after.plan_owned_item_read_pairs == report.before.plan_owned_item_read_pairs
     assert report.after.plan_linked_dependency_pairs == ()
-    assert report.after.roll_blocking_pairs == (
-        (catwoman_issues[2].id, cassandra_issues[0].id),
-    )
+    assert report.after.roll_blocking_pairs == report.before.roll_blocking_pairs
     refreshed = await async_db.get(ContinuityPlan, plan.id)
     assert refreshed is not None
-    assert len(refreshed.nodes_json) == 10
+    assert [node["ref_id"] for node in refreshed.nodes_json] == [
+        issue.id for issue in batman_issues
+    ]
     assert refreshed.ordering_mode == "strict_sequential"
     assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan.id) == {
         (batman_issues[0].id, batman_issues[1].id),
@@ -937,29 +956,215 @@ async def test_absolute_universe_membership_repair_does_not_compile_restrictions
     assert green_arrow.id in roll_after
     assert catwoman.id in roll_after
     assert cassandra.id not in roll_after
-    # Projected compile is thread-entry, not one blocker per JSON hop.
-    assert (ga_issues[0].id, ga_issues[1].id) not in report.projected_thread_entry_pairs
-    assert (catwoman_issues[0].id, cassandra_issues[0].id) not in (
-        report.projected_thread_entry_pairs
-    )
-    assert (batman_issues[-1].id, ga_issues[0].id) in report.projected_thread_entry_pairs
-    assert (ga_issues[-1].id, catwoman_issues[0].id) in report.projected_thread_entry_pairs
+    # Leftovers are not projected as thread-entry gates.
+    assert report.projected_thread_entry_pairs == ()
+    assert (batman_issues[-1].id, ga_issues[0].id) not in report.projected_thread_entry_pairs
+    assert     leftover[0] not in {
+        node["ref_id"] for node in refreshed.nodes_json if node["node_type"] == "issue"
+    }
 
+
+@pytest.mark.asyncio
+async def test_removing_series_updates_plan_record_membership_and_source_order(
+    async_db: AsyncSession,
+) -> None:
+    """#3486: dropping a series rewrites JSON, membership, and source order together."""
+    user = await get_or_create_user_async(async_db)
+    _batman, batman_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Batman",
+        numbers=["1", "2"],
+        queue_position=1,
+    )
+    hated, hated_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Green Arrow",
+        numbers=["1", "2"],
+        queue_position=2,
+    )
+    source_path = "DC/Events/CBH/Absolute Universe Reading Order.cbl"
+    nodes = [
+        ContinuityPlanNode(
+            id=f"issue-{issue.id}",
+            node_type="issue",
+            ref_id=issue.id,
+            lane_id="main",
+            position=position,
+            convergence_gate=[],
+            source_cbl_placements=(
+                CBLPlacement(source_path=source_path, position=position),
+            ),
+        )
+        for position, issue in enumerate(batman_issues + hated_issues)
+    ]
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Absolute Universe",
+        ordering_mode="informational",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[node.model_dump(mode="json") for node in nodes],
+    )
+    async_db.add(plan)
+    await async_db.flush()
     await replace_compiled_rules(
         async_db,
         user_id=user.id,
         plan=plan,
-        nodes=_nodes(json_issues),
-        ordering_mode="strict_sequential",
+        nodes=nodes,
+        ordering_mode="informational",
     )
     await async_db.commit()
-    compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan.id)
-    assert (ga_issues[0].id, ga_issues[1].id) not in compiled
-    assert (batman_issues[0].id, batman_issues[1].id) not in compiled
-    assert compiled == set(report.projected_thread_entry_pairs)
-    roll_compiled = await _roll_ids(user.id, async_db)
-    assert green_arrow.id in roll_compiled
-    assert cassandra.id not in roll_compiled
+    await async_db.refresh(plan)
+
+    dropped_ids, remaining = await drop_threads_from_plan_record(
+        async_db, plan=plan, thread_ids=[hated.id]
+    )
+    await async_db.commit()
+    assert set(dropped_ids) == {issue.id for issue in hated_issues}
+    assert [node.ref_id for node in remaining] == [issue.id for issue in batman_issues]
+    refreshed = await async_db.get(ContinuityPlan, plan.id)
+    assert refreshed is not None
+    assert [node["ref_id"] for node in refreshed.nodes_json] == [
+        issue.id for issue in batman_issues
+    ]
+    member_ids = (
+        await async_db.execute(
+            select(ReadingPlanIssue.issue_id).where(ReadingPlanIssue.plan_id == plan.id)
+        )
+    ).scalars().all()
+    assert set(member_ids) == {issue.id for issue in batman_issues}
+    remaining_occurrences = {f"issue-{issue.id}" for issue in batman_issues}
+    placements = (
+        await async_db.execute(
+            select(ReadingPlanSourcePlacement.occurrence_id).where(
+                ReadingPlanSourcePlacement.plan_id == plan.id
+            )
+        )
+    ).scalars().all()
+    assert set(placements) == remaining_occurrences
+    hated_still_exists = await async_db.get(Issue, hated_issues[0].id)
+    assert hated_still_exists is not None
+
+
+@pytest.mark.asyncio
+async def test_cbl_exclude_drops_existing_series_from_plan_record(
+    async_db: AsyncSession,
+) -> None:
+    """Re-committing a CBL with series EXCLUDE must drop already-present nodes."""
+    user = await get_or_create_user_async(async_db)
+    _batman, batman_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Batman",
+        numbers=["1", "2"],
+        queue_position=1,
+    )
+    _hated, hated_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Absolute Green Arrow",
+        numbers=["1", "2"],
+        queue_position=2,
+    )
+    source_path = "/absolute.cbl"
+    all_issues = batman_issues + hated_issues
+    nodes = [
+        ContinuityPlanNode(
+            id=f"cbl-{position}",
+            node_type="issue",
+            ref_id=issue.id,
+            lane_id="default",
+            position=position,
+            convergence_gate=[],
+            source_cbl_placements=(
+                CBLPlacement(source_path=source_path, position=position),
+            ),
+        )
+        for position, issue in enumerate(all_issues)
+    ]
+    plan = ContinuityPlan(
+        user_id=user.id,
+        name="Absolute Universe",
+        ordering_mode="informational",
+        lanes_json=[{"id": "default", "name": "Default", "order": 0}],
+        nodes_json=[node.model_dump(mode="json") for node in nodes],
+    )
+    async_db.add(plan)
+    await async_db.flush()
+    await replace_compiled_rules(
+        async_db,
+        user_id=user.id,
+        plan=plan,
+        nodes=nodes,
+        ordering_mode="informational",
+    )
+    await async_db.commit()
+    await async_db.refresh(plan)
+
+    entries = [
+        SimpleNamespace(
+            id=position,
+            position=position,
+            series_name=title,
+            volume_year=2024,
+        )
+        for position, title in enumerate(
+            ["Absolute Batman", "Absolute Batman", "Absolute Green Arrow", "Absolute Green Arrow"]
+        )
+    ]
+    facts = {
+        position: {
+            "resolved_issue_id": issue.id,
+            "resolution_status": "existing",
+        }
+        for position, issue in enumerate(all_issues)
+    }
+    report = await _merge_adopted_nodes(
+        async_db,
+        plan,
+        user.id,
+        [cast(CBLSourceEntry, entry) for entry in entries],
+        facts,
+        source_path,
+        {},
+        {},
+        {"Absolute Green Arrow": SourceBackedDecision.EXCLUDE},
+    )
+    assert report.excluded_positions == [2, 3]
+    remaining_nodes = [
+        ContinuityPlanNode.model_validate(node) for node in plan.nodes_json
+    ]
+    await replace_compiled_rules(
+        async_db,
+        user_id=user.id,
+        plan=plan,
+        nodes=remaining_nodes,
+        ordering_mode="informational",
+    )
+    await async_db.commit()
+    assert [node.ref_id for node in remaining_nodes] == [
+        issue.id for issue in batman_issues
+    ]
+    member_ids = set(
+        (
+            await async_db.execute(
+                select(ReadingPlanIssue.issue_id).where(ReadingPlanIssue.plan_id == plan.id)
+            )
+        ).scalars().all()
+    )
+    assert member_ids == {issue.id for issue in batman_issues}
+    placements = set(
+        (
+            await async_db.execute(
+                select(ReadingPlanSourcePlacement.occurrence_id).where(
+                    ReadingPlanSourcePlacement.plan_id == plan.id
+                )
+            )
+        ).scalars().all()
+    )
+    assert placements == {"cbl-0", "cbl-1"}
 
 
 @pytest.mark.asyncio

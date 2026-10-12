@@ -16,8 +16,10 @@ Scope notes (``docs/READING_GRAPH_PERSISTENCE_DESIGN.md``, Chunk 1):
 
 from __future__ import annotations
 
-from collections.abc import Collection, Sequence
+from collections.abc import Collection
+from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -96,28 +98,57 @@ class PlanConstraintSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class MembershipReconcileReport:
-    """Outcome of aligning membership to ``nodes_json`` without compiling rules.
+class DroppedPlanSeries:
+    """One series whose leftover JSON issues are trimmed to membership."""
 
-    ``nodes_json`` is the intended membership and presentation order (#3486).
-    ``reading_plan_issues`` is the derived membership table. This repair
-    copies existing Issue refs from JSON into the table and never calls the
-    strict compiler, so a drifted strict plan is not re-saved into a blanket
-    of adjacent blockers.
+    thread_id: int
+    title: str
+    issue_ids: tuple[int, ...]
+    issue_numbers: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PlanRecordBackup:
+    """Pre-trim ``nodes_json`` and source rows for a documented rollback.
+
+    Membership rows are not included because the membership-authoritative
+    repair never mutates ``reading_plan_issues``. Rollback restores the plan
+    record and source order only.
+    """
+
+    nodes_json: list[dict[str, object]]
+    sources: tuple[dict[str, object], ...]
+    placements: tuple[dict[str, object], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MembershipReconcileReport:
+    """Outcome of aligning the plan record to ``reading_plan_issues``.
+
+    ``reading_plan_issues`` is the intended membership (#3486). Extra issue
+    nodes in ``nodes_json`` are stale leftovers from series removals. This
+    repair trims the plan record and its source order to that table and never
+    calls the strict compiler, so leftovers are not restored or compiled.
 
     Production apply of this report is a separate authorization gate.
     """
 
     plan_id: int
     membership_count: int
+    json_issue_count_before: int
+    json_issue_count_after: int
     skipped_missing_issue_ids: tuple[int, ...]
     skipped_non_issue_nodes: int
     invalid_node_count: int
     inserted_issue_ids: tuple[int, ...]
     removed_issue_ids: tuple[int, ...]
+    dropped_json_issue_ids: tuple[int, ...]
+    dropped_json_node_ids: tuple[str, ...]
+    dropped_series: tuple[DroppedPlanSeries, ...]
     before: PlanConstraintSnapshot
     after: PlanConstraintSnapshot
     projected_thread_entry_pairs: tuple[tuple[int, int], ...]
+    backup: PlanRecordBackup
 
 
 def _snapshot_to_dict(snapshot: PlanConstraintSnapshot) -> dict[str, object]:
@@ -132,31 +163,159 @@ def _snapshot_to_dict(snapshot: PlanConstraintSnapshot) -> dict[str, object]:
     }
 
 
-def membership_report_to_dict(report: MembershipReconcileReport) -> dict[str, object]:
+def _iso(value: datetime | None) -> str | None:
+    """Serialize an optional datetime as ISO-8601."""
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+def _parse_dt(value: object) -> datetime | None:
+    """Parse an optional ISO-8601 datetime from a backup payload."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        return datetime.fromisoformat(value)
+    raise TypeError(f"expected datetime string, got {type(value)!r}")
+
+
+def _backup_int(value: object, field: str) -> int:
+    """Require a JSON integer field from a rollback payload."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"backup {field} must be an int")
+    return value
+
+
+def _source_row_to_dict(source: ReadingPlanSource) -> dict[str, object]:
+    """Serialize one source snapshot for rollback."""
+    return {
+        "id": source.id,
+        "plan_id": source.plan_id,
+        "raw_source_path": source.raw_source_path,
+        "repository": source.repository,
+        "source_path": source.source_path,
+        "revision_sha": source.revision_sha,
+        "content_hash": source.content_hash,
+        "cbl_source_list_id": source.cbl_source_list_id,
+        "custom_cbl_list_id": source.custom_cbl_list_id,
+        "adopted_at": _iso(source.adopted_at),
+        "recorded_at": source.recorded_at.isoformat(),
+        "metadata_json": source.metadata_json,
+    }
+
+
+def _placement_row_to_dict(
+    placement: ReadingPlanSourcePlacement,
+) -> dict[str, object]:
+    """Serialize one source placement for rollback."""
+    return {
+        "id": placement.id,
+        "plan_id": placement.plan_id,
+        "occurrence_id": placement.occurrence_id,
+        "plan_source_id": placement.plan_source_id,
+        "source_position": placement.source_position,
+    }
+
+
+def backup_to_dict(backup: PlanRecordBackup) -> dict[str, object]:
+    """Serialize a plan-record backup as JSON-ready data.
+
+    Args:
+        backup: Captured pre-trim plan record and source rows.
+
+    Returns:
+        Plain mapping suitable for a rollback receipt.
+    """
+    return {
+        "nodes_json": backup.nodes_json,
+        "sources": [dict(row) for row in backup.sources],
+        "placements": [dict(row) for row in backup.placements],
+    }
+
+
+def backup_from_dict(payload: dict[str, object]) -> PlanRecordBackup:
+    """Rehydrate a plan-record backup from a rollback receipt.
+
+    Args:
+        payload: Mapping produced by :func:`backup_to_dict`.
+
+    Returns:
+        Frozen backup matching the original capture.
+    """
+    nodes_raw = payload.get("nodes_json")
+    sources_raw = payload.get("sources")
+    placements_raw = payload.get("placements")
+    nodes = [
+        dict(node)
+        for node in nodes_raw
+        if isinstance(nodes_raw, list) and isinstance(node, dict)
+    ] if isinstance(nodes_raw, list) else []
+    sources = tuple(
+        dict(row)
+        for row in sources_raw
+        if isinstance(sources_raw, list) and isinstance(row, dict)
+    ) if isinstance(sources_raw, list) else ()
+    placements = tuple(
+        dict(row)
+        for row in placements_raw
+        if isinstance(placements_raw, list) and isinstance(row, dict)
+    ) if isinstance(placements_raw, list) else ()
+    return PlanRecordBackup(nodes_json=nodes, sources=sources, placements=placements)
+
+
+def membership_report_to_dict(
+    report: MembershipReconcileReport,
+    *,
+    include_backup: bool = False,
+) -> dict[str, object]:
     """Serialize a membership reconcile report as JSON-ready data.
 
     Args:
         report: Apply or dry-run result.
+        include_backup: When True, include the pre-trim plan record so apply
+            receipts can roll back without a Neon branch.
 
     Returns:
         Plain mapping with list-encoded tuples.
     """
-    return {
+    payload: dict[str, object] = {
         "plan_id": report.plan_id,
-        "json_is_authoritative": True,
+        "membership_is_authoritative": True,
         "membership_count": report.membership_count,
+        "json_issue_count_before": report.json_issue_count_before,
+        "json_issue_count_after": report.json_issue_count_after,
         "skipped_missing_issue_ids": list(report.skipped_missing_issue_ids),
         "skipped_non_issue_nodes": report.skipped_non_issue_nodes,
         "invalid_node_count": report.invalid_node_count,
         "inserted_issue_ids": list(report.inserted_issue_ids),
         "removed_issue_ids": list(report.removed_issue_ids),
+        "dropped_json_issue_ids": list(report.dropped_json_issue_ids),
+        "dropped_json_node_ids": list(report.dropped_json_node_ids),
+        "dropped_series": [
+            {
+                "thread_id": series.thread_id,
+                "title": series.title,
+                "issue_ids": list(series.issue_ids),
+                "issue_numbers": list(series.issue_numbers),
+            }
+            for series in report.dropped_series
+        ],
         "before": _snapshot_to_dict(report.before),
         "after": _snapshot_to_dict(report.after),
         "projected_thread_entry_pairs": [
             list(pair) for pair in report.projected_thread_entry_pairs
         ],
         "compiled_rules": False,
+        "rollback": (
+            "restore backup.nodes_json, reading_plan_sources, and "
+            "reading_plan_source_placements; reading_plan_issues is unchanged"
+        ),
     }
+    if include_backup:
+        payload["backup"] = backup_to_dict(report.backup)
+    return payload
 
 
 def parse_plan_nodes_json(nodes_json: object) -> tuple[list[ContinuityPlanNode], int]:
@@ -180,20 +339,109 @@ def parse_plan_nodes_json(nodes_json: object) -> tuple[list[ContinuityPlanNode],
     return nodes, invalid
 
 
-def _dedupe_existing_issue_nodes(
-    nodes: Sequence[ContinuityPlanNode],
-    existing_ids: set[int],
-) -> list[ContinuityPlanNode]:
-    """Keep first occurrence of each existing Issue; drop dangling issue refs."""
-    deduped: list[ContinuityPlanNode] = []
-    seen_issue_ids: set[int] = set()
+def drop_issue_nodes_from_plan_json(
+    nodes: list[dict[str, object]],
+    *,
+    drop_issue_ids: Collection[int],
+    drop_node_ids: Collection[str] = (),
+    drop_source_path: str | None = None,
+    drop_source_positions: Collection[int] = (),
+) -> list[dict[str, object]]:
+    """Remove issue nodes for a series (or CBL exclude) from the plan record.
+
+    Live series removal must update ``nodes_json`` in the same write that
+    rebuilds membership and source order so the two representations cannot
+    diverge again (#3486).
+
+    Args:
+        nodes: Stored plan node dicts.
+        drop_issue_ids: Canonical issue ids being removed from the plan.
+        drop_node_ids: Plan node ids to drop even when ``ref_id`` is missing.
+        drop_source_path: Optional CBL source path whose excluded positions
+            should also drop matching nodes.
+        drop_source_positions: CBL source positions excluded from this commit.
+
+    Returns:
+        Remaining node dicts, preserving relative order.
+    """
+    drop_ids = {issue_id for issue_id in drop_issue_ids if issue_id > 0}
+    drop_nodes = {node_id for node_id in drop_node_ids if node_id}
+    drop_positions = set(drop_source_positions)
+    kept: list[dict[str, object]] = []
     for node in nodes:
-        if node.node_type == "issue":
-            if node.ref_id not in existing_ids or node.ref_id in seen_issue_ids:
+        node_id = str(node.get("id") or "")
+        if node_id in drop_nodes:
+            continue
+        if str(node.get("node_type")) == "issue":
+            ref_id = node.get("ref_id")
+            if isinstance(ref_id, int) and ref_id in drop_ids:
                 continue
-            seen_issue_ids.add(node.ref_id)
-        deduped.append(node)
-    return deduped
+        if drop_source_path is not None and drop_positions:
+            placements = node.get("source_cbl_placements")
+            matches_excluded = False
+            if isinstance(placements, list):
+                for placement in placements:
+                    if not isinstance(placement, dict):
+                        continue
+                    position = placement.get("position")
+                    if (
+                        str(placement.get("source_path")) == drop_source_path
+                        and isinstance(position, int)
+                        and position in drop_positions
+                    ):
+                        matches_excluded = True
+                        break
+            if matches_excluded:
+                continue
+        kept.append(node)
+    return kept
+
+
+def trim_plan_nodes_json_to_membership(
+    nodes_json: object,
+    *,
+    keep_issue_ids: Collection[int],
+) -> tuple[list[dict[str, object]], tuple[int, ...], tuple[str, ...], int, int]:
+    """Keep non-issue nodes and issue nodes whose ref is in membership.
+
+    Args:
+        nodes_json: Raw ``ContinuityPlan.nodes_json`` value.
+        keep_issue_ids: Intended membership issue ids.
+
+    Returns:
+        Kept nodes, dropped issue ids, dropped node ids, skipped non-issue
+        count, and invalid row count.
+    """
+    keep_ids = {issue_id for issue_id in keep_issue_ids if issue_id > 0}
+    if not isinstance(nodes_json, list):
+        return [], (), (), 0, 0
+    kept: list[dict[str, object]] = []
+    dropped_ids: list[int] = []
+    dropped_node_ids: list[str] = []
+    skipped_non_issue = 0
+    invalid = 0
+    for raw in nodes_json:
+        if not isinstance(raw, dict):
+            invalid += 1
+            continue
+        node_type = str(raw.get("node_type") or "")
+        if node_type != "issue":
+            skipped_non_issue += 1
+            kept.append(raw)
+            continue
+        ref_id = raw.get("ref_id")
+        node_id = str(raw.get("id") or "")
+        if isinstance(ref_id, int) and ref_id in keep_ids:
+            kept.append(raw)
+            continue
+        if isinstance(ref_id, int):
+            dropped_ids.append(ref_id)
+        else:
+            invalid += 1
+        if node_id:
+            dropped_node_ids.append(node_id)
+    unique_dropped = tuple(sorted(set(dropped_ids)))
+    return kept, unique_dropped, tuple(dropped_node_ids), skipped_non_issue, invalid
 
 
 async def _existing_issue_ids(
@@ -252,7 +500,7 @@ async def snapshot_plan_constraint_sets(
         db: Async database session.
         plan: Plan to inspect.
         membership_issue_ids: Override the membership set (dry-run of an
-            intended JSON membership without writing ``reading_plan_issues``).
+            intended membership without writing ``reading_plan_issues``).
 
     Returns:
         Frozen membership and blocker tuples.
@@ -315,32 +563,143 @@ async def _projected_thread_entry_pairs(
     return tuple(strict_plan_item_read_pairs(nodes, index))
 
 
-async def _membership_reconcile_inputs(
+async def _capture_plan_record_backup(
     db: AsyncSession,
     *,
     plan: ContinuityPlan,
-) -> tuple[list[ContinuityPlanNode], set[int], tuple[int, ...], int, int]:
-    """Parse JSON membership intent and classify missing Issue refs.
+) -> PlanRecordBackup:
+    """Snapshot the plan record and source order for rollback."""
+    sources = await reading_plan_repository.list_plan_sources(db, plan_id=plan.id)
+    placements = await reading_plan_repository.list_plan_source_placements(
+        db, plan_id=plan.id
+    )
+    nodes = deepcopy(list(plan.nodes_json or []))
+    return PlanRecordBackup(
+        nodes_json=nodes,
+        sources=tuple(_source_row_to_dict(source) for source in sources),
+        placements=tuple(_placement_row_to_dict(placement) for placement in placements),
+    )
 
-    Returns:
-        Deduped nodes for existing Issues, those Issue ids, dangling refs,
-        skipped non-issue node count, and invalid JSON row count.
+
+def _source_from_backup(row: dict[str, object]) -> ReadingPlanSource:
+    """Rehydrate one source snapshot from a rollback receipt."""
+    metadata = row.get("metadata_json")
+    cbl_source_list_id = row.get("cbl_source_list_id")
+    custom_cbl_list_id = row.get("custom_cbl_list_id")
+    return ReadingPlanSource(
+        id=_backup_int(row["id"], "id"),
+        plan_id=_backup_int(row["plan_id"], "plan_id"),
+        raw_source_path=str(row["raw_source_path"]),
+        repository=str(row["repository"]) if row.get("repository") is not None else None,
+        source_path=str(row["source_path"]) if row.get("source_path") is not None else None,
+        revision_sha=(
+            str(row["revision_sha"]) if row.get("revision_sha") is not None else None
+        ),
+        content_hash=(
+            str(row["content_hash"]) if row.get("content_hash") is not None else None
+        ),
+        cbl_source_list_id=(
+            cbl_source_list_id
+            if isinstance(cbl_source_list_id, int) and not isinstance(cbl_source_list_id, bool)
+            else None
+        ),
+        custom_cbl_list_id=(
+            custom_cbl_list_id
+            if isinstance(custom_cbl_list_id, int) and not isinstance(custom_cbl_list_id, bool)
+            else None
+        ),
+        adopted_at=_parse_dt(row.get("adopted_at")),
+        recorded_at=_parse_dt(row.get("recorded_at")) or datetime.now(UTC),
+        metadata_json=metadata if isinstance(metadata, dict) else None,
+    )
+
+
+def _placement_from_backup(row: dict[str, object]) -> ReadingPlanSourcePlacement:
+    """Rehydrate one source placement from a rollback receipt."""
+    position = row.get("source_position")
+    return ReadingPlanSourcePlacement(
+        id=_backup_int(row["id"], "id"),
+        plan_id=_backup_int(row["plan_id"], "plan_id"),
+        occurrence_id=str(row["occurrence_id"]),
+        plan_source_id=_backup_int(row["plan_source_id"], "plan_source_id"),
+        source_position=(
+            position if isinstance(position, int) and not isinstance(position, bool) else None
+        ),
+    )
+
+
+async def restore_plan_record_from_backup(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    backup: PlanRecordBackup,
+) -> None:
+    """Restore ``nodes_json`` and source order from a captured backup.
+
+    Membership is not rewritten. Strict rules are not compiled.
+
+    Args:
+        db: Async database session.
+        plan: Plan whose record should be restored.
+        backup: Capture taken before the membership-authoritative trim.
     """
-    nodes, invalid_node_count = parse_plan_nodes_json(plan.nodes_json)
-    skipped_non_issue = sum(1 for node in nodes if node.node_type != "issue")
-    issue_ids = sorted({node.ref_id for node in nodes if node.node_type == "issue"})
-    existing_ids = await _existing_issue_ids(db, issue_ids)
-    skipped_missing = tuple(
-        issue_id for issue_id in issue_ids if issue_id not in existing_ids
+    plan.nodes_json = deepcopy(backup.nodes_json)
+    plan.updated_at = datetime.now(UTC)
+    await reading_plan_repository.replace_plan_sources(
+        db,
+        plan_id=plan.id,
+        sources=[_source_from_backup(row) for row in backup.sources],
+        placements=[_placement_from_backup(row) for row in backup.placements],
     )
-    deduped = _dedupe_existing_issue_nodes(nodes, existing_ids)
-    return (
-        deduped,
-        existing_ids,
-        skipped_missing,
-        skipped_non_issue,
-        invalid_node_count,
-    )
+
+
+async def _group_dropped_series(
+    db: AsyncSession,
+    issue_ids: Collection[int],
+) -> tuple[DroppedPlanSeries, ...]:
+    """Group leftover JSON issues by owning series for operator review."""
+    unique_ids = sorted({issue_id for issue_id in issue_ids if issue_id > 0})
+    if not unique_ids:
+        return ()
+    rows = (
+        await db.execute(
+            select(Thread.id, Thread.title, Issue.id, Issue.issue_number, Issue.position)
+            .join(Issue, Issue.thread_id == Thread.id)
+            .where(Issue.id.in_(unique_ids))
+            .order_by(Thread.title, Issue.position, Issue.id)
+        )
+    ).all()
+    grouped: dict[int, DroppedPlanSeries] = {}
+    order: list[int] = []
+    for thread_id, title, issue_id, issue_number, _position in rows:
+        series = grouped.get(int(thread_id))
+        if series is None:
+            grouped[int(thread_id)] = DroppedPlanSeries(
+                thread_id=int(thread_id),
+                title=str(title),
+                issue_ids=(int(issue_id),),
+                issue_numbers=(str(issue_number),),
+            )
+            order.append(int(thread_id))
+        else:
+            grouped[int(thread_id)] = DroppedPlanSeries(
+                thread_id=series.thread_id,
+                title=series.title,
+                issue_ids=(*series.issue_ids, int(issue_id)),
+                issue_numbers=(*series.issue_numbers, str(issue_number)),
+            )
+    return tuple(grouped[thread_id] for thread_id in order)
+
+
+def _json_issue_count(nodes_json: object) -> int:
+    """Count issue-typed nodes in a raw plan record."""
+    if not isinstance(nodes_json, list):
+        return 0
+    count = 0
+    for raw in nodes_json:
+        if isinstance(raw, dict) and str(raw.get("node_type")) == "issue":
+            count += 1
+    return count
 
 
 def _build_membership_report(
@@ -348,10 +707,16 @@ def _build_membership_report(
     plan_id: int,
     before: PlanConstraintSnapshot,
     after: PlanConstraintSnapshot,
+    json_issue_count_before: int,
+    json_issue_count_after: int,
     skipped_missing: tuple[int, ...],
     skipped_non_issue: int,
     invalid_node_count: int,
+    dropped_json_issue_ids: tuple[int, ...],
+    dropped_json_node_ids: tuple[str, ...],
+    dropped_series: tuple[DroppedPlanSeries, ...],
     projected_thread_entry_pairs: tuple[tuple[int, int], ...],
+    backup: PlanRecordBackup,
 ) -> MembershipReconcileReport:
     """Assemble a before/after membership report from two snapshots."""
     before_set = set(before.membership_issue_ids)
@@ -359,14 +724,61 @@ def _build_membership_report(
     return MembershipReconcileReport(
         plan_id=plan_id,
         membership_count=len(after.membership_issue_ids),
+        json_issue_count_before=json_issue_count_before,
+        json_issue_count_after=json_issue_count_after,
         skipped_missing_issue_ids=skipped_missing,
         skipped_non_issue_nodes=skipped_non_issue,
         invalid_node_count=invalid_node_count,
         inserted_issue_ids=tuple(sorted(after_set - before_set)),
         removed_issue_ids=tuple(sorted(before_set - after_set)),
+        dropped_json_issue_ids=dropped_json_issue_ids,
+        dropped_json_node_ids=dropped_json_node_ids,
+        dropped_series=dropped_series,
         before=before,
         after=after,
         projected_thread_entry_pairs=projected_thread_entry_pairs,
+        backup=backup,
+    )
+
+
+async def _plan_record_trim_projection(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    before: PlanConstraintSnapshot,
+    backup: PlanRecordBackup,
+) -> MembershipReconcileReport:
+    """Build the membership-authoritative trim report without compiling."""
+    keep_ids = set(before.membership_issue_ids)
+    kept, dropped_ids, dropped_node_ids, skipped_non_issue, invalid = (
+        trim_plan_nodes_json_to_membership(plan.nodes_json, keep_issue_ids=keep_ids)
+    )
+    existing_dropped = await _existing_issue_ids(db, dropped_ids)
+    skipped_missing = tuple(
+        issue_id for issue_id in dropped_ids if issue_id not in existing_dropped
+    )
+    kept_models, _invalid_kept = parse_plan_nodes_json(kept)
+    projected = await _projected_thread_entry_pairs(db, kept_models)
+    dropped_series = await _group_dropped_series(db, existing_dropped)
+    after = await snapshot_plan_constraint_sets(
+        db,
+        plan=plan,
+        membership_issue_ids=keep_ids,
+    )
+    return _build_membership_report(
+        plan_id=plan.id,
+        before=before,
+        after=after,
+        json_issue_count_before=_json_issue_count(plan.nodes_json),
+        json_issue_count_after=_json_issue_count(kept),
+        skipped_missing=skipped_missing,
+        skipped_non_issue=skipped_non_issue,
+        invalid_node_count=invalid,
+        dropped_json_issue_ids=dropped_ids,
+        dropped_json_node_ids=dropped_node_ids,
+        dropped_series=dropped_series,
+        projected_thread_entry_pairs=projected,
+        backup=backup,
     )
 
 
@@ -375,71 +787,114 @@ async def dry_run_plan_membership_reconcile(
     *,
     plan: ContinuityPlan,
 ) -> MembershipReconcileReport:
-    """Report the JSON-vs-membership gap without writing any rows.
+    """Report leftover JSON issues without writing any rows.
 
     Args:
         db: Async database session.
         plan: Persisted plan to inspect.
 
     Returns:
-        The same report shape as apply, with ``after`` projected from JSON.
+        The same report shape as apply, with membership unchanged.
     """
     before = await snapshot_plan_constraint_sets(db, plan=plan)
-    deduped, existing_ids, skipped_missing, skipped_non_issue, invalid = (
-        await _membership_reconcile_inputs(db, plan=plan)
-    )
-    after = await snapshot_plan_constraint_sets(
-        db,
-        plan=plan,
-        membership_issue_ids=existing_ids,
-    )
-    projected = await _projected_thread_entry_pairs(db, deduped)
-    return _build_membership_report(
-        plan_id=plan.id,
-        before=before,
-        after=after,
-        skipped_missing=skipped_missing,
-        skipped_non_issue=skipped_non_issue,
-        invalid_node_count=invalid,
-        projected_thread_entry_pairs=projected,
+    backup = await _capture_plan_record_backup(db, plan=plan)
+    return await _plan_record_trim_projection(
+        db, plan=plan, before=before, backup=backup
     )
 
 
-async def reconcile_plan_membership_from_nodes(
+async def reconcile_plan_record_to_membership(
     db: AsyncSession,
     *,
     plan: ContinuityPlan,
 ) -> MembershipReconcileReport:
-    """Rebuild one plan's membership from persisted nodes, skipping missing Issues.
+    """Trim one plan's JSON and source order to the membership table.
 
-    ``nodes_json`` is not rewritten and strict rules are not compiled. Issue
-    nodes whose ``ref_id`` does not exist cannot become membership rows (the
-    Issue FK would fail) and are reported so an authorized production repair
-    can drop or rematerialize them separately.
+    ``reading_plan_issues`` is not rewritten and strict rules are not compiled.
+    Leftover JSON issue nodes (including dangling refs) are dropped so a later
+    re-save cannot compile restrictions from series the owner already removed.
 
     Args:
         db: Async database session.
-        plan: Persisted plan whose JSON membership may have drifted.
+        plan: Persisted plan whose JSON record may have drifted.
 
     Returns:
-        Before/after membership and blocker sets plus dangling node refs.
+        Before/after membership and blocker sets plus the dropped leftovers.
     """
     before = await snapshot_plan_constraint_sets(db, plan=plan)
-    deduped, _existing_ids, skipped_missing, skipped_non_issue, invalid = (
-        await _membership_reconcile_inputs(db, plan=plan)
+    backup = await _capture_plan_record_backup(db, plan=plan)
+    report = await _plan_record_trim_projection(
+        db, plan=plan, before=before, backup=backup
     )
-    await rebuild_plan_membership(db, plan_id=plan.id, nodes=deduped)
+    kept, _dropped_ids, dropped_node_ids, _skipped, _invalid = (
+        trim_plan_nodes_json_to_membership(
+            plan.nodes_json, keep_issue_ids=before.membership_issue_ids
+        )
+    )
+    plan.nodes_json = kept
+    plan.updated_at = datetime.now(UTC)
+    await reading_plan_repository.delete_plan_source_placements_for_occurrences(
+        db, plan_id=plan.id, occurrence_ids=dropped_node_ids
+    )
+    await reading_plan_repository.delete_orphan_plan_sources(db, plan_id=plan.id)
     after = await snapshot_plan_constraint_sets(db, plan=plan)
-    projected = await _projected_thread_entry_pairs(db, deduped)
     return _build_membership_report(
-        plan_id=plan.id,
-        before=before,
+        plan_id=report.plan_id,
+        before=report.before,
         after=after,
-        skipped_missing=skipped_missing,
-        skipped_non_issue=skipped_non_issue,
-        invalid_node_count=invalid,
-        projected_thread_entry_pairs=projected,
+        json_issue_count_before=report.json_issue_count_before,
+        json_issue_count_after=_json_issue_count(kept),
+        skipped_missing=report.skipped_missing_issue_ids,
+        skipped_non_issue=report.skipped_non_issue_nodes,
+        invalid_node_count=report.invalid_node_count,
+        dropped_json_issue_ids=report.dropped_json_issue_ids,
+        dropped_json_node_ids=report.dropped_json_node_ids,
+        dropped_series=report.dropped_series,
+        projected_thread_entry_pairs=report.projected_thread_entry_pairs,
+        backup=backup,
     )
+
+
+async def drop_threads_from_plan_record(
+    db: AsyncSession,
+    *,
+    plan: ContinuityPlan,
+    thread_ids: Collection[int],
+) -> tuple[tuple[int, ...], list[ContinuityPlanNode]]:
+    """Remove every issue of the given series from the plan record.
+
+    Updates ``nodes_json`` and rebuilds membership plus source order from the
+    remaining nodes in one write so the two cannot diverge. Does not compile
+    strict rules; live CBL/planner saves call the canonical writer afterwards.
+
+    Args:
+        db: Async database session.
+        plan: Plan to edit.
+        thread_ids: Series to drop from the plan.
+
+    Returns:
+        Dropped issue ids and the remaining validated nodes.
+    """
+    unique_thread_ids = sorted({thread_id for thread_id in thread_ids if thread_id > 0})
+    if not unique_thread_ids:
+        nodes, _invalid = parse_plan_nodes_json(plan.nodes_json)
+        return (), nodes
+    drop_ids = tuple(
+        (
+            await db.execute(
+                select(Issue.id).where(Issue.thread_id.in_(unique_thread_ids))
+            )
+        ).scalars().all()
+    )
+    kept_raw = drop_issue_nodes_from_plan_json(
+        list(plan.nodes_json or []),
+        drop_issue_ids=drop_ids,
+    )
+    plan.nodes_json = kept_raw
+    plan.updated_at = datetime.now(UTC)
+    nodes, _invalid = parse_plan_nodes_json(kept_raw)
+    await rebuild_plan_membership(db, plan_id=plan.id, nodes=nodes)
+    return tuple(sorted(drop_ids)), nodes
 
 
 def _source_metadata_for_node(node: ContinuityPlanNode) -> dict[str, object] | None:
