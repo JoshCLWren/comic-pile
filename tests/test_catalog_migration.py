@@ -11,20 +11,17 @@ that the new columns are nullable with no backfill.
 from __future__ import annotations
 
 import importlib.util
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from types import ModuleType
 
 import pytest
+import pytest_asyncio
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import Connection, inspect, text
-
-from app.models.catalog import CatalogIssue, CatalogSeries
-from app.models.external_identity import ExternalIdentity
-from app.models.issue import Issue
-from app.models.thread import Thread
+from sqlalchemy import Connection, inspect
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_PATH = (
@@ -91,7 +88,7 @@ CREATE TABLE external_identities (
 """
 
 
-def _load_migration_module() -> Any:
+def _load_migration_module() -> ModuleType:
     """Load the catalog migration module by path."""
     spec = importlib.util.spec_from_file_location(
         "m5d300000001_add_catalog_identity_tables", MIGRATION_PATH
@@ -103,16 +100,18 @@ def _load_migration_module() -> Any:
 
 
 @pytest.fixture
-def migration_module() -> Any:
+def migration_module() -> ModuleType:
     """Provide the loaded catalog migration module."""
     return _load_migration_module()
 
 
-@pytest.fixture
-def parent_schema(db_engine: Any) -> Iterator[Connection]:
+@pytest_asyncio.fixture(scope="function")
+async def parent_schema(
+    db_engine: AsyncEngine,
+) -> AsyncIterator[AsyncConnection]:
     """Create a temporary pre-migration schema with populated personal rows.
 
-    Yields a sync connection bound to the temporary schema. The schema is
+    Yields an async connection bound to the temporary schema. The schema is
     dropped on teardown so the shared test database is left unchanged.
     """
 
@@ -143,7 +142,7 @@ def parent_schema(db_engine: Any) -> Iterator[Connection]:
             "read_at, created_at) VALUES "
             "(100, 10, '1', 1, 'read', "
             f"'{now.isoformat()}', '{now.isoformat()}'), "
-            "(101, 10, '2', 2, 'unread', NULL, '{now.isoformat()}')"
+            f"(101, 10, '2', 2, 'unread', NULL, '{now.isoformat()}')"
         )
         sync_conn.exec_driver_sql(
             "INSERT INTO external_identities (id, provider, entity_type, external_id, "
@@ -155,7 +154,7 @@ def parent_schema(db_engine: Any) -> Iterator[Connection]:
         )
 
     def _teardown(sync_conn: Connection) -> None:
-        sync_conn.exec_driver_sql('DROP SCHEMA IF EXISTS "%s" CASCADE' % TEMP_SCHEMA)
+        sync_conn.exec_driver_sql(f'DROP SCHEMA IF EXISTS "{TEMP_SCHEMA}" CASCADE')
 
     async with db_engine.connect() as connection:
         await connection.run_sync(_prepare)
@@ -165,7 +164,9 @@ def parent_schema(db_engine: Any) -> Iterator[Connection]:
             await connection.run_sync(_teardown)
 
 
-def _run_migration(connection: Connection, migration_module: Any, direction: str) -> None:
+def _run_migration(
+    connection: Connection, migration_module: ModuleType, direction: str
+) -> None:
     """Run the migration module's upgrade or downgrade against a sync connection."""
     migration_context = MigrationContext.configure(
         connection,
@@ -178,7 +179,7 @@ def _run_migration(connection: Connection, migration_module: Any, direction: str
             migration_module.downgrade()
 
 
-async def _seed_catalog_rows_and_links(connection: Connection) -> None:
+async def _seed_catalog_rows_and_links(connection: AsyncConnection) -> None:
     """After upgrade, create catalog rows and reader links with personal state intact."""
     now = datetime.now(UTC).isoformat()
 
@@ -203,7 +204,7 @@ async def _seed_catalog_rows_and_links(connection: Connection) -> None:
     await connection.run_sync(_seed)
 
 
-async def _assert_parent_personal_rows(connection: Connection) -> None:
+async def _assert_personal_rows(connection: AsyncConnection) -> None:
     """Assert personal rows and their primary keys survived the migration."""
 
     def _check(sync_conn: Connection) -> None:
@@ -244,7 +245,9 @@ async def _assert_parent_personal_rows(connection: Connection) -> None:
     await connection.run_sync(_check)
 
 
-def _column_is_nullable(connection: Connection, table: str, column: str) -> bool:
+async def _column_is_nullable(
+    connection: AsyncConnection, table: str, column: str
+) -> bool:
     def _check(sync_conn: Connection) -> bool:
         columns = {
             col["name"]: col["nullable"]
@@ -252,30 +255,32 @@ def _column_is_nullable(connection: Connection, table: str, column: str) -> bool
         }
         return bool(columns.get(column))
 
-    return connection.run_sync(_check)
+    return await connection.run_sync(_check)
 
 
-def _table_exists(connection: Connection, table: str) -> bool:
+async def _table_exists(connection: AsyncConnection, table: str) -> bool:
     def _check(sync_conn: Connection) -> bool:
         return inspect(sync_conn).has_table(table)
 
-    return connection.run_sync(_check)
+    return await connection.run_sync(_check)
 
 
-def _index_names(connection: Connection, table: str) -> set[str]:
+async def _index_names(connection: AsyncConnection, table: str) -> set[str]:
     def _check(sync_conn: Connection) -> set[str]:
-        return {
-            index["name"]
-            for index in inspect(sync_conn).get_indexes(table)
-        }
+        names: set[str] = set()
+        for index in inspect(sync_conn).get_indexes(table):
+            name = index.get("name")
+            if isinstance(name, str):
+                names.add(name)
+        return names
 
-    return connection.run_sync(_check)
+    return await connection.run_sync(_check)
 
 
 @pytest.mark.asyncio
 async def test_upgrade_is_additive_and_preserves_personal_rows(
-    parent_schema: Connection,
-    migration_module: Any,
+    parent_schema: AsyncConnection,
+    migration_module: ModuleType,
 ) -> None:
     """Upgrade creates catalog tables, nullable links, and keeps personal rows."""
     await _assert_personal_rows(parent_schema)
@@ -284,22 +289,22 @@ async def test_upgrade_is_additive_and_preserves_personal_rows(
         lambda sync_conn: _run_migration(sync_conn, migration_module, "upgrade")
     )
 
-    assert _table_exists(parent_schema, "catalog_series")
-    assert _table_exists(parent_schema, "catalog_issues")
-    assert _column_is_nullable(parent_schema, "threads", "catalog_series_id")
-    assert _column_is_nullable(parent_schema, "issues", "catalog_issue_id")
+    assert await _table_exists(parent_schema, "catalog_series")
+    assert await _table_exists(parent_schema, "catalog_issues")
+    assert await _column_is_nullable(parent_schema, "threads", "catalog_series_id")
+    assert await _column_is_nullable(parent_schema, "issues", "catalog_issue_id")
 
-    series_indexes = _index_names(parent_schema, "catalog_series")
+    series_indexes = await _index_names(parent_schema, "catalog_series")
     assert "ix_catalog_series_external_identity" in series_indexes
 
-    issue_indexes = _index_names(parent_schema, "catalog_issues")
+    issue_indexes = await _index_names(parent_schema, "catalog_issues")
     assert "ix_catalog_issues_external_identity" in issue_indexes
     assert "ix_catalog_issues_catalog_series" in issue_indexes
 
-    thread_indexes = _index_names(parent_schema, "threads")
+    thread_indexes = await _index_names(parent_schema, "threads")
     assert "ix_thread_catalog_series" in thread_indexes
 
-    reader_issue_indexes = _index_names(parent_schema, "issues")
+    reader_issue_indexes = await _index_names(parent_schema, "issues")
     assert "ix_issue_catalog_issue" in reader_issue_indexes
 
     # No backfill: catalog tables start empty and reader links stay NULL.
@@ -323,8 +328,8 @@ async def test_upgrade_is_additive_and_preserves_personal_rows(
 
 @pytest.mark.asyncio
 async def test_upgrade_then_link_then_downgrade_restores_parent_shape(
-    parent_schema: Connection,
-    migration_module: Any,
+    parent_schema: AsyncConnection,
+    migration_module: ModuleType,
 ) -> None:
     """Upgrade, optional series link, then downgrade keep personal rows intact."""
     await parent_schema.run_sync(
@@ -349,8 +354,8 @@ async def test_upgrade_then_link_then_downgrade_restores_parent_shape(
         lambda sync_conn: _run_migration(sync_conn, migration_module, "downgrade")
     )
 
-    assert not _table_exists(parent_schema, "catalog_series")
-    assert not _table_exists(parent_schema, "catalog_issues")
+    assert not await _table_exists(parent_schema, "catalog_series")
+    assert not await _table_exists(parent_schema, "catalog_issues")
 
     def _columns_gone(sync_conn: Connection) -> None:
         thread_columns = {
@@ -368,8 +373,8 @@ async def test_upgrade_then_link_then_downgrade_restores_parent_shape(
 
 @pytest.mark.asyncio
 async def test_downgrade_is_idempotent_after_upgrade_without_links(
-    parent_schema: Connection,
-    migration_module: Any,
+    parent_schema: AsyncConnection,
+    migration_module: ModuleType,
 ) -> None:
     """Downgrade with NULL links (no catalog rows) still restores parent shape."""
     await parent_schema.run_sync(
@@ -379,8 +384,8 @@ async def test_downgrade_is_idempotent_after_upgrade_without_links(
         lambda sync_conn: _run_migration(sync_conn, migration_module, "downgrade")
     )
 
-    assert not _table_exists(parent_schema, "catalog_series")
-    assert not _table_exists(parent_schema, "catalog_issues")
+    assert not await _table_exists(parent_schema, "catalog_series")
+    assert not await _table_exists(parent_schema, "catalog_issues")
     await _assert_personal_rows(parent_schema)
 
 
