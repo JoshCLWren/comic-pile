@@ -550,7 +550,7 @@ async def test_release_source_endpoint_performance(
     
     monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
     headers = {"X-Release-Writer-Token": "writer-secret"}
-    
+
     # Create a release with a large body to test the optimization
     large_body = "This is a very large body content " * 100  # ~2500 characters
     payload = {
@@ -562,12 +562,17 @@ async def test_release_source_endpoint_performance(
         "summary": "Test summary",
         "body": large_body,
         "visibility": "public",
+        "released_at": "2026-01-01T00:00:00Z",
         "provenance_json": {
             "automation": "test",
             "reader_reachable_path": "/test-path",
+            "classification": "public",
+            "classification_reason": "Test release for performance testing",
+            "user_visible_evidence": "This is a test release for performance testing of the releases/source endpoint",
+            "reader_reachable": True,
         },
     }
-    
+
     # Create the release first
     create_response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
     assert create_response.status_code == 200

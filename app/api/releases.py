@@ -18,7 +18,6 @@ from app.schemas.release import (
 )
 from app.services.release_ledger import (
     ReleaseSourceConflictError,
-    find_release_by_source,
     find_release_minimal_by_source,
     get_published_release,
     list_published_releases,
