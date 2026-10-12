@@ -348,6 +348,83 @@ async def test_changed_decisions_merge_into_the_same_plan(
 
 
 @pytest.mark.asyncio
+async def test_updated_list_content_merges_into_the_same_plan(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Re-adopting an updated source list applies new entries on the claimed plan.
+
+    A lost-response retry of the original fingerprint stays a no-op. Adding a
+    new importable issue and bumping the source hash is a different request
+    and must materialize that issue onto the existing plan, not skip it.
+    """
+    user = await get_or_create_user_async(async_db)
+    tag = f"update-{_suffix()}"
+    source_list, _owned = await _seed_list(async_db, user_id=user.id, tag=tag)
+    issues_before = await async_db.scalar(select(func.count()).select_from(Issue))
+    original_payload = {
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [],
+        "content_hash": source_list.content_hash,
+        "revision_sha": source_list.revision_sha,
+    }
+    first = await auth_client.post(
+        f"/api/v1/cbl/{source_list.id}/adoption-commit",
+        json=original_payload,
+    )
+    assert first.status_code == 201, first.text
+    first_body = first.json()
+    assert len([node for node in first_body["nodes"] if node["node_type"] == "issue"]) == 2
+
+    extra_identity = await _identity(
+        async_db,
+        entity_type="issue",
+        external_id=f"4000-extra-{tag}",
+    )
+    extra_identity.metadata_json = {
+        "volume": {"name": f"Extra {tag}", "start_year": 2002},
+    }
+    async_db.add(
+        CBLSourceEntry(
+            list_id=source_list.id,
+            position=3,
+            series_name=f"Extra {tag}",
+            issue_number="1",
+            volume_year=2002,
+            external_issue_identity_id=extra_identity.id,
+        )
+    )
+    new_hash = f"hash-{tag}-v2"
+    new_revision = f"rev-{tag}-v2"
+    source_list.content_hash = new_hash
+    source_list.revision_sha = new_revision
+    source_list.declared_issue_count = 3
+    await async_db.commit()
+
+    updated = await auth_client.post(
+        f"/api/v1/cbl/{source_list.id}/adoption-commit",
+        json={
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": new_hash,
+            "revision_sha": new_revision,
+        },
+    )
+    assert updated.status_code == 201, updated.text
+    updated_body = updated.json()
+    assert updated_body["id"] == first_body["id"]
+    issue_nodes = [node for node in updated_body["nodes"] if node["node_type"] == "issue"]
+    assert len(issue_nodes) == 3
+    assert 3 in updated_body["created_positions"]
+    assert await async_db.scalar(
+        select(func.count()).select_from(ContinuityPlan).where(ContinuityPlan.user_id == user.id)
+    ) == 1
+    assert await async_db.scalar(select(func.count()).select_from(Issue)) == (issues_before or 0) + 2
+
+
+@pytest.mark.asyncio
 async def test_concurrent_double_submit_creates_one_plan(db_engine: AsyncEngine) -> None:
     """Two overlapping adoption-commits for the same user and list create one plan.
 

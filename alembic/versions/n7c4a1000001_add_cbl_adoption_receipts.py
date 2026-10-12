@@ -4,6 +4,11 @@ Revision ID: n7c4a1000001
 Revises: c25530000001
 Create Date: 2026-10-12 00:00:00.000000
 
+Parent is the Roll cutover revision ``c25530000001``. #3495 patches that
+revision in place (same revision id) so production can complete the
+backfill; it does not mint a new Alembic revision. This child stays
+``down_revision = "c25530000001"`` after #3495 merges. Deploy this
+revision only after that patched cutover has landed.
 """
 
 from collections.abc import Sequence
