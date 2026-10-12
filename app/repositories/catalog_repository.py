@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import populate_existing
 
 from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.external_identity import ExternalIdentity
@@ -34,20 +35,24 @@ async def search_catalog_series(
         limit: Maximum number of results to return (hard capped at 50).
 
     Returns:
-        List of matching external identities for series.
+        List of external identities for matching catalog series.
     """
-    query = select(ExternalIdentity).where(
-        ExternalIdentity.entity_type == "series",
-        ExternalIdentity.provider == provider.strip().lower(),
+    from app.models.external_identity import ExternalIdentity
+
+    query = (
+        select(ExternalIdentity)
+        .join(CatalogSeries, CatalogSeries.canonical_external_identity_id == ExternalIdentity.id)
+        .where(
+            ExternalIdentity.entity_type == "series",
+            ExternalIdentity.provider == provider.strip().lower(),
+        )
     )
 
     if search:
         normalized = search.strip().lower()
         query = query.where(ExternalIdentity.external_id.ilike(f"%{normalized}%"))
 
-    # Apply hard limit
     query = query.limit(limit)
-    
     result = await db.execute(query)
     return list(result.scalars().unique().all())
 
@@ -70,32 +75,47 @@ async def search_catalog_issues(
         limit: Maximum number of results to return (hard capped at 50).
 
     Returns:
-        List of matching external identities for issues.
+        List of external identities for matching catalog issues.
     """
-    query = select(ExternalIdentity).where(
-        ExternalIdentity.entity_type == "issue",
-        ExternalIdentity.provider == provider.strip().lower(),
+    from app.models.external_identity import ExternalIdentity
+
+    query = (
+        select(ExternalIdentity)
+        .join(CatalogIssue, CatalogIssue.canonical_external_identity_id == ExternalIdentity.id)
+        .where(
+            ExternalIdentity.entity_type == "issue",
+            ExternalIdentity.provider == provider.strip().lower(),
+        )
     )
 
     # If series_external_id is provided, filter by series first
     if series_external_id:
-        series_result = await db.execute(
-            select(ExternalIdentity).where(
+        series_ext_result = await db.execute(
+            select(ExternalIdentity.id).where(
                 ExternalIdentity.entity_type == "series",
                 ExternalIdentity.external_id == series_external_id,
             )
         )
-        series_identity = series_result.scalar_one_or_none()
-        if series_identity is None:
+        series_ext_id = series_ext_result.scalar_one_or_none()
+        if series_ext_id is not None:
+            series_catalog_result = await db.execute(
+                select(CatalogSeries.id).where(CatalogSeries.canonical_external_identity_id == series_ext_id)
+            )
+            catalog_series_id = series_catalog_result.scalar_one_or_none()
+            if catalog_series_id is not None:
+                query = query.join(CatalogSeries, CatalogSeries.id == CatalogIssue.catalog_series_id).where(
+                    CatalogSeries.id == catalog_series_id
+                )
+            else:
+                return []
+        else:
             return []
 
     if search:
         normalized = search.strip().lower()
         query = query.where(ExternalIdentity.external_id.ilike(f"%{normalized}%"))
 
-    # Apply hard limit
     query = query.limit(limit)
-    
     result = await db.execute(query)
     return list(result.scalars().unique().all())
 
