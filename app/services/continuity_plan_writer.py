@@ -9,7 +9,8 @@ instead of inventing a second strict compiler.
 The compiler's hard-edge semantics (#2553 Phase B):
   1. ``strict_sequential`` plans compile inferred ``item_read`` gates only
      at crossover points (Thread natural first issues waiting on a prior
-     required issue from a different Thread). Series run side by side
+     required issue from a different Thread, plus parent-anchored annual /
+     special / one-shot / Giant-Size side Threads). Series run side by side
      between those points. List adjacency is not a chain. Same-thread
      adjacency is never compiled. ``inferred_gate_kind`` is provenance
      only and does not change which pairs are emitted;

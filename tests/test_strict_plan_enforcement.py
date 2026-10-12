@@ -221,8 +221,8 @@ def test_non_crossover_list_adjacency_is_not_compiled() -> None:
     """Mid-run hops between series are list adjacency, not crossover points."""
     nodes = _nodes_from_ids([45, 360])
     index = {
-        45: IssueThreadIndex(1, 45, False),
-        360: IssueThreadIndex(2, 360, False),
+        45: IssueThreadIndex(1, 45, False, 79),
+        360: IssueThreadIndex(2, 360, False, 547),
     }
     assert strict_plan_item_read_pairs(nodes, index) == []
     killing_ground = [101, 102]
@@ -230,17 +230,29 @@ def test_non_crossover_list_adjacency_is_not_compiled() -> None:
     later_start = [301]
     mixed = _nodes_from_ids(killing_ground + wild_hunt + later_start)
     mixed_index = {
-        101: IssueThreadIndex(1, 1, True),
-        102: IssueThreadIndex(1, 2, False),
-        201: IssueThreadIndex(2, 1, True),
-        202: IssueThreadIndex(2, 2, False),
-        203: IssueThreadIndex(2, 3, False),
-        301: IssueThreadIndex(3, 1, True),
+        101: IssueThreadIndex(1, 1, True, 2),
+        102: IssueThreadIndex(1, 2, False, 2),
+        201: IssueThreadIndex(2, 1, True, 6),
+        202: IssueThreadIndex(2, 2, False, 6),
+        203: IssueThreadIndex(2, 3, False, 6),
+        301: IssueThreadIndex(3, 1, True, 12),
     }
     compiled = strict_plan_item_read_pairs(mixed, mixed_index)
     assert compiled == [(102, 201), (203, 301)]
     assert (102, 202) not in compiled
     assert (102, 203) not in compiled
+
+
+def test_parent_anchored_annual_compiles_before_and_resume_gates() -> None:
+    """A one-shot between two parent-series issues is a crossover insertion."""
+    nodes = _nodes_from_ids([10, 11, 201, 12])
+    index = {
+        10: IssueThreadIndex(1, 10, False, 20),
+        11: IssueThreadIndex(1, 11, False, 20),
+        201: IssueThreadIndex(2, 1, True, 1),
+        12: IssueThreadIndex(1, 12, False, 20),
+    }
+    assert strict_plan_item_read_pairs(nodes, index) == [(11, 201), (201, 12)]
 
 
 def test_josh_cbl_order_only_frontiers_classify_crossover_gates() -> None:
@@ -285,6 +297,26 @@ def test_josh_cbl_order_only_frontiers_classify_crossover_gates() -> None:
     assert by_thread[3177].label == "Promethea #13"
     assert by_thread[114].label == "Doom Patrol #9"
     assert by_thread[3171].label == "Geiger #5"
+    assert {row.thread_id: row.anchor_label for row in JOSH_CBL_ORDER_ONLY_ROLL_FRONTIERS} == {
+        98: None,
+        305: None,
+        3152: "X-Men #90",
+        18595: "Cable #77",
+        18646: "Cable #64",
+        18655: "Generation X #58",
+        18660: "X-Men #85",
+        18673: "Uncanny X-Men #380",
+        18689: "X-Men Unlimited #22",
+        18699: "X-Men / Dr. Doom '98 #1",
+        18719: "Generation X 1999 #1",
+        18720: "Wolverine #145",
+        18721: "X-Men #91",
+        18722: "Cable #76",
+        18560: "Fantastic Four (1961) #102",
+        3177: None,
+        114: None,
+        3171: None,
+    }
     for key in READING_ORDER_SOURCE_BACKED_MANIFESTS:
         spec = PRODUCTION_SOURCE_BACKED_SPECS[key]
         assert spec.inferred_gate_kind == "thread_entry"
@@ -332,13 +364,14 @@ async def test_strict_plan_crossover_keeps_jsa_off_roll_until_starman_55_is_read
         queue_position=1,
         read_through=1,
     )
-    jsa, jsa_issues = await _make_series(
+    jsa, jsa_all = await _make_series(
         async_db,
         user_id=user.id,
         title="JSA (Robinson / Goyer / Johns)",
-        numbers=["1", "2"],
+        numbers=["1", "2", "3", "4", "5", "6"],
         queue_position=2,
     )
+    jsa_issues = jsa_all[:2]
     starman_55 = starman_issues[1]
     await async_db.commit()
 
@@ -378,6 +411,74 @@ async def test_strict_plan_crossover_keeps_jsa_off_roll_until_starman_55_is_read
     assert starman.id not in blocked_after
     assert jsa.id not in blocked_after
     assert await get_blocking_explanations(jsa.id, user.id, async_db) == []
+
+
+@pytest.mark.asyncio
+async def test_annual_side_thread_blocks_until_parent_and_blocks_parent_resume(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A parent-anchored annual is blocked by the issue before it; parent resumes after it."""
+    user = await get_or_create_user_async(async_db)
+    xmen, xmen_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="X-Men",
+        numbers=["89", "90", "91", "92", "93", "94"],
+        queue_position=1,
+        read_through=2,
+    )
+    annual, annual_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="X-Men 1999 (1999)",
+        numbers=["1"],
+        queue_position=2,
+    )
+    parent_before = xmen_issues[2]
+    parent_after = xmen_issues[3]
+    await async_db.commit()
+
+    created = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload(
+            "Late-90s X-Men Reading Order",
+            [xmen_issues[1], parent_before, annual_issues[0], parent_after],
+        ),
+    )
+    assert created.status_code == 201, created.text
+    compiled = await _compiled_pairs(
+        async_db, user_id=user.id, plan_id=created.json()["id"]
+    )
+    assert compiled == {
+        (parent_before.id, annual_issues[0].id),
+        (annual_issues[0].id, parent_after.id),
+    }
+
+    roll_before = await _roll_ids(user.id, async_db)
+    assert xmen.id in roll_before
+    assert annual.id not in roll_before
+
+    parent_before.status = "read"
+    parent_before.read_at = datetime.now(UTC)
+    xmen.next_unread_issue_id = parent_after.id
+    xmen.issues_remaining = 3
+    await async_db.flush()
+
+    roll_mid = await _roll_ids(user.id, async_db)
+    assert annual.id in roll_mid
+    assert xmen.id not in roll_mid
+
+    annual_issues[0].status = "read"
+    annual_issues[0].read_at = datetime.now(UTC)
+    annual.next_unread_issue_id = None
+    annual.issues_remaining = 0
+    annual.status = "completed"
+    await async_db.flush()
+
+    roll_after = await _roll_ids(user.id, async_db)
+    assert xmen.id in roll_after
+    assert annual.id not in roll_after
 
 
 @pytest.mark.asyncio
