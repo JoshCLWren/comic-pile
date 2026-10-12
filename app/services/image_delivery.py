@@ -53,26 +53,6 @@ _COMICVINE_CANONICAL_SCHEME = "https"
 _COMICVINE_CANONICAL_HOST = "comicvine.gamespot.com"
 _COMICVINE_CANONICAL_PATH_PREFIX = "/a"
 
-# In-memory caches for performance optimization
-# DNS resolution cache: hostname -> (addresses, timestamp)
-# TTL of 5 minutes (300 seconds) balances freshness with performance
-_DNS_CACHE: dict[str, tuple[list[ipaddress.IPv4Address | ipaddress.IPv6Address], float]] = {}
-_DNS_CACHE_TTL = 300.0
-
-# Optimized image cache: (validated_url, target_width) -> OptimizedImage
-# Max 100 entries to bound memory usage
-_IMAGE_CACHE_MAX_SIZE = 100
-_IMAGE_CACHE: dict[tuple[str, int], OptimizedImage] = {}
-_IMAGE_CACHE_ORDER: list[tuple[str, int]] = []
-
-
-def clear_caches() -> None:
-    """Clear all in-memory caches. Used by tests to ensure isolation."""
-    _DNS_CACHE.clear()
-    _IMAGE_CACHE.clear()
-    _IMAGE_CACHE_ORDER.clear()
-
-
 class ImageDeliveryError(Exception):
     """Base error for remote image delivery failures."""
 
@@ -93,6 +73,26 @@ class OptimizedImage:
     media_type: str
     width: int
     transcoded: bool
+
+
+# In-memory caches for performance optimization
+# DNS resolution cache: hostname -> (addresses, timestamp)
+# TTL of 5 minutes (300 seconds) balances freshness with performance
+_DNS_CACHE: dict[str, tuple[list[ipaddress.IPv4Address | ipaddress.IPv6Address], float]] = {}
+_DNS_CACHE_TTL = 300.0
+
+# Optimized image cache: (validated_url, target_width) -> OptimizedImage
+# Max 100 entries to bound memory usage
+_IMAGE_CACHE_MAX_SIZE = 100
+_IMAGE_CACHE: dict[tuple[str, int], OptimizedImage] = {}
+_IMAGE_CACHE_ORDER: list[tuple[str, int]] = []
+
+
+def clear_caches() -> None:
+    """Clear all in-memory caches. Used by tests to ensure isolation."""
+    _DNS_CACHE.clear()
+    _IMAGE_CACHE.clear()
+    _IMAGE_CACHE_ORDER.clear()
 
 
 def resolve_variant_width(requested_width: int) -> int:
