@@ -89,7 +89,7 @@ BLOCKED_LABELS = frozenset(
 # may be reported as queue-eligible by the diagnostic.
 TERMINAL_LABELS = frozenset({"ralph-status:done", "factory:ready"})
 
-FACTORY_OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
+FACTORY_OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$")
 
 _DEP_ON_RE = re.compile(r"(?:[Dd]epends?\s+on)\s+([^\n]+)")
 _NUMBER_REF_RE = re.compile(r"#(\d+)")

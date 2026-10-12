@@ -385,7 +385,7 @@ def replace_factory_labels(number: int, owner: str, stage: str | None = None) ->
            input_json={"labels": sorted(set(labels))})
 
 
-OWNER_RE = re.compile("^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
+OWNER_RE = re.compile("^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$")
 STAGE_LABELS = {'factory:building', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:ready', 'factory:blocked'}
 
 
