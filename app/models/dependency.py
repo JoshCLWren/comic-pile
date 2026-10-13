@@ -40,6 +40,7 @@ class Dependency(Base):
         ),
         UniqueConstraint("source_issue_id", "target_issue_id", name="uq_dependency_issue_edge"),
         Index("ix_dependencies_target_issue_id", "target_issue_id"),
+        Index("ix_dependencies_source_issue_id", "source_issue_id"),
     )
 
     source_issue: Mapped[Issue] = relationship(
