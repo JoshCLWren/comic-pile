@@ -37,8 +37,7 @@ from app.services.session_response import (
     get_session_with_thread_safe,
 )
 from app.services.snooze_service import derive_cross_session_excluded_thread_ids
-from app.repositories import tag_repository
-from app.schemas.tags import TagResponse
+from app.services.tag_service import visible_thread_tags
 from app.schemas import (
     ExplainableFactorResponse,
     OverrideRequest,
@@ -1401,37 +1400,21 @@ async def roll_bootstrap(
     excluded_count = len(excluded_list)
     inactive_count = len(inactive)
 
-    # Tags for issue #3425: batched single query, applied after stale/excluded
+    # Tags for issue #3425: one batched read, applied after the stale/excluded
     # state is fully materialized so no forward reference is possible.
-    all_thread_ids: list[int] = []
-    all_thread_ids.extend(t.id for t in roll_pool)
-    all_thread_ids.extend(t.id for t in snoozed_threads)
-    all_thread_ids.extend(t.id for t in skipped_threads)
-    all_thread_ids.extend(t.id for t in blocked_threads)
-    if stale_thread is not None:
-        all_thread_ids.append(stale_thread.id)
-    all_thread_ids.extend(e.thread_id for e in excluded.values())
-    all_thread_ids.extend(e.thread_id for e in inactive)
-    all_thread_ids = list(dict.fromkeys(all_thread_ids))
-
-    thread_targets = [("Thread", tid) for tid in all_thread_ids]
-    tag_assignments = await tag_repository.list_visible_assignments_for_targets(
-        db, user_id, thread_targets
+    tags_by_thread = await visible_thread_tags(
+        db,
+        user_id,
+        [
+            *[thread.id for thread in roll_pool],
+            *[thread.id for thread in snoozed_threads],
+            *[thread.id for thread in skipped_threads],
+            *[thread.id for thread in blocked_threads],
+            *([stale_thread.id] if stale_thread is not None else []),
+            *[entry.thread_id for entry in excluded.values()],
+            *[entry.thread_id for entry in inactive],
+        ],
     )
-    tags_by_thread: dict[int, list[TagResponse]] = {}
-    for tag, assignment in tag_assignments:
-        tags_by_thread.setdefault(assignment.target_id, []).append(
-            TagResponse(
-                id=tag.id,
-                name=tag.name,
-                normalized_name=tag.normalized_name,
-                scope=tag.scope,
-                owner_user_id=tag.owner_user_id,
-                color=tag.color,
-                created_at=tag.created_at,
-                updated_at=tag.updated_at,
-            )
-        )
 
     for thread in roll_pool:
         thread.tags = tags_by_thread.get(thread.id, [])

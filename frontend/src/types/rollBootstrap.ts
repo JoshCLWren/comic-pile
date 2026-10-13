@@ -1,7 +1,10 @@
 import type { ReadingBandwidth, ReadingIntent, SessionMode, SessionThread } from './index'
-import type { Tag } from '../services/api-tags'
+import type { components } from '../generated/openapi'
 
 export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectionGuidance } from './index'
+
+/** Visible tags carried on a roll pool or excluded-series entry (issue #3425). */
+type ThreadTag = components['schemas']['TagResponse']
 
 /** Lightweight thread summary returned by the Roll bootstrap endpoint. */
 export interface RollBootstrapThread {
@@ -12,7 +15,7 @@ export interface RollBootstrapThread {
   issue_number?: string | null
   route_labels?: string[]
   last_activity_at?: string | null
-  tags?: Tag[]
+  tags?: ThreadTag[]
 }
 
 /** One series excluded from the roll pool, with the reason the user can understand. */
@@ -22,7 +25,7 @@ export interface ThreadExclusionReason {
   format: string
   reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue"
   detail?: string | null
-  tags?: Tag[]
+  tags?: ThreadTag[]
 }
 
 /** One direct continuity blocker for a pending roll. */

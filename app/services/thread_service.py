@@ -20,7 +20,6 @@ from app.repositories import (
     continuity_repository,
     issue_repository,
     reading_session_repository,
-    tag_repository,
     thread_repository,
 )
 from app.schemas import (
@@ -38,7 +37,7 @@ from app.schemas import (
 )
 from app.schemas.tags import TagResponse, TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
-from app.services.tag_service import purge_target_assignments
+from app.services.tag_service import purge_target_assignments, visible_thread_tags
 from app.services.queue_pagination import (
     QueueCursor,
     QueueSort,
@@ -328,23 +327,8 @@ async def list_queue_threads(
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
-    # Fetch tags for threads on this page (batched, no N+1).
-    thread_targets = [("Thread", tr.id) for tr in thread_responses]
-    tag_assignments = await tag_repository.list_visible_assignments_for_targets(db, user_id, thread_targets)
-    tags_by_thread: dict[int, list[TagResponse]] = {}
-    for tag, assignment in tag_assignments:
-        tags_by_thread.setdefault(assignment.target_id, []).append(
-            TagResponse(
-                id=tag.id,
-                name=tag.name,
-                normalized_name=tag.normalized_name,
-                scope=tag.scope,
-                owner_user_id=tag.owner_user_id,
-                color=tag.color,
-                created_at=tag.created_at,
-                updated_at=tag.updated_at,
-            )
-        )
+    # Fetch tags for this page in one batched read (issue #3425).
+    tags_by_thread = await visible_thread_tags(db, user_id, [tr.id for tr in thread_responses])
 
     queue_items = [
         to_queue_list_item(tr, mapping_health_map.get(tr.id), tags_by_thread.get(tr.id, []))
@@ -434,23 +418,8 @@ async def list_completed_threads(
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
-    # Fetch tags for threads on this page (batched, no N+1).
-    thread_targets = [("Thread", tr.id) for tr in thread_responses]
-    tag_assignments = await tag_repository.list_visible_assignments_for_targets(db, user_id, thread_targets)
-    tags_by_thread: dict[int, list[TagResponse]] = {}
-    for tag, assignment in tag_assignments:
-        tags_by_thread.setdefault(assignment.target_id, []).append(
-            TagResponse(
-                id=tag.id,
-                name=tag.name,
-                normalized_name=tag.normalized_name,
-                scope=tag.scope,
-                owner_user_id=tag.owner_user_id,
-                color=tag.color,
-                created_at=tag.created_at,
-                updated_at=tag.updated_at,
-            )
-        )
+    # Fetch tags for this page in one batched read (issue #3425).
+    tags_by_thread = await visible_thread_tags(db, user_id, [tr.id for tr in thread_responses])
 
     queue_items = [
         to_queue_list_item(tr, mapping_health_map.get(tr.id), tags_by_thread.get(tr.id, []))

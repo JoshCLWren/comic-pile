@@ -1,5 +1,4 @@
 import type { components } from '../generated/openapi'
-import type { Tag } from '../services/api-tags'
 
 /**
  * Represents a thread in list view (QueuePage).
@@ -9,9 +8,7 @@ import type { Tag } from '../services/api-tags'
  * last_rating, or is_test to reduce payload
  * size for large lists.
  */
-export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
-  tags?: Tag[]
-}
+export type ThreadListItem = components['schemas']['QueueThreadListItem']
 
 /**
  * Represents a comic thread/series

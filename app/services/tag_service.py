@@ -26,7 +26,7 @@ from app.constants import (
 )
 from app.models import ContinuityPlan, Issue, Tag, TagAssignment, Thread, User
 from app.repositories import tag_repository
-from app.schemas.tags import TagScope
+from app.schemas.tags import TagResponse, TagScope, TagTargetType
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
 
 
@@ -272,6 +272,52 @@ async def _validate_target(
         raise ForbiddenError(
             "You may only assign private tags to targets you own"
         )
+
+
+async def visible_thread_tags(
+    db: AsyncSession, viewer_user_id: int, thread_ids: Iterable[int]
+) -> dict[int, list[TagResponse]]:
+    """Fetch visible tags for many threads in one batched query.
+
+    Surfaces that list threads inline (Queue rows, Roll bootstrap entries) need
+    each row's tags without turning every row into its own request. This helper
+    is the single place that builds the ``TagResponse`` projection so those
+    surfaces stay consistent, and it issues at most one query no matter how
+    many threads are requested.
+
+    Args:
+        db: Database session.
+        viewer_user_id: Viewer whose private vocabulary is included. Global tags
+            are always visible; other users' private tags are never returned.
+        thread_ids: Thread primary keys to hydrate. Duplicates and empty input
+            are handled without extra queries.
+
+    Returns:
+        Thread id to that thread's visible tags, ordered by tag scope then
+        normalized name. Threads without visible tags are absent from the map.
+    """
+    unique_ids = list(dict.fromkeys(thread_ids))
+    if not unique_ids:
+        return {}
+
+    pairs = await tag_repository.list_visible_assignments_for_targets(
+        db, viewer_user_id, [(TagTargetType.THREAD, thread_id) for thread_id in unique_ids]
+    )
+    tags_by_thread: dict[int, list[TagResponse]] = {}
+    for tag, assignment in pairs:
+        tags_by_thread.setdefault(assignment.target_id, []).append(
+            TagResponse(
+                id=tag.id,
+                name=tag.name,
+                normalized_name=tag.normalized_name,
+                scope=tag.scope,
+                owner_user_id=tag.owner_user_id,
+                color=tag.color,
+                created_at=tag.created_at,
+                updated_at=tag.updated_at,
+            )
+        )
+    return tags_by_thread
 
 
 async def purge_target_assignments(
