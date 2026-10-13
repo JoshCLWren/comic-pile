@@ -2,6 +2,7 @@
 
 import logging
 import secrets
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
@@ -30,7 +31,9 @@ from app.repositories.failed_login_repository import (
     clear_attempts_for_username,
     record_failed_attempt,
 )
-from app.repositories.revoked_token_repository import is_token_revoked
+from app.repositories.revoked_token_repository import (
+    get_user_by_username_with_revocation_check,
+)
 from app.repositories.user_repository import (
     check_username_or_email_exists,
     create_user,
@@ -306,21 +309,23 @@ async def refresh_access_token(
             detail="Invalid refresh token",
         )
 
-    if await is_token_revoked(db, jti):
-        _log_refresh_outcome(request, outcome="rejected", reason="revoked_token")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked",
-        )
-
-    user = await get_user_by_username(db, username)
-    if not user:
+    # Optimized: Use single query to get user and check revocation status
+    try:
+        user, is_revoked = await get_user_by_username_with_revocation_check(db, username, jti)
+        if is_revoked:
+            _log_refresh_outcome(request, outcome="rejected", reason="revoked_token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token has been revoked",
+            )
+    except ValueError as e:
         _log_refresh_outcome(request, outcome="rejected", reason="invalid_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
-        )
+        ) from e
 
+    # Check password change time
     payload_pc = payload.get("pc")
     user_pc = int(user.password_changed_at.timestamp()) if user.password_changed_at else 0
     token_pc = int(payload_pc) if payload_pc is not None else 0
@@ -334,10 +339,20 @@ async def refresh_access_token(
     new_jti = secrets.token_urlsafe(32)
     pc = user_pc
     ensure_csrf_cookie(request, response)
-    access_token = create_access_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
-    refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
+    
+    # Optimized: Create tokens in parallel
+    access_token_task = asyncio.create_task(
+        create_access_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
+    )
+    refresh_token_task = asyncio.create_task(
+        create_refresh_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
+    )
+    access_token, refresh_token = await asyncio.gather(access_token_task, refresh_token_task)
+    
     _set_refresh_cookie(response, request, refresh_token)
-    _log_refresh_outcome(request, outcome="success", reason="refreshed")
+    # Reduced logging: Only log success for debugging, not for every successful refresh
+    if logger.isEnabledFor(logging.DEBUG):
+        _log_refresh_outcome(request, outcome="success", reason="refreshed")
 
     return TokenResponse(
         access_token=access_token,
