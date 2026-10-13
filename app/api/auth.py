@@ -2,7 +2,6 @@
 
 import logging
 import secrets
-import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
@@ -339,20 +338,11 @@ async def refresh_access_token(
     new_jti = secrets.token_urlsafe(32)
     pc = user_pc
     ensure_csrf_cookie(request, response)
-    
-    # Optimized: Create tokens in parallel
-    access_token_task = asyncio.create_task(
-        create_access_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
-    )
-    refresh_token_task = asyncio.create_task(
-        create_refresh_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
-    )
-    access_token, refresh_token = await asyncio.gather(access_token_task, refresh_token_task)
-    
+    access_token = create_access_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
+    refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
+
     _set_refresh_cookie(response, request, refresh_token)
-    # Reduced logging: Only log success for debugging, not for every successful refresh
-    if logger.isEnabledFor(logging.DEBUG):
-        _log_refresh_outcome(request, outcome="success", reason="refreshed")
+    _log_refresh_outcome(request, outcome="success", reason="refreshed")
 
     return TokenResponse(
         access_token=access_token,

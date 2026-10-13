@@ -1,225 +1,157 @@
-"""Performance tests for auth refresh endpoint optimization."""
+"""Tests verifying the optimized auth refresh endpoint.
 
-import asyncio
-import time
-from unittest.mock import AsyncMock, patch
+The refresh endpoint was optimized to use a single combined database query
+(``get_user_by_username_with_revocation_check``) instead of separate
+``is_token_revoked`` + ``get_user_by_username`` calls, matching the
+single-round-trip pattern already established by ``get_current_user``.
+"""
+
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
-from fastapi import Request
-
-from app.api.auth import refresh_access_token
-from app.auth import create_refresh_token
-from app.models.user import User
-from app.schemas.auth import TokenResponse
+from httpx import AsyncClient
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 
-@pytest.mark.asyncio
-async def test_refresh_access_token_optimized():
-    """Test that the optimized refresh endpoint works correctly."""
-    # Mock database session
-    mock_db = AsyncMock()
-    
-    # Mock request and response
-    mock_request = Request(scope={"type": "http", "method": "POST", "path": "/refresh"})
-    mock_response = AsyncMock()
-    
-    # Create a test refresh token
-    test_username = "testuser"
-    test_jti = "test_jti_123"
-    test_refresh_token = create_refresh_token(
-        data={"sub": test_username, "jti": test_jti, "type": "refresh", "pc": 0}
-    )
-    
-    # Mock the optimized function to return user and not revoked
-    async def mock_get_user_with_revocation_check(db, username, jti):
-        user = User(id=1, username=username, email="test@example.com", password_hash="hashed")
-        return user, False
-    
-    # Mock token verification
-    with patch('app.api.auth.verify_token') as mock_verify:
-        mock_verify.return_value = {
-            "sub": test_username,
-            "jti": test_jti,
-            "type": "refresh",
-            "pc": 0
-        }
-        
-        with patch('app.api.auth.get_user_by_username_with_revocation_check', 
-                   side_effect=mock_get_user_with_revocation_check):
-            
-            # Mock refresh token data
-            with patch('app.api.auth.RefreshTokenRequest') as mock_request_data:
-                mock_request_data.return_value.refresh_token = test_refresh_token
-                
-                # Mock cookie setting
-                with patch('app.api.auth._set_refresh_cookie'):
-                    # Mock CSRF cookie
-                    with patch('app.api.auth.ensure_csrf_cookie'):
-                        # Mock token creation
-                        with patch('app.api.auth.create_access_token') as mock_create_access:
-                            with patch('app.api.auth.create_refresh_token') as mock_create_refresh:
-                                mock_create_access.return_value = "new_access_token"
-                                mock_create_refresh.return_value = "new_refresh_token"
-                                
-                                # Call the optimized function
-                                result = await refresh_access_token(
-                                    request=mock_request,
-                                    response=mock_response,
-                                    db=mock_db,
-                                    refresh_data=None
-                                )
-                                
-                                # Verify the result
-                                assert isinstance(result, TokenResponse)
-                                assert result.access_token == "new_access_token"
-                                assert result.refresh_token == "new_refresh_token"
+@contextmanager
+def _captured_selects(db_engine: AsyncEngine) -> Iterator[list[str]]:
+    """Yield a list that records SELECT statements executed on the engine.
 
+    Args:
+        db_engine: The async database engine to listen on.
 
-@pytest.mark.asyncio
-async def test_refresh_access_token_parallel_token_creation():
-    """Test that tokens are created in parallel for better performance."""
-    # Mock database session
-    mock_db = AsyncMock()
-    
-    # Mock request and response
-    mock_request = Request(scope={"type": "http", "method": "POST", "path": "/refresh"})
-    mock_response = AsyncMock()
-    
-    test_username = "testuser"
-    test_jti = "test_jti_123"
-    test_refresh_token = create_refresh_token(
-        data={"sub": test_username, "jti": test_jti, "type": "refresh", "pc": 0}
-    )
-    
-    # Track timing of token creation
-    token_creation_times = []
-    
-    async def slow_token_creation(data, delay=0.01):
-        """Simulate token creation with timing."""
-        token_creation_times.append(time.time())
-        await asyncio.sleep(delay)
-        return f"token_{data['jti']}"
-    
-    async def mock_get_user_with_revocation_check(db, username, jti):
-        user = User(id=1, username=username, email="test@example.com", password_hash="hashed")
-        return user, False
-    
-    with patch('app.api.auth.verify_token') as mock_verify:
-        mock_verify.return_value = {
-            "sub": test_username,
-            "jti": test_jti,
-            "type": "refresh",
-            "pc": 0
-        }
-        
-        with patch('app.api.auth.get_user_by_username_with_revocation_check', 
-                   side_effect=mock_get_user_with_revocation_check):
-            
-            with patch('app.api.auth.RefreshTokenRequest') as mock_request_data:
-                mock_request_data.return_value.refresh_token = test_refresh_token
-                
-                with patch('app.api.auth._set_refresh_cookie'):
-                    with patch('app.api.auth.ensure_csrf_cookie'):
-                        with patch('app.api.auth.create_access_token', 
-                                   side_effect=lambda data: slow_token_creation(data, 0.01)):
-                            with patch('app.api.auth.create_refresh_token', 
-                                       side_effect=lambda data: slow_token_creation(data, 0.01)):
-                                
-                                # Call the optimized function
-                                start_time = time.time()
-                                result = await refresh_access_token(
-                                    request=mock_request,
-                                    response=mock_response,
-                                    db=mock_db,
-                                    refresh_data=None
-                                )
-                                end_time = time.time()
-                                
-                                # Verify tokens were created (should be ~0.01s total, not 0.02s)
-                                assert len(token_creation_times) == 2
-                                total_time = end_time - start_time
-                                assert total_time < 0.015  # Should be less than sequential execution
-                                
-                                # Verify the result
-                                assert isinstance(result, TokenResponse)
-                                assert result.access_token == "token_new_jti"
-                                assert result.refresh_token == "token_new_jti"
+    Yields:
+        A list that is populated with SELECT statement strings.
+    """
+    select_statements: list[str] = []
 
+    def _capture(
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_statements.append(statement)
 
-@pytest.mark.asyncio
-async def test_refresh_access_token_revoked_token():
-    """Test that revoked tokens are handled correctly."""
-    mock_db = AsyncMock()
-    mock_request = Request(scope={"type": "http", "method": "POST", "path": "/refresh"})
-    mock_response = AsyncMock()
-    
-    test_username = "testuser"
-    test_jti = "test_jti_123"
-    test_refresh_token = create_refresh_token(
-        data={"sub": test_username, "jti": test_jti, "type": "refresh", "pc": 0}
-    )
-    
-    # Mock the function to return revoked token
-    async def mock_get_user_with_revocation_check(db, username, jti):
-        user = User(id=1, username=username, email="test@example.com", password_hash="hashed")
-        return user, True  # Token is revoked
-    
-    with patch('app.api.auth.verify_token') as mock_verify:
-        mock_verify.return_value = {
-            "sub": test_username,
-            "jti": test_jti,
-            "type": "refresh",
-            "pc": 0
-        }
-        
-        with patch('app.api.auth.get_user_by_username_with_revocation_check', 
-                   side_effect=mock_get_user_with_revocation_check):
-            
-            with patch('app.api.auth.RefreshTokenRequest') as mock_request_data:
-                mock_request_data.return_value.refresh_token = test_refresh_token
-                
-                # Should raise HTTPException for revoked token
-                from fastapi import HTTPException, status
-                with pytest.raises(HTTPException) as exc_info:
-                    await refresh_access_token(
-                        request=mock_request,
-                        response=mock_response,
-                        db=mock_db,
-                        refresh_data=None
-                    )
-                
-                assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-                assert "Refresh token has been revoked" in exc_info.value.detail
-
-
-@pytest.mark.asyncio 
-async def test_database_query_optimization():
-    """Test that database queries are optimized by using single query instead of multiple."""
-    mock_db = AsyncMock()
-    
-    # Track database query calls
-    query_calls = []
-    
-    async def mock_execute(query):
-        query_calls.append(str(query))
-        # Return empty result for simplicity
-        from sqlalchemy import Result
-        return Result([], lambda: None)
-    
-    mock_db.execute = mock_execute
-    
-    # Test the optimized function
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
     try:
-        from app.repositories.revoked_token_repository import get_user_by_username_with_revocation_check
-        await get_user_by_username_with_revocation_check(mock_db, "testuser", "test_jti")
-    except Exception:
-        pass  # We don't care about the actual result, just the query count
-    
-    # The optimized function should make only 1 query instead of 2
-    # (original was: is_token_revoked + get_user_by_username = 2 queries)
-    # (optimized: get_user_by_username_with_revocation_check = 1 query)
-    assert len(query_calls) == 1
-    
-    # Verify it's a JOIN query, not separate queries
-    query_str = query_calls[0]
-    assert "JOIN" in query_str or "LEFT JOIN" in query_str or "outerjoin" in query_str.lower()
+        yield select_statements
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
+
+
+@pytest.mark.asyncio
+async def test_refresh_uses_single_combined_query(
+    client: AsyncClient,
+    db_engine: AsyncEngine,
+) -> None:
+    """The refresh endpoint resolves user + revocation status with one SELECT.
+
+    Previously the endpoint issued separate ``is_token_revoked`` and
+    ``get_user_by_username`` queries (two SELECTs). The optimization
+    consolidates them into a single LEFT JOIN query.
+    """
+    user_data = {
+        "username": "refreshqueryuser",
+        "email": "refreshquery@example.com",
+        "password": "password123",
+    }
+    response = await client.post("/api/v1/auth/register", json=user_data)
+    assert response.status_code == 200
+
+    login_data = {"username": "refreshqueryuser", "password": "password123"}
+    response = await client.post("/api/v1/auth/login", json=login_data)
+    assert response.status_code == 200
+    old_tokens = response.json()
+
+    refresh_data = {"refresh_token": old_tokens["refresh_token"]}
+    with _captured_selects(db_engine) as select_statements:
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
+
+    assert response.status_code == 200
+    assert len(select_statements) == 1, f"Expected 1 SELECT, got: {select_statements}"
+
+
+@pytest.mark.asyncio
+async def test_refresh_revoked_token_rejected(
+    client: AsyncClient,
+) -> None:
+    """A revoked refresh token is rejected with 401.
+
+    Both access and refresh tokens share the same JTI, so revoking the
+    access token via logout also invalidates the refresh token.
+    """
+    user_data = {
+        "username": "revokedrefreshuser",
+        "email": "revokedrefresh@example.com",
+        "password": "password123",
+    }
+    response = await client.post("/api/v1/auth/register", json=user_data)
+    assert response.status_code == 200
+
+    login_data = {"username": "revokedrefreshuser", "password": "password123"}
+    response = await client.post("/api/v1/auth/login", json=login_data)
+    assert response.status_code == 200
+    tokens = response.json()
+
+    refresh_response = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert refresh_response.status_code == 200
+
+    access_token = refresh_response.json()["access_token"]
+    csrf_response = await client.get("/api/v1/auth/csrf")
+    csrf_token = csrf_response.json()["csrf_token"]
+
+    logout_response = await client.post(
+        "/api/v1/auth/logout",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-CSRF-Token": csrf_token,
+        },
+    )
+    assert logout_response.status_code == 200
+
+    refresh_token = tokens["refresh_token"]
+    revoked_response = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert revoked_response.status_code == 401
+    assert "revoked" in revoked_response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_refresh_returns_new_tokens(
+    client: AsyncClient,
+) -> None:
+    """Successful refresh returns new access and refresh tokens."""
+    user_data = {
+        "username": "newtokenuser",
+        "email": "newtoken@example.com",
+        "password": "password123",
+    }
+    response = await client.post("/api/v1/auth/register", json=user_data)
+    assert response.status_code == 200
+
+    login_data = {"username": "newtokenuser", "password": "password123"}
+    response = await client.post("/api/v1/auth/login", json=login_data)
+    assert response.status_code == 200
+    old_tokens = response.json()
+
+    refresh_data = {"refresh_token": old_tokens["refresh_token"]}
+    response = await client.post("/api/v1/auth/refresh", json=refresh_data)
+    assert response.status_code == 200
+
+    new_tokens = response.json()
+    assert "access_token" in new_tokens
+    assert "refresh_token" in new_tokens
+    assert new_tokens["token_type"] == "bearer"
+    assert new_tokens["access_token"] != old_tokens["access_token"]
+    assert new_tokens["refresh_token"] != old_tokens["refresh_token"]
