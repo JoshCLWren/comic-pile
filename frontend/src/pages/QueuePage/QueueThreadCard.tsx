@@ -195,6 +195,24 @@ export default function QueueThreadCard({
               <CrossoverTags groups={crossoverGroups} label={`Crossovers for ${thread.title}`} />
             )}
           </div>
+          {thread.tags && thread.tags.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1" aria-label={`Tags for ${thread.title}`}>
+              {thread.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center gap-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-0.5 text-xs font-bold text-[var(--theme-text-primary)]"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: tag.color }}
+                    title={tag.name}
+                  />
+                  <span className="truncate max-w-[120px]">{tag.name}</span>
+                </span>
+              ))}
+            </div>
+          )}
           {isBlocked && (
             <div
               data-testid="queue-thread-blocked-detail"

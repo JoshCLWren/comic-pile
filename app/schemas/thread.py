@@ -7,6 +7,8 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import WithJsonSchema
 
+from app.schemas.tags import TagResponse
+
 #: Upper bound on manually entered creator credits stored on one thread.
 MAX_MANUAL_CREATOR_CREDITS = 50
 #: Upper bound on one stored creator display name.
@@ -216,6 +218,7 @@ class QueueThreadListItem(BaseModel):
     created_at: datetime
     comicvine_mapping: ComicVineMappingHealth | None = None
     manual_creator_credits: list[ManualCreatorCredit] = Field(default_factory=list)
+    tags: list[TagResponse] = Field(default_factory=list)
 
 
 class ReactivateRequest(BaseModel):

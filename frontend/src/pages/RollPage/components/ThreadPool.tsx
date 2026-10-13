@@ -199,6 +199,24 @@ export function ThreadPool({
                       Connected to: {routeLabels.join(' · ')}
                     </p>
                   ) : null}
+                  {thread.tags && thread.tags.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1" aria-label={`Tags for ${thread.title}`}>
+                      {thread.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-0.5 text-[10px] font-bold text-[var(--theme-text-primary)]"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                            title={tag.name}
+                          />
+                          <span className="truncate max-w-[100px]">{tag.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -245,6 +263,24 @@ export function ThreadPool({
                             ` +${blockingDependencyMap[thread.id].length - 1} more`}
                         </p>
                     )}
+                    {thread.tags && thread.tags.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1" aria-label={`Tags for ${thread.title}`}>
+                        {thread.tags.map((tag) => (
+                          <span
+                            key={tag.id}
+                            className="inline-flex items-center gap-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-0.5 text-[10px] font-bold text-[var(--theme-text-primary)]"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: tag.color }}
+                              title={tag.name}
+                            />
+                            <span className="truncate max-w-[100px]">{tag.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -286,6 +322,24 @@ export function ThreadPool({
                   <p className="text-[9px] text-[var(--theme-comic-accent)]/50">
                     Last opened {staleThread.days} days ago
                   </p>
+                  {staleThread.tags && staleThread.tags.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1" aria-label={`Tags for ${staleThread.title}`}>
+                      {staleThread.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-0.5 text-[10px] font-bold text-[var(--theme-text-primary)]"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                            title={tag.name}
+                          />
+                          <span className="truncate max-w-[100px]">{tag.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -326,6 +380,24 @@ export function ThreadPool({
                   className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
+                  {thread.tags && thread.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1" aria-label={`Tags for ${thread.title}`}>
+                      {thread.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-0.5 text-[10px] font-bold text-[var(--theme-text-primary)]"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                            title={tag.name}
+                          />
+                          <span className="truncate max-w-[100px]">{tag.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => onUnsnooze(thread.id)}
@@ -367,6 +439,24 @@ export function ThreadPool({
                   className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
+                  {thread.tags && thread.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1" aria-label={`Tags for ${thread.title}`}>
+                      {thread.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-0.5 text-[10px] font-bold text-[var(--theme-text-primary)]"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                            title={tag.name}
+                          />
+                          <span className="truncate max-w-[100px]">{tag.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => onUnskip(thread.id)}
@@ -412,6 +502,24 @@ export function ThreadPool({
                   <span className="shrink-0 text-xs text-stone-500">
                     {exclusionReasonLabel(thread)}
                   </span>
+                  {thread.tags && thread.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1" aria-label={`Tags for ${thread.title}`}>
+                      {thread.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-0.5 text-[10px] font-bold text-[var(--theme-text-primary)]"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                            title={tag.name}
+                          />
+                          <span className="truncate max-w-[100px]">{tag.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

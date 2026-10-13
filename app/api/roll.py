@@ -37,6 +37,7 @@ from app.services.session_response import (
     get_session_with_thread_safe,
 )
 from app.services.snooze_service import derive_cross_session_excluded_thread_ids
+from app.repositories import tag_repository
 from app.schemas import (
     ExplainableFactorResponse,
     OverrideRequest,
@@ -1225,6 +1226,54 @@ async def roll_bootstrap(
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
     skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
+
+    # Collect all thread IDs for tag fetching
+    all_thread_ids: list[int] = []
+    all_thread_ids.extend(t.id for t in roll_pool)
+    all_thread_ids.extend(t.id for t in snoozed_threads)
+    all_thread_ids.extend(t.id for t in skipped_threads)
+    all_thread_ids.extend(t.id for t in blocked_threads)
+    if stale_thread:
+        all_thread_ids.append(stale_thread.id)
+    # Also include excluded and inactive thread IDs
+    all_thread_ids.extend(e.thread_id for e in excluded.values())
+    all_thread_ids.extend(e.thread_id for e in inactive)
+    # Deduplicate
+    all_thread_ids = list(dict.fromkeys(all_thread_ids))
+
+    # Fetch tags for all threads in a single batched query
+    thread_targets = [("Thread", tid) for tid in all_thread_ids]
+    tag_assignments = await tag_repository.list_visible_assignments_for_targets(db, user_id, thread_targets)
+    tags_by_thread: dict[int, list[TagResponse]] = {}
+    for tag, assignment in tag_assignments:
+        tags_by_thread.setdefault(assignment.target_id, []).append(
+            TagResponse(
+                id=tag.id,
+                name=tag.name,
+                normalized_name=tag.normalized_name,
+                scope=tag.scope,
+                owner_user_id=tag.owner_user_id,
+                color=tag.color,
+                created_at=tag.created_at,
+                updated_at=tag.updated_at,
+            )
+        )
+
+    # Apply tags to all thread objects
+    for thread in roll_pool:
+        thread.tags = tags_by_thread.get(thread.id, [])
+    for thread in snoozed_threads:
+        thread.tags = tags_by_thread.get(thread.id, [])
+    for thread in skipped_threads:
+        thread.tags = tags_by_thread.get(thread.id, [])
+    for thread in blocked_threads:
+        thread.tags = tags_by_thread.get(thread.id, [])
+    if stale_thread:
+        stale_thread.tags = tags_by_thread.get(stale_thread.id, [])
+    for exc in excluded.values():
+        exc.tags = tags_by_thread.get(exc.thread_id, [])
+    for exc in inactive:
+        exc.tags = tags_by_thread.get(exc.thread_id, [])
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)

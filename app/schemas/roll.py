@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_blocking import ContinuityBlocker
 from app.schemas.session import ActiveThreadInfo, BandwidthSource, IntentSource, SessionBandwidthState, SessionMode
+from app.schemas.tags import TagResponse
 from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
@@ -120,6 +121,7 @@ class RollBootstrapThread(BaseModel):
     issue_number: str | None = None
     route_labels: list[str] = Field(default_factory=list)
     last_activity_at: str | None = None
+    tags: list[TagResponse] = Field(default_factory=list)
 
 
 class RollRecoveryPrerequisite(BaseModel):
@@ -168,6 +170,7 @@ class ThreadExclusionReason(BaseModel):
     format: str
     reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue"]
     detail: str | None = None
+    tags: list[TagResponse] = Field(default_factory=list)
 
 
 class RollBootstrapResponse(BaseModel):
