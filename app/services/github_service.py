@@ -28,25 +28,14 @@ def _labels_for_report_type(report_type: ReportType) -> list[str]:
     return ["bug", "user-reported"]
 
 
-async def create_bug_report_issue(
+def _create_bug_report_issue_sync(
     report_type: ReportType,
     title: str,
     description: str,
     username: str,
     diagnostics_data: BugReportDiagnostics | None = None,
 ) -> str:
-    """Create a GitHub issue for user feedback.
-
-    Args:
-        report_type: Whether the feedback is a bug report or feature request.
-        title: User-provided issue title.
-        description: User-provided issue description.
-        username: ComicPile username that submitted the feedback.
-        diagnostics_data: Optional browser and runtime diagnostics to append.
-
-    Returns:
-        The HTML URL of the newly created GitHub issue.
-    """
+    """Create a GitHub issue for user feedback (synchronous)."""
     settings = get_github_settings()
     g = Github(settings.github_token)
     try:
@@ -123,6 +112,35 @@ async def create_bug_report_issue(
     except GithubException as e:
         raise RuntimeError(f"Failed to create GitHub issue: {e.data}") from e
     return issue.html_url
+
+
+async def create_bug_report_issue(
+    report_type: ReportType,
+    title: str,
+    description: str,
+    username: str,
+    diagnostics_data: BugReportDiagnostics | None = None,
+) -> str:
+    """Create a GitHub issue for user feedback.
+
+    Args:
+        report_type: Whether the feedback is a bug report or feature request.
+        title: User-provided issue title.
+        description: User-provided issue description.
+        username: ComicPile username that submitted the feedback.
+        diagnostics_data: Optional browser and runtime diagnostics to append.
+
+    Returns:
+        The HTML URL of the newly created GitHub issue.
+    """
+    return await asyncio.to_thread(
+        _create_bug_report_issue_sync,
+        report_type,
+        title,
+        description,
+        username,
+        diagnostics_data,
+    )
 
 
 def _performance_repo():
