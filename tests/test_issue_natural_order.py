@@ -33,5 +33,39 @@ def test_natural_issue_order_is_independent_of_input_order() -> None:
 
 def test_natural_issue_order_returns_none_for_irregular_existing_or_new() -> None:
     """Irregular numbers stay on the append-only fallback."""
-    assert natural_issue_order(["1", "Annual 1"], ["2"]) is None
     assert natural_issue_order(["1", "2"], ["1.5"]) is None
+    assert natural_issue_order(["Annual 1"], ["2"]) is None
+
+
+def test_early_numeric_adoption_preserves_interleaved_annuals() -> None:
+    """Adopting #1 into JLE-like issues must not append after the annual."""
+    existing = ["7", "8", "9", "Annual 1", "10", "11", "Annual 2", "12"]
+    assert natural_issue_order(existing, ["1", "2"]) == [
+        "1", "2", *existing,
+    ]
+
+
+def test_mid_series_adoption_does_not_relocate_saved_special() -> None:
+    """The annual stays between its original neighboring numbered issues."""
+    existing = ["9", "10", "Annual 1", "12", "13"]
+    assert natural_issue_order(existing, ["11"]) == [
+        "9", "10", "Annual 1", "11", "12", "13",
+    ]
+
+
+def test_mixed_thread_preserves_special_at_head_and_tail() -> None:
+    """Unusual reader-authored placements remain in their saved order."""
+    existing = ["Special 0", "7", "9", "Annual 1"]
+    assert natural_issue_order(existing, ["8"]) == [
+        "Special 0", "7", "8", "9", "Annual 1",
+    ]
+
+
+def test_mixed_thread_with_unsorted_numeric_anchors_requires_manual_placement() -> None:
+    """A special must not trigger a silent reorder of a curated numeric sequence."""
+    assert natural_issue_order(["10", "Annual 1", "9"], ["8"]) is None
+
+
+def test_mixed_thread_rejects_new_irregular_issue_numbers() -> None:
+    """New specials require explicit placement relative to the main run."""
+    assert natural_issue_order(["7", "Annual 1", "8"], ["Annual 2"]) is None
