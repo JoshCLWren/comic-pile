@@ -1402,12 +1402,15 @@ async def test_post_step23b_rebuild_schedules_residual_starman_overlays(
     assert reports["doctor-strange-epic-vol-10"].get("recovered_after_step23b") is True
 
     # Full classified gates — never residual-only — even when Roll refuses apply.
+    # Same-thread consecutive-position pairs are generated series adjacency, not
+    # hard gates (docs/roll-eligibility-contract.md), so the planner seals only
+    # the reviewed cross-thread edges the compiler will actually compile.
     assert _planned_edge_set(reports["doctor-strange-epic-vol-10"]) == set(
         PRODUCTION_EXPLICIT_READER_ORDER_SPECS["doctor-strange-epic-vol-10"].expected_edges
     )
     assert _planned_edge_set(reports["starman-jsa-bridge"]) == {(26360, 101817)}
     starman_edges = _planned_edge_set(reports["starman-compendiums"])
-    assert len(starman_edges) >= 8  # 3 covered + 5 residual
+    assert len(starman_edges) >= 4  # 3 covered + residual cross-thread edges
 
     for key in ("doctor-strange-epic-vol-10", "starman-jsa-bridge"):
         status = reports[key]["status"]
@@ -1590,7 +1593,9 @@ async def test_step23b_resume_plans_same_hard_gates_as_oneshot(
                 snapshot.get("errors"),
             )
 
-    # Starman resume reconstructs the three Step 23B-covered edges plus five residuals.
+    # Starman resume reconstructs the three Step 23B-covered edges plus the
+    # residual cross-thread edges; same-thread consecutive-position pairs are
+    # retired list adjacency, not hard gates (docs/roll-eligibility-contract.md).
     starman_recovered = await build_explicit_reader_order_dry_run(
         async_db,
         PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-compendiums"],
@@ -1598,7 +1603,7 @@ async def test_step23b_resume_plans_same_hard_gates_as_oneshot(
     )
     assert starman_recovered["ok"] is True, starman_recovered["errors"]
     starman_edges = _planned_edge_set(starman_recovered)
-    assert len(starman_edges) >= 8
+    assert len(starman_edges) >= 4
     reviewed_covered = {
         (
             int(row["source_issue_id"]),

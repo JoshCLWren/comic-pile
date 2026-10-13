@@ -22,6 +22,7 @@ from app.schemas.continuity_plan import (
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.continuity_graph import issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from app.services.list_chain_guard import assert_no_same_thread_pairs
 from app.services.strict_plan_constraints import (
     load_issue_thread_index,
     strict_plan_item_read_pairs,
@@ -534,6 +535,9 @@ async def build_source_backed_reader_order_dry_run(
     )
     issue_index = await load_issue_thread_index(db, issue_ids)
     inferred_pairs = strict_plan_item_read_pairs(nodes, issue_index)
+    # Guard (docs/roll-eligibility-contract.md): retired generated list chains
+    # are never re-authored; same-series order is Issue.position geometry.
+    assert_no_same_thread_pairs(inferred_pairs, issue_index)
     planned_rules = [
         {
             "kind": "adjacent",

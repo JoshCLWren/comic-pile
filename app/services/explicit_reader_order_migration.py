@@ -31,6 +31,7 @@ from app.schemas.continuity_plan import (
 )
 from app.services.continuity_graph import issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from app.services.list_chain_guard import partition_retired_list_chain_pairs
 from app.services.legacy_reading_order_production_migration import (
     load_reviewed_step23a_contract,
     reviewed_reading_plan_order_rows,
@@ -51,6 +52,7 @@ from app.services.migration_shared import (
 from app.services.ultimate_universe_production_migration import (
     _factual_snapshot,
 )
+from app.services.strict_plan_constraints import load_issue_thread_index
 from comic_pile.dependencies import _get_blocked_thread_ids_uncached
 from comic_pile.queue import get_roll_pool
 
@@ -765,8 +767,18 @@ async def build_explicit_reader_order_dry_run(
     # Resume after Step 23B must compile the same hard convergence gates as the
     # normal one-shot path. Step 23B plans are informational with empty gates, so
     # node position is not a Roll authority for covered edges — reconstruct them.
+    # Classified edges that are same-thread consecutive Issue.position pairs are
+    # generated list adjacency, not authoritative blockers
+    # (docs/roll-eligibility-contract.md): the compiler refuses them, so the
+    # planner must not seal them into the reviewed rule set either.
+    issue_thread_index = await load_issue_thread_index(db, issue_ids)
+    hard_edge_list, _retired_adjacent_edges = partition_retired_list_chain_pairs(
+        sorted(edge_set),
+        issue_thread_index,
+    )
+    hard_edge_set = set(hard_edge_list)
     predecessors: dict[int, list[int]] = {}
-    for source_id, target_id in sorted(edge_set):
+    for source_id, target_id in sorted(hard_edge_set):
         predecessors.setdefault(target_id, []).append(source_id)
     for values in predecessors.values():
         values.sort()
@@ -806,7 +818,7 @@ async def build_explicit_reader_order_dry_run(
         for target_id, source_ids in predecessors.items()
         for source_id in source_ids
     }
-    if planned_edges != edge_set:
+    if planned_edges != hard_edge_set:
         errors.append("proposed Reading Plan does not exactly reproduce classified reader-order edges")
 
     target_ids = set(predecessors)

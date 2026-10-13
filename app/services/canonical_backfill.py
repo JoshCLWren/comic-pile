@@ -278,6 +278,45 @@ def validate_compilable_rules(bind: Connection) -> list[DanglingRuleReport]:
     return allowlisted
 
 
+def abort_on_retired_list_chain_rules(bind: Connection) -> None:
+    """Abort the cutover if a rule-native item_read rule is a retired list chain.
+
+    Per ``docs/roll-eligibility-contract.md`` (Josh, 2026-10-12), a hard
+    Dependency whose source and target are consecutive ``Issue.position``
+    entries of the same ``Thread`` is generated series-order adjacency, not
+    an authoritative blocker: natural series order is owned by
+    ``Thread.next_unread_issue_id``. Such rows were produced by the retired
+    whole-list chain compiles; re-running this legacy migration must not
+    resurrect them, so their presence aborts with an investigation-grade
+    error listing the rule ids to retire first.
+
+    Args:
+        bind: Synchronous SQLAlchemy connection used by Alembic.
+
+    Raises:
+        RuntimeError: When any rule-native item_read rule duplicates natural
+            series adjacency.
+    """
+    chain_rules = _query_rule_ids(
+        bind,
+        "SELECT r.id FROM continuity_rules r "
+        "JOIN issues s ON s.id = r.source_id "
+        "JOIN issues t ON t.id = r.target_id "
+        f"WHERE r.{_NATIVE} AND r.satisfaction_type = 'item_read' "
+        "AND r.source_type = 'issue' AND r.target_type = 'issue' "
+        "AND s.thread_id = t.thread_id "
+        "AND t.position = s.position + 1",
+    )
+    if chain_rules:
+        abort_with_rule_ids(
+            chain_rules,
+            "are retired generated list-chain rules duplicating natural "
+            "series order (same thread, consecutive Issue.position); retire "
+            "them per docs/roll-eligibility-contract.md before re-running "
+            "the cutover",
+        )
+
+
 def drop_mirror_trigger(bind: Connection) -> None:
     """Remove the Dependency -> ContinuityRule compatibility bridge."""
     bind.execute(sa.text("DROP TRIGGER IF EXISTS trg_sync_legacy_dependency_to_continuity_rule ON dependencies"))

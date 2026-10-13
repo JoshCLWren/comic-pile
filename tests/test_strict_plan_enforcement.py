@@ -22,12 +22,19 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.issue import Issue
-from app.models.reading_plan_membership import ReadingPlanIssue, ReadingPlanSourcePlacement
+from app.models.reading_plan_membership import (
+    ReadingPlanDependency,
+    ReadingPlanIssue,
+    ReadingPlanSourcePlacement,
+)
 from app.models.thread import Thread
 from app.schemas.continuity_plan import CBLPlacement, ContinuityPlanNode
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_plan_adoption import _merge_adopted_nodes
-from app.services.canonical_constraint_compiler import compile_rule_edges
+from app.services.canonical_constraint_compiler import (
+    compile_rule_edges,
+    retire_rule_edges,
+)
 from app.services.continuity_plan_writer import plan_rule_marker, replace_compiled_rules
 from app.services.reading_plan_normalization import (
     drop_threads_from_plan_record,
@@ -169,6 +176,314 @@ def test_strict_compiler_has_no_title_exemption() -> None:
     for banned in ("title ==", "thread.title", ".ilike("):
         assert banned not in source
         assert banned not in writer
+
+
+def test_strict_compiler_never_invents_list_adjacency_loops() -> None:
+    """Live writer must not reintroduce whole-list adjacent zip/range compiles."""
+    writer = (_REPO_ROOT / "app/services/continuity_plan_writer.py").read_text()
+    for banned in (
+        "zip(ordered",
+        "ordered[1:]",
+        "strict_plan_item_read_pairs(",
+        "strict_plan_reading_order_pairs(",
+    ):
+        assert banned not in writer
+
+
+async def _plan_rule_snapshot(
+    db: AsyncSession, *, user_id: int, plan_id: int
+) -> set[tuple[int, int, str, int | None]]:
+    """Return durable plan-owned ContinuityRule identities for diff checks."""
+    rules = (
+        await db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.user_id == user_id,
+                ContinuityRule.note == plan_rule_marker(plan_id),
+            )
+        )
+    ).scalars().all()
+    return {
+        (
+            rule.source_id,
+            rule.target_id,
+            rule.satisfaction_type,
+            rule.checkpoint_issue_id,
+        )
+        for rule in rules
+    }
+
+
+async def _plan_dependency_snapshot(
+    db: AsyncSession, *, plan_id: int
+) -> set[tuple[int, int, str | None]]:
+    """Return Dependencies linked to one plan for zero-diff checks."""
+    rows = (
+        await db.execute(
+            select(
+                Dependency.source_issue_id,
+                Dependency.target_issue_id,
+                Dependency.note,
+            )
+            .join(
+                ReadingPlanDependency,
+                ReadingPlanDependency.dependency_id == Dependency.id,
+            )
+            .where(ReadingPlanDependency.plan_id == plan_id)
+        )
+    ).all()
+    return {(int(source), int(target), note) for source, target, note in rows}
+
+
+@pytest.mark.asyncio
+async def test_multi_series_strict_compile_has_no_cross_series_adjacency(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Compiling a multi-series strict plan yields no cross-series adjacency edges.
+
+    Josh's verdict: series run side by side in issue order. Consecutive list
+    positions in different series are not hard blockers unless checkpointed.
+    """
+    user = await get_or_create_user_async(async_db)
+    first, first_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Series A",
+        numbers=["1", "2"],
+        queue_position=1,
+    )
+    second, second_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Series B",
+        numbers=["1", "2"],
+        queue_position=2,
+    )
+    third, third_issues = await _make_series(
+        async_db,
+        user_id=user.id,
+        title="Series C",
+        numbers=["1"],
+        queue_position=3,
+    )
+    await async_db.commit()
+
+    ordered = first_issues + second_issues + third_issues
+    created = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload("Multi-series strict", ordered),
+    )
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    compiled = await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id)
+    assert compiled == set()
+    # Cross-series consecutive list positions must not become item_read.
+    assert (first_issues[-1].id, second_issues[0].id) not in compiled
+    assert (second_issues[-1].id, third_issues[0].id) not in compiled
+    # Same-thread natural order is Thread.next_unread_issue_id, not Dependencies.
+    assert (first_issues[0].id, first_issues[1].id) not in compiled
+    assert (second_issues[0].id, second_issues[1].id) not in compiled
+
+    rules = await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_id)
+    assert rules == set()
+    deps = await _plan_dependency_snapshot(async_db, plan_id=plan_id)
+    assert deps == set()
+
+    roll_ids = await _roll_ids(user.id, async_db)
+    assert first.id in roll_ids
+    assert second.id in roll_ids
+    assert third.id in roll_ids
+
+
+@pytest.mark.asyncio
+async def test_explicit_checkpoints_kept_on_strict_compile(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Explicit checkpoints (custom-CBL / planner flags) survive compile."""
+    user = await get_or_create_user_async(async_db)
+    lead, lead_issues = await _make_series(
+        async_db, user_id=user.id, title="Checkpoint lead", numbers=["1"], queue_position=1
+    )
+    follow, follow_issues = await _make_series(
+        async_db, user_id=user.id, title="Checkpoint follow", numbers=["1"], queue_position=2
+    )
+    await async_db.commit()
+
+    created = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload(
+            "Checkpointed",
+            lead_issues + follow_issues,
+            checkpoint_ids={lead_issues[0].id},
+        ),
+    )
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    rules = await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_id)
+    assert rules == {
+        (lead_issues[0].id, follow_issues[0].id, "checkpoint", lead_issues[0].id),
+    }
+    # No inferred item_read adjacency alongside the checkpoint.
+    item_read_pairs = {
+        (source_id, target_id)
+        for source_id, target_id, satisfaction, _checkpoint in rules
+        if satisfaction == "item_read"
+    }
+    assert item_read_pairs == set()
+
+    roll_ids = await _roll_ids(user.id, async_db)
+    assert lead.id in roll_ids
+    assert follow.id not in roll_ids
+
+
+@pytest.mark.asyncio
+async def test_removed_cross_series_chain_stays_gone_on_unchanged_resave(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Re-saving after cross-series chain removal yields zero rules/deps diff.
+
+    Whole-list adjacency edges that were already removed must not return.
+    """
+    user = await get_or_create_user_async(async_db)
+    first, first_issues = await _make_series(
+        async_db, user_id=user.id, title="Chain A", numbers=["1", "2"], queue_position=1
+    )
+    second, second_issues = await _make_series(
+        async_db, user_id=user.id, title="Chain B", numbers=["1", "2"], queue_position=2
+    )
+    await async_db.commit()
+
+    payload = _plan_payload("Chain plan", first_issues + second_issues)
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    # Simulate a historical whole-list adjacent compile, then remove it.
+    chain_pairs = [
+        (first_issues[0].id, first_issues[1].id),
+        (first_issues[1].id, second_issues[0].id),
+        (second_issues[0].id, second_issues[1].id),
+    ]
+    for source_id, target_id in chain_pairs:
+        await _inject_plan_owned_pair(
+            async_db,
+            user_id=user.id,
+            plan_id=plan_id,
+            source_id=source_id,
+            target_id=target_id,
+        )
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set(
+        chain_pairs
+    )
+
+    # Remove the chain ContinuityRules first, then retire their Dependencies.
+    # retire_rule_edges skips pairs still compiled by another live rule.
+    marker = plan_rule_marker(plan_id)
+    old_rules = list(
+        (
+            await async_db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == user.id,
+                    ContinuityRule.note == marker,
+                )
+            )
+        ).scalars().all()
+    )
+    old_rule_ids = [rule.id for rule in old_rules]
+    for rule in old_rules:
+        await async_db.delete(rule)
+    await async_db.flush()
+    await retire_rule_edges(
+        async_db,
+        user_id=user.id,
+        pairs=chain_pairs,
+        exclude_rule_ids=old_rule_ids,
+    )
+    await async_db.commit()
+
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
+    before_rules = await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_id)
+    before_deps = await _plan_dependency_snapshot(async_db, plan_id=plan_id)
+    assert before_rules == set()
+    assert before_deps == set()
+
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200, fetched.text
+    saved = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json=_write_payload_from_get(fetched.json()),
+    )
+    assert saved.status_code == 200, saved.text
+
+    after_rules = await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_id)
+    after_deps = await _plan_dependency_snapshot(async_db, plan_id=plan_id)
+    assert after_rules == before_rules == set()
+    assert after_deps == before_deps == set()
+    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
+    # Chain must not return as either item_read ContinuityRules or Dependencies.
+    for source_id, target_id in chain_pairs:
+        leftover = (
+            await async_db.execute(
+                select(Dependency).where(
+                    Dependency.source_issue_id == source_id,
+                    Dependency.target_issue_id == target_id,
+                )
+            )
+        ).scalar_one_or_none()
+        assert leftover is None
+
+
+@pytest.mark.asyncio
+async def test_resave_keeps_checkpoints_with_zero_edge_diff(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Re-saving a plan that has checkpoints keeps them with zero rules/deps diff."""
+    user = await get_or_create_user_async(async_db)
+    lead, lead_issues = await _make_series(
+        async_db, user_id=user.id, title="Keep lead", numbers=["1"], queue_position=1
+    )
+    follow, follow_issues = await _make_series(
+        async_db, user_id=user.id, title="Keep follow", numbers=["1"], queue_position=2
+    )
+    await async_db.commit()
+
+    payload = _plan_payload(
+        "Keep checkpoints",
+        lead_issues + follow_issues,
+        checkpoint_ids={lead_issues[0].id},
+    )
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    before_rules = await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_id)
+    before_deps = await _plan_dependency_snapshot(async_db, plan_id=plan_id)
+    assert before_rules == {
+        (lead_issues[0].id, follow_issues[0].id, "checkpoint", lead_issues[0].id),
+    }
+    assert before_deps  # checkpoint compiles to a canonical Dependency
+
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200, fetched.text
+    saved = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json=_write_payload_from_get(fetched.json()),
+    )
+    assert saved.status_code == 200, saved.text
+
+    after_rules = await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_id)
+    after_deps = await _plan_dependency_snapshot(async_db, plan_id=plan_id)
+    assert after_rules == before_rules
+    assert after_deps == before_deps
+
+    roll_ids = await _roll_ids(user.id, async_db)
+    assert lead.id in roll_ids
+    assert follow.id not in roll_ids
 
 
 def test_thread_entry_pairs_skip_same_thread_and_non_starts() -> None:

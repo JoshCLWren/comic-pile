@@ -978,3 +978,85 @@ async def test_resave_then_downgrade_keeps_refreshed_edge(
         )
     ).scalar_one()
     assert remaining == f"{EDGE_NOTE_PREFIX}{rule_id}"
+
+
+@pytest.mark.asyncio
+async def test_upgrade_preflight_aborts_on_retired_list_chain_rule(
+    _isolated_migration_data: AsyncSession,
+) -> None:
+    """The migration upgrade() preflight aborts, with no writes, on a retired chain rule.
+
+    A rule-native item_read rule whose source and target are consecutive
+    Issue.position entries of the same Thread duplicates natural series
+    order (docs/roll-eligibility-contract.md) and must abort the replay of
+    c25530000001 before any Dependency write.
+    """
+    import importlib.util
+    from pathlib import Path
+    from types import ModuleType
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    db = _isolated_migration_data
+    user = await _user(db, "chain-guard-user")
+    thread, (i1, i2) = await _thread_with_issues(db, user.id, "Chain Thread", ["1", "2"])
+    db.add(
+        ContinuityRule(
+            user_id=user.id,
+            source_type="issue",
+            source_id=i1.id,
+            target_type="issue",
+            target_id=i2.id,
+            satisfaction_type="item_read",
+        )
+    )
+    await db.commit()
+
+    def _load_module() -> ModuleType:
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "c25530000001_backfill_canonical_roll_dependencies.py"
+        )
+        spec = importlib.util.spec_from_file_location("c25530000001_cutover", path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    module = _load_module()
+    conn = _sync_connection()
+    try:
+        context = MigrationContext.configure(conn)
+        with Operations.context(context), pytest.raises(
+            RuntimeError, match="retired generated list-chain"
+        ):
+            module.upgrade()
+        conn.rollback()
+    finally:
+        conn.close()
+
+    # No writes survived: no backfilled Dependency edge exists.
+    edges = (
+        await db.execute(
+            sa.select(Dependency).where(
+                Dependency.source_issue_id == i1.id,
+                Dependency.target_issue_id == i2.id,
+            )
+        )
+    ).scalars().all()
+    assert edges == []
+
+    # The retired rule itself is untouched rather than dropped or compiled.
+    rule = (
+        await db.execute(
+            sa.select(ContinuityRule).where(
+                ContinuityRule.source_id == i1.id,
+                ContinuityRule.target_id == i2.id,
+            )
+        )
+    ).scalar_one()
+    assert rule.satisfaction_type == "item_read"
+    assert rule.legacy_dependency_id is None

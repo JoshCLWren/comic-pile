@@ -5,9 +5,16 @@ ContinuityRule is the human-authoring record. This module keeps the two in sync
 inside the author's write transaction so rule authoring keeps its intended
 behavior after ContinuityRule leaves the Roll eligibility path.
 
-Strict-sequential inferred edges are selected in
-``app.services.strict_plan_constraints`` (Phase B of #2553) and compiled
-here as ordinary ``item_read`` rules. This module does not invent adjacency.
+Per ``docs/roll-eligibility-contract.md`` (Josh, 2026-10-12), a hard
+Dependency must be specific, authoritative, and necessary; consecutive list
+positions, series changes, and plan membership never become blockers on
+their own. Live Reading Plan writes no longer invent list-adjacency or
+thread-entry edges; ``continuity_plan_writer`` retains existing plan-owned
+``item_read`` pairs and compiles only explicit checkpoints/convergence. Held
+migration scripts may still select pairs via ``strict_plan_constraints``
+under the ``list_chain_guard`` checks. This module does not invent adjacency,
+and ``retire_rule_edges`` removes rule-compiled edges only when no surviving
+rule still intends them.
 """
 
 from __future__ import annotations
