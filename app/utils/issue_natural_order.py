@@ -5,11 +5,11 @@ Queue, Roll, and thread progression. When a reader adds ordinary numeric issue
 numbers to an existing series, those issues belong at their natural position
 rather than at the end of the series.
 
-Automatic placement is only applied when it is unambiguous: every number
-involved must be an ordinary positive integer. Annuals, decimals and
-fractions, named specials, ``0``, and padded numbers such as ``007`` keep
-their existing canonical order so the reader can correct them explicitly
-through the thread reorder path instead.
+Automatic placement is only applied to ordinary positive issue numbers.
+When existing annuals, specials, decimals, or other irregular labels already
+have saved positions, insert new numeric issues around them without moving
+those saved issues relative to one another. Return ``None`` for an ambiguous
+number-only anchor (no regular issues or out-of-order regular issues).
 
 Ordinary numeric series are seated from the set of numbers, even when an
 earlier append left the thread out of ascending order. Roll then follows
@@ -52,10 +52,12 @@ def natural_issue_order(
 ) -> list[str] | None:
     """Merge new issue numbers into a series' natural order.
 
-    The result depends only on the set of numbers, so the order they were typed
-    in never changes the saved thread order. Existing position order is ignored
-    for ordinary numbers so a previous append cannot force later inserts to the
-    end of the thread.
+    For all-numeric threads, existing append mistakes are corrected by sorting.
+    For mixed threads, existing issue placement is authoritative: new numeric
+    issues are seated by their neighboring numbered issues, without moving
+    annuals, specials, or any other already saved issue. Incoming irregular
+    labels and mixed threads with ambiguous numeric anchors keep the manual
+    insertion fallback.
 
     Args:
         existing_issue_numbers: Issue numbers already in the thread, in canonical
@@ -68,20 +70,44 @@ def natural_issue_order(
         or ``None`` when automatic placement would be ambiguous and the existing
         canonical order must be preserved instead.
     """
-    ordered_numbers: list[tuple[int, str]] = []
-
-    for issue_number in existing_issue_numbers:
-        value = parse_ordinary_issue_number(issue_number)
-        if value is None:
-            return None
-        ordered_numbers.append((value, issue_number))
-
+    incoming: list[tuple[int, str]] = []
     for issue_number in new_issue_numbers:
         value = parse_ordinary_issue_number(issue_number)
         if value is None:
             return None
-        ordered_numbers.append((value, issue_number))
+        incoming.append((value, issue_number))
 
-    ordered_numbers.sort(key=lambda entry: entry[0])
+    existing_numbered = [
+        (value, issue_number)
+        for issue_number in existing_issue_numbers
+        if (value := parse_ordinary_issue_number(issue_number)) is not None
+    ]
 
-    return [issue_number for _value, issue_number in ordered_numbers]
+    # The all-numeric case still repairs previous out-of-order appends
+    # (including the Ultimate X-Men #1–#24 recovery in #3483).
+    if len(existing_numbered) == len(existing_issue_numbers):
+        return [
+            label
+            for _number, label in sorted([*existing_numbered, *incoming])
+        ]
+
+    # Mixed threads contain reader-placed annuals, specials, and other
+    # nonstandard labels. Never reorder their existing issue sequence.
+    # A new ordinary number can be inserted relative to existing numbered
+    # issues only if those numbers are already monotonically increasing.
+    if not existing_numbered:
+        return None
+    numbers = [number for number, _label in existing_numbered]
+    if numbers != sorted(numbers):
+        return None
+
+    result = list(existing_issue_numbers)
+    for number, label in sorted(incoming):
+        for index, existing_label in enumerate(result):
+            existing_number = parse_ordinary_issue_number(existing_label)
+            if existing_number is not None and existing_number > number:
+                result.insert(index, label)
+                break
+        else:
+            result.append(label)
+    return result
