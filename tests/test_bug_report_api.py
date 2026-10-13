@@ -348,19 +348,21 @@ async def test_github_service_escapes_backticks_in_diagnostics(
     )
 
     captured_body = {}
-    captured_requests = []
+    captured_requests: list[tuple[str, str]] = []
 
     class MockAsyncClient:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: object, **kwargs: object) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> MockAsyncClient:
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: object) -> None:
             pass
 
-        async def post(self, url, headers, json):
+        async def post(
+            self, url: str, headers: dict[str, str], json: dict[str, object]
+        ) -> MagicMock:
             captured_body["body"] = json["body"]
             captured_requests.append(("POST", url))
             mock_response = MagicMock()
@@ -368,7 +370,9 @@ async def test_github_service_escapes_backticks_in_diagnostics(
             mock_response.json.return_value = {"html_url": mock_issue_url}
             return mock_response
 
-        async def get(self, url, headers, params=None):
+        async def get(
+            self, url: str, headers: dict[str, str], params: dict[str, object] | None = None
+        ) -> MagicMock:
             captured_requests.append(("GET", url))
             mock_response = MagicMock()
             mock_response.raise_for_status = MagicMock()
