@@ -1116,7 +1116,9 @@ async def roll_bootstrap(
             Thread.format,
             Thread.next_unread_issue_id.label("issue_id"),
             Issue.issue_number,
-            func.array_agg(func.distinct(DependencyGroup.name)).label("route_labels"),
+            func.array_remove(
+                func.array_agg(func.distinct(DependencyGroup.name)), None
+            ).label("route_labels"),
         )
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
         .outerjoin(
@@ -1139,7 +1141,7 @@ async def roll_bootstrap(
         .where(Thread.is_blocked.is_(False))
         .order_by(Thread.queue_position)
         .limit(die_size)
-        .group_by(Thread.id)
+        .group_by(Thread.id, Issue.issue_number)
     )
 
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
