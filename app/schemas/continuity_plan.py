@@ -111,7 +111,11 @@ class ContinuityPlanNode(BaseModel):
     # editing or reordering a list must never silently redirect a checkpoint to
     # a different comic. When set, the checkpoint blocks that issue only; a
     # missing target drops the checkpoint instead of retargeting the neighbor.
-    checkpoint_target_ref_id: int | None = Field(default=None, gt=0)
+    checkpoint_target_ref_id: int | None = Field(
+        default=None,
+        gt=0,
+        exclude_if=lambda value: value is None,
+    )
     convergence_gate: Annotated[
         list[ConvergenceGateTarget],
         BeforeValidator(_coerce_convergence_gate),
