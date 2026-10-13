@@ -11,6 +11,7 @@ PlanOrderingMode = Literal["informational", "strict_sequential"]
 PlanInferredGateKind = Literal["thread_entry", "reading_order"]
 PlanNodeType = Literal["issue", "crossover", "thread"]
 
+
 def _reject_boolean_item_id(value: object) -> object:
     """Reject boolean JSON values before Pydantic coerces them to integers."""
     if isinstance(value, bool):
@@ -116,6 +117,11 @@ class ContinuityPlanNode(BaseModel):
         gt=0,
         exclude_if=lambda value: value is None,
     )
+    checkpoint_target_ref_ids: list[Annotated[int, Field(strict=True, gt=0)]] = Field(
+        default_factory=list,
+        max_length=1000,
+        exclude_if=lambda value: not value,
+    )
     convergence_gate: Annotated[
         list[ConvergenceGateTarget],
         BeforeValidator(_coerce_convergence_gate),
@@ -189,13 +195,13 @@ class ContinuityPlanWrite(ContinuityPlanRead):
         # Validate checkpoint placement
         for node in self.nodes:
             if node.is_checkpoint and node.node_type != "issue":
-                raise ValueError(
-                    f"checkpoint on node '{node.id}' is only allowed on issue nodes"
-                )
-            if node.checkpoint_target_ref_id is not None and not node.is_checkpoint:
-                raise ValueError(
-                    f"checkpoint target on node '{node.id}' requires is_checkpoint"
-                )
+                raise ValueError(f"checkpoint on node '{node.id}' is only allowed on issue nodes")
+            if (
+                node.checkpoint_target_ref_id is not None or node.checkpoint_target_ref_ids
+            ) and not node.is_checkpoint:
+                raise ValueError(f"checkpoint target on node '{node.id}' requires is_checkpoint")
+            if len(set(node.checkpoint_target_ref_ids)) != len(node.checkpoint_target_ref_ids):
+                raise ValueError(f"checkpoint on node '{node.id}' contains duplicate targets")
         # Validate convergence gate references
         for node in self.nodes:
             if node.convergence_gate:
@@ -316,8 +322,8 @@ class DerivedCrossoverTemplatePreview(BaseModel):
 
     items: list[CrossoverTemplateItemPreview]
     conflicts: list[CrossoverTemplateConflictPreview] = Field(default_factory=list)
-    parallel_candidates: list[CrossoverTemplateParallelCandidatePreview] = (
-        Field(default_factory=list)
+    parallel_candidates: list[CrossoverTemplateParallelCandidatePreview] = Field(
+        default_factory=list
     )
     serial_spines: list[CrossoverTemplateSerialSpinePreview] = Field(default_factory=list)
     intersections: list[CrossoverTemplateIntersectionPreview] = Field(default_factory=list)

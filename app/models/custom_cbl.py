@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -21,9 +31,7 @@ class CustomCBLList(Base):
     __tablename__ = "custom_cbl_lists"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -36,9 +44,7 @@ class CustomCBLList(Base):
         nullable=False,
     )
 
-    __table_args__ = (
-        Index("ix_custom_cbl_lists_user_updated", "user_id", "updated_at"),
-    )
+    __table_args__ = (Index("ix_custom_cbl_lists_user_updated", "user_id", "updated_at"),)
 
 
 class CustomCBLEntry(Base):
@@ -55,6 +61,9 @@ class CustomCBLEntry(Base):
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     is_checkpoint: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    checkpoint_target_issue_ids: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )

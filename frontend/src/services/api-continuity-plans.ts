@@ -44,6 +44,8 @@ export interface ContinuityPlanNode {
   position: number
   label?: string | null
   is_checkpoint?: boolean
+  checkpoint_target_ref_id?: number | null
+  checkpoint_target_ref_ids?: number[]
   convergence_gate?: ConvergenceGateTarget[]
   source_paths?: string[] | null
   source_cbl_placements?: Array<{ source_path: string; position: number }> | null
@@ -100,6 +102,8 @@ export interface ReadingPlanReaderIssue {
   reader_role?: string | null
   reader_optional?: boolean | null
   is_checkpoint?: boolean
+  checkpoint_target_ref_id?: number | null
+  checkpoint_target_ref_ids?: number[]
   issue_number: string
   thread_id: number
   thread_title: string

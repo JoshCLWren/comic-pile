@@ -33,6 +33,7 @@ from app.services.continuity_plan_writer import (
     list_continuity_plan_items,
     payload_issue_ids,
     plan_rule_marker,
+    preserve_checkpoint_targets,
     preserve_server_lane_metadata,
     replace_compiled_rules,
     retire_plan_edges_for_deletion,
@@ -242,6 +243,7 @@ async def update_continuity_plan(
     # leftover nodes_json. A real editor change (lane, order, checkpoint,
     # convergence, or membership) rewrites stored JSON.
     current_editor = await editor_nodes_for_plan(db, plan)
+    payload.nodes = preserve_checkpoint_targets(current_editor, payload.nodes)
     if (
         payload_issue_ids(payload.nodes) != membership_ids
         or not is_identity_editor_payload(current_editor, payload.nodes)

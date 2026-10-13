@@ -126,6 +126,8 @@ export function buildPayload(
       position: node.position,
       label: node.label ?? null,
       is_checkpoint: node.is_checkpoint ?? false,
+      checkpoint_target_ref_id: node.is_checkpoint ? node.checkpoint_target_ref_id ?? null : null,
+      checkpoint_target_ref_ids: node.is_checkpoint ? node.checkpoint_target_ref_ids ?? [] : [],
       convergence_gate: node.convergence_gate ?? [],
       source_role: node.source_role ?? null,
       source_confidence: node.source_confidence ?? null,

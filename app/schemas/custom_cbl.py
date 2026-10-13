@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -15,7 +16,9 @@ class CustomCBLWrite(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     issue_ids: list[int] = Field(default_factory=list, max_length=1000)
-    checkpoint_issue_ids: list[int] = Field(default_factory=list, max_length=1000)
+    checkpoint_issue_ids: list[int] | None = Field(default=None, max_length=1000)
+    # Omission preserves stored targets for older clients; {} explicitly clears them.
+    checkpoint_targets: dict[int, list[Annotated[int, Field(strict=True, gt=0)]]] | None = None
 
     @field_validator("issue_ids", "checkpoint_issue_ids", mode="before")
     @classmethod
@@ -34,13 +37,21 @@ class CustomCBLWrite(BaseModel):
             raise ValueError("issue_ids must contain positive integers")
         if len(set(self.issue_ids)) != len(self.issue_ids):
             raise ValueError("issue_ids must not contain duplicates")
-        if any(issue_id <= 0 for issue_id in self.checkpoint_issue_ids):
+        checkpoint_ids = self.checkpoint_issue_ids or []
+        if any(issue_id <= 0 for issue_id in checkpoint_ids):
             raise ValueError("checkpoint_issue_ids must contain positive integers")
-        if len(set(self.checkpoint_issue_ids)) != len(self.checkpoint_issue_ids):
+        if len(set(checkpoint_ids)) != len(checkpoint_ids):
             raise ValueError("checkpoint_issue_ids must not contain duplicates")
         owned = set(self.issue_ids)
-        if any(issue_id not in owned for issue_id in self.checkpoint_issue_ids):
+        if any(issue_id not in owned for issue_id in checkpoint_ids):
             raise ValueError("checkpoint_issue_ids must be a subset of issue_ids")
+        for source, targets in (self.checkpoint_targets or {}).items():
+            if source not in owned or any(target not in owned for target in targets):
+                raise ValueError("checkpoint endpoints must be members of issue_ids")
+            if source in targets or len(targets) != len(set(targets)):
+                raise ValueError(
+                    "checkpoint targets must be distinct and cannot include the source"
+                )
         return self
 
 
@@ -55,6 +66,7 @@ class CustomCBLEntryResponse(BaseModel):
     issue_number: str
     status: str
     is_checkpoint: bool = False
+    checkpoint_target_issue_ids: list[int] = Field(default_factory=list)
 
 
 class CustomCBLListItem(BaseModel):
