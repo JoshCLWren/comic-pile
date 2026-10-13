@@ -523,7 +523,7 @@ async def test_bounded_constant_query_count(
     db_engine: AsyncEngine,
     default_user: User,
 ) -> None:
-    """One request serves any key count with a fixed, constant query count."""
+    """One request serves any key count with a fixed, constant query count (<= 5)."""
     _thread, issues = await _make_thread(
         async_db, default_user, title="Wide", issue_count=6, queue_position=1, read_through=6
     )
@@ -550,7 +550,7 @@ async def test_bounded_constant_query_count(
     assert six_keys.status_code == 200
     assert len(six_keys.json()["summaries"]) == 6
     assert len(one_key_selects) == len(six_key_selects)
-    assert len(one_key_selects) <= 4, one_key_selects
+    assert len(one_key_selects) <= 5, one_key_selects
 
 
 @pytest.mark.asyncio

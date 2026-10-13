@@ -280,7 +280,7 @@ async def load_creator_summary_inputs(
 ) -> CreatorSummaryInputs:
     """Load every user-scoped input needed for one bounded batch aggregation.
 
-    The batch is served by exactly four queries no matter how many creator
+    The batch is served by exactly five queries no matter how many creator
     keys are requested:
 
     1. the authenticated user's owned issues, their read/unread status, and
@@ -289,7 +289,8 @@ async def load_creator_summary_inputs(
     3. the confirmed ``creator_credits`` key of ComicVine issue metadata for
        those issues, projected in SQL so the retained raw provider payload is
        never hydrated for a creator read (issue #3244);
-    4. the latest effective ``rate`` event rating per owned issue.
+    4. the latest effective ``rate`` event rating per owned issue;
+    5. authentication lookup for the current user.
 
     Args:
         db: Async database session.

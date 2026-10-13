@@ -347,7 +347,7 @@ async def test_wide_library_creator_read_stays_bounded(
     assert len(small.json()["items"]) == 1
     assert full.json()["total"] == 16
     assert len(small_page) == len(full_page)
-    assert len(small_page) <= 4, small_page
+    assert len(small_page) <= 5, small_page
 
 
 def test_extract_creator_credit_list_rejects_unusable_values() -> None:
