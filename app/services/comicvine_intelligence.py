@@ -77,10 +77,11 @@ def _reference_list(metadata: dict[str, object], *keys: str) -> list[dict[str, o
 
 
 def _series(metadata: dict[str, object]) -> tuple[int | None, str | None]:
-    volume = metadata.get("volume")
-    if isinstance(volume, dict):
-        return _integer(volume.get("id")), _string(volume.get("name"))
-    return _integer(metadata.get("volume_id")), _string(metadata.get("volume_name"))
+    return _series_values(
+        metadata.get("volume"),
+        metadata.get("volume_id"),
+        metadata.get("volume_name"),
+    )
 
 
 def _image(metadata: dict[str, object]) -> str | None:
@@ -148,6 +149,34 @@ def _arc_references(metadata: dict[str, object]) -> list[dict[str, object]]:
     return _reference_list(metadata, "story_arc_credits", "story_arcs")
 
 
+def _arc_ids(credits: object, story_arcs: object) -> set[int]:
+    """Collect story-arc ids from the first usable reference list.
+
+    Mirrors :func:`_arc_references` key precedence: the first key holding a
+    list wins even when that list is empty, and only ids that coerce to an
+    integer are kept.
+    """
+    for value in (credits, story_arcs):
+        if isinstance(value, list):
+            return {
+                arc_id
+                for item in value
+                if isinstance(item, dict) and (arc_id := _integer(item.get("id"))) is not None
+            }
+    return set()
+
+
+def _series_values(
+    volume: object,
+    volume_id: object,
+    volume_name: object,
+) -> tuple[int | None, str | None]:
+    """Resolve the series identity from already-projected metadata fields."""
+    if isinstance(volume, dict):
+        return _integer(volume.get("id")), _string(volume.get("name"))
+    return _integer(volume_id), _string(volume_name)
+
+
 async def _confirmed_identity(db: AsyncSession, issue_id: int) -> ExternalIdentity | None:
     result = await db.execute(
         select(ExternalIdentity)
@@ -179,6 +208,15 @@ async def _related_external_rows(
     of hydrating every row that shares an arc. Ordering stays deterministic
     (``external_id``, then ``id``) and per-arc truncation still happens in
     Python where cover-date ordering is applied.
+
+    Only the fields the response actually renders are projected out of the
+    stored document. Stored metadata embeds ``raw_provider_payload`` (the
+    whole provider issue: description markup, every credit list, image
+    variants), so selecting whole documents for every candidate arc member
+    hydrated roughly seventy times more bytes than the response needs and put
+    the dominant cost of this route on the read path (issue #3390).
+    ``jsonb_to_record`` extracts the rendered fields from a single parse of
+    the document; repeated ``->`` operators would re-parse it once per field.
 
     Returns:
         The candidate rows plus whether the bounded window was saturated, so
@@ -218,8 +256,27 @@ async def _related_external_rows(
                 ei.id AS identity_id,
                 ei.external_id,
                 ei.external_url,
-                ei.metadata_json
+                _rendered.volume AS series_volume,
+                _rendered.volume_id AS series_volume_id,
+                _rendered.volume_name AS series_volume_name,
+                _rendered.issue_number AS issue_number,
+                _rendered.name AS name,
+                _rendered.cover_date AS cover_date,
+                _rendered.site_detail_url AS site_detail_url,
+                _rendered.story_arc_credits AS story_arc_credits,
+                _rendered.story_arcs AS story_arcs
             FROM external_identities ei
+            CROSS JOIN LATERAL jsonb_to_record(ei.metadata_json::jsonb) AS _rendered(
+                volume json,
+                volume_id text,
+                volume_name text,
+                issue_number text,
+                name text,
+                cover_date text,
+                site_detail_url text,
+                story_arc_credits json,
+                story_arcs json
+            )
             WHERE ei.provider = :provider
               AND ei.entity_type = 'issue'
               AND ei.external_id <> :current_external_id
@@ -364,26 +421,22 @@ async def get_issue_intelligence(
 
     related_by_arc: dict[int, list[ComicVineRelatedIssue]] = {arc_id: [] for arc_id in arc_ids}
     for row in related_rows:
-        related_metadata = row["metadata_json"]
-        if not isinstance(related_metadata, dict):
-            continue
-        series_id, series_name = _series(related_metadata)
+        _series_id, series_name = _series_values(
+            row["series_volume"],
+            row["series_volume_id"],
+            row["series_volume_name"],
+        )
         related = ComicVineRelatedIssue(
             comicvine_issue_id=str(row["external_id"]),
             series_name=series_name,
-            issue_number=_string(related_metadata.get("issue_number")),
-            name=_string(related_metadata.get("name")),
-            cover_date=_string(related_metadata.get("cover_date")),
-            comicvine_url=_string(row["external_url"])
-            or _string(related_metadata.get("site_detail_url")),
+            issue_number=_string(row["issue_number"]),
+            name=_string(row["name"]),
+            cover_date=_string(row["cover_date"]),
+            comicvine_url=_string(row["external_url"]) or _string(row["site_detail_url"]),
             comicpile_matches=matches.get(int(row["identity_id"]), []),
         )
-        row_arc_ids = {
-            arc_id
-            for arc in _arc_references(related_metadata)
-            if (arc_id := _integer(arc.get("id"))) is not None
-        }
-        for arc_id in row_arc_ids.intersection(related_by_arc):
+        row_arc_ids = _arc_ids(row["story_arc_credits"], row["story_arcs"])
+        for arc_id in row_arc_ids & related_by_arc.keys():
             related_by_arc[arc_id].append(related)
 
     story_arcs: list[ComicVineStoryArc] = []
