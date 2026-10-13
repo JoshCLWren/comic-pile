@@ -111,8 +111,8 @@ def _image(metadata: dict[str, object]) -> str | None:
 
 
 def _creators_optimized(metadata: dict[str, object]) -> list[ComicVineCreator]:
-    """Optimized creator processing with set-based deduplication."""
-    by_id: dict[int, tuple[str, set[str]]] = {}
+    """Optimized creator processing with set-based deduplication that preserves order."""
+    by_id: dict[int, tuple[str, set[str], list[str]]] = {}  # Added list to preserve order
     order: list[int] = []
     no_id: list[ComicVineCreator] = []
 
@@ -122,31 +122,35 @@ def _creators_optimized(metadata: dict[str, object]) -> list[ComicVineCreator]:
             continue
         creator_id = _integer(credit.get("id"))
         role_value = _string(credit.get("role")) or ""
-        roles = {role.strip() for role in role_value.split(",") if role.strip()}
+        # Preserve order of roles as they appear in the input
+        roles_list = [role.strip() for role in role_value.split(",") if role.strip()]
+        roles_set = set(roles_list)
 
         if creator_id is None:
-            no_id.append(ComicVineCreator(name=name, roles=list(roles)))
+            no_id.append(ComicVineCreator(name=name, roles=roles_list))
             continue
 
         if creator_id not in by_id:
-            by_id[creator_id] = (name, roles)
+            by_id[creator_id] = (name, roles_set, roles_list)
             order.append(creator_id)
         else:
-            _, existing_roles = by_id[creator_id]
-            existing_roles.update(roles)  # Set union is faster than list append
+            _, existing_set, existing_list = by_id[creator_id]
+            # Add new roles while preserving order
+            for role in roles_list:
+                if role not in existing_set:
+                    existing_set.add(role)
+                    existing_list.append(role)
 
     creators = [
         ComicVineCreator(
             creator_id=cid,
             name=by_id[cid][0],
-            roles=list(by_id[cid][1]),
+            roles=by_id[cid][2],  # Use the preserved order list
         )
         for cid in order
     ]
     creators.extend(no_id)
     return creators
-
-
 def _arc_references(metadata: dict[str, object]) -> list[dict[str, object]]:
     return _reference_list(metadata, "story_arc_credits", "story_arcs")
 
@@ -203,8 +207,8 @@ async def _related_external_rows_optimized(
               AND ei.entity_type = 'issue'
               AND ei.external_id <> :current_external_id
               AND (
-                  ei.metadata_json->'story_arc_credits' @> :arc_credits_json::jsonb
-                  OR ei.metadata_json->'story_arcs' @> :story_arcs_json::jsonb
+                  ei.metadata_json::jsonb -> 'story_arc_credits' @> CAST(:arc_credits_json AS jsonb)
+                  OR ei.metadata_json::jsonb -> 'story_arcs' @> CAST(:story_arcs_json AS jsonb)
               )
             ORDER BY ei.external_id, ei.id
             LIMIT :related_row_limit
