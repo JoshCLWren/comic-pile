@@ -735,42 +735,39 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
         AsyncMock(return_value=set()),
     )
 
+    stale_rows = [
+        SimpleNamespace(
+            id=thread_id,
+            title=f"Stale {thread_id}",
+            format="ongoing",
+            last_activity_at=datetime(2026, 7, 1, tzinfo=UTC),
+        )
+        for thread_id in (10, 20, 30)
+    ]
+
     stale_ids_captured: list[int] = []
 
     original_choice = random_mod.choice
 
     def _capturing_choice(seq):
-        if seq and isinstance(seq[0], int) and len(seq) > 0:
-            stale_ids_captured.extend(seq)
+        if seq and hasattr(seq[0], "thread_id"):
+            stale_ids_captured.extend(row.thread_id for row in seq)
         return original_choice(seq)
 
     monkeypatch.setattr(random_mod, "choice", _capturing_choice)
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=3),   # stale count
-        _Result(rows=[(10,), (20,), (30,)]),
-        _Result(
-            rows=[
-                SimpleNamespace(
-                    id=20,
-                    title="Chosen Stale",
-                    format="ongoing",
-                    last_activity_at=datetime(2026, 7, 1, tzinfo=UTC),
-                )
-            ]
-        ),
-        _Result(rows=[]),
-        _Result(rows=[]),
+        _Result(rows=[]),            # pool
+        _Result(rows=[]),            # blocked summaries (windowed total)
+        _Result(rows=stale_rows),    # stale candidates
+        _Result(rows=[]),            # exclusion library (active + completed)
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
-    assert stale_ids_captured == [10, 20, 30]
+    assert sorted(stale_ids_captured) == [10, 20, 30]
     assert response.stale_thread_count == 3
     assert response.stale_thread is not None
-    assert response.stale_thread.id == 20
-    assert response.stale_thread.title == "Chosen Stale"
+    assert response.stale_thread.id in {10, 20, 30}
+    assert response.stale_thread.title == f"Stale {response.stale_thread.id}"
