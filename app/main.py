@@ -257,6 +257,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import reading_plan_sync
     from app.api import recommendation_diagnostics
     from app.api import roll
+    from app.api import roll_tag_exclusions
     from app.api import session
     from app.api import snooze
     from app.api import taste
@@ -274,6 +275,16 @@ def _register_core_routers(app: FastAPI) -> None:
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
+    app.include_router(
+        roll_tag_exclusions.router,
+        prefix="/api/roll/tag-exclusions",
+        tags=["roll"],
+    )
+    app.include_router(
+        roll_tag_exclusions.router,
+        prefix="/api/v1/roll/tag-exclusions",
+        tags=["roll"],
+    )
     # Roll v2: versioned-only, no unversioned alias per #2716
     app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])

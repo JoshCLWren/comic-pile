@@ -40,6 +40,8 @@ import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterUndo } from '../../query/cacheEffects'
 import { ThreadPool } from './components/ThreadPool'
+import { TagExclusionManager } from './components/TagExclusionManager'
+import { useRemoveTagExclusion } from '../../hooks/useRollTagExclusions'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
 import { RollModals } from './components/RollModals'
@@ -132,6 +134,7 @@ export default function RollPage() {
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
+  const removeTagExclusionMutation = useRemoveTagExclusion()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
   const { showToast } = useToast()
@@ -348,6 +351,7 @@ export default function RollPage() {
   const skippedThreads = bootstrap?.skipped_threads ?? []
   const blockedThreads = bootstrap?.blocked_threads ?? []
   const inactiveThreads = bootstrap?.inactive_threads ?? []
+  const tagExclusions = bootstrap?.tag_exclusions ?? []
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -484,6 +488,29 @@ export default function RollPage() {
               />
             )}
 
+            <TagExclusionManager
+              excludedTags={tagExclusions}
+              isPending={removeTagExclusionMutation.isPending}
+              onRemove={(tagId) => {
+                const removed = tagExclusions.find((tag) => tag.id === tagId)
+                void removeTagExclusionMutation
+                  .mutateAsync(tagId)
+                  .then(() => {
+                    showToast(
+                      removed
+                        ? `Removed exclusion for “${removed.name}”. Matching series are eligible again.`
+                        : 'Exclusion removed.',
+                      'success',
+                    )
+                  })
+                  .catch((error: unknown) => {
+                    showToast(
+                      getApiErrorDetail(error) || 'Could not remove the exclusion.',
+                      'error',
+                    )
+                  })
+              }}
+            />
             <ThreadPool
               pool={pool}
               blockedThreads={blockedThreads}

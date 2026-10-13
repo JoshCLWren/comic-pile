@@ -74,6 +74,9 @@ interface DirectChipProps {
   onRemove?: (tag: Tag) => void
   /** Inheritance sources beyond the queried object itself, if any. */
   extraSources?: InheritanceSource[]
+  /** Exclude-from-Roll handler (issue #3033); omit to hide the affordance. */
+  onExcludeTag?: (tag: Tag) => void
+  excludeIsPending?: boolean
 }
 
 /**
@@ -86,7 +89,7 @@ interface DirectChipProps {
  * truncating the name. The remove affordance stays inside the pill because it
  * is the chip's own action, not descriptive state.
  */
-function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
+function DirectChip({ tag, canEdit, onRemove, extraSources, onExcludeTag, excludeIsPending }: DirectChipProps) {
   const [expanded, setExpanded] = useState(false)
   const hasExtraSources = !!extraSources && extraSources.length > 0
 
@@ -112,6 +115,18 @@ function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
             Global
           </span>
         )}
+        {onExcludeTag && (
+          <button
+            type="button"
+            onClick={() => onExcludeTag(tag)}
+            disabled={excludeIsPending}
+            aria-label={`Exclude tag ${tag.name} from Roll`}
+            title="Do not roll anything with this tag, then roll again"
+            className="shrink-0 text-[11px] font-semibold text-[var(--theme-text-muted)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+          >
+            Exclude
+          </button>
+        )}
         {hasExtraSources && (
           <button
             type="button"
@@ -133,6 +148,9 @@ function DirectChip({ tag, canEdit, onRemove, extraSources }: DirectChipProps) {
 
 interface InheritedChipProps {
   entry: EffectiveTag
+  /** Exclude-from-Roll handler (issue #3033); omit to hide the affordance. */
+  onExcludeTag?: (tag: Tag) => void
+  excludeIsPending?: boolean
 }
 
 /**
@@ -149,7 +167,7 @@ interface InheritedChipProps {
  * visible without relying on color perception and without stealing width
  * from the name.
  */
-function InheritedChip({ entry }: InheritedChipProps) {
+function InheritedChip({ entry, onExcludeTag, excludeIsPending }: InheritedChipProps) {
   const [expanded, setExpanded] = useState(false)
   const { tag, sources } = entry
 
@@ -163,6 +181,18 @@ function InheritedChip({ entry }: InheritedChipProps) {
         <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">
           Inherited
         </span>
+        {onExcludeTag && (
+          <button
+            type="button"
+            onClick={() => onExcludeTag(tag)}
+            disabled={excludeIsPending}
+            aria-label={`Exclude tag ${tag.name} from Roll`}
+            title="Do not roll anything with this tag, then roll again"
+            className="shrink-0 text-[11px] font-semibold text-[var(--theme-text-muted)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+          >
+            Exclude
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
@@ -193,6 +223,13 @@ export interface TagChipsProps {
   canRemoveTag?: (tag: Tag) => boolean
   onRetry?: () => void
   label?: string
+  /**
+   * Exclude-from-Roll handler (issue #3033). When provided, every chip offers
+   * an "Exclude" action that persists an account-wide Roll exclusion for the
+   * tag. Omit everywhere except Roll surfaces so other views stay unchanged.
+   */
+  onExcludeTag?: (tag: Tag) => void
+  excludeIsPending?: boolean
 }
 
 /**
@@ -217,6 +254,8 @@ export function TagChips({
   canRemoveTag,
   onRetry,
   label = 'Tags',
+  onExcludeTag,
+  excludeIsPending,
 }: TagChipsProps) {
   // A failed load is reported before the empty state: a query that errored with
   // no cached data has not been shown to be tagless, and the viewer needs the
@@ -272,6 +311,8 @@ export function TagChips({
               tag={tag}
               canEdit={!!canEdit && (canRemoveTag ? canRemoveTag(tag) : true)}
               onRemove={onRemoveDirect}
+              onExcludeTag={onExcludeTag}
+              excludeIsPending={excludeIsPending}
               extraSources={byTagId
                 .get(tag.id)
                 ?.sources.filter(
@@ -280,7 +321,12 @@ export function TagChips({
             />
           ))}
           {inherited.map((entry) => (
-            <InheritedChip key={entry.tag.id} entry={entry} />
+            <InheritedChip
+              key={entry.tag.id}
+              entry={entry}
+              onExcludeTag={onExcludeTag}
+              excludeIsPending={excludeIsPending}
+            />
           ))}
         </ul>
       )}

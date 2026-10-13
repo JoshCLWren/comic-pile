@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useEffectiveTags, useUnassignTag } from '../../hooks/useTags'
-import type { TagTargetType } from '../../services/api-tags'
+import type { Tag, TagTargetType } from '../../services/api-tags'
 import { TagChips } from './TagChips'
 import { TagEditor } from './TagEditor'
 import { tagErrorMessage } from './tagErrors'
@@ -15,6 +15,12 @@ export interface TagSectionProps {
   isAdmin?: boolean
   /** Eyebrow label for the section. */
   title?: string
+  /**
+   * Exclude-from-Roll handler (issue #3033). When provided, every chip offers
+   * an "Exclude" action. Only Roll surfaces pass this; other views omit it.
+   */
+  onExcludeTag?: (tag: Tag) => void
+  excludeIsPending?: boolean
 }
 
 /**
@@ -30,6 +36,8 @@ export function TagSection({
   targetLabel,
   isAdmin,
   title = 'Tags',
+  onExcludeTag,
+  excludeIsPending,
 }: TagSectionProps) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -78,6 +86,8 @@ export function TagSection({
             })
         }}
         onRetry={() => void effective.refetch()}
+        onExcludeTag={onExcludeTag}
+        excludeIsPending={excludeIsPending}
       />
       <TagEditor
         targetType={targetType}

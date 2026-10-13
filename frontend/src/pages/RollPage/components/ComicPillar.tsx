@@ -16,6 +16,9 @@ import {
   invalidateComicVineIssueIntelligenceMany,
 } from '../../../query/cacheEffects'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
+import { useExcludeTagAndReroll } from '../../../hooks/useRollTagExclusions'
+import { useToast } from '../../../contexts/useToast'
+import { getApiErrorDetail } from '../../../utils/apiError'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
@@ -45,6 +48,8 @@ export function ComicPillar({
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const progress = getProgressPercentage(activeRatingThread)
   const { metadata } = useComicVineIssueIntelligence(issueId)
+  const { showToast } = useToast()
+  const excludeTagAndReroll = useExcludeTagAndReroll()
   const storyTitle = metadata?.name ?? null
   // The publication date is rendered once, beside the cover in ComicIdentity.
   // Repeating it here only produced two dates for the same issue.
@@ -293,6 +298,28 @@ export function ComicPillar({
                     ? `${threadTitle} #${issueNumber}`
                     : threadTitle
                 }
+                onExcludeTag={(tag) => {
+                  void excludeTagAndReroll
+                    .mutateAsync(tag.id)
+                    .then((result) => {
+                      if (result.pendingInvalidated) {
+                        showToast(
+                          `Excluded “${result.excludedTag.name}” and rolled again.`,
+                          'success',
+                        )
+                      } else {
+                        showToast(`Excluded “${result.excludedTag.name}” from Roll.`, 'success')
+                      }
+                    })
+                    .catch((error: unknown) => {
+                      showToast(
+                        getApiErrorDetail(error) ||
+                          `Could not exclude “${tag.name}”.`,
+                        'error',
+                      )
+                    })
+                }}
+                excludeIsPending={excludeTagAndReroll.isPending}
               />
             </div>
           )}

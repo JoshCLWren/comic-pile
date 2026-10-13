@@ -34,6 +34,7 @@ from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.reading_session import ReadingSession
+from app.models.roll_tag_exclusion import RollTagExclusion
 from app.models.snapshot import Snapshot
 from app.models.tag import Tag, TagAssignment
 from app.models.taste_signal import TasteSignal
@@ -78,6 +79,7 @@ __all__ = [
     "Release",
     "RevokedToken",
     "ReadingSession",
+    "RollTagExclusion",
     "Snapshot",
     "TasteSignal",
     "Tag",

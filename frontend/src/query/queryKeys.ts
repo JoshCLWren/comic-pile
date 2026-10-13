@@ -132,6 +132,12 @@ export const queryKeys = {
   roll: {
     all: ['roll'] as const,
     bootstrap: () => ['roll', 'bootstrap'] as const,
+    /**
+     * Canonical key for the account-wide tag exclusions (issue #3033). The
+     * exclusions rewrite the roll pool, so exclusion mutations invalidate the
+     * bootstrap alongside this key.
+     */
+    exclusions: () => ['roll', 'tag-exclusions'] as const,
   },
   demo: {
     /**

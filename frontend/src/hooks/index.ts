@@ -59,3 +59,9 @@ export {
   useBulkAssignTag,
   useBulkUnassignTag,
 } from './useTags'
+export {
+  useTagExclusions,
+  useAddTagExclusion,
+  useRemoveTagExclusion,
+  useExcludeTagAndReroll,
+} from './useRollTagExclusions'

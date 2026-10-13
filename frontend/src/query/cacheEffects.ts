@@ -678,3 +678,30 @@ export async function invalidateAfterTagMutation(
     }),
   ])
 }
+
+/**
+ * Refresh every surface a Roll tag-exclusion change rewrites (issue #3033).
+ *
+ * Exclusion adds/removes rewrite the exclusion list, the roll pool inside the
+ * bootstrap, and the tag-usage counts behind the delete-confirmation dialog
+ * (a deleted tag's exclusion references vanish with it). The bootstrap
+ * refetch is what re-renders Roll without navigating away.
+ *
+ * TanStack Query refetches invalidated active queries — callers must not also
+ * call `refetch()` for a key this helper already refreshes.
+ */
+export async function invalidateAfterTagExclusionMutation(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.exclusions(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({ queryKey: queryKeys.tags.all }),
+  ])
+}

@@ -50,6 +50,7 @@ from app.schemas.recommendation_diagnostics import (
     RecommendationDiagnosticsResponse,
 )
 from app.schemas.roll import (
+    ExcludeTagAndRerollResponse,
     OverrideRequest,
     RollBootstrapResponse,
     RollBootstrapThread,
@@ -59,6 +60,8 @@ from app.schemas.roll import (
     SetCurrentIssueResponse,
     SessionModeResponse,
     SessionModeUpdateRequest,
+    TagExclusionAddRequest,
+    TagExclusionListResponse,
     ThreadExclusionReason,
 )
 from app.schemas.recommendation_context import (
@@ -150,6 +153,9 @@ __all__ = [
     "RollBootstrapThread",
     "RollBootstrapResponse",
     "ThreadExclusionReason",
+    "TagExclusionAddRequest",
+    "TagExclusionListResponse",
+    "ExcludeTagAndRerollResponse",
     "SetCurrentIssueRequest",
     "SetCurrentIssueResponse",
     "RecommendationExplanationResponse",

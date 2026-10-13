@@ -1,4 +1,5 @@
 import type { ReadingBandwidth, ReadingIntent, SessionMode, SessionThread } from './index'
+import type { Tag } from '../services/api-tags'
 
 export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectionGuidance } from './index'
 
@@ -18,7 +19,7 @@ export interface ThreadExclusionReason {
   thread_id: number
   title: string
   format: string
-  reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue"
+  reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue" | "tag_excluded"
   detail?: string | null
 }
 
@@ -147,4 +148,9 @@ export interface RollBootstrapResponse {
   excluded_threads?: ThreadExclusionReason[]
   inactive_count?: number
   inactive_threads?: ThreadExclusionReason[]
+  /**
+   * Active account-wide tag exclusions (issue #3033). The Roll screen manages
+   * these directly without waiting for an excluded tag to roll.
+   */
+  tag_exclusions?: Tag[]
 }

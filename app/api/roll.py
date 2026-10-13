@@ -31,6 +31,7 @@ from app.services.reading_effort import (
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.services.roll_service import RollService
+from app.services.roll_tag_exclusion_service import RollTagExclusionService
 from app.services.session_response import (
     build_ladder_path,
     build_session_response,
@@ -60,6 +61,7 @@ from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
 from app.schemas.session import build_session_bandwidth_state, build_session_intent_state, SnoozedThreadInfo
+from app.schemas.tags import TagResponse
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
     DEFAULT_INTENT,
@@ -1142,7 +1144,6 @@ async def roll_bootstrap(
         .where(Thread.queue_position >= 1)
         .where(Thread.is_blocked.is_(False))
         .order_by(Thread.queue_position)
-        .limit(die_size)
     )
 
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
@@ -1157,6 +1158,18 @@ async def roll_bootstrap(
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()
 
+    # Issue #3033: persistent account-wide tag exclusions filter the pool the
+    # same way the roll path filters it (eligibility constraint evaluated on
+    # the next unread issue's effective tags). The die cap applies after
+    # filtering so excluded candidates never consume die faces.
+    tag_exclusion_service = RollTagExclusionService(db)
+    pool_tag_state = await tag_exclusion_service.get_pool_exclusion_state(
+        current_user,
+        [(row.id, row.issue_id) for row in pool_rows],
+    )
+    tag_ineligible_ids = set(pool_tag_state.ineligible_tag_ids)
+    eligible_pool_rows = [row for row in pool_rows if row.id not in tag_ineligible_ids]
+
     roll_pool = [
         RollBootstrapThread(
             id=row.id,
@@ -1166,7 +1179,7 @@ async def roll_bootstrap(
             issue_number=row.issue_number,
             route_labels=list(row.route_labels or []),
         )
-        for row in pool_rows
+        for row in eligible_pool_rows[:die_size]
     ]
 
     snoozed_threads: list[RollBootstrapThread] = []
@@ -1287,12 +1300,24 @@ async def roll_bootstrap(
             Thread.format,
             Thread.queue_position,
             Thread.is_blocked,
+            Thread.next_unread_issue_id.label("next_issue_id"),
         )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .order_by(Thread.queue_position)
     )
     all_active_rows = all_active_result.all()
+
+    # Issue #3033: evaluate persistent tag exclusions over every active row so
+    # tag-excluded series are explained instead of vanishing silently.
+    all_active_tag_state = await tag_exclusion_service.get_pool_exclusion_state(
+        current_user,
+        [(row.id, row.next_issue_id) for row in all_active_rows],
+    )
+    all_active_tag_ineligible = all_active_tag_state.ineligible_tag_ids
+    excluded_tag_names = {
+        tag.id: tag.name for tag in all_active_tag_state.excluded_tags
+    }
 
     available_ids: set[int] = set()
     excluded: dict[int, ThreadExclusionReason] = {}
@@ -1305,12 +1330,13 @@ async def roll_bootstrap(
         fmt = normalize_format_value(row.format)
         queue_pos = row.queue_position
         # Mirrors pool_query's WHERE clause exactly: active (already
-        # filtered above), queued, unblocked, and not snoozed or
-        # skipped in any scope.
+        # filtered above), queued, unblocked, tag-eligible, and not snoozed
+        # or skipped in any scope.
         is_blocked = row.is_blocked
         is_rollable = (
             queue_pos >= 1
             and not is_blocked
+            and tid not in all_active_tag_ineligible
             and tid not in effective_snoozed_ids
             and tid not in skipped_ids
         )
@@ -1321,6 +1347,18 @@ async def roll_bootstrap(
             blocked_ids.append(tid)
             exc = ThreadExclusionReason(
                 thread_id=tid, title=title, format=fmt, reason="blocked",
+            )
+        elif tid in all_active_tag_ineligible:
+            responsible = [
+                excluded_tag_names.get(tag_id, f"tag {tag_id}")
+                for tag_id in all_active_tag_ineligible[tid]
+            ]
+            exc = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="tag_excluded",
+                detail=f"Excluded by tag: {', '.join(responsible)}",
             )
         elif tid in snoozed_ids:
             exc = ThreadExclusionReason(
@@ -1428,6 +1466,20 @@ async def roll_bootstrap(
         excluded_threads=excluded_list,
         inactive_count=inactive_count,
         inactive_threads=inactive,
+        # Issue #3033: active account-wide tag exclusions for Roll management.
+        tag_exclusions=[
+            TagResponse(
+                id=tag.id,
+                name=tag.name,
+                normalized_name=tag.normalized_name,
+                scope=tag.scope,
+                owner_user_id=tag.owner_user_id,
+                color=tag.color,
+                created_at=tag.created_at,
+                updated_at=tag.updated_at,
+            )
+            for tag in all_active_tag_state.excluded_tags
+        ],
     )
 
 

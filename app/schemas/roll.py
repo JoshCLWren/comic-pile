@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_blocking import ContinuityBlocker
 from app.schemas.session import ActiveThreadInfo, BandwidthSource, IntentSource, SessionBandwidthState, SessionMode
+from app.schemas.tags import TagResponse
 from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
@@ -166,7 +167,7 @@ class ThreadExclusionReason(BaseModel):
     thread_id: int
     title: str
     format: str
-    reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue"]
+    reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue", "tag_excluded"]
     detail: str | None = None
 
 
@@ -209,6 +210,11 @@ class RollBootstrapResponse(BaseModel):
     inactive_count: int = 0
     inactive_threads: list[ThreadExclusionReason] = Field(default_factory=list)
 
+    # Active account-wide tag exclusions (issue #3033): persistent eligibility
+    # constraints the user manages directly from Roll. Included so the Roll
+    # screen can render and remove them without waiting for a tag to roll.
+    tag_exclusions: list[TagResponse] = Field(default_factory=list)
+
     @model_validator(mode="before")
     @classmethod
     def bound_summary_lists(cls, data: object) -> object:
@@ -221,3 +227,38 @@ class RollBootstrapResponse(BaseModel):
             if isinstance(values, list):
                 data[field_name] = values[: cls.summary_limit]
         return data
+
+
+class TagExclusionAddRequest(BaseModel):
+    """Request to persist an account-wide Roll tag exclusion (issue #3033)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tag_id: int = Field(..., gt=0, description="Tag to exclude from Roll eligibility")
+
+
+class TagExclusionListResponse(BaseModel):
+    """The user's active account-wide Roll tag exclusions.
+
+    Exclusions are persistent eligibility constraints: they remain active
+    until removed, and removing one makes matching candidates eligible
+    immediately.
+    """
+
+    excluded_tags: list[TagResponse] = Field(default_factory=list)
+
+
+class ExcludeTagAndRerollResponse(BaseModel):
+    """Outcome of a mid-roll tag exclusion with neutral auto-reroll.
+
+    The exclusion is always persisted account-wide. When the pending roll
+    became ineligible under the new exclusion it is cleared and replaced
+    through normal Roll selection (``pending_invalidated`` is ``True`` and
+    ``roll`` carries the replacement); otherwise ``roll`` is ``None`` and the
+    pending roll is untouched. The action is never recorded as a snooze or
+    negative preference signal.
+    """
+
+    excluded_tag: TagResponse
+    pending_invalidated: bool
+    roll: RollResponse | None = None

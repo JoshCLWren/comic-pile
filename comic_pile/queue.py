@@ -565,6 +565,47 @@ async def get_bounded_roll_pool_rows(
     return rows[:current_die]
 
 
+def partition_pool_by_tag_exclusions(
+    rows: list[tuple[Thread, int, str | None]],
+    excluded_tag_ids: Collection[int],
+    effective_tag_ids: dict[int, set[int]],
+) -> tuple[list[tuple[Thread, int, str | None]], dict[int, list[int]]]:
+    """Split roll-pool rows by persistent tag exclusions (issue #3033).
+
+    A candidate is ineligible when its next unread issue's effective tags
+    contain any excluded tag. Effective tags are supplied by the caller
+    (resolved in bulk by
+    ``app.repositories.roll_tag_exclusion_repository.fetch_effective_tag_ids_for_candidates``)
+    so this pure helper never issues a query per candidate.
+
+    Args:
+        rows: ``(Thread, unread_count, next_issue_number)`` pool rows in
+            queue-position order.
+        excluded_tag_ids: Tag IDs the user excluded from Roll eligibility.
+        effective_tag_ids: Map from thread ID to its next unread issue's
+            effective tag ID set. Threads absent from the map are treated as
+            having no effective tags and stay eligible.
+
+    Returns:
+        ``(eligible_rows, ineligible_reasons)`` where ``eligible_rows``
+        preserves queue-position order and ``ineligible_reasons`` maps each
+        removed thread ID to the sorted excluded tag IDs responsible.
+    """
+    excluded = set(excluded_tag_ids)
+    if not excluded:
+        return list(rows), {}
+    eligible: list[tuple[Thread, int, str | None]] = []
+    ineligible: dict[int, list[int]] = {}
+    for row in rows:
+        thread = row[0]
+        matching = sorted(excluded & effective_tag_ids.get(thread.id, set()))
+        if matching:
+            ineligible[thread.id] = matching
+        else:
+            eligible.append(row)
+    return eligible, ineligible
+
+
 async def get_stale_threads(
     user_id: int,
     db: AsyncSession,

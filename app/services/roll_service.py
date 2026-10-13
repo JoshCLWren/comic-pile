@@ -14,9 +14,10 @@ from typing import TypedDict
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ReadingSession, Thread
+from app.models import Event, ReadingSession, Tag, Thread, User
 from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
+from app.repositories import roll_tag_exclusion_repository, tag_repository, thread_repository
 from app.repositories.roll_repository import (
     fetch_issue_by_id,
     fetch_session_events,
@@ -34,6 +35,7 @@ from app.schemas.recommendation_context import (
     CandidateFactor,
     RecommendationContextCreate,
 )
+from app.services.roll_tag_exclusion_service import ExcludeTagAndRerollResult
 from app.momentum import MomentumCandidateWeight
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
@@ -116,11 +118,39 @@ class RollService:
         Raises:
             HTTPException: 400 when the bounded pool is empty.
         """
-        from comic_pile.queue import get_bounded_roll_pool_rows
-
-        bounded_rows = await get_bounded_roll_pool_rows(
-            user_id, self._db, current_die, excluded_ids,
+        from comic_pile.queue import (
+            get_roll_pool_rows,
+            partition_pool_by_tag_exclusions,
         )
+
+        rows = await get_roll_pool_rows(
+            user_id, self._db, excluded_ids,
+        )
+        excluded_tags = await roll_tag_exclusion_repository.list_excluded_tags(
+            self._db, user_id
+        )
+        if excluded_tags:
+            excluded_tag_ids = [tag.id for tag in excluded_tags]
+            candidates = [
+                (row[0].id, row[0].next_unread_issue_id) for row in rows
+            ]
+            effective_tag_ids = (
+                await roll_tag_exclusion_repository.fetch_effective_tag_ids_for_candidates(
+                    self._db, user_id, candidates
+                )
+            )
+            eligible_rows, tag_ineligible = partition_pool_by_tag_exclusions(
+                rows, excluded_tag_ids, effective_tag_ids
+            )
+            bounded_rows = eligible_rows[:current_die]
+            if not bounded_rows and tag_ineligible:
+                raise HTTPException(
+                    status_code=400, detail=self._tag_exclusion_empty_pool_detail(
+                        excluded_tags
+                    ),
+                )
+        else:
+            bounded_rows = rows[:current_die]
         if not bounded_rows:
             raise HTTPException(status_code=400, detail=empty_pool_detail)
 
@@ -353,6 +383,27 @@ class RollService:
             "event": event,
             "rec_context_create": rec_context_create,
         }
+
+    @staticmethod
+    def _tag_exclusion_empty_pool_detail(excluded_tags: list[Tag]) -> str:
+        """Build the explanatory detail for a tag-exclusion-emptied pool.
+
+        Exclusions are never silently ignored: when they eliminate every
+        otherwise-rollable candidate the error names the active exclusions
+        responsible and points at removal and retry instead of falling back
+        to an unfiltered pool.
+
+        Args:
+            excluded_tags: The user's active excluded tags.
+
+        Returns:
+            Human-readable error detail naming the responsible exclusions.
+        """
+        names = ", ".join(tag.name for tag in excluded_tags)
+        return (
+            "No candidates satisfy the current tag exclusions "
+            f"(excluded: {names}). Remove one or more tag exclusions and roll again."
+        )
 
     def _build_rolling_recommendation_context(
         self,
@@ -622,4 +673,198 @@ class RollService:
             selected_index=selected_index,
             unread_count=unread_count,
             snoozed_count=len(snoozed_ids),
+        )
+
+    async def _persist_selection(
+        self,
+        *,
+        current_session: ReadingSession,
+        selected_thread: Thread,
+        event: Event,
+        rec_context_create: RecommendationContextCreate,
+    ) -> None:
+        """Persist one selection's event, recommendation context, and pending state.
+
+        Shared by the neutral reroll path so exclusion-driven rerolls record
+        exactly what an ordinary roll records — and nothing else.
+
+        Args:
+            current_session: The user's active reading session.
+            selected_thread: The newly selected thread.
+            event: The roll event to persist.
+            rec_context_create: The recommendation context payload to persist.
+        """
+        self._db.add(event)
+        await self._db.flush()
+
+        rec_context = RecContextModel(
+            event_id=event.id,
+            schema_version=rec_context_create.schema_version,
+            intent=rec_context_create.intent,
+            intent_source=rec_context_create.intent_source,
+            intent_confidence=rec_context_create.intent_confidence,
+            bandwidth=rec_context_create.bandwidth,
+            bandwidth_source=rec_context_create.bandwidth_source,
+            bandwidth_confidence=rec_context_create.bandwidth_confidence,
+            candidate_factors=[f.model_dump() for f in rec_context_create.candidate_factors]
+            if rec_context_create.candidate_factors else None,
+            final_weight=rec_context_create.final_weight,
+            random_bypass=rec_context_create.random_bypass,
+            balanced_neutrality=rec_context_create.balanced_neutrality,
+            effort_minutes=rec_context_create.effort_minutes,
+            effort_band=rec_context_create.effort_band,
+            effort_source=rec_context_create.effort_source,
+            effort_confidence=rec_context_create.effort_confidence,
+            effort_sample_count=rec_context_create.effort_sample_count,
+        )
+        await insert_recommendation_context(self._db, rec_context)
+
+        now = datetime.now(UTC)
+        await update_session_pending_thread(
+            self._db, current_session.id, selected_thread.id, now
+        )
+
+    async def execute_neutral_reroll(self, *, user_id: int) -> RollResponse:
+        """Select another eligible result without any preference side effects.
+
+        Used after a mid-roll tag exclusion invalidates the pending result.
+        The reroll runs normal Roll selection over the exclusion-filtered pool
+        and deliberately touches nothing else: no snooze or skip entries, no
+        die change, no bandwidth correction, no queue move, and no rating or
+        taste writes. The caller must have cleared the pending roll first.
+
+        Args:
+            user_id: The user to reroll for.
+
+        Returns:
+            RollResponse for the newly selected thread.
+
+        Raises:
+            HTTPException: 400 when no eligible candidate remains, 409 when a
+                pending roll still exists.
+        """
+        current_session = await get_or_create(
+            self._db, user_id=user_id, existing_user=None
+        )
+
+        if current_session.pending_thread_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A roll is already pending. Clear it before rerolling.",
+            )
+
+        current_die = await get_current_die_for_session(current_session, self._db)
+        snoozed_ids = current_session.snoozed_thread_ids or []
+        skipped_ids = current_session.skipped_thread_ids or []
+
+        artifacts = await self.select_pending_thread(
+            user_id=user_id,
+            current_session=current_session,
+            current_die=current_die,
+            excluded_ids=[*snoozed_ids, *skipped_ids],
+            selection_bandwidth=current_session.active_bandwidth or DEFAULT_BANDWIDTH,
+            selection_intent=current_session.active_intent or DEFAULT_INTENT,
+            selection_method_override=None,
+        )
+
+        selected_thread: Thread = artifacts["selected_thread"]
+        selected_index: int = artifacts["selected_index"]
+        unread_count: int = artifacts["unread_count"]
+
+        await self._persist_selection(
+            current_session=current_session,
+            selected_thread=selected_thread,
+            event=artifacts["event"],
+            rec_context_create=artifacts["rec_context_create"],
+        )
+
+        await self._db.commit()
+
+        return self.build_roll_response(
+            selected_thread=selected_thread,
+            current_die=current_die,
+            selected_index=selected_index,
+            unread_count=unread_count,
+            snoozed_count=len(snoozed_ids),
+        )
+
+    async def execute_exclude_tag_and_reroll(
+        self, *, user: User, tag_id: int
+    ) -> ExcludeTagAndRerollResult:
+        """Persist an account-wide tag exclusion, rerolling neutrally when needed.
+
+        Implements the mid-roll behavior for issue #3033:
+
+        1. persist the account-wide exclusion;
+        2. when the currently pending issue's effective tags contain the
+           excluded tag, invalidate/clear the now-ineligible pending result;
+        3. automatically select another eligible result through normal Roll
+           selection;
+        4. record nothing as a snooze or negative preference signal.
+
+        When no pending roll exists, or the pending result stays eligible, the
+        exclusion is persisted and no reroll happens.
+
+        Args:
+            user: The requesting user.
+            tag_id: Tag to exclude from Roll eligibility.
+
+        Returns:
+            The exclusion outcome, including the replacement roll when the
+            pending result was invalidated.
+
+        Raises:
+            HTTPException: 404 when the tag does not exist or is not visible
+                to the user; 400 when the exclusion empties the eligible pool.
+        """
+        tag = await tag_repository.get_tag_by_id(self._db, tag_id)
+        if tag is None or (tag.scope == "private" and tag.owner_user_id != user.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tag {tag_id} does not exist",
+            )
+
+        tag_id_value = tag.id
+        await roll_tag_exclusion_repository.add_exclusion(
+            self._db, user.id, tag_id_value
+        )
+        await self._db.commit()
+
+        current_session = await get_or_create(
+            self._db, user_id=user.id, existing_user=user
+        )
+        pending_thread_id = current_session.pending_thread_id
+        if pending_thread_id is None:
+            return ExcludeTagAndRerollResult(
+                excluded_tag=tag, pending_invalidated=False, roll=None
+            )
+
+        pending_thread = await thread_repository.find_owned(
+            self._db, user.id, pending_thread_id
+        )
+        if pending_thread is None:
+            current_session.pending_thread_id = None
+            current_session.pending_thread_updated_at = None
+            await self._db.flush()
+            roll = await self.execute_neutral_reroll(user_id=user.id)
+            return ExcludeTagAndRerollResult(
+                excluded_tag=tag, pending_invalidated=True, roll=roll
+            )
+
+        pending_thread_id_value = pending_thread.id
+        pending_issue_id = pending_thread.next_unread_issue_id
+        effective = await roll_tag_exclusion_repository.fetch_effective_tag_ids_for_candidates(
+            self._db, user.id, [(pending_thread_id_value, pending_issue_id)]
+        )
+        if tag_id_value not in effective.get(pending_thread_id_value, set()):
+            return ExcludeTagAndRerollResult(
+                excluded_tag=tag, pending_invalidated=False, roll=None
+            )
+
+        current_session.pending_thread_id = None
+        current_session.pending_thread_updated_at = None
+        await self._db.flush()
+        roll = await self.execute_neutral_reroll(user_id=user.id)
+        return ExcludeTagAndRerollResult(
+            excluded_tag=tag, pending_invalidated=True, roll=roll
         )
