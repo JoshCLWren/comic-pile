@@ -225,15 +225,11 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     assert "59" not in by_worker
     assert "ling-3.0-flash-fin-free" not in {row["model"] for row in rows}
     assert by_worker["75"]["model"] == "ling-3.1-flash-free"
-    assert by_worker["83"]["source"] == "nvidia"
-    assert by_worker["83"]["model"] == "nvidia/nemotron-3-super-120b-a12b"
+    assert by_worker["83"]["source"] == "opencode-free"
+    assert by_worker["83"]["model"] == "cat-jam-free"
     assert by_worker["83"]["minute"] == "45"
-    assert by_worker["84"]["source"] == "nvidia"
-    assert by_worker["84"]["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
-    assert by_worker["84"]["minute"] == "0"
-    assert by_worker["85"]["source"] == "nvidia"
-    assert by_worker["85"]["model"] == "nvidia/nemotron-3.5-lightning-30b-a3b"
-    assert by_worker["85"]["minute"] == "45"
+    assert "84" not in by_worker
+    assert "85" not in by_worker
     assert by_worker["86"]["source"] == "nvidia"
     assert by_worker["86"]["model"] == "meta/muse-glimmer-30b"
     assert by_worker["86"]["minute"] == "15"

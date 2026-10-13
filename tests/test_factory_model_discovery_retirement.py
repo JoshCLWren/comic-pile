@@ -1441,28 +1441,14 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "ling-3.0-flash-fin-free" not in {row["model"] for row in remaining}
     assert by_worker["83"] == {
         "worker": "83",
-        "source": "nvidia",
-        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "source": "opencode-free",
+        "model": "cat-jam-free",
         "minute": "45",
         "scheduler": "dispatcher",
-        "display_name": "NVIDIA Nemotron 3 Super",
+        "display_name": "OpenCode Cat Jam Free",
     }
-    assert by_worker["84"] == {
-        "worker": "84",
-        "source": "nvidia",
-        "model": "nvidia/nemotron-3-ultra-550b-a55b",
-        "minute": "0",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA Nemotron 3 Ultra",
-    }
-    assert by_worker["85"] == {
-        "worker": "85",
-        "source": "nvidia",
-        "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "minute": "45",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA Nemotron 3.5 Lightning",
-    }
+    assert "84" not in by_worker
+    assert "85" not in by_worker
     assert by_worker["86"] == {
         "worker": "86",
         "source": "nvidia",
