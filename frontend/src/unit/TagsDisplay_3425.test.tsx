@@ -1,11 +1,20 @@
-import { render, screen } from '@testing-library/react'
+import { render as baseRender, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
+import { PositionMenuProvider } from '../contexts/PositionMenuContext'
 import type { BlockingDependency, ThreadListItem } from '../types'
 import type { RollBootstrapThread, ThreadExclusionReason } from '../types/rollBootstrap'
 import type { Tag } from '../services/api-tags'
+
+function render(ui: React.ReactElement) {
+  return baseRender(
+    <PositionMenuProvider>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </PositionMenuProvider>
+  )
+}
 
 const tag: Tag = {
   id: 7,
@@ -49,73 +58,70 @@ function exclusionThread(): ThreadExclusionReason {
 describe('issue #3425 tag display', () => {
   it('shows tags on queue rows', () => {
     render(
-      <MemoryRouter>
-        <QueueThreadCard
-          thread={queueThread()}
-          index={0}
-          isBlocked={false}
-          blockingDependencies={[] as BlockingDependency[]}
-          crossoverGroups={[]}
-          crossoverGroupsLoading={false}
-          crossoverGroupsError={false}
-          isDragOver={false}
-          snoozeIcon=""
-          snoozeLabel=""
-          snoozeDisabled={false}
-          onCardClick={vi.fn()}
-          onDragStart={vi.fn()}
-          onDragEnd={vi.fn()}
-          onDragOver={vi.fn()}
-          onDrop={vi.fn()}
-          onRead={vi.fn()}
-          onSnooze={vi.fn()}
-          onMoveToFront={vi.fn()}
-          onMoveToBack={vi.fn()}
-          onReposition={vi.fn()}
-          onEdit={vi.fn()}
-          onDependencies={vi.fn()}
-          onDelete={vi.fn()}
-        />
-      </MemoryRouter>,
+      <QueueThreadCard
+        thread={queueThread()}
+        index={0}
+        isBlocked={false}
+        // SAFETY: empty array satisfies BlockingDependency[] for test isolation
+        blockingDependencies={[] as BlockingDependency[]}
+        crossoverGroups={[]}
+        crossoverGroupsLoading={false}
+        crossoverGroupsError={false}
+        isDragOver={false}
+        snoozeIcon=""
+        snoozeLabel=""
+        snoozeDisabled={false}
+        onCardClick={vi.fn()}
+        onDragStart={vi.fn()}
+        onDragEnd={vi.fn()}
+        onDragOver={vi.fn()}
+        onDrop={vi.fn()}
+        onRead={vi.fn()}
+        onSnooze={vi.fn()}
+        onMoveToFront={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onReposition={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+      />
     )
     expect(screen.getByLabelText('Tags for Spider-Man')).toHaveTextContent('Physical')
   })
 
   it('shows tags on roll die faces and every pool section', () => {
     render(
-      <MemoryRouter>
-        <ThreadPool
-          pool={[poolThread(1, 'Spider-Man')]}
-          blockedThreads={[poolThread(2, 'Blocked Saga')]}
-          blockingDependencyMap={{}}
-          dieSize={6}
-          isRatingView={false}
-          selectedThreadId={null}
-          staleThread={{ ...poolThread(3, 'Stale Saga'), days: 30 }}
-          staleThreadCount={1}
-          snoozedThreads={[poolThread(4, 'Snoozed Saga')]}
-          snoozedExpanded
-          skippedThreads={[poolThread(5, 'Skipped Saga')]}
-          skippedExpanded
-          blockedExpanded
-          staleExpanded
-          inactiveExpanded
-          inactiveThreads={[exclusionThread()]}
-          onToggleInactive={vi.fn()}
-          onThreadClick={vi.fn()}
-          onUnsnooze={vi.fn()}
-          onUnskip={vi.fn()}
-          onReadStale={vi.fn()}
-          onToggleSnoozed={vi.fn()}
-          onToggleSkipped={vi.fn()}
-          onToggleStale={vi.fn()}
-          onToggleBlocked={vi.fn()}
-          onShuffle={vi.fn()}
-          unsnoozeIsPending={false}
-          unskipIsPending={false}
-          shuffleIsPending={false}
-        />
-      </MemoryRouter>,
+      <ThreadPool
+        pool={[poolThread(1, 'Spider-Man')]}
+        blockedThreads={[poolThread(2, 'Blocked Saga')]}
+        blockingDependencyMap={{}}
+        dieSize={6}
+        isRatingView={false}
+        selectedThreadId={null}
+        staleThread={{ ...poolThread(3, 'Stale Saga'), days: 30 }}
+        staleThreadCount={1}
+        snoozedThreads={[poolThread(4, 'Snoozed Saga')]}
+        snoozedExpanded
+        skippedThreads={[poolThread(5, 'Skipped Saga')]}
+        skippedExpanded
+        blockedExpanded
+        staleExpanded
+        inactiveExpanded
+        inactiveThreads={[exclusionThread()]}
+        onToggleInactive={vi.fn()}
+        onThreadClick={vi.fn()}
+        onUnsnooze={vi.fn()}
+        onUnskip={vi.fn()}
+        onReadStale={vi.fn()}
+        onToggleSnoozed={vi.fn()}
+        onToggleSkipped={vi.fn()}
+        onToggleStale={vi.fn()}
+        onToggleBlocked={vi.fn()}
+        onShuffle={vi.fn()}
+        unsnoozeIsPending={false}
+        unskipIsPending={false}
+        shuffleIsPending={false}
+      />
     )
     expect(screen.getByLabelText('Tags for Spider-Man')).toHaveTextContent('Physical')
     expect(screen.getByLabelText('Tags for Blocked Saga')).toHaveTextContent('Physical')
