@@ -12,6 +12,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Issue, Thread
 
 
+async def active_frontier_rows(
+    db: AsyncSession, user_id: int
+) -> list[tuple[int, int | None, int | None, int | None, str | None]]:
+    """Load scalar frontier inputs, including empty active threads, without flushing.
+
+    Args:
+        db: Database session, whose pending changes must not be persisted.
+        user_id: Owner of every returned thread and issue.
+
+    Returns:
+        Thread ID, stored pointer, issue ID, position and status rows, ordered
+        by thread, position and stable issue ID. Position gaps are preserved.
+    """
+    with db.no_autoflush:
+        result = await db.execute(
+            select(
+                Thread.id, Thread.next_unread_issue_id,
+                Issue.id, Issue.position, Issue.status,
+            )
+            .outerjoin(Issue, Issue.thread_id == Thread.id)
+            .where(Thread.user_id == user_id, Thread.status == "active")
+            .order_by(Thread.id, Issue.position, Issue.id)
+        )
+    return [(row[0], row[1], row[2], row[3], row[4]) for row in result.all()]
+
+
 async def get_issue(db: AsyncSession, issue_id: int) -> Issue | None:
     """Return an issue by primary key.
 
