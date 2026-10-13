@@ -1,5 +1,8 @@
 # ADR: Reader execution is Threads + Issues + issue dependencies
 
+**Architecture update (2026-10-13):** [Reading List Execution ADR](READING_LIST_EXECUTION_ADR.md) supersedes this document as the **accepted target architecture (Option E)**. This ADR documents the **currently deployed, transitional Reading Plan/Dependency design** until the guarded in-place cutover. Do not add new canonical-Reading-Plan compiler work on the authority of this document.
+
+
 **Decision date:** 2026-09-16  
 **Status:** Accepted  
 **Decision owner:** JoshCLWren  
