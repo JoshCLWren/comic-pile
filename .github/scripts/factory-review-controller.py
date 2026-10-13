@@ -22,6 +22,13 @@ classify_ci_reconciliation = _review_policy.classify_ci_reconciliation
 head_contributor_marker = _review_policy.head_contributor_marker
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
 head_contributor_provenance = _review_policy.head_contributor_provenance
+head_has_cross_model_review = _review_policy.head_has_cross_model_review
+agent_model_author_marker = _review_policy.agent_model_author_marker
+agent_model_review_marker = _review_policy.agent_model_review_marker
+controller_comment_bodies = _review_policy.controller_comment_bodies
+current_head_author_identity = _review_policy.current_head_author_identity
+marker_model_token = _review_policy.marker_model_token
+normalize_model_family = _review_policy.normalize_model_family
 parse_review_marker = _review_policy.parse_review_marker
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
@@ -284,14 +291,8 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
     return result
 
 
-def review_comment_bodies(pr_number: int) -> list[str]:
-    """Return trusted comments that may contain review attestations.
-
-    Factory workers post through ``GITHUB_TOKEN`` as ``github-actions[bot]``.
-    The repository owner may also run the review controller during incidents;
-    those OWNER-authored exact-head markers must remain visible to authorize /
-    drain or ready PRs get falsely demoted (incident #2309 observation).
-    """
+def issue_comment_records(pr_number: int) -> list[dict[str, Any]]:
+    """Return raw issue-comment payloads for one pull request."""
     pages = gh_json(
         [
             "api",
@@ -300,7 +301,115 @@ def review_comment_bodies(pr_number: int) -> list[str]:
             f"repos/{REPO}/issues/{pr_number}/comments?per_page=100",
         ]
     )
-    return trusted_comment_bodies(flatten_pages(pages))
+    return flatten_pages(pages)
+
+
+def review_comment_bodies(pr_number: int) -> list[str]:
+    """Return trusted comments that may contain review attestations.
+
+    Factory workers post through ``GITHUB_TOKEN`` as ``github-actions[bot]``.
+    The repository owner may also run the review controller during incidents;
+    those OWNER-authored exact-head markers must remain visible to authorize /
+    drain or ready PRs get falsely demoted (incident #2309 observation).
+    """
+    return trusted_comment_bodies(issue_comment_records(pr_number))
+
+
+def model_comment_bodies(pr_number: int) -> list[str]:
+    """Return controller-bot comments trusted for author/reviewer model markers.
+
+    OWNER and collaborator comments are ignored here even when they are trusted
+    for factory worker provenance. Cursor cloud agents act as those accounts
+    and must not be able to declare their own author or reviewer model.
+    """
+    return controller_comment_bodies(issue_comment_records(pr_number))
+
+
+def roster_model_for_worker(worker: str) -> str | None:
+    """Return the factory roster model pin for one worker, if present.
+
+    Args:
+        worker: Fixed-model factory worker id.
+
+    Returns:
+        Roster model id, or ``None`` when the worker is not pinned.
+    """
+    roster = importlib.import_module("factory_roster")
+    for row in roster.load_roster_rows():
+        if str(row["worker"]) == str(worker):
+            model = str(row["model"] or "").strip()
+            return model or None
+    return None
+
+
+def persist_author_model_marker(*, pr_number: int, head: str, worker: str) -> str | None:
+    """Write the controller author-model marker for one exact head.
+
+    Args:
+        pr_number: Pull request number.
+        head: Exact commit SHA just recorded.
+        worker: Factory worker that pushed the head.
+
+    Returns:
+        Marker text when a roster model exists, otherwise ``None``.
+    """
+    model = roster_model_for_worker(worker)
+    if not model:
+        return None
+    marker = agent_model_author_marker(
+        pr=pr_number,
+        head=head,
+        model=model,
+        agent=worker,
+    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+    return marker
+
+
+def persist_cross_model_review_marker(
+    *,
+    pr_number: int,
+    head: str,
+    reviewer: str,
+) -> str | None:
+    """Write the controller review-model marker when identities and families differ.
+
+    The reviewer cannot declare the author's model: that identity is read from
+    the controller-authored author marker recorded at push time. Same-family
+    models and same-agent reviews are skipped so the merge gate stays fail
+    closed.
+
+    Args:
+        pr_number: Pull request number.
+        head: Exact commit SHA under review.
+        reviewer: Factory worker the controller launched for this review.
+
+    Returns:
+        Marker text when a qualifying cross-model review was recorded.
+    """
+    recorded = current_head_author_identity(
+        model_comment_bodies(pr_number),
+        pr=pr_number,
+        head=head,
+    )
+    reviewer_model = roster_model_for_worker(reviewer)
+    if recorded is None or reviewer_model is None:
+        return None
+    author_model, author_agent = recorded
+    if marker_model_token(author_agent) == marker_model_token(reviewer):
+        return None
+    if normalize_model_family(author_model) == normalize_model_family(reviewer_model):
+        return None
+    marker = agent_model_review_marker(
+        pr=pr_number,
+        head=head,
+        author_model=author_model,
+        reviewer_model=reviewer_model,
+        author_agent=author_agent,
+        reviewer_agent=reviewer,
+    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+    return marker
 
 
 def redact_review_text(text: str) -> str:
@@ -1240,6 +1349,11 @@ def handle_review(
         excerpt=excerpt,
         note="Semantic approval is scoped to this exact reviewed PR head.",
     )
+    persist_cross_model_review_marker(
+        pr_number=pr_number,
+        head=reviewed_head,
+        reviewer=worker,
+    )
 
     mechanical = mechanical_merge_gate(pr_number, reviewed_head)
     latest = pr_json(pr_number)
@@ -1458,6 +1572,11 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
     contributors, provenance_complete = head_contributor_provenance(
         comments, pr=pr_number, head=head, producer=producer
     )
+    cross_model = head_has_cross_model_review(
+        model_comment_bodies(pr_number),
+        pr=pr_number,
+        head=head,
+    )
     authorized = (
         str(pr.get("state")) == "OPEN"
         and "factory:ready" in labels_of(pr)
@@ -1467,6 +1586,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
             approvers=approvers,
             provenance_complete=provenance_complete,
         )
+        and cross_model
     )
     if authorized:
         return {
@@ -1476,6 +1596,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
             "contributors": sorted(contributors),
             "provenance_complete": provenance_complete,
             "approvers": sorted(approvers),
+            "cross_model_review": True,
         }
 
     if str(pr.get("state")) == "OPEN" and "factory:ready" in labels_of(pr):
@@ -1500,6 +1621,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
         "contributors": sorted(contributors),
         "provenance_complete": provenance_complete,
         "approvers": sorted(approvers),
+        "cross_model_review": cross_model,
     }
 
 
@@ -1542,12 +1664,18 @@ def record_contribution(*, worker: str, pr_number: int, head: str) -> dict[str, 
                 epoch=epoch,
             )
             run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+            author_marker = persist_author_model_marker(
+                pr_number=pr_number,
+                head=head,
+                worker=worker,
+            )
             return {
                 "status": "recorded",
                 "pr": pr_number,
                 "head": head,
                 "worker": worker,
                 "epoch": epoch,
+                "author_model_marker": author_marker,
             }
         mismatch = f"PR #{pr_number} head {current_head} does not match expected {head}"
         if attempt + 1 < CONTRIBUTION_HEAD_SYNC_ATTEMPTS:

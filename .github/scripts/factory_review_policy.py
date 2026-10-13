@@ -27,6 +27,35 @@ HEAD_CONTRIBUTOR_RE = re.compile(
     r"pr-(?P<pr>\d+):head-(?P<head>[0-9a-f]{40}):"
     r"worker-(?P<worker>\d+):epoch-(?P<epoch>\d+) -->$"
 )
+_MODEL_TOKEN = r"[A-Za-z0-9][A-Za-z0-9._+-]*"
+# Effort and speed suffixes that do not change model family.
+_MODEL_FAMILY_SUFFIXES = (
+    "-fast",
+    "-thinking",
+    "-none",
+    "-minimal",
+    "-low",
+    "-medium",
+    "-high",
+    "-xhigh",
+    "-max",
+)
+AGENT_MODEL_AUTHOR_RE = re.compile(
+    r"^<!-- comic-pile-agent-model-author-v1:"
+    rf"pr-(?P<pr>\d+):head-(?P<head>[0-9a-f]{{40}}):"
+    rf"model-(?P<model>{_MODEL_TOKEN}):"
+    rf"agent-(?P<agent>{_MODEL_TOKEN}) -->$"
+)
+AGENT_MODEL_REVIEW_RE = re.compile(
+    r"^<!-- comic-pile-agent-model-review-v1:"
+    rf"pr-(?P<pr>\d+):head-(?P<head>[0-9a-f]{{40}}):"
+    rf"author-(?P<author>{_MODEL_TOKEN}):"
+    rf"reviewer-(?P<reviewer>{_MODEL_TOKEN}):"
+    rf"author-agent-(?P<author_agent>{_MODEL_TOKEN}):"
+    rf"reviewer-agent-(?P<reviewer_agent>{_MODEL_TOKEN}):"
+    r"verdict-(?P<verdict>approve) -->$"
+)
+CURSOR_AGENT_ID_RE = re.compile(r"\bbc-(?P<id>[0-9a-f]{8,})\b", re.IGNORECASE)
 
 
 def classify_ci_reconciliation(
@@ -141,6 +170,31 @@ def trusted_comment_bodies(comments: Iterable[Mapping[str, Any]]) -> list[str]:
         login = str(user.get("login") or "")
         association = str(comment.get("author_association") or "")
         if login != TRUSTED_COMMENT_LOGIN and association not in TRUSTED_COMMENT_ASSOCIATIONS:
+            continue
+        bodies.append(str(comment.get("body") or ""))
+    return bodies
+
+
+def controller_comment_bodies(comments: Iterable[Mapping[str, Any]]) -> list[str]:
+    """Return comment bodies posted by ``github-actions[bot]`` only.
+
+    Author and reviewer model markers must not be trusted from OWNER, MEMBER,
+    or COLLABORATOR accounts. Cursor cloud agents act as those identities and
+    can spoof ``author-<x>:reviewer-<y>`` strings. The review controller writes
+    model provenance through ``GITHUB_TOKEN`` as ``github-actions[bot]`` after
+    it records a contribution or interprets a factory review it launched.
+    """
+    bodies: list[str] = []
+    for comment in comments:
+        if not isinstance(comment, Mapping):
+            continue
+        if performed_via_untrusted_app(comment):
+            continue
+        user = comment.get("user")
+        if not isinstance(user, Mapping):
+            continue
+        login = str(user.get("login") or "")
+        if login != TRUSTED_COMMENT_LOGIN:
             continue
         bodies.append(str(comment.get("body") or ""))
     return bodies
@@ -351,3 +405,276 @@ def approval_can_promote(
         producer=producer,
         provenance_complete=provenance_complete,
     )
+
+
+def marker_model_token(model: str) -> str:
+    """Sanitize a roster or Cursor model id for the marker token alphabet.
+
+    Args:
+        model: Raw model id, which may contain ``/`` or ``:``.
+
+    Returns:
+        Marker-safe token.
+
+    Raises:
+        ValueError: If the model collapses to an empty token.
+
+    """
+    cleaned = re.sub(r"[^A-Za-z0-9._+-]+", "-", model.strip())
+    cleaned = cleaned.strip("-_+.")
+    if not cleaned:
+        raise ValueError("model token is empty")
+    return cleaned
+
+
+def agent_model_author_marker(*, pr: int, head: str, model: str, agent: str) -> str:
+    """Build one controller-trusted author-model marker.
+
+    Args:
+        pr: Pull request number.
+        head: Exact commit SHA being attributed.
+        model: Factory roster or Cursor model that authored the head.
+        agent: Distinct author identity (factory worker id or Cursor ``bc-`` id).
+
+    Returns:
+        Entire-comment-body marker text.
+
+    """
+    model_token = marker_model_token(model)
+    agent_token = marker_model_token(agent)
+    return (
+        "<!-- comic-pile-agent-model-author-v1:"
+        f"pr-{pr}:head-{head}:model-{model_token}:agent-{agent_token} -->"
+    )
+
+
+def parse_agent_model_author_marker(line: str) -> dict[str, str] | None:
+    """Parse one exact author-model marker line.
+
+    Args:
+        line: Comment body or first line.
+
+    Returns:
+        Named groups when the line is a trusted author-model marker.
+
+    """
+    match = AGENT_MODEL_AUTHOR_RE.fullmatch(line.strip())
+    return match.groupdict() if match else None
+
+
+def agent_model_review_marker(
+    *,
+    pr: int,
+    head: str,
+    author_model: str,
+    reviewer_model: str,
+    author_agent: str,
+    reviewer_agent: str,
+) -> str:
+    """Build one controller-trusted cross-model review marker.
+
+    Args:
+        pr: Pull request number.
+        head: Exact commit SHA that was reviewed.
+        author_model: Model that authored the head.
+        reviewer_model: Model that reviewed the head.
+        author_agent: Distinct author identity bound to the author marker.
+        reviewer_agent: Distinct reviewer identity the controller launched.
+
+    Returns:
+        Entire-comment-body marker text.
+
+    """
+    return (
+        "<!-- comic-pile-agent-model-review-v1:"
+        f"pr-{pr}:head-{head}:author-{marker_model_token(author_model)}:"
+        f"reviewer-{marker_model_token(reviewer_model)}:"
+        f"author-agent-{marker_model_token(author_agent)}:"
+        f"reviewer-agent-{marker_model_token(reviewer_agent)}:"
+        "verdict-approve -->"
+    )
+
+
+def parse_agent_model_review_marker(line: str) -> dict[str, str] | None:
+    """Parse one exact cross-model review marker line.
+
+    Args:
+        line: Comment first line.
+
+    Returns:
+        Named groups when the line is a trusted approve review marker.
+
+    """
+    match = AGENT_MODEL_REVIEW_RE.fullmatch(line.strip())
+    return match.groupdict() if match else None
+
+
+def normalize_model_family(value: str) -> str:
+    """Canonicalize a recorded model id to its family for equality checks.
+
+    Strips a leading ``cursor-`` prefix and trailing effort or speed suffixes
+    (``none``, ``minimal``, ``low``, ``medium``, ``high``, ``xhigh``, ``max``,
+    ``thinking``, ``fast``) so ``cursor-grok-4.6-high-fast`` and
+    ``cursor-grok-4.6-low`` compare as the same model.
+
+    Args:
+        value: Raw model token from a marker or roster pin.
+
+    Returns:
+        Lowercased model-family token.
+
+    """
+    token = marker_model_token(value).lower()
+    if token.startswith("cursor-"):
+        token = token[len("cursor-") :]
+    changed = True
+    while changed and token:
+        changed = False
+        for suffix in _MODEL_FAMILY_SUFFIXES:
+            if token.endswith(suffix) and len(token) > len(suffix):
+                token = token[: -len(suffix)]
+                changed = True
+    return token
+
+
+def _normalize_model(value: str) -> str:
+    """Canonicalize a recorded model id for equality checks.
+
+    Args:
+        value: Raw model token from a marker.
+
+    Returns:
+        Model-family token.
+
+    """
+    return normalize_model_family(value)
+
+
+def cursor_agent_ids_from_text(text: str | None) -> set[str]:
+    """Return distinct Cursor ``bc-`` agent ids found in PR or comment text.
+
+    Args:
+        text: PR body, review footer, or other trusted Cursor metadata text.
+
+    Returns:
+        Lowercased ``bc-`` ids. Conflicting ids are the caller's problem: a
+        unique id can attribute a head, more than one cannot.
+
+    """
+    if not text:
+        return set()
+    return {f"bc-{match.group('id').lower()}" for match in CURSOR_AGENT_ID_RE.finditer(text)}
+
+
+def current_head_author_identity(
+    comments: Iterable[str],
+    *,
+    pr: int,
+    head: str,
+) -> tuple[str, str] | None:
+    """Return the unique author model family and agent for one exact PR head.
+
+    Missing markers and conflicting markers both fail closed.
+
+    Args:
+        comments: Controller-authored comment bodies.
+        pr: Pull request number.
+        head: Exact commit SHA.
+
+    Returns:
+        ``(model_family, agent)`` when exactly one author identity is recorded,
+        otherwise ``None``.
+
+    """
+    identities: set[tuple[str, str]] = set()
+    for body in comments:
+        stripped = str(body or "").strip()
+        if not stripped or "\n" in stripped:
+            continue
+        marker = parse_agent_model_author_marker(stripped)
+        if not marker or int(marker["pr"]) != pr or marker["head"] != head:
+            continue
+        identities.add(
+            (normalize_model_family(marker["model"]), marker_model_token(marker["agent"]))
+        )
+    if len(identities) != 1:
+        return None
+    return next(iter(identities))
+
+
+def current_head_author_model(
+    comments: Iterable[str],
+    *,
+    pr: int,
+    head: str,
+) -> str | None:
+    """Return the author model recorded against one exact PR head.
+
+    Only a comment whose whole body is one author-model marker is honored.
+    Missing or conflicting markers return ``None`` (fail closed).
+
+    Args:
+        comments: Controller-authored comment bodies.
+        pr: Pull request number.
+        head: Exact commit SHA.
+
+    Returns:
+        Normalized author model family, or ``None`` when none is recorded
+        or the record is ambiguous.
+
+    """
+    identity = current_head_author_identity(comments, pr=pr, head=head)
+    if identity is None:
+        return None
+    return identity[0]
+
+
+def head_has_cross_model_review(
+    comments: Iterable[str],
+    *,
+    pr: int,
+    head: str,
+) -> bool:
+    """Return whether an exact head has a different-model independent review.
+
+    Fail closed: the head must have exactly one controller-authored author
+    marker. A review counts only when it is recorded against ``head``, names
+    both models, those model families differ, the review's author model and
+    author agent match the recorded author identity, and the reviewer agent is
+    distinct from the author agent. A stale review bound to another SHA does
+    not authorize the current head.
+
+    Args:
+        comments: Controller-authored comment bodies.
+        pr: Pull request number.
+        head: Exact commit SHA being merged.
+
+    Returns:
+        True when a qualifying cross-model approve review exists.
+
+    """
+    recorded = current_head_author_identity(comments, pr=pr, head=head)
+    if recorded is None:
+        return False
+    recorded_author, recorded_agent = recorded
+    for body in comments:
+        stripped = str(body or "").strip()
+        if not stripped or "\n" in stripped:
+            continue
+        marker = parse_agent_model_review_marker(stripped)
+        if not marker:
+            continue
+        if int(marker["pr"]) != pr or marker["head"] != head:
+            continue
+        author = normalize_model_family(marker["author"])
+        reviewer = normalize_model_family(marker["reviewer"])
+        author_agent = marker_model_token(marker["author_agent"])
+        reviewer_agent = marker_model_token(marker["reviewer_agent"])
+        if not author or not reviewer or author == reviewer:
+            continue
+        if author != recorded_author or author_agent != recorded_agent:
+            continue
+        if reviewer_agent == recorded_agent:
+            continue
+        return True
+    return False

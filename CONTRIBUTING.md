@@ -141,3 +141,46 @@ make migrate  # or: alembic upgrade head
 - Attach screenshots when UI is affected
 - Ensure all tests pass and coverage is maintained
 - Do not add or edit changelog Markdown as part of implementation delivery. User-facing release notes are published after merge by the dedicated release writer to the database-backed release ledger. Release-note publication or reconciliation delays do not block an otherwise-ready implementation PR.
+
+### Merge gate (agent-authored PRs)
+
+This is the only pre-merge process rule (#3561). Every agent-authored pull
+request — Cursor cloud agents and factory workers — may merge only when both
+are true for the **exact current head**:
+
+1. One thorough code review by a Cursor cloud agent running a **different
+   model** than the PR author. Same-model reviews do not count. A review
+   recorded against a previous SHA does not count after the head moves.
+2. CI is green on that head.
+
+There are no extra pre-merge QA, preview, smoke, or migration-rehearsal
+steps. Do not add a `factory:approved` label; controller provenance is the
+authority.
+
+The review controller writes those models as `github-actions[bot]` comments.
+It records the author model from the factory roster when the producing worker
+records the head, and the reviewer model when it launches and interprets an
+independent factory review. Cursor cloud-agent ids (`bc-…`) in a PR footer
+are a distinct identity token, not a substitute for the controller marker.
+
+Only `github-actions[bot]` model markers count. OWNER/MEMBER/COLLABORATOR
+comments — including Cursor agents posting as the repository owner — cannot
+satisfy the gate. A missing author marker, or two author markers that disagree,
+fails closed.
+
+Markers (entire comment body, written only by the controller):
+
+- Author:
+  `<!-- comic-pile-agent-model-author-v1:pr-<n>:head-<sha>:model-<model>:agent-<author-id> -->`
+- Reviewer:
+  `<!-- comic-pile-agent-model-review-v1:pr-<n>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:author-agent-<author-id>:reviewer-agent-<reviewer-id>:verdict-approve -->`
+
+The reviewer agent id must differ from the author agent id. Model comparison
+uses the model family: a leading `cursor-` prefix and effort/speed suffixes
+(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `thinking`,
+`fast`) are stripped, so `cursor-grok-4.6-high-fast` and `cursor-grok-4.6-low`
+are the same model.
+
+The factory merge drain refuses the PR when those markers are missing, the
+author record is missing or conflicting, the models match, the reviewer is
+the authoring agent, the review SHA is stale, or required CI is red.

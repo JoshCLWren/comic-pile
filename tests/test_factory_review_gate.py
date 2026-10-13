@@ -25,6 +25,12 @@ current_head_contributors = _review_policy.current_head_contributors
 head_contributor_marker = _review_policy.head_contributor_marker
 head_contributor_provenance = _review_policy.head_contributor_provenance
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
+head_has_cross_model_review = _review_policy.head_has_cross_model_review
+agent_model_author_marker = _review_policy.agent_model_author_marker
+agent_model_review_marker = _review_policy.agent_model_review_marker
+controller_comment_bodies = _review_policy.controller_comment_bodies
+cursor_agent_ids_from_text = _review_policy.cursor_agent_ids_from_text
+normalize_model_family = _review_policy.normalize_model_family
 parse_head_contributor_marker = _review_policy.parse_head_contributor_marker
 recorded_pr_contributors = _review_policy.recorded_pr_contributors
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
@@ -93,6 +99,12 @@ def wire_controller(
         lambda _path, **_kwargs: excerpt_text,
     )
     monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: list(comments))
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: list(comments))
+    monkeypatch.setattr(
+        module,
+        "roster_model_for_worker",
+        lambda worker: f"roster-model-{worker}",
+    )
     if mechanical == "retry":
         gate_result = {"decision": "retry", "reason": "required checks are pending"}
     else:
@@ -761,9 +773,17 @@ def test_head_contributor_marker_roundtrip() -> None:
     assert parsed["epoch"] == "1234567890"
 
 
-def producer_contribution(*, worker: str = "43") -> list[str]:
+def producer_contribution(*, worker: str = "43", model: str = "grok-4.6") -> list[str]:
     """Return the controller-written producer record a real factory PR carries."""
-    return [contributor_comment(pr=1390, head=REVIEWED_HEAD, worker=worker, epoch=1)]
+    return [
+        contributor_comment(pr=1390, head=REVIEWED_HEAD, worker=worker, epoch=1),
+        agent_model_author_marker(
+            pr=1390,
+            head=REVIEWED_HEAD,
+            model=model,
+            agent=worker,
+        ),
+    ]
 
 
 def contributor_comment(*, pr: int = 123, head: str, worker: str, epoch: int) -> str:
@@ -1261,13 +1281,22 @@ def test_controller_records_contribution_for_the_exact_head(
         lambda: 1234567890,
     )
     monkeypatch.setattr(module, "post_review_comment", lambda **kwargs: posted.append(kwargs))
+    monkeypatch.setattr(module, "roster_model_for_worker", lambda _worker: "nemotron-3-ultra-free")
 
     result = module.record_contribution(worker="42", pr_number=1390, head=head)
 
     assert result["status"] == "recorded"
     assert result["head"] == head
     marker = head_contributor_marker(pr=1390, head=head, worker="42", epoch=1234567890)
+    author_marker = agent_model_author_marker(
+        pr=1390,
+        head=head,
+        model="nemotron-3-ultra-free",
+        agent="42",
+    )
     assert ["issue", "comment", "1390", "--repo", module.REPO, "--body", marker] in commands
+    assert ["issue", "comment", "1390", "--repo", module.REPO, "--body", author_marker] in commands
+    assert result["author_model_marker"] == author_marker
     assert current_head_contributors([marker], pr=1390, head=head) == {"42"}
 
 
@@ -1409,9 +1438,7 @@ def test_controller_promotes_once_provenance_is_recorded(
     """Recorded provenance keeps ordinary single-reviewer promotion working."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
-    contributions = [
-        contributor_comment(pr=1390, head=REVIEWED_HEAD, worker="43", epoch=1)
-    ]
+    contributions = producer_contribution()
     transitions, _posted, _commands = wire_controller(
         monkeypatch,
         module,
@@ -1606,6 +1633,7 @@ def test_authorize_ready_rejects_ready_pr_without_semantic_approve_markers(
         },
     )
     monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
     monkeypatch.setattr(module, "linked_issue_from_branch", lambda _branch: None)
     monkeypatch.setattr(
         module,
@@ -1675,11 +1703,16 @@ def test_authorization_paths_do_not_read_pull_reviews() -> None:
     module = load_review_controller()
     import inspect
 
+    records_src = inspect.getsource(module.issue_comment_records)
     bodies_src = inspect.getsource(module.review_comment_bodies)
+    model_src = inspect.getsource(module.model_comment_bodies)
     auth_src = inspect.getsource(module.authorize_ready)
-    assert "issues/" in bodies_src and "/comments" in bodies_src
+    assert "issues/" in records_src and "/comments" in records_src
+    assert "/reviews" not in records_src
     assert "/reviews" not in bodies_src
+    assert "/reviews" not in model_src
     assert "review_comment_bodies" in auth_src
+    assert "model_comment_bodies" in auth_src
     assert "/reviews" not in auth_src
 
 
@@ -1708,3 +1741,299 @@ def test_merge_drain_never_reads_native_review_state_for_merge() -> None:
     assert "author_association" not in content
     # Drain must not treat a native APPROVED event as merge authority.
     assert "pull_request_review" not in content
+
+
+def _cross_model_comments(
+    *,
+    pr: int = 1390,
+    head: str = REVIEWED_HEAD,
+    author_model: str = "grok-4.6",
+    reviewer_model: str = "claude-opus-5-5",
+    author_agent: str = "43",
+    reviewer_agent: str = "17",
+    include_author: bool = True,
+) -> list[str]:
+    """Build trusted provenance for one exact-head cross-model review.
+
+    Args:
+        pr: Pull request number.
+        head: Commit SHA recorded on the markers.
+        author_model: Model that authored the head.
+        reviewer_model: Cursor cloud-agent model that reviewed the head.
+        author_agent: Distinct author identity bound to the author marker.
+        reviewer_agent: Distinct reviewer identity bound to the review marker.
+        include_author: Whether to include the whole-body author marker.
+
+    Returns:
+        Comment bodies the merge gate reads.
+
+    """
+    comments = [
+        contributor_comment(pr=pr, head=head, worker="43", epoch=1),
+        review_marker(
+            pr=pr,
+            head=head,
+            reviewer="17",
+            producer="43",
+            verdict="approve",
+        ),
+        agent_model_review_marker(
+            pr=pr,
+            head=head,
+            author_model=author_model,
+            reviewer_model=reviewer_model,
+            author_agent=author_agent,
+            reviewer_agent=reviewer_agent,
+        ),
+    ]
+    if include_author:
+        comments.append(
+            agent_model_author_marker(
+                pr=pr,
+                head=head,
+                model=author_model,
+                agent=author_agent,
+            )
+        )
+    return comments
+
+
+def test_same_model_review_is_rejected() -> None:
+    """A Cursor review from the author's own model cannot authorize merge."""
+    comments = _cross_model_comments(
+        author_model="grok-4.6",
+        reviewer_model="grok-4.6",
+    )
+    assert not head_has_cross_model_review(
+        comments, pr=1390, head=REVIEWED_HEAD
+    )
+
+
+def test_different_model_review_is_accepted() -> None:
+    """A different Cursor model on the exact head satisfies the merge gate."""
+    comments = _cross_model_comments(
+        author_model="grok-4.6",
+        reviewer_model="claude-opus-5-5",
+    )
+    assert head_has_cross_model_review(comments, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_stale_head_cross_model_review_is_rejected() -> None:
+    """A cross-model review bound to a previous SHA does not follow the head."""
+    comments = _cross_model_comments(head=REVIEWED_HEAD)
+    assert not head_has_cross_model_review(comments, pr=1390, head=MOVED_HEAD)
+    assert head_has_cross_model_review(comments, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_missing_cross_model_review_is_rejected() -> None:
+    """Factory worker approval alone is not the Cursor cross-model review."""
+    comments = producer_contribution()
+    comments.append(
+        review_marker(
+            pr=1390,
+            head=REVIEWED_HEAD,
+            reviewer="17",
+            producer="43",
+            verdict="approve",
+        )
+    )
+    assert not head_has_cross_model_review(
+        comments, pr=1390, head=REVIEWED_HEAD
+    )
+
+
+def test_authorize_ready_requires_cross_model_review(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The merge-drain authorization command refuses same-model or missing reviews."""
+    module = load_review_controller()
+    writes: list[tuple[object, ...]] = []
+    monkeypatch.setattr(
+        module,
+        "pr_json",
+        lambda _pr: {
+            "state": "OPEN",
+            "headRefOid": REVIEWED_HEAD,
+            "headRefName": "factory/43-1386-opencode-free",
+            "body": "Closes #1386.\nWorker: opencode-free-model-factory-43",
+            "labels": [
+                {"name": "factory"},
+                {"name": "factory:unowned"},
+                {"name": "factory:ready"},
+            ],
+        },
+    )
+    monkeypatch.setattr(module, "linked_issue_from_branch", lambda _branch: None)
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda *args: writes.append(args),
+    )
+
+    same_model_comments = _cross_model_comments(
+        author_model="grok-4.6",
+        reviewer_model="grok-4.6",
+    )
+    monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: same_model_comments)
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: same_model_comments)
+    same_model = module.authorize_ready(1390)
+    assert same_model["authorized"] is False
+    assert same_model["cross_model_review"] is False
+
+    writes.clear()
+    accepted_comments = _cross_model_comments(
+        author_model="grok-4.6",
+        reviewer_model="claude-opus-5-5",
+    )
+    monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: accepted_comments)
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: accepted_comments)
+    accepted = module.authorize_ready(1390)
+    assert accepted["authorized"] is True
+    assert accepted["cross_model_review"] is True
+    assert writes == []
+
+
+def test_required_checks_gate_denies_red_ci() -> None:
+    """Green CI is the other half of the merge gate; red required checks deny."""
+    module = load_review_controller()
+    denied = module.interpret_required_checks(
+        [{"state": "FAILURE"}],
+        command_status=1,
+        stderr="",
+    )
+    assert denied["decision"] == "deny"
+    assert "FAILURE" in str(denied["reason"])
+    passed = module.interpret_required_checks(
+        [{"state": "SUCCESS"}],
+        command_status=0,
+        stderr="",
+    )
+    assert passed["decision"] == "pass"
+
+
+def test_missing_author_marker_fails_closed() -> None:
+    """A review that names the author model cannot stand in for a missing author record."""
+    comments = _cross_model_comments(include_author=False)
+    assert not head_has_cross_model_review(comments, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_conflicting_author_markers_fail_closed() -> None:
+    """Two disagreeing author markers deny the head instead of trusting the review."""
+    comments = _cross_model_comments(author_model="grok-4.6")
+    comments.append(
+        agent_model_author_marker(
+            pr=1390,
+            head=REVIEWED_HEAD,
+            model="claude-opus-5-5",
+            agent="43",
+        )
+    )
+    assert not head_has_cross_model_review(comments, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_effort_suffixes_are_the_same_model_family() -> None:
+    """Cursor effort and speed suffixes do not count as a different model."""
+    assert normalize_model_family("cursor-grok-4.6-high-fast") == normalize_model_family(
+        "cursor-grok-4.6-low"
+    )
+    comments = _cross_model_comments(
+        author_model="cursor-grok-4.6-high-fast",
+        reviewer_model="cursor-grok-4.6-low",
+    )
+    assert not head_has_cross_model_review(comments, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_same_agent_review_fails_even_when_models_differ() -> None:
+    """The authoring agent cannot attest a different-model review of its own head."""
+    comments = _cross_model_comments(
+        author_model="grok-4.6",
+        reviewer_model="claude-opus-5-5",
+        author_agent="43",
+        reviewer_agent="43",
+    )
+    assert not head_has_cross_model_review(comments, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_owner_posted_model_markers_are_ignored() -> None:
+    """Cursor-as-OWNER comments cannot spoof author or reviewer model markers."""
+    author = agent_model_author_marker(
+        pr=1390,
+        head=REVIEWED_HEAD,
+        model="grok-4.6",
+        agent="43",
+    )
+    review = agent_model_review_marker(
+        pr=1390,
+        head=REVIEWED_HEAD,
+        author_model="grok-4.6",
+        reviewer_model="claude-opus-5-5",
+        author_agent="43",
+        reviewer_agent="17",
+    )
+    owner_comments = [
+        {"user": {"login": "JoshCLWren"}, "author_association": "OWNER", "body": author},
+        {"user": {"login": "JoshCLWren"}, "author_association": "OWNER", "body": review},
+    ]
+    assert controller_comment_bodies(owner_comments) == []
+    assert not head_has_cross_model_review(
+        controller_comment_bodies(owner_comments),
+        pr=1390,
+        head=REVIEWED_HEAD,
+    )
+    bot_comments = [
+        {
+            "user": {"login": "github-actions[bot]"},
+            "author_association": "NONE",
+            "body": author,
+        },
+        {
+            "user": {"login": "github-actions[bot]"},
+            "author_association": "NONE",
+            "body": review,
+        },
+    ]
+    bodies = controller_comment_bodies(bot_comments)
+    assert head_has_cross_model_review(bodies, pr=1390, head=REVIEWED_HEAD)
+
+
+def test_cursor_footer_agent_ids_are_distinct_identities() -> None:
+    """PR-footer Cursor run ids are parsed as distinct agent identities."""
+    body = (
+        "Implemented the merge gate.\n\n"
+        "https://cursor.com/agents/bc-c52d4041\n"
+    )
+    assert cursor_agent_ids_from_text(body) == {"bc-c52d4041"}
+    assert cursor_agent_ids_from_text("no agent") == set()
+
+
+def test_controller_writes_review_model_marker_on_approve(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Independent approve records a controller-authored cross-model review marker."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    comments = producer_contribution()
+    _transitions, _posted, commands = wire_controller(
+        monkeypatch,
+        module,
+        [payload, payload],
+        comments=comments,
+        include_diff_inspection=True,
+    )
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+    assert result["status"] == "ready"
+    expected = agent_model_review_marker(
+        pr=1390,
+        head=REVIEWED_HEAD,
+        author_model="grok-4.6",
+        reviewer_model="roster-model-17",
+        author_agent="43",
+        reviewer_agent="17",
+    )
+    assert ["issue", "comment", "1390", "--repo", module.REPO, "--body", expected] in commands
