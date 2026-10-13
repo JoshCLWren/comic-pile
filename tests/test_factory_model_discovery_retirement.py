@@ -1453,7 +1453,7 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "worker": "86",
         "source": "nvidia",
         "model": "meta/muse-glimmer-30b",
-        "minute": "15",
+        "minute": "0",
         "scheduler": "dispatcher",
         "display_name": "NVIDIA Muse Glimmer 30B",
     }
@@ -1506,9 +1506,8 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     assert by_worker["51"]["model"] not in lock["retired_models"]
     assert by_worker["52"]["model"] not in lock["retired_models"]
     assert by_worker["53"]["model"] not in lock["retired_models"]
-    assert by_worker["84"]["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
-    assert by_worker["84"]["source"] == "nvidia"
-    assert "nvidia/nemotron-3-ultra-550b-a55b" not in lock["retired_models"]
+    assert "84" not in by_worker
+    assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
     assert "thinkingmachines/inkling" in lock["retired_models"]
     assert ROSTER.openrouter_model_is_free(by_worker["51"]["model"])
     assert ROSTER.openrouter_model_is_free(by_worker["52"]["model"])

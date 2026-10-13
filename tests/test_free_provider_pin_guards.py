@@ -232,6 +232,6 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     assert "85" not in by_worker
     assert by_worker["86"]["source"] == "nvidia"
     assert by_worker["86"]["model"] == "meta/muse-glimmer-30b"
-    assert by_worker["86"]["minute"] == "15"
+    assert by_worker["86"]["minute"] == "0"
     assert by_worker["80"]["source"] == "nvidia"
     assert by_worker["81"]["source"] == "nvidia"
