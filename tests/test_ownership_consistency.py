@@ -9,9 +9,7 @@ Tests enforce reader ownership consistency at graph and library write boundaries
 """
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-
+from sqlalchemy.ext.asyncio import AsyncSession as SQLAlchemyAsyncSession
 from app.models import (
     ContinuityPlan,
     Dependency,
@@ -28,12 +26,12 @@ from app.services.errors import InvalidRequestError
 from app.services.reading_session_service import ReadingSessionService
 from app.services.tag_service import TagService
 from app.services.thread_service import set_current_issue, set_pending_thread
-from tests.conftest import async_session_maker
+from tests.conftest import async_db
 
 
 @pytest.mark.asyncio
 async def test_thread_next_unread_issue_ownership_validation(
-    db: async_session_maker, user: User, thread: Thread, issue: Issue
+    db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that Thread.next_unread_issue_id must belong to same thread."""
     
@@ -74,7 +72,7 @@ async def test_thread_next_unread_issue_ownership_validation(
 
 @pytest.mark.asyncio 
 async def test_dependency_ownership_validation(
-    db: async_session_maker, user: User, thread: Thread, issue: Issue
+    db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that Dependency source/target issues must belong to same user."""
     
@@ -152,7 +150,7 @@ async def test_dependency_ownership_validation(
 
 @pytest.mark.asyncio
 async def test_reading_session_pending_references_validation(
-    db: async_session_maker, user: User, thread: Thread, issue: Issue
+    db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that ReadingSession pending references must belong to session user."""
     
@@ -194,7 +192,7 @@ async def test_reading_session_pending_references_validation(
 
 @pytest.mark.asyncio
 async def test_reading_plan_membership_ownership_validation(
-    db: async_session_maker, user: User, thread: Thread, issue: Issue
+    db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that ReadingPlanMembership issues must belong to plan user."""
     
@@ -262,7 +260,7 @@ async def test_reading_plan_membership_ownership_validation(
 
 @pytest.mark.asyncio
 async def test_tag_assignment_ownership_validation(
-    db: async_session_maker, user: User, thread: Thread, issue: Issue
+    db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that TagAssignment targets must belong to their respective users."""
     
@@ -340,7 +338,7 @@ async def test_tag_assignment_ownership_validation(
 
 @pytest.mark.asyncio
 async def test_thread_next_unread_cross_thread_validation(
-    db: async_session_maker, user: User, thread: Thread, issue: Issue
+    db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that next_unread_issue_id cannot belong to different thread of same user."""
     
@@ -379,7 +377,7 @@ async def test_thread_next_unread_cross_thread_validation(
 
 @pytest.mark.asyncio
 async def test_preflight_invalid_rows_detection(
-    db: async_session_maker, user: User, thread: Thread, issue: Issue
+    db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that preflight can detect existing invalid rows without private payloads."""
     
