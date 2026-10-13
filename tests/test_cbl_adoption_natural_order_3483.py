@@ -15,7 +15,7 @@ from sqlalchemy import event as sa_event
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.models import Issue, Thread
+from app.models import Dependency, Issue, Thread
 from app.services.cbl_plan_adoption import _ensure_missing_issue_created
 from app.services.issue_insertion import create_issue_in_natural_order
 from tests.conftest import get_or_create_user_async
@@ -287,3 +287,69 @@ async def test_sequential_natural_order_inserts_use_set_based_reseats(
     assert await _ordered_numbers(async_db, thread.id) == [
         str(number) for number in range(1, 7 + large_count)
     ]
+
+
+@pytest.mark.asyncio
+async def test_cbl_adoption_keeps_annual_and_its_cross_thread_gate(
+    async_db: AsyncSession,
+) -> None:
+    """Adding early JLE #1 preserves Annual #1's placement and exact dependency."""
+    user = await get_or_create_user_async(async_db, "cbl-jle-annual-cross-thread")
+    thread = await _series_thread(
+        async_db,
+        user_id=user.id,
+        title="CBL: Justice League Europe",
+        numbers=["7", "8", "Annual 1", "9", "10"],
+        read_through="8",
+    )
+    annual = (
+        await async_db.execute(
+            select(Issue).where(
+                Issue.thread_id == thread.id, Issue.issue_number == "Annual 1"
+            )
+        )
+    ).scalar_one()
+    original_annual_id = annual.id
+    original_annual_status = annual.status
+
+    special_thread = await _series_thread(
+        async_db,
+        user_id=user.id,
+        title="CBL: Linked Special",
+        numbers=["1"],
+        read_through=None,
+    )
+    assert special_thread.next_unread_issue_id is not None
+    gate = Dependency(
+        source_issue_id=annual.id,
+        target_issue_id=special_thread.next_unread_issue_id,
+        note="reader-authored annual checkpoint",
+    )
+    async_db.add(gate)
+    await async_db.flush()
+    gate_id = gate.id
+
+    added = await _ensure_missing_issue_created(
+        async_db,
+        user.id,
+        fact=_fact("Justice League Europe", "1"),
+        volume_year=None,
+    )
+    assert added.created is True
+    assert await _ordered_numbers(async_db, thread.id) == [
+        "1", "7", "8", "Annual 1", "9", "10",
+    ]
+
+    await async_db.refresh(thread)
+    next_issue = await async_db.get(Issue, thread.next_unread_issue_id)
+    assert next_issue is not None
+    assert next_issue.issue_number == "1"
+
+    await async_db.refresh(annual)
+    assert annual.id == original_annual_id
+    assert annual.status == original_annual_status
+    assert annual.position == 4
+    persisted_gate = await async_db.get(Dependency, gate_id)
+    assert persisted_gate is not None
+    assert persisted_gate.source_issue_id == original_annual_id
+    assert persisted_gate.target_issue_id == special_thread.next_unread_issue_id
