@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Issue, Thread
 from app.repositories import issue_repository, thread_repository
 from app.services.issue_tracking import apply_thread_issue_tracking_state
-from app.utils.issue_natural_order import natural_issue_order
+from app.utils.issue_natural_order import natural_issue_order, parse_ordinary_issue_number
 
 CONFIRMATION_TOKEN = "NATURAL-ISSUE-ORDER-REPAIR"
 """Required --confirm value for apply and rollback. Preflight does not need it."""
@@ -184,7 +184,7 @@ def _plan_repair(
 
 def _thread_is_irregular(issues: list[Issue]) -> bool:
     """Return True when any issue number has no ordinary natural position."""
-    return natural_issue_order([issue.issue_number for issue in issues], []) is None
+    return any(parse_ordinary_issue_number(issue.issue_number) is None for issue in issues)
 
 
 def _restore_thread_tracking(thread: Thread, state: ThreadTrackingSnapshot) -> None:
