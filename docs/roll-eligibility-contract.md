@@ -1,5 +1,8 @@
 # ComicPile Roll Eligibility Contract (Josh, 2026-10-12, authoritative)
 
+**Architecture update (2026-10-13):** [Reading List Execution ADR](READING_LIST_EXECUTION_ADR.md) is the **accepted replacement contract**. The below describes existing runtime/safety behavior **until cutover**, not the desired final design. In particular, strict Reading Lists will directly enforce list order without compiling adjacency edges.
+
+
 A reading list says what order Josh intends to read. A checkpoint tells Roll what it may not offer yet. They are different things.
 
 ## Core rule
