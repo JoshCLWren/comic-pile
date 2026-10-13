@@ -103,16 +103,18 @@ def natural_issue_order(
 
     result = list(existing_issue_numbers)
     for number, label in sorted(incoming):
+        # Find the correct position to insert this new number
+        # We want to place it after the last existing number <= new number
+        insert_position = 0
         for index, existing_label in enumerate(result):
             existing_number = parse_ordinary_issue_number(existing_label)
-            if existing_number is not None and existing_number > number:
-                result.insert(index, label)
+            if existing_number is not None and existing_number <= number:
+                # This existing number should come before our new number,
+                # so we should insert after it
+                insert_position = index + 1
+            elif existing_number is not None and existing_number > number:
+                # We found a number greater than ours, so stop searching
                 break
-        else:
-            last_numbered_index = max(
-                index
-                for index, existing_label in enumerate(result)
-                if parse_ordinary_issue_number(existing_label) is not None
-            )
-            result.insert(last_numbered_index + 1, label)
+        
+        result.insert(insert_position, label)
     return result
