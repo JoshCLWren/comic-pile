@@ -81,6 +81,13 @@ class OptimizedImage:
 _DNS_CACHE: dict[str, tuple[list[ipaddress.IPv4Address | ipaddress.IPv6Address], float]] = {}
 _DNS_CACHE_TTL = 300.0
 
+# Upstream image cache: validated_url -> (payload_bytes, content_type)
+# Caches raw upstream bytes to avoid repeated fetches for different width buckets.
+# Max 50 entries to bound memory usage (each entry can be several MB).
+_UPSTREAM_CACHE_MAX_SIZE = 50
+_UPSTREAM_CACHE: dict[str, tuple[bytes, str]] = {}
+_UPSTREAM_CACHE_ORDER: list[str] = []
+
 # Optimized image cache: (validated_url, target_width) -> OptimizedImage
 # Max 100 entries to bound memory usage
 _IMAGE_CACHE_MAX_SIZE = 100
@@ -91,6 +98,8 @@ _IMAGE_CACHE_ORDER: list[tuple[str, int]] = []
 def clear_caches() -> None:
     """Clear all in-memory caches. Used by tests to ensure isolation."""
     _DNS_CACHE.clear()
+    _UPSTREAM_CACHE.clear()
+    _UPSTREAM_CACHE_ORDER.clear()
     _IMAGE_CACHE.clear()
     _IMAGE_CACHE_ORDER.clear()
 
@@ -386,6 +395,28 @@ def transcode_to_webp(payload: bytes, target_width: int) -> tuple[bytes, str] | 
     return None
 
 
+def _upstream_cache_get(key: str) -> tuple[bytes, str] | None:
+    """Get an item from the upstream cache and update LRU order."""
+    if key in _UPSTREAM_CACHE:
+        # Move to end (most recently used)
+        _UPSTREAM_CACHE_ORDER.remove(key)
+        _UPSTREAM_CACHE_ORDER.append(key)
+        return _UPSTREAM_CACHE[key]
+    return None
+
+
+def _upstream_cache_put(key: str, value: tuple[bytes, str]) -> None:
+    """Put an item in the upstream cache, evicting LRU if necessary."""
+    if key in _UPSTREAM_CACHE:
+        _UPSTREAM_CACHE_ORDER.remove(key)
+    elif len(_UPSTREAM_CACHE) >= _UPSTREAM_CACHE_MAX_SIZE:
+        # Evict LRU
+        lru_key = _UPSTREAM_CACHE_ORDER.pop(0)
+        del _UPSTREAM_CACHE[lru_key]
+    _UPSTREAM_CACHE[key] = value
+    _UPSTREAM_CACHE_ORDER.append(key)
+
+
 def _cache_get(key: tuple[str, int]) -> OptimizedImage | None:
     """Get an item from the image cache and update LRU order."""
     if key in _IMAGE_CACHE:
@@ -408,14 +439,41 @@ def _cache_put(key: tuple[str, int], value: OptimizedImage) -> None:
     _IMAGE_CACHE_ORDER.append(key)
 
 
+async def _fetch_upstream_cached(
+    validated_url: str,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> tuple[bytes, str]:
+    """Fetch upstream image with caching of raw bytes.
+
+    In production (transport is None), uses in-memory cache to avoid
+    repeated upstream fetches for the same URL across different width buckets.
+    In tests (transport provided), bypasses cache for isolation.
+    """
+    if transport is None:
+        cached = _upstream_cache_get(validated_url)
+        if cached is not None:
+            return cached
+
+        payload, content_type = await fetch_upstream(validated_url, transport=transport)
+        _upstream_cache_put(validated_url, (payload, content_type))
+        return payload, content_type
+
+    # Test path - no caching
+    return await fetch_upstream(validated_url, transport=transport)
+
+
 async def _optimize_remote_image_uncached(
     validated_url: str,
     target_width: int,
     *,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> OptimizedImage:
-    """Core optimization logic without caching (used for cache misses and tests)."""
-    payload, content_type = await fetch_upstream(validated_url, transport=transport)
+    """Core optimization logic without final-image caching (used for cache misses and tests).
+
+    Still uses upstream byte cache in production.
+    """
+    payload, content_type = await _fetch_upstream_cached(validated_url, transport=transport)
 
     transcoded = transcode_to_webp(payload, target_width)
     if transcoded is not None:
