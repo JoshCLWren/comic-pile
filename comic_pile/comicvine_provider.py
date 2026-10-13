@@ -16,14 +16,13 @@ from pathlib import Path
 
 import httpx
 from filelock import FileLock
-from functools import wraps
-import time
 
 COMICVINE_BASE_URL = "https://comicvine.gamespot.com/api"
 DEFAULT_REQUESTS_PER_HOUR = 180
 DEFAULT_NO_HEADER_COOLDOWN = 60.0
 DEFAULT_MAX_NO_HEADER_COOLDOWN = 3600.0
 DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 0.0
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 COLLECTION_PAGE_LIMIT = 100
 DEEP_ISSUE_FIELDS = (
     "id",
@@ -39,25 +38,6 @@ DEEP_ISSUE_FIELDS = (
     "story_arc_credits",
     "date_last_updated",
 )
-
-
-def _performance_monitor(func):
-    """Decorator to monitor and log performance of ComicVine requests."""
-    @wraps(func)
-    async def wrapper(self, *args, **kwargs):
-        start_time = time.monotonic()
-        try:
-            result = await func(self, *args, **kwargs)
-            duration = time.monotonic() - start_time
-            # Log slow requests (over 1 second)
-            if duration > 1.0:
-                print(f"PERF: {func.__name__} took {duration:.3f}s (slow)")
-            return result
-        except Exception as exc:
-            duration = time.monotonic() - start_time
-            print(f"PERF: {func.__name__} failed after {duration:.3f}s: {exc}")
-            raise
-    return wrapper
 
 
 class ComicVineError(RuntimeError):
@@ -347,7 +327,7 @@ class ComicVineClient:
             DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS
         ),
         base_url: str = COMICVINE_BASE_URL,
-        timeout_seconds: float = 5.0,
+        timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
     ) -> None:
         """Configure the provider client.
 
@@ -357,7 +337,7 @@ class ComicVineClient:
             requests_per_hour: Rolling-hour budget per endpoint path.
             minimum_live_request_interval_seconds: Minimum delay between uncached live request starts.
             base_url: Provider API base URL.
-            timeout_seconds: Network timeout per request (reduced from 30s to 5s for better performance).
+            timeout_seconds: Network timeout per request.
         """
         if not api_key.strip():
             raise ValueError("api_key is required")
@@ -379,24 +359,15 @@ class ComicVineClient:
         self._live_request_lock = asyncio.Lock()
         self._last_live_request_started_at: float | None = None
         self.live_request_starts = 0
-    
-    async def close(self) -> None:
-        """Close the httpx client and cleanup resources."""
-        if hasattr(self, '_http_client'):
-            await self._http_client.aclose()
-    
-    def __del__(self) -> None:
-        """Ensure proper cleanup of resources."""
-        if hasattr(self, '_http_client'):
-            # Don't await in __del__, just mark for cleanup
-            self._http_client = None  # type: ignore
-        
-        # Initialize httpx client with connection pooling for better performance
         self._http_client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout_seconds, connect=timeout_seconds * 0.3),
             limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
             http2=False,  # Disable HTTP/2 for compatibility with ComicVine
         )
+
+    async def close(self) -> None:
+        """Close the httpx client and release pooled connections."""
+        await self._http_client.aclose()
 
     @staticmethod
     def _cache_key(endpoint: str, params: Mapping[str, object]) -> str:
@@ -438,54 +409,40 @@ class ComicVineClient:
                 self._last_live_request_started_at = time.monotonic()
         self.live_request_starts += 1
 
-    @_performance_monitor
-    async def _request_async(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
-        """Make an async HTTP request to ComicVine using httpx for better performance."""
+    def _request_sync(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
         query = {
             **params,
             "api_key": self.api_key,
             "format": "json",
         }
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
-        
+        url = f"{self.base_url}/{endpoint.lstrip('/')}?{urllib.parse.urlencode(query)}"
+        request = urllib.request.Request(url, headers={"User-Agent": "ComicPile/1.0"})
         try:
-            response = await self._http_client.get(
-                url,
-                params=query,
-                headers={"User-Agent": "ComicPile/1.0"},
-                timeout=self.timeout_seconds,
-            )
-            response.raise_for_status()
-            decoded = response.json()
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code in (420, 429):
-                retry_after = _parse_retry_after(exc.response.headers.get("Retry-After"), self._clock)
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                decoded = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code in (420, 429):
+                retry_after = _parse_retry_after(exc.headers.get("Retry-After"), self._clock)
                 raise ComicVineRateLimitError(
-                    f"ComicVine returned HTTP {exc.response.status_code}",
+                    f"ComicVine returned HTTP {exc.code}",
                     retry_after=retry_after,
                 ) from exc
-            raise ComicVineError(f"ComicVine HTTP {exc.response.status_code} for {endpoint}") from exc
-        except (httpx.RequestError, httpx.TimeoutException) as exc:
+            raise ComicVineError(f"ComicVine HTTP {exc.code} for {endpoint}") from exc
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise ComicVineError(f"ComicVine request failed for {endpoint}: {exc}") from exc
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise ComicVineError(f"ComicVine response JSON decode failed for {endpoint}: {exc}") from exc
-        
         if not isinstance(decoded, dict):
             raise ComicVineError(f"ComicVine returned a non-object response for {endpoint}")
-        
         status_code = decoded.get("status_code")
         if status_code not in (None, 1):
             raise ComicVineError(
                 f"ComicVine API error for {endpoint}: {decoded.get('error', status_code)!r}"
             )
-        
         return decoded
 
     def _is_in_resource_cooldown(self, endpoint_bucket: str) -> bool:
         """Check if a resource is currently in a persisted cooldown."""
         return self.throttle_tracker.is_throttled(endpoint_bucket)
 
-    @_performance_monitor
     async def request(
         self,
         endpoint_bucket: str,
@@ -528,7 +485,7 @@ class ComicVineClient:
             raise
         await self._pace_live_request()
         try:
-            payload = await self._request_async(endpoint, params)
+            payload = await asyncio.to_thread(self._request_sync, endpoint, params)
         except ComicVineRateLimitError as exc:
             effective_delay = self.throttle_tracker.record_throttle(
                 endpoint_bucket,
