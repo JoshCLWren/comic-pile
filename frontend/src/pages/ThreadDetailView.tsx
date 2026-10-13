@@ -504,22 +504,20 @@ export default function ThreadDetailView() {
                               </span>
                             </span>
                             <div className="flex items-center gap-3">
-                              {bulkSelectMode && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setTagEditorIssue({
-                                      id: issue.id,
-                                      issue_number: issue.issue_number,
-                                    })
-                                  }
-                                  aria-label={`Edit tags for issue #${issue.issue_number}`}
-                                  title={`Edit tags for issue #${issue.issue_number}`}
-                                  className="text-xs font-black uppercase tracking-widest text-stone-500 hover:text-amber-300"
-                                >
-                                  Tags
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setTagEditorIssue({
+                                    id: issue.id,
+                                    issue_number: issue.issue_number,
+                                  })
+                                }
+                                aria-label={`Edit tags for issue #${issue.issue_number}`}
+                                title={`Edit tags for issue #${issue.issue_number}`}
+                                className="text-xs font-black uppercase tracking-widest text-stone-500 hover:text-amber-300"
+                              >
+                                Tags
+                              </button>
                               <span className="text-xs font-black uppercase tracking-widest">
                                 {issue.status === 'read' ? (
                                   <span className="text-green-400">Read</span>
