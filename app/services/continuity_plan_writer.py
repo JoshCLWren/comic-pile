@@ -6,18 +6,24 @@ plan-owned rules are compiled and replaced from the same node semantics. This
 module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
-The compiler's hard-edge semantics (#2553 Phase B / #3499 CBL redirect):
-  1. ``strict_sequential`` plans retain existing in-plan ``item_read``
-     pairs; they do not infer thread-entry or adjacent Dependencies.
-     Complicated reading order is authored as a custom CBL and applied;
-  2. checkpoint nodes (including flags copied from a custom CBL) block
-     the next node in the same lane;
-  3. convergence gates compile ``converged`` self-loop rules;
-  4. plan-level cycles and persisted-rule conflicts keep their stable codes;
-  5. informational plans add no inferred blockers;
-  6. an ordinary save of unchanged membership retains existing plan-owned
-     ``item_read`` pairs (Julix/Mignolaverse hops included) so Roll
-     eligibility does not change. Saving never invents new pairs.
+The compiler's hard-edge semantics (#2553 Phase B / Josh's CBL verdict):
+  1. Strict plans never invent whole-list Dependency chains. Consecutive
+     list positions in different series are not hard edges. Roll follows
+     natural in-series order (``Thread.next_unread_issue_id``) plus
+     explicit crossover checkpoints and recorded standalone prerequisites
+     only (e.g. Starman #55 → All-Star Comics (1999) #1).
+  2. ``strict_sequential`` retains existing in-plan ``item_read`` pairs
+     whose both endpoints remain; it does not infer thread-entry or
+     adjacent Dependencies. Complicated order is authored as a custom CBL.
+  3. Checkpoint nodes (including flags copied from a custom CBL) block
+     the next node in the same lane — the only plan-authored cross-series
+     hard gate the live compiler emits.
+  4. Convergence gates compile ``converged`` self-loop rules.
+  5. Plan-level cycles and persisted-rule conflicts keep their stable codes.
+  6. Informational plans add no inferred blockers.
+  7. An ordinary unchanged strict save is a no-op for ContinuityRules and
+     Dependencies when the desired edge set already matches: eligibility
+     does not change, and removed cross-series chain edges do not return.
 """
 
 from __future__ import annotations
@@ -303,6 +309,111 @@ def _is_equivalent_reusable_item_read_rule(
     )
 
 
+def _nodes_by_lane(
+    nodes: Sequence[ContinuityPlanNode],
+) -> dict[str, list[ContinuityPlanNode]]:
+    """Group plan nodes by lane id, sorted by display position."""
+    grouped: dict[str, list[ContinuityPlanNode]] = {}
+    for node in nodes:
+        grouped.setdefault(node.lane_id, []).append(node)
+    for lane_nodes in grouped.values():
+        lane_nodes.sort(key=lambda item: item.position)
+    return grouped
+
+
+def _checkpoint_edges_from_nodes(
+    nodes: Sequence[ContinuityPlanNode],
+) -> list[tuple[str, int, str, int, str, int | None]]:
+    """Return checkpoint compile edges authored on plan nodes.
+
+    A checkpoint blocks only the next node in the same lane. Cross-series
+    consecutive list positions without ``is_checkpoint`` never appear here.
+    """
+    nodes_by_lane = _nodes_by_lane(nodes)
+    edges: list[tuple[str, int, str, int, str, int | None]] = []
+    for node in nodes:
+        if not node.is_checkpoint:
+            continue
+        lane_nodes = nodes_by_lane.get(node.lane_id, [])
+        node_index = next(
+            (index for index, candidate in enumerate(lane_nodes) if candidate.id == node.id),
+            None,
+        )
+        if node_index is None or node_index >= len(lane_nodes) - 1:
+            continue
+        next_node = lane_nodes[node_index + 1]
+        if next_node.node_type == node.node_type and next_node.ref_id == node.ref_id:
+            continue
+        checkpoint_issue_id = node.ref_id if node.node_type == "issue" else None
+        edges.append((
+            node.node_type,
+            node.ref_id,
+            next_node.node_type,
+            next_node.ref_id,
+            "checkpoint",
+            checkpoint_issue_id,
+        ))
+    return edges
+
+
+def _edge_identity(
+    source_type: str,
+    source_id: int,
+    target_type: str,
+    target_id: int,
+    satisfaction_type: str,
+    extra: int | list[dict[str, int | str]] | None,
+) -> tuple[object, ...]:
+    """Return a hashable identity for one compiled plan-owned edge."""
+    if satisfaction_type == "converged" and isinstance(extra, list):
+        targets = tuple(
+            sorted(
+                (str(target["type"]), int(target["id"]))
+                for target in extra
+            )
+        )
+        return (
+            source_type,
+            source_id,
+            target_type,
+            target_id,
+            satisfaction_type,
+            targets,
+        )
+    return (
+        source_type,
+        source_id,
+        target_type,
+        target_id,
+        satisfaction_type,
+        extra,
+    )
+
+
+def _rule_edge_identity(rule: ContinuityRule) -> tuple[object, ...]:
+    """Return the compile identity of one persisted plan-owned rule."""
+    extra: int | list[dict[str, int | str]] | None
+    if rule.satisfaction_type == "checkpoint":
+        extra = rule.checkpoint_issue_id
+    elif rule.satisfaction_type == "converged":
+        raw_targets = rule.convergence_targets or []
+        extra = [
+            {"type": str(target["type"]), "id": int(target["id"])}
+            for target in raw_targets
+            if isinstance(target, dict)
+        ]
+    else:
+        extra = None
+    return _edge_identity(
+        rule.source_type,
+        rule.source_id,
+        rule.target_type,
+        rule.target_id,
+        rule.satisfaction_type,
+        extra,
+    )
+
+
 async def replace_compiled_rules(
     db: AsyncSession,
     *,
@@ -386,48 +497,29 @@ async def replace_compiled_rules(
         ):
             prior_item_read.add((old_rule.source_id, old_rule.target_id))
 
-    # Normalized membership/provenance always reflects the latest nodes in the
-    # same transaction: informational plans with no compiled edges still own
-    # relational membership, and a later rule-compilation failure rolls the
-    # membership rebuild back with the rest of the write.
-    await rebuild_plan_membership(db, plan_id=plan.id, nodes=nodes)
-    await db.execute(
-        delete(ContinuityRule).where(
-            ContinuityRule.user_id == user_id,
-            ContinuityRule.note == marker,
-        )
-    )
-    await db.flush()
-
     # Build node lookup for convergence gate resolution
     node_map: dict[str, ContinuityPlanNode] = {node.id: node for node in nodes}
 
-    # Build per-lane ordered node lists for checkpoint next-node lookup
-    nodes_by_lane: dict[str, list[ContinuityPlanNode]] = {}
-    for node in nodes:
-        nodes_by_lane.setdefault(node.lane_id, []).append(node)
-    for lane_nodes in nodes_by_lane.values():
-        lane_nodes.sort(key=lambda n: n.position)
-
-    # Collect all edges to compile (for cycle detection)
+    # Collect all edges to compile (for cycle detection / no-op compare)
     convergence_target = dict[str, int | str]
     edges_to_add: list[
         tuple[str, int, str, int, str, int | list[convergence_target] | None]
     ] = []
 
     # 1. Strict-sequential item_read: retain existing in-plan pairs whose
-    # both endpoints remain. Never infer thread-entry or adjacency.
+    # both endpoints remain. Never infer thread-entry or list adjacency.
+    incoming_ids = payload_issue_ids(nodes)
+    unchanged_strict_save = (
+        ordering_mode == "strict_sequential"
+        and incoming_ids == prior_membership_ids
+        and prior_ordering_mode == "strict_sequential"
+    )
     if ordering_mode == "strict_sequential":
-        incoming_ids = payload_issue_ids(nodes)
         compiled_item_read: set[tuple[int, int]] = {
             pair
             for pair in prior_item_read
             if pair[0] in incoming_ids and pair[1] in incoming_ids
         }
-        unchanged_strict_save = (
-            incoming_ids == prior_membership_ids
-            and prior_ordering_mode == "strict_sequential"
-        )
         if extra_item_read_pairs and not unchanged_strict_save:
             issue_index: dict[int, IssueThreadIndex] = await load_issue_thread_index(
                 db, incoming_ids
@@ -452,26 +544,9 @@ async def replace_compiled_rules(
                 "item_read", None,
             ))
 
-    # 2. Checkpoint rules: checkpoint node blocks the next node in the same lane
-    for node in nodes:
-        if not node.is_checkpoint:
-            continue
-        lane_nodes = nodes_by_lane.get(node.lane_id, [])
-        node_index = next(
-            (i for i, n in enumerate(lane_nodes) if n.id == node.id), None
-        )
-        if node_index is None or node_index >= len(lane_nodes) - 1:
-            continue
-        next_node = lane_nodes[node_index + 1]
-        # Skip self-referencing checkpoint edges (same issue/type in same lane)
-        if next_node.node_type == node.node_type and next_node.ref_id == node.ref_id:
-            continue
-        checkpoint_issue_id = node.ref_id if node.node_type == "issue" else None
-        edges_to_add.append((
-            node.node_type, node.ref_id,
-            next_node.node_type, next_node.ref_id,
-            "checkpoint", checkpoint_issue_id,
-        ))
+    # 2. Checkpoint rules: only explicit is_checkpoint nodes (custom CBL or
+    # planner). Never treat ordinary consecutive list positions as checkpoints.
+    edges_to_add.extend(_checkpoint_edges_from_nodes(nodes))
 
     # 3. Converged rules: node waits for all convergence gate targets
     for node in nodes:
@@ -493,6 +568,40 @@ async def replace_compiled_rules(
             node.node_type, node.ref_id,
             "converged", gate_targets,
         ))
+
+    desired_identities = {
+        _edge_identity(
+            source_type,
+            source_id,
+            target_type,
+            target_id,
+            satisfaction_type,
+            extra,
+        )
+        for source_type, source_id, target_type, target_id, satisfaction_type, extra in edges_to_add
+    }
+    existing_identities = {_rule_edge_identity(rule) for rule in old_plan_rules}
+
+    # Normalized membership/provenance always reflects the latest nodes in the
+    # same transaction: informational plans with no compiled edges still own
+    # relational membership, and a later rule-compilation failure rolls the
+    # membership rebuild back with the rest of the write.
+    await rebuild_plan_membership(db, plan_id=plan.id, nodes=nodes)
+
+    # True no-op: unchanged strict membership whose desired edge set already
+    # matches plan-owned rules. Skip delete/recreate so ContinuityRules and
+    # Dependencies do not churn, and removed chain edges cannot return.
+    if unchanged_strict_save and desired_identities == existing_identities:
+        await db.flush()
+        return True
+
+    await db.execute(
+        delete(ContinuityRule).where(
+            ContinuityRule.user_id == user_id,
+            ContinuityRule.note == marker,
+        )
+    )
+    await db.flush()
 
     if not edges_to_add:
         if sync_canonical_edges:

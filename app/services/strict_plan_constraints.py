@@ -1,16 +1,16 @@
 """Held thread-entry selector and issue-thread index helpers (#2553).
 
-Live Reading Plan writes no longer infer Dependencies from plan order.
-Complicated reading orders are authored as custom CBLs (one ordered list of
-actual comics, with optional checkpoints) and consumed by Reading Plans.
-Roll honors (a) natural in-series progression via
-``Thread.next_unread_issue_id`` and (b) explicitly defined prerequisites and
-checkpoints only.
+Live Reading Plan writes never invent whole-list Dependency chains from
+consecutive list positions. Complicated reading orders are authored as
+custom CBLs (one ordered list of actual comics, with optional checkpoints)
+and consumed by Reading Plans. Roll honors (a) natural in-series progression
+via ``Thread.next_unread_issue_id`` and (b) explicitly defined prerequisites
+and checkpoints only (Josh's verdict on #2553 / #3499).
 
 ``strict_plan_item_read_pairs`` remains for held production-migration
 scripts that still classify historical thread-entry gates. The live writer
 does not call it. Same-thread adjacent pairs are never compiled into
-Dependencies.
+Dependencies by the live path.
 
 Existing plan-owned ``item_read`` rows are retained on an ordinary no-change
 save until a hop is classified and removed on purpose:
