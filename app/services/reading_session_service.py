@@ -49,7 +49,7 @@ class ReadingSessionService:
             if thread is None:
                 raise InvalidRequestError(
                     f"Pending thread {session.pending_thread_id} does not exist or "
-                    "does not belong to user {user_id}"
+                    f"does not belong to user {user_id}"
                 )
 
     async def _validate_pending_issue_ownership(

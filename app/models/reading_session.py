@@ -16,6 +16,8 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
+    UniqueConstraint,
     Index,
     Integer,
     JSON,
@@ -57,9 +59,7 @@ class ReadingSession(Base):
     start_die: Mapped[int] = mapped_column(Integer, default=6)
     manual_die: Mapped[int | None] = mapped_column(Integer, nullable=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    pending_thread_id: Mapped[int | None] = mapped_column(
-        ForeignKey("threads.id", ondelete="SET NULL"), nullable=True
-    )
+    pending_thread_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pending_issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("issues.id", ondelete="SET NULL"), nullable=True
     )
@@ -131,6 +131,12 @@ class ReadingSession(Base):
             "intent_confidence IS NULL "
             "OR (intent_confidence >= 0 AND intent_confidence <= 1)",
             name="ck_sessions_intent_confidence_range",
+        ),
+        ForeignKeyConstraint(
+            ["pending_thread_id", "user_id"],
+            ["threads.id", "threads.user_id"],
+            ondelete="SET NULL",
+            name="fk_session_pending_thread_user",
         ),
     )
 

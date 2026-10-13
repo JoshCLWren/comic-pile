@@ -315,6 +315,13 @@ async def create_dependency(
     source_thread = await thread_repository.find_owned(db, user_id, source_issue.thread_id)
     target_thread = await thread_repository.find_owned(db, user_id, target_issue.thread_id)
     if not source_thread or not target_thread:
+        source_thread_record = await thread_repository.get_thread(db, source_issue.thread_id)
+        target_thread_record = await thread_repository.get_thread(db, target_issue.thread_id)
+        if (
+            (source_thread_record is not None and source_thread_record.user_id != user_id)
+            or (target_thread_record is not None and target_thread_record.user_id != user_id)
+        ):
+            return None, "Cross-user dependency is not allowed: issues belong to different readers"
         return None, "Issue not found"
 
     # Check for circular dependency

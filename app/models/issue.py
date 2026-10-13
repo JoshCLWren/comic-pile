@@ -37,6 +37,7 @@ class Issue(Base):
 
     # Indexes for performance
     __table_args__ = (
+        UniqueConstraint("id", "thread_id", name="uq_issue_id_thread"),
         UniqueConstraint("thread_id", "issue_number", name="uq_issue_thread_number"),
         UniqueConstraint(
             "thread_id",

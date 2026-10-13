@@ -9,6 +9,7 @@ Tests enforce reader ownership consistency at graph and library write boundaries
 """
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession as SQLAlchemyAsyncSession
@@ -27,6 +28,33 @@ from app.services.errors import InvalidRequestError
 from app.services.reading_session_service import ReadingSessionService
 from app.services.tag_service import TagService
 from app.services.thread_service import set_current_issue
+
+
+@pytest_asyncio.fixture
+async def user(db):
+    u = User(username="ownership_user", email="ownership@example.com")
+    db.add(u)
+    await db.commit()
+    await db.refresh(u)
+    return u
+
+
+@pytest_asyncio.fixture
+async def thread(db, user):
+    t = Thread(title="Ownership Thread", format="Comic", issues_remaining=1, user_id=user.id, queue_position=1)
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+    return t
+
+
+@pytest_asyncio.fixture
+async def issue(db, thread):
+    i = Issue(thread_id=thread.id, issue_number="1", status="unread", position=1)
+    db.add(i)
+    await db.commit()
+    await db.refresh(i)
+    return i
 
 
 @pytest.mark.asyncio
@@ -293,13 +321,13 @@ async def test_reading_plan_membership_ownership_application_validation(
     # Test 2: Invalid membership - issue from other user's thread should fail at application layer
     # (rebuild_plan_membership validates ownership)
     from app.services.reading_plan_normalization import rebuild_plan_membership
-    from app.models import PlanNode
+    from app.schemas.continuity_plan import ContinuityPlanNode
     
     nodes = [
-        PlanNode(node_type="issue", ref_id=other_user_issue.id, lane_id="main", display_position=0),
+        ContinuityPlanNode(id="node-1", node_type="issue", ref_id=other_user_issue.id, lane_id="main", position=0),
     ]
     with pytest.raises(ValueError, match="does not belong to any thread owned by user"):
-        await rebuild_plan_membership(db, plan.id, nodes)
+        await rebuild_plan_membership(db=db, plan_id=plan.id, nodes=nodes)
 
 
 @pytest.mark.asyncio
@@ -360,7 +388,9 @@ async def test_tag_assignment_ownership_validation(
     assert assignment1 is not None
     
     # Test 2: Invalid assignment - private tag to other user's thread should fail
-    with pytest.raises(InvalidRequestError):
+    from app.services.errors import ForbiddenError
+
+    with pytest.raises(ForbiddenError):
         await tag_service.assign_tag(
             user=user,
             tag_id=private_tag.id,

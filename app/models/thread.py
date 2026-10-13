@@ -10,6 +10,8 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
+    UniqueConstraint,
     Index,
     Integer,
     JSON,
@@ -66,9 +68,7 @@ class Thread(Base):
     issues_remaining: Mapped[int] = mapped_column(Integer, default=0)
     # New issue tracking fields (NULL means old system, not migrated yet)
     total_issues: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    next_unread_issue_id: Mapped[int | None] = mapped_column(
-        ForeignKey("issues.id", ondelete="SET NULL"), nullable=True
-    )
+    next_unread_issue_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reading_progress: Mapped[str | None] = mapped_column(String(20), nullable=True)
     queue_position: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="active")
@@ -125,6 +125,13 @@ class Thread(Base):
             postgresql_where=text("status = 'completed'"),
         ),
         Index("ix_thread_catalog_series", "catalog_series_id"),
+        UniqueConstraint("id", "user_id", name="uq_thread_id_user"),
+        ForeignKeyConstraint(
+            ["next_unread_issue_id", "id"],
+            ["issues.id", "issues.thread_id"],
+            ondelete="SET NULL",
+            name="fk_thread_next_unread_issue_same_thread",
+        ),
     )
 
     user: Mapped[User] = relationship("User", back_populates="threads", lazy="raise")

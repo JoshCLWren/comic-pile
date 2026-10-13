@@ -30,9 +30,11 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Add ownership consistency constraints using valid PostgreSQL constructs."""
+    # Unique supporting constraints required for composite FK targets.
+    op.create_unique_constraint("uq_issue_id_thread", "issues", ["id", "thread_id"])
+    op.create_unique_constraint("uq_thread_id_user", "threads", ["id", "user_id"])
+
     # 1. Thread.next_unread_issue_id must belong to same thread
-    # Create a composite foreign key: (next_unread_issue_id, thread_id) -> issues(id, thread_id)
-    # First ensure issues has a unique constraint on (id, thread_id) - redundant since id is PK
     op.create_foreign_key(
         "fk_thread_next_unread_issue_same_thread",
         "threads",
@@ -73,3 +75,5 @@ def downgrade() -> None:
     """Drop ownership consistency constraints."""
     op.drop_constraint("fk_session_pending_thread_user", "sessions", type_="foreignkey")
     op.drop_constraint("fk_thread_next_unread_issue_same_thread", "threads", type_="foreignkey")
+    op.drop_constraint("uq_thread_id_user", "threads", type_="unique")
+    op.drop_constraint("uq_issue_id_thread", "issues", type_="unique")

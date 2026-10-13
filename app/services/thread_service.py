@@ -1108,6 +1108,24 @@ async def set_current_issue(
     )
 
     if not target_issue:
+        from sqlalchemy import select
+
+        from app.repositories import thread_repository
+
+        owned_threads = await thread_repository.threads_for_user(db, user_id)
+        owned_thread_ids = {t.id for t in owned_threads}
+        cross_result = await db.execute(
+            select(Issue).where(
+                Issue.issue_number == target_number,
+                Issue.thread_id.in_(owned_thread_ids),
+                Issue.thread_id != thread_id,
+            )
+        )
+        if cross_result.scalar_one_or_none() is not None:
+            raise InvalidRequestError(
+                f"Issue '{target_number}' does not belong to thread {thread_id}. "
+                "Cross-thread issue assignment is not allowed."
+            )
         raise NotFoundError(f"Issue '{target_number}' not found in thread {thread_id}")
 
     # Validate ownership consistency: target issue must belong to this thread
