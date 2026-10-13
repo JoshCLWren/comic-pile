@@ -109,5 +109,10 @@ def natural_issue_order(
                 result.insert(index, label)
                 break
         else:
-            result.append(label)
+            last_numbered_index = max(
+                index
+                for index, existing_label in enumerate(result)
+                if parse_ordinary_issue_number(existing_label) is not None
+            )
+            result.insert(last_numbered_index + 1, label)
     return result

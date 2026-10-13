@@ -40,17 +40,13 @@ def test_natural_issue_order_returns_none_for_irregular_existing_or_new() -> Non
 def test_early_numeric_adoption_preserves_interleaved_annuals() -> None:
     """Adopting #1 into JLE-like issues must not append after the annual."""
     existing = ["7", "8", "9", "Annual 1", "10", "11", "Annual 2", "12"]
-    assert natural_issue_order(existing, ["1", "2"]) == [
-        "1", "2", *existing,
-    ]
+    assert natural_issue_order(existing, ["1", "2"]) == ["1", "2", *existing]
 
 
 def test_mid_series_adoption_does_not_relocate_saved_special() -> None:
     """The annual stays between its original neighboring numbered issues."""
     existing = ["9", "10", "Annual 1", "12", "13"]
-    assert natural_issue_order(existing, ["11"]) == [
-        "9", "10", "Annual 1", "11", "12", "13",
-    ]
+    assert natural_issue_order(existing, ["11"]) == ["9", "10", "Annual 1", "11", "12", "13"]
 
 
 def test_mixed_thread_preserves_special_at_head_and_tail() -> None:
@@ -69,3 +65,11 @@ def test_mixed_thread_with_unsorted_numeric_anchors_requires_manual_placement() 
 def test_mixed_thread_rejects_new_irregular_issue_numbers() -> None:
     """New specials require explicit placement relative to the main run."""
     assert natural_issue_order(["7", "Annual 1", "8"], ["Annual 2"]) is None
+
+
+def test_new_number_beyond_maximum_stays_before_trailing_special() -> None:
+    """A higher issue follows the last numeric issue without moving the special."""
+    assert natural_issue_order(
+        ["1", "2", "5", "7", "8", "Annual 1", "9", "10", "Special 0"],
+        ["11"],
+    ) == ["1", "2", "5", "7", "8", "Annual 1", "9", "10", "11", "Special 0"]
