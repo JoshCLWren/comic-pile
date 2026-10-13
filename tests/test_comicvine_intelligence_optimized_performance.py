@@ -8,7 +8,6 @@ on reducing application processing time from 1590ms to under 850ms.
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -19,8 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
-from app.services import comicvine_fallback, comicvine_intelligence
-from app.services.comicvine_fallback import _pending_metadata_refreshes
+from app.services import comicvine_intelligence
 from app.services.comicvine_intelligence import (
     MAX_ARCS_PER_INTELLIGENCE_READ,
     MAX_RELATED_ISSUES_PER_ARC,
@@ -316,6 +314,8 @@ async def test_optimized_vs_baseline_performance(
     optimized_app_seconds = optimized_wall_seconds - optimized_ledger.db_seconds
 
     # Verify results are functionally equivalent
+    assert baseline_result is not None
+    assert optimized_result is not None
     assert baseline_result.comicvine_issue_id == optimized_result.comicvine_issue_id
     assert len(baseline_result.story_arcs) == len(optimized_result.story_arcs)
     
@@ -455,7 +455,6 @@ async def test_optimized_json_query_performance(
         )
     wall_seconds = time.perf_counter() - started
     db_seconds = ledger.db_seconds
-    app_seconds = wall_seconds - db_seconds
 
     assert result is not None
     assert len(result.story_arcs) == len(arc_ids)

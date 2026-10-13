@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from html.parser import HTMLParser
 from typing import cast
@@ -308,7 +309,7 @@ async def _comicpile_matches(
     return matches
 
 
-def _build_story_arcs_optimized(
+async def _build_story_arcs_optimized(
     arc_refs: list[dict[str, object]],
     related_by_arc: dict[int, list[ComicVineRelatedIssue]],
     arc_ids: list[int],
@@ -453,7 +454,7 @@ async def get_issue_intelligence_optimized(
                 related_by_arc[arc_id].append(related)
 
     # Build story arcs with optimized processing
-    story_arcs = _build_story_arcs_optimized(
+    story_arcs = await _build_story_arcs_optimized(
         arc_refs, related_by_arc, arc_ids, window_saturated, identity.external_id, db
     )
 
