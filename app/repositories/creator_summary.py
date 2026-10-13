@@ -2,9 +2,11 @@
 
 Every SQLAlchemy query used by the creator summary endpoint lives here so the
 router stays free of schema imports and ``execute`` calls (router-layering
-contract). All queries are user-scoped joins with no per-creator or per-issue
-fan-out: the whole batch request is served by a fixed, bounded number of
-queries regardless of how many creator keys are requested.
+contract). Every query is scoped to the authenticated user by an indexed
+``threads.user_id`` predicate — never by a library-sized ``IN`` list — and none
+of them fans out per creator or per issue: the whole batch request is served by
+a fixed, bounded number of queries regardless of how many creator keys are
+requested.
 """
 
 from __future__ import annotations
@@ -280,12 +282,13 @@ async def load_creator_summary_inputs(
 ) -> CreatorSummaryInputs:
     """Load every user-scoped input needed for one bounded batch aggregation.
 
-    The batch is served by exactly five queries no matter how many creator
-    keys are requested:
+    The batch is served by exactly five queries no matter how many creator keys
+    are requested — four aggregation reads plus the request's own
+    authentication lookup:
 
-    1. the authenticated user's owned issues, their read/unread status, and
-       their thread ids;
-    2. thread titles and manual creator credits for those threads;
+    1. the authenticated user's owned issues and their thread ids;
+    2. the user's threads: titles and manual creator credits, read once per
+       thread instead of once per owned issue (issue #3387);
     3. the confirmed ``creator_credits`` key of ComicVine issue metadata for
        those issues, projected in SQL so the retained raw provider payload is
        never hydrated for a creator read (issue #3244);
@@ -315,29 +318,37 @@ async def load_creator_summary_inputs(
         issue_thread_map[owned_issue_id] = thread_id_int
         thread_ids.add(thread_id_int)
 
-    # 2. Thread details to avoid duplicating manual credits per issue.
+    # 2. Thread titles and manual creator credits, read once per thread.
+    #
+    # Projecting these columns off the issue join above repeated the stored
+    # manual-credit document on every owned issue row, so a wide library
+    # transferred and parsed the same JSON once per issue instead of once per
+    # thread. Reading the user's threads directly keeps one row per thread and
+    # keeps the statement user-scoped: filtering by ``id IN (...)`` would grow
+    # one bind parameter per thread, which is exactly the wide-library shape
+    # this read has to stay fast for. The set only guards the empty library,
+    # which owns no thread to read.
     thread_manual_credits: dict[int, list[dict[str, object]]] = {}
     owned_issue_series: dict[int, OwnedIssueSeries] = {}
     if thread_ids:
         thread_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.manual_creator_credits)
-            .where(Thread.id.in_(thread_ids))
+            select(Thread.id, Thread.title, Thread.manual_creator_credits).where(
+                Thread.user_id == user_id
+            )
         )
-        thread_map: dict[int, tuple[str, list[dict[str, object]] | None]] = {}
+        thread_titles: dict[int, str] = {}
         for thread_id, title, manual_credits in thread_result.all():
-            thread_map[int(thread_id)] = (str(title), manual_credits)
+            thread_id_int = int(thread_id)
+            thread_titles[thread_id_int] = str(title)
             if manual_credits:
-                thread_manual_credits[int(thread_id)] = manual_credits
+                thread_manual_credits[thread_id_int] = manual_credits
         for issue_id, thread_id in issue_thread_map.items():
-            title, _ = thread_map.get(thread_id, ("", None))
             owned_issue_series[issue_id] = OwnedIssueSeries(
                 thread_id=thread_id,
-                thread_title=title,
+                thread_title=thread_titles.get(thread_id, ""),
             )
-    else:
-        thread_map = {}
 
-    # 2. Confirmed creator credits per owned issue (ComicVine).
+    # 3. Confirmed creator credits per owned issue (ComicVine).
     # Only ``metadata_json->'creator_credits'`` is projected. Normalized issue
     # metadata also retains the complete raw ComicVine provider payload, and
     # hydrating that payload for every owned issue on every creator read is what
@@ -368,7 +379,7 @@ async def load_creator_summary_inputs(
         for credit in credits:
             by_key.setdefault((credit.external_id, credit.roles), credit)
 
-    # 3. Manual thread-level creator credits for issues without ComicVine metadata.
+    # 4. Manual thread-level creator credits for issues without ComicVine metadata.
     for issue_id, series in owned_issue_series.items():
         if issue_id in issues_with_creator_metadata:
             continue

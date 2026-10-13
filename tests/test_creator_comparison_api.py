@@ -522,9 +522,12 @@ async def test_compare_issues_a_creator_independent_query_count(
     assert four.status_code == 200
     assert len(two.json()["comparisons"]) == 2
     assert len(four.json()["comparisons"]) == 4
-    # Auth lookup plus the four fixed batch queries; never one per creator.
+    # Auth lookup plus the three fixed batch queries; never one per creator.
+    # ``load_creator_comparison_inputs`` is independent of the creator-summary
+    # read that issue #3387 split into a separate thread query, so this bound
+    # stays tight and must not drift when that route's query count changes.
     assert len(four_creator_selects) == len(two_creator_selects)
-    assert len(four_creator_selects) <= 5, four_creator_selects
+    assert len(four_creator_selects) <= 4, four_creator_selects
 
 
 @pytest.mark.asyncio

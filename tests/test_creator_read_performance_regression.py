@@ -350,6 +350,44 @@ async def test_wide_library_creator_read_stays_bounded(
     assert len(small_page) <= 5, small_page
 
 
+@pytest.mark.asyncio
+async def test_thread_read_is_one_user_scoped_statement(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """Thread titles and manual credits are read once per thread, not per issue.
+
+    Projecting those columns off the issue join repeated the stored manual-credit
+    document on every owned issue row, so a wide library moved the same JSON once
+    per issue (issue #3387). The read that replaced it must stay a single
+    thread-only statement scoped by the indexed ``threads.user_id`` predicate:
+    filtering the same rows by a library-sized ``id IN (...)`` list would
+    reintroduce the wide-library cost this read exists to remove.
+    """
+    await _seed_full_payload_library(async_db, default_user, thread_count=8, issues_per_thread=5)
+    await async_db.flush()
+
+    # The fixture credits person ids 402 and 403 on its first thread, so both
+    # requested keys resolve and the response proves the read still works.
+    with _captured_selects(db_engine) as statements:
+        response = await auth_client.get("/api/v1/creators/summaries?keys=creator:402,creator:403")
+    assert response.status_code == 200
+    assert len(response.json()["summaries"]) == 2
+
+    thread_reads = [
+        statement for statement in statements if "manual_creator_credits" in statement.lower()
+    ]
+    assert len(thread_reads) == 1, thread_reads
+    thread_read = thread_reads[0]
+    assert "threads.user_id" in thread_read, thread_read
+    # Thread-only: no issue join, so no duplicated row per owned issue.
+    assert " JOIN " not in thread_read.upper(), thread_read
+    # User-scoped predicate only; never one bind parameter per owned thread.
+    assert not re.search(r"\bIN\s*\(", thread_read, flags=re.IGNORECASE), thread_read
+
+
 def test_extract_creator_credit_list_rejects_unusable_values() -> None:
     """Only a list of credit dictionaries yields credits."""
     assert extract_creator_credit_list(None) == []
