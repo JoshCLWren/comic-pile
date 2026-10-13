@@ -642,6 +642,36 @@ async def replace_compiled_rules(
     # matches plan-owned rules. Skip delete/recreate so ContinuityRules and
     # Dependencies do not churn, and removed chain edges cannot return.
     if unchanged_strict_save and desired_identities == existing_identities:
+        # Roll-eligibility contract: an unchanged strict save must still repair
+        # a missing canonical Dependency for a surviving plan-owned rule,
+        # instead of treating the unchanged payload as a complete no-op.
+        if sync_canonical_edges and old_pairs:
+            existing_pairs = {
+                (int(source_id), int(target_id))
+                for source_id, target_id in (
+                    await db.execute(
+                        select(
+                            Dependency.source_issue_id,
+                            Dependency.target_issue_id,
+                        ).where(
+                            tuple_(
+                                Dependency.source_issue_id,
+                                Dependency.target_issue_id,
+                            ).in_(list(old_pairs))
+                        )
+                    )
+                ).all()
+            }
+            missing = old_pairs - existing_pairs
+            if missing:
+                for rule in old_plan_rules:
+                    if any(pair in missing for pair in rule_edge_pairs(rule)):
+                        await compile_rule_edges(
+                            db,
+                            rule,
+                            plan_id=plan.id,
+                            promote_cbl_occupants=True,
+                        )
         await db.flush()
         return True
 

@@ -6,12 +6,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import insert, select
+from sqlalchemy import delete, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import continuity_plan as continuity_plan_api
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from tests.conftest import get_or_create_user_async
@@ -1087,3 +1088,236 @@ async def test_list_plans_orders_by_last_saved(
     assert response.status_code == 200, response.text
     ids = [item["id"] for item in response.json()]
     assert ids.index(new_id) < ids.index(old_id)
+
+@pytest.mark.asyncio
+async def test_checkpoint_target_edit_survives_get_and_unchanged_resave(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Changing only a checkpoint target must be a real edit that persists (#3585 P1).
+
+    A strict plan with an explicit ``checkpoint_target_ref_id`` must treat a
+    target-only change as an edit: ``nodes_json``, the compiled ContinuityRule,
+    and the canonical Dependency all move from B to C, and a later GET plus
+    unchanged re-save can never restore B.
+    """
+    user = await get_or_create_user_async(async_db)
+    a = await _make_issue(async_db, user_id=user.id, suffix="cp-a")
+    b = await _make_issue(async_db, user_id=user.id, suffix="cp-b")
+    c = await _make_issue(async_db, user_id=user.id, suffix="cp-c")
+    await async_db.commit()
+
+    def payload(target_ref: int) -> dict[str, object]:
+        return {
+            "name": "Checkpoint retarget",
+            "ordering_mode": "strict_sequential",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [
+                {
+                    "id": f"issue-{a.id}",
+                    "node_type": "issue",
+                    "ref_id": a.id,
+                    "lane_id": "main",
+                    "position": 0,
+                    "is_checkpoint": True,
+                    "checkpoint_target_ref_id": target_ref,
+                    "convergence_gate": None,
+                },
+                {
+                    "id": f"issue-{b.id}",
+                    "node_type": "issue",
+                    "ref_id": b.id,
+                    "lane_id": "main",
+                    "position": 1,
+                    "is_checkpoint": False,
+                    "convergence_gate": None,
+                },
+                {
+                    "id": f"issue-{c.id}",
+                    "node_type": "issue",
+                    "ref_id": c.id,
+                    "lane_id": "main",
+                    "position": 2,
+                    "is_checkpoint": False,
+                    "convergence_gate": None,
+                },
+            ],
+        }
+
+    async def assert_pointed_at(expected: int, blocked: int) -> None:
+        plan = (
+            await async_db.execute(
+                select(ContinuityPlan).where(ContinuityPlan.id == plan_id)
+            )
+        ).scalar_one()
+        stored = next(
+            node for node in plan.nodes_json if node["id"] == f"issue-{a.id}"
+        )
+        assert stored.get("checkpoint_target_ref_id") == expected
+        assert all(
+            node.get("checkpoint_target_ref_id") != blocked
+            for node in plan.nodes_json
+        )
+        rules = (
+            await async_db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.user_id == user.id,
+                    ContinuityRule.note == f"continuity-plan:{plan_id}",
+                    ContinuityRule.satisfaction_type == "checkpoint",
+                )
+            )
+        ).scalars().all()
+        assert len(rules) == 1
+        assert rules[0].source_id == a.id
+        assert rules[0].target_id == expected
+        assert rules[0].target_id != blocked
+        edges = (
+            await async_db.execute(
+                select(Dependency).where(Dependency.source_issue_id == a.id)
+            )
+        ).scalars().all()
+        assert {edge.target_issue_id for edge in edges} == {expected}
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload(b.id))
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+    await assert_pointed_at(expected=b.id, blocked=c.id)
+
+    # Change ONLY the checkpoint target from B to C.
+    updated = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}", json=payload(c.id)
+    )
+    assert updated.status_code == 200, updated.text
+    await assert_pointed_at(expected=c.id, blocked=b.id)
+
+    # GET round-trip, then re-save unchanged: nothing may drift back to B.
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200, fetched.text
+    body = fetched.json()
+    checkpoint_node = next(
+        node for node in body["nodes"] if node["id"] == f"issue-{a.id}"
+    )
+    assert checkpoint_node.get("checkpoint_target_ref_id") == c.id
+    resaved = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json={
+            "name": body["name"],
+            "ordering_mode": body["ordering_mode"],
+            "lanes": body["lanes"],
+            "nodes": body["nodes"],
+        },
+    )
+    assert resaved.status_code == 200, resaved.text
+    await assert_pointed_at(expected=c.id, blocked=b.id)
+
+
+@pytest.mark.asyncio
+async def test_unchanged_strict_save_repairs_missing_dependency(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """An unchanged strict save must repair a missing canonical Dependency (#3585 P3).
+
+    Deleting the Dependency row behind a surviving plan-owned ContinuityRule
+    does not change the plan payload, but the roll-eligibility contract
+    requires the save to reconcile: the canonical edge must be re-compiled
+    rather than treated as a complete no-op.
+    """
+    user = await get_or_create_user_async(async_db)
+    a = await _make_issue(async_db, user_id=user.id, suffix="repair-a")
+    b = await _make_issue(async_db, user_id=user.id, suffix="repair-b")
+    await async_db.commit()
+
+    payload = {
+        "name": "Repair plan",
+        "ordering_mode": "strict_sequential",
+        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "nodes": [
+            {
+                "id": f"issue-{a.id}",
+                "node_type": "issue",
+                "ref_id": a.id,
+                "lane_id": "main",
+                "position": 0,
+                "is_checkpoint": True,
+                "checkpoint_target_ref_id": b.id,
+                "convergence_gate": None,
+            },
+            {
+                "id": f"issue-{b.id}",
+                "node_type": "issue",
+                "ref_id": b.id,
+                "lane_id": "main",
+                "position": 1,
+                "is_checkpoint": False,
+                "convergence_gate": None,
+            },
+        ],
+    }
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    rule = (
+        await async_db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.user_id == user.id,
+                ContinuityRule.note == f"continuity-plan:{plan_id}",
+                ContinuityRule.satisfaction_type == "checkpoint",
+            )
+        )
+    ).scalar_one()
+    edge = (
+        await async_db.execute(
+            select(Dependency).where(
+                Dependency.source_issue_id == a.id,
+                Dependency.target_issue_id == b.id,
+            )
+        )
+    ).scalar_one()
+
+    # Delete the canonical Dependency directly, leaving the rule intact.
+    await async_db.execute(delete(Dependency).where(Dependency.id == edge.id))
+    await async_db.commit()
+    assert (
+        await async_db.execute(
+            select(Dependency).where(
+                Dependency.source_issue_id == a.id,
+                Dependency.target_issue_id == b.id,
+            )
+        )
+    ).scalars().all() == []
+
+    # Re-save the plan unchanged: the surviving rule must recompile its edge.
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200, fetched.text
+    body = fetched.json()
+    resaved = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_id}",
+        json={
+            "name": body["name"],
+            "ordering_mode": body["ordering_mode"],
+            "lanes": body["lanes"],
+            "nodes": body["nodes"],
+        },
+    )
+    assert resaved.status_code == 200, resaved.text
+
+    repaired = (
+        await async_db.execute(
+            select(Dependency).where(
+                Dependency.source_issue_id == a.id,
+                Dependency.target_issue_id == b.id,
+            )
+        )
+    ).scalars().all()
+    assert len(repaired) == 1
+    assert (repaired[0].note or "").startswith("canonical:rule:")
+
+    # The rule itself was never churned.
+    surviving = (
+        await async_db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.note == f"continuity-plan:{plan_id}"
+            )
+        )
+    ).scalars().all()
+    assert [r.id for r in surviving] == [rule.id]
