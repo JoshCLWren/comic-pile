@@ -138,6 +138,15 @@ async def get_creator_summaries(
     Returns:
         The batch summary response keyed by requested visible creator keys.
     """
+    # Resolve requested creator IDs up-front to limit Python work to the batch.
+    requested_id_map: dict[str, int] = {}
+    requested_ids: set[int] = set()
+    for key in requested_keys:
+        creator_id = parse_creator_key(key)
+        if creator_id is not None:
+            requested_id_map[key] = creator_id
+            requested_ids.add(creator_id)
+
     inputs = await load_creator_summary_inputs(db, user_id)
 
     rated_issue_ids = frozenset(inputs.effective_ratings)
@@ -161,13 +170,16 @@ async def get_creator_summaries(
     creator_headline_issues: dict[int, set[int]] = defaultdict(set)
     creator_roles: dict[int, set[str]] = defaultdict(set)
     creator_names: dict[int, str] = {}
-    for issue_id, credits in inputs.issue_creator_credits.items():
-        for credit in credits:
-            creator_issues[credit.external_id].add(issue_id)
-            creator_names.setdefault(credit.external_id, credit.display_name)
-            creator_roles[credit.external_id].update(credit.roles)
-            if any(role in HEADLINE_ROLES for role in credit.roles):
-                creator_headline_issues[credit.external_id].add(issue_id)
+    if requested_ids:
+        for issue_id, credits in inputs.issue_creator_credits.items():
+            for credit in credits:
+                if credit.external_id not in requested_ids:
+                    continue
+                creator_issues[credit.external_id].add(issue_id)
+                creator_names.setdefault(credit.external_id, credit.display_name)
+                creator_roles[credit.external_id].update(credit.roles)
+                if any(role in HEADLINE_ROLES for role in credit.roles):
+                    creator_headline_issues[credit.external_id].add(issue_id)
 
     # Precompute per-creator statistics to avoid repeated large loops
     creator_stats: dict[int, dict[str, Any]] = {
@@ -190,9 +202,8 @@ async def get_creator_summaries(
         }
 
     summaries: dict[str, CreatorSummaryItem] = {}
-    for key in requested_keys:
-        creator_id = parse_creator_key(key)
-        if creator_id is None or creator_id not in creator_stats:
+    for key, creator_id in requested_id_map.items():
+        if creator_id not in creator_stats:
             continue
         data = creator_stats[creator_id]
         ratings = data["ratings"]

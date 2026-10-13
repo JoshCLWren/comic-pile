@@ -284,11 +284,11 @@ async def load_creator_summary_inputs(
     keys are requested:
 
     1. the authenticated user's owned issues, their read/unread status, and
-       their stable local thread/series identity;
-    2. the confirmed ``creator_credits`` key of ComicVine issue metadata for
+       their thread ids;
+    2. thread titles and manual creator credits for those threads;
+    3. the confirmed ``creator_credits`` key of ComicVine issue metadata for
        those issues, projected in SQL so the retained raw provider payload is
        never hydrated for a creator read (issue #3244);
-    3. manual thread-level creator credits for threads without issue metadata;
     4. the latest effective ``rate`` event rating per owned issue.
 
     Args:
@@ -298,25 +298,43 @@ async def load_creator_summary_inputs(
     Returns:
         User-scoped :class:`CreatorSummaryInputs`.
     """
-    # 1. Owned issues, statuses, and stable local series identity.
+    # 1. Owned issues and thread ids.
     issue_result = await db.execute(
-        select(Issue.id, Issue.status, Issue.thread_id, Thread.title, Thread.manual_creator_credits)
+        select(Issue.id, Issue.status, Issue.thread_id)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
     owned_issues: dict[int, str] = {}
-    owned_issue_series: dict[int, OwnedIssueSeries] = {}
-    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
-    for issue_id, status, thread_id, thread_title, manual_credits in issue_result.all():
+    thread_ids: set[int] = set()
+    issue_thread_map: dict[int, int] = {}
+    for issue_id, status, thread_id in issue_result.all():
         owned_issue_id = int(issue_id)
         owned_issues[owned_issue_id] = str(status)
-        owned_issue_series[owned_issue_id] = OwnedIssueSeries(
-            thread_id=int(thread_id),
-            thread_title=str(thread_title),
-        )
         thread_id_int = int(thread_id)
-        if manual_credits and thread_id_int not in thread_manual_credits:
-            thread_manual_credits[thread_id_int] = manual_credits
+        issue_thread_map[owned_issue_id] = thread_id_int
+        thread_ids.add(thread_id_int)
+
+    # 2. Thread details to avoid duplicating manual credits per issue.
+    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
+    owned_issue_series: dict[int, OwnedIssueSeries] = {}
+    if thread_ids:
+        thread_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.manual_creator_credits)
+            .where(Thread.id.in_(thread_ids))
+        )
+        thread_map: dict[int, tuple[str, list[dict[str, object]] | None]] = {}
+        for thread_id, title, manual_credits in thread_result.all():
+            thread_map[int(thread_id)] = (str(title), manual_credits)
+            if manual_credits:
+                thread_manual_credits[int(thread_id)] = manual_credits
+        for issue_id, thread_id in issue_thread_map.items():
+            title, _ = thread_map.get(thread_id, ("", None))
+            owned_issue_series[issue_id] = OwnedIssueSeries(
+                thread_id=thread_id,
+                thread_title=title,
+            )
+    else:
+        thread_map = {}
 
     # 2. Confirmed creator credits per owned issue (ComicVine).
     # Only ``metadata_json->'creator_credits'`` is projected. Normalized issue
