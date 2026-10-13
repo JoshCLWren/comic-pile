@@ -2,13 +2,15 @@
 
 Tests enforce reader ownership consistency at graph and library write boundaries:
 - Cross-user graph/member/pending/frontier writes are rejected
-- next_unread_issue_id belonging to different Thread of same reader is rejected  
+- next_unread_issue_id belonging to different Thread of same reader is rejected
 - DB-enforced relationships reject invalid direct SQL inserts
 - Application-only/polymorphic boundaries have explicit rejection tests
 - Preflight reports existing invalid rows without private payloads
 """
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession as SQLAlchemyAsyncSession
 from app.models import (
     ContinuityPlan,
@@ -17,7 +19,6 @@ from app.models import (
     ReadingPlanIssue,
     ReadingSession,
     Tag,
-    TagAssignment,
     Thread,
     User,
 )
@@ -25,8 +26,7 @@ from app.services.dependency_service import create_dependency
 from app.services.errors import InvalidRequestError
 from app.services.reading_session_service import ReadingSessionService
 from app.services.tag_service import TagService
-from app.services.thread_service import set_current_issue, set_pending_thread
-from tests.conftest import async_db
+from app.services.thread_service import set_current_issue
 
 
 @pytest.mark.asyncio
@@ -34,7 +34,6 @@ async def test_thread_next_unread_issue_ownership_validation(
     db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that Thread.next_unread_issue_id must belong to same thread."""
-    
     # Create another thread and issue for the same user
     other_thread = Thread(
         title="Other Thread",
@@ -75,7 +74,6 @@ async def test_dependency_ownership_validation(
     db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that Dependency source/target issues must belong to same user."""
-    
     # Create another thread and issue for the same user
     other_thread = Thread(
         title="Other Thread", 
@@ -145,7 +143,7 @@ async def test_dependency_ownership_validation(
         db=db
     )
     assert result is None
-    assert "different threads" in warning or "Cross-user" in warning
+    assert warning is not None and ("different threads" in warning or "Cross-user" in warning)
 
 
 @pytest.mark.asyncio
@@ -153,7 +151,6 @@ async def test_reading_session_pending_references_validation(
     db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that ReadingSession pending references must belong to session user."""
-    
     # Create another user with their own thread
     other_user = User(username="otheruser", email="other@example.com")
     db.add(other_user)
@@ -195,7 +192,6 @@ async def test_reading_plan_membership_ownership_validation(
     db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that ReadingPlanMembership issues must belong to plan user."""
-    
     # Create another user with their own thread and issue
     other_user = User(username="otheruser", email="other@example.com")
     db.add(other_user)
@@ -263,7 +259,6 @@ async def test_tag_assignment_ownership_validation(
     db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that TagAssignment targets must belong to their respective users."""
-    
     # Create another user with their own thread
     other_user = User(username="otheruser", email="other@example.com")
     db.add(other_user)
@@ -317,7 +312,7 @@ async def test_tag_assignment_ownership_validation(
     assert assignment1 is not None
     
     # Test 2: Invalid assignment - private tag to other user's thread should fail
-    with pytest.raises(Exception):  # Should raise ForbiddenError or similar
+    with pytest.raises(InvalidRequestError):
         await tag_service.assign_tag(
             user=user,
             tag_id=private_tag.id,
@@ -341,7 +336,6 @@ async def test_thread_next_unread_cross_thread_validation(
     db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that next_unread_issue_id cannot belong to different thread of same user."""
-    
     # Create another thread for the same user
     other_thread = Thread(
         title="Other Thread",
@@ -380,7 +374,6 @@ async def test_preflight_invalid_rows_detection(
     db: SQLAlchemyAsyncSession, user: User, thread: Thread, issue: Issue
 ):
     """Test that preflight can detect existing invalid rows without private payloads."""
-    
     # Manually create an invalid state that violates constraints
     # This simulates data that might exist from a bug or migration issue
     

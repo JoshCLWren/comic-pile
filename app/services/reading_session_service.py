@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import OperationalError
 
 from app.database import get_db
-from app.models import ReadingSession, Thread, Issue
+from app.models import ReadingSession
 from app.repositories import reading_session_repository, thread_repository, issue_repository
 from app.services.ownership import get_owned_session_or_404
 from app.services.thread_issue_stats import load_unread_counts

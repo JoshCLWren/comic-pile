@@ -1,7 +1,7 @@
 """Add ownership consistency constraints for reader isolation.
 
 Revision ID: 3225_ownership_consistency
-Revises: 05f8245be922
+Revises: c34990000001
 Create Date: 2026-10-13 00:00:00.000000
 
 Implements issue #3225: enforce reader ownership consistency at graph and
@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "3225_ownership_consistency"
-down_revision: str | Sequence[str] | None = "05f8245be922"
+down_revision: str | Sequence[str] | None = "c34990000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
