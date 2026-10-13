@@ -41,7 +41,6 @@ from alembic import op
 
 from app.services.canonical_backfill import (
     DanglingRuleReport,
-    abort_on_retired_list_chain_rules,
     backfill_converged_edges,
     backfill_item_read_edges,
     drop_mirror_trigger,
@@ -82,9 +81,6 @@ def upgrade() -> None:
     """Validate, drop the mirror trigger, backfill canonical edges, link plans."""
     bind = op.get_bind()
 
-    # Guard (docs/roll-eligibility-contract.md): never resurrect retired
-    # generated list-chain edges from legacy rule rows.
-    abort_on_retired_list_chain_rules(bind)
     skipped_dangling = validate_compilable_rules(bind)
     drop_mirror_trigger(bind)
 

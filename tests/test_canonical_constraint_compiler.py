@@ -459,11 +459,16 @@ async def test_plan_create_links_canonical_edges_for_provenance(
 
 
 @pytest.mark.asyncio
-async def test_plan_resave_refreshes_compiled_edge_notes_to_new_rule_ids(
+async def test_unchanged_strict_resave_preserves_rule_identities(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Re-saving an unchanged strict plan retargets Dependency.note at the new rule id."""
+    """Re-saving an unchanged strict plan preserves rule identities (zero churn).
+
+    Contract: "Saving an unchanged plan changes nothing: issue identity,
+    membership, hard Dependencies and Roll eligibility all stay the same."
+    Rule IDs and Dependency notes must not churn on a no-op save.
+    """
     user = await get_or_create_user_async(async_db)
     _source_thread, source_issue = await _thread_issue(
         async_db, user_id=user.id, title="Resave Source", queue_position=1
@@ -488,7 +493,7 @@ async def test_plan_resave_refreshes_compiled_edge_notes_to_new_rule_ids(
     assert updated.status_code == 200, updated.text
     second_note = await _edge_note(async_db, source_issue.id, target_issue.id)
     assert second_note is not None and second_note.startswith("canonical:rule:")
-    assert second_note != first_note
+    assert second_note == first_note
 
 
 @pytest.mark.asyncio
