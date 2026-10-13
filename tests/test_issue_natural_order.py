@@ -73,3 +73,11 @@ def test_new_number_beyond_maximum_stays_before_trailing_special() -> None:
         ["1", "2", "5", "7", "8", "Annual 1", "9", "10", "Special 0"],
         ["11"],
     ) == ["1", "2", "5", "7", "8", "Annual 1", "9", "10", "11", "Special 0"]
+
+
+def test_new_number_below_first_numeric_with_leading_special() -> None:
+    """A new number below the first numeric issue inserts after a leading special."""
+    assert natural_issue_order(
+        ["Special 0", "7", "9", "Annual 1"],
+        ["5"],
+    ) == ["Special 0", "5", "7", "9", "Annual 1"]
