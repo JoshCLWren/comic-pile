@@ -11,8 +11,10 @@ from contextlib import contextmanager
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy import delete, event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+
+from app.models import User
 
 
 @contextmanager
@@ -151,3 +153,48 @@ async def test_refresh_returns_new_tokens(
     assert new_tokens["token_type"] == "bearer"
     assert new_tokens["access_token"] != old_tokens["access_token"]
     assert new_tokens["refresh_token"] != old_tokens["refresh_token"]
+
+
+@pytest.mark.asyncio
+async def test_refresh_deleted_user_rejected_in_one_query(
+    client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """A refresh token whose user is gone is rejected by the same single query.
+
+    The combined lookup resolves the user first, so a token naming a deleted
+    user reports ``User not found`` even when its JTI is also revoked, and the
+    rejection still costs exactly one SELECT.
+    """
+    user_data = {
+        "username": "deletedrefreshuser",
+        "email": "deletedrefreshuser@example.com",
+        "password": "password123",
+    }
+    response = await client.post("/api/v1/auth/register", json=user_data)
+    assert response.status_code == 200
+
+    login_data = {"username": "deletedrefreshuser", "password": "password123"}
+    response = await client.post("/api/v1/auth/login", json=login_data)
+    assert response.status_code == 200
+    tokens = response.json()
+
+    revoke_response = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {tokens['refresh_token']}"},
+    )
+    assert revoke_response.status_code == 200
+
+    await async_db.execute(delete(User).where(User.username == "deletedrefreshuser"))
+    await async_db.flush()
+
+    with _captured_selects(db_engine) as select_statements:
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": tokens["refresh_token"]},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "User not found"
+    assert len(select_statements) == 1, f"Expected 1 SELECT, got: {select_statements}"

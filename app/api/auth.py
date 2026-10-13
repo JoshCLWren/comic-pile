@@ -308,15 +308,8 @@ async def refresh_access_token(
             detail="Invalid refresh token",
         )
 
-    # Optimized: Use single query to get user and check revocation status
     try:
         user, is_revoked = await get_user_by_username_with_revocation_check(db, username, jti)
-        if is_revoked:
-            _log_refresh_outcome(request, outcome="rejected", reason="revoked_token")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token has been revoked",
-            )
     except ValueError as e:
         _log_refresh_outcome(request, outcome="rejected", reason="invalid_token")
         raise HTTPException(
@@ -324,7 +317,13 @@ async def refresh_access_token(
             detail="User not found",
         ) from e
 
-    # Check password change time
+    if is_revoked:
+        _log_refresh_outcome(request, outcome="rejected", reason="revoked_token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+        )
+
     payload_pc = payload.get("pc")
     user_pc = int(user.password_changed_at.timestamp()) if user.password_changed_at else 0
     token_pc = int(payload_pc) if payload_pc is not None else 0
@@ -338,12 +337,9 @@ async def refresh_access_token(
     new_jti = secrets.token_urlsafe(32)
     pc = user_pc
     ensure_csrf_cookie(request, response)
-
     access_token = create_access_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
     refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
-
     _set_refresh_cookie(response, request, refresh_token)
-
     _log_refresh_outcome(request, outcome="success", reason="refreshed")
 
     return TokenResponse(
