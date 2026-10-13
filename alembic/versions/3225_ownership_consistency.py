@@ -37,7 +37,7 @@ def upgrade() -> None:
         "fk_thread_next_unread_issue_same_thread",
         "threads",
         "issues",
-        ["next_unread_issue_id", "thread_id"],
+        ["next_unread_issue_id", "id"],
         ["id", "thread_id"],
         ondelete="SET NULL",
     )
