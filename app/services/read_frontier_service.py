@@ -36,7 +36,8 @@ async def derive_read_frontiers(
 
     Reads scalar storage values in one query with autoflush disabled. Does not
     consult cached counters, blocking flags or pointers to choose a candidate,
-    and does not change Thread status, progress, Issue state or Roll. Missing
+    and does not change Thread status, progress, Issue state or Roll. Only
+    ``read`` is complete; other states remain unread, as in prerequisites. Missing
     threads are absent; empty and fully read threads have no candidate.
 
     Args:
@@ -63,7 +64,7 @@ async def derive_read_frontiers(
     frontiers: dict[int, ThreadReadFrontier] = {}
     for thread_id in sorted(grouped):
         issues = sorted(grouped[thread_id], key=lambda issue: (issue[1], issue[0]))
-        unread = [issue_id for issue_id, _, status in issues if status == "unread"]
+        unread = [issue_id for issue_id, _, status in issues if status != "read"]
         pointer = pointers[thread_id]
         frontiers[thread_id] = ThreadReadFrontier(
             thread_id=thread_id,
