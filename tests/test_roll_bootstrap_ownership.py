@@ -97,7 +97,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         timezone=None,
     )
     current_user = SimpleNamespace(id=7)
-    owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
+    owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing", last_activity_at=None)
 
     monkeypatch.setattr(
         roll_api,
