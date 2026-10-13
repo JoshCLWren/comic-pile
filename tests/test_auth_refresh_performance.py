@@ -108,13 +108,19 @@ async def test_refresh_revoked_token_rejected(
     )
     assert refresh_response.status_code == 200
 
-    # The original refresh token should still be valid because it was
-    # not revoked (only the access token was revoked in the original test,
-    # but they have different JTIs)
-    assert refresh_response.status_code == 200
-    new_tokens = refresh_response.json()
-    assert new_tokens["access_token"] != tokens["access_token"]
-    assert new_tokens["refresh_token"] != tokens["refresh_token"]
+    # Revoke the refresh token explicitly via logout (send refresh token as Bearer)
+    revoke_response = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {tokens['refresh_token']}"},
+    )
+    assert revoke_response.status_code == 200
+
+    # After revocation, refresh must be rejected
+    refresh_after_revoke = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert refresh_after_revoke.status_code == 401
 
 
 @pytest.mark.asyncio
