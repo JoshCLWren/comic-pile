@@ -52,6 +52,7 @@ class CustomCBLEntryView:
     issue_number: str
     status: str
     is_checkpoint: bool
+    checkpoint_target_issue_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,9 +72,7 @@ class CustomCBLExportResult:
     filename: str
 
 
-async def get_owned_custom_cbl(
-    db: AsyncSession, *, user_id: int, list_id: int
-) -> CustomCBLList:
+async def get_owned_custom_cbl(db: AsyncSession, *, user_id: int, list_id: int) -> CustomCBLList:
     """Load one custom CBL without leaking another user's list identifiers."""
     row = (
         await db.execute(
@@ -88,9 +87,7 @@ async def get_owned_custom_cbl(
     return row
 
 
-async def list_custom_cbls(
-    db: AsyncSession, *, user_id: int
-) -> list[tuple[CustomCBLList, int]]:
+async def list_custom_cbls(db: AsyncSession, *, user_id: int) -> list[tuple[CustomCBLList, int]]:
     """Return owned custom CBLs newest-first with issue counts."""
     result = await db.execute(
         select(CustomCBLList, func.count(CustomCBLEntry.id))
@@ -102,9 +99,7 @@ async def list_custom_cbls(
     return [(row[0], int(row[1])) for row in result.all()]
 
 
-async def load_custom_cbl_entries(
-    db: AsyncSession, *, list_id: int
-) -> list[CustomCBLEntryView]:
+async def load_custom_cbl_entries(db: AsyncSession, *, list_id: int) -> list[CustomCBLEntryView]:
     """Resolve ordered custom CBL entries to their canonical issue/thread labels."""
     result = await db.execute(
         select(CustomCBLEntry, Issue, Thread)
@@ -123,6 +118,7 @@ async def load_custom_cbl_entries(
             issue_number=issue.issue_number,
             status=issue.status,
             is_checkpoint=entry.is_checkpoint,
+            checkpoint_target_issue_ids=tuple(entry.checkpoint_target_issue_ids or []),
         )
         for entry, issue, thread in result.all()
     ]
@@ -135,9 +131,40 @@ async def replace_custom_cbl_entries(
     list_row: CustomCBLList,
     issue_ids: Sequence[int],
     checkpoint_issue_ids: Sequence[int] | None = None,
+    checkpoint_targets: dict[int, list[int]] | None = None,
 ) -> None:
     """Replace membership after proving every referenced issue belongs to the user."""
     checkpoint_set = set(checkpoint_issue_ids or ())
+    targets = checkpoint_targets
+    if targets is None:
+        previous = await load_custom_cbl_entries(db, list_id=list_row.id)
+        targets = {}
+        for index, entry in enumerate(previous):
+            if entry.checkpoint_target_issue_ids:
+                targets[entry.issue_id] = list(entry.checkpoint_target_issue_ids)
+            elif entry.is_checkpoint:
+                targets[entry.issue_id] = (
+                    [previous[index + 1].issue_id] if index + 1 < len(previous) else []
+                )
+        # Removed targets drop their checkpoint, never redirect to a new neighbor.
+        targets = {
+            source: [target for target in values if target in issue_ids]
+            for source, values in targets.items()
+            if source in issue_ids and (checkpoint_issue_ids is None or source in checkpoint_set)
+        }
+    for position, source in enumerate(issue_ids):
+        if checkpoint_targets is None and source in checkpoint_set and source not in targets:
+            targets[source] = [issue_ids[position + 1]] if position + 1 < len(issue_ids) else []
+    if any(
+        source not in issue_ids
+        or source in values
+        or len(values) != len(set(values))
+        or any(target not in issue_ids for target in values)
+        for source, values in targets.items()
+    ):
+        raise HTTPException(
+            status_code=422, detail={"code": "custom_cbl_invalid_checkpoint_targets"}
+        )
     if issue_ids:
         result = await db.execute(
             select(Issue.id)
@@ -159,7 +186,8 @@ async def replace_custom_cbl_entries(
                 list_id=list_row.id,
                 issue_id=issue_id,
                 position=position,
-                is_checkpoint=issue_id in checkpoint_set,
+                is_checkpoint=bool(targets.get(issue_id)),
+                checkpoint_target_issue_ids=targets.get(issue_id, []),
             )
         )
     await db.flush()
@@ -344,11 +372,18 @@ def _merge_custom_cbl_into_lane(
                 position=0,
                 label=f"{entry.series_name} #{entry.issue_number}",
                 is_checkpoint=entry.is_checkpoint,
+                checkpoint_target_ref_ids=list(entry.checkpoint_target_issue_ids),
                 convergence_gate=[],
             )
             added.append(entry.issue_id)
         else:
-            node = existing.model_copy(update={"is_checkpoint": entry.is_checkpoint})
+            node = existing.model_copy(
+                update={
+                    "is_checkpoint": entry.is_checkpoint,
+                    "checkpoint_target_ref_id": None,
+                    "checkpoint_target_ref_ids": list(entry.checkpoint_target_issue_ids),
+                }
+            )
             reused.append(entry.issue_id)
         ordered_source_nodes.append(
             _with_source_provenance(
@@ -436,7 +471,7 @@ async def apply_custom_cbl_to_plan(
         user_id=user_id,
         plan=plan,
         nodes=merged_nodes,
-        ordering_mode=cast(PlanOrderingMode, plan.ordering_mode)
+        ordering_mode=cast(PlanOrderingMode, plan.ordering_mode),
     )
     await db.flush()
 
@@ -458,6 +493,7 @@ def _entry_response(entry: CustomCBLEntryView) -> CustomCBLEntryResponse:
         issue_number=entry.issue_number,
         status=entry.status,
         is_checkpoint=entry.is_checkpoint,
+        checkpoint_target_issue_ids=list(entry.checkpoint_target_issue_ids),
     )
 
 
@@ -476,9 +512,7 @@ async def _full_response(db: AsyncSession, row: CustomCBLList) -> CustomCBLRespo
     )
 
 
-async def list_custom_cbl_responses(
-    db: AsyncSession, *, user_id: int
-) -> list[CustomCBLListItem]:
+async def list_custom_cbl_responses(db: AsyncSession, *, user_id: int) -> list[CustomCBLListItem]:
     """List one user's custom CBLs as public picker rows."""
     rows = await list_custom_cbls(db, user_id=user_id)
     return [
@@ -522,6 +556,7 @@ async def create_custom_cbl_for_user(
     description: str | None,
     issue_ids: Sequence[int],
     checkpoint_issue_ids: Sequence[int] | None = None,
+    checkpoint_targets: dict[int, list[int]] | None = None,
 ) -> CustomCBLResponse:
     """Create one custom CBL, persist exact membership, and return its full representation."""
     try:
@@ -538,6 +573,7 @@ async def create_custom_cbl_for_user(
             list_row=row,
             issue_ids=issue_ids,
             checkpoint_issue_ids=checkpoint_issue_ids,
+            checkpoint_targets=checkpoint_targets,
         )
         await db.commit()
     except Exception:
@@ -564,6 +600,7 @@ async def update_custom_cbl_for_user(
     description: str | None,
     issue_ids: Sequence[int],
     checkpoint_issue_ids: Sequence[int] | None = None,
+    checkpoint_targets: dict[int, list[int]] | None = None,
 ) -> CustomCBLResponse:
     """Replace one owned custom CBL's metadata and ordered membership atomically."""
     try:
@@ -577,6 +614,7 @@ async def update_custom_cbl_for_user(
             list_row=row,
             issue_ids=issue_ids,
             checkpoint_issue_ids=checkpoint_issue_ids,
+            checkpoint_targets=checkpoint_targets,
         )
         await db.commit()
     except Exception:
@@ -586,9 +624,7 @@ async def update_custom_cbl_for_user(
     return await _full_response(db, row)
 
 
-async def delete_custom_cbl_for_user(
-    db: AsyncSession, *, user_id: int, list_id: int
-) -> None:
+async def delete_custom_cbl_for_user(db: AsyncSession, *, user_id: int, list_id: int) -> None:
     """Delete one owned custom CBL without touching its canonical issues or Reading Plans."""
     try:
         row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)

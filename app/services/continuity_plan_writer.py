@@ -334,6 +334,35 @@ def _nodes_by_lane(
     return grouped
 
 
+def preserve_checkpoint_targets(
+    current: Sequence[ContinuityPlanNode],
+    incoming: Sequence[ContinuityPlanNode],
+) -> list[ContinuityPlanNode]:
+    """Keep durable targets when an older enabled-checkpoint payload omits them.
+
+    Explicit target fields remain authoritative. Disabling a checkpoint clears
+    its semantics rather than restoring stored targets.
+    """
+    by_issue = {(node.node_type, node.ref_id): node for node in current}
+    result: list[ContinuityPlanNode] = []
+    target_fields = {"checkpoint_target_ref_id", "checkpoint_target_ref_ids"}
+    for node in incoming:
+        old = by_issue.get((node.node_type, node.ref_id))
+        if (
+            old is not None
+            and node.is_checkpoint
+            and not target_fields.intersection(node.model_fields_set)
+        ):
+            node = node.model_copy(
+                update={
+                    "checkpoint_target_ref_id": old.checkpoint_target_ref_id,
+                    "checkpoint_target_ref_ids": list(old.checkpoint_target_ref_ids),
+                }
+            )
+        result.append(node)
+    return result
+
+
 def _checkpoint_edges_from_nodes(
     nodes: Sequence[ContinuityPlanNode],
 ) -> list[tuple[str, int, str, int, str, int | None]]:
@@ -348,26 +377,30 @@ def _checkpoint_edges_from_nodes(
     consecutive list positions without ``is_checkpoint`` never appear here.
     """
     nodes_by_lane = _nodes_by_lane(nodes)
-    by_issue_ref = {
-        node.ref_id: node for node in nodes if node.node_type == "issue"
-    }
+    by_issue_ref = {node.ref_id: node for node in nodes if node.node_type == "issue"}
     edges: list[tuple[str, int, str, int, str, int | None]] = []
     for node in nodes:
         if not node.is_checkpoint:
             continue
+        explicit_targets = set(node.checkpoint_target_ref_ids)
         if node.checkpoint_target_ref_id is not None:
-            target_node = by_issue_ref.get(node.checkpoint_target_ref_id)
-            if target_node is None or target_node.ref_id == node.ref_id:
-                continue
-            checkpoint_issue_id = node.ref_id if node.node_type == "issue" else None
-            edges.append((
-                node.node_type,
-                node.ref_id,
-                target_node.node_type,
-                target_node.ref_id,
-                "checkpoint",
-                checkpoint_issue_id,
-            ))
+            explicit_targets.add(node.checkpoint_target_ref_id)
+        if explicit_targets:
+            for target_id in sorted(explicit_targets):
+                target_node = by_issue_ref.get(target_id)
+                if target_node is None or target_node.ref_id == node.ref_id:
+                    continue
+                checkpoint_issue_id = node.ref_id if node.node_type == "issue" else None
+                edges.append(
+                    (
+                        node.node_type,
+                        node.ref_id,
+                        target_node.node_type,
+                        target_node.ref_id,
+                        "checkpoint",
+                        checkpoint_issue_id,
+                    )
+                )
             continue
         lane_nodes = nodes_by_lane.get(node.lane_id, [])
         node_index = next(
@@ -380,14 +413,16 @@ def _checkpoint_edges_from_nodes(
         if next_node.node_type == node.node_type and next_node.ref_id == node.ref_id:
             continue
         checkpoint_issue_id = node.ref_id if node.node_type == "issue" else None
-        edges.append((
-            node.node_type,
-            node.ref_id,
-            next_node.node_type,
-            next_node.ref_id,
-            "checkpoint",
-            checkpoint_issue_id,
-        ))
+        edges.append(
+            (
+                node.node_type,
+                node.ref_id,
+                next_node.node_type,
+                next_node.ref_id,
+                "checkpoint",
+                checkpoint_issue_id,
+            )
+        )
     return edges
 
 
@@ -401,12 +436,7 @@ def _edge_identity(
 ) -> tuple[object, ...]:
     """Return a hashable identity for one compiled plan-owned edge."""
     if satisfaction_type == "converged" and isinstance(extra, list):
-        targets = tuple(
-            sorted(
-                (str(target["type"]), int(target["id"]))
-                for target in extra
-            )
-        )
+        targets = tuple(sorted((str(target["type"]), int(target["id"])) for target in extra))
         return (
             source_type,
             source_id,
@@ -537,9 +567,7 @@ async def replace_compiled_rules(
 
     # Collect all edges to compile (for cycle detection / no-op compare)
     convergence_target = dict[str, int | str]
-    edges_to_add: list[
-        tuple[str, int, str, int, str, int | list[convergence_target] | None]
-    ] = []
+    edges_to_add: list[tuple[str, int, str, int, str, int | list[convergence_target] | None]] = []
 
     # 1. Strict-sequential item_read: retain existing in-plan pairs whose
     # both endpoints remain. Never infer thread-entry or list adjacency.
@@ -551,9 +579,7 @@ async def replace_compiled_rules(
     )
     if ordering_mode == "strict_sequential":
         compiled_item_read: set[tuple[int, int]] = {
-            pair
-            for pair in prior_item_read
-            if pair[0] in incoming_ids and pair[1] in incoming_ids
+            pair for pair in prior_item_read if pair[0] in incoming_ids and pair[1] in incoming_ids
         }
         if extra_item_read_pairs and not unchanged_strict_save:
             issue_index: dict[int, IssueThreadIndex] = await load_issue_thread_index(
@@ -573,11 +599,16 @@ async def replace_compiled_rules(
                     continue
                 compiled_item_read.add(pair)
         for source_id, target_id in compiled_item_read:
-            edges_to_add.append((
-                "issue", source_id,
-                "issue", target_id,
-                "item_read", None,
-            ))
+            edges_to_add.append(
+                (
+                    "issue",
+                    source_id,
+                    "issue",
+                    target_id,
+                    "item_read",
+                    None,
+                )
+            )
 
     # 2. Checkpoint rules: only explicit is_checkpoint nodes (custom CBL or
     # planner). Never treat ordinary consecutive list positions as checkpoints.
@@ -607,17 +638,24 @@ async def replace_compiled_rules(
                 # series predecessor first" is Issue.position geometry, not a
                 # hard Dependency (docs/roll-eligibility-contract.md).
                 continue
-            gate_targets.append({
-                "type": resolved.node_type,
-                "id": resolved.ref_id,
-            })
+            gate_targets.append(
+                {
+                    "type": resolved.node_type,
+                    "id": resolved.ref_id,
+                }
+            )
         if not gate_targets:
             continue
-        edges_to_add.append((
-            node.node_type, node.ref_id,
-            node.node_type, node.ref_id,
-            "converged", gate_targets,
-        ))
+        edges_to_add.append(
+            (
+                node.node_type,
+                node.ref_id,
+                node.node_type,
+                node.ref_id,
+                "converged",
+                gate_targets,
+            )
+        )
 
     desired_identities = {
         _edge_identity(
@@ -687,9 +725,7 @@ async def replace_compiled_rules(
         if sync_canonical_edges:
             # The new rule set is empty: retire all previously compiled
             # pairs so orphaned edges don't keep blocking Roll (#2553).
-            await retire_rule_edges(
-                db, user_id=user_id, pairs=list(old_pairs), exclude_rule_id=-1
-            )
+            await retire_rule_edges(db, user_id=user_id, pairs=list(old_pairs), exclude_rule_id=-1)
         return True
 
     # Check for plan-level cycles using in-memory graph
@@ -711,11 +747,7 @@ async def replace_compiled_rules(
                     graph_edges.append((target_key, source_key))
             continue
         target_key = (target_type, target_id)
-        if (
-            source_key in all_plan_keys
-            and target_key in all_plan_keys
-            and source_key != target_key
-        ):
+        if source_key in all_plan_keys and target_key in all_plan_keys and source_key != target_key:
             graph_edges.append((source_key, target_key))
 
     cycle_nodes = _detect_plan_cycles(sorted(all_plan_keys), graph_edges)
@@ -734,9 +766,12 @@ async def replace_compiled_rules(
     created_rules: list[ContinuityRule] = []
     new_pairs: set[tuple[int, int]] = set()
     for (
-        source_type, source_id,
-        target_type, target_id,
-        satisfaction_type, extra,
+        source_type,
+        source_id,
+        target_type,
+        target_id,
+        satisfaction_type,
+        extra,
     ) in edges_to_add:
         source_type_cast = cast(ContinuityNodeType, source_type)
         target_type_cast = cast(ContinuityNodeType, target_type)
@@ -884,9 +919,7 @@ async def list_continuity_plan_items(
     ]
 
 
-async def retire_plan_edges_for_deletion(
-    db: AsyncSession, *, user_id: int, plan_id: int
-) -> None:
+async def retire_plan_edges_for_deletion(db: AsyncSession, *, user_id: int, plan_id: int) -> None:
     """Retire canonical edges compiled by one plan before its rules are deleted.
 
     After the Roll cutover (#2553) those Dependency rows are the only Roll
@@ -950,9 +983,7 @@ async def retire_plan_edges_for_deletion(
                 )
                 .where(
                     ReadingPlanDependency.plan_id != plan_id,
-                    tuple_(Dependency.source_issue_id, Dependency.target_issue_id).in_(
-                        list(pairs)
-                    ),
+                    tuple_(Dependency.source_issue_id, Dependency.target_issue_id).in_(list(pairs)),
                 )
             )
         ).all()

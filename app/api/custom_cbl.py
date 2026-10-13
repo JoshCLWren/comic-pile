@@ -71,6 +71,7 @@ async def create_custom_cbl(
         description=payload.description,
         issue_ids=payload.issue_ids,
         checkpoint_issue_ids=payload.checkpoint_issue_ids,
+        checkpoint_targets=payload.checkpoint_targets,
     )
 
 
@@ -104,6 +105,7 @@ async def update_custom_cbl(
         description=payload.description,
         issue_ids=payload.issue_ids,
         checkpoint_issue_ids=payload.checkpoint_issue_ids,
+        checkpoint_targets=payload.checkpoint_targets,
     )
 
 

@@ -482,6 +482,7 @@ def editor_node_identity_key(node: ContinuityPlanNode) -> tuple[object, ...]:
         node.position,
         node.is_checkpoint,
         node.checkpoint_target_ref_id,
+        tuple(sorted(node.checkpoint_target_ref_ids)),
         gates,
     )
 
