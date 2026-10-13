@@ -743,6 +743,7 @@ def test_unused_free_converts_surplus_big_pickle_instead_of_growing(tmp_path: Pa
         _row("42", "opencode-free", "nemotron-3-ultra-free", minute="15"),
         _row("45", "opencode-free", "nemotron-3.5-lightning-free", minute="20"),
         _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
+        _row("48", "opencode-free", "cat-jam-free", minute="20"),
         _row("49", "opencode-free", "space-bunny-free", minute="40"),
         _row("58", "opencode-free", "big-pickle", minute="30"),
         _row("59", "opencode-free", "big-pickle", minute="35"),
@@ -867,6 +868,7 @@ def test_mixed_retire_and_add_rebalances_in_one_plan(tmp_path: Path) -> None:
         _row("75", "opencode-free", "ling-3.1-flash-free", minute="10"),
         _row("76", "opencode-free", "fledge-alpha-free", minute="45"),
         _row("80", "opencode-free", "absent-free-model", minute="20"),
+        _row("209", "opencode-free", "cat-jam-free", minute="25"),
         _row("201", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
         _row("202", "opencode-free", "nemotron-3-ultra-free", minute="30"),
         _row("203", "opencode-free", "nemotron-3.5-lightning-free", minute="35"),
@@ -943,6 +945,7 @@ def test_apply_does_not_grow_first_big_pickle_when_absent(tmp_path: Path) -> Non
         _row("45", "opencode-free", "nemotron-3.5-lightning-free", minute="15"),
         _row("46", "kilo-auto", "kilo-auto/free", minute="20"),
         _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
+        _row("48", "opencode-free", "cat-jam-free", minute="45"),
         _row("49", "opencode-free", "space-bunny-free", minute="40"),
         _row("58", "opencode-free", "muse-spark-1.3-contributor-free", minute="30"),
         _row("59", "opencode-free", "ling-3.0-flash-fin-free", minute="35"),
@@ -988,8 +991,8 @@ def _balanced_grow_roster() -> list[dict[str, str]]:
 
     All keep-present free OpenCode models except ``ling-3.0-flash-fin-free``
     are already pinned (including ``space-bunny-free``,
-    ``longcat-2.5-preview-free``, ``ling-3.1-flash-free``, and
-    ``fledge-alpha-free``), so apply
+    ``longcat-2.5-preview-free``, ``ling-3.1-flash-free``,
+    ``fledge-alpha-free``, and ``cat-jam-free``), so apply
     must grow a new worker rather
     than convert. The rows cover every dispatcher minute so the validator
     loop applies.
@@ -1003,6 +1006,7 @@ def _balanced_grow_roster() -> list[dict[str, str]]:
         _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
         _row("48", "opencode-free", "muse-spark-1.3-contributor-free", minute="30"),
         _row("49", "opencode-free", "space-bunny-free", minute="35"),
+        _row("50", "opencode-free", "cat-jam-free", minute="40"),
         _row("74", "opencode-free", "longcat-2.5-preview-free", minute="0"),
         _row("75", "opencode-free", "ling-3.1-flash-free", minute="5"),
         _row("76", "opencode-free", "fledge-alpha-free", minute="10"),
@@ -1019,7 +1023,11 @@ def _balanced_grow_roster() -> list[dict[str, str]]:
 
 
 def _balanced_mimo_upgrade_roster() -> list[dict[str, str]]:
-    """Return a ±1 roster whose only catalog change is mimo-v2.5 → v2.6."""
+    """Return a ±1 roster whose only catalog change is mimo-v2.5 → v2.6.
+
+    ``cat-jam-free`` is pinned so the recorded catalog's newest free model
+    does not become a second hole next to the mimo upgrade.
+    """
     return [
         _row("39", "opencode-free", "big-pickle", minute="0"),
         _row("41", "opencode-free", "mimo-v2.5-free", minute="15"),
@@ -1030,6 +1038,7 @@ def _balanced_mimo_upgrade_roster() -> list[dict[str, str]]:
         _row("48", "opencode-free", "muse-spark-1.3-contributor-free", minute="35"),
         _row("49", "opencode-free", "ling-3.0-flash-fin-free", minute="40"),
         _row("50", "opencode-free", "space-bunny-free", minute="45"),
+        _row("51", "opencode-free", "cat-jam-free", minute="20"),
         _row("74", "opencode-free", "longcat-2.5-preview-free", minute="0"),
         _row("75", "opencode-free", "ling-3.1-flash-free", minute="10"),
         _row("76", "opencode-free", "fledge-alpha-free", minute="15"),
@@ -1441,33 +1450,19 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "ling-3.0-flash-fin-free" not in {row["model"] for row in remaining}
     assert by_worker["83"] == {
         "worker": "83",
-        "source": "nvidia",
-        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "source": "opencode-free",
+        "model": "cat-jam-free",
         "minute": "45",
         "scheduler": "dispatcher",
-        "display_name": "NVIDIA Nemotron 3 Super",
+        "display_name": "OpenCode Cat Jam Free",
     }
-    assert by_worker["84"] == {
-        "worker": "84",
-        "source": "nvidia",
-        "model": "nvidia/nemotron-3-ultra-550b-a55b",
-        "minute": "0",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA Nemotron 3 Ultra",
-    }
-    assert by_worker["85"] == {
-        "worker": "85",
-        "source": "nvidia",
-        "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "minute": "45",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA Nemotron 3.5 Lightning",
-    }
+    assert "84" not in by_worker
+    assert "85" not in by_worker
     assert by_worker["86"] == {
         "worker": "86",
         "source": "nvidia",
         "model": "meta/muse-glimmer-30b",
-        "minute": "15",
+        "minute": "0",
         "scheduler": "dispatcher",
         "display_name": "NVIDIA Muse Glimmer 30B",
     }
@@ -1520,9 +1515,8 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     assert by_worker["51"]["model"] not in lock["retired_models"]
     assert by_worker["52"]["model"] not in lock["retired_models"]
     assert by_worker["53"]["model"] not in lock["retired_models"]
-    assert by_worker["84"]["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
-    assert by_worker["84"]["source"] == "nvidia"
-    assert "nvidia/nemotron-3-ultra-550b-a55b" not in lock["retired_models"]
+    assert "84" not in by_worker
+    assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
     assert "thinkingmachines/inkling" in lock["retired_models"]
     assert ROSTER.openrouter_model_is_free(by_worker["51"]["model"])
     assert ROSTER.openrouter_model_is_free(by_worker["52"]["model"])
