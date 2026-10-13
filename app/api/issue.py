@@ -25,7 +25,7 @@ from app.schemas import (
 from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.schemas.reader_context import ReaderContextResponse
 from app.services import issue as issue_service
-from app.services.comicvine_intelligence import get_issue_intelligence
+from app.services.comicvine_intelligence_optimized import get_issue_intelligence_optimized as get_issue_intelligence
 from app.services.reader_context import get_reader_context
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from comic_pile.dependencies import validate_position_dependency_consistency
