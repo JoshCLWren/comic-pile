@@ -547,3 +547,32 @@ it('shows direct and inherited tag chips on issue rows without opening an editor
   expect(mockedThreadIssuesTags).toHaveBeenCalledWith(1)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
+
+it('offers per-issue tag editing directly without enabling Select mode (#3424)', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 1, queue_position: 1,
+    status: 'active', total_issues: 2, next_unread_issue_number: '2', notes: null,
+  } as never)
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 1, page_size: 100,
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+
+  // The regression: the per-issue tag button used to render only after
+  // enabling bulk Select mode, leaving no tag access on plain issue rows.
+  const tagButton = screen.getByRole('button', { name: 'Edit tags for issue #1' })
+  expect(tagButton).toBeInTheDocument()
+
+  await user.click(tagButton)
+  await waitFor(() =>
+    expect(screen.getByRole('heading', { name: 'Tags · #1' })).toBeInTheDocument(),
+  )
+})
