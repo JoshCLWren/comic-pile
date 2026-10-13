@@ -47,7 +47,6 @@ class ThreadSummaryRow(NamedTuple):
     thread_id: int
     title: str
     format: str
-    last_activity_at: datetime | None
 
 
 class BlockedSummaryRow(NamedTuple):
@@ -169,7 +168,7 @@ async def fetch_session_scope_summary_rows(
     if not thread_ids:
         return []
     result = await db.execute(
-        select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+        select(Thread.id, Thread.title, Thread.format)
         .where(Thread.user_id == user_id)
         .where(Thread.id.in_(thread_ids))
     )
@@ -178,7 +177,6 @@ async def fetch_session_scope_summary_rows(
             thread_id=row.id,
             title=row.title,
             format=row.format,
-            last_activity_at=row.last_activity_at,
         )
         for row in result.all()
     ]

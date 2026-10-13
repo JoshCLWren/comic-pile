@@ -97,7 +97,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         timezone=None,
     )
     current_user = SimpleNamespace(id=7)
-    owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing", last_activity_at=None)
+    owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
 
     monkeypatch.setattr(
         roll_api,
@@ -122,13 +122,11 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(rows=[owned_snoozed]),  # snoozed threads
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),               # pool
+        _Result(rows=[owned_snoozed]),  # session-scope snoozed/skipped summaries
+        _Result(rows=[]),               # blocked summaries (windowed total)
+        _Result(rows=[]),               # stale candidates
+        _Result(rows=[]),               # exclusion library (active + completed)
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -199,12 +197,10 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=pool_rows),   # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=pool_rows),  # pool
+        _Result(rows=[]),         # blocked summaries (windowed total)
+        _Result(rows=[]),         # stale candidates
+        _Result(rows=[]),         # exclusion library (active + completed)
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -508,12 +504,10 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),  # pool
+        _Result(rows=[]),  # blocked summaries (windowed total)
+        _Result(rows=[]),  # stale candidates
+        _Result(rows=[]),  # exclusion library (active + completed)
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -577,12 +571,10 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),  # pool
+        _Result(rows=[]),  # blocked summaries (windowed total)
+        _Result(rows=[]),  # stale candidates
+        _Result(rows=[]),  # exclusion library (active + completed)
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -648,12 +640,10 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),  # pool
+        _Result(rows=[]),  # blocked summaries (windowed total)
+        _Result(rows=[]),  # stale candidates
+        _Result(rows=[]),  # exclusion library (active + completed)
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -771,3 +761,145 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
     assert response.stale_thread is not None
     assert response.stale_thread.id in {10, 20, 30}
     assert response.stale_thread.title == f"Stale {response.stale_thread.id}"
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_reads_each_summary_family_in_one_round_trip(monkeypatch):
+    """Bootstrap keeps one bounded read-model query per summary family (#3375).
+
+    Regression guard for the production incident that recorded 36 sequential
+    queries and 1326 ms of DB time against the 1000 ms route budget. The
+    blocked total rides on the bounded detail query instead of a second count
+    round trip, stale candidates arrive fully loaded so no follow-up detail
+    query is needed, and one library query covers both the active and the
+    completed status.
+    """
+    current_session = _mode_session(
+        id=55,
+        snoozed_thread_ids=[101],
+        skipped_thread_ids=[102],
+        timezone=None,
+    )
+    current_user = SimpleNamespace(id=7)
+
+    monkeypatch.setattr(
+        roll_api,
+        "get_or_create",
+        AsyncMock(return_value=current_session),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_current_die_for_session",
+        AsyncMock(return_value=6),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_blocking_explanations_batch",
+        AsyncMock(return_value={}),
+    )
+
+    blocked_row = SimpleNamespace(
+        id=2,
+        title="Blocked",
+        format="ongoing",
+        last_activity_at=None,
+        blocked_total=57,
+    )
+    stale_row = SimpleNamespace(
+        id=3,
+        title="Stale",
+        format="ongoing",
+        last_activity_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(  # pool
+            rows=[
+                SimpleNamespace(
+                    id=1,
+                    title="Pool",
+                    format="ongoing",
+                    issue_id=None,
+                    issue_number=None,
+                    route_labels=[],
+                )
+            ]
+        ),
+        _Result(  # session-scope snoozed/skipped summaries
+            rows=[
+                SimpleNamespace(id=101, title="Snoozed", format="ongoing"),
+                SimpleNamespace(id=102, title="Skipped", format="ongoing"),
+            ]
+        ),
+        _Result(rows=[blocked_row]),  # blocked summaries (windowed total)
+        _Result(rows=[stale_row]),  # stale candidates
+        _Result(  # exclusion library (active + completed)
+            rows=[
+                SimpleNamespace(
+                    id=1,
+                    title="Pool",
+                    format="ongoing",
+                    queue_position=1,
+                    is_blocked=False,
+                    status="active",
+                ),
+                SimpleNamespace(
+                    id=2,
+                    title="Blocked",
+                    format="ongoing",
+                    queue_position=2,
+                    is_blocked=True,
+                    status="active",
+                ),
+                SimpleNamespace(
+                    id=9,
+                    title="Done",
+                    format="ongoing",
+                    queue_position=3,
+                    is_blocked=False,
+                    status="completed",
+                ),
+            ]
+        ),
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
+
+    assert db.execute.await_count == 5
+
+    blocked_sql = str(
+        db.execute.await_args_list[2].args[0].compile(compile_kwargs={"literal_binds": True})
+    )
+    assert "OVER ()" in blocked_sql
+    assert "LIMIT 20" in blocked_sql
+
+    stale_sql = str(db.execute.await_args_list[3].args[0])
+    assert "LIMIT" not in stale_sql
+
+    library_sql = str(
+        db.execute.await_args_list[4].args[0].compile(compile_kwargs={"literal_binds": True})
+    )
+    assert "'active'" in library_sql
+    assert "'completed'" in library_sql
+
+    assert [thread.id for thread in response.roll_pool] == [1]
+    assert [thread.id for thread in response.snoozed_threads] == [101]
+    assert [thread.id for thread in response.skipped_threads] == [102]
+    assert response.blocked_count == 57
+    assert [thread.id for thread in response.blocked_threads] == [2]
+    assert response.stale_thread_count == 1
+    assert response.stale_thread is not None
+    assert response.stale_thread.id == 3
+    assert response.total_threads == 3
+    assert response.available_threads == 1
