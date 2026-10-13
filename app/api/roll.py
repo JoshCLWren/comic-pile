@@ -1109,23 +1109,55 @@ async def roll_bootstrap(
         pending_thread_title=pending_thread_title,
     )
 
+    pool_selection = (
+        select(
+            Thread.id.label("thread_id"),
+            Thread.title.label("title"),
+            Thread.format.label("format"),
+            Thread.next_unread_issue_id.label("issue_id"),
+            Thread.queue_position.label("queue_position"),
+            Issue.issue_number.label("issue_number"),
+        )
+        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.is_blocked.is_(False))
+        .order_by(Thread.queue_position)
+        .limit(die_size)
+    )
+
+    snoozed_ids = list(current_session.snoozed_thread_ids or [])
+    skipped_ids = list(current_session.skipped_thread_ids or [])
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+    effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
+    if effective_snoozed_ids:
+        pool_selection = pool_selection.where(Thread.id.not_in(effective_snoozed_ids))
+    if skipped_ids:
+        pool_selection = pool_selection.where(Thread.id.not_in(skipped_ids))
+
+    # Bound the die pool before aggregating route labels so the membership joins
+    # cover the ``die_size`` returned threads only. Grouping them over the user's
+    # whole active queue first would make this query scale with queue size
+    # instead of die size, regressing large queues.
+    pool_source = pool_selection.subquery()
     pool_query = (
         select(
-            Thread.id,
-            Thread.title,
-            Thread.format,
-            Thread.next_unread_issue_id.label("issue_id"),
-            Issue.issue_number,
+            pool_source.c.thread_id.label("id"),
+            pool_source.c.title,
+            pool_source.c.format,
+            pool_source.c.issue_id,
+            pool_source.c.issue_number,
             func.array_remove(
                 func.array_agg(func.distinct(DependencyGroup.name)), None
             ).label("route_labels"),
         )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .select_from(pool_source)
         .outerjoin(
             DependencyGroupMembership,
             or_(
-                DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+                DependencyGroupMembership.thread_id == pool_source.c.thread_id,
+                DependencyGroupMembership.issue_id == pool_source.c.issue_id,
             ),
         )
         .outerjoin(
@@ -1135,23 +1167,16 @@ async def roll_bootstrap(
                 DependencyGroup.user_id == user_id,
             ),
         )
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .where(Thread.is_blocked.is_(False))
-        .order_by(Thread.queue_position)
-        .limit(die_size)
-        .group_by(Thread.id, Issue.issue_number)
+        .group_by(
+            pool_source.c.thread_id,
+            pool_source.c.title,
+            pool_source.c.format,
+            pool_source.c.issue_id,
+            pool_source.c.issue_number,
+            pool_source.c.queue_position,
+        )
+        .order_by(pool_source.c.queue_position)
     )
-
-    snoozed_ids = list(current_session.snoozed_thread_ids or [])
-    skipped_ids = list(current_session.skipped_thread_ids or [])
-    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
-    effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
-    if effective_snoozed_ids:
-        pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
-    if skipped_ids:
-        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
 
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()

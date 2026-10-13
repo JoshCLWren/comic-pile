@@ -462,6 +462,66 @@ async def test_bootstrap_pool_query_count_is_constant(
 
 
 @pytest.mark.asyncio
+async def test_bootstrap_route_label_aggregate_is_bounded_by_die_pool(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Route labels must aggregate over the die pool, not the whole queue.
+
+    Regression guard: grouping the dependency-group membership joins directly
+    onto ``threads`` puts ``GROUP BY`` before ``LIMIT``, so the aggregate walks
+    every active thread the user owns instead of the ``die_size`` threads the
+    endpoint returns. On a large queue that is an order-of-magnitude
+    regression. The pool must be bounded first, then aggregated.
+    """
+    user = await get_or_create_user_async(async_db)
+
+    for position in range(1, 61):
+        thread = Thread(
+            user_id=user.id,
+            title=f"Bounded {position}",
+            format="Comic",
+            issues_remaining=3,
+            queue_position=position,
+            status="active",
+            created_at=datetime.now(UTC),
+        )
+        async_db.add(thread)
+        await async_db.flush()
+        group = DependencyGroup(user_id=user.id, name=f"Bounded Group {position}")
+        async_db.add(group)
+        await async_db.flush()
+        async_db.add(DependencyGroupMembership(group_id=group.id, thread_id=thread.id))
+    await async_db.flush()
+
+    statements: list[str] = []
+
+    def _capture(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+    try:
+        response = await auth_client.get("/api/v1/roll/bootstrap")
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
+
+    assert response.status_code == 200
+    assert len(response.json()["roll_pool"]) < 60
+
+    label_selects = [s for s in statements if "array_agg" in s]
+    assert len(label_selects) == 1
+    pool_statement = label_selects[0]
+
+    limit_index = pool_statement.upper().find("LIMIT")
+    group_by_index = pool_statement.upper().find("GROUP BY")
+    assert limit_index != -1, pool_statement
+    assert group_by_index != -1, pool_statement
+    assert limit_index < group_by_index, pool_statement
+
+
+@pytest.mark.asyncio
 async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
     """A session with no bandwidth/intent state produces a null SessionMode."""
     current_session = SimpleNamespace(
