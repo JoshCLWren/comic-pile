@@ -141,7 +141,7 @@ async def test_cbl_adjacency_series_change_and_membership_create_no_blockers(
     still adds none — only explicit checkpoints may block Roll.
     """
     user = await get_or_create_user_async(async_db)
-    series_issues: list[Issue] = []
+    series_issues: list[list[Issue]] = []
     threads: list[Thread] = []
     for offset, title in enumerate(("Adjacency A", "Adjacency B", "Adjacency C"), start=1):
         thread, issues = await _make_series(
@@ -488,3 +488,104 @@ async def test_stale_convergence_nodes_cannot_recreate_list_chain_edges(
     _b.issues_remaining = 1
     await async_db.flush()
     assert third.id in await _roll_ids(user.id, async_db)
+
+
+@pytest.mark.asyncio
+async def test_overlapping_strict_plans_preserve_each_others_checkpoint_dependencies(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Contract: overlapping strict plans never clobber each other's hard edges.
+
+    Two strict plans share issues; each carries explicit checkpoint rules.
+    Re-saving or editing one plan must leave the other plan's rules and hard
+    Dependencies untouched, and read state on the shared issues satisfies
+    both plans' blockers at once.
+    """
+    user = await get_or_create_user_async(async_db)
+    _lead, lead_issues = await _make_series(
+        async_db, user_id=user.id, title="Overlap lead", numbers=["1", "2"], queue_position=1
+    )
+    follow, follow_issues = await _make_series(
+        async_db, user_id=user.id, title="Overlap follow", numbers=["1"], queue_position=2
+    )
+    mid, mid_issues = await _make_series(
+        async_db, user_id=user.id, title="Overlap mid", numbers=["1"], queue_position=3
+    )
+    await async_db.commit()
+
+    plan_a_issues = lead_issues + follow_issues
+    created_a = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload(
+            "Overlap A", plan_a_issues, checkpoint_ids={lead_issues[-1].id}
+        ),
+    )
+    assert created_a.status_code == 201, created_a.text
+    plan_a_id = created_a.json()["id"]
+
+    plan_b_issues = lead_issues + mid_issues
+    created_b = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload(
+            "Overlap B", plan_b_issues, checkpoint_ids={lead_issues[-1].id}
+        ),
+    )
+    assert created_b.status_code == 201, created_b.text
+    plan_b_id = created_b.json()["id"]
+
+    a_edge = (lead_issues[-1].id, follow_issues[0].id, "checkpoint", lead_issues[-1].id)
+    b_edge = (lead_issues[-1].id, mid_issues[0].id, "checkpoint", lead_issues[-1].id)
+    assert await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_a_id) == {
+        a_edge
+    }
+    assert await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_b_id) == {
+        b_edge
+    }
+    before_b_deps = await _plan_dependency_snapshot(async_db, plan_id=plan_b_id)
+    roll_ids = await _roll_ids(user.id, async_db)
+    assert follow.id not in roll_ids
+    assert mid.id not in roll_ids
+
+    # Re-saving plan A unchanged must not churn plan B's rules or edges.
+    fetched_a = await auth_client.get(f"/api/v1/continuity-plans/{plan_a_id}")
+    assert fetched_a.status_code == 200, fetched_a.text
+    saved_a = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_a_id}",
+        json=_write_payload_from_get(fetched_a.json()),
+    )
+    assert saved_a.status_code == 200, saved_a.text
+    assert await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_b_id) == {
+        b_edge
+    }
+    assert await _plan_dependency_snapshot(async_db, plan_id=plan_b_id) == before_b_deps
+
+    # Editing plan A (dropping its segue target) retires only plan A's
+    # checkpoint; plan B keeps its hard Dependencies on the shared issues.
+    edited_a = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan_a_id}",
+        json=_plan_payload(
+            "Overlap A", lead_issues, checkpoint_ids={lead_issues[-1].id}
+        ),
+    )
+    assert edited_a.status_code == 200, edited_a.text
+    assert await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_a_id) == set()
+    assert await _plan_rule_snapshot(async_db, user_id=user.id, plan_id=plan_b_id) == {
+        b_edge
+    }
+    assert await _plan_dependency_snapshot(async_db, plan_id=plan_b_id) == before_b_deps
+    roll_after_edit = await _roll_ids(user.id, async_db)
+    assert mid.id not in roll_after_edit
+
+    # Read state is shared: reading the lead issues lifts both plans' blockers.
+    now = datetime.now(UTC)
+    _lead.reading_progress = "completed"
+    _lead.issues_remaining = 0
+    _lead.next_unread_issue_id = None
+    for issue in lead_issues:
+        issue.status = "read"
+        issue.read_at = now
+    await async_db.flush()
+    roll_final = await _roll_ids(user.id, async_db)
+    assert follow.id in roll_final
+    assert mid.id in roll_final
