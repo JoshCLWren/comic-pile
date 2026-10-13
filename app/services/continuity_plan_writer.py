@@ -6,6 +6,12 @@ plan-owned rules are compiled and replaced from the same node semantics. This
 module owns that canonical path so a future CBL adoption slice can call it
 instead of inventing a second strict compiler.
 
+The authoritative policy for what may become a hard Roll prerequisite is
+``docs/roll-eligibility-contract.md`` (Josh, 2026-10-12): custom CBLs own
+intended reading order, canonical issue-to-issue Dependencies own hard Roll
+restrictions, and "strict" means enforcing the checkpoints Josh selected —
+never chaining every adjacent list entry.
+
 The compiler's hard-edge semantics (#2553 Phase B / Josh's CBL verdict):
   1. Strict plans never invent whole-list Dependency chains. Consecutive
      list positions in different series are not hard edges. Roll follows
@@ -16,9 +22,15 @@ The compiler's hard-edge semantics (#2553 Phase B / Josh's CBL verdict):
      whose both endpoints remain; it does not infer thread-entry or
      adjacent Dependencies. Complicated order is authored as a custom CBL.
   3. Checkpoint nodes (including flags copied from a custom CBL) block
-     the next node in the same lane — the only plan-authored cross-series
-     hard gate the live compiler emits.
-  4. Convergence gates compile ``converged`` self-loop rules.
+     the next node in the same lane — or, when ``checkpoint_target_ref_id``
+     is set, exactly that issue. Explicit targets are never silently
+     redirected by edits or reorders; a removed target drops the
+     checkpoint. This is the only plan-authored cross-series hard gate the
+     live compiler emits.
+  4. Convergence gates compile ``converged`` self-loop rules, except gate
+     targets that only duplicate the node's natural series predecessor —
+     stale ``nodes_json`` convergence flags cannot recreate retired
+     list-chain edges (see ``app/services/list_chain_guard.py``).
   5. Plan-level cycles and persisted-rule conflicts keep their stable codes.
   6. Informational plans add no inferred blockers.
   7. An ordinary unchanged strict save is a no-op for ContinuityRules and
@@ -57,6 +69,7 @@ from app.services.canonical_constraint_compiler import (
     retire_rule_edges,
     rule_edge_pairs,
 )
+from app.services.list_chain_guard import is_retired_list_chain_pair
 from app.services.reading_plan_normalization import (
     issue_ids_from_plan_json,
     rebuild_plan_membership,
@@ -326,13 +339,35 @@ def _checkpoint_edges_from_nodes(
 ) -> list[tuple[str, int, str, int, str, int | None]]:
     """Return checkpoint compile edges authored on plan nodes.
 
-    A checkpoint blocks only the next node in the same lane. Cross-series
+    A checkpoint with explicit ``checkpoint_target_ref_id`` blocks that issue
+    and only that issue: editing or reordering the list never silently
+    redirects it to a different comic, and a removed target drops the
+    checkpoint instead of retargeting the neighbor (contract:
+    docs/roll-eligibility-contract.md). Without an explicit target, the
+    legacy flag blocks only the next node in the same lane. Cross-series
     consecutive list positions without ``is_checkpoint`` never appear here.
     """
     nodes_by_lane = _nodes_by_lane(nodes)
+    by_issue_ref = {
+        node.ref_id: node for node in nodes if node.node_type == "issue"
+    }
     edges: list[tuple[str, int, str, int, str, int | None]] = []
     for node in nodes:
         if not node.is_checkpoint:
+            continue
+        if node.checkpoint_target_ref_id is not None:
+            target_node = by_issue_ref.get(node.checkpoint_target_ref_id)
+            if target_node is None or target_node.ref_id == node.ref_id:
+                continue
+            checkpoint_issue_id = node.ref_id if node.node_type == "issue" else None
+            edges.append((
+                node.node_type,
+                node.ref_id,
+                target_node.node_type,
+                target_node.ref_id,
+                "checkpoint",
+                checkpoint_issue_id,
+            ))
             continue
         lane_nodes = nodes_by_lane.get(node.lane_id, [])
         node_index = next(
@@ -549,13 +584,28 @@ async def replace_compiled_rules(
     edges_to_add.extend(_checkpoint_edges_from_nodes(nodes))
 
     # 3. Converged rules: node waits for all convergence gate targets
+    convergence_index: dict[int, IssueThreadIndex] = {}
+    if any(node.convergence_gate for node in nodes):
+        convergence_index = await load_issue_thread_index(db, incoming_ids)
     for node in nodes:
         if not node.convergence_gate:
             continue
+        node_meta = convergence_index.get(node.ref_id)
         gate_targets: list[convergence_target] = []
         for target in node.convergence_gate:
             resolved = node_map.get(target.node_id)
             if resolved is None:
+                continue
+            prereq_meta = convergence_index.get(resolved.ref_id)
+            if (
+                node_meta is not None
+                and prereq_meta is not None
+                and is_retired_list_chain_pair(prereq_meta, node_meta)
+            ):
+                # Stale nodes_json convergence flags cannot recreate retired
+                # list-chain edges: a gate whose only meaning is "read my own
+                # series predecessor first" is Issue.position geometry, not a
+                # hard Dependency (docs/roll-eligibility-contract.md).
                 continue
             gate_targets.append({
                 "type": resolved.node_type,

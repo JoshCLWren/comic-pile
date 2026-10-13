@@ -107,6 +107,11 @@ class ContinuityPlanNode(BaseModel):
 
     # Plan-level checkpoint/convergence semantics
     is_checkpoint: bool = False
+    # Explicit checkpoint target (Issue ref_id), per docs/roll-eligibility-contract.md:
+    # editing or reordering a list must never silently redirect a checkpoint to
+    # a different comic. When set, the checkpoint blocks that issue only; a
+    # missing target drops the checkpoint instead of retargeting the neighbor.
+    checkpoint_target_ref_id: int | None = Field(default=None, gt=0)
     convergence_gate: Annotated[
         list[ConvergenceGateTarget],
         BeforeValidator(_coerce_convergence_gate),
@@ -182,6 +187,10 @@ class ContinuityPlanWrite(ContinuityPlanRead):
             if node.is_checkpoint and node.node_type != "issue":
                 raise ValueError(
                     f"checkpoint on node '{node.id}' is only allowed on issue nodes"
+                )
+            if node.checkpoint_target_ref_id is not None and not node.is_checkpoint:
+                raise ValueError(
+                    f"checkpoint target on node '{node.id}' requires is_checkpoint"
                 )
         # Validate convergence gate references
         for node in self.nodes:

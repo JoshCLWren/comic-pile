@@ -1,16 +1,21 @@
 """Held thread-entry selector and issue-thread index helpers (#2553).
 
-Live Reading Plan writes never invent whole-list Dependency chains from
-consecutive list positions. Complicated reading orders are authored as
-custom CBLs (one ordered list of actual comics, with optional checkpoints)
-and consumed by Reading Plans. Roll honors (a) natural in-series progression
-via ``Thread.next_unread_issue_id`` and (b) explicitly defined prerequisites
-and checkpoints only (Josh's verdict on #2553 / #3499).
+The authoritative policy is ``docs/roll-eligibility-contract.md`` (Josh,
+2026-10-12): a reading list states intended order; a checkpoint states what
+Roll may not offer yet. Live Reading Plan writes never invent whole-list
+Dependency chains from consecutive list positions. Complicated reading
+orders are authored as custom CBLs (one ordered list of actual comics, with
+optional checkpoints) and consumed by Reading Plans. Roll honors (a) natural
+in-series progression via ``Thread.next_unread_issue_id`` and (b) explicitly
+defined prerequisites and checkpoints only (Josh's verdict on #2553 / #3499).
+Series changes, CBL adjacency, and plan membership create no blockers on
+their own.
 
 ``strict_plan_item_read_pairs`` remains for held production-migration
 scripts that still classify historical thread-entry gates. The live writer
 does not call it. Same-thread adjacent pairs are never compiled into
-Dependencies by the live path.
+Dependencies by the live path, and migration selections are asserted
+same-thread-free by ``app/services/list_chain_guard.py``.
 
 Existing plan-owned ``item_read`` rows are retained on an ordinary no-change
 save until a hop is classified and removed on purpose:

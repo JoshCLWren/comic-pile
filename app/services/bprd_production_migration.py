@@ -29,6 +29,7 @@ from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
 )
+from app.services.list_chain_guard import assert_no_same_thread_pairs
 from app.services.strict_plan_constraints import (
     load_issue_thread_index,
     strict_plan_item_read_pairs,
@@ -231,6 +232,10 @@ async def _planned_edges(
         if pair not in seen:
             pairs.append(pair)
             seen.add(pair)
+    # Guard (docs/roll-eligibility-contract.md): retired generated list
+    # chains are never re-authored; same-series order is Issue.position
+    # geometry, not a hard Dependency.
+    assert_no_same_thread_pairs(pairs, index)
     return pairs
 
 
