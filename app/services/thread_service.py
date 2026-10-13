@@ -1110,6 +1110,13 @@ async def set_current_issue(
     if not target_issue:
         raise NotFoundError(f"Issue '{target_number}' not found in thread {thread_id}")
 
+    # Validate ownership consistency: target issue must belong to this thread
+    if target_issue.thread_id != thread_id:
+        raise InvalidRequestError(
+            f"Issue '{target_number}' does not belong to thread {thread_id}. "
+            "Cross-thread issue assignment is not allowed."
+        )
+
     all_issues = await issue_repository.issues_ordered(db, thread_id)
 
     now = datetime.now(UTC)

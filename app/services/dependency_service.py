@@ -317,6 +317,14 @@ async def create_dependency(
     if not source_thread or not target_thread:
         return None, "Issue not found"
 
+    # Validate ownership consistency: both issues must belong to the same thread
+    if source_thread.id != target_thread.id:
+        return None, (
+            f"Cannot create dependency between issues in different threads "
+            f"({source_thread.title} vs {target_thread.title}). "
+            "Dependencies can only be created between issues in the same thread."
+        )
+
     # Check for circular dependency
     if await detect_circular_dependency(
         source_issue_id, target_issue_id, "issue", db

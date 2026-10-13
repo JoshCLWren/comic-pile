@@ -13,10 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import OperationalError
 
 from app.database import get_db
-from app.models import ReadingSession
-from app.repositories import reading_session_repository
+from app.models import ReadingSession, Thread, Issue
+from app.repositories import reading_session_repository, thread_repository, issue_repository
 from app.services.ownership import get_owned_session_or_404
 from app.services.thread_issue_stats import load_unread_counts
+from app.services.errors import InvalidRequestError
 from comic_pile.dependencies import refresh_user_blocked_status
 
 
@@ -30,6 +31,53 @@ class ReadingSessionService:
             db: SQLAlchemy async session.
         """
         self.db = db
+
+    async def _validate_pending_thread_ownership(
+        self, session: ReadingSession, user_id: int
+    ) -> None:
+        """Validate that pending_thread_id belongs to the session user.
+
+        Args:
+            session: The reading session to validate.
+            user_id: The user ID for ownership validation.
+
+        Raises:
+            InvalidRequestError: When pending_thread_id is set and doesn't belong to user.
+        """
+        if session.pending_thread_id is not None:
+            thread = await thread_repository.find_owned(self.db, user_id, session.pending_thread_id)
+            if thread is None:
+                raise InvalidRequestError(
+                    f"Pending thread {session.pending_thread_id} does not exist or "
+                    "does not belong to user {user_id}"
+                )
+
+    async def _validate_pending_issue_ownership(
+        self, session: ReadingSession, user_id: int
+    ) -> None:
+        """Validate that pending_issue_id belongs to the session user.
+
+        Args:
+            session: The reading session to validate.
+            user_id: The user ID for ownership validation.
+
+        Raises:
+            InvalidRequestError: When pending_issue_id is set and doesn't belong to user.
+        """
+        if session.pending_issue_id is not None:
+            issue = await issue_repository.get_issue(self.db, session.pending_issue_id)
+            if issue is None:
+                raise InvalidRequestError(
+                    f"Pending issue {session.pending_issue_id} does not exist"
+                )
+            
+            # Validate that the issue belongs to a thread owned by the user
+            thread = await thread_repository.find_owned(self.db, user_id, issue.thread_id)
+            if thread is None:
+                raise InvalidRequestError(
+                    f"Pending issue {session.pending_issue_id} does not belong to "
+                    f"any thread owned by user {user_id}"
+                )
 
     async def restore_reading_session_start(self, session_id: int, user_id: int) -> ReadingSession:
         """Restore session to its initial state at session start.
@@ -52,6 +100,10 @@ class ReadingSessionService:
         while retries < max_retries:
             try:
                 session = await get_owned_session_or_404(self.db, user_id, session_id)
+
+                # Validate pending references belong to session user
+                await self._validate_pending_thread_ownership(session, user_id)
+                await self._validate_pending_issue_ownership(session, user_id)
 
                 snapshot = await reading_session_repository.first_start_snapshot(
                     self.db, session_id

@@ -1141,6 +1141,37 @@ async def rebuild_plan_membership(
         plan_id: Plan whose normalized rows are replaced.
         nodes: Canonical node set just persisted to the plan.
     """
+    # Get the plan to validate ownership
+    plan = await db.get(ContinuityPlan, plan_id)
+    if plan is None:
+        raise ValueError(f"Plan {plan_id} not found")
+    
+    # Collect all issue IDs referenced in the nodes
+    issue_ids = [node.ref_id for node in nodes if node.node_type == "issue"]
+    
+    # Validate ownership: all issues must belong to threads owned by the plan's user
+    if issue_ids:
+        issue_rows = await db.execute(
+            select(Issue).where(Issue.id.in_(issue_ids))
+        )
+        issues = list(issue_rows.scalars().all())
+        
+        # Create a mapping of issue ID to thread ID
+        issue_to_thread = {issue.id: issue.thread_id for issue in issues}
+        
+        # Validate all referenced issues exist and belong to plan's user
+        for issue_id in issue_ids:
+            if issue_id not in issue_to_thread:
+                raise ValueError(f"Issue {issue_id} not found")
+            
+            # Check if the thread belongs to the plan's user
+            thread = await db.get(Thread, issue_to_thread[issue_id])
+            if thread is None or thread.user_id != plan.user_id:
+                raise ValueError(
+                    f"Issue {issue_id} does not belong to any thread owned by "
+                    f"user {plan.user_id}. Cross-user issue assignment is not allowed."
+                )
+
     # Canonical membership invariant (#3037): fail closed with a domain error
     # before any row is replaced, so no write path can persist a duplicate.
     ensure_plan_issue_uniqueness(nodes)
