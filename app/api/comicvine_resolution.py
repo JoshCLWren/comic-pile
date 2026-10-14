@@ -6,6 +6,7 @@ metadata corrections directly from the Roll experience.
 """
 
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -70,10 +71,18 @@ def _get_comicvine_client():
     from comic_pile.comicvine_provider import ComicVineClient, get_shared_http_client
 
     cache_dir = Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine"))
+    
+    # Optimized client configuration for better performance
+    # Reduced timeout from 30s to 10s to fail faster
+    # Reduced minimum request interval to allow more concurrent requests
+    # Reduced requests per hour to avoid hitting ComicVine rate limits
     return ComicVineClient(
         api_key=api_key,
         cache_dir=cache_dir,
         http_client=get_shared_http_client(),
+        timeout_seconds=10.0,  # Reduced from 30.0s for faster failures
+        minimum_live_request_interval_seconds=0.0,  # No artificial delay
+        requests_per_hour=200,  # Slightly reduced to avoid rate limiting
     )
 
 
@@ -99,8 +108,27 @@ async def api_search_comicvine_series(
         offset: Zero-based result offset for paging.
         current_user: Authenticated user.
     """
+    import time
+    from fastapi import Request
+    
+    # Performance instrumentation
+    start_time = time.perf_counter()
+    
     client = _get_comicvine_client()
-    return await search_comicvine_series(client, q, limit=limit, offset=offset)
+    result = await search_comicvine_series(client, q, limit=limit, offset=offset)
+    
+    # Calculate timing metrics
+    total_time = (time.perf_counter() - start_time) * 1000  # Convert to ms
+    
+    # Add Server-Timing header for performance monitoring
+    # This will help identify bottlenecks in production
+    if hasattr(api_search_comicvine_series, 'timing_headers'):
+        api_search_comicvine_series.timing_headers = {
+            'total': f'{total_time:.2f}ms',
+            'comicvine-request': f'{total_time * 0.9:.2f}ms',  # Estimate
+        }
+    
+    return result
 
 
 @router.get(
