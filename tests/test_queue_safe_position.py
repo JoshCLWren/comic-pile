@@ -463,3 +463,69 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
         f"Thread B (id={thread_b.id}) should NOT be in the d8 roll pool "
         f"when thread A (id={thread_a.id}) is skipped, but it is present"
     )
+
+
+@pytest.mark.asyncio
+async def test_move_to_safe_position_constrained_below_die_size_issue_3696(
+    async_db: AsyncSession, default_user
+) -> None:
+    """Issue #3696 constrained behavior when eligible alternatives run short.
+
+    Hard-blocked threads and caller-supplied exclusions do not count as
+    alternatives, so placement must count only threads the next roll could
+    actually select. Here fourteen active threads with two blocked and two
+    excluded leave nine eligible alternatives for a d10 die.
+
+    The target is placed after every eligible thread rather than at a
+    die+1 slot, and the bounded d10 pool still spans the whole eligible set.
+    That is the explicit contract: placement pushes as far as eligibility
+    allows, and no immediate non-repeat is promised when too few eligible
+    threads exist to deliver one.
+    """
+    user = default_user
+    blocked_positions = {2, 4}
+    excluded_positions = {3, 5}
+    threads = []
+    for position in range(1, 15):
+        thread = Thread(
+            title=f"Constrained pool thread {position}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=position,
+            is_blocked=position in blocked_positions,
+            status="active",
+            user_id=user.id,
+        )
+        async_db.add(thread)
+        threads.append(thread)
+    await async_db.flush()
+
+    target = threads[0]
+    excluded_thread_ids = {threads[position - 1].id for position in excluded_positions}
+
+    await move_to_safe_position(
+        target.id,
+        user.id,
+        10,
+        async_db,
+        excluded_thread_ids=excluded_thread_ids,
+    )
+    await async_db.refresh(target)
+
+    # Nine eligible alternatives cannot fill a d10 window, so the target goes
+    # to the end of the eligible region instead of a die+1 slot.
+    assert target.queue_position == 14
+
+    bounded_rows = await get_bounded_roll_pool_rows(
+        user.id,
+        async_db,
+        10,
+        snoozed_ids=sorted(excluded_thread_ids),
+    )
+    bounded_thread_ids = {row[0].id for row in bounded_rows}
+    assert len(bounded_thread_ids) == 10
+    assert target.id in bounded_thread_ids, (
+        f"Target thread {target.id} is still inside the d10 pool because only "
+        "nine eligible alternatives exist; constrained placement does not "
+        "promise an immediate non-repeat."
+    )
