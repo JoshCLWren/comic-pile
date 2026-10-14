@@ -13,6 +13,7 @@ from comic_pile.comicvine_provider import (
     ComicVineClient,
     ComicVineError,
     ComicVineRateLimitError,
+    close_shared_http_client,
     get_shared_http_client,
 )
 
@@ -103,20 +104,42 @@ async def test_httpx_transport_maps_rate_limit_and_http_errors(tmp_path: Path) -
     )
     try:
         with pytest.raises(ComicVineRateLimitError, match="HTTP 429") as throttled:
-            await client.request("search", "search", {"query": "throttled", "page": 1})
+            await client.request("throttled-search", "search", {"query": "throttled", "page": 1})
     finally:
         await http_client.aclose()
     assert throttled.value.retry_after == 12.0
 
+    # The 429 above persists a cooldown for its own endpoint bucket, so the
+    # server-error half uses a separate bucket to stay reachable.
     client, http_client = _client_with_transport(
         lambda request: httpx.Response(500, json={"error": "boom"}),
         tmp_path,
     )
     try:
         with pytest.raises(ComicVineError, match="ComicVine HTTP 500 for search"):
-            await client.request("search", "search", {"query": "broken", "page": 1})
+            await client.request("broken-search", "search", {"query": "broken", "page": 1})
     finally:
         await http_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_httpx_transport_honors_configured_request_timeout(tmp_path: Path) -> None:
+    """The injected transport must not silently fall back to the shared client timeout."""
+    seen: list[dict[str, float | None]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        timeout = request.extensions.get("timeout")
+        seen.append(dict(timeout) if isinstance(timeout, dict) else {})
+        return httpx.Response(200, json={"status_code": 1, "results": []})
+
+    http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = ComicVineClient("secret", tmp_path, timeout_seconds=2.0, http_client=http_client)
+    try:
+        await client.request("search", "search", {"query": "timeouts", "page": 1})
+    finally:
+        await http_client.aclose()
+
+    assert seen == [{"connect": 0.6, "read": 2.0, "write": 2.0, "pool": 2.0}]
 
 
 @pytest.mark.asyncio
@@ -176,14 +199,33 @@ async def test_default_client_delegates_to_request_sync(
     assert calls == ["search"]
 
 
-def test_shared_http_client_reuses_one_redirect_following_client() -> None:
+@pytest.mark.asyncio
+async def test_shared_http_client_reuses_one_redirect_following_client() -> None:
     """The shared production client is a singleton configured to follow redirects."""
     first = get_shared_http_client()
     second = get_shared_http_client()
+    try:
+        assert first is second
+        assert first.follow_redirects is True
+        assert first.timeout is not None
+    finally:
+        await close_shared_http_client()
 
-    assert first is second
-    assert first.follow_redirects is True
-    assert first.timeout is not None
+
+@pytest.mark.asyncio
+async def test_close_shared_http_client_is_idempotent_and_resets_the_singleton() -> None:
+    """Shutdown drains the pool, repeats safely, and lets the next caller rebuild it."""
+    created = get_shared_http_client()
+    await close_shared_http_client()
+
+    await close_shared_http_client()
+
+    replacement = get_shared_http_client()
+    try:
+        assert replacement is not created
+        assert replacement.is_closed is False
+    finally:
+        await close_shared_http_client()
 
 
 @pytest.mark.asyncio

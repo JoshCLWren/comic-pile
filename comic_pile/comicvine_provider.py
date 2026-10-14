@@ -319,13 +319,22 @@ _shared_http_client: httpx.AsyncClient | None = None
 _shared_http_client_lock = threading.Lock()
 
 
+def _default_request_timeout() -> httpx.Timeout:
+    """Build the shared transport timeout used when no per-client override applies."""
+    return httpx.Timeout(
+        DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        connect=DEFAULT_REQUEST_TIMEOUT_SECONDS * 0.3,
+    )
+
+
 def get_shared_http_client() -> httpx.AsyncClient:
     """Return the process-wide keep-alive HTTP client for live ComicVine calls.
 
     Reusing one client across requests keeps TLS connections warm so warm
     application instances do not pay a fresh handshake on every provider call.
     Redirects are followed to match the historical urllib transport behavior.
-    The client is intended for the application's single event loop.
+    The client is intended for the application's single event loop, and
+    application shutdown must call :func:`close_shared_http_client`.
 
     Returns:
         The shared async HTTP client, created on first use.
@@ -335,14 +344,27 @@ def get_shared_http_client() -> httpx.AsyncClient:
         with _shared_http_client_lock:
             if _shared_http_client is None:
                 _shared_http_client = httpx.AsyncClient(
-                    timeout=httpx.Timeout(
-                        DEFAULT_REQUEST_TIMEOUT_SECONDS,
-                        connect=DEFAULT_REQUEST_TIMEOUT_SECONDS * 0.3,
-                    ),
+                    timeout=_default_request_timeout(),
                     limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
                     follow_redirects=True,
                 )
     return _shared_http_client
+
+
+async def close_shared_http_client() -> None:
+    """Close the process-wide keep-alive client and clear the cached singleton.
+
+    Shutdown drains idle provider sockets deterministically instead of leaving
+    the pool to interpreter teardown. Calling this when no client was created
+    is a no-op, and the next :func:`get_shared_http_client` call builds a fresh
+    client.
+    """
+    global _shared_http_client
+    with _shared_http_client_lock:
+        client = _shared_http_client
+        _shared_http_client = None
+    if client is not None:
+        await client.aclose()
 
 
 class ComicVineClient:
@@ -369,7 +391,7 @@ class ComicVineClient:
             requests_per_hour: Rolling-hour budget per endpoint path.
             minimum_live_request_interval_seconds: Minimum delay between uncached live request starts.
             base_url: Provider API base URL.
-            timeout_seconds: Network timeout per request on the default urllib transport.
+            timeout_seconds: Network timeout per request on either transport.
             http_client: Optional shared async HTTP client. When provided, live requests use it
                 with connection keep-alive; when None, live requests go through the synchronous
                 urllib transport on a worker thread.
@@ -436,6 +458,17 @@ class ComicVineClient:
                 self._last_live_request_started_at = time.monotonic()
         self.live_request_starts += 1
 
+    def _transport_timeout(self) -> httpx.Timeout:
+        """Build the per-request timeout applied to the injected async transport.
+
+        The shared client is process-wide, so the configured ``timeout_seconds``
+        is passed per request instead of being frozen into the shared client.
+
+        Returns:
+            The read/write/pool timeout with a proportionally shorter connect budget.
+        """
+        return httpx.Timeout(self.timeout_seconds, connect=self.timeout_seconds * 0.3)
+
     async def _request_async(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
         """Fetch one raw provider payload over the configured HTTP transport.
 
@@ -469,6 +502,7 @@ class ComicVineClient:
                 url,
                 params=query,
                 headers={"User-Agent": "ComicPile/1.0"},
+                timeout=self._transport_timeout(),
             )
             response.raise_for_status()
             decoded = response.json()
