@@ -399,7 +399,7 @@ async def load_creator_summary_inputs(
         for issue_id, by_key in per_issue_credits.items()
     }
 
-    # 4. Latest effective rating per owned issue (latest event wins).
+    # 5. Latest effective rating per owned issue (latest event wins).
     # PostgreSQL ``DISTINCT ON`` collapses the user's rate events to one row per
     # owned issue inside the database. ``distinct(Event.issue_id)`` would render
     # the same SQL but is deprecated on SQLAlchemy 2.1 and emits
