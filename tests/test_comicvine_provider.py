@@ -442,6 +442,46 @@ def test_throttle_sets_cooldown_on_request_failure(tmp_path: Path, monkeypatch: 
     assert client.throttle_tracker.get_cooldown("issue") is not None
 
 
+def test_throttled_request_reports_effective_cooldown_on_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A throttled request must surface the persisted effective cooldown on the error.
+
+    Both ``retry_after`` and ``retry_after_seconds`` must carry the cooldown that was
+    actually recorded, including the bounded headerless fallback when the provider
+    omits ``Retry-After``.
+    """
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited_no_header(request: object, timeout: float) -> FakeUrlResponse:
+        raise urllib.error.HTTPError("https://example.invalid", 429, "slow down", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited_no_header)
+    with pytest.raises(ComicVineRateLimitError) as exc_info:
+        asyncio.run(client.request("issue", "issue/4000-7", {}, refresh=True))
+
+    assert exc_info.value.retry_after == 60.0
+    assert exc_info.value.retry_after_seconds == 60.0
+    assert exc_info.value.resource == "issue"
+
+
+def test_throttled_request_reports_provider_retry_after_on_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider ``Retry-After`` header must reach callers unchanged on both attributes."""
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited(request: object, timeout: float) -> FakeUrlResponse:
+        raise FakeHttpErrorWithHeaders(429, {"Retry-After": "120"})
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited)
+    with pytest.raises(ComicVineRateLimitError) as exc_info:
+        asyncio.run(client.request("issue", "issue/4000-7", {}, refresh=True))
+
+    assert exc_info.value.retry_after == 120.0
+    assert exc_info.value.retry_after_seconds == 120.0
+
+
 def test_throttle_no_cached_response_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """When throttled and no cached response exists, the error must be raised."""
     client = ComicVineClient("secret", tmp_path)
