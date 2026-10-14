@@ -1,0 +1,247 @@
+# Scheduled / manually dispatched Chromium regression discovery (issue #1483).
+#
+# Coverage is selected from the canonical behavior inventory
+# (docs/e2e-behavior-inventory.yaml) by scripts/e2e_regression_select.py.
+# This workflow is intentionally NOT a required pull-request gate: broader
+# P1/P2 regression runs on a schedule and explicit dispatch instead.
+#
+# Failure contract (acceptance criteria of #1483):
+#   - This workflow never creates GitHub issues and never applies issue/PR
+#     labels. Failed tests preserve traces, screenshots, video, JSON results,
+#     and the backend log as artifacts.
+#   - Reproducible product defects are reconciled against existing issues/PRs
+#     and grouped to one root cause before normal product work is created.
+#     See docs/E2E_CHROMIUM_REGRESSION.md for the reconciliation path.
+
+name: E2E Chromium Regression
+
+on:
+  schedule:
+    - cron: '47 4 * * *'
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Inventory priority scope to run'
+        required: true
+        default: 'p1-p2'
+        type: choice
+        options:
+          - p1-p2
+          - p0
+          - all
+      workers:
+        description: 'Playwright worker count'
+        required: false
+        default: '2'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-chromium-regression-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: 'true'
+  SECRET_KEY: e2e-regression-discovery-secret-key
+  # Browser suites register users and create fixtures at test speed; the
+  # e2e backend contract (docker-compose.test.yml) disables rate limiting
+  # for the disposable test database.
+  TEST_ENVIRONMENT: 'true'
+  AUTO_BACKUP_ENABLED: 'false'
+  BASE_URL: http://127.0.0.1:9000
+
+jobs:
+  chromium-regression:
+    name: Chromium regression (inventory scope)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_e2e_regression
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: '3.14'
+          enable-cache: true
+
+      - name: Enable repository pnpm version
+        run: corepack enable
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install locked Python dependencies
+        run: uv sync --locked
+
+      - name: Build frontend
+        run: pnpm --filter frontend run build
+
+      - name: Install Chromium
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: Apply migrations
+        run: .venv/bin/alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_e2e_regression
+
+      - name: Start backend
+        run: |
+          nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 9000 --workers 2 \
+            > /tmp/backend.log 2>&1 &
+          ready=0
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:9000/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::Backend failed to become healthy on :9000"
+            tail -n 200 /tmp/backend.log || true
+            exit 1
+          fi
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_e2e_regression
+
+      - name: Select regression specs from canonical inventory
+        run: |
+          .venv/bin/python scripts/e2e_regression_select.py \
+            --scope "${{ github.event.inputs.scope || 'p1-p2' }}" \
+            --output frontend/test-results/regression/selection.json
+
+      - name: Run Chromium regression suite
+        run: pnpm --filter frontend exec playwright test --config=playwright.regression.config.ts
+        env:
+          E2E_REGRESSION_SELECTION: ${{ github.workspace }}/frontend/test-results/regression/selection.json
+          REGRESSION_WORKERS: ${{ github.event.inputs.workers || '2' }}
+
+      - name: Collect backend log evidence
+        if: always()
+        run: |
+          mkdir -p frontend/test-results/regression
+          cp /tmp/backend.log frontend/test-results/regression/backend.log || true
+
+      - name: Publish run summary
+        if: always()
+        run: |
+          .venv/bin/python - <<'EOF'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
+          results_path = Path("frontend/test-results/regression/results.json")
+          selection_path = Path("frontend/test-results/regression/selection.json")
+
+          lines = ["# Chromium regression discovery run", ""]
+
+          selection = {}
+          if selection_path.exists():
+              selection = json.loads(selection_path.read_text(encoding="utf-8"))
+          scope = selection.get("scope", "unknown")
+          behaviors = selection.get("behaviors", [])
+          lines.append(f"- **Scope:** `{scope}`")
+          lines.append(f"- **Inventory behaviors:** {len(behaviors)}")
+          lines.append(f"- **Selected spec files:** {len(selection.get('specs', []))}")
+          unmapped = selection.get("unmapped_specs", [])
+          if unmapped:
+              lines.append(f"- **Spec files not yet in the inventory:** {', '.join(unmapped)}")
+          lines.append("")
+
+          if results_path.exists():
+              results = json.loads(results_path.read_text(encoding="utf-8"))
+              stats = results.get("stats", {})
+              lines.append("## Result counts")
+              lines.append("")
+              lines.append(f"- expected: {stats.get('expected', 0)}")
+              lines.append(f"- unexpected (failed): {stats.get('unexpected', 0)}")
+              lines.append(f"- flaky: {stats.get('flaky', 0)}")
+              lines.append(f"- skipped: {stats.get('skipped', 0)}")
+              lines.append("")
+
+              failures: list[str] = []
+
+              # Playwright's JSON reporter nests tests under suite → spec:
+              # suites carry child suites, specs carry tests[] with status.
+              def walk(suite: dict, prefix: list[str]) -> None:
+                  suite_title = suite.get("title")
+                  path = prefix + ([str(suite_title)] if suite_title else [])
+                  for spec in suite.get("specs", []):
+                      spec_title = str(spec.get("title", ""))
+                      for test in spec.get("tests", []):
+                          status = test.get("status")
+                          if status in ("unexpected", "flaky"):
+                              title_path = " › ".join([*path, spec_title])
+                              failures.append(f"- `{title_path}` ({status})")
+                  for child in suite.get("suites", []):
+                      walk(child, path)
+
+              for suite in results.get("suites", []):
+                  walk(suite, [])
+
+              if failures:
+                  lines.append("## Failures")
+                  lines.append("")
+                  lines.extend(failures)
+                  lines.append("")
+                  lines.append(
+                      "**No GitHub issues or labels are created from this run.** "
+                      "Reconcile failures against existing issues/PRs and group them to "
+                      "one root cause per product behavior before creating normal product "
+                      "work — see `docs/E2E_CHROMIUM_REGRESSION.md`."
+                  )
+                  lines.append("")
+          else:
+              lines.append("_No results.json was produced (run may have failed before tests started)._")
+              lines.append("")
+
+          lines.append("Artifacts: `regression-results` (JSON results, selection manifest, backend log) and `regression-report` (HTML report with traces/screenshots/video).")
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as handle:
+                  handle.write("\n".join(lines) + "\n")
+          print("\n".join(lines))
+          EOF
+
+      - name: Upload structured results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-results-${{ github.run_id }}
+          path: |
+            frontend/test-results/regression/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload HTML report with traces
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-report-${{ github.run_id }}
+          path: |
+            frontend/playwright-report/regression/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.repositories.creator_summary import manual_creator_id
 
 D1 = datetime(2026, 3, 1, tzinfo=UTC)
 D2 = datetime(2026, 3, 2, tzinfo=UTC)
@@ -442,6 +443,79 @@ async def test_foreign_and_unknown_keys_are_omitted(
 
 
 @pytest.mark.asyncio
+async def test_manual_thread_credits_attribute_every_owned_issue(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Thread-level manual credits attribute the creator to each owned issue.
+
+    Manual credits are stored once on the thread and read back from a
+    thread-only statement (issue #3387), so every owned issue in that thread is
+    attributed when the issue itself carries no confirmed ComicVine credit.
+    """
+    thread, issues = await _make_thread(
+        async_db, default_user, title="Manual Book", issue_count=3, queue_position=1, read_through=3
+    )
+    thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await async_db.flush()
+    for issue in issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    manual_key = f"creator:{manual_creator_id('Manual Writer')}"
+    response = await auth_client.get(f"/api/v1/creators/summaries?keys={manual_key}")
+
+    assert response.status_code == 200
+    body = response.json()
+    summary = body["summaries"][manual_key]
+    assert summary["display_name"] == "Manual Writer"
+    assert summary["normalized_roles"] == ["writer"]
+    assert summary["ratings_count"] == 3
+    assert summary["average_rating"] == 4.0
+    assert summary["read_unrated_count"] == 0
+    assert summary["upcoming_count"] == 0
+    assert body["coverage"]["rated_issues_total"] == 3
+    assert body["coverage"]["rated_issues_with_creator_metadata"] == 3
+    assert body["coverage"]["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_confirmed_comicvine_credits_suppress_thread_manual_credits(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Confirmed issue credits win over the thread's manual credits for that issue.
+
+    The two credit sources are joined from different reads — confirmed issue
+    metadata and the thread-only manual-credit read — so this pins the precedence
+    rule across both.
+    """
+    thread, issues = await _make_thread(
+        async_db, default_user, title="Mixed Book", issue_count=3, queue_position=1, read_through=3
+    )
+    thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await async_db.flush()
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 7, "name": "Provider Writer", "role": "writer"}]
+    )
+    for issue in issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    manual_key = f"creator:{manual_creator_id('Manual Writer')}"
+    response = await auth_client.get(f"/api/v1/creators/summaries?keys=creator:7,{manual_key}")
+
+    assert response.status_code == 200
+    body = response.json()
+    # The issue with confirmed ComicVine credits is attributed to that provider
+    # credit only, so the thread's manual credit covers just the other two.
+    assert body["summaries"]["creator:7"]["ratings_count"] == 1
+    assert body["summaries"][manual_key]["ratings_count"] == 2
+    assert body["coverage"]["rated_issues_with_creator_metadata"] == 3
+    assert body["coverage"]["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
 async def test_empty_library_returns_empty_summaries_and_vacuous_coverage(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -523,7 +597,7 @@ async def test_bounded_constant_query_count(
     db_engine: AsyncEngine,
     default_user: User,
 ) -> None:
-    """One request serves any key count with a fixed, constant query count."""
+    """One request serves any key count with a fixed, constant query count (<= 5)."""
     _thread, issues = await _make_thread(
         async_db, default_user, title="Wide", issue_count=6, queue_position=1, read_through=6
     )
@@ -550,7 +624,7 @@ async def test_bounded_constant_query_count(
     assert six_keys.status_code == 200
     assert len(six_keys.json()["summaries"]) == 6
     assert len(one_key_selects) == len(six_key_selects)
-    assert len(one_key_selects) <= 4, one_key_selects
+    assert len(one_key_selects) <= 5, one_key_selects
 
 
 @pytest.mark.asyncio

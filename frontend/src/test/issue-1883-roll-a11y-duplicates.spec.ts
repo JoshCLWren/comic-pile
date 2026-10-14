@@ -127,6 +127,7 @@ async function seedInterrelatedThreads(
   await apiPost(page, user, '/api/v1/dependencies/', {
     source_type: 'issue',
     source_id: issuesA[0].id,
+    target_type: 'issue',
     target_id: issuesB[0].id,
   });
 }

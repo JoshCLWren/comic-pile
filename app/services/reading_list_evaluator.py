@@ -27,6 +27,7 @@ class ReadingThread:
 
     thread_id: int
     status: str = "active"
+    name: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,7 @@ class ReadingList:
     list_id: int
     mode: Literal["strict", "loose"]
     entries: tuple[ReadingListEntry, ...] = ()
+    name: str = ""
 
     def __post_init__(self) -> None:
         """Detach entries from any mutable input container."""

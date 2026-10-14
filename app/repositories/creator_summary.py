@@ -2,9 +2,11 @@
 
 Every SQLAlchemy query used by the creator summary endpoint lives here so the
 router stays free of schema imports and ``execute`` calls (router-layering
-contract). All queries are user-scoped joins with no per-creator or per-issue
-fan-out: the whole batch request is served by a fixed, bounded number of
-queries regardless of how many creator keys are requested.
+contract). Every query is scoped to the authenticated user by an indexed
+``threads.user_id`` predicate — never by a library-sized ``IN`` list — and none
+of them fans out per creator or per issue: the whole batch request is served by
+a fixed, bounded number of queries regardless of how many creator keys are
+requested.
 """
 
 from __future__ import annotations
@@ -280,16 +282,18 @@ async def load_creator_summary_inputs(
 ) -> CreatorSummaryInputs:
     """Load every user-scoped input needed for one bounded batch aggregation.
 
-    The batch is served by exactly four queries no matter how many creator
-    keys are requested:
+    The batch is served by exactly five queries no matter how many creator keys
+    are requested — four aggregation reads plus the request's own
+    authentication lookup:
 
-    1. the authenticated user's owned issues, their read/unread status, and
-       their stable local thread/series identity;
-    2. the confirmed ``creator_credits`` key of ComicVine issue metadata for
+    1. the authenticated user's owned issues and their thread ids;
+    2. the user's threads: titles and manual creator credits, read once per
+       thread instead of once per owned issue (issue #3387);
+    3. the confirmed ``creator_credits`` key of ComicVine issue metadata for
        those issues, projected in SQL so the retained raw provider payload is
        never hydrated for a creator read (issue #3244);
-    3. manual thread-level creator credits for threads without issue metadata;
-    4. the latest effective ``rate`` event rating per owned issue.
+    4. the latest effective ``rate`` event rating per owned issue;
+    5. authentication lookup for the current user.
 
     Args:
         db: Async database session.
@@ -298,27 +302,53 @@ async def load_creator_summary_inputs(
     Returns:
         User-scoped :class:`CreatorSummaryInputs`.
     """
-    # 1. Owned issues, statuses, and stable local series identity.
+    # 1. Owned issues and thread ids.
     issue_result = await db.execute(
-        select(Issue.id, Issue.status, Issue.thread_id, Thread.title, Thread.manual_creator_credits)
+        select(Issue.id, Issue.status, Issue.thread_id)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
     owned_issues: dict[int, str] = {}
-    owned_issue_series: dict[int, OwnedIssueSeries] = {}
-    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
-    for issue_id, status, thread_id, thread_title, manual_credits in issue_result.all():
+    thread_ids: set[int] = set()
+    issue_thread_map: dict[int, int] = {}
+    for issue_id, status, thread_id in issue_result.all():
         owned_issue_id = int(issue_id)
         owned_issues[owned_issue_id] = str(status)
-        owned_issue_series[owned_issue_id] = OwnedIssueSeries(
-            thread_id=int(thread_id),
-            thread_title=str(thread_title),
-        )
         thread_id_int = int(thread_id)
-        if manual_credits and thread_id_int not in thread_manual_credits:
-            thread_manual_credits[thread_id_int] = manual_credits
+        issue_thread_map[owned_issue_id] = thread_id_int
+        thread_ids.add(thread_id_int)
 
-    # 2. Confirmed creator credits per owned issue (ComicVine).
+    # 2. Thread titles and manual creator credits, read once per thread.
+    #
+    # Projecting these columns off the issue join above repeated the stored
+    # manual-credit document on every owned issue row, so a wide library
+    # transferred and parsed the same JSON once per issue instead of once per
+    # thread. Reading the user's threads directly keeps one row per thread and
+    # keeps the statement user-scoped: filtering by ``id IN (...)`` would grow
+    # one bind parameter per thread, which is exactly the wide-library shape
+    # this read has to stay fast for. The set only guards the empty library,
+    # which owns no thread to read.
+    thread_manual_credits: dict[int, list[dict[str, object]]] = {}
+    owned_issue_series: dict[int, OwnedIssueSeries] = {}
+    if thread_ids:
+        thread_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.manual_creator_credits).where(
+                Thread.user_id == user_id
+            )
+        )
+        thread_titles: dict[int, str] = {}
+        for thread_id, title, manual_credits in thread_result.all():
+            thread_id_int = int(thread_id)
+            thread_titles[thread_id_int] = str(title)
+            if manual_credits:
+                thread_manual_credits[thread_id_int] = manual_credits
+        for issue_id, thread_id in issue_thread_map.items():
+            owned_issue_series[issue_id] = OwnedIssueSeries(
+                thread_id=thread_id,
+                thread_title=thread_titles.get(thread_id, ""),
+            )
+
+    # 3. Confirmed creator credits per owned issue (ComicVine).
     # Only ``metadata_json->'creator_credits'`` is projected. Normalized issue
     # metadata also retains the complete raw ComicVine provider payload, and
     # hydrating that payload for every owned issue on every creator read is what
@@ -349,7 +379,7 @@ async def load_creator_summary_inputs(
         for credit in credits:
             by_key.setdefault((credit.external_id, credit.roles), credit)
 
-    # 3. Manual thread-level creator credits for issues without ComicVine metadata.
+    # 4. Manual thread-level creator credits for issues without ComicVine metadata.
     for issue_id, series in owned_issue_series.items():
         if issue_id in issues_with_creator_metadata:
             continue
@@ -369,7 +399,7 @@ async def load_creator_summary_inputs(
         for issue_id, by_key in per_issue_credits.items()
     }
 
-    # 4. Latest effective rating per owned issue (latest event wins).
+    # 5. Latest effective rating per owned issue (latest event wins).
     # PostgreSQL ``DISTINCT ON`` collapses the user's rate events to one row per
     # owned issue inside the database. ``distinct(Event.issue_id)`` would render
     # the same SQL but is deprecated on SQLAlchemy 2.1 and emits
