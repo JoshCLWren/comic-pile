@@ -266,3 +266,32 @@ it('reports current-session failures and tolerates a malformed current response'
   const stringFailure = renderWithProvider(() => useSession())
   await waitFor(() => expect(stringFailure.result.current.error?.message).toBe('Failed to fetch current session'))
 })
+
+it('exposes retry progress while the session list is retried after a timeout', async () => {
+  mockedSessionApi.list.mockReset().mockRejectedValue(new Error('timeout of 10000ms exceeded'))
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: 1, retryDelay: 10 }, mutations: { retry: false } },
+  })
+  const { result } = renderHook(() => useSessions(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
+    ),
+  })
+
+  await waitFor(() => expect(result.current.isError).toBe(true))
+
+  expect(mockedSessionApi.list).toHaveBeenCalledTimes(2)
+  expect(result.current.failureCount).toBe(2)
+  expect(result.current.isRetrying).toBe(false)
+})
+
+it('reports zero session-list failures on the fast path', async () => {
+  const { result } = renderWithProvider(() => useSessions())
+
+  await waitFor(() => expect(result.current.isPending).toBe(false))
+
+  expect(result.current.failureCount).toBe(0)
+  expect(result.current.isRetrying).toBe(false)
+})

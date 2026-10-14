@@ -102,6 +102,17 @@ export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
         hasMore,
         loadMore,
         refetch: query.refetch,
+        // Failed attempts so far. A timed-out first page stays pending through
+        // the shared retry policy (issue #3429), so the History page uses this
+        // to bound the loading state with progress and a Retry affordance
+        // instead of an indefinite spinner.
+        failureCount: query.failureCount,
+        // True while the initial load is still trying after at least one
+        // failure. Keyed on isPending (already observed) rather than
+        // isFetching so the retry affordance never adds a new render
+        // subscription of its own.
+        isRetrying:
+          query.isPending && !query.isFetchingNextPage && query.failureCount > 0,
       };
     },
     [query],

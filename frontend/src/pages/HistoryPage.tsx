@@ -2,14 +2,55 @@ import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
 
 export default function HistoryPage() {
-  const { data: sessions, isPending, isLoadingMore, hasMore, loadMore, error } = useSessions()
+  const {
+    data: sessions,
+    isPending,
+    isLoadingMore,
+    hasMore,
+    loadMore,
+    error,
+    failureCount,
+    refetch,
+  } = useSessions()
 
   if (isPending) {
+    // A timed-out first page stays pending through the shared retry policy
+    // (issue #3429). Once an attempt has failed, say so and offer recovery
+    // instead of holding a bare spinner until retries exhaust.
+    if (failureCount > 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen gap-4">
+          <p role="status" className="text-sm font-bold text-stone-400">
+            Still loading your history… your library is safe.
+          </p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )
+    }
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
   if (error && !isLoadingMore && (!sessions || sessions.length === 0)) {
-    return <div className="error-message">Failed to load sessions</div>
+    return (
+      <div className="flex flex-col items-center justify-center h-screen gap-4">
+        <p role="alert" className="error-message">
+          Failed to load sessions
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    )
   }
 
   if (!sessions || sessions.length === 0) {

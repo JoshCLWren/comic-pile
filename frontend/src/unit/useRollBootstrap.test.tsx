@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
 import { queryClient } from '../query/queryClient'
@@ -300,5 +300,59 @@ describe('useRollBootstrap', () => {
     expect(result.current.isPending).toBe(false)
     expect(result.current.isError).toBe(false)
     expect(result.current.error).toBeNull()
+  })
+})
+
+describe('useRollBootstrap retry progress (issue #3429)', () => {
+  function renderWithRetry(retry: number) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry, retryDelay: 10 } },
+    })
+    return renderHook(() => useRollBootstrap(bootstrapApi), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>
+          <ToastProvider>{children}</ToastProvider>
+        </QueryClientProvider>
+      ),
+    })
+  }
+
+  it('reports zero failures on the fast path', async () => {
+    mockedBootstrap.mockResolvedValue(bootstrapResponse)
+
+    const { result } = renderWithRetry(1)
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(result.current.data).toBe(bootstrapResponse)
+    expect(result.current.failureCount).toBe(0)
+    expect(result.current.isRetrying).toBe(false)
+  })
+
+  it('records failed attempts while a timed-out bootstrap is retried', async () => {
+    mockedBootstrap.mockRejectedValue(new Error('timeout of 10000ms exceeded'))
+
+    const { result } = renderWithRetry(1)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    expect(mockedBootstrap).toHaveBeenCalledTimes(2)
+    expect(result.current.failureCount).toBe(2)
+    expect(result.current.isRetrying).toBe(false)
+  })
+
+  it('resets the failure count after a retry succeeds', async () => {
+    mockedBootstrap
+      .mockRejectedValueOnce(new Error('timeout of 10000ms exceeded'))
+      .mockResolvedValue(bootstrapResponse)
+
+    const { result } = renderWithRetry(1)
+
+    await waitFor(() => expect(result.current.data).toBe(bootstrapResponse))
+
+    expect(mockedBootstrap).toHaveBeenCalledTimes(2)
+    expect(result.current.failureCount).toBe(0)
+    expect(result.current.isRetrying).toBe(false)
+    expect(result.current.isError).toBe(false)
   })
 })

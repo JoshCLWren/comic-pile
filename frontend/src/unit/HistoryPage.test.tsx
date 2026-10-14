@@ -243,3 +243,58 @@ it('shows retry button on load more error', () => {
   fireEvent.click(retryButton)
   expect(loadMore).toHaveBeenCalledTimes(1)
 })
+
+it('holds a bare spinner before any initial attempt has failed (issue #3429)', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [],
+    isPending: true,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+    failureCount: 0,
+    isRetrying: false,
+    refetch: vi.fn(),
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  expect(screen.getByText('Loading...')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+})
+
+it('offers Retry without a reload once an initial attempt has failed (issue #3429)', () => {
+  const refetch = vi.fn()
+  mockedUseSessions.mockReturnValue({
+    data: [],
+    isPending: true,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+    failureCount: 1,
+    isRetrying: true,
+    refetch,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  expect(screen.getByRole('status')).toHaveTextContent('Still loading your history')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalledTimes(1)
+})
+
+it('offers Retry on an initial load failure (issue #3429)', () => {
+  const refetch = vi.fn()
+  mockedUseSessions.mockReturnValue({
+    data: [],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: new Error('timeout of 10000ms exceeded'),
+    failureCount: 4,
+    isRetrying: false,
+    refetch,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  expect(screen.getByRole('alert')).toHaveTextContent('Failed to load sessions')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalledTimes(1)
+})

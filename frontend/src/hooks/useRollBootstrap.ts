@@ -28,7 +28,7 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
   // has superseded it (mirrors the pre-React-Query generation guard).
   const requestGenerationRef = useRef(0)
 
-  const { data, isPending, isError, error, refetch } = useQuery({
+  const { data, isPending, isError, error, failureCount, refetch } = useQuery({
     queryKey: queryKeys.roll.bootstrap(),
     queryFn: async (): Promise<RollBootstrapResponse | null> => {
       const generation = ++requestGenerationRef.current
@@ -121,6 +121,15 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
     isError,
     // SAFETY: the bootstrap queryFn normalizes failures to Error, so the query error value is Error | null.
     error: (error as Error | null) ?? null,
+    // Number of failed attempts so far. The shared retry policy keeps a
+    // timed-out bootstrap in pending through several retries (issue #3429), so
+    // callers use this to bound the loading state with progress and a Retry
+    // affordance instead of an indefinite spinner.
+    failureCount,
+    // True while the initial load is still trying after at least one failure.
+    // Keyed on isPending (already observed) rather than isFetching so the
+    // retry affordance never adds a new render subscription of its own.
+    isRetrying: isPending && failureCount > 0,
     refetch: refetchBootstrap,
   }
 }

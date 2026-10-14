@@ -70,6 +70,7 @@ export default function RollPage() {
     isPending: isBootstrapLoading,
     isError: isBootstrapError,
     error: bootstrapError,
+    failureCount: bootstrapFailureCount,
   } = useRollBootstrap()
 
   const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
@@ -358,6 +359,30 @@ export default function RollPage() {
   const hasRollableContent = pool.length > 0 || blockedThreads.length > 0 || snoozedThreads.length > 0
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
+    // A timed-out bootstrap stays pending through the shared retry policy
+    // (issue #3429). Once an attempt has failed, say so and offer recovery
+    // instead of holding a bare spinner until retries exhaust.
+    if (bootstrapFailureCount > 0) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-4">
+          <div className="text-center space-y-4">
+            <p
+              role="status"
+              className="text-center text-stone-500 font-black uppercase tracking-widest text-[10px]"
+            >
+              Still loading… your library is safe.
+            </p>
+            <button
+              type="button"
+              onClick={() => refetchBootstrap()}
+              className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="text-center py-10 text-stone-500 font-black uppercase tracking-widest text-[10px]">
         Loading...
