@@ -1360,6 +1360,10 @@ async def roll_bootstrap(
                 reason="tag_excluded",
                 detail=f"Excluded by tag: {', '.join(responsible)}",
             )
+            # Tag exclusions own no dedicated Roll section, so the series joins
+            # the shared "out of the roll pool" explanation instead of silently
+            # vanishing from the only surface that renders exclusion reasons.
+            inactive.append(exc)
         elif tid in snoozed_ids:
             exc = ThreadExclusionReason(
                 thread_id=tid,

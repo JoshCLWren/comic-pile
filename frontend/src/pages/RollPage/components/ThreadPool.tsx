@@ -10,6 +10,7 @@ const EXCLUSION_REASON_LABELS: Record<ThreadExclusionReason['reason'], string> =
   blocked: 'Waiting on an earlier issue',
   snoozed: 'Snoozed',
   skipped: 'Skipped this session',
+  tag_excluded: 'Excluded by tag',
 }
 
 function exclusionReasonLabel(thread: ThreadExclusionReason): string {
@@ -81,6 +82,19 @@ export function ThreadPool({
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
+
+  // Issue #3033: an empty pool caused by account-wide tag exclusions must say
+  // so instead of claiming the reading queue is empty. Tag exclusions own no
+  // dedicated Roll section, so their series arrive through inactiveThreads.
+  const tagExcludedCount = inactiveThreads.filter(
+    (thread) => thread.reason === 'tag_excluded',
+  ).length
+  const emptyPoolOnlyTagExcluded =
+    pool.length === 0 &&
+    blockedThreads.length === 0 &&
+    snoozedThreads.length === 0 &&
+    inactiveThreads.length > 0 &&
+    tagExcludedCount === inactiveThreads.length
 
   useEffect(() => {
     const returnedToRoll = wasRatingView.current && !isRatingView
