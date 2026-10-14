@@ -221,6 +221,22 @@ behaviors:
     status: covered
     specs: ["issue-3144-manual-die-ladder-readout.spec.ts"]
 
+  - id: QUEUE-005
+    area: queue
+    behavior: "A Queue row shows the tags its series carries, so a tag-based decision needs no extra navigation"
+    priority: P1
+    status: covered
+    specs: ["issue-3425-list-view-tag-visibility.spec.ts"]
+    evidence: "issue #3425 (user-reported dogfood: tagged series read as untagged in the Queue)"
+
+  - id: ROLL-010
+    area: roll
+    behavior: "A Roll die face shows the tags its series carries before the roll"
+    priority: P1
+    status: covered
+    specs: ["issue-3425-list-view-tag-visibility.spec.ts"]
+    evidence: "issue #3425 (user-reported dogfood: tagged series read as untagged on die faces)"
+
   - id: REG-001
     area: regression
     behavior: "Fixed chrome and the app shell never overlap page content across supported viewports"

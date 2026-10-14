@@ -26,7 +26,7 @@ from app.constants import (
 )
 from app.models import ContinuityPlan, Issue, Tag, TagAssignment, Thread, User
 from app.repositories import tag_repository
-from app.schemas.tags import TagScope
+from app.schemas.tags import TagScope, TagSummary
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
 
 
@@ -294,6 +294,45 @@ async def purge_target_assignments(
     return await tag_repository.delete_assignments_for_target(
         db, target_type, target_ids
     )
+
+
+async def fetch_visible_thread_tag_summaries(
+    db: AsyncSession,
+    viewer_user_id: int,
+    thread_ids: Iterable[int],
+) -> dict[int, list[TagSummary]]:
+    """Return the viewer-visible tag summaries for a set of threads.
+
+    Issue #3425: Queue rows and Roll die faces must show the tags a series
+    actually carries, so every list projection that renders a thread row
+    hydrates them through this one batched read instead of a query per row.
+    Visibility is the same privacy boundary used everywhere else — every
+    global tag plus the viewer's own private tags.
+
+    Args:
+        db: Database session.
+        viewer_user_id: Viewer whose private vocabulary is included.
+        thread_ids: Threads whose visible tags are loaded.
+
+    Returns:
+        Mapping of thread id to its visible tag summaries, ordered by tag
+        scope then normalized name. Threads without visible assignments are
+        absent from the mapping.
+    """
+    unique_ids = sorted(set(thread_ids))
+    if not unique_ids:
+        return {}
+
+    assignments = await tag_repository.list_visible_assignments_for_targets(
+        db, viewer_user_id, [("Thread", thread_id) for thread_id in unique_ids]
+    )
+
+    summaries: dict[int, list[TagSummary]] = {}
+    for tag, assignment in assignments:
+        summaries.setdefault(assignment.target_id, []).append(
+            TagSummary(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
+        )
+    return summaries
 
 
 class TagDeletionHook:

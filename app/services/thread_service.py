@@ -20,7 +20,6 @@ from app.repositories import (
     continuity_repository,
     issue_repository,
     reading_session_repository,
-    tag_repository,
     thread_repository,
 )
 from app.schemas import (
@@ -38,7 +37,10 @@ from app.schemas import (
 )
 from app.schemas.tags import TagSummary, TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
-from app.services.tag_service import purge_target_assignments
+from app.services.tag_service import (
+    fetch_visible_thread_tag_summaries,
+    purge_target_assignments,
+)
 from app.services.queue_pagination import (
     QueueCursor,
     QueueSort,
@@ -330,19 +332,15 @@ async def list_queue_threads(
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
-    # Fetch visible tags for threads on this page (batched)
-    thread_ids = [tr.id for tr in thread_responses]
-    targets = [("Thread", tid) for tid in thread_ids]
-    visible_assignments = await tag_repository.list_visible_assignments_for_targets(db, user_id, targets)
-    tags_by_thread: dict[int, list[TagSummary]] = {}
-    for tag, assignment in visible_assignments:
-        tid = assignment.target_id
-        tags_by_thread.setdefault(tid, []).append(
-            TagSummary(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
-        )
+    # Fetch viewer-visible tags for this page in one batched read so Queue rows
+    # show the tags a series carries (issue #3425). Threads with no assignments
+    # are absent from the mapping and render an empty list.
+    tags_by_thread = await fetch_visible_thread_tag_summaries(
+        db, user_id, (tr.id for tr in thread_responses)
+    )
 
     queue_items = [
-        to_queue_list_item(tr, mapping_health_map.get(tr.id), tags=tags_by_thread.get(tr.id, []))
+        to_queue_list_item(tr, mapping_health_map.get(tr.id), tags_by_thread.get(tr.id, []))
         for tr in thread_responses
     ]
 
@@ -429,19 +427,14 @@ async def list_completed_threads(
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
-    # Fetch visible tags for completed threads on this page (batched)
-    thread_ids = [tr.id for tr in thread_responses]
-    targets = [("Thread", tid) for tid in thread_ids]
-    visible_assignments = await tag_repository.list_visible_assignments_for_targets(db, user_id, targets)
-    tags_by_thread: dict[int, list[TagSummary]] = {}
-    for tag, assignment in visible_assignments:
-        tid = assignment.target_id
-        tags_by_thread.setdefault(tid, []).append(
-            TagSummary(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
-        )
+    # Same batched tag projection as the active Queue so completed rows stay
+    # consistent with in-queue rows (issue #3425).
+    tags_by_thread = await fetch_visible_thread_tag_summaries(
+        db, user_id, (tr.id for tr in thread_responses)
+    )
 
     queue_items = [
-        to_queue_list_item(tr, mapping_health_map.get(tr.id), tags=tags_by_thread.get(tr.id, []))
+        to_queue_list_item(tr, mapping_health_map.get(tr.id), tags_by_thread.get(tr.id, []))
         for tr in thread_responses
     ]
 

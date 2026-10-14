@@ -1,6 +1,16 @@
 import type { ReadingBandwidth, ReadingIntent, SessionMode, SessionThread } from './index'
+import type { components } from '../generated/openapi'
 
 export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectionGuidance } from './index'
+
+/**
+ * Read-only tag projection returned on list views.
+ *
+ * Mirrors the server's `TagSummary` schema: enough identity to render a chip
+ * (name + the tag's own palette color) without the assignment bookkeeping that
+ * the tag-management endpoints return.
+ */
+export type RollTagSummary = components['schemas']['TagSummary']
 
 /** Lightweight thread summary returned by the Roll bootstrap endpoint. */
 export interface RollBootstrapThread {
@@ -11,6 +21,28 @@ export interface RollBootstrapThread {
   issue_number?: string | null
   route_labels?: string[]
   last_activity_at?: string | null
+  /**
+   * Viewer-visible tags carried by the series (issue #3425). Die faces render
+   * these so a tagged series reads as tagged before the roll, instead of only
+   * on the thread's own page. The checked-in generated schema can lag the
+   * server, so consumers normalize through `getRollTagList`.
+   */
+  tags?: RollTagSummary[] | null
+}
+
+/**
+ * Read the tag list off a roll-bootstrap thread without a cast.
+ *
+ * The generated client schema is regenerated from the OpenAPI document and the
+ * checked-in copy can lag behind the server's live response. An absent value is
+ * treated as an empty list so a tagged series can never render as untagged
+ * because of a stale generated type.
+ *
+ * @param thread - Any bootstrap thread carrying a tags field.
+ * @returns The visible tag summaries, or an empty list when absent.
+ */
+export function getRollTagList(thread: { tags?: RollTagSummary[] | null }): RollTagSummary[] {
+  return thread.tags ?? []
 }
 
 /** One series excluded from the roll pool, with the reason the user can understand. */

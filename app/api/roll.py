@@ -3,6 +3,7 @@
 import json
 import logging
 import random
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -23,8 +24,8 @@ from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
-from app.repositories import tag_repository
 from app.services.explanation_projection import get_primary_explanation
+from app.services.tag_service import fetch_visible_thread_tag_summaries
 from app.services.reading_effort import (
     EffortEstimate,
     build_recommendation_context,
@@ -284,13 +285,13 @@ def _build_rolling_recommendation_context(
 async def _load_visible_thread_tags(
     db: AsyncSession,
     user_id: int,
-    thread_ids: list[int],
+    thread_ids: Iterable[int],
 ) -> dict[int, list[TagSummary]]:
-    """Batch the viewer-visible tags for a set of threads.
+    """Batch the viewer-visible tags for the bootstrap's roll-adjacent series.
 
     Issue #3425: the roll pool reads as an untagged list even for tagged
     series, so there is no at-a-glance tag signal before rolling. One batched
-    repository read keeps the extra cost at a single round trip for the whole
+    service read keeps the extra cost at a single round trip for the whole
     bootstrap instead of one query per die face.
 
     Args:
@@ -302,21 +303,7 @@ async def _load_visible_thread_tags(
         Mapping of thread id to its visible tag summaries. Threads without
         assignments are absent from the mapping.
     """
-    if not thread_ids:
-        return {}
-
-    assignments = await tag_repository.list_visible_assignments_for_targets(
-        db,
-        user_id,
-        [("Thread", thread_id) for thread_id in thread_ids],
-    )
-
-    tags_by_thread: dict[int, list[TagSummary]] = {}
-    for tag, assignment in assignments:
-        tags_by_thread.setdefault(assignment.target_id, []).append(
-            TagSummary(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
-        )
-    return tags_by_thread
+    return await fetch_visible_thread_tag_summaries(db, user_id, thread_ids)
 
 
 @router.post("/", response_model=RollResponse)

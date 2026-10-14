@@ -4,8 +4,10 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import { CrossoverTags } from '../../components/CrossoverTags'
+import { TagSummaryChips } from '../../components/Tags/TagSummaryChips'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { BlockingDependency, ThreadListItem } from '../../types'
+import { getQueueTagList } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
 import QueueMappingHealthIndicator from './QueueMappingHealthIndicator'
 import QueueMapSeriesDialog from '../../components/QueueMapSeriesDialog'
@@ -81,6 +83,9 @@ export default function QueueThreadCard({
   const blockerLabels = blockingDependencies.map((dependency) => dependency.label)
   const firstBlocker = blockingDependencies[0] ?? null
   const extraBlockerCount = Math.max(blockingDependencies.length - 1, 0)
+  // Issue #3425: the row carries the series' own tags so tag-based decisions
+  // do not require opening the thread.
+  const tags = getQueueTagList(thread)
 
   const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
     const interactive = target instanceof Element
@@ -186,6 +191,9 @@ export default function QueueThreadCard({
             )}
           </div>
           {thread.notes && <p className="mt-1.5 text-xs text-[var(--theme-text-muted)] [overflow-wrap:anywhere] break-words">{thread.notes}</p>}
+          {tags.length > 0 && (
+            <TagSummaryChips tags={tags} label={`Tags for ${thread.title}`} className="mt-1.5" />
+          )}
           <div className="mt-1.5">
             {crossoverGroupsLoading ? (
               <p className="text-xs text-[var(--theme-text-dim)]">Loading crossovers…</p>

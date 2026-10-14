@@ -35,11 +35,12 @@ from comic_pile.queue import move_to_back, move_to_position, shuffle_queue
 from tests.conftest import get_or_create_user_async
 
 FIRST_PAGE_SIZE = 50
-# Threads without issue tracking (no total_issues) execute 2 SELECTs for the
-# thread list: the page itself plus the authoritative whole-queue active_count
-# added by issue #2568. Migrated threads would execute 4 SELECTs (threads +
-# unread counts + next issue numbers + active_count).
-EXPECTED_SELECTS_PER_PAGE = 2
+# Threads without issue tracking (no total_issues) execute 3 SELECTs for the
+# thread list: the page itself, the authoritative whole-queue active_count
+# added by issue #2568, and the batched viewer-visible tag projection added by
+# issue #3425. Migrated threads would execute 5 SELECTs (threads + unread counts
+# + next issue numbers + active_count + mapping health).
+EXPECTED_SELECTS_PER_PAGE = 3
 
 
 def _make_request() -> Request:

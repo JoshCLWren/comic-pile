@@ -27,6 +27,7 @@ QUEUE_FIELDS = {
     "created_at",
     "comicvine_mapping",
     "manual_creator_credits",
+    "tags",
 }
 QUEUE_DROPPED_FIELDS = {
     "last_rating",
@@ -34,6 +35,10 @@ QUEUE_DROPPED_FIELDS = {
     "reading_progress",
     "next_unread_issue_id",
 }
+#: Fields the Queue screen adds beyond the thread-detail model: the ComicVine
+#: mapping-health projection and, since issue #3425, the tag projection that
+#: makes Queue rows show the tags a series carries.
+QUEUE_ADDED_FIELDS = {"comicvine_mapping", "tags"}
 SESSION_HISTORY_FIELDS = {
     "id",
     "started_at",
@@ -120,15 +125,22 @@ def _component_schema(name: str) -> dict[str, object]:
 
 
 def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
-    """Queue items expose only the documented 15-field screen contract."""
+    """Queue items expose only the documented 16-field screen contract."""
     full_fields = set(ThreadResponse.model_fields)
     queue_fields = set(QueueThreadListItem.model_fields)
 
     assert queue_fields == QUEUE_FIELDS
     assert full_fields - queue_fields == QUEUE_DROPPED_FIELDS
+    assert queue_fields - full_fields == QUEUE_ADDED_FIELDS
     assert len(full_fields) == 18
-    assert len(queue_fields) == 15
-    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 3 / 18
+    assert len(queue_fields) == 16
+    # "Narrower" is a payload property, not a field-count property: Queue
+    # trades four detail-only fields for two compact list projections
+    # (ComicVine mapping health and tags), and every dropped field really is
+    # detail-only. The serialized win is pinned by
+    # test_queue_item_records_serialized_byte_reduction below.
+    assert QUEUE_DROPPED_FIELDS < full_fields
+    assert QUEUE_ADDED_FIELDS.isdisjoint(full_fields)
 
 
 def test_queue_item_records_serialized_byte_reduction() -> None:

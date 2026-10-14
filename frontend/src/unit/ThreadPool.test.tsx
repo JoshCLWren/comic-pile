@@ -264,4 +264,43 @@ describe('ThreadPool Component', () => {
     fireEvent.click(toggle)
     expect(onToggleSkipped).toHaveBeenCalledTimes(1)
   })
+
+  it('shows the series tags on each die face (issue #3425)', () => {
+    renderPool({
+      pool: [
+        {
+          ...mockPool[0],
+          tags: [{ id: 21, name: 'Physical', color: '#ff0000', scope: 'global' }],
+        },
+      ],
+    })
+
+    const group = screen.getByRole('list', { name: 'Tags for The Amazing Spider-Man' })
+    expect(group).toBeInTheDocument()
+    expect(screen.getByText('Physical')).toBeInTheDocument()
+  })
+
+  it('names the tags in the die face accessible label', () => {
+    renderPool({
+      pool: [
+        {
+          ...mockPool[0],
+          tags: [
+            { id: 21, name: 'Physical', color: '#ff0000', scope: 'global' },
+            { id: 22, name: 'Annual', color: '#00ff00', scope: 'private' },
+          ],
+        },
+      ],
+    })
+
+    expect(
+      screen.getByRole('button', { name: /tagged Physical, Annual/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('renders no tag group for an untagged die face', () => {
+    renderPool()
+
+    expect(screen.queryByRole('list', { name: /^Tags for / })).not.toBeInTheDocument()
+  })
 })

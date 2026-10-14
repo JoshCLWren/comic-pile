@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
+import { TagSummaryChips } from '../../../components/Tags/TagSummaryChips'
 import type { BlockingDependency } from '../../../types'
 import type { RollBootstrapThread, ThreadExclusionReason } from '../../../types/rollBootstrap'
+import { getRollTagList } from '../../../types/rollBootstrap'
 
 const EXCLUSION_REASON_LABELS: Record<ThreadExclusionReason['reason'], string> = {
   completed: 'Read the full series',
@@ -169,6 +171,10 @@ export function ThreadPool({
           pool.map((thread, index) => {
             const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
             const routeLabels = (thread.route_labels ?? []).filter(Boolean)
+            // Issue #3425: die faces carry the series' tags so a tagged series
+            // is recognizable before it is rolled.
+            const tags = getRollTagList(thread)
+            const tagNames = tags.map((tag) => tag.name)
             return (
               <div
                 key={thread.id}
@@ -181,7 +187,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}. Open series actions.`}
+                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}. Open series actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
@@ -199,6 +205,11 @@ export function ThreadPool({
                       Connected to: {routeLabels.join(' · ')}
                     </p>
                   ) : null}
+                  <TagSummaryChips
+                    tags={tags}
+                    label={`Tags for ${thread.title}`}
+                    className="mt-1"
+                  />
                 </div>
               </div>
             )

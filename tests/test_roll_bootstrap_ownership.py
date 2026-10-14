@@ -127,6 +127,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         _Result(scalar_value=0),   # blocked count
         _Result(rows=[]),          # blocked threads
         _Result(scalar_value=0),   # stale count
+        _Result(rows=[]),          # visible tags (issue #3425)
         _Result(rows=[]),          # all active
         _Result(rows=[]),          # completed
     ]
@@ -148,6 +149,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
             "issue_number": None,
             "route_labels": [],
             "last_activity_at": None,
+            "tags": [],
         }
     ]
     assert response.bandwidth == SessionBandwidthState(
@@ -203,6 +205,7 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         _Result(scalar_value=0),   # blocked count
         _Result(rows=[]),          # blocked threads
         _Result(scalar_value=0),   # stale count
+        _Result(rows=[]),          # visible tags (issue #3425)
         _Result(rows=[]),          # all active
         _Result(rows=[]),          # completed
     ]
@@ -763,6 +766,8 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
                 )
             ]
         ),
+        _Result(rows=[]),
+        _Result(rows=[]),  # visible tags (issue #3425)
         _Result(rows=[]),
         _Result(rows=[]),
     ]

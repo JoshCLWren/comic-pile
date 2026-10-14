@@ -36,6 +36,33 @@ export function getManualCreatorCreditList(
   return thread.manual_creator_credits ?? []
 }
 
+/**
+ * Read-only tag projection carried by a list row.
+ *
+ * Mirrors the server's `TagSummary` schema: enough identity to render a chip
+ * (name plus the tag's own palette color) without the assignment bookkeeping
+ * that the tag-management endpoints return.
+ */
+export type ThreadTagSummary = components['schemas']['TagSummary']
+
+/**
+ * Read the tag list off a thread-shaped list row without a cast.
+ *
+ * Normalizes through one helper for the same reason as
+ * `getManualCreatorCreditList`: the checked-in generated client schema can lag
+ * the server's live response, and an untagged series must never render as
+ * untagged merely because the generated type has not caught up.
+ *
+ * Args:
+ *     thread: Any list row carrying a tags field.
+ *
+ * Returns:
+ *     The visible tag summaries, or an empty list when absent.
+ */
+export function getQueueTagList(thread: { tags?: ThreadTagSummary[] | null }): ThreadTagSummary[] {
+  return thread.tags ?? []
+}
+
 export interface AuthUser {
   id?: number;
   username: string;

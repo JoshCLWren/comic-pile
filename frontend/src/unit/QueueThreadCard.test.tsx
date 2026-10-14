@@ -859,4 +859,40 @@ describe('QueueThreadCard', () => {
       expect(screen.queryByText(/need mapping/)).toBeNull()
       expect(screen.getByTestId('queue-map-series-btn')).toBeInTheDocument()
     })
+
+  describe('tag visibility (issue #3425)', () => {
+    it('shows the series tags on the Queue row', () => {
+      renderCard(
+        createMockThread({
+          title: 'Spider-Man',
+          tags: [{ id: 31, name: 'Physical', color: '#ff0000', scope: 'global' }],
+        }),
+      )
+
+      const group = screen.getByRole('list', { name: 'Tags for Spider-Man' })
+      expect(group).toBeInTheDocument()
+      expect(screen.getByText('Physical')).toBeInTheDocument()
+    })
+
+    it('renders no tag group for an untagged Queue row', () => {
+      renderCard(createMockThread({ title: 'Batman' }))
+
+      expect(screen.queryByRole('list', { name: /^Tags for / })).not.toBeInTheDocument()
+    })
+
+    it('keeps the row clickable when tags are displayed', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      renderCard(
+        createMockThread({
+          tags: [{ id: 31, name: 'Physical', color: '#ff0000', scope: 'global' }],
+        }),
+        { onCardClick },
+      )
+
+      await user.click(screen.getByText('Physical'))
+
+      expect(onCardClick).toHaveBeenCalledTimes(1)
+    })
   })
+})
