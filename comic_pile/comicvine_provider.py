@@ -613,7 +613,8 @@ class ComicVineClient:
                 retry_after=exc.retry_after,
             )
             exc.resource = endpoint_bucket
-            exc.retry_after = effective_delay
+            # Preserve the original retry_after from the exception for callers
+            exc.retry_after = exc.retry_after
             exc.retry_after_seconds = effective_delay
             cached = self._read_cache(cache_key)
             if cached is not None:
