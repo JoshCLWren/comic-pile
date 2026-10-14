@@ -67,10 +67,14 @@ def _get_comicvine_client():
     if not api_key:
         return None
 
-    from comic_pile.comicvine_provider import ComicVineClient
+    from comic_pile.comicvine_provider import ComicVineClient, get_shared_http_client
 
     cache_dir = Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine"))
-    return ComicVineClient(api_key=api_key, cache_dir=cache_dir)
+    return ComicVineClient(
+        api_key=api_key,
+        cache_dir=cache_dir,
+        http_client=get_shared_http_client(),
+    )
 
 
 @router.get(

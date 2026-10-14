@@ -6,6 +6,7 @@ import asyncio
 import email.utils
 import hashlib
 import json
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -13,8 +14,6 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from functools import wraps
-import time
 
 import httpx
 from filelock import FileLock
@@ -40,25 +39,6 @@ DEEP_ISSUE_FIELDS = (
     "story_arc_credits",
     "date_last_updated",
 )
-
-
-def _performance_monitor(func):
-    """Decorator to monitor and log performance of ComicVine requests."""
-    @wraps(func)
-    async def wrapper(self, *args, **kwargs):
-        start_time = time.monotonic()
-        try:
-            result = await func(self, *args, **kwargs)
-            duration = time.monotonic() - start_time
-            # Log slow requests (over 1 second)
-            if duration > 1.0:
-                print(f"PERF: {func.__name__} took {duration:.3f}s (slow)")
-            return result
-        except Exception as exc:
-            duration = time.monotonic() - start_time
-            print(f"PERF: {func.__name__} failed after {duration:.3f}s: {exc}")
-            raise
-    return wrapper
 
 
 class ComicVineError(RuntimeError):
@@ -335,6 +315,36 @@ def _parse_retry_after(header_value: str | None, clock: Callable[[], float] = ti
     return None
 
 
+_shared_http_client: httpx.AsyncClient | None = None
+_shared_http_client_lock = threading.Lock()
+
+
+def get_shared_http_client() -> httpx.AsyncClient:
+    """Return the process-wide keep-alive HTTP client for live ComicVine calls.
+
+    Reusing one client across requests keeps TLS connections warm so warm
+    application instances do not pay a fresh handshake on every provider call.
+    Redirects are followed to match the historical urllib transport behavior.
+    The client is intended for the application's single event loop.
+
+    Returns:
+        The shared async HTTP client, created on first use.
+    """
+    global _shared_http_client
+    if _shared_http_client is None:
+        with _shared_http_client_lock:
+            if _shared_http_client is None:
+                _shared_http_client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(
+                        DEFAULT_REQUEST_TIMEOUT_SECONDS,
+                        connect=DEFAULT_REQUEST_TIMEOUT_SECONDS * 0.3,
+                    ),
+                    limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+                    follow_redirects=True,
+                )
+    return _shared_http_client
+
+
 class ComicVineClient:
     """Fetch ComicVine resources with endpoint-specific contracts, resource throttling, and resumable caching."""
 
@@ -349,6 +359,7 @@ class ComicVineClient:
         ),
         base_url: str = COMICVINE_BASE_URL,
         timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         """Configure the provider client.
 
@@ -358,7 +369,10 @@ class ComicVineClient:
             requests_per_hour: Rolling-hour budget per endpoint path.
             minimum_live_request_interval_seconds: Minimum delay between uncached live request starts.
             base_url: Provider API base URL.
-            timeout_seconds: Network timeout per request.
+            timeout_seconds: Network timeout per request on the default urllib transport.
+            http_client: Optional shared async HTTP client. When provided, live requests use it
+                with connection keep-alive; when None, live requests go through the synchronous
+                urllib transport on a worker thread.
         """
         if not api_key.strip():
             raise ValueError("api_key is required")
@@ -380,15 +394,7 @@ class ComicVineClient:
         self._live_request_lock = asyncio.Lock()
         self._last_live_request_started_at: float | None = None
         self.live_request_starts = 0
-        self._http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout_seconds, connect=timeout_seconds * 0.3),
-            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
-            http2=False,  # Disable HTTP/2 for compatibility with ComicVine
-        )
-
-    async def close(self) -> None:
-        """Close the httpx client and release pooled connections."""
-        await self._http_client.aclose()
+        self._http_client = http_client
 
     @staticmethod
     def _cache_key(endpoint: str, params: Mapping[str, object]) -> str:
@@ -430,9 +436,27 @@ class ComicVineClient:
                 self._last_live_request_started_at = time.monotonic()
         self.live_request_starts += 1
 
-    @_performance_monitor
     async def _request_async(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
-        """Make an async HTTP request to ComicVine using httpx for better performance."""
+        """Fetch one raw provider payload over the configured HTTP transport.
+
+        When no async HTTP client was injected, the request falls back to the
+        synchronous urllib transport on a worker thread. The injected client
+        path reuses keep-alive connections and follows redirects, matching the
+        urllib transport's behavior.
+
+        Args:
+            endpoint: Relative API path.
+            params: Provider request parameters excluding credentials and output format.
+
+        Returns:
+            Decoded provider payload as a dictionary.
+
+        Raises:
+            ComicVineRateLimitError: When the provider answers with a throttle status.
+            ComicVineError: For HTTP, network, decoding, or provider payload failures.
+        """
+        if self._http_client is None:
+            return await asyncio.to_thread(self._request_sync, endpoint, params)
         query = {
             **params,
             "api_key": self.api_key,
@@ -445,7 +469,6 @@ class ComicVineClient:
                 url,
                 params=query,
                 headers={"User-Agent": "ComicPile/1.0"},
-                timeout=self.timeout_seconds,
             )
             response.raise_for_status()
             decoded = response.json()
@@ -457,7 +480,7 @@ class ComicVineClient:
                     retry_after=retry_after,
                 ) from exc
             raise ComicVineError(f"ComicVine HTTP {exc.response.status_code} for {endpoint}") from exc
-        except (httpx.RequestError, httpx.TimeoutException) as exc:
+        except httpx.RequestError as exc:
             raise ComicVineError(f"ComicVine request failed for {endpoint}: {exc}") from exc
         except (json.JSONDecodeError, ValueError) as exc:
             raise ComicVineError(f"ComicVine response JSON decode failed for {endpoint}: {exc}") from exc
