@@ -102,7 +102,6 @@ async def search_comicvine_series(
     Returns:
         Series search results with paging metadata.
     """
-    import time
     start_time = time.perf_counter()
     
     clamped_limit = max(1, min(limit, 100))

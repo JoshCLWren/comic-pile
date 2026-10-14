@@ -108,9 +108,6 @@ async def api_search_comicvine_series(
         offset: Zero-based result offset for paging.
         current_user: Authenticated user.
     """
-    import time
-    from fastapi import Request
-    
     # Performance instrumentation
     start_time = time.perf_counter()
     
