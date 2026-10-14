@@ -105,15 +105,23 @@ async def test_comicvine_intelligence_under_1000ms_budget(
     related_identities = []
     for arc_id in arc_ids:
         for related_num in range(2, 7):
+            # Unique external IDs satisfy uq_external_identity_provider_entity;
+            # unique issue numbers/positions satisfy uq_issue_thread_number and
+            # uq_issue_thread_position. Each related member belongs to exactly
+            # one arc so per-arc assertions stay exact (a shared-arc fixture
+            # would attach every row to every arc via the intersection logic).
+            external_id = str(2000 + arc_id * 10 + related_num)
             related_identity = _identity(
-                f"100{related_num}",
+                external_id,
                 {
                     "name": f"Related Issue {related_num}",
                     "issue_number": str(related_num),
                     "volume_id": 100,
                     "volume_name": "Performance Test Series",
                     "cover_date": f"2026-{arc_id:02d}-{related_num:02d}",
-                    "story_arc_credits": story_arc_credits,
+                    "story_arc_credits": [
+                        {"id": arc_id, "name": f"Story Arc {arc_id}"}
+                    ],
                 },
             )
             related_identities.append(related_identity)
@@ -122,11 +130,11 @@ async def test_comicvine_intelligence_under_1000ms_budget(
     await async_db.flush()
 
     related_mappings = []
-    for related_identity in related_identities:
+    for index, related_identity in enumerate(related_identities):
         related_issue = Issue(
             thread_id=thread.id,
-            issue_number=str(related_identity.external_id[1:]),
-            position=related_identity.external_id[1:],
+            issue_number=f"related-{related_identity.external_id}",
+            position=2 + index,
             status="read",
         )
         async_db.add(related_issue)
