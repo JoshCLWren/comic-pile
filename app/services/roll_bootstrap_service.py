@@ -176,7 +176,8 @@ async def build_roll_bootstrap_response(
     rollable_rows = [
         row
         for row in active_rows
-        if row["queue_position"] >= 1
+        if row["queue_position"] is not None
+        and row["queue_position"] >= 1
         and not row["is_blocked"]
         and row["id"] not in effective_snoozed_id_set
         and row["id"] not in skipped_id_set
@@ -231,11 +232,21 @@ async def build_roll_bootstrap_response(
         if not row["is_blocked"]
         and row["id"] not in effective_snoozed_id_set
         and (
-            row["last_activity_at"]
-            if row["last_activity_at"] is not None
-            else row["created_at"]
+            (
+                row["last_activity_at"]
+                if row["last_activity_at"] is not None
+                else row["created_at"]
+            )
+            is not None
         )
-        < stale_cutoff
+        and (
+            (
+                row["last_activity_at"]
+                if row["last_activity_at"] is not None
+                else row["created_at"]
+            )
+            < stale_cutoff
+        )
     ]
     stale_thread_count = len(stale_ids)
 
@@ -269,7 +280,8 @@ async def build_roll_bootstrap_response(
         fmt = normalize_format_value(row["format"])
         is_blocked = row["is_blocked"]
         is_rollable = (
-            row["queue_position"] >= 1
+            row["queue_position"] is not None
+            and row["queue_position"] >= 1
             and not is_blocked
             and tid not in effective_snoozed_id_set
             and tid not in skipped_id_set

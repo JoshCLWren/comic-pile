@@ -443,9 +443,18 @@ class TestCriterion6TasteDoesNotWeightRolls:
 
         from app import momentum
         import app.api.roll as roll_module
+        from app.repositories import roll_bootstrap_repository as bootstrap_repo
+        from app.services import roll_bootstrap_service
 
         momentum_source = inspect.getsource(momentum)
-        roll_source = inspect.getsource(roll_module)
+        # Bootstrap assembly moved out of the router (issue #3375), so the guard
+        # must cover the service and repository that now own that logic.
+        roll_sources = (
+            inspect.getsource(roll_module),
+            inspect.getsource(roll_bootstrap_service),
+            inspect.getsource(bootstrap_repo),
+        )
 
-        assert "taste" not in roll_source.lower()
+        for roll_source in roll_sources:
+            assert "taste" not in roll_source.lower()
         assert "taste" not in momentum_source.lower()
