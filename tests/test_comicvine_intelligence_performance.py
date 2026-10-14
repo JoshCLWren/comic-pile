@@ -1,10 +1,13 @@
 """Performance test for GET /api/v1/issues/{issue_id}/comicvine endpoint."""
 
+import time
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.performance_budgets import REQUEST_TIMEOUT_MS
 from app.services import comicvine_intelligence
 
 
@@ -152,7 +155,9 @@ async def test_comicvine_intelligence_under_1000ms_budget(
     async_db.add_all(related_mappings)
     await async_db.flush()
 
+    started = time.perf_counter()
     response = await auth_client.get(f"/api/v1/issues/{current_issue.id}/comicvine")
+    elapsed_ms = (time.perf_counter() - started) * 1000
 
     assert response.status_code == 200
     body = response.json()
@@ -170,3 +175,13 @@ async def test_comicvine_intelligence_under_1000ms_budget(
     for arc in story_arcs:
         assert arc["comicvine_arc_id"] in arc_ids
         assert len(arc["related_issues"]) == 5
+
+    assert elapsed_ms < REQUEST_TIMEOUT_MS, (
+        f"GET /api/v1/issues/{{issue_id}}/comicvine took {elapsed_ms:.1f}ms, "
+        f"exceeding the {REQUEST_TIMEOUT_MS}ms budget (issue #3390)"
+    )
+    print(
+        f"MEASUREMENT issue=3390 kind=comicvine_intelligence "
+        f"arcs=10 related=50 elapsed_ms={elapsed_ms:.1f} "
+        f"budget_ms={REQUEST_TIMEOUT_MS}"
+    )
