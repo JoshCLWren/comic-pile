@@ -40,7 +40,13 @@ test.describe('AUTH-001: Authentication and startup', () => {
 
   test('invalid credentials show error and stay on login page', async ({
     page,
+    allowExpectedBrowserFailures,
   }) => {
+    // A 401 here is the test's own intent (bad credentials), not app noise.
+    allowExpectedBrowserFailures.allow({
+      category: 'console',
+      message: 'api/v1/auth/login',
+    })
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('input[name="username"]', { state: 'visible' })
 
@@ -48,7 +54,7 @@ test.describe('AUTH-001: Authentication and startup', () => {
     await page.fill('input[name="password"]', 'wrong_password_123')
     await page.click('button[type="submit"]')
 
-    await expect(page.locator('.text-red-400')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(/incorrect username or password/i)).toBeVisible({ timeout: 5000 })
     await expect(page).toHaveURL(/\/login/)
   })
 
@@ -62,10 +68,9 @@ test.describe('AUTH-001: Authentication and startup', () => {
     await page.fill('input[name="password"]', 'correct_password_123')
     await page.click('button[type="submit"]')
 
-    await expect(page.locator('.text-red-400')).toHaveText(
-      /use your username, not your email/i,
-      { timeout: 5000 },
-    )
+    await expect(page.getByText(/username, not your email/i)).toBeVisible({
+      timeout: 5000,
+    })
     await expect(page).toHaveURL(/\/login/)
   })
 

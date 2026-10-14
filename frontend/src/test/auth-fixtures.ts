@@ -4,6 +4,7 @@ type QueuedResponse = {
   status: number
   body: unknown
   networkError: string | null
+  persistent: boolean
 }
 
 type MockObject = {
@@ -11,7 +12,9 @@ type MockObject = {
   as: (name: string) => MockObject
   reply: (status: number, body?: unknown) => MockObject
   replyOnce: (status: number, body?: unknown) => MockObject
+  replyAlways: (status: number, body?: unknown) => MockObject
   networkErrorMethod: (message: string) => MockObject
+  networkErrorAlways: (message: string) => MockObject
 }
 
 type AuthFixtures = {
@@ -51,7 +54,12 @@ export const test = base.extend<AuthFixtures>({
       const queue = findQueueForRequest(method, url)
 
       if (queue && queue.length > 0) {
-        const next = queue.shift()!
+        // Persistent entries answer every matching request (bounded-retry auth
+        // flows re-hit the same endpoint) until a later reply replaces them.
+        const next = queue[0]
+        if (!next.persistent) {
+          queue.shift()
+        }
         if (next.networkError) {
           await route.abort('failed')
         } else {
@@ -79,15 +87,25 @@ export const test = base.extend<AuthFixtures>({
         },
         reply: (status: number, body?: unknown) => {
           queue.length = 0
-          queue.push({ status, body: body ?? null, networkError: null })
+          queue.push({ status, body: body ?? null, networkError: null, persistent: false })
           return mock
         },
         replyOnce: (status: number, body?: unknown) => {
-          queue.push({ status, body: body ?? null, networkError: null })
+          queue.push({ status, body: body ?? null, networkError: null, persistent: false })
+          return mock
+        },
+        replyAlways: (status: number, body?: unknown) => {
+          queue.length = 0
+          queue.push({ status, body: body ?? null, networkError: null, persistent: true })
           return mock
         },
         networkErrorMethod: (message: string) => {
-          queue.push({ status: 0, body: null, networkError: message || 'failed' })
+          queue.push({ status: 0, body: null, networkError: message || 'failed', persistent: false })
+          return mock
+        },
+        networkErrorAlways: (message: string) => {
+          queue.length = 0
+          queue.push({ status: 0, body: null, networkError: message || 'failed', persistent: true })
           return mock
         },
       }
@@ -108,6 +126,13 @@ export const test = base.extend<AuthFixtures>({
           created_at: '2023-01-01T00:00:00Z',
           last_login: '2023-01-01T00:00:00Z',
           preferences: { theme: 'classic' },
+        })
+
+        // Session renewal must stay inside the mock: a real refresh against
+        // the backend would 401 and end the mocked session mid-test.
+        mockApi.post('/api/v1/auth/refresh').as('refresh').replyAlways(200, {
+          access_token: 'test-access-token',
+          refresh_token: 'test-refresh-token',
         })
       },
 

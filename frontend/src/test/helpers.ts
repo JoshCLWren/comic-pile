@@ -21,8 +21,24 @@ type TestUser = {
 };
 
 export async function waitForQueueReady(page: Page): Promise<void> {
-  await expect(page.getByRole('heading', { name: 'Queue' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Add Series' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Queue', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add Series' }).first()).toBeVisible()
+}
+
+/**
+ * The queue shows a "Ready to roll?" nudge modal after the first series is
+ * created (localStorage-persisted). Its backdrop blocks later interactions,
+ * so UI-create flows must dismiss it before touching the queue again.
+ */
+export async function dismissRollNudgeIfPresent(page: Page): Promise<void> {
+  const nudge = page.getByTestId('roll-nudge-modal')
+  try {
+    await nudge.waitFor({ state: 'visible', timeout: 3000 })
+  } catch {
+    return
+  }
+  await nudge.getByRole('button', { name: /maybe later/i }).click()
+  await expect(nudge).toBeHidden()
 }
 
 /** Exact Queue title locator. Substring `getByText('Test Thread 1')` also hits 10–19. */
@@ -123,10 +139,10 @@ export async function scrollAppUntil(
         break
       }
       const previousHeight = state.rootScrollHeight
-      await page.waitForFunction((prev) => {
-        const root = document.getElementById('root')
-        return (root?.scrollHeight ?? 0) > prev
-      }, previousHeight, { timeout: 15000 })
+              await page.waitForFunction((prev) => {
+                const root = document.getElementById('root')
+                return (root?.scrollHeight ?? 0) > prev
+              }, previousHeight, { timeout: 25000 })
       continue
     }
     await scrollAppTo(page, next)

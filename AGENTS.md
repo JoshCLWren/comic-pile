@@ -157,6 +157,8 @@ cd frontend && pnpm run build && npx playwright test --headed  # Run with browse
 
 **Why build required?** Playwright tests run against production build in `static/react/`, not dev server. Without build, tests fail with 404s for CSS/JS assets.
 
+**Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 reds reconcile into one canonical issue), and the verified failure-class triage table.
+
 ## Python Code Style
 
 ### Imports
@@ -448,6 +450,7 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - Run `make lint` and `make pytest` before committing
 - Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
+- **Local factory sessions**: before the first commit of any issue-driven session, load the `local-factory-session` skill (`.agents/skills/local-factory-session/SKILL.md`). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
 
 ## Factory roster discovery
 
@@ -478,6 +481,15 @@ make next-task
 
 For a complete copy-paste execution prompt, read
 [`prompts/agent-next-task.md`](prompts/agent-next-task.md).
+
+**Local factory sessions**: load the `local-factory-next-task` skill
+(`.agents/skills/local-factory-next-task/SKILL.md`) for the full startup flow — private
+worktree and port-slot claiming (so parallel local agents such as Codex never clobber each
+other's branches, artifacts, or ports), session bootstrap, how `make next-task` orders
+claimable work (priority, then oldest issue number), how to check factory leases (labels,
+claim markers) before claiming so a local session never interferes with the scheduled GitHub
+Action factories, the two-step atomic claim (`make start-task` + full factory label set with
+`factory:local`), and the handoff into the `local-factory-session` skill.
 
 Agents with the `github-issue-kanban` skill should follow that skill. Other
 agents must read `docs/ISSUE_EXECUTION_PROTOCOL.md`, update the selected

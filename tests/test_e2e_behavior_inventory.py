@@ -3,6 +3,10 @@
 This test guards the contract of ``docs/e2e-behavior-inventory.yaml`` without
 adding any Playwright/Chromium coverage (that work belongs to #1480). It
 ensures the inventory stays a valid, unique, and complete source of truth.
+
+Since issue #1483 the inventory is also the coverage source of truth for the
+scheduled Chromium regression selector, so covered behaviors must name the
+spec files that actually own them.
 """
 
 from pathlib import Path
@@ -10,6 +14,7 @@ from pathlib import Path
 import yaml
 
 INVENTORY_PATH = Path("docs/e2e-behavior-inventory.yaml")
+SPEC_DIR = Path("frontend/src/test")
 
 VALID_PRIORITIES = {"P0", "P1", "P2"}
 VALID_STATUSES = {"uncovered", "covered", "blocked"}
@@ -82,3 +87,35 @@ def test_required_p0_areas_are_represented() -> None:
             p0_areas.add(entry["area"])
     missing = REQUIRED_P0_AREAS - p0_areas
     assert not missing, f"missing P0 coverage for areas: {sorted(missing)}"
+
+
+def test_covered_behaviors_declare_owning_specs() -> None:
+    """Every covered behavior must name at least one owning spec file."""
+    data = _load_inventory()
+    for entry in data["behaviors"]:
+        if entry["status"] != "covered":
+            continue
+        specs = entry.get("specs")
+        assert isinstance(specs, list) and specs, (
+            f"{entry['id']} is covered but declares no specs; "
+            "regression selection cannot run coverage it cannot resolve"
+        )
+
+
+def test_declared_specs_exist_as_playwright_spec_files() -> None:
+    """Declared spec files must be well-formed basenames that exist on disk."""
+    data = _load_inventory()
+    for entry in data["behaviors"]:
+        specs = entry.get("specs")
+        if not specs:
+            continue
+        assert isinstance(specs, list)
+        for spec in specs:
+            assert isinstance(spec, str), f"{entry['id']} has a non-string spec entry"
+            assert "/" not in spec and "\\" not in spec, (
+                f"{entry['id']} spec {spec} must be a basename under {SPEC_DIR}"
+            )
+            assert spec.endswith(".spec.ts"), f"{entry['id']} spec {spec} is not a .spec.ts file"
+            assert (SPEC_DIR / spec).exists(), (
+                f"{entry['id']} references missing spec file {SPEC_DIR / spec}"
+            )
