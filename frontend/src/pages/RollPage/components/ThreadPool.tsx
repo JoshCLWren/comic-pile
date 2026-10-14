@@ -83,9 +83,6 @@ export function ThreadPool({
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
 
-  // Issue #3033: an empty pool caused by account-wide tag exclusions must say
-  // so instead of claiming the reading queue is empty. Tag exclusions own no
-  // dedicated Roll section, so their series arrive through inactiveThreads.
   useEffect(() => {
     const returnedToRoll = wasRatingView.current && !isRatingView
     wasRatingView.current = isRatingView

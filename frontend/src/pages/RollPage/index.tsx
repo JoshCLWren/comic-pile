@@ -21,6 +21,7 @@ import { useCorrectionSheetExamples } from '../../hooks/useCorrectionSheetExampl
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
+import type { Tag } from '../../services/api-tags'
 import type { ReadingModeState, SessionModeUpdateRequest, SnoozeCorrectionInfo, CorrectionChoiceId } from '../../types'
 import { FEATURES } from '../../config/features'
 import type { ThreadMetadata } from './types'
@@ -41,7 +42,7 @@ import { useToast } from '../../contexts/useToast'
 import { invalidateAfterUndo } from '../../query/cacheEffects'
 import { ThreadPool } from './components/ThreadPool'
 import { TagExclusionManager } from './components/TagExclusionManager'
-import { useRemoveTagExclusion } from '../../hooks/useRollTagExclusions'
+import { useRemoveTagExclusion, useExcludeTagAndReroll } from '../../hooks/useRollTagExclusions'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
 import { RollModals } from './components/RollModals'
@@ -134,6 +135,7 @@ export default function RollPage() {
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
+  const excludeTagAndRerollMutation = useExcludeTagAndReroll()
   const removeTagExclusionMutation = useRemoveTagExclusion()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
@@ -323,6 +325,28 @@ export default function RollPage() {
     }
   }, [skipMutation, refetchBootstrap, rating, state])
 
+  const handleExcludeTag = useCallback(
+    (tag: Tag) => {
+      void excludeTagAndRerollMutation
+        .mutateAsync(tag.id)
+        .then((result) => {
+          showToast(
+            result.pendingInvalidated
+              ? `Excluded “${result.excludedTag.name}” and rolled again.`
+              : `Excluded “${result.excludedTag.name}” from Roll.`,
+            'success',
+          )
+        })
+        .catch((error: unknown) => {
+          showToast(
+            getApiErrorDetail(error) || `Could not exclude “${tag.name}”.`,
+            'error',
+          )
+        })
+    },
+    [excludeTagAndRerollMutation, showToast],
+  )
+
   const ratingViewData = useRatingView({
     state,
     bootstrap,
@@ -340,6 +364,8 @@ export default function RollPage() {
     rating,
     snooze,
     onSkip: handleSkip,
+    onExcludeTag: handleExcludeTag,
+    excludeIsPending: excludeTagAndRerollMutation.isPending,
     rateMutation,
     snoozeMutation,
     dismissPendingMutation,

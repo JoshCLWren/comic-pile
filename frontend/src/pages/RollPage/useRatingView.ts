@@ -5,6 +5,7 @@ import type { RatingThread, ThreadMetadata } from './types'
 import type { ConnectedThreadInfo, ReaderContextResponse } from '../../types'
 import type { ReadingOrder } from '../../services/api-reading-orders'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
+import type { Tag } from '../../services/api-tags'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
@@ -29,6 +30,10 @@ interface UseRatingViewParams {
   }
   snooze: { handleSnooze: () => Promise<void> }
   onSkip: () => Promise<void>
+  /** Persist a Roll tag exclusion for one chip (issue #3033). */
+  onExcludeTag?: (tag: Tag) => void
+  /** True while an exclude-and-reroll is in flight (issue #3033). */
+  excludeIsPending?: boolean
   rateMutation: { isPending: boolean }
   snoozeMutation: { isPending: boolean }
   dismissPendingMutation: { isPending: boolean }
@@ -54,6 +59,8 @@ export interface RatingViewData {
   onSkip?: () => void
   onCancel: () => void
   onRefreshThread: () => void
+  onExcludeTag?: (tag: Tag) => void
+  excludeIsPending?: boolean
   readerContext: ReaderContextResponse | null
   isReaderContextLoading: boolean
   readerContextError: Error | null
@@ -103,6 +110,8 @@ export function useRatingView({
   rating,
   snooze,
   onSkip,
+  onExcludeTag,
+  excludeIsPending,
   rateMutation,
   snoozeMutation,
   dismissPendingMutation,
@@ -148,6 +157,8 @@ export function useRatingView({
     onSkip,
     onCancel: rating.handleCancelRating,
     onRefreshThread: rating.handleRefreshThread,
+    onExcludeTag,
+    excludeIsPending,
     readerContext,
     isReaderContextLoading,
     readerContextError: readerContextError ?? null,

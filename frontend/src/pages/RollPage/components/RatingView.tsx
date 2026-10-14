@@ -29,6 +29,8 @@ export function RatingView({ data }: RatingViewProps) {
     onSkip,
     onCancel,
     onRefreshThread,
+    onExcludeTag,
+    excludeIsPending,
     readerContext,
     isReaderContextLoading,
     ratingViewTopRef,
@@ -53,6 +55,8 @@ export function RatingView({ data }: RatingViewProps) {
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}
             onRefreshThread={onRefreshThread}
+            onExcludeTag={onExcludeTag}
+            excludeIsPending={excludeIsPending}
           />
         </div>
 

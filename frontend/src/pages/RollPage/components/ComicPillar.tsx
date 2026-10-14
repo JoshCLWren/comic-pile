@@ -16,15 +16,20 @@ import {
   invalidateComicVineIssueIntelligenceMany,
 } from '../../../query/cacheEffects'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
-import { useExcludeTagAndReroll } from '../../../hooks/useRollTagExclusions'
-import { useToast } from '../../../contexts/useToast'
-import { getApiErrorDetail } from '../../../utils/apiError'
+import type { Tag } from '../../../services/api-tags'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
   /** Die size the current roll used, so the winning face can be named on the card (issue #3126). */
   currentDie?: number
   onRefreshThread: () => void
+  /**
+   * Exclude a tag from Roll (issue #3033). RollPage owns the mutation and the
+   * toast so this card stays presentational and needs no toast context.
+   */
+  onExcludeTag?: (tag: Tag) => void
+  /** True while an exclude-and-reroll is in flight. */
+  excludeIsPending?: boolean
 }
 
 // A non-breaking space before the separator glues it to the item it follows, so
@@ -35,6 +40,8 @@ export function ComicPillar({
   activeRatingThread,
   currentDie,
   onRefreshThread,
+  onExcludeTag,
+  excludeIsPending,
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
@@ -48,8 +55,6 @@ export function ComicPillar({
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const progress = getProgressPercentage(activeRatingThread)
   const { metadata } = useComicVineIssueIntelligence(issueId)
-  const { showToast } = useToast()
-  const excludeTagAndReroll = useExcludeTagAndReroll()
   const storyTitle = metadata?.name ?? null
   // The publication date is rendered once, beside the cover in ComicIdentity.
   // Repeating it here only produced two dates for the same issue.
@@ -298,28 +303,8 @@ export function ComicPillar({
                     ? `${threadTitle} #${issueNumber}`
                     : threadTitle
                 }
-                onExcludeTag={(tag) => {
-                  void excludeTagAndReroll
-                    .mutateAsync(tag.id)
-                    .then((result) => {
-                      if (result.pendingInvalidated) {
-                        showToast(
-                          `Excluded “${result.excludedTag.name}” and rolled again.`,
-                          'success',
-                        )
-                      } else {
-                        showToast(`Excluded “${result.excludedTag.name}” from Roll.`, 'success')
-                      }
-                    })
-                    .catch((error: unknown) => {
-                      showToast(
-                        getApiErrorDetail(error) ||
-                          `Could not exclude “${tag.name}”.`,
-                        'error',
-                      )
-                    })
-                }}
-                excludeIsPending={excludeTagAndReroll.isPending}
+                onExcludeTag={onExcludeTag}
+                excludeIsPending={excludeIsPending}
               />
             </div>
           )}

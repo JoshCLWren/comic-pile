@@ -37,7 +37,8 @@ def _tag_to_response(tag: Tag) -> TagResponse:
     )
 
 
-async def _list_response(    service: RollTagExclusionService, user: User
+async def _list_response(
+    service: RollTagExclusionService, user: User
 ) -> roll_schemas.TagExclusionListResponse:
     """Build the exclusion-list response for one user."""
     tags = await service.list_excluded_tags(user)
