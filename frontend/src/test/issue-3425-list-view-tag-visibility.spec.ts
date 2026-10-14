@@ -30,11 +30,14 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
   // SAFETY: the CSRF bootstrap response always carries csrf_token.
   const { csrf_token: csrf } = (await csrfResponse.json()) as { csrf_token?: string }
   expect(csrf).toBeDefined()
-  return {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-CSRF-Token': csrf!,
   }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  return headers
 }
 
 /** Create a private tag owned by the test user and attach it to one thread. */
