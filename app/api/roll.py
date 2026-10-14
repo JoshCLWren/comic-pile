@@ -48,6 +48,7 @@ from app.schemas import (
     RollResponse,
     SessionMode,
     SessionModeResponse,
+    SessionModeUpdateRequest,
     SessionResponse,
     ThreadExclusionReason,
 )
@@ -1265,24 +1266,7 @@ async def roll_bootstrap(
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
     skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
 
-    # Issue #3425: attach viewer-visible tags to every roll-adjacent series
-    # summary, including the die-face pool, so a tagged series reads as tagged
-    # on the Roll screen instead of only on its own detail page.
-    tagged_bootstrap_threads: list[RollBootstrapThread] = [
-        *roll_pool,
-        *snoozed_threads,
-        *skipped_threads,
-        *blocked_threads,
-    ]
-    if stale_thread is not None:
-        tagged_bootstrap_threads.append(stale_thread)
-
-    tags_by_thread = await _load_visible_thread_tags(
-        db, user_id, sorted({thread.id for thread in tagged_bootstrap_threads})
-    )
-    for thread in tagged_bootstrap_threads:
-        thread.tags = tags_by_thread.get(thread.id, [])
-
+    # Compute stale_thread before building tagged_bootstrap_threads so it can be included
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
     stale_base = (
@@ -1330,6 +1314,24 @@ async def roll_bootstrap(
                     format=normalize_format_value(stale_row.format),
                     last_activity_at=stale_last_activity,
                 )
+
+    # Issue #3425: attach viewer-visible tags to every roll-adjacent series
+    # summary, including the die-face pool, so a tagged series reads as tagged
+    # on the Roll screen instead of only on its own detail page.
+    tagged_bootstrap_threads: list[RollBootstrapThread] = [
+        *roll_pool,
+        *snoozed_threads,
+        *skipped_threads,
+        *blocked_threads,
+    ]
+    if stale_thread is not None:
+        tagged_bootstrap_threads.append(stale_thread)
+
+    tags_by_thread = await _load_visible_thread_tags(
+        db, user_id, sorted({thread.id for thread in tagged_bootstrap_threads})
+    )
+    for thread in tagged_bootstrap_threads:
+        thread.tags = tags_by_thread.get(thread.id, [])
 
     # Exclusion transparency for issue #3125: enumerate every series
     # not in the roll pool and explain why, so the user can see what
