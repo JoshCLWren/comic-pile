@@ -30,5 +30,6 @@ ROUTER_SUBMODULES = (
     "recommendation_diagnostics",
     "releases",
     "roll_recovery_switch",
+    "roll_tag_exclusions",
     "taste_signal",
 )
