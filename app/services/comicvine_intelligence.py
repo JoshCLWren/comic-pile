@@ -354,15 +354,9 @@ async def get_issue_intelligence(
     arc_refs = _arc_references(metadata)
     arc_ids = [arc_id for arc in arc_refs if (arc_id := _integer(arc.get("id"))) is not None]
 
-    if not arc_ids:
-        return None
-
     related_rows, window_saturated = await _related_external_rows(
         db, arc_ids, identity.external_id
     )
-
-    if not related_rows:
-        return None
 
     matches = await _comicpile_matches(
         db,

@@ -1,12 +1,11 @@
 """Performance test for GET /api/v1/issues/{issue_id}/comicvine endpoint."""
 
-from datetime import UTC, datetime
-
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.services import comicvine_intelligence
 
 
 def _identity(external_id: str, metadata: dict[str, object]) -> ExternalIdentity:
@@ -49,7 +48,6 @@ async def test_comicvine_intelligence_under_1000ms_budget(
 
     Performance budget: 1000ms (from issue #3390).
     """
-    from app.services.comicvine_intelligence import get_issue_intelligence
 
     def _noop_schedule(_identity_id: int) -> bool:
         return False
