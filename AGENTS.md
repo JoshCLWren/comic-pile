@@ -482,6 +482,12 @@ make next-task
 For a complete copy-paste execution prompt, read
 [`prompts/agent-next-task.md`](prompts/agent-next-task.md).
 
+**Local factory sessions**: load the `local-factory-next-task` skill
+(`.agents/skills/local-factory-next-task/SKILL.md`) for the full startup flow — session
+bootstrap, how `make next-task` orders claimable work (priority, then oldest issue number),
+the two-step atomic claim (`make start-task` + full factory label set with `factory:local`),
+and the handoff into the `local-factory-session` skill.
+
 Agents with the `github-issue-kanban` skill should follow that skill. Other
 agents must read `docs/ISSUE_EXECUTION_PROTOCOL.md`, update the selected
 issue's `ralph-status:*` label before editing, and add a verification comment
