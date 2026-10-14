@@ -30,10 +30,10 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
   // SAFETY: the CSRF bootstrap response always carries csrf_token.
   const { csrf_token: csrf } = (await csrfResponse.json()) as { csrf_token?: string }
   expect(csrf).toBeDefined()
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-CSRF-Token': csrf!,
-  } satisfies Record<string, string>
+  }
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
@@ -44,7 +44,7 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
 async function tagThread(page: Page, threadId: number, name: string): Promise<void> {
   const headers = await authHeaders(page)
 
-  const createResponse = await page.request.post('/api/tags/', {
+  const createResponse = await page.request.post('/api/v1/tags/', {
     headers,
     data: { name, color: 'red', scope: 'private' },
   })
@@ -52,7 +52,7 @@ async function tagThread(page: Page, threadId: number, name: string): Promise<vo
   // SAFETY: a successful create always returns the created tag with its id.
   const { tag } = (await createResponse.json()) as { tag: { id: number } }
 
-  const assignResponse = await page.request.post(`/api/tags/${tag.id}/assign/`, {
+  const assignResponse = await page.request.post(`/api/v1/tags/${tag.id}/assign/`, {
     headers,
     data: { target_type: 'Thread', target_id: threadId },
   })
