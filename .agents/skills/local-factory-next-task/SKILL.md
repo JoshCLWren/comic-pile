@@ -21,6 +21,42 @@ commit #1.
 
 Also: inspect `git status` and preserve any existing user changes.
 
+### Claim a private worktree
+
+Never share a checkout with another agent (Codex, Cursor, other opencode sessions).
+Parallel agents in one worktree clobber branches, build artifacts, and ports. One session =
+one worktree, following the existing on-disk convention (`comic-pile-<issue-or-topic>`
+under `/mnt/extra/josh/code/` or `/home/josh/tmp/`):
+
+```bash
+git -C /mnt/extra/josh/code/comic-pile-<main-or-topic> worktree add \
+  /mnt/extra/josh/code/comic-pile-<issue> -b <branch-name> origin/main
+```
+
+Run every subsequent command from that worktree. `make worktrees` lists existing ones; if a
+worktree for your issue already exists, enter it instead of creating another.
+
+### Claim a port slot
+
+Separate worktrees isolate compose *projects* (project name derives from the directory), but
+**host-published ports are machine-global** — two sessions on defaults will collide on the
+test Postgres (5437), api-test (8002), redis-test (6379), the e2e backend (9000), and the
+dev API (8000). Claim the smallest free slot N in 1–9 for the whole session
+(`ss -ltn | grep -E ':(800[0-9]|900[0-9]|543[7-9])'`), then export:
+
+| Resource | Default | Slot N |
+|---|---|---|
+| Dev API (`PORT`, Makefile convention: main=8000, worktrees 8001+) | 8000 | `PORT=$((8000+N))` |
+| E2E backend / Playwright (`BASE_URL`) | 9000 | `BASE_URL=http://127.0.0.1:$((9000+N))` |
+| Test Postgres publish (`E2E_POSTGRES_PUBLISH`) | 5437 | `E2E_POSTGRES_PUBLISH=$((5437+N)):5432` |
+| api-test publish (`E2E_API_PORT`, only if using the full compose stack) | 8002 | `E2E_API_PORT=$((8002+N))` |
+| redis-test publish (`E2E_REDIS_PUBLISH`, only for full compose stack) | 6379 | `E2E_REDIS_PUBLISH=$((6379+N))` |
+
+The e2e lane needs only Postgres plus a locally started uvicorn — bring up the single
+service (`docker compose -f docker-compose.test.yml up -d postgres-test` with
+`E2E_POSTGRES_PUBLISH` set) to skip the redis/api-test ports entirely. Details in the
+`e2e-chromium-regression` skill.
+
 ## 2. Read durable context
 
 - `AGENTS.md`

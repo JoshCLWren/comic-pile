@@ -14,13 +14,21 @@ must stay green), `p1-p2` (default scheduled discovery — reds are catalogued, 
 
 ## Local run contract
 
-1. Test database:
+Parallel local sessions (second opencode, Codex, other worktrees) share machine-global host
+ports and `/tmp` paths even though compose projects are per-directory. **Claim a port slot
+first** (see `local-factory-next-task`): pick the smallest free N in 1–9 and export it for
+the whole session.
+
+1. Test database — Postgres only is enough for this lane (skips redis-test/api-test port
+   collisions from `make docker-test-up`'s full-stack default):
 
    ```bash
-   make docker-test-up   # Postgres 16 on :5437
+   export E2E_POSTGRES_PUBLISH="$((5437+N)):5432"
+   docker compose -f docker-compose.test.yml up -d postgres-test
    ```
 
-2. Frontend build (skip only when reusing an existing `static/react` build):
+2. Frontend build (skip only when reusing an existing `static/react` build — artifacts are
+   per-worktree):
 
    ```bash
    pnpm --filter frontend run build
@@ -29,13 +37,20 @@ must stay green), `p1-p2` (default scheduled discovery — reds are catalogued, 
 3. Backend — **`TEST_ENVIRONMENT=true` is mandatory**. The rate-limit gate
    (`app/middleware/rate_limit.py`) only disables throttling in test mode; without it,
    fixture-speed traffic 429s the entire run. Never pass `REDIS_URL` (Redis is unused).
+   Keep the log path slot-unique too — `/tmp/backend.log` is machine-global:
 
    ```bash
+   export E2E_BACKEND_PORT="$((9000+N))"
+   export BASE_URL="http://127.0.0.1:${E2E_BACKEND_PORT}"
    SECRET_KEY=test-secret-key-for-testing-only TEST_ENVIRONMENT=true AUTO_BACKUP_ENABLED=false \
-     DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5437/comic_pile_test \
-     nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 9000 > /tmp/backend.log 2>&1 &
-   curl -fsS http://127.0.0.1:9000/health
+     DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:$((5437+N))/comic_pile_test \
+     nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "${E2E_BACKEND_PORT}" \
+     > "/tmp/backend-${E2E_BACKEND_PORT}.log" 2>&1 &
+   curl -fsS "${BASE_URL}/health"
    ```
+
+   All Playwright configs read `BASE_URL` (fallback `http://127.0.0.1:9000`), so the export
+   is what steers the suite to this session's backend.
 
    uvicorn has no `--reload`: after any backend edit or rebase, kill the old process and
    restart it, or you are testing stale code.
@@ -50,7 +65,8 @@ must stay green), `p1-p2` (default scheduled discovery — reds are catalogued, 
    ```
 
 Evidence: `frontend/test-results/regression/results.json` (+ traces/screenshots/videos),
-`/tmp/backend.log`, HTML report under `frontend/playwright-report/regression/`. The scheduled
+the slot-unique backend log (`/tmp/backend-<port>.log`), HTML report under
+`frontend/playwright-report/regression/`. The scheduled
 workflow uploads `regression-results-*` / `regression-report-*` artifacts. The config refuses
 to run without a selection manifest — that fail-closed behavior is intentional; fix the
 selector or inventory instead of bypassing it.
