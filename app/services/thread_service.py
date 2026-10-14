@@ -8,9 +8,10 @@ sibling repositories; HTTP status mapping lives in routers.
 import asyncio
 import logging
 import os
-from typing import cast
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +38,6 @@ from app.schemas import (
 )
 from app.schemas.tags import TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
-from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
     QueueCursor,
     QueueSort,
@@ -46,9 +46,10 @@ from app.services.queue_pagination import (
     encode_queue_cursor,
     normalize_queue_search,
 )
+from app.services.tag_service import purge_target_assignments
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
-from comic_pile.reading_session import get_current_die, get_or_create
 from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
+from comic_pile.reading_session import get_current_die, get_or_create
 
 logger = logging.getLogger(__name__)
 
@@ -1108,10 +1109,6 @@ async def set_current_issue(
     )
 
     if not target_issue:
-        from sqlalchemy import select
-
-        from app.repositories import thread_repository
-
         owned_threads = await thread_repository.threads_for_user(db, user_id)
         owned_thread_ids = {t.id for t in owned_threads}
         cross_result = await db.execute(

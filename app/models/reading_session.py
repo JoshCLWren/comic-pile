@@ -17,7 +17,6 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     ForeignKeyConstraint,
-    UniqueConstraint,
     Index,
     Integer,
     JSON,

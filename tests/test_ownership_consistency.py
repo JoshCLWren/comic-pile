@@ -32,6 +32,7 @@ from app.services.thread_service import set_current_issue
 
 @pytest_asyncio.fixture
 async def user(db):
+    """Create a test user."""
     u = User(username="ownership_user", email="ownership@example.com")
     db.add(u)
     await db.commit()
@@ -41,6 +42,7 @@ async def user(db):
 
 @pytest_asyncio.fixture
 async def thread(db, user):
+    """Create a test thread."""
     t = Thread(title="Ownership Thread", format="Comic", issues_remaining=1, user_id=user.id, queue_position=1)
     db.add(t)
     await db.commit()
@@ -50,6 +52,7 @@ async def thread(db, user):
 
 @pytest_asyncio.fixture
 async def issue(db, thread):
+    """Create a test issue."""
     i = Issue(thread_id=thread.id, issue_number="1", status="unread", position=1)
     db.add(i)
     await db.commit()
