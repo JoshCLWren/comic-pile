@@ -332,6 +332,9 @@ async def fetch_visible_thread_tag_summaries(
         summaries.setdefault(assignment.target_id, []).append(
             TagSummary(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
         )
+    # Order each thread's tags by scope then normalized name (issue #3425 contract).
+    for thread_id in summaries:
+        summaries[thread_id].sort(key=lambda t: (t.scope, t.name))
     return summaries
 
 
