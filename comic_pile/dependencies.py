@@ -220,9 +220,9 @@ async def get_thread_blocking_info_optimized(thread_id: int, user_id: int, db: A
     # Single query to get both blocking status and explanations
     result = await db.execute(
         select(
-            target_thread.c.id,
             source_thread.c.id,
             source_thread.c.title,
+            source_issue.c.id,
             source_issue.c.issue_number,
         )
         .select_from(target_thread)
@@ -251,11 +251,11 @@ async def get_thread_blocking_info_optimized(thread_id: int, user_id: int, db: A
     # Convert to BlockingDependency objects
     dependencies = [
         BlockingDependency(
-            thread_id=src_tid,
-            thread_title=src_title,
-            issue_number=str(src_issue_num),
+            thread_id=thread_id_val,
+            thread_title=thread_title,
+            issue_number=str(issue_number),
         )
-        for src_tid, src_title, _src_iid, src_issue_num in rows
+        for thread_id_val, thread_title, _issue_id, issue_number in rows
     ]
     
     return True, dependencies
