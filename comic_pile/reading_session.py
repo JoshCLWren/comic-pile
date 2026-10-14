@@ -443,6 +443,7 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
         .where(Event.type.in_(("rate", "snooze", "undo")))
         .where(Event.die_after.is_not(None))
         .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
     )
     last_die_event = result.scalars().first()
     if last_die_event and last_die_event.die_after is not None:
@@ -475,6 +476,7 @@ async def get_current_die_for_session(session: ReadingSession, db: AsyncSession)
         .where(Event.type.in_(("rate", "snooze", "undo")))
         .where(Event.die_after.is_not(None))
         .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
     )
     last_die_event = result.scalars().first()
     if last_die_event and last_die_event.die_after is not None:

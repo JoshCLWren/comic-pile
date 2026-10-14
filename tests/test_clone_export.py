@@ -59,7 +59,7 @@ def test_db_url() -> str:
 def requires_postgres(test_db_url):
     """Skip test when not running against PostgreSQL."""
     if not _is_postgres(test_db_url):
-        pytest.skip(**{"msg": "Requires PostgreSQL for REPEATABLE READ / READ ONLY isolation"})
+        pytest.skip(reason="Requires PostgreSQL for REPEATABLE READ / READ ONLY isolation")
 
 
 @pytest_asyncio.fixture(autouse=True)

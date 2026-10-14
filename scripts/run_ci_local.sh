@@ -204,6 +204,7 @@ if [[ "${RUN_PLAYWRIGHT}" -eq 1 ]]; then
     docker run --rm --network "${CI_NETWORK}" --shm-size=2gb --memory=8gb --cpus=4 \
       -e CI=true \
       -e SECRET_KEY=test-secret-key-for-testing-only \
+      -e TEST_ENVIRONMENT=true \
       -e DATABASE_URL="${shard_db_url}" \
       -e TEST_DATABASE_URL="${shard_db_url}" \
       -e BASE_URL="http://localhost:9000" \

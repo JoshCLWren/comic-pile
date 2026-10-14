@@ -187,7 +187,7 @@ const noLayoutClassAssertionsPlugin = {
 
 export default [
   {
-    ignores: ['dist', 'coverage'],
+    ignores: ['dist', 'coverage', 'playwright-report', 'test-results'],
   },
   {
     files: ['**/*.{js,jsx,ts,tsx}'],

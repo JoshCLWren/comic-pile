@@ -155,6 +155,7 @@ async def get_session_with_thread_safe(
         .where(Event.session_id == session_id)
         .where(Event.type.in_(["roll", "rate", "snooze", "rolled_but_skipped"]))
         .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
     )
     latest_event = event_result.scalars().first()
 
