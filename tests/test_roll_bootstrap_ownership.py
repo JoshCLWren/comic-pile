@@ -11,29 +11,99 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.api import roll as roll_api
 from app.models import DependencyGroup, DependencyGroupMembership, Issue, Thread
+from app.repositories import roll_bootstrap_repository as roll_bootstrap_repo
 from app.schemas import RollBootstrapResponse, RollBootstrapThread, SessionMode
 from app.schemas.session import SessionBandwidthState, build_session_bandwidth_state
+from app.services import roll_bootstrap_service
 from tests.conftest import get_or_create_user_async
 
 
-class _Result:
-    """Minimal SQLAlchemy result double for the bootstrap query sequence."""
+def _inventory_row(
+    thread_id: int,
+    *,
+    title: str | None = None,
+    format: str = "ongoing",
+    status: str = "active",
+    queue_position: int = 1,
+    is_blocked: bool = False,
+    last_activity_at: datetime | None = None,
+    created_at: datetime | None = None,
+) -> dict[str, object]:
+    """Build one owned-thread inventory row as the repository returns it."""
+    return {
+        "id": thread_id,
+        "title": title or f"Thread {thread_id}",
+        "format": format,
+        "status": status,
+        "queue_position": queue_position,
+        "is_blocked": is_blocked,
+        "last_activity_at": last_activity_at,
+        "created_at": created_at or datetime.now(UTC),
+    }
 
-    def __init__(self, *, rows=None, scalar_value=None):
-        self._rows = rows or []
-        self._scalar_value = scalar_value
 
-    def all(self):
-        return self._rows
+def _pool_row(
+    thread_id: int,
+    *,
+    issue_id: int | None = None,
+    issue_number: str | None = None,
+    route_labels: list[str] | None = None,
+) -> dict[str, object]:
+    """Build one roll-pool detail row as the repository returns it."""
+    return {
+        "thread_id": thread_id,
+        "issue_id": issue_id,
+        "issue_number": issue_number,
+        "route_labels": route_labels or [],
+    }
 
-    def scalar(self):
-        return self._scalar_value
 
-    def first(self):
-        return self._rows[0] if self._rows else None
+def _patch_bootstrap(
+    monkeypatch,
+    current_session,
+    *,
+    inventory=(),
+    pool=(),
+    die: int = 4,
+    active_thread=None,
+    derived_snoozed_ids: set[int] | None = None,
+):
+    """Patch the v1 bootstrap collaborators and return the db plus its mocks.
 
-    def scalars(self):
-        return self
+    Session resolution, die, cross-session snooze derivation, and the two bounded
+    repository fetches are the only collaborators the bootstrap owns, so
+    unit-level coverage replaces exactly those and leaves the derivation logic
+    itself running for real.
+
+    Returns:
+        Namespace exposing ``db`` (the async session double) plus the
+        ``inventory`` and ``pool`` repository mocks for call assertions.
+    """
+    inventory_mock = AsyncMock(return_value=list(inventory))
+    pool_mock = AsyncMock(return_value=list(pool))
+    monkeypatch.setattr(
+        roll_bootstrap_service,
+        "get_or_create",
+        AsyncMock(return_value=current_session),
+    )
+    monkeypatch.setattr(
+        roll_bootstrap_service,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, active_thread)),
+    )
+    monkeypatch.setattr(
+        roll_bootstrap_service,
+        "get_current_die_for_session",
+        AsyncMock(return_value=die),
+    )
+    monkeypatch.setattr(
+        roll_bootstrap_service,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=derived_snoozed_ids or set()),
+    )
+    monkeypatch.setattr(roll_bootstrap_repo, "fetch_owned_thread_inventory", inventory_mock)
+    monkeypatch.setattr(roll_bootstrap_repo, "fetch_roll_pool_rows", pool_mock)
+    return SimpleNamespace(db=AsyncMock(), inventory=inventory_mock, pool=pool_mock)
 
 
 def _mode_session(**kwargs):
@@ -97,46 +167,19 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         timezone=None,
     )
     current_user = SimpleNamespace(id=7)
-    owned_snoozed = SimpleNamespace(id=101, title="Owned", format="ongoing")
 
-    monkeypatch.setattr(
-        roll_api,
-        "get_or_create",
-        AsyncMock(return_value=current_session),
+    # Only 101 is owned. 202 is a stored session id that resolves to nothing the
+    # user owns, so it must never surface.
+    bootstrap = _patch_bootstrap(
+        monkeypatch,
+        current_session,
+        inventory=[_inventory_row(101, title="Owned", format="ongoing")],
     )
-    monkeypatch.setattr(
-        roll_api,
-        "get_session_with_thread_safe",
-        AsyncMock(return_value=(current_session, None)),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_current_die_for_session",
-        AsyncMock(return_value=4),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "derive_cross_session_excluded_thread_ids",
-        AsyncMock(return_value=set()),
-    )
-
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(rows=[owned_snoozed]),  # snoozed threads
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
-    ]
+    db = bootstrap.db
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
-    snoozed_statement = db.execute.await_args_list[1].args[0]
-    compiled = str(snoozed_statement)
-    assert "threads.user_id" in compiled
-    assert "threads.id" in compiled
+    assert bootstrap.inventory.await_args.kwargs["user_id"] == 7
 
     assert response.snoozed_count == 1
     assert [thread.model_dump() for thread in response.snoozed_threads] == [
@@ -164,55 +207,23 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
     """A d100 bootstrap may return all 100 eligible faces instead of a smaller summary page."""
     current_session = _mode_session(id=55, manual_die=100, timezone=None)
     current_user = SimpleNamespace(id=7)
-    pool_rows = [
-        SimpleNamespace(
-            id=index,
-            title=f"Thread {index}",
-            format="ongoing",
-            issue_id=None,
-            issue_number=None,
-            route_labels=[],
-        )
-        for index in range(1, 101)
-    ]
 
-    monkeypatch.setattr(
-        roll_api,
-        "get_or_create",
-        AsyncMock(return_value=current_session),
+    bootstrap = _patch_bootstrap(
+        monkeypatch,
+        current_session,
+        inventory=[_inventory_row(index) for index in range(1, 101)],
+        die=100,
     )
-    monkeypatch.setattr(
-        roll_api,
-        "get_session_with_thread_safe",
-        AsyncMock(return_value=(current_session, None)),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_current_die_for_session",
-        AsyncMock(return_value=100),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "derive_cross_session_excluded_thread_ids",
-        AsyncMock(return_value=set()),
-    )
-
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _Result(rows=pool_rows),   # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
-    ]
+    db = bootstrap.db
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
-    pool_statement = db.execute.await_args_list[0].args[0]
-    compiled = str(pool_statement.compile(compile_kwargs={"literal_binds": True}))
-    assert "LIMIT 100" in compiled
+    # The die cap bounds the ids handed to the single pool fetch; it must never
+    # paginate below the current die.
+    thread_ids = bootstrap.pool.await_args.kwargs["thread_ids"]
+    assert thread_ids == list(range(1, 101))
     assert response.current_die == 100
+    assert [thread.id for thread in response.roll_pool] == list(range(1, 101))
     assert len(response.roll_pool) == 100
 
 
@@ -391,9 +402,12 @@ async def test_bootstrap_pool_query_count_is_constant(
 ) -> None:
     """Bootstrap SELECT count must not scale with pool rows or memberships.
 
-    Regression guard: route labels are fetched by a correlated subquery inside
-    the single pool query, so the endpoint performs no separate per-thread or
-    per-membership label query and no route_result round trip.
+    Regression guard for issue #3375, which recorded a cold bootstrap at 1962ms
+    against a 1000ms budget with 36 queries. Route labels are fetched by a
+    correlated subquery inside the single pool query, and every summary is
+    derived from one owned-thread inventory read, so the endpoint performs no
+    per-thread label query, no route_result round trip, and no per-summary
+    query.
     """
     user = await get_or_create_user_async(async_db)
 
@@ -460,6 +474,17 @@ async def test_bootstrap_pool_query_count_is_constant(
     assert len(label_selects) == 1
     assert "array_agg" in label_selects[0]
 
+    # Issue #3375: every summary (snoozed, skipped, blocked, stale, all-active,
+    # completed) is derived from one owned-thread inventory read plus one bounded
+    # pool read. Exactly three reads may still touch `threads` here:
+    # cross-session snooze backoff, the inventory, and the pool detail. A fourth
+    # means a per-summary query has been reintroduced, which is the regression
+    # that blew the 1000ms budget at 36 queries.
+    threads_selects = [
+        statement for statement in large_pool_selects if "FROM threads" in statement
+    ]
+    assert len(threads_selects) == 3
+
 
 @pytest.mark.asyncio
 async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
@@ -485,36 +510,7 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
     )
     current_user = SimpleNamespace(id=7)
 
-    monkeypatch.setattr(
-        roll_api,
-        "get_or_create",
-        AsyncMock(return_value=current_session),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_session_with_thread_safe",
-        AsyncMock(return_value=(current_session, None)),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_current_die_for_session",
-        AsyncMock(return_value=4),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "derive_cross_session_excluded_thread_ids",
-        AsyncMock(return_value=set()),
-    )
-
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
-    ]
+    db = _patch_bootstrap(monkeypatch, current_session).db
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
@@ -554,36 +550,7 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
     )
     current_user = SimpleNamespace(id=7)
 
-    monkeypatch.setattr(
-        roll_api,
-        "get_or_create",
-        AsyncMock(return_value=current_session),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_session_with_thread_safe",
-        AsyncMock(return_value=(current_session, None)),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_current_die_for_session",
-        AsyncMock(return_value=4),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "derive_cross_session_excluded_thread_ids",
-        AsyncMock(return_value=set()),
-    )
-
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
-    ]
+    db = _patch_bootstrap(monkeypatch, current_session).db
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
@@ -625,36 +592,7 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
     )
     current_user = SimpleNamespace(id=7)
 
-    monkeypatch.setattr(
-        roll_api,
-        "get_or_create",
-        AsyncMock(return_value=current_session),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_session_with_thread_safe",
-        AsyncMock(return_value=(current_session, None)),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_current_die_for_session",
-        AsyncMock(return_value=4),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "derive_cross_session_excluded_thread_ids",
-        AsyncMock(return_value=set()),
-    )
-
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
-    ]
+    db = _patch_bootstrap(monkeypatch, current_session).db
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
@@ -714,27 +652,6 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
     current_session = _mode_session(id=55, timezone=None)
     current_user = SimpleNamespace(id=7)
 
-    monkeypatch.setattr(
-        roll_api,
-        "get_or_create",
-        AsyncMock(return_value=current_session),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_session_with_thread_safe",
-        AsyncMock(return_value=(current_session, None)),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "get_current_die_for_session",
-        AsyncMock(return_value=4),
-    )
-    monkeypatch.setattr(
-        roll_api,
-        "derive_cross_session_excluded_thread_ids",
-        AsyncMock(return_value=set()),
-    )
-
     stale_ids_captured: list[int] = []
 
     original_choice = random_mod.choice
@@ -746,31 +663,27 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
 
     monkeypatch.setattr(random_mod, "choice", _capturing_choice)
 
-    db = AsyncMock()
-    db.execute.side_effect = [
-        _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=3),   # stale count
-        _Result(rows=[(10,), (20,), (30,)]),
-        _Result(
-            rows=[
-                SimpleNamespace(
-                    id=20,
-                    title="Chosen Stale",
-                    format="ongoing",
-                    last_activity_at=datetime(2026, 7, 1, tzinfo=UTC),
-                )
-            ]
-        ),
-        _Result(rows=[]),
-        _Result(rows=[]),
-    ]
+    stale_last_activity = datetime(2026, 7, 1, tzinfo=UTC)
+    bootstrap = _patch_bootstrap(
+        monkeypatch,
+        current_session,
+        inventory=[
+            _inventory_row(
+                thread_id,
+                title=f"Stale {thread_id}",
+                queue_position=thread_id // 10,
+                last_activity_at=stale_last_activity,
+            )
+            for thread_id in (10, 20, 30)
+        ],
+    )
+    db = bootstrap.db
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
     assert stale_ids_captured == [10, 20, 30]
     assert response.stale_thread_count == 3
     assert response.stale_thread is not None
-    assert response.stale_thread.id == 20
-    assert response.stale_thread.title == "Chosen Stale"
+    assert response.stale_thread.id in (10, 20, 30)
+    assert response.stale_thread.title == f"Stale {response.stale_thread.id}"
+    assert response.stale_thread.last_activity_at == "2026-07-01T00:00:00+00:00"
