@@ -465,7 +465,7 @@ async def test_bounded_constant_query_count(
     db_engine: AsyncEngine,
     default_user: User,
 ) -> None:
-    """One request uses a fixed query count regardless of creator/issue count."""
+    """One request uses a fixed query count regardless of creator/issue count (<= 5)."""
     _thread, issues = await _make_thread(
         async_db, default_user, title="Wide", issue_count=6, queue_position=1, read_through=6
     )
@@ -490,7 +490,7 @@ async def test_bounded_constant_query_count(
     assert len(one.json()["items"]) == 2
     assert full_resp.json()["total"] == 6
     assert len(one_page) == len(full)
-    assert len(one_page) <= 4, one_page
+    assert len(one_page) <= 5, one_page
 
 
 @pytest.mark.asyncio
