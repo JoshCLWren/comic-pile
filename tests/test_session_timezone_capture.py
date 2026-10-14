@@ -11,8 +11,26 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.api import roll as roll_api
-from app.repositories import roll_bootstrap_repository as roll_bootstrap_repo
-from app.services import roll_bootstrap_service
+
+
+class _Result:
+    """Minimal SQLAlchemy result double for the bootstrap query sequence."""
+
+    def __init__(self, *, rows=None, scalar_value=None):
+        self._rows = rows or []
+        self._scalar_value = scalar_value
+
+    def all(self):
+        return self._rows
+
+    def scalar(self):
+        return self._scalar_value
+
+    def first(self):
+        return self._rows[0] if self._rows else None
+
+    def scalars(self):
+        return self
 
 
 def _session(timezone=None):
@@ -38,44 +56,37 @@ def _session(timezone=None):
 
 
 def _patch_bootstrap(monkeypatch, current_session):
-    """Patch the v1 bootstrap collaborators and return the async db double.
-
-    Timezone capture is session behavior, so every collaborator that could
-    perform unrelated database work is replaced and only the capture path
-    itself stays real.
-    """
     monkeypatch.setattr(
-        roll_bootstrap_service,
+        roll_api,
         "get_or_create",
         AsyncMock(return_value=current_session),
     )
     monkeypatch.setattr(
-        roll_bootstrap_service,
+        roll_api,
         "get_session_with_thread_safe",
         AsyncMock(return_value=(current_session, None)),
     )
     monkeypatch.setattr(
-        roll_bootstrap_service,
+        roll_api,
         "get_current_die_for_session",
         AsyncMock(return_value=6),
     )
     monkeypatch.setattr(
-        roll_bootstrap_service,
+        roll_api,
         "derive_cross_session_excluded_thread_ids",
         AsyncMock(return_value=set()),
     )
-    monkeypatch.setattr(
-        roll_bootstrap_repo,
-        "fetch_owned_thread_inventory",
-        AsyncMock(return_value=[]),
-    )
-    monkeypatch.setattr(
-        roll_bootstrap_repo,
-        "fetch_roll_pool_rows",
-        AsyncMock(return_value=[]),
-    )
 
-    return AsyncMock()
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=[]),          # pool
+        _Result(scalar_value=0),  # blocked count
+        _Result(rows=[]),          # blocked threads
+        _Result(scalar_value=0),  # stale count
+        _Result(rows=[]),          # all active
+        _Result(rows=[]),          # completed
+    ]
+    return db
 
 
 @pytest.mark.asyncio
