@@ -546,9 +546,9 @@ async def rate_thread(
     else:
         derived_excluded_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
         excluded_ids = [
-            * (current_session.snoozed_thread_ids or []),
-            * (current_session.skipped_thread_ids or []),
-            * list(derived_excluded_ids),
+            *(current_session.snoozed_thread_ids or []),
+            *(current_session.skipped_thread_ids or []),
+            *derived_excluded_ids,
         ]
         queue_position_changes = await move_to_safe_position(
             thread_id,
