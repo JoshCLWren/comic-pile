@@ -277,11 +277,6 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
     app.include_router(
         roll_tag_exclusions.router,
-        prefix="/api/roll/tag-exclusions",
-        tags=["roll"],
-    )
-    app.include_router(
-        roll_tag_exclusions.router,
         prefix="/api/v1/roll/tag-exclusions",
         tags=["roll"],
     )
