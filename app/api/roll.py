@@ -48,10 +48,10 @@ from app.schemas import (
     RollResponse,
     SessionMode,
     SessionModeResponse,
-    SessionModeUpdateRequest,
     SessionResponse,
     ThreadExclusionReason,
 )
+from app.schemas.tags import TagSummary
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
     RollableThread,
@@ -278,6 +278,44 @@ def _build_rolling_recommendation_context(
         if selected_thread_last_activity_at else None,
         "effort_estimate": effort_estimate,
     }
+
+
+async def _load_visible_thread_tags(
+    db: AsyncSession,
+    user_id: int,
+    thread_ids: list[int],
+) -> dict[int, list[TagSummary]]:
+    """Batch the viewer-visible tags for a set of threads.
+
+    Issue #3425: the roll pool reads as an untagged list even for tagged
+    series, so there is no at-a-glance tag signal before rolling. One batched
+    repository read keeps the extra cost at a single round trip for the whole
+    bootstrap instead of one query per die face.
+
+    Args:
+        db: Async database session.
+        user_id: Viewer whose private tag vocabulary is included.
+        thread_ids: Threads whose visible tags are loaded.
+
+    Returns:
+        Mapping of thread id to its visible tag summaries. Threads without
+        assignments are absent from the mapping.
+    """
+    if not thread_ids:
+        return {}
+
+    assignments = await tag_repository.list_visible_assignments_for_targets(
+        db,
+        user_id,
+        [("Thread", thread_id) for thread_id in thread_ids],
+    )
+
+    tags_by_thread: dict[int, list[TagSummary]] = {}
+    for tag, assignment in assignments:
+        tags_by_thread.setdefault(assignment.target_id, []).append(
+            TagSummary(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
+        )
+    return tags_by_thread
 
 
 @router.post("/", response_model=RollResponse)
@@ -1226,6 +1264,24 @@ async def roll_bootstrap(
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
     skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
+
+    # Issue #3425: attach viewer-visible tags to every roll-adjacent series
+    # summary, including the die-face pool, so a tagged series reads as tagged
+    # on the Roll screen instead of only on its own detail page.
+    tagged_bootstrap_threads: list[RollBootstrapThread] = [
+        *roll_pool,
+        *snoozed_threads,
+        *skipped_threads,
+        *blocked_threads,
+    ]
+    if stale_thread is not None:
+        tagged_bootstrap_threads.append(stale_thread)
+
+    tags_by_thread = await _load_visible_thread_tags(
+        db, user_id, sorted({thread.id for thread in tagged_bootstrap_threads})
+    )
+    for thread in tagged_bootstrap_threads:
+        thread.tags = tags_by_thread.get(thread.id, [])
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
