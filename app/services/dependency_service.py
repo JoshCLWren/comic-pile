@@ -28,7 +28,6 @@ from comic_pile.dependencies import (
     detect_circular_dependency,
     format_blocking_reason,
     get_blocked_thread_ids,
-    get_blocking_explanations,
     get_blocking_explanations_batch,
     get_dependency_order_conflicts,
     get_thread_blocking_info_optimized,

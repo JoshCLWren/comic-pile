@@ -474,6 +474,7 @@ async def test_get_thread_blocking_info_optimization_correctness(
     # Set up next_unread_issue_id
     target_thread.next_unread_issue_id = target_issue_1.id
     await async_db.commit()
+    await async_db.refresh(target_thread)
 
     # Initially, thread should not be blocked
     response = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
@@ -484,17 +485,23 @@ async def test_get_thread_blocking_info_optimization_correctness(
     assert data["blocking_dependencies"] == []
 
     # Create a dependency that will block the target thread when issue 2 becomes next unread
-    await async_db.execute(
-        "INSERT INTO dependencies (source_issue_id, target_issue_id, note) "
-        "VALUES (:source_issue_id, :target_issue_id, NULL)",
-        {"source_issue_id": source_issue.id, "target_issue_id": target_issue_2.id}
+    create_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue_2.id,
+        },
     )
+    assert create_resp.status_code == 201
 
     # Read issue 1, making issue 2 the next unread
     target_issue_1.status = "read"
     target_issue_1.read_at = datetime.now(UTC)
     target_thread.next_unread_issue_id = target_issue_2.id
     await async_db.commit()
+    await async_db.refresh(target_thread)
 
     # Now thread should be blocked
     response = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
