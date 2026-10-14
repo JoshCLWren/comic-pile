@@ -31,6 +31,7 @@ from comic_pile.dependencies import (
     get_blocking_explanations,
     get_blocking_explanations_batch,
     get_dependency_order_conflicts,
+    get_thread_blocking_info_optimized,
     refresh_user_blocked_status,
 )
 
@@ -241,11 +242,12 @@ async def get_thread_blocking_info(
     if not thread:
         return None
 
-    blocked_ids = await get_blocked_thread_ids(user_id, db)
-    if thread_id not in blocked_ids:
+    # Use optimized function to get both blocked status and explanations in one query
+    is_blocked, dependencies = await get_thread_blocking_info_optimized(thread_id, user_id, db)
+    
+    if not is_blocked:
         return BlockingExplanation(is_blocked=False, blocking_reasons=[], blocking_dependencies=[])
 
-    dependencies = await get_blocking_explanations(thread_id, user_id, db)
     return BlockingExplanation(
         is_blocked=True,
         blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],

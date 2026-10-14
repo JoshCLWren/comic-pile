@@ -206,6 +206,61 @@ async def _canonical_blocking_explanations_batch(
     return reasons_map
 
 
+async def get_thread_blocking_info_optimized(thread_id: int, user_id: int, db: AsyncSession) -> tuple[bool, list[BlockingDependency]]:
+    """Optimized version: get both blocked status and explanations in one query.
+    
+    Returns:
+        Tuple of (is_blocked, blocking_dependencies)
+    """
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    source_thread = Thread.__table__.alias("source_thread")
+    target_thread = Thread.__table__.alias("target_thread")
+
+    # Single query to get both blocking status and explanations
+    result = await db.execute(
+        select(
+            target_thread.c.id,
+            source_thread.c.id,
+            source_thread.c.title,
+            source_issue.c.issue_number,
+        )
+        .select_from(target_thread)
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(target_thread.c.id == thread_id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source_thread.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .where(_canonical_dependency_filter())
+        .distinct()
+    )
+    
+    rows = result.all()
+    
+    # If no blocking dependencies found, thread is not blocked
+    if not rows:
+        return False, []
+    
+    # Convert to BlockingDependency objects
+    dependencies = [
+        BlockingDependency(
+            thread_id=src_tid,
+            thread_title=src_title,
+            issue_number=str(src_issue_num),
+        )
+        for src_tid, src_title, _src_iid, src_issue_num in rows
+    ]
+    
+    return True, dependencies
+
+
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
     """Human-readable reasons a thread is blocked.
 
