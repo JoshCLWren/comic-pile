@@ -324,3 +324,94 @@ async def test_batch_blocking_info_nonexistent_threads(auth_client, async_db, te
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
 
+
+async def test_batch_blocking_info_incident_route_query_budget(
+    auth_client,
+    async_db,
+    db_engine,
+) -> None:
+    """Issue #3430: the incident route must run one canonical Dependency join.
+
+    ``POST /api/v1/threads:getBlockingInfo`` is the batch route named in the
+    production performance incident. Blocked status and blocking reasons must
+    both come from the single canonical Dependency join, so the route never
+    re-scans every thread the user owns just to decide ``is_blocked``.
+
+    Args:
+        auth_client: Authenticated API client.
+        async_db: Test database session used for seeding.
+        db_engine: Shared test engine used to capture statements.
+    """
+    from sqlalchemy import event
+
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    thread_count = 10
+    thread_ids: list[int] = []
+    for index in range(thread_count):
+        thread = Thread(
+            title=f"Budget Block {index}",
+            format="Comic",
+            issues_remaining=1,
+            queue_position=index + 1,
+            status="active",
+            user_id=user.id,
+            total_issues=1,
+        )
+        async_db.add(thread)
+        await async_db.flush()
+        issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+        async_db.add(issue)
+        await async_db.flush()
+        thread.next_unread_issue_id = issue.id
+        thread_ids.append(thread.id)
+
+    source_issue_id = (
+        await async_db.execute(select(Issue.id).where(Issue.thread_id == thread_ids[0]))
+    ).scalar_one()
+    for blocked_thread_id in thread_ids[1:]:
+        target_issue_id = (
+            await async_db.execute(select(Issue.id).where(Issue.thread_id == blocked_thread_id))
+        ).scalar_one()
+        async_db.add(
+            Dependency(source_issue_id=source_issue_id, target_issue_id=target_issue_id)
+        )
+    await async_db.commit()
+
+    captured: list[str] = []
+
+    def _capture(conn, cursor, statement, parameters, context, executemany):
+        captured.append(" ".join(str(statement).split()).lower())
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+    try:
+        response = await auth_client.post(
+            "/api/v1/threads:getBlockingInfo",
+            json={"thread_ids": thread_ids},
+        )
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
+
+    assert response.status_code == 200
+    threads = response.json()["threads"]
+    assert threads[str(thread_ids[0])]["is_blocked"] is False
+    for blocked_thread_id in thread_ids[1:]:
+        entry = threads[str(blocked_thread_id)]
+        assert entry["is_blocked"] is True
+        assert entry["blocking_reasons"]
+        assert entry["blocking_dependencies"]
+
+    canonical_joins = [statement for statement in captured if "join dependencies" in statement]
+    assert len(canonical_joins) == 1, (
+        "POST /api/v1/threads:getBlockingInfo must evaluate blocked state and reasons "
+        f"with exactly one canonical Dependency join, got {len(canonical_joins)}: "
+        f"{canonical_joins}"
+    )
+
+    assert len(captured) <= 10, (
+        f"Expected a bounded round-trip count for the incident route, got "
+        f"{len(captured)}: {captured}"
+    )
+

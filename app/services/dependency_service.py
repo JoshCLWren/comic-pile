@@ -241,9 +241,7 @@ async def get_thread_blocking_info(
     if not thread:
         return None
 
-    # Use optimized function to get both blocked status and explanations in one query
     is_blocked, dependencies = await get_thread_blocking_info_optimized(thread_id, user_id, db)
-    
     if not is_blocked:
         return BlockingExplanation(is_blocked=False, blocking_reasons=[], blocking_dependencies=[])
 
@@ -258,6 +256,13 @@ async def get_threads_blocking_info(
     thread_ids: list[int], user_id: int, db: AsyncSession
 ) -> dict[int, BlockingExplanation] | None:
     """Return blocked status and human-readable blocking reasons for multiple threads.
+
+    Blocked status is derived from the same canonical batch explanations query
+    that produces the reasons, so this route never runs the redundant
+    full-user blocked-ids scan (issue #3430, the batch ``getBlockingInfo``
+    incident route). A thread is blocked exactly when that canonical query
+    returns at least one unread prerequisite edge for it, which is the same
+    predicate ``get_blocked_thread_ids`` evaluates for a single thread.
 
     Args:
         thread_ids: Owned thread IDs to inspect.
@@ -277,15 +282,12 @@ async def get_threads_blocking_info(
     if thread_count != len(thread_ids):
         return None
 
-    blocked_ids = await get_blocked_thread_ids(user_id, db)
-    reasons_map = await get_blocking_explanations_batch(
-        thread_ids, user_id, db
-    )
+    reasons_map = await get_blocking_explanations_batch(thread_ids, user_id, db)
 
     result: dict[int, BlockingExplanation] = {}
     for tid in thread_ids:
-        if tid in blocked_ids:
-            dependencies = reasons_map.get(tid, [])
+        dependencies = reasons_map.get(tid, [])
+        if dependencies:
             result[tid] = BlockingExplanation(
                 is_blocked=True,
                 blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],
