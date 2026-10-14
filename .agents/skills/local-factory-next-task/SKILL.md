@@ -1,6 +1,6 @@
 ---
 name: local-factory-next-task
-description: Find the oldest factory-claimable task and start it as a local factory session. Use when the user says find the next task, pick the next issue, what should we work on, start factory work, claim the oldest claimable task, take something from the backlog, or work as a local factory in this repository.
+description: Find the oldest factory-claimable task without interfering with the scheduled GitHub Action factories, and start it as a local factory session. Use when the user says find the next task, pick the next issue, what should we work on, start factory work, claim the oldest claimable task, take contention-free or tail work from the backlog, or work as a local factory in this repository.
 metadata:
   opencode/slash: "true"
 ---
@@ -27,7 +27,7 @@ Also: inspect `git status` and preserve any existing user changes.
 - `docs/ISSUE_EXECUTION_PROTOCOL.md`
 - `docs/AUTONOMOUS_FACTORY_POLICY.md` (factory work — claim leases, review, merge gates)
 
-## 3. Select the task
+## 3. Select the task without interfering with the Action factories
 
 ```bash
 make next-task
@@ -43,6 +43,48 @@ Work on the selected issue unless the user names another. Selection semantics
 - **Ordering**: highest priority first (`critical` → `high` → `medium` → `low` → unprioritized),
   tie-broken by **lowest issue number — i.e. the oldest claimable task wins within a
   priority band**.
+
+**The scheduled GitHub Action factories run this same selection on every dispatch tick, so
+the top candidate is exactly what they race for. A local session is a peer worker: once any
+worker holds a lease, peers take the next eligible item (`docs/AUTONOMOUS_FACTORY_POLICY.md`).
+Never take leased work, never race a dispatcher, never overwrite another worker's claim.**
+
+Before claiming, run both contention checks on the candidate:
+
+1. **Labels** — proceed only if factory labels are exactly `factory` + `factory:unowned` (or
+   absent). Any `factory:<n>` owner (other than `factory:unowned`) or any stage label
+   (`factory:building` / `factory:review` / `factory:ci` / `factory:ready` /
+   `factory:changes-requested` / `factory:blocked` / `factory:migration-wait`) means leased →
+   skip.
+2. **Claim markers** — the newest lease marker in the issue comments must be a *release*
+   (`factory-claim-released-v*`), or there must be no markers at all. Newest being
+   `factory-controller-claim-v*`, `factory-implement-claim-v*`, or an unreleased
+   `factory-resume:v1` means leased → skip:
+
+   ```bash
+   gh api "repos/JoshCLWren/comic-pile/issues/<n>/comments?per_page=100" --jq \
+     '[.[] | select(.body | test("factory-(controller-claim|implement-claim|claim-released)-v|factory-resume:v")) | "\(.created_at)  \(.body | split("\n")[0])"] | .[-4:]'
+   ```
+
+3. **Open factory PR** — `gh pr list --state open --search "<n>"` for a factory PR already
+   advancing the issue → skip.
+
+If the top candidate is contended, walk the ordered candidate list (same claimability +
+ordering rules, already excluding factory-owned issues) and take the first uncontended one.
+When the user asks for the *oldest* claimable work specifically (the low-contention tail the
+factories drain last), pick the oldest (lowest-number) uncontended candidate from this list
+rather than the head:
+
+```bash
+gh issue list --state open --limit 200 --json number,title,labels --jq '
+  def prio: ([.labels[].name | select(startswith("ralph-priority:"))
+    | {"ralph-priority:critical":0,"ralph-priority:high":1,"ralph-priority:medium":2,"ralph-priority:low":3}[.] // 99] | min) // 99;
+  [ .[]
+    | select(any(.labels[].name; . == "ralph-status:pending") and any(.labels[].name; . == "ralph-task"))
+    | select(all(.labels[].name; IN("duplicate","ralph-status:blocked","ralph-status:done","ralph-status:in-progress","ralph-status:in-review") | not))
+    | select([.labels[].name | select(startswith("factory:")) | select(. != "factory:unowned")] | length == 0)
+  ] | sort_by(prio, .number) | .[] | "p\(prio)  #\(.number)  \(.title[0:70])"'
+```
 
 Then read the issue body, any linked plan (`docs/issue-plans/<number>.md`, bounded chunks),
 and the named files. If the issue is too large for one implementation pass, split it into
@@ -76,6 +118,14 @@ issue, create a linked issue instead of widening scope.
    `infrastructure`, etc.) + `ralph-status:in-progress` + `factory` + `factory:building` +
    exactly one owner (`factory:local` for a local session). Fetch current labels first
    (`gh issue view <n> --json labels`) so none are dropped.
+
+**Claim immediately after picking** — before deep reading or editing — so the dispatcher sees
+the lease and moves on. Race etiquette: if `make start-task` fails with "not pending", a
+factory won the race; take the next uncontended candidate instead of retrying. If a factory
+claims the issue *after* you (a new unreleased claim marker or foreign `factory:<n>` owner
+appears while you work), do not fight or overwrite it — leave a release comment, restore
+`ralph-status:pending` + `factory:unowned`, and move to the next candidate. Ownership is a
+temporary next-action lease, never a contest.
 
 ## 5. Work the issue
 
