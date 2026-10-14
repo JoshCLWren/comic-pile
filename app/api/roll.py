@@ -48,9 +48,8 @@ from app.schemas import (
     RollResponse,
     SessionMode,
     SessionModeResponse,
+    SessionModeUpdateRequest,
     SessionResponse,
-    TagExclusionAddRequest,
-    TagExclusionListResponse,
     ThreadExclusionReason,
 )
 from app.schemas.roll_v2 import (

@@ -1,0 +1,58 @@
+{
+  "type": "module",
+  "name": "@msw/url",
+  "version": "0.1.2",
+  "description": "Utilities for working with URLs.",
+  "types": "./build/index.d.mts",
+  "sideEffects": false,
+  "imports": {
+    "#src/*": "./src/*",
+    "#tests/*": "./tests/*"
+  },
+  "exports": {
+    ".": {
+      "types": "./build/index.d.mts",
+      "default": "./build/index.mjs"
+    }
+  },
+  "files": [
+    "./build"
+  ],
+  "keywords": [
+    "match",
+    "url",
+    "pattern",
+    "route",
+    "parse",
+    "params",
+    "wildcard"
+  ],
+  "author": "Artem Zakharchenko <kettanaito@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "url": "https://github.com/mswjs/url"
+  },
+  "homepage": "https://github.com/mswjs/url",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@ossjs/release": "^0.11.0",
+    "@remix-run/route-pattern": "^0.23.0",
+    "@types/node": "^25.5.0",
+    "find-my-way": "^9.6.0",
+    "path-to-regexp": "^8.4.2",
+    "publint": "^0.3.21",
+    "tsdown": "^0.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "scripts": {
+    "start": "tsdown -w",
+    "lint": "publint",
+    "test": "vitest",
+    "bench": "vitest bench",
+    "build": "tsdown",
+    "release": "release publish"
+  }
+}

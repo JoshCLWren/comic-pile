@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.src.json",
+  "include": ["./global.browser.d.ts", "./**/*.ts"],
+  "references": [
+    {
+      "path": "../tsconfig.core.json"
+    }
+  ],
+  "compilerOptions": {
+    // Expose browser-specific libraries only for the
+    // source code under the "src/browser" directory.
+    // Setting "lib" replaces the default library set implied by
+    // the "target", so "ESNext" must be listed explicitly.
+    "lib": ["ESNext", "DOM", "WebWorker", "DOM.Iterable"]
+  }
+}
