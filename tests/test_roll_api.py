@@ -4,7 +4,7 @@ import logging
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -169,9 +169,15 @@ async def test_roll_pending_message_does_not_leak_other_user_thread_title(
 
     current_session = await async_db.get(ReadingSession, current_session_id)
     assert current_session is not None
+    # #3225: the database now rejects a reading session that pins another
+    # reader's thread. Seed this legacy row with triggers bypassed so the test
+    # keeps proving the real invariant - the API never leaks a foreign title -
+    # even for state the new constraints make unreachable.
+    await async_db.execute(text("SET session_replication_role = replica"))
     current_session.pending_thread_id = private_thread.id
     current_session.pending_thread_updated_at = datetime.now(UTC)
     await async_db.commit()
+    await async_db.execute(text("SET session_replication_role = origin"))
 
     roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 409

@@ -2,7 +2,7 @@
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ReadingSession, Thread
@@ -666,7 +666,13 @@ async def test_get_session_current_returns_no_active_thread_when_pending_is_stal
         started_at=datetime.now(UTC),
     )
     async_db.add(session)
+    # #3225: the database now rejects a reading session that pins another
+    # reader's thread. Seed this stale legacy row with triggers bypassed so the
+    # test keeps proving that /sessions/current never falls back to a foreign
+    # thread's title.
+    await async_db.execute(text("SET session_replication_role = replica"))
     await async_db.commit()
+    await async_db.execute(text("SET session_replication_role = origin"))
     await async_db.refresh(session)
 
     roll_event = Event(

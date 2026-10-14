@@ -49,6 +49,7 @@ from app.schemas.reading_plan_membership import (
     ReadingPlanSourceSnapshot,
 )
 from app.services.cbl_source_public import public_cbl_repository, public_cbl_source_path
+from app.services.ownership_consistency import ensure_issue_ids_owned
 
 
 def ensure_plan_issue_uniqueness(nodes: list[ContinuityPlanNode]) -> None:
@@ -79,6 +80,39 @@ def ensure_plan_issue_uniqueness(nodes: list[ContinuityPlanNode]) -> None:
                 },
             )
         seen.add(node.ref_id)
+
+
+async def ensure_plan_issue_membership_owned(
+    db: AsyncSession,
+    *,
+    plan_id: int,
+    issue_ids: Sequence[int],
+) -> None:
+    """Reject Reading Plan membership that references unowned issues (#3225).
+
+    Plan membership crosses two tables (``continuity_plans`` and ``issues``), so
+    no foreign key can express it; this is the centralized typed ownership
+    validation every membership write path funnels through. A missing issue and
+    another reader's issue are reported identically so the boundary cannot be
+    used as an existence oracle.
+
+    Args:
+        db: Database session.
+        plan_id: Plan that owns the membership.
+        issue_ids: Canonical issue ids referenced by the plan nodes.
+
+    Raises:
+        HTTPException: 404 when the plan does not exist, 422
+            ``unowned_plan_issue`` naming the rejected issue ids.
+    """
+    if not issue_ids:
+        return
+    plan = await db.get(ContinuityPlan, plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"Continuity plan {plan_id} not found")
+    await ensure_issue_ids_owned(
+        db, user_id=plan.user_id, issue_ids=issue_ids, code="unowned_plan_issue"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1142,10 +1176,23 @@ async def rebuild_plan_membership(
         db: Database session.
         plan_id: Plan whose normalized rows are replaced.
         nodes: Canonical node set just persisted to the plan.
+
+    Raises:
+        HTTPException: 404 when the plan no longer exists, 422 when the node set
+            repeats a canonical issue (#3037) or references an issue the plan's
+            reader does not own (#3225).
     """
     # Canonical membership invariant (#3037): fail closed with a domain error
     # before any row is replaced, so no write path can persist a duplicate.
     ensure_plan_issue_uniqueness(nodes)
+    # Reader-ownership invariant (#3225): a plan may only reference issues the
+    # plan's own reader owns. Shared catalog identity is never authorization
+    # evidence, so membership is resolved through the owning thread.
+    await ensure_plan_issue_membership_owned(
+        db,
+        plan_id=plan_id,
+        issue_ids=[node.ref_id for node in nodes if node.node_type == "issue"],
+    )
     issue_rows: list[ReadingPlanIssue] = []
     snapshots: dict[str, ReadingPlanSource] = {}
     # (occurrence_id, raw_path, source_position) triples, deduplicated.

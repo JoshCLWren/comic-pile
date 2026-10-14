@@ -37,6 +37,10 @@ from app.schemas import (
 )
 from app.schemas.tags import TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.ownership_consistency import (
+    ensure_pending_thread_owned,
+    ensure_thread_frontier_issue,
+)
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
     QueueCursor,
@@ -1122,6 +1126,14 @@ async def set_current_issue(
             if issue.status != "unread":
                 issue.status = "unread"
                 issue.read_at = None
+
+    # Reader-ownership gate (#3225). The frontier must belong to this exact
+    # thread, and the pending thread reference must stay inside this reader's
+    # library. The database enforces both, so this is the early, domain-typed
+    # rejection that keeps a client-visible error instead of an opaque integrity
+    # failure.
+    await ensure_thread_frontier_issue(db, thread_id=thread_id, issue_id=target_issue.id)
+    await ensure_pending_thread_owned(db, user_id=user_id, thread_id=thread_id)
 
     thread.total_issues = len(all_issues)
     thread.next_unread_issue_id = target_issue.id

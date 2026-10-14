@@ -1,0 +1,19 @@
+{
+  "revision": "m5d400000001",
+  "summary": "Enforce reader ownership consistency at graph and library write boundaries (#3225): prove no thread frontier escapes its own thread and no reading session points at another reader's thread before the ownership triggers are installed.",
+  "risks": [],
+  "preflight_checks": [
+    {
+      "name": "no thread frontier escapes its own thread",
+      "condition": "every threads.next_unread_issue_id references an issue whose thread_id equals the thread's own id",
+      "sql": "SELECT count(*) FROM threads t JOIN issues i ON i.id = t.next_unread_issue_id WHERE i.thread_id <> t.id",
+      "expect": { "operator": "equals", "value": 0 }
+    },
+    {
+      "name": "no reading session points at another reader's thread",
+      "condition": "every sessions.pending_thread_id references a thread whose user_id equals the session's own user_id",
+      "sql": "SELECT count(*) FROM sessions s JOIN threads t ON t.id = s.pending_thread_id WHERE t.user_id <> s.user_id",
+      "expect": { "operator": "equals", "value": 0 }
+    }
+  ]
+}

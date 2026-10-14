@@ -41,6 +41,12 @@ from app.models.thread import Thread
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
 
+# PostgreSQL-level reader-ownership triggers (#3225). Imported after every model
+# so ``Base.metadata.create_all`` installs the same enforcement as the migration.
+from app.ownership_constraints import install_reader_ownership_constraints
+
+install_reader_ownership_constraints()
+
 __all__ = [
     "CblAdoptionReceipt",
     "CBLSource",
