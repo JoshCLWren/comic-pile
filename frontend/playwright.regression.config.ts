@@ -32,12 +32,17 @@ function loadSelectionSpecs(): string[] {
         'Run `pnpm run test:e2e:regression` (or scripts/e2e_regression_select.py) first.',
     );
   }
+  // SAFETY: JSON.parse of a manifest file validated by schema in scripts/e2e_regression_select.py
   const manifest = JSON.parse(readFileSync(resolved, 'utf-8')) as SelectionManifest;
   const specs: string[] = [];
   if (Array.isArray(manifest.specs)) {
     for (const entry of manifest.specs) {
-      if (typeof entry !== 'string' || entry.length === 0) {
-        throw new Error(`Invalid spec entry in selection manifest: ${String(entry)}`);
+      // Parse input at I/O boundary, then branch on domain value
+      if (typeof entry !== 'string') {
+        throw new Error(`Invalid spec entry in selection manifest: expected string, got ${typeof entry}`);
+      }
+      if (entry.length === 0) {
+        throw new Error('Invalid spec entry in selection manifest: empty string');
       }
       specs.push(entry);
     }

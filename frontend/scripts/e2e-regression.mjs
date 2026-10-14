@@ -113,7 +113,9 @@ export function main(argv) {
   const configPath = path.join(frontendRoot, 'playwright.regression.config.ts')
   const env = {
     E2E_REGRESSION_SELECTION: defaultOutput,
-    ...(options.workers ? { REGRESSION_WORKERS: options.workers } : {}),
+  }
+  if (options.workers) {
+    env.REGRESSION_WORKERS = options.workers
   }
 
   if (options.list) {
