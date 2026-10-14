@@ -1148,7 +1148,10 @@ async def roll_bootstrap(
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
     derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
-    effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
+    snoozed_id_set = set(snoozed_ids)
+    skipped_id_set = set(skipped_ids)
+    effective_snoozed_set = snoozed_id_set | derived_snoozed_ids
+    effective_snoozed_ids = sorted(effective_snoozed_set)
     if effective_snoozed_ids:
         pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
     if skipped_ids:
@@ -1311,8 +1314,8 @@ async def roll_bootstrap(
         is_rollable = (
             queue_pos >= 1
             and not is_blocked
-            and tid not in effective_snoozed_ids
-            and tid not in skipped_ids
+            and tid not in effective_snoozed_set
+            and tid not in skipped_id_set
         )
         if is_rollable:
             available_ids.add(tid)
@@ -1322,7 +1325,7 @@ async def roll_bootstrap(
             exc = ThreadExclusionReason(
                 thread_id=tid, title=title, format=fmt, reason="blocked",
             )
-        elif tid in snoozed_ids:
+        elif tid in snoozed_id_set:
             exc = ThreadExclusionReason(
                 thread_id=tid,
                 title=title,
@@ -1338,7 +1341,7 @@ async def roll_bootstrap(
                 reason="snoozed",
                 detail="Snoozed by cross-session backoff",
             )
-        elif tid in skipped_ids:
+        elif tid in skipped_id_set:
             exc = ThreadExclusionReason(
                 thread_id=tid,
                 title=title,
