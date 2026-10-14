@@ -37,11 +37,9 @@ function loadSelectionSpecs(): string[] {
   const specs: string[] = [];
   if (Array.isArray(manifest.specs)) {
     for (const entry of manifest.specs) {
-      // Parse input at I/O boundary, then branch on domain value
-      if (typeof entry !== 'string') {
-        throw new Error(`Invalid spec entry in selection manifest: expected string, got ${typeof entry}`);
-      }
-      if (entry.length === 0) {
+      // Domain values after I/O boundary parsing
+      const entrySpec = String(entry)
+      if (entrySpec.length === 0) {
         throw new Error('Invalid spec entry in selection manifest: empty string');
       }
       specs.push(entry);
