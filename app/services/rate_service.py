@@ -44,6 +44,7 @@ from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
 from comic_pile.reading_session import get_current_die_for_session
+from app.services.snooze_service import derive_cross_session_excluded_thread_ids
 
 
 async def _find_source_roll_event(
@@ -543,12 +544,18 @@ async def rate_thread(
             commit=False,
         )
     else:
+        derived_excluded_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+        excluded_ids = [
+            * (current_session.snoozed_thread_ids or []),
+            * (current_session.skipped_thread_ids or []),
+            * list(derived_excluded_ids),
+        ]
         queue_position_changes = await move_to_safe_position(
             thread_id,
             user_id,
             new_die,
             db,
-            excluded_thread_ids=[*(current_session.snoozed_thread_ids or []), *(current_session.skipped_thread_ids or [])],
+            excluded_thread_ids=excluded_ids,
         )
 
     # Always refresh blocked status after reading.  Advancing next_unread_issue_id
