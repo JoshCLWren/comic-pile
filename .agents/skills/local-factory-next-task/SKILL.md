@@ -1,6 +1,8 @@
 ---
 name: local-factory-next-task
 description: Find the oldest factory-claimable task and start it as a local factory session. Use when the user says find the next task, pick the next issue, what should we work on, start factory work, claim the oldest claimable task, take something from the backlog, or work as a local factory in this repository.
+metadata:
+  opencode/slash: "true"
 ---
 
 # Start the oldest claimable task as a local factory

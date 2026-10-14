@@ -1,6 +1,8 @@
 ---
 name: local-factory-session
 description: Bootstrap and hand off a local factory/issue session in Comic Pile so nothing needs manual reconfiguration. Use when starting local issue-driven work, before the first commit of a session, when commit provenance (Model trailer) or factory labels look wrong, when opening or reviving a factory PR, or when handing work to the scheduled review fleet.
+metadata:
+  opencode/slash: "true"
 ---
 
 # Local factory session bootstrap and handoff

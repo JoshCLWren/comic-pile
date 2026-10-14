@@ -1,6 +1,8 @@
 ---
 name: e2e-chromium-regression
 description: Run, triage, and maintain the inventory-driven Chromium regression lane (P0 gate scope plus scheduled P1/P2 discovery). Use when running playwright.regression.config.ts or scripts/e2e-regression.mjs, when the e2e-chromium-regression workflow fails, when browser specs fail with 429/422/400/405 or missing roll regions, when changing docs/e2e-behavior-inventory.yaml, or when reconciling discovery failures into product issues.
+metadata:
+  opencode/slash: "true"
 ---
 
 # Chromium regression lane
