@@ -1269,7 +1269,8 @@ async def test_low_rating_safe_position_excludes_cross_session_snooze_backoff_is
 
     user = await get_or_create_user_async(async_db)
 
-    # Create 11 threads; target will be rated low.
+    # Create 13 threads: target + 2 excluded + 10 other eligible, so the
+    # d10 bounded pool can hold ten others without the just-rated target.
     threads = [
         Thread(
             title=f"Thread {i}",
@@ -1279,7 +1280,7 @@ async def test_low_rating_safe_position_excludes_cross_session_snooze_backoff_is
             status="active",
             user_id=user.id,
         )
-        for i in range(1, 12)
+        for i in range(1, 14)
     ]
     async_db.add_all(threads)
     await async_db.flush()
@@ -1312,11 +1313,12 @@ async def test_low_rating_safe_position_excludes_cross_session_snooze_backoff_is
     await async_db.commit()
 
     # Mock derive_cross_session_excluded_thread_ids to include cross_snoozed
-    async def mock_derive(db, uid):
+    async def mock_derive(db: AsyncSession, uid: int) -> set[int]:
         return {cross_snoozed.id}
 
     # Patch the function used by rate_service
     import app.services.rate_service as rate_service_module
+
     original = rate_service_module.derive_cross_session_excluded_thread_ids
     rate_service_module.derive_cross_session_excluded_thread_ids = mock_derive
     try:
@@ -1330,4 +1332,17 @@ async def test_low_rating_safe_position_excludes_cross_session_snooze_backoff_is
     # Simple check: target queue position should be > 10th eligible position
     # due to safe placement respecting exclusions
     assert target.queue_position > 10
+
+    # Invariant from issue #3696: the rated target must be absent from the
+    # real next-roll bounded d10 pool built with the same exclusion set
+    # (session snoozed + durable cross-session backoff), not only at a raw
+    # queue position beyond the die size.
+    bounded_rows = await get_bounded_roll_pool_rows(
+        user.id,
+        async_db,
+        10,
+        snoozed_ids=[session_snoozed.id, cross_snoozed.id],
+        skipped_ids=[],
+    )
+    assert target.id not in {row[0].id for row in bounded_rows}
 
