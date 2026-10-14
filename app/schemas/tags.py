@@ -43,6 +43,15 @@ class TagBaseResponse(BaseModel):
     updated_at: datetime
 
 
+class TagSummary(BaseModel):
+    """Lightweight tag representation for list views."""
+
+    id: int
+    name: str
+    color: str
+    scope: str
+
+
 class TagResponse(TagBaseResponse):
     """A tag response."""
 

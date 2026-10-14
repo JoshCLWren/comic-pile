@@ -23,6 +23,7 @@ from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
+from app.repositories import tag_repository
 from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
     EffortEstimate,
