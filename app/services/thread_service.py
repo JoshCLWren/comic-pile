@@ -36,7 +36,7 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
-    from app.schemas.tags import TagSummary
+from app.schemas.tags import TagSummary, TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
@@ -334,15 +334,12 @@ async def list_queue_threads(
     thread_ids = [tr.id for tr in thread_responses]
     targets = [("Thread", tid) for tid in thread_ids]
     visible_assignments = await tag_repository.list_visible_assignments_for_targets(db, user_id, targets)
-    tags_by_thread: dict[int, list[dict]] = {}
+    tags_by_thread: dict[int, list[TagSummary]] = {}
     for tag, assignment in visible_assignments:
         tid = assignment.target_id
-        tags_by_thread.setdefault(tid, []).append({
-            "id": tag.id,
-            "name": tag.name,
-            "color": tag.color,
-            "scope": tag.scope,
-        })
+        tags_by_thread.setdefault(tid, []).append(
+            TagSummary(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
+        )
 
     queue_items = [
         to_queue_list_item(tr, mapping_health_map.get(tr.id), tags=tags_by_thread.get(tr.id, []))
@@ -436,15 +433,12 @@ async def list_completed_threads(
     thread_ids = [tr.id for tr in thread_responses]
     targets = [("Thread", tid) for tid in thread_ids]
     visible_assignments = await tag_repository.list_visible_assignments_for_targets(db, user_id, targets)
-    tags_by_thread: dict[int, list[dict]] = {}
+    tags_by_thread: dict[int, list[TagSummary]] = {}
     for tag, assignment in visible_assignments:
         tid = assignment.target_id
-        tags_by_thread.setdefault(tid, []).append({
-            "id": tag.id,
-            "name": tag.name,
-            "color": tag.color,
-            "scope": tag.scope,
-        })
+        tags_by_thread.setdefault(tid, []).append(
+            TagSummary(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
+        )
 
     queue_items = [
         to_queue_list_item(tr, mapping_health_map.get(tr.id), tags=tags_by_thread.get(tr.id, []))

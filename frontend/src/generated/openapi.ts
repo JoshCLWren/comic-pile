@@ -5123,12 +5123,12 @@ export interface paths {
          *
          *     Ordinary numeric issue numbers are inserted at their natural position in the
          *     series rather than always appended, so adding ``#2`` to ``#33, #34, #35``
-         *     saves ``#2, #33, #34, #35``. When that placement would be ambiguous — an
-         *     ``insert_after_issue_id`` anchor, irregular numbering such as ``Annual 1``
-         *     or ``0``, or a series the reader reordered by hand — new issues are appended
-         *     after the last existing issue. When ``insert_after_issue_id`` is provided,
+         *     saves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural
+         *     placement. Send explicit JSON ``null`` to append at the end (the UI
+         *     "At the end" choice). When ``insert_after_issue_id`` is a concrete issue ID,
          *     existing issues later in the thread are shifted upward so the new issues are
-         *     inserted immediately after that issue.
+         *     inserted immediately after that issue. Irregular numbering such as
+         *     ``Annual 1`` or ``0`` falls back to append-only placement.
          *
          *     Args:
          *         thread_id: The thread ID to create issues for.
@@ -6830,6 +6830,10 @@ export interface components {
          * @description One ordered reference in a continuity plan.
          */
         ContinuityPlanNode: {
+            /** Checkpoint Target Ref Id */
+            checkpoint_target_ref_id?: number | null;
+            /** Checkpoint Target Ref Ids */
+            checkpoint_target_ref_ids?: number[];
             /** Convergence Gate */
             convergence_gate?: components["schemas"]["ConvergenceGateTarget"][];
             /** Id */
@@ -8440,6 +8444,8 @@ export interface components {
          * @description One resolved custom CBL entry.
          */
         CustomCBLEntryResponse: {
+            /** Checkpoint Target Issue Ids */
+            checkpoint_target_issue_ids?: number[];
             /** Id */
             id: number;
             /**
@@ -8529,7 +8535,11 @@ export interface components {
          */
         CustomCBLWrite: {
             /** Checkpoint Issue Ids */
-            checkpoint_issue_ids?: number[];
+            checkpoint_issue_ids?: number[] | null;
+            /** Checkpoint Targets */
+            checkpoint_targets?: {
+                [key: string]: number[];
+            } | null;
             /** Description */
             description?: string | null;
             /** Issue Ids */
@@ -9754,7 +9764,7 @@ export interface components {
         IssueCreateRange: {
             /**
              * Insert After Issue Id
-             * @description Insert new issues after this issue ID. If null, append to end.
+             * @description Insert new issues after this issue ID. Omit the field to place ordinary numeric issues in natural series order. Send explicit null to append at the end.
              */
             insert_after_issue_id?: number | null;
             /**
@@ -10339,6 +10349,8 @@ export interface components {
             queue_position: number;
             /** Status */
             status: string;
+            /** Tags */
+            tags?: components["schemas"]["TagSummary"][];
             /** Title */
             title: string;
             /** Total Issues */
@@ -11441,6 +11453,8 @@ export interface components {
             last_activity_at?: string | null;
             /** Route Labels */
             route_labels?: string[];
+            /** Tags */
+            tags?: components["schemas"]["TagSummary"][];
             /** Title */
             title: string;
         };
@@ -12855,6 +12869,20 @@ export interface components {
          * @enum {string}
          */
         TagScope: "global" | "private";
+        /**
+         * TagSummary
+         * @description Lightweight tag representation for list views.
+         */
+        TagSummary: {
+            /** Color */
+            color: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Scope */
+            scope: string;
+        };
         /**
          * TagTargetType
          * @description A taggable entity type.
