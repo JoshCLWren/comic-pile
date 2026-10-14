@@ -10,15 +10,14 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import Text, func, or_, select
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.config import get_recommendation_settings
 from app.database import get_db
 from app.middleware import limiter
-from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, ReadingSession, Snapshot, Thread
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
@@ -43,14 +42,12 @@ from app.schemas import (
     OverrideRequest,
     RecommendationExplanationResponse,
     RollBootstrapResponse,
-    RollBootstrapThread,
     RollRequest,
     RollResponse,
     SessionMode,
     SessionModeResponse,
     SessionModeUpdateRequest,
     SessionResponse,
-    ThreadExclusionReason,
 )
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
@@ -71,7 +68,6 @@ from comic_pile.recommendation_version import (
     recommendation_algorithm_version,
 )
 from comic_pile.reading_session import get_current_die_for_session, get_or_create
-from comic_pile.dependencies import get_blocking_explanations_batch
 
 router = APIRouter(tags=["roll"])
 v2_router = APIRouter(tags=["roll"])
