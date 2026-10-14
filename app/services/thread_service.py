@@ -36,7 +36,7 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
-from app.schemas.tags import TagSummary, TagTargetType
+    from app.schemas.tags import TagSummary
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
