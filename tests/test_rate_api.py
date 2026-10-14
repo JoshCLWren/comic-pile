@@ -1266,8 +1266,6 @@ async def test_low_rating_safe_position_excludes_cross_session_snooze_backoff_is
     roll bounded pool built with that exclusion.
     """
     from tests.conftest import get_or_create_user_async
-    from app.services.snooze_service import derive_cross_session_excluded_thread_ids
-    from comic_pile.queue import get_bounded_roll_pool_rows
 
     user = await get_or_create_user_async(async_db)
 
@@ -1329,19 +1327,6 @@ async def test_low_rating_safe_position_excludes_cross_session_snooze_backoff_is
     assert response.status_code == 200
 
     await async_db.refresh(target)
-    # With cross-session snooze excluded, target should move beyond die 10 pool
-    bounded_rows = await get_bounded_roll_pool_rows(
-        user.id,
-        async_db,
-        10,
-        snoozed_ids=[session_snoozed.id],
-        skipped_ids=[],
-    )
-    # The bounded pool should be built with the same exclusions as rating;
-    # we verify target is not in the pool when exclusions are applied.
-    # Re-build pool with mocked exclusion to mirror rating path
-    from unittest.mock import AsyncMock
-
     # Simple check: target queue position should be > 10th eligible position
     # due to safe placement respecting exclusions
     assert target.queue_position > 10
