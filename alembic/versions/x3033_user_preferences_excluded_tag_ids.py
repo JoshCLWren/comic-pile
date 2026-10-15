@@ -1,7 +1,7 @@
 """Add excluded tag IDs to user preferences for Roll tag exclusions.
 
 Revision ID: x3033_user_preference_tag_exclusions
-Revises: c36620000001
+Revises: c36630000001
 Create Date: 2026-08-04 10:00:00.000000
 
 """
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "x3033_up_tag_exclusions"
-down_revision: str | Sequence[str] | None = "c36620000001"
+revision: str = "x3033_user_preference_tag_exclusions"
+down_revision: str | Sequence[str] | None = "c36630000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

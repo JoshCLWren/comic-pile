@@ -1,7 +1,6 @@
 """Alembic environment configuration."""
 
 import os
-import sys
 from logging.config import fileConfig
 
 from dotenv import load_dotenv
@@ -28,8 +27,6 @@ from app.database import Base
 
 # Load environment variables from .env file
 load_dotenv()
-import sys
-print("DATABASE_URL from os.getenv:", os.getenv("DATABASE_URL"), file=sys.stderr)
 
 config = context.config
 
