@@ -14,12 +14,15 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import text
+from httpx import AsyncClient
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +30,7 @@ from app.auth import hash_password
 from app.models import (
     CatalogIssue,
     ContinuityPlan,
+    Dependency,
     ExternalIdentity,
     Issue,
     ReadingSession,
@@ -37,7 +41,7 @@ from app.models import (
 )
 from app.repositories import ownership_consistency_repository
 from app.schemas.continuity_plan import ContinuityPlanNode
-from app.services import ownership_consistency
+from app.services import dependency_service, ownership_consistency
 from app.services.reading_plan_normalization import rebuild_plan_membership
 
 PASSWORD_HASH = hash_password("password")
@@ -319,6 +323,86 @@ async def test_shared_catalog_access_grants_nothing_beyond_the_catalog_row(
         db, user_id=thread_a.user_id, issue_ids=[issue_a.id, issue_b.id]
     )
     assert unowned == {issue_b.id}
+
+
+@pytest.mark.asyncio
+async def test_dependency_rejects_another_readers_issue_with_shared_catalog(
+    auth_client: AsyncClient,
+    db: AsyncSession,
+    default_user: User,
+    reader_b: User,
+    shared_catalog_issue: CatalogIssue,
+) -> None:
+    """The graph write boundary rejects a foreign issue even with one shared CatalogIssue.
+
+    The API reports another reader's issue exactly like a missing one, so the
+    Dependency endpoint cannot be used as an existence oracle, and the central
+    service path applies the identical rejection without writing a row.
+    """
+    own_thread = await _make_thread(db, default_user.id, "Reader Own Graph")
+    foreign_thread = await _make_thread(db, reader_b.id, "Reader B Graph")
+    own_issue = await _make_issue(
+        db, own_thread.id, "1", 1, catalog_issue_id=shared_catalog_issue.id
+    )
+    foreign_issue = await _make_issue(
+        db, foreign_thread.id, "1", 1, catalog_issue_id=shared_catalog_issue.id
+    )
+    await db.commit()
+    assert own_issue.catalog_issue_id == foreign_issue.catalog_issue_id
+
+    foreign = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": own_issue.id,
+            "target_type": "issue",
+            "target_id": foreign_issue.id,
+        },
+    )
+    missing = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": own_issue.id,
+            "target_type": "issue",
+            "target_id": 987654321,
+        },
+    )
+    assert foreign.status_code == 404
+    assert missing.status_code == 404
+    assert foreign.json() == missing.json()
+
+    result, warning = await dependency_service.create_dependency(
+        own_issue.id, foreign_issue.id, default_user.id, db
+    )
+    assert result is None
+    assert warning == "Issue not found"
+
+    stored = await db.execute(
+        select(Dependency)
+        .where(Dependency.source_issue_id == own_issue.id)
+        .where(Dependency.target_issue_id == foreign_issue.id)
+    )
+    assert stored.scalar_one_or_none() is None
+
+
+def test_ownership_constraints_imports_before_app_models() -> None:
+    """``app.ownership_constraints`` stays importable before ``app.models``.
+
+    ``app.models.__init__`` calls ``install_reader_ownership_constraints`` while
+    the package is still initializing, so a module-scope model import in this
+    module would make any first-touch import of it fail with a circular-import
+    error instead of registering the DDL.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", "import app.ownership_constraints"],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.asyncio

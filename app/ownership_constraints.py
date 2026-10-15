@@ -47,9 +47,6 @@ from __future__ import annotations
 from sqlalchemy import event
 from sqlalchemy.schema import DDL
 
-from app.models.reading_session import ReadingSession
-from app.models.thread import Thread
-
 #: Trigger names installed on ``threads`` and ``sessions``.
 THREAD_FRONTIER_TRIGGER_NAME = "trg_threads_frontier_ownership"
 SESSION_PENDING_TRIGGER_NAME = "trg_sessions_pending_ownership"
@@ -125,9 +122,17 @@ def install_reader_ownership_constraints() -> None:
     ``Base.metadata.create_all`` (test fixtures) installs exactly the same
     PostgreSQL enforcement the Alembic migration installs in production.
 
+    The model imports live here instead of at module scope: ``app.models`` calls
+    this function while its own package is still initializing, so a module-scope
+    ``from app.models.thread import Thread`` would make any first-touch import of
+    ``app.ownership_constraints`` fail with a circular-import error.
+
     The DDL is PostgreSQL-only: ``create_all`` against another dialect must not
     fail, and the single-column foreign keys still provide existence checks.
     """
+    from app.models.reading_session import ReadingSession
+    from app.models.thread import Thread
+
     for statement in THREAD_FRONTIER_TRIGGER_STATEMENTS:
         event.listen(
             Thread.__table__,
