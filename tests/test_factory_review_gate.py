@@ -2045,7 +2045,7 @@ def test_interactive_author_marker_uses_verified_exact_head_commit(
     module = load_review_controller()
     payload = {
         "state": "OPEN", "headRefName": "local/refactor",
-        "body": "Closes #2380.\\nModel: forged-from-pr-body",
+        "body": "Closes #2380.\nModel: forged-from-pr-body",
         "author": {"login": "JoshCLWren"},
         "labels": [{"name": "factory"}],
     }
@@ -2057,7 +2057,7 @@ def test_interactive_author_marker_uses_verified_exact_head_commit(
             "sha": REVIEWED_HEAD,
             "author": {"login": "JoshCLWren"},
             "committer": None,
-            "commit": {"message": "Fix behavior\\n\\nModel: opencode/mimo-v2.6-flash-free"},
+            "commit": {"message": "Fix behavior\n\nModel: opencode/mimo-v2.6-flash-free"},
         },
     )
     monkeypatch.setattr(
@@ -2093,7 +2093,7 @@ def test_interactive_author_attribution_fails_closed(
             "sha": MOVED_HEAD if unsafe == "stale-head" else REVIEWED_HEAD,
             "author": {"login": "intruder" if unsafe == "unattributed-commit" else "JoshCLWren"},
             "committer": None,
-            "commit": {"message": "Fix bug\\n\\nModel: cursor-grok-4.6"},
+            "commit": {"message": "Fix bug\n\nModel: cursor-grok-4.6"},
         },
     )
     monkeypatch.setattr(
