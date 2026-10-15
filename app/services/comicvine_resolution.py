@@ -54,6 +54,13 @@ logger = logging.getLogger(__name__)
 COMICVINE_PROVIDER = "comicvine"
 """Canonical provider key for ComicVine identities, mappings, and catalog rows."""
 
+PROVIDER_SLOW_SEARCH_LOG_MS = 500.0
+"""Provider-phase search latency above which a warning is logged in every environment.
+
+ComicVine series search answers well inside the request budget when the upstream
+call is warm, so a warning here means the provider phase itself is regressing.
+"""
+
 
 def _coerce_provider_int(value: object) -> int | None:
     """Coerce a ComicVine value into an int when it is numeric.
@@ -133,11 +140,13 @@ async def search_comicvine_series(
         },
     )
 
-    # Performance monitoring
     request_time = (time.perf_counter() - start_time) * 1000
 
-    # Log performance metrics for debugging (only in development)
-    if request_time > 500:  # Log slow requests
+    # Provider-phase latency only: the request-logging middleware measures total
+    # application time, so this isolates how much of a slow search is the upstream
+    # ComicVine call rather than our own work. Logged in every environment because
+    # the 1000 ms request budget is only observable in production traffic.
+    if request_time > PROVIDER_SLOW_SEARCH_LOG_MS:
         logger.warning(
             "ComicVine search took %.2fms for query: %s",
             request_time,
@@ -158,13 +167,11 @@ async def search_comicvine_series(
         if not isinstance(row, dict):
             continue
 
-        # Fast path for essential fields
         volume_id = row.get("id")
         name = row.get("name")
         if not isinstance(volume_id, int) or not isinstance(name, str):
             continue
 
-        # Optimized publisher extraction
         publisher_raw = row.get("publisher")
         publisher = (
             publisher_raw.get("name")
@@ -174,13 +181,11 @@ async def search_comicvine_series(
             else None
         )
 
-        # Optimized image URL extraction
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
             image_url = image_raw.get("medium_url") or image_raw.get("small_url")
 
-        # Create result with validated publisher
         series_results.append(
             ComicVineSeriesResult(
                 comicvine_volume_id=volume_id,
