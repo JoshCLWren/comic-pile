@@ -135,7 +135,7 @@ async def test_database_exactly_one_target_constraint(
             await async_db.flush()
 
 
-def test_payload_validation_without_database() -> None:
+async def test_payload_validation_without_database() -> None:
     """Validate the public exactly-one-target contract independently of FastAPI."""
     with pytest.raises(ValidationError):
         CollectionExclusionCreate(thread_id=1, issue_id=2)
