@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if awk -F '\t' '$1 == 87 && $2 == "opencode-free" && $3 == "deepseek-v4.1-flash-free" {found=1} END {exit !found}' .github/free-model-factories.tsv; then
+          if awk -F '\t' '$1 == 74 && $2 == "opencode-free" && $3 == "deepseek-v4.1-flash-free" {found=1} END {exit !found}' .github/free-model-factories.tsv; then
             echo 'active=true' >> "$GITHUB_OUTPUT"
           else
             echo 'active=false' >> "$GITHUB_OUTPUT"
