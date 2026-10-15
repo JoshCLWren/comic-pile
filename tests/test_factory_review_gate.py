@@ -409,7 +409,6 @@ def test_approved_head_without_cross_model_provenance_is_blocked(
     assert transitions[-1]["pr_stage"] == "factory:blocked"
     assert all(item["pr_stage"] != "factory:ready" for item in transitions)
     assert "cross-model" in str(posted[-1]["note"])
-    
 
 def test_controller_mechanical_failure_routes_to_repair(
     monkeypatch: MonkeyPatch,
