@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Coroutine
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -248,12 +249,12 @@ def test_explicit_opt_in_restores_request_and_coroutine_evaluation(
     """The legacy filing path still schedules under affirmative opt-in."""
     monkeypatch.setenv("PERF_ALARM_GITHUB_ISSUES_ENABLED", "true")
     clear_settings_cache()
-    scheduled: list[object] = []
+    scheduled = 0
 
-    def capture_and_close(coroutine: object) -> None:
-        scheduled.append(coroutine)
-        close = getattr(coroutine, "close")
-        close()
+    def capture_and_close(coroutine: Coroutine[object, object, None]) -> None:
+        nonlocal scheduled
+        scheduled += 1
+        coroutine.close()
 
     with patch.object(perf_issues, "_spawn_background", side_effect=capture_and_close):
         perf_issues.handle_request_telemetry(
@@ -267,4 +268,4 @@ def test_explicit_opt_in_restores_request_and_coroutine_evaluation(
             elapsed_ms=500.0,
             deadline_ms=500.0,
         )
-    assert len(scheduled) == 2
+    assert scheduled == 2
