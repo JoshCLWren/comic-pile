@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
@@ -119,8 +120,7 @@ async def search_comicvine_series(
             next_offset=None,
         )
 
-    # Optimized field list - only request essential fields for search results
-    # Further reduced to minimize response size and processing time
+    # Request the fields the UI renders, including the cover thumbnail.
     response = await client.request(
         "search",
         "search",
@@ -129,7 +129,7 @@ async def search_comicvine_series(
             "resources": "volume",
             "limit": clamped_limit,
             "page": page,
-            "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url",
+            "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
     
