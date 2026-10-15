@@ -115,7 +115,7 @@ def test_explicitly_factory_enrolled_manual_and_agent_prs_reach_review_queue() -
     assert not policy.is_factory_managed_pr(excluded)
 
     opted_out = dict(item)
-    opted_out["body"] = "Closes #2401\\n\\n<!-- factory-execution:manual-only -->"
+    opted_out["body"] = "Closes #2401\n\n<!-- factory-execution:manual-only -->"
     assert not policy.pr_is_static_candidate(opted_out, {}, no_diff_attempts=0)
 
 
