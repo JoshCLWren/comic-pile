@@ -429,7 +429,7 @@ def persist_interactive_author_model_marker(
         return None
     metadata = json_object(commit.get("commit"))
     message = str(metadata.get("message") or "") if metadata is not None else ""
-    models = set(re.findall(r"(?m)^Model:[ \\t]*(\\S+)[ \\t]*$", message))
+    models = set(re.findall(r"(?m)^Model:[ \t]*(\S+)[ \t]*$", message))
     if len(models) > 1:
         return None
     model = next(iter(models)) if models else "human"
