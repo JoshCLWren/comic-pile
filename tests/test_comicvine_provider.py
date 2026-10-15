@@ -8,6 +8,7 @@ import time
 import urllib.error
 from collections.abc import Callable, Mapping
 from pathlib import Path
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -594,14 +595,16 @@ async def test_shared_http_client_is_reused_and_closed_deterministically(
     """The process-wide keep-alive client is one reusable pool that shutdown drains."""
     monkeypatch.setattr("comic_pile.comicvine_provider._shared_http_client", None)
 
-    first = get_shared_http_client()
-    second = get_shared_http_client()
+    with patch("httpx.AsyncClient", wraps=httpx.AsyncClient) as client_factory:
+        first = get_shared_http_client()
+        second = get_shared_http_client()
 
     assert first is second
     assert first.is_closed is False
     assert first.follow_redirects is True
-    assert first.limits.max_keepalive_connections > 0
-    assert first.limits.max_connections >= first.limits.max_keepalive_connections
+    assert client_factory.call_args.kwargs["limits"] == httpx.Limits(
+        max_keepalive_connections=20, max_connections=100
+    )
     assert first.timeout.read == DEFAULT_REQUEST_TIMEOUT_SECONDS
     assert first.timeout.connect == DEFAULT_REQUEST_TIMEOUT_SECONDS * 0.3
 
@@ -638,7 +641,8 @@ async def test_request_async_uses_injected_client_and_decodes_payload(tmp_path: 
         sent.append(request)
         return httpx.Response(200, json={"status_code": 1, "results": [{"id": 471}]})
 
-    client = ComicVineClient("secret", tmp_path, http_client=_mocked_transport(handler))
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
     try:
         response = await client.request(
             "search",
@@ -646,7 +650,7 @@ async def test_request_async_uses_injected_client_and_decodes_payload(tmp_path: 
             {"query": "batman", "resources": "volume", "limit": 10, "page": 1},
         )
     finally:
-        await client._http_client.aclose()
+        await http_client.aclose()
 
     assert response.from_cache is False
     assert response.payload == {"status_code": 1, "results": [{"id": 471}]}
@@ -689,12 +693,13 @@ async def test_request_async_maps_provider_throttle_to_rate_limit_error(tmp_path
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(429, headers={"Retry-After": "120"})
 
-    client = ComicVineClient("secret", tmp_path, http_client=_mocked_transport(handler))
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
     try:
         with pytest.raises(ComicVineRateLimitError) as exc_info:
             await client.request("search", "search", {"query": "batman"}, refresh=True)
     finally:
-        await client._http_client.aclose()
+        await http_client.aclose()
 
     assert exc_info.value.retry_after == 120.0
     assert exc_info.value.retry_after_seconds == 120.0
@@ -709,12 +714,13 @@ async def test_request_async_maps_http_error_status_to_provider_error(tmp_path: 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, text="upstream unavailable")
 
-    client = ComicVineClient("secret", tmp_path, http_client=_mocked_transport(handler))
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
     try:
         with pytest.raises(ComicVineError) as exc_info:
             await client.request("search", "search", {"query": "batman"}, refresh=True)
     finally:
-        await client._http_client.aclose()
+        await http_client.aclose()
 
     assert isinstance(exc_info.value, ComicVineError)
     assert not isinstance(exc_info.value, ComicVineRateLimitError)
@@ -728,12 +734,13 @@ async def test_request_async_maps_transport_failure_to_provider_error(tmp_path: 
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
 
-    client = ComicVineClient("secret", tmp_path, http_client=_mocked_transport(handler))
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
     try:
         with pytest.raises(ComicVineError) as exc_info:
             await client.request("search", "search", {"query": "batman"}, refresh=True)
     finally:
-        await client._http_client.aclose()
+        await http_client.aclose()
 
     assert not isinstance(exc_info.value, ComicVineRateLimitError)
     assert "request failed" in str(exc_info.value)
@@ -746,12 +753,13 @@ async def test_request_async_maps_invalid_json_to_provider_error(tmp_path: Path)
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, text="<html>gateway error</html>")
 
-    client = ComicVineClient("secret", tmp_path, http_client=_mocked_transport(handler))
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
     try:
         with pytest.raises(ComicVineError) as exc_info:
             await client.request("search", "search", {"query": "batman"}, refresh=True)
     finally:
-        await client._http_client.aclose()
+        await http_client.aclose()
 
     assert "JSON decode failed" in str(exc_info.value)
 
@@ -774,12 +782,13 @@ async def test_request_async_rejects_unusable_payloads(
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=payload)
 
-    client = ComicVineClient("secret", tmp_path, http_client=_mocked_transport(handler))
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
     try:
         with pytest.raises(ComicVineError, match=expected_message) as exc_info:
             await client.request("search", "search", {"query": "batman"}, refresh=True)
     finally:
-        await client._http_client.aclose()
+        await http_client.aclose()
 
     assert not isinstance(exc_info.value, ComicVineRateLimitError)
 
