@@ -632,7 +632,7 @@ function enrollPr(number, extra = {}) {
   };
 }
 
-test('enroll leaves factory:local PRs untouched (no factory:review stamped)', async () => {
+test('enroll adds review stage without stealing a local factory lease', async () => {
   for (const labels of [
     ['factory', 'factory:local'],
     ['infrastructure', 'factory', 'factory:local'],
@@ -651,11 +651,16 @@ test('enroll leaves factory:local PRs untouched (no factory:review stamped)', as
     ]) {
       await reconcile.reconcileMissingPrLabels({ github, context });
     }
-    assert.equal(calls.length, 0, `labels ${labels.join(',')} must not be mutated`);
+    assert.equal(calls.length, 2, 'test harness returns the original labels on each read');
+    for (const call of calls) {
+      assert.deepEqual(new Set(call.labels),
+        new Set([...labels.filter(label => label !== 'factory'), 'factory', 'factory:local', 'factory:review']));
+      assert.ok(!call.labels.includes('factory:unowned'));
+    }
   }
 });
 
-test('enroll sweep skips factory:local PRs but still repairs other PRs', async () => {
+test('enroll sweep repairs local review stages and preserves active owners', async () => {
   const calls = [];
   const github = enrollGithubFor({
     pulls: [enrollPr(3153), enrollPr(3154), enrollPr(3200)],
@@ -667,13 +672,19 @@ test('enroll sweep skips factory:local PRs but still repairs other PRs', async (
     setLabels: async input => calls.push(input),
   });
   await reconcile.reconcileMissingPrLabels({ github, context: contextFor('schedule', {}) });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].issue_number, 3200);
+  assert.deepEqual(calls.map(call => call.issue_number), [3153, 3154, 3200]);
   assert.deepEqual(
     new Set(calls[0].labels),
+    new Set(['infrastructure', 'factory', 'factory:local', 'factory:review']),
+  );
+  assert.deepEqual(
+    new Set(calls[1].labels),
+    new Set(['factory', 'factory:local', 'factory:review']),
+  );
+  assert.deepEqual(
+    new Set(calls[2].labels),
     new Set(['bug', 'factory', 'factory:unowned', 'factory:review']),
   );
-  assert.ok(!calls.some(call => call.labels.includes('factory:local')));
 });
 
 test('enroll leaves manual-only PRs untouched even without factory:local', async () => {
