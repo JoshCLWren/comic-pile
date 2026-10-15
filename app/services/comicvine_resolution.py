@@ -158,8 +158,11 @@ async def search_comicvine_series(
         return ComicVineSeriesSearchResponse(
             query=query,
             results=[],
+            total_available=0,
             offset=clamped_offset,
             limit=clamped_limit,
+            has_more=False,
+            next_offset=None,
         )
 
     series_results: list[ComicVineSeriesResult] = []
