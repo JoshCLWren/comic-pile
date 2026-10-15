@@ -6,13 +6,14 @@ import asyncio
 import email.utils
 import hashlib
 import json
-import logging
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 
 from filelock import FileLock

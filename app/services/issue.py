@@ -35,11 +35,11 @@ logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
-def _spawn_background(coro: asyncio.Coroutine[object, object, None]) -> None:
+def _spawn_background(coro: asyncio.Task[None]) -> None:
     """Keep a background task referenced until it finishes.
 
     Args:
-        coro: Background coroutine to schedule on the running loop.
+        coro: Background task to schedule on the running loop.
     """
     try:
         loop = asyncio.get_running_loop()
