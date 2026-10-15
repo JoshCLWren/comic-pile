@@ -243,8 +243,9 @@ def is_factory_managed_pr(pr: dict[str, Any]) -> bool:
     head = str(pr.get('headRefName') or '')
     if head.startswith('factory/'):
         return True
-    if head.startswith(('agent/', 'chatgpt/')):
-        return False
+    # Explicitly factory-enrolled interactive PRs are reviewable regardless
+    # of the branch prefix. Their GitHub author and provenance are still
+    # verified by the trusted review controller before merge authorization.
     return 'factory' in labels_of(pr)
 
 
