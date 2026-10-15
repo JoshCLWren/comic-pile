@@ -1035,7 +1035,9 @@ async def import_comicvine_series(
         request: Validated import payload with optional reading progress and
             anchored placement.
         comicvine_client: Optional configured ComicVine client. When present,
-            provider metadata is hydrated for each adopted issue.
+            the caller controls per-issue hydration; the batch import path
+            deliberately passes no client so provider metadata is NOT hydrated
+            per adopted issue, avoiding one external fetch per roster row.
 
     Returns:
         ImportSeriesResponse with thread details and per-issue adoption results.
