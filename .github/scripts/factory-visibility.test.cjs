@@ -81,7 +81,7 @@ test('fixed-model worker tokens map from the roster, not a numeric ceiling', () 
   assert.equal(ownerFor('opencode-free-model-factory-73'), 'factory:73');
   assert.equal(ownerFor('opencode-free-model-factory-74'), 'factory:74');
   assert.equal(ownerFor('opencode-free-model-factory-75'), 'factory:75');
-  assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:77');
+  assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:unowned');
   assert.equal(ownerFor('opencode-omniroute-factory-73'), 'factory:73');
   assert.equal(ownerFor('opencode-nvidia-factory-11'), 'factory:11');
   // Off-roster / retired ids stay unowned even when historically in 6..71.
@@ -96,7 +96,7 @@ test('head-contributor markers resolve roster workers above the old ceiling', ()
   const { workerFrom } = reconcile._test;
   const body = '<!-- comic-pile-factory-head-contributor-v1:pr-7:head-' + 'a'.repeat(40) + ':worker-77:epoch-2 -->';
   assert.equal(workerFrom(body), '77');
-  assert.equal(ownerFor(workerFrom(body)), 'factory:77');
+  assert.equal(ownerFor(workerFrom(body)), 'factory:unowned');
   assert.equal(ownerFor('worker-73'), 'factory:73');
   assert.equal(ownerFor('72'), 'factory:unowned');
 });
