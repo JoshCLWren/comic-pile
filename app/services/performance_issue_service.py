@@ -1,9 +1,11 @@
-"""Automatic GitHub issue filing for production performance violations.
+"""Optional GitHub issue filing for production performance violations.
 
-Implements issue #3245 filing plus the #3552 noise-control contract.
+Implements issue #3245 filing, #3552 noise controls and the default-off #3726 policy.
 
 Policy:
 
+- GitHub filing is disabled by default; telemetry and runtime budgets stay on.
+- Explicitly opt in with ``PERF_ALARM_GITHUB_ISSUES_ENABLED=true``.
 - Dedupe fingerprint is kind plus route identity: for requests that is
   ``method + route template``. Warm/cold, workload class, and dominant
   phase are evidence on the sample, never separate issues.
@@ -25,7 +27,7 @@ Policy:
 - If an open issue already exists for the fingerprint, a new over-budget
   sample comments at most once per fingerprint per hour, and never
   comments on a closed issue.
-- Readiness-critical coroutine hard timeouts still file immediately
+- When enabled, readiness-critical coroutine hard timeouts file immediately
   unless the same coroutine signature already has an open issue.
 
 Issue creation never blocks the user request: callers use the ``handle_*``
@@ -396,6 +398,13 @@ def daily_breach_threshold() -> int:
     from app.config import get_app_settings
 
     return get_app_settings().perf_alarm_daily_breach_threshold
+
+
+def github_issue_filing_enabled() -> bool:
+    """Return whether production telemetry may automatically contact GitHub."""
+    from app.config import get_app_settings
+
+    return get_app_settings().perf_alarm_github_issues_enabled
 
 
 def get_tracker() -> PerformanceIssueTracker:
@@ -865,6 +874,9 @@ async def _comment_if_throttled(
         GitHub issue state after the attempt, or None when throttled or
         GitHub is unavailable.
     """
+    if not github_issue_filing_enabled():
+        return None
+
     from app.services import github_service as gh
 
     if not await store.try_claim_comment(fingerprint):
@@ -897,6 +909,9 @@ async def _file_new_issue(
         body: Issue body with evidence and fingerprint marker.
         labels: Factory intake labels.
     """
+    if not github_issue_filing_enabled():
+        return
+
     from app.services import github_service as gh
 
     if not await store.try_claim_filing(decision.fingerprint):
@@ -975,6 +990,9 @@ async def _file_decision_background(
         comment: Occurrence comment used when updating an open issue.
         store: Durable store. Tests omit this to use the in-memory store.
     """
+    if not github_issue_filing_enabled():
+        return
+
     try:
         from app.services import github_service as gh
     except ImportError as exc:
@@ -1123,7 +1141,7 @@ def schedule_filing(
         comment: Occurrence comment used when updating an open issue.
         store: Durable store captured by the background task.
     """
-    if decision.action in {"accumulate", "ignore"}:
+    if not github_issue_filing_enabled() or decision.action in {"accumulate", "ignore"}:
         return
     _spawn_background(
         _file_decision_background(
@@ -1179,6 +1197,9 @@ async def _handle_request_background(
         deployment_id: Deployment/commit identifier.
         server_timing: Representative Server-Timing header value.
     """
+    if not github_issue_filing_enabled():
+        return
+
     db: AsyncSession | None = None
     try:
         store, db = await _open_production_store()
@@ -1322,7 +1343,7 @@ def handle_request_telemetry(
             },
         )
         return
-    if duration_ms <= REQUEST_TIMEOUT_MS:
+    if not github_issue_filing_enabled() or duration_ms <= REQUEST_TIMEOUT_MS:
         return
     _spawn_background(
         _handle_request_background(
@@ -1391,6 +1412,9 @@ async def _handle_coroutine_background(
         exception_type: Timeout/exception type name when known.
         deployment_id: Deployment/commit identifier.
     """
+    if not github_issue_filing_enabled():
+        return
+
     db: AsyncSession | None = None
     try:
         store, db = await _open_production_store()
@@ -1448,6 +1472,9 @@ def handle_coroutine_timeout(
         exception_type: Timeout/exception type name when known.
         deployment_id: Deployment/commit identifier.
     """
+    if not github_issue_filing_enabled():
+        return
+
     _spawn_background(
         _handle_coroutine_background(
             operation=operation,
