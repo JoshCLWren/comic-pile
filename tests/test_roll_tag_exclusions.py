@@ -8,9 +8,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Tag, TagAssignment, Thread
+from app.models import TagAssignment, Thread
 from app.models.user import User
-from tests.conftest import get_or_create_user_async
 
 
 async def _thread_with_issue(

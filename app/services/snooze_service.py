@@ -163,6 +163,7 @@ async def derive_effective_roll_excluded_thread_ids(
         user_id: Owner of the threads.
         session_snoozed_ids: Current session's snoozed thread IDs.
         session_skipped_ids: Current session's skipped thread IDs.
+        excluded_tag_ids: Account-wide excluded tag IDs from user preferences.
 
     Returns:
         Deduplicated thread IDs that must stay out of roll eligibility.

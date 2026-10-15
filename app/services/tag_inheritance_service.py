@@ -391,8 +391,6 @@ class TagInheritanceService:
         """
         from collections import defaultdict
 
-        from collections import defaultdict
-
         from app.repositories import issue_repository, reading_plan_repository, thread_repository
 
         if not issue_ids:
