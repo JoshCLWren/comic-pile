@@ -1,0 +1,54 @@
+name: OpenCode DeepSeek free endpoint smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/free-model-factories.tsv'
+      - '.github/workflows/opencode-deepseek-free-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-deepseek-free-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert dedicated free worker pin
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          awk -F '\t' '$1 == 87 && $2 == "opencode-free" && $3 == "deepseek-v4.1-flash-free" {found=1} END {exit !found}' .github/free-model-factories.tsv
+      - name: Install factory-pinned OpenCode
+        shell: bash
+        env:
+          OPENCODE_VERSION: '1.18.32'
+          OPENCODE_LINUX_X64_SHA256: '3046e0404fdc60fb80307e7a47824ba07477364178a4d09baa8548496dd6d43b'
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/opencode-linux-x64.tar.gz"
+          curl -fsSL --retry 3 "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" -o "$archive"
+          printf '%s  %s\n' "$OPENCODE_LINUX_X64_SHA256" "$archive" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/opencode-bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/opencode-bin"
+          echo "$RUNNER_TEMP/opencode-bin" >> "$GITHUB_PATH"
+      - name: Verify exact free model is discoverable
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          opencode models opencode --refresh | tee "$RUNNER_TEMP/opencode-models.txt"
+          grep -Fx 'opencode/deepseek-v4.1-flash-free' "$RUNNER_TEMP/opencode-models.txt"
+      - name: Invoke exact free model anonymously
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          # Match the production opencode-free lane, which supplies no paid-provider credentials.
+          timeout --signal=TERM --kill-after=10s 180s \
+            opencode run -m opencode/deepseek-v4.1-flash-free --agent build \
+            --dir "$GITHUB_WORKSPACE" --title 'DeepSeek free endpoint acceptance smoke' \
+            'Reply with exactly DEEPSEEK_FREE_ENDPOINT_OK. Do not edit files, run commands, or use tools.' \
+            2>&1 | tee "$RUNNER_TEMP/deepseek-free-smoke.log"
+          grep -q 'DEEPSEEK_FREE_ENDPOINT_OK' "$RUNNER_TEMP/deepseek-free-smoke.log"
+          test -z "$(git status --porcelain)"
