@@ -56,6 +56,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId: number
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
+  onLoad?: () => void
   /** Injectable issue API; defaults to the production issuesApi. */
   issuesApi?: IssueToggleListApi
   /** Injectable dependency API; defaults to the production issueDependenciesApi. */
@@ -70,6 +71,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId,
   onOpenDependencies,
   onIssueChanged,
+  onLoad,
   issuesApi: issuesService = issuesApi,
   dependenciesApi = issueDependenciesApi,
   deferred = false,
@@ -333,6 +335,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     } finally {
       if (loadGeneration === loadGenerationRef.current) {
         setIsLoading(false)
+        onLoad?.()
       }
     }
   }, [fetchAllIssues, fetchDependencies, syncOptimisticIssues])

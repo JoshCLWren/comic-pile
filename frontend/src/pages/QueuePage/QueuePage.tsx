@@ -36,6 +36,7 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
+  const [isIssuesLoading, setIsIssuesLoading] = useState(false)
   const isSearching = searchQuery.trim() !== ''
 
   const {
@@ -180,7 +181,10 @@ export default function QueuePage() {
           onMoveToFront={() => actions.handleMoveToFront(thread.id)}
           onMoveToBack={() => actions.handleMoveToBack(thread.id)}
           onReposition={() => modals.openRepositionModal(thread)}
-          onEdit={() => modals.showEditModal(thread)}
+          onEdit={() => {
+  setIsIssuesLoading(true)
+  modals.showEditModal(thread)
+}}
           onDependencies={() => modals.openDependenciesModal(thread)}
           onDelete={() => actions.requestDelete(thread)}
         />
@@ -317,9 +321,11 @@ export default function QueuePage() {
           onOpenMigrationDialog={modals.openMigrationDialog}
           onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
           onIssueChanged={handleIssueChanged}
+          onIssuesLoaded={() => setIsIssuesLoading(false)}
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
+          isIssuesLoading={modals.isIssuesLoading}
           showRollNudge={modals.showRollNudge}
           onDismissRollNudge={modals.dismissRollNudge}
           onRollNudgeNavigate={modals.rollNudgeNavigate}

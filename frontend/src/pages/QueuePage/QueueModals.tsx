@@ -231,9 +231,11 @@ interface QueueModalsProps {
   onOpenMigrationDialog: (thread: Thread | ThreadListItem) => void
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
+  onIssuesLoaded?: () => void
   isPendingCreate: boolean
   isPendingEdit: boolean
   isPendingReactivate: boolean
+  isIssuesLoading: boolean
   showRollNudge: boolean
   onDismissRollNudge: () => void
   onRollNudgeNavigate: () => void
@@ -284,9 +286,11 @@ export function QueueModals({
   onOpenMigrationDialog,
   onOpenDependencies,
   onIssueChanged,
+  onIssuesLoaded,
   isPendingCreate,
   isPendingEdit,
   isPendingReactivate,
+  isIssuesLoading,
   showRollNudge,
   onDismissRollNudge,
   onRollNudgeNavigate,
@@ -587,16 +591,24 @@ export function QueueModals({
               deferred
               onOpenDependencies={onOpenDependencies}
               onIssueChanged={onIssueChanged}
+              onLoad={() => {
+                setIsIssuesLoading(false)
+                onIssuesLoaded?.()
+              }}
             />
+          )}
+          
+          {editingThread && editingThread.total_issues != null && isIssuesLoading && (
+            <div className="text-xs text-stone-500">Loading issues...</div>
           )}
 
           <button
             type="submit"
             form="edit-thread-form"
-            disabled={isPendingEdit}
+            disabled={isPendingEdit || isIssuesLoading}
             className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
-            {isPendingEdit ? 'Saving...' : 'Save Changes'}
+            {isIssuesLoading ? 'Loading issues...' : isPendingEdit ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </Modal>
