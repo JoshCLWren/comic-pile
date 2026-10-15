@@ -1,5 +1,6 @@
 """Regression coverage for owner-scoped, durable Option E collection exclusions."""
 
+import asyncio
 from datetime import UTC, datetime
 
 import pytest
@@ -7,10 +8,11 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.models import CollectionExclusion, Issue, Thread, User
 from app.schemas.collection_exclusion import CollectionExclusionCreate
+from app.services.collection_exclusion_service import create_collection_exclusion
 
 pytestmark = pytest.mark.asyncio
 
@@ -141,3 +143,68 @@ async def test_payload_validation_without_database() -> None:
         CollectionExclusionCreate(thread_id=1, issue_id=2)
     with pytest.raises(ValidationError):
         CollectionExclusionCreate(provider="comicvine", external_volume_id=" ")
+
+
+async def test_concurrent_identical_volume_requests_share_one_record(
+    db_engine: AsyncEngine,
+) -> None:
+    """Independent transactions contend on the unique index and both return one ID."""
+    factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with factory() as seed:
+        owner = User(username="exclusions_concurrent", created_at=datetime.now(UTC))
+        seed.add(owner)
+        await seed.commit()
+        user_id = owner.id
+
+    async def create_one() -> int:
+        async with factory() as session:
+            result = await create_collection_exclusion(
+                session,
+                user_id=user_id,
+                payload=CollectionExclusionCreate(
+                    provider="comicvine", external_volume_id="4050-90001"
+                ),
+            )
+            return result.id
+
+    try:
+        first_id, second_id = await asyncio.gather(create_one(), create_one())
+        assert first_id == second_id
+        async with factory() as check:
+            records = await check.scalars(
+                select(CollectionExclusion).where(CollectionExclusion.user_id == user_id)
+            )
+            assert [record.id for record in records] == [first_id]
+    finally:
+        async with factory() as cleanup:
+            owner = await cleanup.get(User, user_id)
+            if owner is not None:
+                await cleanup.delete(owner)
+            await cleanup.commit()
+
+
+async def test_all_target_kinds_survive_deleted_thread_and_issue(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict[str, object]
+) -> None:
+    """Durable exclusions outlive both the target issue and parent Thread."""
+    targets = (
+        {"provider": "comicvine", "external_volume_id": "4050-777"},
+        {"thread_id": 2},
+        {"issue_id": 6},
+    )
+    recorded = []
+    for target in targets:
+        response = await auth_client.post(BASE, json=target)
+        assert response.status_code == 200, response.text
+        recorded.append(response.json())
+
+    await async_db.execute(delete(Issue).where(Issue.id == 6))
+    await async_db.commit()
+    before_thread_delete = (await auth_client.get(BASE)).json()
+    assert before_thread_delete == recorded
+
+    await async_db.execute(delete(Thread).where(Thread.id == 2))
+    await async_db.commit()
+    after_thread_delete = (await auth_client.get(BASE)).json()
+    assert after_thread_delete == recorded
+    assert len({row["id"] for row in after_thread_delete}) == 3
