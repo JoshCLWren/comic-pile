@@ -222,21 +222,29 @@ def test_dangling_and_malformed_note_rules_remain_unknown() -> None:
 
 
 def test_malformed_rule_note_does_not_infer_checkpoint_provenance() -> None:
+    """Malformed compiler notes retain matching rules without granting authorship."""
     snapshot = fixture_snapshot()
     snapshot.dependencies[0].note = "canonical:rule:invalid"
     result = census(replace(snapshot, rules=snapshot.rules[:1]), 1)
-    edge = result["edges"][0]
+    edges = result["edges"]
+    assert isinstance(edges, list)
+    edge = edges[0]
     assert edge["evidence_class"] == "D"
     assert edge["missing_note_rule"] is True
     assert edge["rule_evidence"][0]["matches_compiled_pair"] is True
 
 
 def test_foreign_source_to_owned_frontier_is_not_confirmed_blocker() -> None:
+    """Preserve foreign-source evidence without counting it as a live blocker."""
     snapshot = fixture_snapshot()
     edge = Dependency(id=9, source_issue_id=999, target_issue_id=11, note="foreign")
     result = census(replace(snapshot, dependencies=[edge]), 1)
-    reported = result["edges"][0]
+    edges = result["edges"]
+    assert isinstance(edges, list)
+    reported = edges[0]
     assert reported["unresolved_endpoint"] is True
     assert reported["active_derived_frontier_blocker"] is False
     assert reported["active_stored_frontier_blocker"] is False
-    assert result["summary"]["active_derived_frontier_blockers"] == 0
+    summary = result["summary"]
+    assert isinstance(summary, dict)
+    assert summary["active_derived_frontier_blockers"] == 0
