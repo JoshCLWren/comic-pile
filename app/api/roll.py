@@ -1243,30 +1243,6 @@ async def roll_bootstrap(
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
     skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
 
-    # Collect all thread IDs from all lists for batch tag fetching
-    all_thread_ids: list[int] = []
-    all_thread_ids.extend(t.id for t in roll_pool)
-    all_thread_ids.extend(t.id for t in snoozed_threads)
-    all_thread_ids.extend(t.id for t in skipped_threads)
-    all_thread_ids.extend(t.id for t in blocked_threads)
-    # Deduplicate while preserving order
-    seen = set()
-    unique_thread_ids = [tid for tid in all_thread_ids if not (tid in seen or seen.add(tid))]
-
-    # Fetch effective tags for all threads (batched, no N+1)
-    tag_service = TagInheritanceService(db)
-    tags_map = await tag_service.get_threads_effective_tags(current_user.id, unique_thread_ids)
-
-    # Apply tags to all thread lists
-    for t in roll_pool:
-        t.tags = tags_map.get(t.id, []).direct_tags
-    for t in snoozed_threads:
-        t.tags = tags_map.get(t.id, []).direct_tags
-    for t in skipped_threads:
-        t.tags = tags_map.get(t.id, []).direct_tags
-    for t in blocked_threads:
-        t.tags = tags_map.get(t.id, []).direct_tags
-
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
     stale_base = (
@@ -1314,6 +1290,18 @@ async def roll_bootstrap(
                     format=normalize_format_value(stale_row.format),
                     last_activity_at=stale_last_activity,
                 )
+
+    # One bounded tag read for every thread this bootstrap returns (issue
+    # #3425), so Roll rows show tags without a query per face. Threads have no
+    # parents in v1, so these are the directly assigned visible tags.
+    bootstrap_threads = [*roll_pool, *snoozed_threads, *skipped_threads, *blocked_threads]
+    if stale_thread is not None:
+        bootstrap_threads.append(stale_thread)
+    tags_by_thread = await TagInheritanceService(db).get_threads_direct_tags(
+        user_id, [thread.id for thread in bootstrap_threads]
+    )
+    for thread in bootstrap_threads:
+        thread.tags = tags_by_thread.get(thread.id, [])
 
     # Exclusion transparency for issue #3125: enumerate every series
     # not in the roll pool and explain why, so the user can see what
