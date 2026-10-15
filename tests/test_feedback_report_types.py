@@ -54,7 +54,7 @@ def test_feedback_issue_execution_gate_matches_report_type(
     assert kwargs["labels"] == _labels_for_report_type(report_type)
     marker = "<!-- factory-execution:manual-only -->"
     if expected_gate:
-        assert body.startswith(f"{marker}\\n\\n")
+        assert body.startswith(f"{marker}\n\n")
         assert body.count(marker) == 1
     else:
         assert marker not in body
