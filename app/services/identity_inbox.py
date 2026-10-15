@@ -83,6 +83,10 @@ async def list_inbox_items(
         select(IssueExternalIdentityMapping)
         .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
         .join(Thread, Thread.id == Issue.thread_id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
         .where(
             Thread.user_id == user_id,
             IssueExternalIdentityMapping.status.in_(["unresolved", "candidate", "deferred"]),
