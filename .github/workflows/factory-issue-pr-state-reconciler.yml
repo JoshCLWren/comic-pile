@@ -3,6 +3,10 @@ name: Factory Issue PR State Reconciler
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, closed, unlabeled]
+  # Trusted review feedback may route a PR to repair. Native APPROVED is
+  # deliberately not a merge authorization; controller attestations still rule.
+  pull_request_review:
+    types: [submitted, dismissed]
   workflow_dispatch:
   schedule:
     # PR events cannot repair issues whose last canonical PR was closed before
@@ -37,8 +41,12 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            const { reconcileMissingPrLabels } = require('./.github/scripts/factory-visibility.cjs');
-            await reconcileMissingPrLabels({ github, context });
+            const visibility = require('./.github/scripts/factory-visibility.cjs');
+            if (context.eventName === 'pull_request_review') {
+              await visibility({ github, context });
+            } else {
+              await visibility.reconcileMissingPrLabels({ github, context });
+            }
 
       - name: Reconcile linked issue from trusted canonical PR history
         env:
@@ -49,6 +57,9 @@ jobs:
           EVENT_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
         run: |
           set -Eeuo pipefail
+          # This event only affects PR review/repair state. Do not enter the
+          # scheduled linked-issue sweep or infer issue closure from a review.
+          [[ "$EVENT_NAME" == 'pull_request_review' ]] && exit 0
 
           issue_from_head() {
             sed -nE 's#^factory/[0-9]+-([0-9]+)-.*$#\1#p' <<< "$1"
