@@ -10465,6 +10465,8 @@ export interface components {
             queue_position: number;
             /** Status */
             status: string;
+            /** Tags */
+            tags?: components["schemas"]["TagResponse"][];
             /** Title */
             title: string;
             /** Total Issues */
@@ -11602,6 +11604,8 @@ export interface components {
             last_activity_at?: string | null;
             /** Route Labels */
             route_labels?: string[];
+            /** Tags */
+            tags?: components["schemas"]["TagResponse"][];
             /** Title */
             title: string;
         };

@@ -35,8 +35,9 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
-from app.schemas.tags import TagTargetType
+from app.schemas.tags import TagResponse, TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
     QueueCursor,
@@ -165,7 +166,9 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
 
 
 def to_queue_list_item(
-    tr: ThreadResponse, mapping_health: dict | None = None
+    tr: ThreadResponse,
+    mapping_health: dict | None = None,
+    tags: list[TagResponse] | None = None,
 ) -> QueueThreadListItem:
     """Convert a full ThreadResponse to a narrow QueueThreadListItem.
 
@@ -178,6 +181,8 @@ def to_queue_list_item(
         mapping_health: Optional pre-computed mapping health row from the
             batched repository query. When provided, used to construct the
             ComicVineMappingHealth projection.
+        tags: Optional pre-fetched visible direct tags for the thread, read in
+            one batched query for the whole page.
 
     Returns:
         Narrow list-item projection of the thread response.
@@ -231,6 +236,7 @@ def to_queue_list_item(
         created_at=tr.created_at,
         comicvine_mapping=comicvine_mapping,
         manual_creator_credits=tr.manual_creator_credits,
+        tags=tags or [],
     )
 
 
@@ -321,12 +327,21 @@ async def list_queue_threads(
 
     # Fetch ComicVine mapping health for issue-tracking threads on this page only
     # (batched, no N+1). Legacy threads without total_issues skip the query
-    # entirely, preserving the existing 2-SELECT-per-page contract for them.
+    # entirely, so their per-page SQL work stays the page read, the active_count
+    # read, and the one bounded tag read added by issue #3425.
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
+    # One bounded tag read for the whole page (issue #3425) so Queue rows show
+    # tags without a per-row query.
+    tags_map = await TagInheritanceService(db).get_threads_direct_tags(
+        user_id, [tr.id for tr in thread_responses]
+    )
+
     queue_items = [
-        to_queue_list_item(tr, mapping_health_map.get(tr.id))
+        to_queue_list_item(
+            tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, [])
+        )
         for tr in thread_responses
     ]
 
@@ -409,12 +424,21 @@ async def list_completed_threads(
 
     # Fetch ComicVine mapping health for issue-tracking threads on this page only
     # (batched, no N+1). Legacy threads without total_issues skip the query
-    # entirely, preserving the existing 2-SELECT-per-page contract for them.
+    # entirely, so their per-page SQL work stays the page read plus the one
+    # bounded tag read added by issue #3425.
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
+    # One bounded tag read for the whole page (issue #3425) so Queue rows show
+    # tags without a per-row query.
+    tags_map = await TagInheritanceService(db).get_threads_direct_tags(
+        user_id, [tr.id for tr in thread_responses]
+    )
+
     queue_items = [
-        to_queue_list_item(tr, mapping_health_map.get(tr.id))
+        to_queue_list_item(
+            tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, [])
+        )
         for tr in thread_responses
     ]
 

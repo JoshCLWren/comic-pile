@@ -10099,6 +10099,13 @@
             "title": "Status",
             "type": "string"
           },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagResponse"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -12896,6 +12903,13 @@
               "type": "string"
             },
             "title": "Route Labels",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagResponse"
+            },
+            "title": "Tags",
             "type": "array"
           },
           "title": {

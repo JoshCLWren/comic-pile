@@ -30,6 +30,7 @@ duplicate-occurrence compatibility handling.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +43,7 @@ from app.repositories import (
     tag_repository,
     thread_repository,
 )
+from app.schemas.tags import TagResponse
 from app.services.errors import NotFoundError
 
 
@@ -140,6 +142,27 @@ def _combine_assignments(
         target_id=self_id,
         direct_tags=direct,
         effective_tags=effective,
+    )
+
+
+def tag_to_response(tag: Tag) -> TagResponse:
+    """Convert an ORM tag to its API response model.
+
+    Args:
+        tag: The stored tag.
+
+    Returns:
+        The wire representation of the tag.
+    """
+    return TagResponse(
+        id=tag.id,
+        name=tag.name,
+        normalized_name=tag.normalized_name,
+        scope=tag.scope,
+        owner_user_id=tag.owner_user_id,
+        color=tag.color,
+        created_at=tag.created_at,
+        updated_at=tag.updated_at,
     )
 
 
@@ -368,3 +391,44 @@ class TagInheritanceService:
         return _combine_assignments(
             self_type="ContinuityPlan", self_id=plan_id, pairs=rows
         )
+
+    async def get_threads_direct_tags(
+        self, user_id: int, thread_ids: Sequence[int]
+    ) -> dict[int, list[TagResponse]]:
+        """Return the visible direct tags for a bounded set of threads.
+
+        Threads have no parents in v1, so a thread's effective tags are exactly
+        its directly assigned visible tags. This batch sibling of
+        :meth:`get_thread_effective_tags` exists for list surfaces (the Queue
+        rows and the Roll die faces in issue #3425) that render many threads at
+        once: it resolves every requested thread in one query instead of one
+        request per row.
+
+        Ownership is the caller's responsibility. Callers only ever pass
+        threads their own queries already scoped to the viewer, so an unknown
+        id yields no entry rather than an error; a tag assignment belonging to
+        another user's thread is never returned because the query is filtered
+        to the viewer's own private vocabulary and the caller's owned ids.
+
+        Args:
+            user_id: The requesting user, used for private-tag visibility.
+            thread_ids: Primary keys of the threads to hydrate. Duplicates and
+                unknown ids are tolerated.
+
+        Returns:
+            Map from thread id to its visible direct tags, ordered by tag
+            scope then normalized name. Threads without visible tags are
+            omitted, so callers read it with ``mapping.get(thread_id, [])``.
+        """
+        if not thread_ids:
+            return {}
+
+        targets = [("Thread", thread_id) for thread_id in dict.fromkeys(thread_ids)]
+        pairs = await tag_repository.list_visible_assignments_for_targets(
+            self._db, user_id, targets
+        )
+
+        grouped: dict[int, list[TagResponse]] = {}
+        for tag, assignment in pairs:
+            grouped.setdefault(assignment.target_id, []).append(tag_to_response(tag))
+        return grouped

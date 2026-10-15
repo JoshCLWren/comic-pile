@@ -17,7 +17,11 @@ from app.models import Tag, TagAssignment
 from app.models.user import User
 from app.schemas import tags as tag_schemas
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
-from app.services.tag_inheritance_service import EffectiveTagsResult, TagInheritanceService
+from app.services.tag_inheritance_service import (
+    EffectiveTagsResult,
+    TagInheritanceService,
+    tag_to_response,
+)
 from app.services.tag_service import TagService
 
 router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
@@ -546,20 +550,6 @@ async def get_tag_usage(
         total_assignments=usage.total_assignments,
         assignments_by_target_type=usage.assignments_by_target_type,
         references_removed_by_consumers=consumer_references,
-    )
-
-
-def tag_to_response(tag: Tag) -> tag_schemas.TagResponse:
-    """Convert an ORM tag to its API response model."""
-    return tag_schemas.TagResponse(
-        id=tag.id,
-        name=tag.name,
-        normalized_name=tag.normalized_name,
-        scope=tag.scope,
-        owner_user_id=tag.owner_user_id,
-        color=tag.color,
-        created_at=tag.created_at,
-        updated_at=tag.updated_at,
     )
 
 
