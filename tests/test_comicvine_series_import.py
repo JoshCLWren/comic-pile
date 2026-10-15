@@ -506,7 +506,6 @@ async def test_series_import_does_not_hydrate_per_issue(
 ) -> None:
     """Performance regression: series import avoids per-issue external fetches."""
     calls: list[int] = []
-    original = _StubClient.__init__
 
     class CountingStub(_StubClient):
         async def fetch_issue(self, issue_id: int, **_kwargs: object) -> ComicVineResponse:
