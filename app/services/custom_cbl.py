@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from html import escape
-from typing import cast
+from typing import Literal, cast
 
 from fastapi import HTTPException
 from sqlalchemy import delete, func, or_, select
@@ -52,6 +52,8 @@ class CustomCBLEntryView:
     issue_number: str
     status: str
     is_checkpoint: bool
+    gate: Literal["none", "hold", "after_previous"]
+    skipped: bool
     checkpoint_target_issue_ids: tuple[int, ...] = ()
 
 
@@ -118,6 +120,8 @@ async def load_custom_cbl_entries(db: AsyncSession, *, list_id: int) -> list[Cus
             issue_number=issue.issue_number,
             status=issue.status,
             is_checkpoint=entry.is_checkpoint,
+            gate=entry.gate,
+            skipped=entry.skipped,
             checkpoint_target_issue_ids=tuple(entry.checkpoint_target_issue_ids or []),
         )
         for entry, issue, thread in result.all()
@@ -135,9 +139,10 @@ async def replace_custom_cbl_entries(
 ) -> None:
     """Replace membership after proving every referenced issue belongs to the user."""
     checkpoint_set = set(checkpoint_issue_ids or ())
+    previous = await load_custom_cbl_entries(db, list_id=list_row.id)
+    previous_intent = {entry.issue_id: (entry.gate, entry.skipped) for entry in previous}
     targets = checkpoint_targets
     if targets is None:
-        previous = await load_custom_cbl_entries(db, list_id=list_row.id)
         targets = {}
         for index, entry in enumerate(previous):
             if entry.checkpoint_target_issue_ids:
@@ -181,11 +186,14 @@ async def replace_custom_cbl_entries(
 
     await db.execute(delete(CustomCBLEntry).where(CustomCBLEntry.list_id == list_row.id))
     for position, issue_id in enumerate(issue_ids):
+        gate, skipped = previous_intent.get(issue_id, ("none", False))
         db.add(
             CustomCBLEntry(
                 list_id=list_row.id,
                 issue_id=issue_id,
                 position=position,
+                gate=gate,
+                skipped=skipped,
                 is_checkpoint=bool(targets.get(issue_id)),
                 checkpoint_target_issue_ids=targets.get(issue_id, []),
             )
@@ -493,6 +501,8 @@ def _entry_response(entry: CustomCBLEntryView) -> CustomCBLEntryResponse:
         issue_number=entry.issue_number,
         status=entry.status,
         is_checkpoint=entry.is_checkpoint,
+        gate=entry.gate,
+        skipped=entry.skipped,
         checkpoint_target_issue_ids=list(entry.checkpoint_target_issue_ids),
     )
 
@@ -505,6 +515,7 @@ async def _full_response(db: AsyncSession, row: CustomCBLList) -> CustomCBLRespo
         user_id=row.user_id,
         name=row.name,
         description=row.description,
+        mode=row.mode,
         issue_count=len(entries),
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -520,6 +531,7 @@ async def list_custom_cbl_responses(db: AsyncSession, *, user_id: int) -> list[C
             id=row.id,
             name=row.name,
             description=row.description,
+            mode=row.mode,
             issue_count=count,
             updated_at=row.updated_at,
         )

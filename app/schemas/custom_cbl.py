@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -66,6 +66,8 @@ class CustomCBLEntryResponse(BaseModel):
     issue_number: str
     status: str
     is_checkpoint: bool = False
+    gate: Literal["none", "hold", "after_previous"] = "none"
+    skipped: bool = False
     checkpoint_target_issue_ids: list[int] = Field(default_factory=list)
 
 
@@ -75,6 +77,7 @@ class CustomCBLListItem(BaseModel):
     id: int
     name: str
     description: str | None
+    mode: Literal["strict", "loose"] = "loose"
     issue_count: int
     updated_at: datetime
 
