@@ -335,7 +335,14 @@ def roster_model_for_worker(worker: str) -> str | None:
         Roster model id, or ``None`` when the worker is not pinned.
     """
     roster = importlib.import_module("factory_roster")
-    for row in roster.load_roster_rows():
+    # The controller and its roster are captured from trusted main before the
+    # worker switches to an untrusted PR branch. Never read the branch's TSV.
+    controller_file = Path(__file__).resolve()
+    if controller_file.parent.name == "scripts" and controller_file.parent.parent.name == ".github":
+        roster_path = controller_file.parent.parent / "free-model-factories.tsv"
+    else:
+        roster_path = controller_file.with_name("free-model-factories.tsv")
+    for row in roster.load_roster_rows(roster_path):
         if str(row["worker"]) == str(worker):
             model = str(row["model"] or "").strip()
             return model or None
