@@ -15,6 +15,7 @@ relying on package-attribute access, which this package no longer provides.
 ROUTER_SUBMODULES = (
     "analytics",
     "cbl_sources",
+    "collection_exclusions",
     "continuity_plan",
     "continuity_rule",
     "continuity_template",
