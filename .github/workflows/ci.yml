@@ -111,6 +111,12 @@ jobs:
       - name: Run frontend lint
         run: pnpm --filter frontend run lint
 
+      - name: Verify generated API contract freshness
+        # The committed client includes test-only /api/v1/debug/log.
+        env:
+          ENVIRONMENT: test
+        run: pnpm --filter frontend run check:api-types
+
       - name: Run frontend typecheck
         run: pnpm --filter frontend run typecheck
 

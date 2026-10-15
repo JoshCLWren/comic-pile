@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 
-GENERATED_SCHEMA = (
-    Path(__file__).resolve().parent.parent / "frontend/src/generated/openapi.json"
-)
+import pytest
+
+GENERATED_SCHEMA = Path(__file__).resolve().parent.parent / "frontend/src/generated/openapi.json"
 
 
 def _schema_candidates() -> list[Path]:
@@ -36,6 +37,7 @@ def _schema_candidates() -> list[Path]:
         GENERATED_SCHEMA,
         Path("frontend/src/generated/openapi.json"),
     ]
+
 
 # Families intentionally exposed ONLY under bare ``/api`` because they are
 # non-client tooling or administrative surfaces, never versioned client
@@ -110,18 +112,28 @@ def test_openapi_has_no_supported_collections_surface() -> None:
     violations: list[str] = []
 
     for path in schema.get("paths", {}):
-        if "collection" in path.lower():
+        if "collection" in path.lower() and path not in {
+            "/api/v1/collection-exclusions",
+            "/api/v1/collection-exclusions/{exclusion_id}",
+        }:
             violations.append(f"path:{path}")
 
     for name in schema.get("components", {}).get("schemas", {}):
-        if "collection" in name.lower():
+        if "collection" in name.lower() and name not in {
+            "CollectionExclusionCreate",
+            "CollectionExclusionResponse",
+        }:
             violations.append(f"schema:{name}")
 
     for methods in schema.get("paths", {}).values():
         for operation in methods.values():
             if isinstance(operation, dict):
                 operation_id = operation.get("operationId", "")
-                if "collection" in operation_id.lower():
+                if "collection" in operation_id.lower() and operation_id not in {
+                    "list_exclusions_api_v1_collection_exclusions_get",
+                    "create_exclusion_api_v1_collection_exclusions_post",
+                    "delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete",
+                }:
                     violations.append(f"operation:{operation_id}")
 
     assert not violations, f"Collections surface detected: {violations}"
@@ -136,9 +148,7 @@ def test_retained_families_expose_canonical_v1_routes() -> None:
             v1_families.add(path[len("/api/v1/") :].split("/")[0])
 
     missing = REQUIRED_V1_FAMILIES - v1_families
-    assert not missing, (
-        f"Retained families missing canonical /api/v1 routes: {sorted(missing)}"
-    )
+    assert not missing, f"Retained families missing canonical /api/v1 routes: {sorted(missing)}"
 
 
 def test_legacy_api_aliases_are_explicit_allowlist() -> None:
@@ -195,3 +205,21 @@ def test_generated_client_has_zero_bare_domain_path_references() -> None:
         "Generated client schema lost all canonical /api/v1 routes."
     )
     assert "/api/ping" in paths, "Ping heartbeat path missing from client schema."
+
+
+@pytest.mark.parametrize("surface", ["path", "schema", "operation"])
+def test_retired_collections_are_rejected_even_with_exclusion_api(
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+) -> None:
+    """The exclusion API exception cannot reintroduce the retired Collections domain."""
+    schema = _load_schema()
+    if surface == "path":
+        schema["paths"]["/api/v1/collections"] = {}
+    elif surface == "schema":
+        schema["components"]["schemas"]["CollectionResponse"] = {}
+    else:
+        schema["paths"]["/api/v1/example"] = {"get": {"operationId": "list_collections"}}
+    monkeypatch.setattr(sys.modules[__name__], "_load_schema", lambda: schema)
+    with pytest.raises(AssertionError, match="Collections surface detected"):
+        test_openapi_has_no_supported_collections_surface()

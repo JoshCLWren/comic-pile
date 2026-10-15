@@ -1495,6 +1495,136 @@
         "title": "CatalogSeriesSearchResponse",
         "type": "object"
       },
+      "CollectionExclusionCreate": {
+        "description": "Exactly one target: external volume identity, Thread or Issue.",
+        "properties": {
+          "external_volume_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Volume Id"
+          },
+          "issue_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          }
+        },
+        "title": "CollectionExclusionCreate",
+        "type": "object"
+      },
+      "CollectionExclusionResponse": {
+        "description": "Stored exclusion, with an ID for explicit removal.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "external_volume_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Volume Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "provider",
+          "external_volume_id",
+          "thread_id",
+          "issue_id",
+          "created_at"
+        ],
+        "title": "CollectionExclusionResponse",
+        "type": "object"
+      },
       "ComicVineComicPileMatch": {
         "description": "One user-owned ComicPile representation of an external issue.",
         "properties": {
@@ -2693,6 +2823,27 @@
       "ContinuityPlanNode": {
         "description": "One ordered reference in a continuity plan.",
         "properties": {
+          "checkpoint_target_ref_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Target Ref Id"
+          },
+          "checkpoint_target_ref_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 1000,
+            "title": "Checkpoint Target Ref Ids",
+            "type": "array"
+          },
           "convergence_gate": {
             "items": {
               "$ref": "#/components/schemas/ConvergenceGateTarget"
@@ -5564,6 +5715,23 @@
       "CustomCBLEntryResponse": {
         "description": "One resolved custom CBL entry.",
         "properties": {
+          "checkpoint_target_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Checkpoint Target Issue Ids",
+            "type": "array"
+          },
+          "gate": {
+            "default": "none",
+            "enum": [
+              "none",
+              "hold",
+              "after_previous"
+            ],
+            "title": "Gate",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -5588,6 +5756,11 @@
           "series_name": {
             "title": "Series Name",
             "type": "string"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
           },
           "status": {
             "title": "Status",
@@ -5666,6 +5839,15 @@
             "title": "Issue Count",
             "type": "integer"
           },
+          "mode": {
+            "default": "loose",
+            "enum": [
+              "strict",
+              "loose"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -5720,9 +5902,25 @@
             "title": "Issue Count",
             "type": "integer"
           },
+          "mode": {
+            "default": "loose",
+            "enum": [
+              "strict",
+              "loose"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "predecessor_changes": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingListPredecessorChange"
+            },
+            "title": "Predecessor Changes",
+            "type": "array"
           },
           "updated_at": {
             "format": "date-time",
@@ -5732,6 +5930,13 @@
           "user_id": {
             "title": "User Id",
             "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -5751,12 +5956,51 @@
         "description": "Create or replace one custom CBL and its ordered issue membership.",
         "properties": {
           "checkpoint_issue_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 1000,
-            "title": "Checkpoint Issue Ids",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 1000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Issue Ids"
+          },
+          "checkpoint_targets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "exclusiveMinimum": 0.0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Targets"
+          },
+          "confirmed_predecessor_changes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReadingListPredecessorChange"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Predecessor Changes"
           },
           "description": {
             "anyOf": [
@@ -5770,6 +6014,20 @@
             ],
             "title": "Description"
           },
+          "entry_intents": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ReadingListEntryIntent"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Intents"
+          },
           "issue_ids": {
             "items": {
               "type": "integer"
@@ -5777,6 +6035,21 @@
             "maxItems": 1000,
             "title": "Issue Ids",
             "type": "array"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strict",
+                  "loose"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
           },
           "name": {
             "maxLength": 200,
@@ -8596,7 +8869,7 @@
                 "type": "null"
               }
             ],
-            "description": "Insert new issues after this issue ID. If null, append to end.",
+            "description": "Insert new issues after this issue ID. Omit the field to place ordinary numeric issues in natural series order. Send explicit null to append at the end.",
             "title": "Insert After Issue Id"
           },
           "issue_range": {
@@ -10644,6 +10917,79 @@
           "identity_source"
         ],
         "title": "ReaderContextSeries",
+        "type": "object"
+      },
+      "ReadingListEntryIntent": {
+        "description": "Explicit positional intent for one stable member Issue.",
+        "properties": {
+          "gate": {
+            "default": "none",
+            "enum": [
+              "none",
+              "hold",
+              "after_previous"
+            ],
+            "title": "Gate",
+            "type": "string"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          }
+        },
+        "title": "ReadingListEntryIntent",
+        "type": "object"
+      },
+      "ReadingListPredecessorChange": {
+        "description": "Named before/after requirements that the reader must acknowledge.",
+        "properties": {
+          "after_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "After Issue Ids",
+            "type": "array"
+          },
+          "after_issue_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "After Issue Names",
+            "type": "array"
+          },
+          "before_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Before Issue Ids",
+            "type": "array"
+          },
+          "before_issue_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Before Issue Names",
+            "type": "array"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_name": {
+            "title": "Issue Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_name",
+          "before_issue_ids",
+          "before_issue_names",
+          "after_issue_ids",
+          "after_issue_names"
+        ],
+        "title": "ReadingListPredecessorChange",
         "type": "object"
       },
       "ReadingModeResponse": {
@@ -18632,6 +18978,129 @@
         "tags": [
           "cbl-adoption-commit",
           "cbl-adoption-commit"
+        ]
+      }
+    },
+    "/api/v1/collection-exclusions": {
+      "get": {
+        "description": "Return exclusions explicitly entered by this reader.",
+        "operationId": "list_exclusions_api_v1_collection_exclusions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionExclusionResponse"
+                  },
+                  "title": "Response List Exclusions Api V1 Collection Exclusions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Exclusions",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "collection-exclusions"
+        ]
+      },
+      "post": {
+        "description": "Idempotently exclude one external volume, Thread or Issue.",
+        "operationId": "create_exclusion_api_v1_collection_exclusions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionExclusionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionExclusionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Exclusion",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "collection-exclusions"
+        ]
+      }
+    },
+    "/api/v1/collection-exclusions/{exclusion_id}": {
+      "delete": {
+        "description": "Remove one owned exclusion without changing the underlying comic.",
+        "operationId": "delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exclusion_id",
+            "required": true,
+            "schema": {
+              "title": "Exclusion Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Exclusion",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "collection-exclusions"
         ]
       }
     },
@@ -28196,7 +28665,7 @@
         ]
       },
       "post": {
-        "description": "Create issues from a range string and place them in thread order.\n\nOrdinary numeric issue numbers are inserted at their natural position in the\nseries rather than always appended, so adding ``#2`` to ``#33, #34, #35``\nsaves ``#2, #33, #34, #35``. When that placement would be ambiguous — an\n``insert_after_issue_id`` anchor, irregular numbering such as ``Annual 1``\nor ``0``, or a series the reader reordered by hand — new issues are appended\nafter the last existing issue. When ``insert_after_issue_id`` is provided,\nexisting issues later in the thread are shifted upward so the new issues are\ninserted immediately after that issue.\n\nArgs:\n    thread_id: The thread ID to create issues for.\n    request: Request with issue range string.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    IssueListResponse with newly created issues only (not all issues).\n\nRaises:\n    HTTPException: If thread not found, all issues already exist,\n                  position collision detected, or issue range is invalid.",
+        "description": "Create issues from a range string and place them in thread order.\n\nOrdinary numeric issue numbers are inserted at their natural position in the\nseries rather than always appended, so adding ``#2`` to ``#33, #34, #35``\nsaves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural\nplacement. Send explicit JSON ``null`` to append at the end (the UI\n\"At the end\" choice). When ``insert_after_issue_id`` is a concrete issue ID,\nexisting issues later in the thread are shifted upward so the new issues are\ninserted immediately after that issue. Irregular numbering such as\n``Annual 1`` or ``0`` falls back to append-only placement.\n\nArgs:\n    thread_id: The thread ID to create issues for.\n    request: Request with issue range string.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    IssueListResponse with newly created issues only (not all issues).\n\nRaises:\n    HTTPException: If thread not found, all issues already exist,\n                  position collision detected, or issue range is invalid.",
         "operationId": "create_issues_api_v1_threads__thread_id__issues_post",
         "parameters": [
           {
