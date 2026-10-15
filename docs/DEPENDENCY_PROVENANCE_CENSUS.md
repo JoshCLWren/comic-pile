@@ -22,12 +22,12 @@ references and explanations, matching rules, legacy links, compiler-note rule re
 and conflicting or missing rule evidence remain visible. Cross-list counts mean both
 endpoints have list memberships with no shared list; unlisted endpoints are not guessed
 into a list. Active frontier blocker counts measure dependency rows, not unique Threads;
-a missing source is conservatively unsatisfied.
+a missing or foreign source is retained in the inventory but is not a confirmed Roll blocker.
 
 The A/B/C/D vocabulary follows the accepted Reading List ADR. A requires reviewed
 reader-authorship evidence; C requires preserved generation evidence. Existing arbitrary
 notes, plan links, and compiler markers do not prove either, so this report conservatively
-leaves them D. A single matching checkpoint rule can supply observational B evidence.
+leaves them D. A matching checkpoint rule alone cannot prove the dependency's origin; such edges remain D.
 Multiple competing rules, missing referenced rules, or mismatching provenance remain D.
 Neither B nor any other report field authorizes retirement. Historical overwritten notes
 cannot be recovered by inference; review the retained evidence before making decisions.

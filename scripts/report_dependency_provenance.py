@@ -146,9 +146,12 @@ def census(snapshot: Snapshot, user_id: int) -> dict[str, object]:
         pair = (edge.source_issue_id, edge.target_issue_id)
         related = {r.id: r for r in rules_by_pair[pair] + rules_by_legacy[edge.id]}
         referenced_rule_id = None
+        malformed_rule_note = False
         for prefix in ("canonical:rule:", "canonical:rule-backfill:"):
             if edge.note and edge.note.startswith(prefix):
                 suffix = edge.note.removeprefix(prefix)
+                if not suffix.isdecimal():
+                    malformed_rule_note = True
                 if suffix.isdecimal():
                     referenced_rule_id = int(suffix)
                     if referenced_rule_id in rules_by_id:
@@ -165,16 +168,13 @@ def census(snapshot: Snapshot, user_id: int) -> dict[str, object]:
         } for rule in sorted(related.values(), key=lambda row: row.id)]
         # Authorship cannot be proved from an arbitrary note or a rule's existence.
         # Even recognized compiler notes can overwrite older intent on the same pair.
-        checkpoint = bool(evidence) and all(
-            r["satisfaction_type"] == "checkpoint" and r["matches_compiled_pair"]
-            for r in evidence
-        )
         missing_rule = referenced_rule_id is not None and referenced_rule_id not in related
-        classification = "B" if checkpoint and len(evidence) == 1 and not missing_rule else "D"
+        # Matching checkpoint evidence cannot establish who authored this dependency.
+        classification = "D"
         same_thread = source.thread_id == target.thread_id if source and target else None
         source_lists, target_lists = lists[edge.source_issue_id], lists[edge.target_issue_id]
         active = target is not None and threads[target.thread_id].status == "active"
-        unsatisfied = source is None or source.status != "read"
+        unsatisfied = source is not None and source.status != "read"
         edges.append({
             "dependency_id": edge.id, "source_issue_id": edge.source_issue_id,
             "target_issue_id": edge.target_issue_id, "note": edge.note,
@@ -193,7 +193,7 @@ def census(snapshot: Snapshot, user_id: int) -> dict[str, object]:
             else "unknown_authorship_or_conflicting_provenance",
             "rule_evidence": evidence,
             "note_rule_id": referenced_rule_id,
-            "missing_note_rule": missing_rule,
+            "missing_note_rule": missing_rule or malformed_rule_note,
             "plan_ids": sorted(plans_by_dependency[edge.id]),
             "plan_evidence": [{"plan_id": p.plan_id, "explanation": p.explanation}
                 for p in sorted(snapshot.plan_dependencies, key=lambda p: p.plan_id)
@@ -207,7 +207,7 @@ def census(snapshot: Snapshot, user_id: int) -> dict[str, object]:
         "user_id": user_id, "read_only": True,
         "classification_policy": {
             "A": "requires reviewed reader-authorship evidence; never inferred from notes",
-            "B": "single matching explicit checkpoint rule; not retirement approval",
+            "B": "requires independently verified rule origin; matching alone is insufficient",
             "C": "requires preserved generation evidence; compiler note alone is insufficient",
             "D": "unknown, overwritten or conflicting provenance; requires review",
         },

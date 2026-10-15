@@ -75,8 +75,8 @@ def test_collisions_and_unknown_authorship_remain_unknown() -> None:
     assert result["summary"] == {
         "enforced_edges": 4, "inert_cbl_order_edges": 1,
         "same_thread_edges": 1, "cross_thread_edges": 2, "cross_list_edges": 1,
-        "evidence_classes": {"D": 4}, "active_derived_frontier_blockers": 2,
-        "active_stored_frontier_blockers": 2, "frontier_mismatches": 2,
+        "evidence_classes": {"D": 4}, "active_derived_frontier_blockers": 1,
+        "active_stored_frontier_blockers": 1, "frontier_mismatches": 2,
     }
 
 
@@ -86,7 +86,8 @@ def test_single_matching_checkpoint_is_evidence_not_approval() -> None:
     result = census(replace(snapshot, rules=snapshot.rules[:1]), 1)
     edges = result["edges"]
     assert isinstance(edges, list)
-    assert edges[0]["evidence_class"] == "B"
+    assert edges[0]["evidence_class"] == "D"
+    assert edges[0]["rule_evidence"][0]["matches_compiled_pair"] is True
     assert result["read_only"] is True
 
 
@@ -218,3 +219,24 @@ def test_dangling_and_malformed_note_rules_remain_unknown() -> None:
     assert edges[0]["evidence_class"] == "D"
     assert edges[0]["rule_evidence"][0]["matches_compiled_pair"] is False
     assert edges[0]["rule_evidence"][0]["convergence_targets"] == rule.convergence_targets
+
+
+def test_malformed_rule_note_does_not_infer_checkpoint_provenance() -> None:
+    snapshot = fixture_snapshot()
+    snapshot.dependencies[0].note = "canonical:rule:invalid"
+    result = census(replace(snapshot, rules=snapshot.rules[:1]), 1)
+    edge = result["edges"][0]
+    assert edge["evidence_class"] == "D"
+    assert edge["missing_note_rule"] is True
+    assert edge["rule_evidence"][0]["matches_compiled_pair"] is True
+
+
+def test_foreign_source_to_owned_frontier_is_not_confirmed_blocker() -> None:
+    snapshot = fixture_snapshot()
+    edge = Dependency(id=9, source_issue_id=999, target_issue_id=11, note="foreign")
+    result = census(replace(snapshot, dependencies=[edge]), 1)
+    reported = result["edges"][0]
+    assert reported["unresolved_endpoint"] is True
+    assert reported["active_derived_frontier_blocker"] is False
+    assert reported["active_stored_frontier_blocker"] is False
+    assert result["summary"]["active_derived_frontier_blockers"] == 0
