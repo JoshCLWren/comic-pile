@@ -109,7 +109,6 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editingThread, setEditingThread] = useState<Thread | ThreadListItem | null>(null)
-  const [isIssuesLoading, setIsIssuesLoading] = useState(false)
   const [reactivateThreadId, setReactivateThreadId] = useState('')
   const [issuesToAdd, setIssuesToAdd] = useState(1)
   const [repositioningThread, setRepositioningThread] = useState<ThreadListItem | null>(null)
