@@ -1232,12 +1232,11 @@ def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -
     assert sum(1 for row in remaining if row["model"] == "big-pickle") >= 1
 
 
-def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
-    """Worker 59's Zen Ling 3.0 pin is retired; Muse Spark 1.3 stays.
+def test_committed_tsv_retires_ling_promos_and_preserves_muse_spark() -> None:
+    """Workers 59 and 75 no longer pin expired Ling free promotions.
 
-    ``ling-3.0-flash-fin-free`` left the live Zen catalog (``Model is
-    unavailable``). Worker 75 already pins the successor
-    ``ling-3.1-flash-free``, so the freed slot is not reused.
+    Ling 3.0 and Ling 3.1 are in the retirement lock; worker 75 is reused
+    for the current free Nemotron model while Muse Spark 1.3 remains active.
     """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
