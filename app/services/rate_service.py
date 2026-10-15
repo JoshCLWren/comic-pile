@@ -39,6 +39,7 @@ from app.services.snapshot_contract import (
     USES_ISSUE_TRACKING_KEY,
     classify_snapshot,
 )
+from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
 from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
@@ -543,12 +544,21 @@ async def rate_thread(
             commit=False,
         )
     else:
+        # Issue #3696: safe placement must count exactly the threads the next
+        # roll cannot select, so a low-rated thread never lands back inside the
+        # bounded pool that excluded threads were skipped from.
+        excluded_ids = await derive_effective_roll_excluded_thread_ids(
+            db,
+            user_id,
+            session_snoozed_ids=current_session.snoozed_thread_ids,
+            session_skipped_ids=current_session.skipped_thread_ids,
+        )
         queue_position_changes = await move_to_safe_position(
             thread_id,
             user_id,
             new_die,
             db,
-            excluded_thread_ids=[*(current_session.snoozed_thread_ids or []), *(current_session.skipped_thread_ids or [])],
+            excluded_thread_ids=excluded_ids,
         )
 
     # Always refresh blocked status after reading.  Advancing next_unread_issue_id

@@ -30,6 +30,7 @@ from app.services.reading_effort import (
     compute_effort_estimate,
 )
 from app.services.bandwidth_selection import select_bandwidth_weighted
+from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
 from app.schemas.recommendation_context import (
     CandidateFactor,
     RecommendationContextCreate,
@@ -483,6 +484,12 @@ class RollService:
         current_die = await get_current_die_for_session(current_session, self._db)
         snoozed_ids = current_session.snoozed_thread_ids or []
         skipped_ids = current_session.skipped_thread_ids or []
+        excluded_ids = await derive_effective_roll_excluded_thread_ids(
+            self._db,
+            user_id,
+            session_snoozed_ids=snoozed_ids,
+            session_skipped_ids=skipped_ids,
+        )
 
         selection_bandwidth = (
             roll_request.bandwidth
@@ -499,7 +506,7 @@ class RollService:
             user_id=user_id,
             current_session=current_session,
             current_die=current_die,
-            excluded_ids=[*snoozed_ids, *skipped_ids],
+            excluded_ids=excluded_ids,
             selection_bandwidth=selection_bandwidth,
             selection_intent=selection_intent,
             selection_method_override=None,
@@ -564,12 +571,18 @@ class RollService:
         current_die = await get_current_die_for_session(current_session, self._db)
         snoozed_ids = current_session.snoozed_thread_ids or []
         existing_skipped_ids = list(current_session.skipped_thread_ids or [])
+        excluded_ids = await derive_effective_roll_excluded_thread_ids(
+            self._db,
+            user_id,
+            session_snoozed_ids=snoozed_ids,
+            session_skipped_ids=existing_skipped_ids,
+        )
 
         artifacts = await self.select_pending_thread(
             user_id=user_id,
             current_session=current_session,
             current_die=current_die,
-            excluded_ids=[*snoozed_ids, *existing_skipped_ids, skipped_thread_id],
+            excluded_ids=[*excluded_ids, skipped_thread_id],
             selection_bandwidth=current_session.active_bandwidth or DEFAULT_BANDWIDTH,
             selection_intent=current_session.active_intent or DEFAULT_INTENT,
             selection_method_override="skip",

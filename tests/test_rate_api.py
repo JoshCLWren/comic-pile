@@ -1,10 +1,14 @@
 """Tests for rate API endpoints."""
 
+from collections.abc import Collection
+from datetime import UTC, datetime, timedelta
+from typing import cast
+
 import pytest
 from sqlalchemy import select
 
 from app.models import Event, Issue, Thread
-from comic_pile.queue import get_bounded_roll_pool_rows
+from comic_pile.queue import QueuePositionChanges, get_bounded_roll_pool_rows
 from httpx import AsyncClient
 from app.models import ReadingSession
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1251,3 +1255,316 @@ async def test_rate_thread_with_zero_issues_remaining_returns_error(
     response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
     assert response.status_code == 400
     assert "no issues remaining" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_low_rating_safe_position_excludes_cross_session_snooze_backoff_issue_3696(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Low rating safe placement must match next-roll eligibility exactly.
+
+    Regression test for issue #3696: rating-time ``move_to_safe_position``
+    must count the same exclusion set as roll selection — current-session
+    snoozed, session skipped, and durable cross-session snooze backoff. The
+    durable backoff is derived from real snooze events in a previous session
+    (no mocking). After rating 3.5 (d8 -> d10) the real next-roll endpoint
+    must exclude the just-rated target from
+    ``rolling_recommendation_context.bounded_candidate_ids`` whenever at
+    least ten other eligible threads exist.
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    # 14 threads: target, cross-session snoozed, session snoozed, session
+    # skipped, plus ten other eligible threads so the d10 bounded pool can
+    # hold ten others without the just-rated target.
+    threads = [
+        Thread(
+            title=f"Thread {i}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=i,
+            status="active",
+            user_id=user.id,
+        )
+        for i in range(1, 15)
+    ]
+    async_db.add_all(threads)
+    await async_db.flush()
+
+    target = threads[0]
+    cross_snoozed = threads[1]
+    session_snoozed = threads[2]
+    skipped = threads[3]
+
+    prev_started = datetime(2026, 10, 1, 12, 0, 0, tzinfo=UTC)
+    snooze_started = datetime(2026, 10, 2, 12, 0, 0, tzinfo=UTC)
+    current_started = datetime(2026, 10, 3, 12, 0, 0, tzinfo=UTC)
+
+    prev_session = ReadingSession(
+        start_die=8,
+        user_id=user.id,
+        started_at=prev_started,
+        ended_at=prev_started + timedelta(hours=1),
+    )
+    async_db.add(prev_session)
+    await async_db.flush()
+
+    # Three real snooze events in the previous session: a 3-snooze streak has
+    # a Fibonacci backoff of 2 later sessions, and only one later session
+    # (the current one) exists, so the thread stays excluded.
+    for offset in range(3):
+        async_db.add(
+            Event(
+                type="snooze",
+                thread_id=cross_snoozed.id,
+                session_id=prev_session.id,
+                timestamp=snooze_started + timedelta(minutes=offset),
+                die=8,
+                die_after=8,
+            )
+        )
+
+    session = ReadingSession(
+        start_die=8,
+        user_id=user.id,
+        started_at=current_started,
+        snoozed_thread_ids=[session_snoozed.id],
+        skipped_thread_ids=[skipped.id],
+    )
+    async_db.add(session)
+    await async_db.flush()
+
+    session.pending_thread_id = target.id
+    async_db.add(
+        Event(
+            type="roll",
+            die=8,
+            result=1,
+            selected_thread_id=target.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=target.id,
+        )
+    )
+    await async_db.commit()
+
+    from app.services.snooze_service import derive_cross_session_excluded_thread_ids
+
+    derived = await derive_cross_session_excluded_thread_ids(async_db, user.id)
+    assert cross_snoozed.id in derived
+
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 3.5, "issues_read": 1})
+    assert response.status_code == 200
+
+    roll_response = await auth_client.post("/api/v1/roll/", json={})
+    assert roll_response.status_code == 200
+
+    result = await async_db.execute(
+        select(Event)
+        .where(Event.session_id == session.id)
+        .where(Event.type == "roll")
+        .order_by(Event.id.desc())
+    )
+    latest_roll = result.scalars().first()
+    assert latest_roll is not None
+
+    context = latest_roll.rolling_recommendation_context
+    assert context is not None
+    bounded_candidate_ids = cast(list[int], context["bounded_candidate_ids"])
+    assert target.id not in bounded_candidate_ids
+    assert latest_roll.selected_thread_id != target.id
+    assert cross_snoozed.id not in bounded_candidate_ids
+    assert skipped.id not in bounded_candidate_ids
+    assert session_snoozed.id not in bounded_candidate_ids
+
+
+@pytest.mark.asyncio
+async def test_low_rating_uses_shared_effective_roll_exclusion_set_issue_3696(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rating-time placement and roll selection must agree on eligibility.
+
+    Issue #3696 required one shared exclusion policy rather than a second copy
+    that can drift. This test pins both halves of that contract:
+
+    - the rating path hands ``move_to_safe_position`` exactly the effective
+      next-roll exclusion set (session snoozed + session skipped + durable
+      cross-session snooze backoff), and nothing more;
+    - a thread whose cross-session backoff has already elapsed stays out of
+      that exclusion set and is therefore eligible both for placement counting
+      and for the real next roll.
+
+    Uses real snooze events in earlier sessions rather than mocks so the
+    backoff derivation itself is exercised.
+    """
+    from app.services import rate_service
+    from app.services.snooze_service import (
+        derive_cross_session_excluded_thread_ids,
+        derive_effective_roll_excluded_thread_ids,
+    )
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    threads = [
+        Thread(
+            title=f"Thread {position}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=position,
+            status="active",
+            user_id=user.id,
+        )
+        for position in range(1, 16)
+    ]
+    async_db.add_all(threads)
+    await async_db.flush()
+
+    target = threads[0]
+    session_snoozed = threads[1]
+    session_skipped = threads[2]
+    backoff_active = threads[3]
+    backoff_expired = threads[4]
+
+    # Three sessions. ``backoff_active`` snoozes after the second session
+    # starts, so only one later session exists and its 3-snooze streak
+    # (Fibonacci backoff of 2) is still serving. ``backoff_expired`` snoozes
+    # after the first session starts, so two later sessions exist and its
+    # identical streak has already elapsed.
+    first_started = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+    second_started = datetime(2026, 10, 1, 12, 0, 0, tzinfo=UTC)
+    current_started = datetime(2026, 10, 5, 12, 0, 0, tzinfo=UTC)
+
+    first_session = ReadingSession(
+        start_die=8,
+        user_id=user.id,
+        started_at=first_started,
+        ended_at=first_started + timedelta(hours=1),
+    )
+    second_session = ReadingSession(
+        start_die=8,
+        user_id=user.id,
+        started_at=second_started,
+        ended_at=second_started + timedelta(hours=1),
+    )
+    async_db.add_all([first_session, second_session])
+    await async_db.flush()
+
+    for offset in range(3):
+        async_db.add(
+            Event(
+                type="snooze",
+                thread_id=backoff_expired.id,
+                session_id=first_session.id,
+                timestamp=first_started + timedelta(minutes=offset),
+                die=8,
+                die_after=8,
+            )
+        )
+    for offset in range(3):
+        async_db.add(
+            Event(
+                type="snooze",
+                thread_id=backoff_active.id,
+                session_id=second_session.id,
+                timestamp=second_started + timedelta(minutes=offset),
+                die=8,
+                die_after=8,
+            )
+        )
+
+    session = ReadingSession(
+        start_die=8,
+        user_id=user.id,
+        started_at=current_started,
+        snoozed_thread_ids=[session_snoozed.id],
+        skipped_thread_ids=[session_skipped.id],
+    )
+    async_db.add(session)
+    await async_db.flush()
+
+    session.pending_thread_id = target.id
+    async_db.add(
+        Event(
+            type="roll",
+            die=8,
+            result=1,
+            selected_thread_id=target.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=target.id,
+        )
+    )
+    await async_db.commit()
+
+    derived_excluded_ids = await derive_cross_session_excluded_thread_ids(async_db, user.id)
+    assert backoff_active.id in derived_excluded_ids
+    assert backoff_expired.id not in derived_excluded_ids
+
+    effective_excluded_ids = await derive_effective_roll_excluded_thread_ids(
+        async_db,
+        user.id,
+        session_snoozed_ids=[session_snoozed.id],
+        session_skipped_ids=[session_skipped.id],
+    )
+    expected_exclusions = {session_snoozed.id, session_skipped.id, backoff_active.id}
+    assert set(effective_excluded_ids) == expected_exclusions
+    assert len(effective_excluded_ids) == len(expected_exclusions)
+
+    captured_exclusions: list[list[int]] = []
+    captured_die_sizes: list[int] = []
+    real_move_to_safe_position = rate_service.move_to_safe_position
+
+    async def _spy_move_to_safe_position(
+        thread_id: int,
+        user_id: int,
+        die_size: int,
+        db: AsyncSession,
+        excluded_thread_ids: Collection[int] | None = None,
+    ) -> QueuePositionChanges:
+        """Record the exclusion set the rating path hands to queue placement."""
+        captured_die_sizes.append(die_size)
+        captured_exclusions.append(list(excluded_thread_ids or ()))
+        return await real_move_to_safe_position(
+            thread_id, user_id, die_size, db, excluded_thread_ids=excluded_thread_ids
+        )
+
+    monkeypatch.setattr(rate_service, "move_to_safe_position", _spy_move_to_safe_position)
+
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 3.5, "issues_read": 1})
+    assert response.status_code == 200
+
+    # d8 stepped up to d10 for the below-threshold rating.
+    assert captured_die_sizes == [10]
+    assert len(captured_exclusions) == 1
+    assert set(captured_exclusions[0]) == expected_exclusions
+    assert backoff_expired.id not in captured_exclusions[0]
+
+    roll_response = await auth_client.post("/api/v1/roll/", json={})
+    assert roll_response.status_code == 200
+
+    result = await async_db.execute(
+        select(Event)
+        .where(Event.session_id == session.id)
+        .where(Event.type == "roll")
+        .order_by(Event.id.desc())
+    )
+    latest_roll = result.scalars().first()
+    assert latest_roll is not None
+
+    context = latest_roll.rolling_recommendation_context
+    assert context is not None
+    bounded_candidate_ids = cast(list[int], context["bounded_candidate_ids"])
+
+    # Eligibility agrees across both paths: the elapsed-backoff thread is
+    # rollable again, the still-backed-off thread is not, and the rated target
+    # stays outside the d10 pool because ten other eligible threads remain.
+    assert backoff_expired.id in bounded_candidate_ids
+    assert backoff_active.id not in bounded_candidate_ids
+    assert target.id not in bounded_candidate_ids
+    assert latest_roll.selected_thread_id != target.id
+
