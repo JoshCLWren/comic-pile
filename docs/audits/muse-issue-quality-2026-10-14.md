@@ -353,3 +353,15 @@ No production data changed. Labels may continue showing `factory` and `factory:u
 - Rechecked #3710, #3581, #3575, #3545, #3612, #3625, #3626, #3606, and #3614: all are currently open and already contain the exact standalone manual-only directive. Those pre-existing gates were not added by this follow-up, and their business value is not yet approved. The factory labels remain present and alone do not prove eligibility.
 
 **Audit status:** Still incomplete. The nine verified markers and one telemetry closure above are a narrow evidence-backed subset; no claim is made that 274 individual dispositions have been source-validated. Muse remains disabled.
+
+### Further performance evidence spot-check, 2026-10-15
+
+Read original issue bodies for #3437, #3463, #3471, #3476, #3510, #3526 and #3567, plus the current comments for #3437 and #3463. **No closure was justified by these checks alone.** Specifically:
+
+- #3463 appears to exceed the old 1,000 ms budget by only **1.38 ms**, but its three owner comments expressly report repeat violations; therefore do **not** classify it as an isolated incident without reconciling those repeats against telemetry.
+- #3471, #3476 and #3510 report **372, 611 and 864 database queries** respectively. Despite individually moderate durations, these are concrete potential N+1/query-amplification signals. Keep investigating independent of the disputed time budget.
+- #3437 reports one 1,198 ms warm write with 18 DB queries; comments document failed/released worker claims, not a completed fix.
+- #3526 reports one 1,776 ms warm tags request with 2 queries and just 3.85 ms DB time: the dominant time is application-side, not evidence of a DB bottleneck. Root cause and recurrence remain unverified.
+- #3567 reports one 1,607 ms continuity-plan reader request with 8 queries and 1,495 ms DB time; a single sample cannot distinguish normal variation from a durable bottleneck.
+
+**Disposition:** retain these seven pending independent review; do not close repeat signals or high-query-count write paths on the basis of the arbitrary 1,000 ms threshold.
