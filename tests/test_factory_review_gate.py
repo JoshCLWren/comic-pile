@@ -1716,20 +1716,19 @@ def test_authorization_paths_do_not_read_pull_reviews() -> None:
     assert "/reviews" not in auth_src
 
 
-def test_no_workflow_wires_factory_visibility_reconcile_on_pull_request_review() -> None:
-    """pull_request_review must not invoke factory-visibility reconcile."""
-    for wf_path in sorted(WORKFLOWS.glob("*.yml")):
-        content = wf_path.read_text(encoding="utf-8")
-        if "pull_request_review" not in content:
-            continue
-        uses_visibility = (
-            "factory-visibility.cjs" in content
-            or "factory-visibility" in content and "reconcile" in content
-        )
-        assert not uses_visibility, (
-            f"{wf_path.name} triggers on pull_request_review and runs factory-visibility reconcile"
-        )
-
+def test_trusted_native_changes_requested_routes_to_repair_only() -> None:
+    """Native review feedback can request repairs, not bypass merge authorization."""
+    workflow = (
+        WORKFLOWS / "factory-issue-pr-state-reconciler.yml"
+    ).read_text(encoding="utf-8")
+    assert "pull_request_review:" in workflow
+    assert "types: [submitted, dismissed]" in workflow
+    assert "await visibility({ github, context });" in workflow
+    assert '[[ "$EVENT_NAME" == \'pull_request_review\' ]] && exit 0' in workflow
+    # Review votes never feed ready or merge gates. Those remain controller-only.
+    controller = (SCRIPTS / "factory-review-controller.py").read_text(encoding="utf-8")
+    assert "head_has_cross_model_review" in controller
+    assert "def authorize_ready" in controller
 
 def test_merge_drain_never_reads_native_review_state_for_merge() -> None:
     """factory-ready-merge-drain merges only via controller authorized + gates."""
