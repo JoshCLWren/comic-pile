@@ -368,3 +368,80 @@ class TagInheritanceService:
         return _combine_assignments(
             self_type="ContinuityPlan", self_id=plan_id, pairs=rows
         )
+
+
+    async def issue_effective_tag_ids(
+        self, user: User, issue_ids: list[int]
+    ) -> dict[int, set[int]]:
+        """Return the effective tag-ID set for each requested issue in bulk.
+
+        Effective tags follow the same additive union as
+        :meth:`get_issue_effective_tags` (issue, thread, and containing
+        Reading Plans), but returns tag IDs so roll eligibility can filter
+        candidates without repeated per-issue requests. A single bulk
+        assignment query is used to avoid N+1 lookups.
+
+        Args:
+            user: The requesting user.
+            issue_ids: Issue primary keys to resolve.
+
+        Returns:
+            Map from issue ID to its effective tag-ID set. Unknown or
+            unowned issues map to an empty set.
+        """
+        from collections import defaultdict
+
+        from collections import defaultdict
+
+        from app.repositories import issue_repository, reading_plan_repository, thread_repository
+
+        if not issue_ids:
+            return {issue_id: set() for issue_id in issue_ids}
+
+        issues = await issue_repository.get_issues_by_ids(self._db, list(dict.fromkeys(issue_ids)))
+        issues_by_id = {issue.id: issue for issue in issues}
+        thread_ids = {issue.thread_id for issue in issues}
+        threads_by_id = await thread_repository.threads_by_ids(self._db, thread_ids)
+        owned_issue_ids = {
+            issue.id
+            for issue in issues
+            if threads_by_id.get(issue.thread_id) is not None
+            and threads_by_id[issue.thread_id].user_id == user.id
+        }
+
+        plans_by_issue = await reading_plan_repository.plans_containing_issues_for_user(
+            self._db, issue_ids=list(owned_issue_ids), user_id=user.id
+        )
+        plan_ids: set[int] = set()
+        plan_ids_by_issue: dict[int, set[int]] = {}
+        for issue_id in owned_issue_ids:
+            ids = {plan.id for plan in plans_by_issue.get(issue_id, [])}
+            plan_ids_by_issue[issue_id] = ids
+            plan_ids.update(ids)
+
+        targets: list[tuple[str, int]] = []
+        for issue_id in owned_issue_ids:
+            targets.append(("Issue", issue_id))
+        for thread_id in {issues_by_id[i].thread_id for i in owned_issue_ids}:
+            targets.append(("Thread", thread_id))
+        for plan_id in plan_ids:
+            targets.append(("ContinuityPlan", plan_id))
+
+        pairs = await tag_repository.list_visible_assignments_for_targets(
+            self._db, user.id, targets
+        )
+        tags_by_target: dict[tuple[str, int], list[int]] = defaultdict(list)
+        for tag, assignment in pairs:
+            tags_by_target[(assignment.target_type, assignment.target_id)].append(tag.id)
+
+        result: dict[int, set[int]] = {issue_id: set() for issue_id in issue_ids}
+        for issue_id in owned_issue_ids:
+            issue = issues_by_id[issue_id]
+            thread_id = issue.thread_id
+            tag_ids: set[int] = set()
+            tag_ids.update(tags_by_target.get(("Issue", issue_id), []))
+            tag_ids.update(tags_by_target.get(("Thread", thread_id), []))
+            for plan_id in plan_ids_by_issue.get(issue_id, ()):
+                tag_ids.update(tags_by_target.get(("ContinuityPlan", plan_id), []))
+            result[issue_id] = tag_ids
+        return result

@@ -22,6 +22,7 @@ from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue,
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
+from app.repositories import thread_repository
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
@@ -36,6 +37,7 @@ from app.services.session_response import (
     build_session_response,
     get_session_with_thread_safe,
 )
+from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.snooze_service import (
     derive_cross_session_excluded_thread_ids,
     derive_effective_roll_excluded_thread_ids,
@@ -63,6 +65,7 @@ from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
 from app.schemas.session import build_session_bandwidth_state, build_session_intent_state, SnoozedThreadInfo
+from app.schemas import UserPreferencesPatchRequest
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
     DEFAULT_INTENT,
@@ -1754,3 +1757,190 @@ async def get_roll_recommendation_explanation(
             for f in factors
         ],
     )
+
+
+@router.get("/tag-exclusions")
+async def get_roll_tag_exclusions(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Return the authenticated user's account-wide excluded tag IDs.
+
+    Args:
+        current_user: The authenticated user.
+        db: Database session.
+
+    Returns:
+        The persisted excluded tag IDs.
+    """
+    from app.services.preferences_service import read_user_preferences
+
+    preferences = await read_user_preferences(db, current_user.id)
+    return {"excluded_tag_ids": preferences.excluded_tag_ids}
+
+
+@router.post("/tag-exclusions")
+@limiter.limit("30/minute")
+async def add_roll_tag_exclusion(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    payload: dict[str, Any] = Body(default={}),
+) -> dict[str, object]:
+    """Persist one or more account-wide tag exclusions.
+
+    When the pending roll's next unread issue becomes ineligible because of
+    the new exclusion, the exclusion persists, the pending result is cleared,
+    and another eligible roll is selected automatically without recording a
+    snooze or recommendation penalty.
+
+    Args:
+        request: FastAPI request for rate limiting.
+        current_user: The authenticated user.
+        db: Database session.
+        payload: Request body with ``tag_id`` or ``tag_ids``.
+
+    Returns:
+        The persisted excluded tag IDs and, when a reroll happened, the
+        new ``RollResponse`` under ``roll``.
+    """
+    from app.services.preferences_service import read_user_preferences, update_user_preferences
+
+    raw_ids: list[int] = []
+    if isinstance(payload.get("tag_id"), int):
+        raw_ids.append(int(payload["tag_id"]))
+    if isinstance(payload.get("tag_ids"), list):
+        for value in payload["tag_ids"]:
+            if isinstance(value, int):
+                raw_ids.append(int(value))
+
+    preferences = await read_user_preferences(db, current_user.id)
+    merged = sorted(set(preferences.excluded_tag_ids) | set(raw_ids))
+    updated_preferences = await update_user_preferences(
+        db, current_user.id, UserPreferencesPatchRequest(
+            excluded_tag_ids=merged
+        ),
+    )
+    excluded_tag_ids = list(updated_preferences.excluded_tag_ids)
+
+    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
+    pending_thread_id = current_session.pending_thread_id
+    rerolled = False
+    roll_response_payload: dict[str, object] | None = None
+
+    if pending_thread_id is not None and raw_ids:
+        thread = await thread_repository.get_thread(db, pending_thread_id)
+        issue_id = getattr(thread, "next_unread_issue_id", None) if thread is not None else None
+        pending_becomes_ineligible = False
+        if issue_id is not None:
+            issue_tag_ids = await TagInheritanceService(db).issue_effective_tag_ids(
+                current_user, [int(issue_id)]
+            )
+            if issue_tag_ids.get(int(issue_id), set()) & {int(tag_id) for tag_id in raw_ids}:
+                pending_becomes_ineligible = True
+            # Also treat any already-excluded tag as ineligible.
+            if issue_tag_ids.get(int(issue_id), set()) & set(excluded_tag_ids):
+                pending_becomes_ineligible = True
+
+        if pending_becomes_ineligible:
+            current_die = await get_current_die_for_session(current_session, db)
+            snoozed_ids = current_session.snoozed_thread_ids or []
+            skipped_ids = current_session.skipped_thread_ids or []
+            from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
+
+            excluded_ids = await derive_effective_roll_excluded_thread_ids(
+                db,
+                current_user.id,
+                session_snoozed_ids=snoozed_ids,
+                session_skipped_ids=skipped_ids,
+                excluded_tag_ids=excluded_tag_ids,
+            )
+            try:
+                artifacts = await _select_pending_thread(
+                    db=db,
+                    user_id=current_user.id,
+                    current_session=current_session,
+                    current_die=current_die,
+                    excluded_ids=[*excluded_ids, pending_thread_id],
+                    selection_bandwidth=current_session.active_bandwidth or DEFAULT_BANDWIDTH,
+                    selection_intent=current_session.active_intent or DEFAULT_INTENT,
+                    selection_method_override=None,
+                    empty_pool_detail="No candidates satisfy the current tag exclusions",
+                )
+            except HTTPException:
+                current_session.pending_thread_id = None
+                await db.commit()
+                raise
+
+            db.add(artifacts.event)
+            await db.flush()
+            rec_context = RecommendationContext(
+                event_id=artifacts.event.id,
+                schema_version=artifacts.rec_context_create.schema_version,
+                intent=artifacts.rec_context_create.intent,
+                intent_source=artifacts.rec_context_create.intent_source,
+                intent_confidence=artifacts.rec_context_create.intent_confidence,
+                bandwidth=artifacts.rec_context_create.bandwidth,
+                bandwidth_source=artifacts.rec_context_create.bandwidth_source,
+                bandwidth_confidence=artifacts.rec_context_create.bandwidth_confidence,
+                candidate_factors=[f.model_dump() for f in artifacts.rec_context_create.candidate_factors]
+                if artifacts.rec_context_create.candidate_factors else None,
+                final_weight=artifacts.rec_context_create.final_weight,
+                random_bypass=artifacts.rec_context_create.random_bypass,
+                balanced_neutrality=artifacts.rec_context_create.balanced_neutrality,
+                effort_minutes=artifacts.rec_context_create.effort_minutes,
+                effort_band=artifacts.rec_context_create.effort_band,
+                effort_source=artifacts.rec_context_create.effort_source,
+                effort_confidence=artifacts.rec_context_create.effort_confidence,
+                effort_sample_count=artifacts.rec_context_create.effort_sample_count,
+            )
+            db.add(rec_context)
+            current_session.pending_thread_id = artifacts.selected_thread.id
+            current_session.pending_thread_updated_at = datetime.now(UTC)
+
+            await db.commit()
+
+            roll_response = _build_roll_response(
+                artifacts=artifacts,
+                current_die=current_die,
+                snoozed_count=len(snoozed_ids),
+            )
+            rerolled = True
+            roll_response_payload = roll_response.model_dump() if hasattr(roll_response, "model_dump") else roll_response.dict()
+
+    return {
+        "excluded_tag_ids": excluded_tag_ids,
+        "rerolled": rerolled,
+        "roll": roll_response_payload,
+    }
+
+
+@router.delete("/tag-exclusions/{tag_id}")
+@limiter.limit("30/minute")
+async def remove_roll_tag_exclusion(
+    tag_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Remove one account-wide tag exclusion.
+
+    Args:
+        tag_id: Tag ID to make eligible again.
+        request: FastAPI request for rate limiting.
+        current_user: The authenticated user.
+        db: Database session.
+
+    Returns:
+        The remaining excluded tag IDs.
+    """
+    from app.services.preferences_service import read_user_preferences, update_user_preferences
+
+    preferences = await read_user_preferences(db, current_user.id)
+    remaining = [value for value in preferences.excluded_tag_ids if int(value) != int(tag_id)]
+    updated = await update_user_preferences(
+        db, current_user.id, UserPreferencesPatchRequest(
+            excluded_tag_ids=remaining
+        ),
+    )
+    return {"excluded_tag_ids": updated.excluded_tag_ids}

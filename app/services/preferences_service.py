@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import DEFAULT_THEME
 from app.repositories.preferences_repository import (
+    get_excluded_tag_ids,
     get_theme,
     seed_default_theme,
+    set_excluded_tag_ids,
     upsert_theme,
 )
 from app.schemas.preferences import (
@@ -36,7 +38,10 @@ async def read_user_preferences(
         defaults.
     """
     theme = await get_theme(db, user_id)
-    return UserPreferencesResponse(theme=theme or DEFAULT_THEME, user_id=user_id)
+    excluded_tag_ids = await get_excluded_tag_ids(db, user_id)
+    return UserPreferencesResponse(
+        theme=theme or DEFAULT_THEME, user_id=user_id, excluded_tag_ids=excluded_tag_ids
+    )
 
 
 async def update_user_preferences(
@@ -61,11 +66,29 @@ async def update_user_preferences(
     Returns:
         The user's preferences after the update.
     """
+    if payload.excluded_tag_ids is not None:
+        persisted_excluded = await set_excluded_tag_ids(db, user_id, payload.excluded_tag_ids)
+        await db.commit()
+        theme = await get_theme(db, user_id)
+        return UserPreferencesResponse(
+            theme=theme or DEFAULT_THEME,
+            user_id=user_id,
+            excluded_tag_ids=persisted_excluded,
+        )
+
     if payload.theme is not None:
         persisted_theme = await upsert_theme(db, user_id, payload.theme)
         await db.commit()
-        return UserPreferencesResponse(theme=persisted_theme, user_id=user_id)
+        excluded_tag_ids = await get_excluded_tag_ids(db, user_id)
+        return UserPreferencesResponse(
+            theme=persisted_theme,
+            user_id=user_id,
+            excluded_tag_ids=excluded_tag_ids,
+        )
 
     persisted_theme = await seed_default_theme(db, user_id, DEFAULT_THEME)
     await db.commit()
-    return UserPreferencesResponse(theme=persisted_theme, user_id=user_id)
+    excluded_tag_ids = await get_excluded_tag_ids(db, user_id)
+    return UserPreferencesResponse(
+        theme=persisted_theme, user_id=user_id, excluded_tag_ids=excluded_tag_ids
+    )

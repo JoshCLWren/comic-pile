@@ -143,6 +143,7 @@ async def derive_effective_roll_excluded_thread_ids(
     *,
     session_snoozed_ids: Collection[int] | None = None,
     session_skipped_ids: Collection[int] | None = None,
+    excluded_tag_ids: list[int] | None = None,
 ) -> list[int]:
     """Return the complete thread exclusion set shared by every roll path.
 
@@ -167,12 +168,24 @@ async def derive_effective_roll_excluded_thread_ids(
         Deduplicated thread IDs that must stay out of roll eligibility.
     """
     derived_excluded_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+
+    from app.models import User
+    from app.services.tag_roll_exclusion_service import derive_tag_excluded_thread_ids
+
+    user = await db.get(User, user_id)
+    tag_excluded_ids: set[int] = set()
+    if user is not None:
+        tag_excluded_ids = await derive_tag_excluded_thread_ids(
+            db, user, excluded_tag_ids=excluded_tag_ids
+        )
+
     excluded_ids: list[int] = []
     seen: set[int] = set()
     for thread_id in (
         *(session_snoozed_ids or ()),
         *(session_skipped_ids or ()),
         *sorted(derived_excluded_ids),
+        *sorted(tag_excluded_ids),
     ):
         if thread_id in seen:
             continue

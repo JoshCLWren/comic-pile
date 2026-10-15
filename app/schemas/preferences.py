@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.constants import DEFAULT_THEME
 
@@ -24,6 +24,7 @@ class UserPreferencesResponse(BaseModel):
 
     theme: ThemeId = DEFAULT_THEME
     user_id: int
+    excluded_tag_ids: list[int] = Field(default_factory=list)
 
 
 class UserPreferencesPatchRequest(BaseModel):
@@ -32,6 +33,9 @@ class UserPreferencesPatchRequest(BaseModel):
     Attributes:
         theme: Optional theme id to apply. When omitted, the current theme
             is left unchanged. Unknown values are rejected by validation.
+        excluded_tag_ids: Optional complete list of excluded tag IDs to apply.
+            When omitted, exclusions are left unchanged.
     """
 
     theme: ThemeId | None = None
+    excluded_tag_ids: list[int] | None = None

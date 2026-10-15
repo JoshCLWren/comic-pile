@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import DEFAULT_THEME
@@ -37,6 +37,9 @@ class UserPreferences(Base):
     )
     theme: Mapped[str] = mapped_column(
         String(50), nullable=False, default=DEFAULT_THEME, server_default=DEFAULT_THEME
+    )
+    excluded_tag_ids: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
