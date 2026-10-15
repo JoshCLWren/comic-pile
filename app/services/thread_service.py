@@ -594,7 +594,29 @@ async def update_thread(
     await db.commit()
     await db.refresh(thread)
 
-    return await thread_to_response(thread, db)
+    # Pre-fetch statistics that thread_to_response would otherwise query
+    # per-thread, to avoid additional DB round-trips (issue #3442 performance
+    # incident: application time dominated by per-call DB queries).
+    if thread.uses_issue_tracking():
+        issues_remaining_map = {thread.id: await thread.get_issues_remaining(db)}
+    else:
+        issues_remaining_map = None
+
+    next_unread_issue_number: str | None = None
+    if thread.next_unread_issue_id is not None:
+        next_issue: Issue | None = issue_repository.get_issue(
+            db, thread.next_unread_issue_id
+        )
+        if next_issue is not None:
+            next_unread_issue_number = next_issue.issue_number
+
+    return await thread_to_response(
+        thread,
+        db,
+        issue_number_map={thread.next_unread_issue_id: next_unread_issue_number}
+        if next_unread_issue_number is not None else None,
+        issues_remaining_map=issues_remaining_map,
+    )
 
 
 async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
