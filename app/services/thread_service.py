@@ -594,7 +594,21 @@ async def update_thread(
     await db.commit()
     await db.refresh(thread)
 
-    return await thread_to_response(thread, db)
+    # Pre-fetch statistics using the same batched maps as threads_to_responses,
+    # to avoid per-thread DB round-trips on the update path (issue #3442).
+    if thread.uses_issue_tracking():
+        issues_remaining_map = await load_unread_counts([thread], db)
+        issue_number_map = await load_next_issue_numbers([thread], db)
+    else:
+        issues_remaining_map = None
+        issue_number_map = None
+
+    return await thread_to_response(
+        thread,
+        db,
+        issue_number_map=issue_number_map,
+        issues_remaining_map=issues_remaining_map,
+    )
 
 
 async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
