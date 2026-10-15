@@ -267,10 +267,9 @@ async def run_bounded[T](
             extra={"performance_violation": violation.to_dict()},
         )
         if budget_type == "startup":
-            # Readiness-critical coroutine hard timeout (issue #3245): file an
-            # actionable issue immediately. Evaluation and GitHub calls run in
-            # bounded background work, so this never blocks the caller; any
-            # failure is logged inside the handler.
+            # Readiness-critical coroutine hard timeout: always record, log and
+            # raise the budget error. Only the optional (#3726) GitHub alarm
+            # schedules an issue; it is disabled by default and non-blocking.
             try:
                 from app.services import performance_issue_service as perf_issues
 
