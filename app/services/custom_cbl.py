@@ -16,6 +16,7 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories import reading_list_authoring_repository as authoring_repository
 from app.schemas.continuity_plan import (
     CBLPlacement,
     ContinuityPlanLane,
@@ -28,6 +29,8 @@ from app.schemas.custom_cbl import (
     CustomCBLIssueSearchResult,
     CustomCBLListItem,
     CustomCBLResponse,
+    ReadingListEntryIntent,
+    ReadingListPredecessorChange,
 )
 from app.services.continuity_plan_writer import (
     guard_plan_write,
@@ -36,6 +39,7 @@ from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
 )
+from app.services.reading_list_authoring import load_authoring_snapshot, validate_authored_list
 from app.services.reading_plan_normalization import editor_nodes_for_plan, editor_plan_response
 from comic_pile.dependencies import refresh_user_blocked_status
 
@@ -569,11 +573,16 @@ async def create_custom_cbl_for_user(
     issue_ids: Sequence[int],
     checkpoint_issue_ids: Sequence[int] | None = None,
     checkpoint_targets: dict[int, list[int]] | None = None,
+    mode: Literal["strict", "loose"] | None = None,
+    entry_intents: dict[int, ReadingListEntryIntent] | None = None,
+    confirmed_predecessor_changes: list[ReadingListPredecessorChange] | None = None,
 ) -> CustomCBLResponse:
     """Create one custom CBL, persist exact membership, and return its full representation."""
     try:
+        await authoring_repository.lock_reader(db, user_id)
         row = CustomCBLList(
             user_id=user_id,
+            mode=mode or "loose",
             name=name.strip(),
             description=description.strip() if description else None,
         )
@@ -587,12 +596,24 @@ async def create_custom_cbl_for_user(
             checkpoint_issue_ids=checkpoint_issue_ids,
             checkpoint_targets=checkpoint_targets,
         )
+        await authoring_repository.set_entry_intents(
+            db,
+            row.id,
+            {i: (intent.gate, intent.skipped) for i, intent in (entry_intents or {}).items()},
+        )
+        await validate_authored_list(
+            db,
+            user_id=user_id,
+            list_id=row.id,
+            before=None,
+            confirmed=confirmed_predecessor_changes,
+        )
+        response = await _full_response(db, row)
         await db.commit()
     except Exception:
         await db.rollback()
         raise
-    await db.refresh(row)
-    return await _full_response(db, row)
+    return response
 
 
 async def get_custom_cbl_response(
@@ -613,10 +634,18 @@ async def update_custom_cbl_for_user(
     issue_ids: Sequence[int],
     checkpoint_issue_ids: Sequence[int] | None = None,
     checkpoint_targets: dict[int, list[int]] | None = None,
+    mode: Literal["strict", "loose"] | None = None,
+    entry_intents: dict[int, ReadingListEntryIntent] | None = None,
+    confirmed_predecessor_changes: list[ReadingListPredecessorChange] | None = None,
 ) -> CustomCBLResponse:
     """Replace one owned custom CBL's metadata and ordered membership atomically."""
     try:
+        await authoring_repository.lock_reader(db, user_id)
         row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+        before_snapshot = await load_authoring_snapshot(db, user_id)
+        before = next(item for item in before_snapshot.lists if item.list_id == list_id)
+        if mode is not None:
+            row.mode = mode
         row.name = name.strip()
         row.description = description.strip() if description else None
         row.updated_at = datetime.now(UTC)
@@ -628,17 +657,31 @@ async def update_custom_cbl_for_user(
             checkpoint_issue_ids=checkpoint_issue_ids,
             checkpoint_targets=checkpoint_targets,
         )
+        await authoring_repository.set_entry_intents(
+            db,
+            row.id,
+            {i: (intent.gate, intent.skipped) for i, intent in (entry_intents or {}).items()},
+        )
+        changes = await validate_authored_list(
+            db,
+            user_id=user_id,
+            list_id=row.id,
+            before=before,
+            confirmed=confirmed_predecessor_changes,
+        )
+        response = await _full_response(db, row)
+        response.predecessor_changes = changes
         await db.commit()
     except Exception:
         await db.rollback()
         raise
-    await db.refresh(row)
-    return await _full_response(db, row)
+    return response
 
 
 async def delete_custom_cbl_for_user(db: AsyncSession, *, user_id: int, list_id: int) -> None:
     """Delete one owned custom CBL without touching its canonical issues or Reading Plans."""
     try:
+        await authoring_repository.lock_reader(db, user_id)
         row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
         await db.delete(row)
         await db.commit()

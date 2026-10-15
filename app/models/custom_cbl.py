@@ -25,9 +25,9 @@ from app.database import Base
 class CustomCBLList(Base):
     """One user-owned editable comic reading list.
 
-    Custom CBLs are reader-authored source material. They do not own Roll
-    eligibility or reader intent; a Reading Plan does that after explicit
-    application of the list.
+    Custom CBLs hold reader-authored membership and Option E positional intent.
+    These fields remain inactive in Roll until the separately approved cutover;
+    the transitional Reading Plan runtime still serves current eligibility.
     """
 
     __tablename__ = "custom_cbl_lists"

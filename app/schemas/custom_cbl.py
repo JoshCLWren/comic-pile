@@ -10,9 +10,30 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.schemas.continuity_plan import ContinuityPlanResponse
 
 
+class ReadingListEntryIntent(BaseModel):
+    """Explicit positional intent for one stable member Issue."""
+
+    gate: Literal["none", "hold", "after_previous"] = "none"
+    skipped: bool = False
+
+
+class ReadingListPredecessorChange(BaseModel):
+    """Named before/after requirements that the reader must acknowledge."""
+
+    issue_id: int
+    issue_name: str
+    before_issue_ids: list[int]
+    before_issue_names: list[str]
+    after_issue_ids: list[int]
+    after_issue_names: list[str]
+
+
 class CustomCBLWrite(BaseModel):
     """Create or replace one custom CBL and its ordered issue membership."""
 
+    mode: Literal["strict", "loose"] | None = None
+    entry_intents: dict[int, ReadingListEntryIntent] | None = None
+    confirmed_predecessor_changes: list[ReadingListPredecessorChange] | None = None
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     issue_ids: list[int] = Field(default_factory=list, max_length=1000)
@@ -37,6 +58,8 @@ class CustomCBLWrite(BaseModel):
             raise ValueError("issue_ids must contain positive integers")
         if len(set(self.issue_ids)) != len(self.issue_ids):
             raise ValueError("issue_ids must not contain duplicates")
+        if any(issue_id not in self.issue_ids for issue_id in (self.entry_intents or {})):
+            raise ValueError("entry_intents must reference members of issue_ids")
         checkpoint_ids = self.checkpoint_issue_ids or []
         if any(issue_id <= 0 for issue_id in checkpoint_ids):
             raise ValueError("checkpoint_issue_ids must contain positive integers")
@@ -88,6 +111,7 @@ class CustomCBLResponse(CustomCBLListItem):
     user_id: int
     created_at: datetime
     entries: list[CustomCBLEntryResponse]
+    predecessor_changes: list[ReadingListPredecessorChange] = Field(default_factory=list)
 
 
 class CustomCBLIssueSearchResult(BaseModel):
