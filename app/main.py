@@ -274,6 +274,9 @@ def _register_core_routers(app: FastAPI) -> None:
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
+    # Versioned-only roll resources (issue #3033): new client-facing roll
+    # routes live here and never gain a bare /api/roll/* alias.
+    app.include_router(roll.v1_router, prefix="/api/v1/roll", tags=["roll"])
     # Roll v2: versioned-only, no unversioned alias per #2716
     app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])

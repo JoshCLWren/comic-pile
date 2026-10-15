@@ -44,6 +44,59 @@ class RollResponse(BaseModel):
     explanation: str | None = None
 
 
+class RollTagExclusionTag(BaseModel):
+    """One account-wide tag exclusion resolved to its reader-facing identity."""
+
+    id: int
+    name: str
+    color: str
+    scope: str
+
+
+class RollTagExclusionsResponse(BaseModel):
+    """The authenticated user's account-wide Roll tag exclusions.
+
+    Attributes:
+        excluded_tag_ids: Every persisted excluded tag ID, including IDs whose
+            tag row no longer exists.
+        excluded_tags: Resolved summaries for the exclusions that still exist,
+            so the Roll UI can show which tags are responsible for an empty
+            or filtered pool.
+    """
+
+    excluded_tag_ids: list[int]
+    excluded_tags: list[RollTagExclusionTag]
+
+
+class RollTagExclusionAddResponse(BaseModel):
+    """Result of adding one or more account-wide tag exclusions.
+
+    Attributes:
+        excluded_tag_ids: The persisted exclusions after the merge.
+        excluded_tags: Resolved summaries of the persisted exclusions.
+        rerolled: True when the pending roll became ineligible and another
+            eligible result was selected without recording a snooze.
+        roll: The replacement roll result when ``rerolled`` is true.
+    """
+
+    excluded_tag_ids: list[int]
+    excluded_tags: list[RollTagExclusionTag]
+    rerolled: bool = False
+    roll: RollResponse | None = None
+
+
+class RollTagExclusionRemoveResponse(BaseModel):
+    """Result of removing one account-wide tag exclusion.
+
+    Attributes:
+        excluded_tag_ids: The exclusions that remain after the removal.
+        excluded_tags: Resolved summaries of the remaining exclusions.
+    """
+
+    excluded_tag_ids: list[int]
+    excluded_tags: list[RollTagExclusionTag]
+
+
 class SetCurrentIssueRequest(BaseModel):
     """Schema for atomically correcting the current issue in an active thread."""
 
@@ -166,7 +219,7 @@ class ThreadExclusionReason(BaseModel):
     thread_id: int
     title: str
     format: str
-    reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue"]
+    reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue", "excluded_tag"]
     detail: str | None = None
 
 

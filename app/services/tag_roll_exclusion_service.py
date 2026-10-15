@@ -11,9 +11,12 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.repositories import thread_repository
+from app.repositories import tag_repository, thread_repository
 from app.repositories.preferences_repository import get_excluded_tag_ids
+from app.schemas.roll import RollTagExclusionTag
 from app.services.tag_inheritance_service import TagInheritanceService
+
+TAG_EXCLUSION_EMPTY_POOL_DETAIL = "No candidates satisfy the current tag exclusions"
 
 
 async def get_user_excluded_tag_ids(db: AsyncSession, user_id: int) -> list[int]:
@@ -29,16 +32,43 @@ async def get_user_excluded_tag_ids(db: AsyncSession, user_id: int) -> list[int]
     return await get_excluded_tag_ids(db, user_id)
 
 
+async def list_excluded_tag_summaries(
+    db: AsyncSession, user_id: int, excluded_tag_ids: list[int]
+) -> list[RollTagExclusionTag]:
+    """Resolve exclusion IDs into reader-facing tag summaries.
+
+    Deleted tags stay in the exclusion list (so restoring them later never
+    silently changes eligibility) but resolve to no summary here.
+
+    Args:
+        db: Database session.
+        user_id: Owning user, applied as the visibility boundary.
+        excluded_tag_ids: The persisted exclusion IDs to resolve.
+
+    Returns:
+        One summary per excluded tag that still exists and is visible to
+        ``user_id``, ordered by tag ID.
+    """
+    if not excluded_tag_ids:
+        return []
+    tags = await tag_repository.get_visible_tags_by_ids(db, user_id, excluded_tag_ids)
+    return [
+        RollTagExclusionTag(id=tag.id, name=tag.name, color=tag.color, scope=tag.scope)
+        for tag in tags
+    ]
+
+
 async def derive_tag_excluded_thread_ids(
     db: AsyncSession,
-    user: User,
+    user_id: int,
+    *,
     excluded_tag_ids: list[int] | None = None,
 ) -> set[int]:
     """Resolve threads whose next unread issue carries an excluded tag.
 
     Args:
         db: Database session.
-        user: Owning user.
+        user_id: Owning user.
         excluded_tag_ids: Optional exclusion override; loaded from
             preferences when omitted.
 
@@ -46,12 +76,16 @@ async def derive_tag_excluded_thread_ids(
         Set of thread IDs that must stay out of the roll pool.
     """
     if excluded_tag_ids is None:
-        excluded_tag_ids = await get_excluded_tag_ids(db, user.id)
+        excluded_tag_ids = await get_excluded_tag_ids(db, user_id)
     if not excluded_tag_ids:
         return set()
 
+    user = await db.get(User, user_id)
+    if user is None:
+        return set()
+
     excluded = {int(tag_id) for tag_id in excluded_tag_ids}
-    threads = await thread_repository.fetch_active_threads(db, user.id)
+    threads = await thread_repository.fetch_active_threads(db, user_id)
     candidates = [
         thread
         for thread in threads
@@ -71,3 +105,55 @@ async def derive_tag_excluded_thread_ids(
         if issue_tag_ids & excluded:
             result.add(thread.id)
     return result
+
+
+async def explain_empty_pool_detail(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    current_die: int,
+    excluded_ids: list[int],
+    default_detail: str,
+) -> str:
+    """Explain an empty roll pool, attributing it to tag exclusions when true.
+
+    Issue #3033 requires the empty-pool state to say that no candidate
+    satisfies the active tag exclusions instead of implying the library is
+    empty. The attribution only applies when the pool still has candidates
+    once the tag-derived exclusions are dropped, so an actually empty library
+    keeps its original wording.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the candidate pool.
+        current_die: Die size that bounds the pool.
+        excluded_ids: The full exclusion set that produced the empty pool.
+        default_detail: Wording to keep when exclusions are not the cause.
+
+    Returns:
+        The reader-facing reason the pool is empty.
+    """
+    excluded_tag_ids = await get_excluded_tag_ids(db, user_id)
+    if not excluded_tag_ids:
+        return default_detail
+
+    tag_excluded_ids = await derive_tag_excluded_thread_ids(
+        db, user_id, excluded_tag_ids=excluded_tag_ids
+    )
+    if not tag_excluded_ids:
+        return default_detail
+
+    untagged_excluded_ids = [
+        thread_id for thread_id in excluded_ids if thread_id not in tag_excluded_ids
+    ]
+    if untagged_excluded_ids == list(excluded_ids):
+        return default_detail
+
+    from comic_pile.queue import get_bounded_roll_pool_rows
+
+    remaining_rows = await get_bounded_roll_pool_rows(
+        user_id, db, current_die, untagged_excluded_ids
+    )
+    if not remaining_rows:
+        return default_detail
+    return TAG_EXCLUSION_EMPTY_POOL_DETAIL

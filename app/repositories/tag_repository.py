@@ -75,6 +75,39 @@ async def get_tag_by_id(db: AsyncSession, tag_id: int) -> Tag | None:
     return await db.get(Tag, tag_id)
 
 
+async def get_visible_tags_by_ids(
+    db: AsyncSession, viewer_user_id: int, tag_ids: Iterable[int]
+) -> list[Tag]:
+    """Return the tags from ``tag_ids`` that the viewer may see.
+
+    A client can write arbitrary tag IDs into its own preference row, so any
+    read that resolves those IDs back to names must apply the same
+    visibility rule as every other tag read: global tags plus the viewer's
+    own private tags. Private tags owned by anyone else are never returned.
+
+    Args:
+        db: Database session.
+        viewer_user_id: Viewer whose private vocabulary is included.
+        tag_ids: Candidate tag primary keys.
+
+    Returns:
+        Matching visible tags ordered by primary key. Empty when
+        ``tag_ids`` is empty.
+    """
+    ids = {int(tag_id) for tag_id in tag_ids}
+    if not ids:
+        return []
+    result = await db.execute(
+        select(Tag)
+        .where(
+            Tag.id.in_(ids),
+            (Tag.scope == "global") | (Tag.owner_user_id == viewer_user_id),
+        )
+        .order_by(Tag.id)
+    )
+    return list(result.scalars().all())
+
+
 async def get_tag_by_name(db: AsyncSession, normalized_name: str, scope: str) -> Tag | None:
     """Return a tag by name and scope.
 

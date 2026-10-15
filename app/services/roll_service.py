@@ -118,12 +118,22 @@ class RollService:
             HTTPException: 400 when the bounded pool is empty.
         """
         from comic_pile.queue import get_bounded_roll_pool_rows
+        from app.services.tag_roll_exclusion_service import explain_empty_pool_detail
 
         bounded_rows = await get_bounded_roll_pool_rows(
             user_id, self._db, current_die, excluded_ids,
         )
         if not bounded_rows:
-            raise HTTPException(status_code=400, detail=empty_pool_detail)
+            # Issue #3033: when tag exclusions are what emptied the pool, say
+            # so instead of implying the library has nothing rollable.
+            detail = await explain_empty_pool_detail(
+                self._db,
+                user_id=user_id,
+                current_die=current_die,
+                excluded_ids=excluded_ids,
+                default_detail=empty_pool_detail,
+            )
+            raise HTTPException(status_code=400, detail=detail)
 
         recommendation_settings = get_recommendation_settings()
         control_mode = recommendation_settings.control_mode

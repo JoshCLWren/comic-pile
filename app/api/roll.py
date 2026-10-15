@@ -38,6 +38,10 @@ from app.services.session_response import (
     get_session_with_thread_safe,
 )
 from app.services.tag_inheritance_service import TagInheritanceService
+from app.services.tag_roll_exclusion_service import (
+    derive_tag_excluded_thread_ids,
+    list_excluded_tag_summaries,
+)
 from app.services.snooze_service import (
     derive_cross_session_excluded_thread_ids,
     derive_effective_roll_excluded_thread_ids,
@@ -50,6 +54,9 @@ from app.schemas import (
     RollBootstrapThread,
     RollRequest,
     RollResponse,
+    RollTagExclusionAddResponse,
+    RollTagExclusionRemoveResponse,
+    RollTagExclusionsResponse,
     SessionMode,
     SessionModeResponse,
     SessionModeUpdateRequest,
@@ -79,6 +86,10 @@ from comic_pile.reading_session import get_current_die_for_session, get_or_creat
 from comic_pile.dependencies import get_blocking_explanations_batch
 
 router = APIRouter(tags=["roll"])
+# Versioned-only roll resources. New client-facing roll routes belong here so
+# they never appear under bare /api/roll/* (see the route-prefix convention in
+# ``app.main`` and ``tests/test_route_versioning.py``).
+v1_router = APIRouter(tags=["roll"])
 v2_router = APIRouter(tags=["roll"])
 logger = logging.getLogger(__name__)
 
@@ -1168,10 +1179,16 @@ async def roll_bootstrap(
     skipped_id_set = set(skipped_ids)
     effective_snoozed_set = snoozed_id_set | derived_snoozed_ids
     effective_snoozed_ids = sorted(effective_snoozed_set)
+    # Account-wide tag exclusions (issue #3033) are eligibility constraints too:
+    # the pool shown to the dice and the transparency list must both honor them.
+    tag_excluded_ids = sorted(await derive_tag_excluded_thread_ids(db, user_id))
+    tag_excluded_set = set(tag_excluded_ids)
     if effective_snoozed_ids:
         pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
     if skipped_ids:
         pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
+    if tag_excluded_ids:
+        pool_query = pool_query.where(Thread.id.not_in(tag_excluded_ids))
 
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()
@@ -1324,14 +1341,15 @@ async def roll_bootstrap(
         fmt = normalize_format_value(row.format)
         queue_pos = row.queue_position
         # Mirrors pool_query's WHERE clause exactly: active (already
-        # filtered above), queued, unblocked, and not snoozed or
-        # skipped in any scope.
+        # filtered above), queued, unblocked, and not snoozed, skipped,
+        # or tag-excluded in any scope.
         is_blocked = row.is_blocked
         is_rollable = (
             queue_pos >= 1
             and not is_blocked
             and tid not in effective_snoozed_set
             and tid not in skipped_id_set
+            and tid not in tag_excluded_set
         )
         if is_rollable:
             available_ids.add(tid)
@@ -1364,6 +1382,14 @@ async def roll_bootstrap(
                 format=fmt,
                 reason="skipped",
                 detail="Skipped in current session",
+            )
+        elif tid in tag_excluded_set:
+            exc = ThreadExclusionReason(
+                thread_id=tid,
+                title=title,
+                format=fmt,
+                reason="excluded_tag",
+                detail="Excluded tag",
             )
         else:
             exc = ThreadExclusionReason(
@@ -1536,7 +1562,12 @@ async def roll_v2_bootstrap(
     skipped_ids = list(current_session.skipped_thread_ids or [])
     derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
     effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
-    excluded_thread_ids = sorted(set(effective_snoozed_ids) | set(skipped_ids))
+    # Account-wide tag exclusions (issue #3033) filter the v2 rollable
+    # projection exactly as they filter the v1 pool.
+    tag_excluded_ids = sorted(await derive_tag_excluded_thread_ids(db, user_id))
+    excluded_thread_ids = sorted(
+        set(effective_snoozed_ids) | set(skipped_ids) | set(tag_excluded_ids)
+    )
     rollable, last_read, _omitted_thread_ids = await get_v2_rollable_projection(
         db,
         user_id=user_id,
@@ -1759,11 +1790,11 @@ async def get_roll_recommendation_explanation(
     )
 
 
-@router.get("/tag-exclusions")
+@v1_router.get("/tag-exclusions", response_model=RollTagExclusionsResponse)
 async def get_roll_tag_exclusions(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
+) -> RollTagExclusionsResponse:
     """Return the authenticated user's account-wide excluded tag IDs.
 
     Args:
@@ -1771,22 +1802,28 @@ async def get_roll_tag_exclusions(
         db: Database session.
 
     Returns:
-        The persisted excluded tag IDs.
+        The persisted excluded tag IDs plus resolved tag summaries, so the
+        Roll UI can show which tags are responsible for a filtered pool.
     """
     from app.services.preferences_service import read_user_preferences
 
     preferences = await read_user_preferences(db, current_user.id)
-    return {"excluded_tag_ids": preferences.excluded_tag_ids}
+    excluded_tag_ids = list(preferences.excluded_tag_ids)
+    excluded_tags = await list_excluded_tag_summaries(db, current_user.id, excluded_tag_ids)
+    return RollTagExclusionsResponse(
+        excluded_tag_ids=excluded_tag_ids,
+        excluded_tags=excluded_tags,
+    )
 
 
-@router.post("/tag-exclusions")
+@v1_router.post("/tag-exclusions", response_model=RollTagExclusionAddResponse)
 @limiter.limit("30/minute")
 async def add_roll_tag_exclusion(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     payload: dict[str, Any] = Body(default={}),
-) -> dict[str, object]:
+) -> RollTagExclusionAddResponse:
     """Persist one or more account-wide tag exclusions.
 
     When the pending roll's next unread issue becomes ineligible because of
@@ -1826,7 +1863,7 @@ async def add_roll_tag_exclusion(
     current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
     pending_thread_id = current_session.pending_thread_id
     rerolled = False
-    roll_response_payload: dict[str, object] | None = None
+    roll_response_payload: RollResponse | None = None
 
     if pending_thread_id is not None and raw_ids:
         thread = await thread_repository.get_thread(db, pending_thread_id)
@@ -1906,23 +1943,27 @@ async def add_roll_tag_exclusion(
                 snoozed_count=len(snoozed_ids),
             )
             rerolled = True
-            roll_response_payload = roll_response.model_dump() if hasattr(roll_response, "model_dump") else roll_response.dict()
+            roll_response_payload = roll_response
 
-    return {
-        "excluded_tag_ids": excluded_tag_ids,
-        "rerolled": rerolled,
-        "roll": roll_response_payload,
-    }
+    excluded_tags = await list_excluded_tag_summaries(db, current_user.id, excluded_tag_ids)
+    return RollTagExclusionAddResponse(
+        excluded_tag_ids=excluded_tag_ids,
+        excluded_tags=excluded_tags,
+        rerolled=rerolled,
+        roll=roll_response_payload,
+    )
 
 
-@router.delete("/tag-exclusions/{tag_id}")
+@v1_router.delete(
+    "/tag-exclusions/{tag_id}", response_model=RollTagExclusionRemoveResponse
+)
 @limiter.limit("30/minute")
 async def remove_roll_tag_exclusion(
     tag_id: int,
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
+) -> RollTagExclusionRemoveResponse:
     """Remove one account-wide tag exclusion.
 
     Args:
@@ -1932,7 +1973,7 @@ async def remove_roll_tag_exclusion(
         db: Database session.
 
     Returns:
-        The remaining excluded tag IDs.
+        The remaining excluded tag IDs and their resolved summaries.
     """
     from app.services.preferences_service import read_user_preferences, update_user_preferences
 
@@ -1943,4 +1984,9 @@ async def remove_roll_tag_exclusion(
             excluded_tag_ids=remaining
         ),
     )
-    return {"excluded_tag_ids": updated.excluded_tag_ids}
+    excluded_tag_ids = list(updated.excluded_tag_ids)
+    excluded_tags = await list_excluded_tag_summaries(db, current_user.id, excluded_tag_ids)
+    return RollTagExclusionRemoveResponse(
+        excluded_tag_ids=excluded_tag_ids,
+        excluded_tags=excluded_tags,
+    )
