@@ -594,27 +594,19 @@ async def update_thread(
     await db.commit()
     await db.refresh(thread)
 
-    # Pre-fetch statistics that thread_to_response would otherwise query
-    # per-thread, to avoid additional DB round-trips (issue #3442 performance
-    # incident: application time dominated by per-call DB queries).
+    # Pre-fetch statistics using the same batched maps as threads_to_responses,
+    # to avoid per-thread DB round-trips on the update path (issue #3442).
     if thread.uses_issue_tracking():
-        issues_remaining_map = {thread.id: await thread.get_issues_remaining(db)}
+        issues_remaining_map = await load_unread_counts([thread], db)
+        issue_number_map = await load_next_issue_numbers([thread], db)
     else:
         issues_remaining_map = None
-
-    next_unread_issue_number: str | None = None
-    if thread.next_unread_issue_id is not None:
-        next_issue: Issue | None = issue_repository.get_issue(
-            db, thread.next_unread_issue_id
-        )
-        if next_issue is not None:
-            next_unread_issue_number = next_issue.issue_number
+        issue_number_map = None
 
     return await thread_to_response(
         thread,
         db,
-        issue_number_map={thread.next_unread_issue_id: next_unread_issue_number}
-        if next_unread_issue_number is not None else None,
+        issue_number_map=issue_number_map,
         issues_remaining_map=issues_remaining_map,
     )
 

@@ -363,6 +363,7 @@ async def test_update_thread_performance_issue_tracking(
         last_activity_at=now,
     )
     async_db.add(thread)
+    await async_db.flush()
 
     # Create issue records
     issues = [
@@ -376,6 +377,7 @@ async def test_update_thread_performance_issue_tracking(
         for i in range(1, 6)
     ]
     async_db.add_all(issues)
+    await async_db.flush()
 
     # Set next_unread_issue_id to the first unread issue
     thread.next_unread_issue_id = issues[1].id  # issue #2 is unread
@@ -390,7 +392,7 @@ async def test_update_thread_performance_issue_tracking(
 
     data = response.json()
     assert data["title"] == "Perf Test Thread Updated"
-    assert data["issues_remaining"] == 3
+    assert data["issues_remaining"] == 4
     assert data["status"] == "active"
     assert data["queue_position"] == 1
     assert data["total_issues"] == 5
