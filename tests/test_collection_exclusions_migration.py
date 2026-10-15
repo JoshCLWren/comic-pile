@@ -49,6 +49,10 @@ async def test_collection_exclusion_migration_roundtrip_postgres(
     def verify(conn: Connection) -> None:
         # pg_temp keeps these migration tables separate from Base.metadata.create_all.
         conn.execute(text("SET LOCAL search_path TO pg_temp, public"))
+        # PostgreSQL forbids foreign keys from a temp table to a permanent table.
+        # Shadow users in the same temporary schema to test the real FK safely.
+        conn.execute(text("CREATE TEMP TABLE users (id integer PRIMARY KEY) ON COMMIT DROP"))
+        conn.execute(text("INSERT INTO users (id) VALUES (1)"))
         with Operations.context(MigrationContext.configure(conn)):
             module.upgrade()
 
