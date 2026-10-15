@@ -557,7 +557,7 @@ class TestOptimizeEndpoint:
         """DNS timeouts are handled gracefully and don't cache the error."""
         # Mock slow DNS resolution that exceeds the 5-second timeout
         def slow_dns_resolution(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-            time.sleep(10.0)  # Block longer than the 5s timeout
+            time.sleep(6.0)  # Block longer than the 5s timeout (thread finishes ~6s)
             return [ipaddress.IPv4Address("127.0.0.1")]
 
         monkeypatch.setattr(
