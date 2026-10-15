@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Tag, User
+from app.models import Tag
 from app.repositories import (
     continuity_repository,
     issue_repository,
@@ -161,17 +161,17 @@ class TagInheritanceService:
         self._db = db
 
     async def get_issue_effective_tags(
-        self, user: User, issue_id: int
+        self, user_id: int, issue_id: int
     ) -> EffectiveTagsResult:
         """Return direct and effective tags for one owned issue.
 
-        Effective tags union the issue's direct tags, its thread's tags, and
-        the tags of every Reading Plan owned by the viewer that contains the
+        Effective tags union the issue's direct tags, its thread's tags, and the
+        tags of every Reading Plan owned by the viewer that contains the
         issue. Tags inherited through several paths appear once with all of
         their sources retained.
 
         Args:
-            user: The requesting user; must own the issue's thread.
+            user_id: The requesting user; must own the issue's thread.
             issue_id: Primary key of the issue.
 
         Returns:
@@ -181,26 +181,26 @@ class TagInheritanceService:
             NotFoundError: When the issue does not exist or is not owned by
                 the user.
         """
-        issue = await issue_repository.find_owned(self._db, user.id, issue_id)
+        issue = await issue_repository.find_owned(self._db, user_id, issue_id)
         if issue is None:
             raise NotFoundError(f"Issue {issue_id} does not exist")
         thread_id = issue.thread_id
         issue_number = issue.issue_number
 
-        thread = await thread_repository.find_owned(self._db, user.id, thread_id)
+        thread = await thread_repository.find_owned(self._db, user_id, thread_id)
         if thread is None:
             raise NotFoundError(f"Issue {issue_id} does not exist")
         thread_title = thread.title
 
         plans = await reading_plan_repository.plans_containing_issue_for_user(
-            self._db, issue_id=issue_id, user_id=user.id
+            self._db, issue_id=issue_id, user_id=user_id
         )
         plan_names = {plan.id: plan.name for plan in plans}
 
         targets: list[tuple[str, int]] = [("Issue", issue_id), ("Thread", thread_id)]
         targets.extend(("ContinuityPlan", plan_id) for plan_id in plan_names)
         pairs = await tag_repository.list_visible_assignments_for_targets(
-            self._db, user.id, targets
+            self._db, user_id, targets
         )
 
         display_names = {("Issue", issue_id): f"#{issue_number}"}
@@ -218,7 +218,7 @@ class TagInheritanceService:
         )
 
     async def get_thread_issues_effective_tags(
-        self, user: User, thread_id: int
+        self, user_id: int, thread_id: int
     ) -> list[EffectiveTagsResult]:
         """Return direct and effective tags for every issue in one owned thread.
 
@@ -232,7 +232,7 @@ class TagInheritanceService:
         contributing source retained.
 
         Args:
-            user: The requesting user; must own the thread.
+            user_id: The requesting user; must own the thread.
             thread_id: Primary key of the thread.
 
         Returns:
@@ -243,7 +243,7 @@ class TagInheritanceService:
             NotFoundError: When the thread does not exist or is not owned by
                 the user.
         """
-        thread = await thread_repository.find_owned(self._db, user.id, thread_id)
+        thread = await thread_repository.find_owned(self._db, user_id, thread_id)
         if thread is None:
             raise NotFoundError(f"Thread {thread_id} does not exist")
         thread_title = thread.title
@@ -255,7 +255,7 @@ class TagInheritanceService:
             return []
 
         plans_by_issue = await reading_plan_repository.plans_containing_issues_for_user(
-            self._db, issue_ids=issue_ids, user_id=user.id
+            self._db, issue_ids=issue_ids, user_id=user_id
         )
         plan_names: dict[int, str] = {}
         for plans in plans_by_issue.values():
@@ -266,7 +266,7 @@ class TagInheritanceService:
         targets.extend(("Issue", issue_id) for issue_id in issue_ids)
         targets.extend(("ContinuityPlan", plan_id) for plan_id in plan_names)
         pairs = await tag_repository.list_visible_assignments_for_targets(
-            self._db, user.id, targets
+            self._db, user_id, targets
         )
 
         display_names: dict[tuple[str, int], str] = {("Thread", thread_id): thread_title}
@@ -301,7 +301,7 @@ class TagInheritanceService:
         return results
 
     async def get_thread_effective_tags(
-        self, user: User, thread_id: int
+        self, user_id: int, thread_id: int
     ) -> EffectiveTagsResult:
         """Return direct and effective tags for one owned thread.
 
@@ -309,7 +309,7 @@ class TagInheritanceService:
         directly assigned visible tags.
 
         Args:
-            user: The requesting user; must own the thread.
+            user_id: The requesting user; must own the thread.
             thread_id: Primary key of the thread.
 
         Returns:
@@ -319,12 +319,12 @@ class TagInheritanceService:
             NotFoundError: When the thread does not exist or is not owned by
                 the user.
         """
-        thread = await thread_repository.find_owned(self._db, user.id, thread_id)
+        thread = await thread_repository.find_owned(self._db, user_id, thread_id)
         if thread is None:
             raise NotFoundError(f"Thread {thread_id} does not exist")
 
         pairs = await tag_repository.list_visible_assignments_for_targets(
-            self._db, user.id, [("Thread", thread_id)]
+            self._db, user_id, [("Thread", thread_id)]
         )
         rows = [
             (tag, "Thread", thread_id, thread.title) for tag, _assignment in pairs
@@ -334,7 +334,7 @@ class TagInheritanceService:
         )
 
     async def get_plan_effective_tags(
-        self, user: User, plan_id: int
+        self, user_id: int, plan_id: int
     ) -> EffectiveTagsResult:
         """Return direct and effective tags for one owned Reading Plan.
 
@@ -342,7 +342,7 @@ class TagInheritanceService:
         the directly assigned visible tags.
 
         Args:
-            user: The requesting user; must own the plan.
+            user_id: The requesting user; must own the plan.
             plan_id: Primary key of the plan.
 
         Returns:
@@ -353,13 +353,13 @@ class TagInheritanceService:
                 the user.
         """
         plan = await continuity_repository.get_continuity_plan(
-            self._db, user.id, plan_id
+            self._db, user_id, plan_id
         )
         if plan is None:
             raise NotFoundError(f"Reading Plan {plan_id} does not exist")
 
         pairs = await tag_repository.list_visible_assignments_for_targets(
-            self._db, user.id, [("ContinuityPlan", plan_id)]
+            self._db, user_id, [("ContinuityPlan", plan_id)]
         )
         rows = [
             (tag, "ContinuityPlan", plan_id, plan.name)
@@ -370,7 +370,7 @@ class TagInheritanceService:
         )
 
     async def get_threads_effective_tags(
-        self, user: User, thread_ids: list[int]
+        self, user_id: int, thread_ids: list[int]
     ) -> dict[int, EffectiveTagsResult]:
         """Return direct and effective tags for multiple owned threads.
 
@@ -379,7 +379,7 @@ class TagInheritanceService:
         when rendering lists of threads.
 
         Args:
-            user: The requesting user; must own all threads.
+            user_id: The requesting user; must own all threads.
             thread_ids: Primary keys of the threads.
 
         Returns:
@@ -392,7 +392,7 @@ class TagInheritanceService:
         if not thread_ids:
             return {}
 
-        threads = await thread_repository.find_owned_bulk(self._db, user.id, thread_ids)
+        threads = await thread_repository.find_owned_bulk(self._db, user_id, thread_ids)
         if len(threads) != len(thread_ids):
             found_ids = {t.id for t in threads}
             missing = [tid for tid in thread_ids if tid not in found_ids]
@@ -401,7 +401,7 @@ class TagInheritanceService:
         thread_map = {t.id: t for t in threads}
         targets = [("Thread", tid) for tid in thread_ids]
         pairs = await tag_repository.list_visible_assignments_for_targets(
-            self._db, user.id, targets
+            self._db, user_id, targets
         )
 
         results: dict[int, EffectiveTagsResult] = {}

@@ -1255,7 +1255,7 @@ async def roll_bootstrap(
 
     # Fetch effective tags for all threads (batched, no N+1)
     tag_service = TagInheritanceService(db)
-    tags_map = await tag_service.get_threads_effective_tags(current_user, unique_thread_ids)
+    tags_map = await tag_service.get_threads_effective_tags(current_user.id, unique_thread_ids)
 
     # Apply tags to all thread lists
     for t in roll_pool:

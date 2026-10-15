@@ -90,7 +90,7 @@ async def get_issue_effective_tags(
     """
     service = TagInheritanceService(db)
     try:
-        result = await service.get_issue_effective_tags(current_user, issue_id)
+        result = await service.get_issue_effective_tags(current_user.id, issue_id)
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return effective_tags_to_response(result)
@@ -122,7 +122,7 @@ async def get_thread_effective_tags(
     """
     service = TagInheritanceService(db)
     try:
-        result = await service.get_thread_effective_tags(current_user, thread_id)
+        result = await service.get_thread_effective_tags(current_user.id, thread_id)
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return effective_tags_to_response(result)
@@ -152,7 +152,7 @@ async def get_plan_effective_tags(
     """
     service = TagInheritanceService(db)
     try:
-        result = await service.get_plan_effective_tags(current_user, plan_id)
+        result = await service.get_plan_effective_tags(current_user.id, plan_id)
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return effective_tags_to_response(result)
@@ -188,7 +188,7 @@ async def get_thread_issues_effective_tags(
     """
     service = TagInheritanceService(db)
     try:
-        results = await service.get_thread_issues_effective_tags(current_user, thread_id)
+        results = await service.get_thread_issues_effective_tags(current_user.id, thread_id)
     except (NotFoundError, ForbiddenError, InvalidRequestError, ConflictError) as exc:
         raise _map_error(exc) from exc
     return tag_schemas.ThreadIssuesEffectiveTagsResponse(

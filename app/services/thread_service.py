@@ -333,12 +333,7 @@ async def list_queue_threads(
     # Fetch effective tags for all threads on this page (batched, no N+1)
     thread_ids = [tr.id for tr in thread_responses]
     tag_service = TagInheritanceService(db)
-    # Create a minimal user object for the tag service
-    class _MinimalUser:
-        id: int
-    user_obj = _MinimalUser()
-    user_obj.id = user_id
-    tags_map = await tag_service.get_threads_effective_tags(user_obj, thread_ids)
+    tags_map = await tag_service.get_threads_effective_tags(user_id, thread_ids)
 
     queue_items = [
         to_queue_list_item(tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, []).direct_tags)
@@ -431,12 +426,7 @@ async def list_completed_threads(
     # Fetch effective tags for all threads on this page (batched, no N+1)
     thread_ids = [tr.id for tr in thread_responses]
     tag_service = TagInheritanceService(db)
-    from app.models.user import User
-    class _MinimalUser:
-        id: int
-    user_obj = _MinimalUser()
-    user_obj.id = user_id
-    tags_map = await tag_service.get_threads_effective_tags(user_obj, thread_ids)
+    tags_map = await tag_service.get_threads_effective_tags(user_id, thread_ids)
 
     queue_items = [
         to_queue_list_item(tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, []).direct_tags)
