@@ -135,7 +135,13 @@ async def validate_authored_list(
                 "path": [
                     {
                         "source_issue_id": e.source_issue_id,
+                        "source_issue_name": names.get(
+                            e.source_issue_id, f"Issue #{e.source_issue_id}"
+                        ),
                         "target_issue_id": e.target_issue_id,
+                        "target_issue_name": names.get(
+                            e.target_issue_id, f"Issue #{e.target_issue_id}"
+                        ),
                         "origin": e.origin,
                         "prerequisite_origin": e.prerequisite_origin,
                         "provenance": list(e.provenance),

@@ -40,7 +40,10 @@ volume mapping. An excluded prerequisite source fails closed. Cycles return HTTP
 retired, or rewritten by this API; cycle diagnostics explicitly label unknown historical provenance
 rather than inferring reader authorship from an absent generated marker. Inert `cbl-order:` rows
 are not execution inputs. Each structured cycle-path edge also carries `prerequisite_origin`
-(`reader`, `converted`, or null for non-prerequisite edges) and `provenance` (an array). The authoring
+(`reader`, `converted`, or null for non-prerequisite edges) and `provenance` (an array). Each edge
+additionally carries `source_issue_name` and `target_issue_name`, the canonical Thread-title plus
+issue-number for its endpoints, so clients can name every cycle node — including Issues that are
+not members of the edited list (overlapping lists, series order, prerequisites). The authoring
 adapter marks historical rows as `converted` with `historical classification unknown` provenance;
 this is not proof of approved conversion or reader authorship.
 

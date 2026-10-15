@@ -52,7 +52,9 @@ describe('decodeCustomCBLError', () => {
         path: [
           {
             source_issue_id: 26360,
+            source_issue_name: 'Starman #55',
             target_issue_id: 30001,
+            target_issue_name: 'All-Star Comics #1',
             origin: 'list',
             prerequisite_origin: null,
             provenance: [],
@@ -66,7 +68,9 @@ describe('decodeCustomCBLError', () => {
     expect(detail.cyclePath).toEqual([
       {
         source_issue_id: 26360,
+        source_issue_name: 'Starman #55',
         target_issue_id: 30001,
+        target_issue_name: 'All-Star Comics #1',
         origin: 'list',
         prerequisite_origin: null,
         provenance: [],
@@ -133,6 +137,36 @@ describe('describeCyclePath', () => {
     expect(message).toBe(
       'This order would create a reading cycle: Starman #55 → All-Star Comics #1 → Starman #55. Change the sequence and try again.',
     )
+  })
+
+  it('prefers server-provided names for issues outside the edited list', () => {
+    const message = describeCyclePath(
+      [
+        {
+          source_issue_id: 26360,
+          source_issue_name: 'Starman #55',
+          target_issue_id: 99001,
+          target_issue_name: 'JSA #1',
+          origin: 'list Other',
+          prerequisite_origin: null,
+          provenance: [],
+        },
+        {
+          source_issue_id: 99001,
+          source_issue_name: 'JSA #1',
+          target_issue_id: 26360,
+          target_issue_name: 'Starman #55',
+          origin: 'list Other',
+          prerequisite_origin: null,
+          provenance: [],
+        },
+      ],
+      () => 'Issue #99001',
+    )
+    expect(message).toBe(
+      'This order would create a reading cycle: Starman #55 → JSA #1 → Starman #55. Change the sequence and try again.',
+    )
+    expect(message).not.toContain('Issue #99001')
   })
 
   it('falls back to generic guidance without a path', () => {

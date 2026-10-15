@@ -90,13 +90,16 @@ function decodeCycleEdge(value: JsonValue): ReadingListCycleEdge | null {
   const prerequisite = value.prerequisite_origin
   const prerequisiteOrigin =
     prerequisite === 'reader' || prerequisite === 'converted' ? prerequisite : null
-  return {
+  const edge: ReadingListCycleEdge = {
     source_issue_id: Number(sourceId),
     target_issue_id: Number(targetId),
     origin,
     prerequisite_origin: prerequisiteOrigin,
     provenance: decodeStringArray(value.provenance),
   }
+  if (isString(value.source_issue_name)) edge.source_issue_name = value.source_issue_name
+  if (isString(value.target_issue_name)) edge.target_issue_name = value.target_issue_name
+  return edge
 }
 
 /**
@@ -150,6 +153,10 @@ export function describePredecessorChange(change: ReadingListPredecessorChange):
 /**
  * Describe a rejected cycle path as a named chain.
  *
+ * Prefers the canonical Issue names returned with the 422 so nodes outside the
+ * edited list (other lists, series order, prerequisites) are identifiable. Falls
+ * back to the caller's resolver for older responses that omit names.
+ *
  * @param edges - Structured cycle edges returned with the 422.
  * @param nameFor - Resolves a persisted Issue ID to its display name.
  * @returns Actionable sentence readers can act on.
@@ -162,8 +169,9 @@ export function describeCyclePath(
   if (!first) {
     return 'This order would create a reading cycle. Change the sequence and try again.'
   }
-  const nodes = [nameFor(first.source_issue_id)]
-  for (const edge of edges) nodes.push(nameFor(edge.target_issue_id))
+  const resolve = (issueId: number, provided?: string) => provided ?? nameFor(issueId)
+  const nodes = [resolve(first.source_issue_id, first.source_issue_name)]
+  for (const edge of edges) nodes.push(resolve(edge.target_issue_id, edge.target_issue_name))
   return `This order would create a reading cycle: ${nodes.join(' → ')}. Change the sequence and try again.`
 }
 

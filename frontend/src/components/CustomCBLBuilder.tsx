@@ -184,21 +184,25 @@ export default function CustomCBLBuilder({
   useEffect(() => {
     const list = detailQuery.data
     if (!list) return
+    // Only (re)seed the form when the selected list identity changes. React Query
+    // can emit new data for the same list (refetch, cache write, or the second
+    // run this effect triggers via setLoadedListId); reseeding then would discard
+    // in-progress mode/gate/skip edits before the reader saves them.
+    if (list.id === loadedListId) return
     setName(list.name)
     setDescription(list.description ?? '')
     setMode(list.mode ?? DEFAULT_MODE)
     setEntries(normalizePositions(list.entries))
-    if (list.id !== loadedListId) {
-      setLoadedListId(list.id)
-      setMessage(null)
-      setExportError(null)
-    }
+    setLoadedListId(list.id)
+    setMessage(null)
+    setExportError(null)
   }, [detailQuery.data, loadedListId])
 
   const createMutation = useMutation({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),
     onSuccess: async (created) => {
       await applyCreatedCustomCBL(queryClient, created)
+      saveMutation.reset()
       setSelectedId(created.id)
       setNewName('')
       setMessage('Custom CBL created.')
@@ -223,6 +227,7 @@ export default function CustomCBLBuilder({
     mutationFn: (listId: number) => customCBLApi.delete(listId),
     onSuccess: async () => {
       if (selectedId) await applyDeletedCustomCBL(queryClient, selectedId)
+      saveMutation.reset()
       setSelectedId(null)
       setLoadedListId(null)
       setName('')
@@ -343,6 +348,15 @@ export default function CustomCBLBuilder({
     )
     setMessage(null)
   }
+  const chooseList = (value: string) => {
+    const next = value ? Number(value) : null
+    if (next === selectedId) return
+    // Saving can fail with a structured preview/cycle error tied to the list that
+    // was submitted; switching lists must not carry that feedback onto another list.
+    saveMutation.reset()
+    setMessage(null)
+    setSelectedId(next)
+  }
   const exportList = async () => {
     if (!selectedId || !persisted || dirty || disabled || isPending) return
     setExportError(null)
@@ -398,7 +412,7 @@ export default function CustomCBLBuilder({
           {(listsQuery.data?.length ?? 0) > 0 && (
             <label className="block text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
               Custom CBL
-              <select aria-label="Custom CBL" value={selectedId ?? ''} onChange={(event) => setSelectedId(event.target.value ? Number(event.target.value) : null)} disabled={disabled || isPending} className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50">
+              <select aria-label="Custom CBL" value={selectedId ?? ''} onChange={(event) => chooseList(event.target.value)} disabled={disabled || isPending} className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50">
                 <option value="">Choose a custom CBL</option>
                 {(listsQuery.data ?? []).map((list) => <option key={list.id} value={list.id}>{list.name} · {list.issue_count} issues · {list.mode}</option>)}
               </select>
