@@ -377,6 +377,7 @@ async def test_update_thread_performance_issue_tracking(
         for i in range(1, 6)
     ]
     async_db.add_all(issues)
+    await async_db.flush()
 
     # Set next_unread_issue_id to the first unread issue
     thread.next_unread_issue_id = issues[1].id  # issue #2 is unread
