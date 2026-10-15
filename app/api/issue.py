@@ -236,6 +236,7 @@ async def create_issues(
             request.issue_range,
             request.insert_after_issue_id,
             append_to_end=append_to_end,
+            enable_comicvine_mapping=True,  # Enable ComicVine auto-mapping by default
         )
     except IntegrityError as e:
         await db.rollback()

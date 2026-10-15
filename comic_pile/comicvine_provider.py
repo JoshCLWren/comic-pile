@@ -6,6 +6,7 @@ import asyncio
 import email.utils
 import hashlib
 import json
+import logging
 import time
 import urllib.error
 import urllib.parse
@@ -559,3 +560,99 @@ class ComicVineClient:
                 break
             offset += page_count
         return rows
+
+    async def fetch_volume_issues_parallel(
+        self,
+        volume_id: int,
+        *,
+        refresh: bool = False,
+        max_concurrent_pages: int = 5,
+    ) -> list[dict[str, object]]:
+        """Fetch a complete volume issue roster using parallel pagination for better performance.
+
+        This method fetches all pages concurrently instead of sequentially, which can
+        significantly reduce total fetch time for volumes with many issues.
+
+        Args:
+            volume_id: ComicVine volume ID.
+            refresh: Force live requests for every page.
+            max_concurrent_pages: Maximum number of concurrent page requests.
+
+        Returns:
+            Ordered provider rows across all pages.
+
+        Raises:
+            ComicVineError: When pagination metadata is inconsistent or a returned row belongs to
+                a different volume, which indicates that the provider ignored the collection filter.
+        """
+        # First, get total count to determine number of pages
+        first_response = await self.request(
+            "issues",
+            "issues",
+            {
+                "filter": f"volume:{volume_id}",
+                "limit": 1,
+                "offset": 0,
+            },
+            refresh=refresh,
+        )
+        
+        total_results = first_response.payload.get("number_of_total_results")
+        if not isinstance(total_results, int) or total_results <= 0:
+            return []
+        
+        # Calculate all page offsets
+        page_size = COLLECTION_PAGE_LIMIT
+        offsets = range(0, total_results, page_size)
+        
+        # Create semaphore to limit concurrent requests
+        semaphore = asyncio.Semaphore(max_concurrent_pages)
+        
+        async def fetch_page(offset: int) -> list[dict[str, object]]:
+            """Fetch a single page with semaphore control."""
+            async with semaphore:
+                response = await self.request(
+                    "issues",
+                    "issues",
+                    {
+                        "filter": f"volume:{volume_id}",
+                        "limit": page_size,
+                        "offset": offset,
+                    },
+                    refresh=refresh,
+                )
+                results = response.payload.get("results")
+                if not isinstance(results, list):
+                    raise ComicVineError("ComicVine /issues response did not contain a results list")
+                page_rows = [row for row in results if isinstance(row, dict)]
+                
+                # Validate volume filter for each row
+                for row in page_rows:
+                    volume = row.get("volume")
+                    if isinstance(volume, dict) and volume.get("id") not in (None, volume_id):
+                        raise ComicVineError(
+                            "ComicVine /issues ignored the requested volume filter; refusing mixed data"
+                        )
+                
+                return page_rows
+        
+        # Execute concurrent requests
+        page_tasks = [fetch_page(offset) for offset in offsets]
+        pages = await asyncio.gather(*page_tasks, return_exceptions=True)
+        
+        # Combine results and handle exceptions
+        all_rows = []
+        for i, page_result in enumerate(pages):
+            if isinstance(page_result, Exception):
+                logger.warning("Failed to fetch page %d for volume %d: %s", i, volume_id, str(page_result))
+                continue
+            all_rows.extend(page_result)
+        
+        # Validate total count
+        if isinstance(total_results, int) and len(all_rows) != total_results:
+            logger.warning(
+                "Expected %d issues for volume %d but got %d", 
+                total_results, volume_id, len(all_rows)
+            )
+        
+        return all_rows

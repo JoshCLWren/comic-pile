@@ -5,6 +5,7 @@ pruning. It ensures that thread counters (next-unread, remaining) and
 lifecycle status are kept in sync with the issue set.
 """
 
+import asyncio
 import logging
 import os
 from datetime import UTC, datetime
@@ -28,6 +29,101 @@ from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.comicvine_provider import ComicVineClient
 
 logger = logging.getLogger(__name__)
+
+# Background task tracking for ComicVine auto-mapping
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _spawn_background(coro: asyncio.Coroutine[object, object, None]) -> None:
+    """Keep a background task referenced until it finishes.
+
+    Args:
+        coro: Background coroutine to schedule on the running loop.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning("ComicVine auto-mapping skipped: no running event loop")
+        coro.close()
+        return
+    task = loop.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+async def drain_background_tasks() -> None:
+    """Await in-flight ComicVine auto-mapping tasks. Intended for tests."""
+    while _background_tasks:
+        pending = list(_background_tasks)
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
+async def _perform_comicvine_auto_mapping(
+    db: AsyncSession,
+    thread_id: int,
+    current_user_id: int,
+    comicvine_volume_id: int,
+    new_issues: list[Issue],
+) -> None:
+    """Perform ComicVine auto-mapping in background.
+    
+    Args:
+        db: Database session.
+        thread_id: Thread ID for the issues being mapped.
+        current_user_id: User owning the thread.
+        comicvine_volume_id: ComicVine volume ID to map issues to.
+        new_issues: List of new issues to map.
+    """
+    try:
+        # Create a ComicVine client for fetching volume issues
+        api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
+        cache_dir = Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine"))
+        if not api_key:
+            logger.warning("COMICVINE_API_KEY not set, skipping background auto-mapping")
+            return
+        
+        comicvine_client = ComicVineClient(api_key, cache_dir)
+        
+        # Fetch all issues for the ComicVine volume
+        volume_issues_response = await comicvine_client.fetch_volume_issues(comicvine_volume_id)
+        comicvine_issues = volume_issues_response or []
+        
+        # Create a mapping from issue number to ComicVine issue ID
+        comicvine_issue_map = {}
+        for issue_data in comicvine_issues:
+            issue_number = issue_data.get("issue_number")
+            if issue_number is not None:
+                # Normalize issue number to string for consistent comparison
+                comicvine_issue_map[str(issue_number)] = issue_data.get("id")
+        
+        # Try to adopt each new issue to its corresponding ComicVine issue
+        for issue in new_issues:
+            issue_number_str = str(issue.issue_number)
+            if issue_number_str in comicvine_issue_map:
+                comicvine_issue_id = comicvine_issue_map[issue_number_str]
+                if comicvine_issue_id is None or not isinstance(comicvine_issue_id, int):
+                    logger.warning("Skipping adoption for issue %d: invalid ComicVine issue ID %r", issue.id, comicvine_issue_id)
+                    continue
+                try:
+                    adoption_result = await adopt_comicvine_issue(
+                        db=db,
+                        user_id=current_user_id,
+                        thread_id=thread_id,
+                        comicvine_issue_id=comicvine_issue_id,
+                        issue_number=issue_number_str,
+                        comicvine_client=comicvine_client,
+                    )
+                    if adoption_result.outcome == "created":
+                        logger.info("Background auto-mapped issue %d to ComicVine issue %s", issue.id, comicvine_issue_id)
+                    elif adoption_result.outcome == "reused":
+                        logger.info("Background reused existing ComicVine mapping for issue %d", issue.id)
+                    elif adoption_result.outcome == "conflict":
+                        logger.warning("Background ComicVine mapping conflict for issue %d: %s", issue.id, adoption_result.conflict_detail)
+                except Exception as e:
+                    logger.warning("Failed to background adopt ComicVine issue %s for issue %d: %s", comicvine_issue_id, issue.id, str(e))
+                    
+    except Exception as e:
+        logger.warning("Failed to background auto-map new issues to ComicVine volume %d: %s", comicvine_volume_id, str(e))
 
 
 async def list_issues(
@@ -91,6 +187,7 @@ async def create_issues(
     insert_after_issue_id: int | None,
     *,
     append_to_end: bool = False,
+    enable_comicvine_mapping: bool = True,
 ) -> tuple[list[Issue], int]:
     """Create issues from a range and integrate them into the thread order.
 
@@ -113,6 +210,9 @@ async def create_issues(
         append_to_end: When True, append after the last issue even if
             ``insert_after_issue_id`` is ``None``. Distinguishes the wire
             contract for explicit null from an omitted placement field.
+        enable_comicvine_mapping: When True, auto-map new issues to ComicVine
+            if the thread has a confirmed series mapping. Disable for better
+            performance in high-throughput scenarios.
 
     Returns:
         A tuple of (newly_created_issues, total_issue_count).
@@ -227,8 +327,8 @@ async def create_issues(
         # If there's any error checking for ComicVine mapping, continue without auto-mapping
         logger.warning("Failed to check for ComicVine series mapping on thread %d", thread_id, exc_info=True)
 
-    # Auto-map new issues to ComicVine if we found a volume mapping
-    if comicvine_volume_id and new_issues:
+    # Auto-map new issues to ComicVine if we found a volume mapping and mapping is enabled
+    if comicvine_volume_id and new_issues and enable_comicvine_mapping:
         try:
             # Create a ComicVine client for fetching volume issues
             api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
@@ -250,33 +350,19 @@ async def create_issues(
                         # Normalize issue number to string for consistent comparison
                         comicvine_issue_map[str(issue_number)] = issue_data.get("id")
                 
-                # Try to adopt each new issue to its corresponding ComicVine issue
-                for issue in new_issues:
-                    issue_number_str = str(issue.issue_number)
-                    if issue_number_str in comicvine_issue_map:
-                        comicvine_issue_id = comicvine_issue_map[issue_number_str]
-                        if comicvine_issue_id is None or not isinstance(comicvine_issue_id, int):
-                            logger.warning("Skipping adoption for issue %d: invalid ComicVine issue ID %r", issue.id, comicvine_issue_id)
-                            continue
-                        try:
-                            adoption_result = await adopt_comicvine_issue(
-                                db=db,
-                                user_id=current_user_id,
-                                thread_id=thread_id,
-                                comicvine_issue_id=comicvine_issue_id,
-                                issue_number=issue_number_str,
-                                comicvine_client=comicvine_client,
-                            )
-                            if adoption_result.outcome == "created":
-                                logger.info("Auto-mapped issue %d to ComicVine issue %s", issue.id, comicvine_issue_id)
-                            elif adoption_result.outcome == "reused":
-                                logger.info("Reused existing ComicVine mapping for issue %d", issue.id)
-                            elif adoption_result.outcome == "conflict":
-                                logger.warning("ComicVine mapping conflict for issue %d: %s", issue.id, adoption_result.conflict_detail)
-                        except Exception as e:
-                            logger.warning("Failed to adopt ComicVine issue %s for issue %d: %s", comicvine_issue_id, issue.id, str(e))
+                # Spawn background task for ComicVine auto-mapping to avoid blocking the main request
+                _spawn_background(
+                    _perform_comicvine_auto_mapping(
+                        db=db,
+                        thread_id=thread_id,
+                        current_user_id=current_user_id,
+                        comicvine_volume_id=comicvine_volume_id,
+                        new_issues=new_issues,
+                    )
+                )
+                logger.info("Spawned background task for ComicVine auto-mapping of %d issues", len(new_issues))
         except Exception as e:
-            logger.warning("Failed to auto-map new issues to ComicVine volume %d: %s", comicvine_volume_id, str(e))
+            logger.warning("Failed to schedule ComicVine auto-mapping for volume %d: %s", comicvine_volume_id, str(e))
 
     was_unmigrated = thread.total_issues is None
     had_next_unread_issue = thread.next_unread_issue_id is not None
