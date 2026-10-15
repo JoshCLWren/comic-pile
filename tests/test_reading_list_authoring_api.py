@@ -1,5 +1,7 @@
 """Behavioral coverage of direct Reading List authoring without dependency compilation."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -136,16 +138,16 @@ async def test_gate_removal_preserves_stable_prerequisite_and_read_state(
         },
     )
     # A skip edit changes positional requirements, so acknowledge the concrete preview.
-    if saved.status_code == 409:
-        saved = await auth_client.put(
-            url,
-            json={
-                "name": "Starman/JSA",
-                "issue_ids": [a, b, c],
-                "entry_intents": {str(c): {"gate": "none"}, str(b): {"skipped": True}},
-                "confirmed_predecessor_changes": saved.json()["detail"]["predecessor_changes"],
-            },
-        )
+    assert saved.status_code == 409, saved.text
+    saved = await auth_client.put(
+        url,
+        json={
+            "name": "Starman/JSA",
+            "issue_ids": [a, b, c],
+            "entry_intents": {str(c): {"gate": "none"}, str(b): {"skipped": True}},
+            "confirmed_predecessor_changes": saved.json()["detail"]["predecessor_changes"],
+        },
+    )
     assert saved.status_code == 200, saved.text
     assert saved.json()["entries"][2]["gate"] == "none"
     assert saved.json()["entries"][1]["skipped"] is True
@@ -311,6 +313,7 @@ async def test_series_and_stable_prerequisite_cycles_reject_atomically(
     )
     assert rejected.status_code == 422, rejected.text
     assert "prerequisite" in rejected.json()["detail"]["message"]
+    assert "historical classification unknown" in rejected.json()["detail"]["message"]
     current = (await auth_client.get(url)).json()
     assert current["name"] == "Original" and current["mode"] == "loose"
 
@@ -335,9 +338,140 @@ async def test_series_order_cannot_be_reversed_by_a_list(
             "name": "Reversed series",
             "issue_ids": [b, a],
             "mode": "strict",
-            "confirmed_predecessor_changes": [],
         },
     )
     assert rejected.status_code == 422, rejected.text
     assert "series order" in rejected.json()["detail"]["message"]
     assert (await auth_client.get("/api/v1/custom-cbls")).json() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("edit", [{"mode": "strict"}, {"gate": "hold"}, {"gate": "after_previous"}])
+async def test_mode_and_gate_only_edits_require_confirmation(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    edit: dict[str, str],
+) -> None:
+    """New positional requirements always require confirmation on existing lists."""
+    a, b, c = await _members(async_db)
+    created = await auth_client.post(
+        "/api/v1/custom-cbls", json={"name": "Order", "issue_ids": [a, b, c]}
+    )
+    url = f"/api/v1/custom-cbls/{created.json()['id']}"
+    body = {
+        "name": "Order",
+        "issue_ids": [a, b, c],
+        **({"mode": edit["mode"]} if "mode" in edit else {"entry_intents": {str(b): edit}}),
+    }
+    preview = await auth_client.put(url, json=body)
+    assert preview.status_code == 409, preview.text
+    changes = preview.json()["detail"]["predecessor_changes"]
+    assert changes
+    saved = await auth_client.put(url, json={**body, "confirmed_predecessor_changes": changes})
+    assert saved.status_code == 200, saved.text
+
+
+@pytest.mark.asyncio
+async def test_confirmation_uses_identity_and_loads_library_once(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Names and display ordering do not invalidate unchanged semantic consent."""
+    from app.repositories import reading_list_authoring_repository as repository
+
+    a, b, c = await _members(async_db)
+    created = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Order",
+            "issue_ids": [a, b, c],
+            "mode": "strict",
+        },
+    )
+    url = f"/api/v1/custom-cbls/{created.json()['id']}"
+    body = {"name": "Order", "issue_ids": [c, b, a]}
+    preview = await auth_client.put(url, json=body)
+    assert preview.status_code == 409, preview.text
+    changes = list(reversed(preview.json()["detail"]["predecessor_changes"]))
+    for change in changes:
+        change["issue_name"] = "old display name"
+        change["before_issue_names"] = []
+        change["after_issue_names"] = []
+    issue = await async_db.get(Issue, a)
+    assert issue is not None
+    thread = await async_db.get(Thread, issue.thread_id)
+    assert thread is not None
+    thread.title = "Renamed"
+    await async_db.commit()
+    with patch.object(repository, "load_issues", AsyncMock(wraps=repository.load_issues)) as load:
+        saved = await auth_client.put(url, json={**body, "confirmed_predecessor_changes": changes})
+        assert saved.status_code == 200, saved.text
+        load.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_excluded_placements_still_preview_stored_constraint_changes(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Exclusion does not conceal the ordering constraints retained by validation."""
+    a, b, c = await _members(async_db)
+    user = await get_or_create_user_async(async_db)
+    async_db.add_all([CollectionExclusion(user_id=user.id, issue_id=i) for i in (a, b, c)])
+    await async_db.commit()
+    created = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Excluded",
+            "issue_ids": [a, b, c],
+            "mode": "strict",
+        },
+    )
+    assert created.status_code == 201, created.text
+    url = f"/api/v1/custom-cbls/{created.json()['id']}"
+    preview = await auth_client.put(url, json={"name": "Excluded", "issue_ids": [c, b, a]})
+    assert preview.status_code == 409, preview.text
+    assert len(preview.json()["detail"]["predecessor_changes"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_strict_authoring_warns_about_omitted_unread_series_issues(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Partial Thread coverage warns without inventing constraints for omitted Issues."""
+    a, b, _ = await _members(async_db)
+    first = await async_db.get(Issue, a)
+    second = await async_db.get(Issue, b)
+    assert first is not None and second is not None
+    second.thread_id = first.thread_id
+    second.issue_number = "2"
+    second.position = 2
+    await async_db.commit()
+    created = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Partial",
+            "issue_ids": [a],
+            "mode": "strict",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["warnings"] == [
+        "Strict list omits unread Issues from Series 0: Series 0 #2"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_confirmation_is_put_only(auth_client: AsyncClient) -> None:
+    """Creation rejects an acknowledgement that has no previous list to describe."""
+    response = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "New",
+            "issue_ids": [],
+            "confirmed_predecessor_changes": [],
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "reading_list_confirmation_put_only"

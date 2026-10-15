@@ -19,7 +19,9 @@ from app.services.reading_list_evaluator import (
 )
 
 
-async def load_authoring_snapshot(db: AsyncSession, user_id: int) -> ReadingSnapshot:
+async def load_authoring_snapshot(
+    db: AsyncSession, user_id: int
+) -> tuple[ReadingSnapshot, dict[int, str]]:
     """Read complete constraints without classifying historical dependencies.
 
     Args:
@@ -27,61 +29,64 @@ async def load_authoring_snapshot(db: AsyncSession, user_id: int) -> ReadingSnap
         user_id: Reader whose complete constraint graph is loaded.
 
     Returns:
-        Immutable snapshot with historical requirements marked unknown in memory.
+        Snapshot and display names, sharing a single load of owned Issues.
     """
     threads = await repository.load_threads(db, user_id)
     issues = await repository.load_issues(db, user_id)
     lists = await repository.load_lists(db, user_id)
     entries = await repository.load_entries(db, user_id)
     requirements = await repository.load_requirements(db, user_id)
-    excluded = await repository.load_excluded_issue_ids(db, user_id)
-    try:
-        return ReadingSnapshot(
-            user_id=user_id,
-            threads=tuple(ReadingThread(t.id, t.status, t.title) for t in threads),
-            issues=tuple(ReadingIssue(i.id, i.thread_id, i.position, i.status) for i in issues),
-            lists=tuple(
-                ReadingList(
-                    row.id,
-                    row.mode,
-                    tuple(
-                        ReadingListEntry(e.issue_id, e.gate, e.skipped)
-                        for e in entries
-                        if e.list_id == row.id
-                    ),
-                    row.name,
-                )
-                for row in lists
-            ),
-            prerequisites=tuple(
-                ReadingPrerequisite(
-                    row.id,
-                    row.source_issue_id,
-                    row.target_issue_id,
-                    "converted",
-                    ("historical classification unknown", row.note or ""),
-                )
-                for row in requirements
-            ),
-            excluded_issue_ids=excluded,
-        )
-    except ValueError as exc:
+    excluded = await repository.load_excluded_issue_ids(db, user_id, issues)
+    if any(row.source_issue_id in excluded for row in requirements):
         raise HTTPException(
             status_code=422,
             detail={
                 "code": "reading_list_invalid_constraints",
-                "message": str(exc),
+                "message": "Collection exclusion strands an explicit prerequisite",
             },
-        ) from exc
+        )
+    by_list: dict[int, list[ReadingListEntry]] = {}
+    for entry in entries:
+        by_list.setdefault(entry.list_id, []).append(
+            ReadingListEntry(entry.issue_id, entry.gate, entry.skipped)
+        )
+    snapshot = ReadingSnapshot(
+        user_id=user_id,
+        threads=tuple(ReadingThread(t.id, t.status, t.title) for t in threads),
+        issues=tuple(ReadingIssue(i.id, i.thread_id, i.position, i.status) for i in issues),
+        lists=tuple(
+            ReadingList(
+                row.id,
+                row.mode,
+                tuple(by_list.get(row.id, ())),
+                row.name,
+            )
+            for row in lists
+        ),
+        prerequisites=tuple(
+            ReadingPrerequisite(
+                row.id,
+                row.source_issue_id,
+                row.target_issue_id,
+                "converted",
+                ("historical classification unknown", row.note or ""),
+            )
+            for row in requirements
+        ),
+        excluded_issue_ids=excluded,
+    )
+    thread_names = {thread.id: thread.title for thread in threads}
+    names = {issue.id: f"{thread_names[issue.thread_id]} #{issue.issue_number}" for issue in issues}
+    return snapshot, names
 
 
-def _requirements(reading_list: ReadingList, excluded: frozenset[int]) -> dict[int, list[int]]:
-    """Describe positional requirements independently of current read state."""
+def _requirements(reading_list: ReadingList) -> dict[int, list[int]]:
+    """Describe stored positional constraints, including globally excluded Issues."""
     result: dict[int, list[int]] = {}
     earlier: list[int] = []
     hold: list[int] = []
     for entry in reading_list.entries:
-        if entry.skipped or entry.issue_id in excluded:
+        if entry.skipped:
             continue
         sources = set(hold)
         if reading_list.mode == "strict" or entry.gate == "hold":
@@ -102,7 +107,7 @@ async def validate_authored_list(
     list_id: int,
     before: ReadingList | None,
     confirmed: list[ReadingListPredecessorChange] | None,
-) -> list[ReadingListPredecessorChange]:
+) -> tuple[list[ReadingListPredecessorChange], list[str]]:
     """Validate the union and demand exact acknowledgement of retargeted gates.
 
     Args:
@@ -113,12 +118,12 @@ async def validate_authored_list(
         confirmed: Named predecessor changes acknowledged by the reader.
 
     Returns:
-        Effective named changes for the saved list.
+        Stored-constraint changes and strict partial-Thread warnings.
 
     Raises:
         HTTPException: For invalid constraints, cycles, or missing confirmation.
     """
-    snapshot = await load_authoring_snapshot(db, user_id)
+    snapshot, names = await load_authoring_snapshot(db, user_id)
     try:
         validate_reading_constraints(snapshot)
     except ReadingCycleError as exc:
@@ -137,14 +142,31 @@ async def validate_authored_list(
                 ],
             },
         ) from exc
-    after = next(row for row in snapshot.lists if row.list_id == list_id)
+    after = next((row for row in snapshot.lists if row.list_id == list_id), None)
+    if after is None:
+        raise HTTPException(status_code=404, detail="Reading List not found")
+    warnings: list[str] = []
+    if after.mode == "strict":
+        members = {entry.issue_id for entry in after.entries}
+        represented = {issue.thread_id for issue in snapshot.issues if issue.issue_id in members}
+        omitted_by_thread: dict[int, list[str]] = {}
+        for issue in snapshot.issues:
+            if (
+                issue.thread_id in represented
+                and issue.issue_id not in members
+                and issue.status != "read"
+                and issue.issue_id not in snapshot.excluded_issue_ids
+            ):
+                omitted_by_thread.setdefault(issue.thread_id, []).append(names[issue.issue_id])
+        for thread in snapshot.threads:
+            if omitted := omitted_by_thread.get(thread.thread_id):
+                warnings.append(
+                    f"Strict list omits unread Issues from {thread.name}: " + ", ".join(omitted)
+                )
     if before is None:
-        return []
-    old = _requirements(before, snapshot.excluded_issue_ids)
-    new = _requirements(after, snapshot.excluded_issue_ids)
-    threads = {row.thread_id: row.name for row in snapshot.threads}
-    issues = await repository.load_issues(db, user_id)
-    names = {i.id: f"{threads[i.thread_id]} #{i.issue_number}" for i in issues}
+        return [], warnings
+    old = _requirements(before)
+    new = _requirements(after)
     changes = [
         ReadingListPredecessorChange(
             issue_id=issue_id,
@@ -157,12 +179,19 @@ async def validate_authored_list(
         for issue_id in sorted(old.keys() | new.keys())
         if old.get(issue_id, []) != new.get(issue_id, [])
     ]
-    # Explicit mode/gate edits already express new intent. A placement or skip edit
-    # can retarget existing gates without the reader noticing and needs a preview.
-    placement_changed = tuple((e.issue_id, e.skipped) for e in before.entries) != tuple(
-        (e.issue_id, e.skipped) for e in after.entries
-    )
-    if changes and placement_changed and confirmed != changes:
+
+    def confirmation_key(
+        change: ReadingListPredecessorChange,
+    ) -> tuple[int, tuple[int, ...], tuple[int, ...]]:
+        return (
+            change.issue_id,
+            tuple(sorted(change.before_issue_ids)),
+            tuple(sorted(change.after_issue_ids)),
+        )
+
+    if changes and sorted(map(confirmation_key, confirmed or [])) != sorted(
+        map(confirmation_key, changes)
+    ):
         raise HTTPException(
             status_code=409,
             detail={
@@ -170,4 +199,4 @@ async def validate_authored_list(
                 "predecessor_changes": [change.model_dump() for change in changes],
             },
         )
-    return changes
+    return changes, warnings

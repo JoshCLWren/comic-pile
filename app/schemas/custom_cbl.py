@@ -112,6 +112,7 @@ class CustomCBLResponse(CustomCBLListItem):
     created_at: datetime
     entries: list[CustomCBLEntryResponse]
     predecessor_changes: list[ReadingListPredecessorChange] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class CustomCBLIssueSearchResult(BaseModel):

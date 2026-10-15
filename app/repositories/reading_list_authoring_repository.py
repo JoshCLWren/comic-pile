@@ -1,5 +1,8 @@
 """Persistence boundaries for Option E list authoring and validation inputs."""
 
+from collections.abc import Sequence
+from typing import Literal
+
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -130,12 +133,15 @@ async def load_requirements(db: AsyncSession, user_id: int) -> list[Dependency]:
     )
 
 
-async def load_excluded_issue_ids(db: AsyncSession, user_id: int) -> frozenset[int]:
+async def load_excluded_issue_ids(
+    db: AsyncSession, user_id: int, issues: Sequence[Issue]
+) -> frozenset[int]:
     """Resolve owner exclusions by stable Issue, Thread and confirmed volume identity.
 
     Args:
         db: Current authoring transaction.
         user_id: Reader whose collection exclusions are resolved.
+        issues: Already-loaded owned Issue rows.
 
     Returns:
         Owned Issue IDs matched by durable collection exclusions.
@@ -154,52 +160,60 @@ async def load_excluded_issue_ids(db: AsyncSession, user_id: int) -> frozenset[i
         for row in exclusions
         if row.external_volume_id is not None
     }
-    identities = await db.execute(
-        select(
-            ThreadExternalSeriesMapping.thread_id,
-            ExternalIdentity.provider,
-            ExternalIdentity.external_id,
+    if volumes:
+        identities = await db.execute(
+            select(
+                ThreadExternalSeriesMapping.thread_id,
+                ExternalIdentity.provider,
+                ExternalIdentity.external_id,
+            )
+            .join(
+                ExternalIdentity,
+                ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+            )
+            .join(Thread, Thread.id == ThreadExternalSeriesMapping.thread_id)
+            .where(Thread.user_id == user_id, ThreadExternalSeriesMapping.status == "confirmed")
         )
-        .join(
-            ExternalIdentity,
-            ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+        thread_ids.update(
+            tid for tid, provider, external_id in identities if (provider, external_id) in volumes
         )
-        .join(Thread, Thread.id == ThreadExternalSeriesMapping.thread_id)
-        .where(Thread.user_id == user_id, ThreadExternalSeriesMapping.status == "confirmed")
-    )
-    thread_ids.update(
-        tid for tid, provider, external_id in identities if (provider, external_id) in volumes
-    )
-    canonical = await db.execute(
-        select(Thread.id, ExternalIdentity.provider, ExternalIdentity.external_id)
-        .join(CatalogSeries, CatalogSeries.id == Thread.catalog_series_id)
-        .join(ExternalIdentity, ExternalIdentity.id == CatalogSeries.canonical_external_identity_id)
-        .where(Thread.user_id == user_id)
-    )
-    thread_ids.update(
-        tid for tid, provider, external_id in canonical if (provider, external_id) in volumes
-    )
-    catalog_issues = await db.execute(
-        select(Issue.id, ExternalIdentity.provider, ExternalIdentity.external_id)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .join(CatalogIssue, CatalogIssue.id == Issue.catalog_issue_id)
-        .join(CatalogSeries, CatalogSeries.id == CatalogIssue.catalog_series_id)
-        .join(ExternalIdentity, ExternalIdentity.id == CatalogSeries.canonical_external_identity_id)
-        .where(Thread.user_id == user_id)
-    )
-    issue_ids.update(
-        issue_id
-        for issue_id, provider, external_id in catalog_issues
-        if (provider, external_id) in volumes
-    )
-    issues = await load_issues(db, user_id)
+        canonical = await db.execute(
+            select(Thread.id, ExternalIdentity.provider, ExternalIdentity.external_id)
+            .join(CatalogSeries, CatalogSeries.id == Thread.catalog_series_id)
+            .join(
+                ExternalIdentity,
+                ExternalIdentity.id == CatalogSeries.canonical_external_identity_id,
+            )
+            .where(Thread.user_id == user_id)
+        )
+        thread_ids.update(
+            tid for tid, provider, external_id in canonical if (provider, external_id) in volumes
+        )
+        catalog_issues = await db.execute(
+            select(Issue.id, ExternalIdentity.provider, ExternalIdentity.external_id)
+            .join(Thread, Thread.id == Issue.thread_id)
+            .join(CatalogIssue, CatalogIssue.id == Issue.catalog_issue_id)
+            .join(CatalogSeries, CatalogSeries.id == CatalogIssue.catalog_series_id)
+            .join(
+                ExternalIdentity,
+                ExternalIdentity.id == CatalogSeries.canonical_external_identity_id,
+            )
+            .where(Thread.user_id == user_id)
+        )
+        issue_ids.update(
+            issue_id
+            for issue_id, provider, external_id in catalog_issues
+            if (provider, external_id) in volumes
+        )
     return frozenset(
         issue.id for issue in issues if issue.id in issue_ids or issue.thread_id in thread_ids
     )
 
 
 async def set_entry_intents(
-    db: AsyncSession, list_id: int, intents: dict[int, tuple[str, bool]]
+    db: AsyncSession,
+    list_id: int,
+    intents: dict[int, tuple[Literal["none", "hold", "after_previous"], bool]],
 ) -> None:
     """Persist validated intent without touching historical checkpoint metadata.
 
@@ -217,8 +231,6 @@ async def set_entry_intents(
     for entry in entries:
         if entry.issue_id in intents:
             gate, skipped = intents[entry.issue_id]
-            if gate not in ("none", "hold", "after_previous"):
-                raise ValueError("Invalid gate")
             entry.gate = gate
             entry.skipped = skipped
     await db.flush()

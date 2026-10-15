@@ -111,6 +111,9 @@ jobs:
       - name: Run frontend lint
         run: pnpm --filter frontend run lint
 
+      - name: Verify generated API contract freshness
+        run: pnpm --filter frontend run check:api-types
+
       - name: Run frontend typecheck
         run: pnpm --filter frontend run typecheck
 
