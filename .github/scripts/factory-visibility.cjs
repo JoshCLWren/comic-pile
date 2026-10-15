@@ -298,10 +298,9 @@ async function reconcileMissingPrLabels({ github, context }) {
     // factory queue (enroll would otherwise default them to factory:review).
     if ((pr.body || '').includes(MANUAL_ONLY_MARKER)) continue;
     const current = await currentLabels(github, context, pr.number);
-    // Local/infrastructure PRs are operator-managed. Enroll must never touch
-    // them: defaulting a stage here would stamp factory:review onto PRs that
-    // must not enter the factory review queue.
-    if (current.has('factory:local')) continue;
+    // A local factory lease is a real active owner, not an exemption from
+    // factory review. Preserve it until the local session explicitly releases
+    // ownership; never take it over during an enrollment sweep.
     const owners = [...current].filter(isOwnerLabel);
     const stages = STAGE_LABELS.filter(label => current.has(label));
     if (current.has('factory') && owners.length === 1 && stages.length === 1) continue;
