@@ -16,12 +16,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Assert dedicated free worker pin
+      - name: Check whether promotional free pin remains active
+        id: pin
         shell: bash
         run: |
           set -Eeuo pipefail
-          awk -F '\t' '$1 == 87 && $2 == "opencode-free" && $3 == "deepseek-v4.1-flash-free" {found=1} END {exit !found}' .github/free-model-factories.tsv
+          if awk -F '\t' '$1 == 87 && $2 == "opencode-free" && $3 == "deepseek-v4.1-flash-free" {found=1} END {exit !found}' .github/free-model-factories.tsv; then
+            echo 'active=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'active=false' >> "$GITHUB_OUTPUT"
+            echo 'Promotional free model was retired; live smoke is no longer applicable.'
+          fi
       - name: Install factory-pinned OpenCode
+        if: steps.pin.outputs.active == 'true'
         shell: bash
         env:
           OPENCODE_VERSION: '1.18.32'
@@ -35,12 +42,14 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP/opencode-bin"
           echo "$RUNNER_TEMP/opencode-bin" >> "$GITHUB_PATH"
       - name: Verify exact free model is discoverable
+        if: steps.pin.outputs.active == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
           opencode models opencode --refresh | tee "$RUNNER_TEMP/opencode-models.txt"
           grep -Fx 'opencode/deepseek-v4.1-flash-free' "$RUNNER_TEMP/opencode-models.txt"
       - name: Invoke exact free model anonymously
+        if: steps.pin.outputs.active == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
