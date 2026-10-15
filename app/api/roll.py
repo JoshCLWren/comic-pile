@@ -58,7 +58,6 @@ from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
     RollableThread,
 )
-from app.schemas.tags import TagResponse
 from app.services.roll_v2_projection import get_v2_rollable_projection
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.schemas.recommendation_context import (
@@ -1250,8 +1249,6 @@ async def roll_bootstrap(
     all_thread_ids.extend(t.id for t in snoozed_threads)
     all_thread_ids.extend(t.id for t in skipped_threads)
     all_thread_ids.extend(t.id for t in blocked_threads)
-    if stale_thread is not None:
-        all_thread_ids.append(stale_thread.id)
     # Deduplicate while preserving order
     seen = set()
     unique_thread_ids = [tid for tid in all_thread_ids if not (tid in seen or seen.add(tid))]
@@ -1269,8 +1266,6 @@ async def roll_bootstrap(
         t.tags = tags_map.get(t.id, []).direct_tags
     for t in blocked_threads:
         t.tags = tags_map.get(t.id, []).direct_tags
-    if stale_thread is not None:
-        stale_thread.tags = tags_map.get(stale_thread.id, []).direct_tags
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)

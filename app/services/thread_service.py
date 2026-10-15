@@ -333,7 +333,6 @@ async def list_queue_threads(
     # Fetch effective tags for all threads on this page (batched, no N+1)
     thread_ids = [tr.id for tr in thread_responses]
     tag_service = TagInheritanceService(db)
-    from app.models.user import User
     # Create a minimal user object for the tag service
     class _MinimalUser:
         id: int
