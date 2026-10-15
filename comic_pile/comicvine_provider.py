@@ -560,7 +560,11 @@ class ComicVineClient:
             },
             refresh=refresh,
         )
-        
+
+        first_results = first_response.payload.get("results")
+        if not isinstance(first_results, list):
+            raise ComicVineError("ComicVine /issues response did not contain a results list")
+
         total_results = first_response.payload.get("number_of_total_results")
         if not isinstance(total_results, int) or total_results <= 0:
             return []

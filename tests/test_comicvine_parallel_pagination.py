@@ -2,160 +2,148 @@
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from comic_pile.comicvine_provider import ComicVineError, ComicVineResponse
+from comic_pile.comicvine_provider import (
+    ComicVineClient,
+    ComicVineError,
+    ComicVineResponse,
+)
 from app.services.comicvine_resolution import get_comicvine_series_issues
+
+
+def _make_client(tmp_path: Path) -> ComicVineClient:
+    """Build a real provider client backed by a temporary cache directory."""
+    return ComicVineClient("secret", tmp_path)
+
+
+def _probe_response(total_results: int) -> ComicVineResponse:
+    """Build the count-probe response consumed by parallel pagination."""
+    return ComicVineResponse(
+        payload={"number_of_total_results": total_results, "results": []},
+        from_cache=False,
+        cache_key="count_probe",
+    )
+
+
+def _issue_rows(start: int, stop: int, *, volume_id: int = 100) -> list[dict[str, object]]:
+    """Build ordered provider rows with ids from start to stop (inclusive)."""
+    return [
+        {
+            "id": issue_id,
+            "issue_number": str(issue_id),
+            "name": f"Issue {issue_id}",
+            "volume": {"id": volume_id},
+        }
+        for issue_id in range(start, stop + 1)
+    ]
 
 
 class TestComicVineParallelPagination:
     """Test parallel pagination functionality in ComicVine provider."""
 
     @pytest.mark.asyncio
-    async def test_parallel_pagination_complete_results(self):
+    async def test_parallel_pagination_complete_results(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that parallel pagination returns all expected issues in correct order."""
-        # Mock the ComicVine client
-        mock_client = Mock()
-        
-        # Mock responses for 3 pages (total 250 issues)
-        page1_response = ComicVineResponse(
-            payload={
-                "number_of_total_results": 250,
-                "results": [
-                    {"id": 1, "issue_number": "1", "name": "Issue 1", "volume": {"id": 100}},
-                    {"id": 2, "issue_number": "2", "name": "Issue 2", "volume": {"id": 100}},
-                    # ... 98 more issues for page 1
-                ] * 100,  # Simplified - actual test would have 100 unique issues
-            },
-            from_cache=False,
-            cache_key="test_cache_key",
+        client = _make_client(tmp_path)
+        page1_rows = _issue_rows(1, 100)
+        page2_rows = _issue_rows(101, 200)
+        page3_rows = _issue_rows(201, 250)
+
+        probe_request = AsyncMock(return_value=_probe_response(250))
+        monkeypatch.setattr(client, "request", probe_request)
+        monkeypatch.setattr(
+            client,
+            "_fetch_single_page_issues",
+            AsyncMock(side_effect=[page1_rows, page2_rows, page3_rows]),
         )
-        
-        page2_response = ComicVineResponse(
-            payload={
-                "number_of_total_results": 250,
-                "results": [
-                    {"id": 101, "issue_number": "101", "name": "Issue 101", "volume": {"id": 100}},
-                    {"id": 102, "issue_number": "102", "name": "Issue 102", "volume": {"id": 100}},
-                    # ... 98 more issues for page 2
-                ] * 100,  # Simplified - actual test would have 100 unique issues
-            },
-            from_cache=False,
-            cache_key="test_cache_key",
-        )
-        
-        page3_response = ComicVineResponse(
-            payload={
-                "number_of_total_results": 250,
-                "results": [
-                    {"id": 201, "issue_number": "201", "name": "Issue 201", "volume": {"id": 100}},
-                    {"id": 202, "issue_number": "202", "name": "Issue 202", "volume": {"id": 100}},
-                    # ... 48 more issues for page 3
-                ] * 50,  # Simplified - actual test would have 50 unique issues
-            },
-            from_cache=False,
-            cache_key="test_cache_key",
-        )
-        
-        # Mock the internal methods
-        mock_client._fetch_single_page_issues = AsyncMock(
-            side_effect=[
-                page1_response.payload["results"][:100],  # Page 1
-                page1_response.payload["results"][100:200],  # Page 2  
-                page1_response.payload["results"][200:250],  # Page 3
-            ]
-        )
-        
-        # Test the parallel pagination
-        result = await mock_client._fetch_volume_issues_parallel(100)
-        
-        # Verify all results are returned
+
+        result = await client._fetch_volume_issues_parallel(100)
+
         assert len(result) == 250
-        
-        # Verify correct order (issues should be in ascending order by ID)
         issue_ids = [issue["id"] for issue in result]
         assert issue_ids == list(range(1, 251))
-        
-        # Verify all issues belong to the correct volume
         for issue in result:
             volume = issue.get("volume")
             assert isinstance(volume, dict)
             assert volume.get("id") == 100
+        probe_request.assert_called_once_with(
+            "issues",
+            "issues",
+            {"filter": "volume:100", "limit": 1, "offset": 0},
+            refresh=False,
+        )
 
     @pytest.mark.asyncio
-    async def test_parallel_pagination_single_page(self):
+    async def test_parallel_pagination_single_page(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that single page volumes use the optimized single page path."""
-        mock_client = Mock()
-        
-        # Mock response for single page (50 issues)
-        single_page_response = ComicVineResponse(
-            payload={
-                "number_of_total_results": 50,
-                "results": [
-                    {"id": i, "issue_number": str(i), "name": f"Issue {i}", "volume": {"id": 100}}
-                    for i in range(1, 51)
-                ],
-            },
-            from_cache=False,
-            cache_key="test_cache_key",
-        )
-        
-        mock_client._fetch_single_page_issues = AsyncMock(
-            return_value=single_page_response.payload["results"]
-        )
-        
-        # Test single page handling
-        result = await mock_client._fetch_volume_issues_parallel(100)
-        
-        # Verify results
+        client = _make_client(tmp_path)
+        page_rows = _issue_rows(1, 50)
+
+        monkeypatch.setattr(client, "request", AsyncMock(return_value=_probe_response(50)))
+        fetch_page = AsyncMock(return_value=page_rows)
+        monkeypatch.setattr(client, "_fetch_single_page_issues", fetch_page)
+
+        result = await client._fetch_volume_issues_parallel(100)
+
         assert len(result) == 50
-        assert all(issue["volume"]["id"] == 100 for issue in result)
+        for issue in result:
+            volume = issue.get("volume")
+            assert isinstance(volume, dict)
+            assert volume.get("id") == 100
+        fetch_page.assert_called_once_with(100, 0, refresh=False)
 
     @pytest.mark.asyncio
-    async def test_parallel_pagination_error_handling(self):
+    async def test_parallel_pagination_error_handling(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test error handling when some pages fail."""
-        mock_client = Mock()
-        
-        # Mock first page success, second page failure
-        mock_client._fetch_single_page_issues = AsyncMock(
-            side_effect=[
-                [{"id": 1, "issue_number": "1", "name": "Issue 1", "volume": {"id": 100}}],  # Page 1 success
-                ComicVineError("API request failed"),  # Page 2 failure
-            ]
+        client = _make_client(tmp_path)
+
+        monkeypatch.setattr(client, "request", AsyncMock(return_value=_probe_response(250)))
+        monkeypatch.setattr(
+            client,
+            "_fetch_single_page_issues",
+            AsyncMock(
+                side_effect=[
+                    _issue_rows(1, 100),
+                    ComicVineError("API request failed"),
+                ]
+            ),
         )
-        
-        # Should raise error due to partial failure
-        with pytest.raises(ComicVineError):
-            await mock_client._fetch_volume_issues_parallel(100)
+
+        with pytest.raises(ComicVineError, match="API request failed"):
+            await client._fetch_volume_issues_parallel(100)
 
     @pytest.mark.asyncio
-    async def test_parallel_pagination_count_validation(self):
+    async def test_parallel_pagination_count_validation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test validation of total count vs actual results."""
-        mock_client = Mock()
-        
-        # Mock responses where actual count doesn't match total
-        mock_client._fetch_single_page_issues = AsyncMock(
-            return_value=[
-                {"id": 1, "issue_number": "1", "name": "Issue 1", "volume": {"id": 100}},
-                {"id": 2, "issue_number": "2", "name": "Issue 2", "volume": {"id": 100}},
-            ]
+        client = _make_client(tmp_path)
+
+        monkeypatch.setattr(client, "request", AsyncMock(return_value=_probe_response(250)))
+        monkeypatch.setattr(
+            client,
+            "_fetch_single_page_issues",
+            AsyncMock(side_effect=[_issue_rows(1, 1), _issue_rows(2, 2)]),
         )
-        
-        # Should raise error due to count mismatch
-        with pytest.raises(ComicVineError) as exc_info:
-            await mock_client._fetch_volume_issues_parallel(100)
-        
-        assert "Expected 250 issues but received 2" in str(exc_info.value)
+
+        with pytest.raises(ComicVineError, match="Expected 250 issues but received 2"):
+            await client._fetch_volume_issues_parallel(100)
 
     @pytest.mark.asyncio
     async def test_service_layer_parallel_optimization(self):
         """Test that service layer uses parallel requests when series_name is not provided."""
         mock_client = Mock()
-        
-        # Mock volume and issues responses
+
         volume_response = ComicVineResponse(
             payload={
                 "results": {
@@ -166,23 +154,20 @@ class TestComicVineParallelPagination:
             from_cache=False,
             cache_key="test_cache_key",
         )
-        
+
         issues_response = [
             {"id": 1, "issue_number": "1", "name": "Issue 1", "volume": {"id": 100}},
             {"id": 2, "issue_number": "2", "name": "Issue 2", "volume": {"id": 100}},
         ]
-        
+
         mock_client.fetch_volume = AsyncMock(return_value=volume_response)
         mock_client.fetch_volume_issues = AsyncMock(return_value=issues_response)
-        
-        # Test service layer with empty series_name (should trigger parallel fetch)
+
         result = await get_comicvine_series_issues(mock_client, 100, series_name="")
-        
-        # Verify both volume and issues were fetched
+
         mock_client.fetch_volume.assert_called_once_with(100)
         mock_client.fetch_volume_issues.assert_called_once_with(100)
-        
-        # Verify result contains series name from volume
+
         assert result.series_name == "Test Series"
         assert len(result.issues) == 2
 
@@ -190,52 +175,52 @@ class TestComicVineParallelPagination:
     async def test_service_layer_with_pre_fetched_series_name(self):
         """Test that service layer uses single request when series_name is provided."""
         mock_client = Mock()
-        
+
         issues_response = [
             {"id": 1, "issue_number": "1", "name": "Issue 1", "volume": {"id": 100}},
             {"id": 2, "issue_number": "2", "name": "Issue 2", "volume": {"id": 100}},
         ]
-        
+
         mock_client.fetch_volume_issues = AsyncMock(return_value=issues_response)
-        
-        # Test service layer with pre-fetched series_name (should skip volume fetch)
-        result = await get_comicvine_series_issues(mock_client, 100, series_name="Pre-fetched Series")
-        
-        # Verify only issues were fetched, not volume
+
+        result = await get_comicvine_series_issues(
+            mock_client, 100, series_name="Pre-fetched Series"
+        )
+
         mock_client.fetch_volume_issues.assert_called_once_with(100)
         mock_client.fetch_volume.assert_not_called()
-        
-        # Verify result uses provided series name
+
         assert result.series_name == "Pre-fetched Series"
         assert len(result.issues) == 2
 
     @pytest.mark.asyncio
-    async def test_volume_filter_validation(self):
+    async def test_volume_filter_validation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that volume filter validation works correctly."""
-        mock_client = Mock()
-        
-        # Mock response with mixed volume data (should be rejected)
-        mock_client._fetch_single_page_issues = AsyncMock(
-            return_value=[
-                {"id": 1, "issue_number": "1", "name": "Issue 1", "volume": {"id": 100}},  # Correct volume
-                {"id": 2, "issue_number": "2", "name": "Issue 2", "volume": {"id": 200}},  # Wrong volume
-            ]
-        )
-        
-        # Should raise error due to mixed volume data
-        with pytest.raises(ComicVineError) as exc_info:
-            await mock_client._fetch_volume_issues_parallel(100)
-        
-        assert "ignored the requested volume filter" in str(exc_info.value)
+        client = _make_client(tmp_path)
+        mixed_rows: list[dict[str, object]] = [
+            {"id": 1, "issue_number": "1", "name": "Issue 1", "volume": {"id": 100}},
+            {"id": 2, "issue_number": "2", "name": "Issue 2", "volume": {"id": 200}},
+        ]
+
+        monkeypatch.setattr(client, "request", AsyncMock(return_value=_probe_response(250)))
+        monkeypatch.setattr(client, "_fetch_single_page_issues", AsyncMock(return_value=mixed_rows))
+
+        with pytest.raises(ComicVineError, match="ignored the requested volume filter"):
+            await client._fetch_volume_issues_parallel(100)
 
     @pytest.mark.asyncio
-    async def test_empty_results_handling(self):
+    async def test_empty_results_handling(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test handling of empty results."""
-        mock_client = Mock()
-        
-        # Mock empty response
-        mock_client._fetch_single_page_issues = AsyncMock(return_value=[])
-        
-        # Should return empty list without error
-        result = await mock_client._fetch_volume_issues_parallel(100)
+        client = _make_client(tmp_path)
+        fetch_page = AsyncMock(return_value=[])
+        monkeypatch.setattr(client, "request", AsyncMock(return_value=_probe_response(0)))
+        monkeypatch.setattr(client, "_fetch_single_page_issues", fetch_page)
+
+        result = await client._fetch_volume_issues_parallel(100)
+
         assert result == []
+        fetch_page.assert_not_called()

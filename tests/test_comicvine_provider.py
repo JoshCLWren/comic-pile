@@ -192,7 +192,8 @@ async def test_volume_roster_paginates_at_documented_maximum(
     monkeypatch.setattr(client, "_request_sync", fake_request)
     rows = await client.fetch_volume_issues(7, refresh=True)
 
-    assert offsets == [0, 100]
+    # First issues call is the count probe (limit=1); pages then fetch in parallel.
+    assert offsets == [0, 0, 100]
     assert len(rows) == 105
     assert rows[0]["id"] == 0
     assert rows[-1]["id"] == 104
