@@ -7,6 +7,7 @@ in routers.
 
 import logging
 from bisect import bisect_right
+from collections.abc import Collection
 from datetime import datetime
 
 from fastapi import HTTPException, status
@@ -134,6 +135,50 @@ async def derive_cross_session_excluded_thread_ids(
             excluded.add(thread_id)
 
     return excluded
+
+
+async def derive_effective_roll_excluded_thread_ids(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    session_snoozed_ids: Collection[int] | None = None,
+    session_skipped_ids: Collection[int] | None = None,
+) -> list[int]:
+    """Return the complete thread exclusion set shared by every roll path.
+
+    Roll eligibility is one policy with three inputs: the current session's
+    snoozed threads, the current session's skipped threads, and durable
+    cross-session snooze backoff. Issue #3696 was a production repeat-roll
+    defect caused by rating-time safe placement counting only part of that set,
+    so the rating path and every live roll-selection path build it here instead
+    of repeating the union at each call site.
+
+    Callers that report exclusion transparency still need the raw backoff set
+    from :func:`derive_cross_session_excluded_thread_ids` to explain *why* a
+    thread is hidden; this helper is for eligibility decisions only.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        session_snoozed_ids: Current session's snoozed thread IDs.
+        session_skipped_ids: Current session's skipped thread IDs.
+
+    Returns:
+        Deduplicated thread IDs that must stay out of roll eligibility.
+    """
+    derived_excluded_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+    excluded_ids: list[int] = []
+    seen: set[int] = set()
+    for thread_id in (
+        *(session_snoozed_ids or ()),
+        *(session_skipped_ids or ()),
+        *sorted(derived_excluded_ids),
+    ):
+        if thread_id in seen:
+            continue
+        seen.add(thread_id)
+        excluded_ids.append(thread_id)
+    return excluded_ids
 
 
 async def _snoozed_thread_info(db: AsyncSession, thread_ids: list[int]) -> list[SnoozedThreadInfo]:

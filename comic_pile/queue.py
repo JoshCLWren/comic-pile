@@ -340,6 +340,23 @@ async def move_to_safe_position(
 ) -> QueuePositionChanges:
     """Move a thread just beyond the current die range.
 
+    Only threads that the next roll could actually select are counted, so
+    ``excluded_thread_ids`` must be the same complete exclusion set the roll
+    path uses (issue #3696). Callers that pass only part of it place the thread
+    too early and let the next roll repeat the just-rated series.
+
+    Constrained behavior, stated explicitly so callers do not promise an
+    immediate non-repeat that cannot be delivered:
+
+    - The thread is counted by rank among non-blocked, non-excluded threads,
+      and is placed immediately after the ``die_size``-th such thread.
+    - When fewer than ``die_size`` eligible threads remain, the target is placed
+      after every eligible thread instead, which is the end of the queue's
+      eligible region. An immediate non-repeat is not guaranteed in that case
+      because the bounded pool covers the whole eligible set.
+    - When the thread is already ranked at or beyond ``die_size``, or is the only
+      eligible thread, the position is left unchanged.
+
     Args:
         thread_id: Thread to reposition.
         user_id: Thread owner.
