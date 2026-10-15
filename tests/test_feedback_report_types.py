@@ -5,13 +5,59 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import AsyncClient
 
-from app.services.github_service import _labels_for_report_type
+from app.schemas.bug_report import ReportType
+from app.services.github_service import _create_bug_report_issue_sync, _labels_for_report_type
+from scripts.factory_eligibility import is_manual_only
 
 
 def test_report_type_labels_are_distinct() -> None:
     """Bug reports and feature requests receive their canonical labels."""
     assert _labels_for_report_type("bug") == ["bug", "user-reported"]
     assert _labels_for_report_type("feature") == ["enhancement", "user-reported"]
+
+
+@pytest.mark.parametrize(
+    ("report_type", "expected_gate"),
+    [("feature", True), ("bug", False)],
+)
+def test_feedback_issue_execution_gate_matches_report_type(
+    report_type: ReportType,
+    expected_gate: bool,
+) -> None:
+    """New feature requests require product approval; ordinary bugs do not."""
+    settings = MagicMock()
+    settings.github_token = "test-token"
+    settings.github_repo_owner = "JoshCLWren"
+    settings.github_repo_name = "comic-pile"
+
+    repository = MagicMock()
+    repository.create_issue.return_value.html_url = "https://github.com/test/repo/issues/9"
+    github_client = MagicMock()
+    github_client.get_repo.return_value = repository
+
+    with (
+        patch("app.services.github_service.get_github_settings", return_value=settings),
+        patch("app.services.github_service.Github", return_value=github_client),
+    ):
+        url = _create_bug_report_issue_sync(
+            report_type=report_type,
+            title="QA example",
+            description="A user supplied description.",
+            username="reader",
+        )
+
+    assert url == "https://github.com/test/repo/issues/9"
+    kwargs = repository.create_issue.call_args.kwargs
+    body = kwargs["body"]
+    assert is_manual_only(body) is expected_gate
+    assert "A user supplied description." in body
+    assert kwargs["labels"] == _labels_for_report_type(report_type)
+    marker = "<!-- factory-execution:manual-only -->"
+    if expected_gate:
+        assert body.startswith(f"{marker}\\n\\n")
+        assert body.count(marker) == 1
+    else:
+        assert marker not in body
 
 
 @pytest.mark.asyncio
