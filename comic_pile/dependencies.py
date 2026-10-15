@@ -192,6 +192,7 @@ async def _canonical_blocking_explanations_batch(
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
         .where(_canonical_dependency_filter())
+        .distinct()
     )
 
     reasons_map: dict[int, list[BlockingDependency]] = {}

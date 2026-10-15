@@ -114,7 +114,7 @@ async def test_issues_position_index_improves_pagination(async_db_committed: Asy
     for i in range(100):
         issue = Issue(
             thread_id=thread.id,
-            issue_number=str(i + 1),
+            issue_number=f"issue-{i + 1}",
             position=i + 1,
             status="unread",
         )
