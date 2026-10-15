@@ -151,7 +151,7 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
     Returns:
         One ThreadResponse per input thread, in input order.
     """
-    issue_map, remaining_map = await load_issue_stats(threads, db)
+    remaining_map, issue_map = await load_issue_stats(threads, db)
     return [
         await thread_to_response(
             thread,
