@@ -1,15 +1,64 @@
 import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
 
+/**
+ * Shared recovery action for the bounded-loading and load-failure states.
+ *
+ * Both states offer the same recovery, so they share one button treatment per
+ * the visual grammar's button-group rule.
+ */
+function RetryHistoryButton({ onRetry }: { onRetry: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRetry}
+      className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+    >
+      Retry
+    </button>
+  )
+}
+
 export default function HistoryPage() {
-  const { data: sessions, isPending, isLoadingMore, hasMore, loadMore, error } = useSessions()
+  const {
+    data: sessions,
+    isPending,
+    isLoadingMore,
+    hasMore,
+    loadMore,
+    error,
+    isRetrying,
+    refetch,
+  } = useSessions()
 
   if (isPending) {
+    // A timed-out first page stays pending through the shared retry policy
+    // (issue #3429). Once an attempt has failed, say so and offer recovery
+    // instead of holding a bare spinner until retries exhaust. isRetrying stays
+    // true across a user-initiated retry, so pressing Retry never drops the user
+    // back onto the bare splash.
+    if (isRetrying) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen gap-4">
+          <p role="status" className="text-sm font-bold text-stone-400">
+            Still loading your history… your library is safe.
+          </p>
+          <RetryHistoryButton onRetry={() => void refetch()} />
+        </div>
+      )
+    }
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
   if (error && !isLoadingMore && (!sessions || sessions.length === 0)) {
-    return <div className="error-message">Failed to load sessions</div>
+    return (
+      <div className="flex flex-col items-center justify-center h-screen gap-4">
+        <p role="alert" className="error-message">
+          Failed to load sessions
+        </p>
+        <RetryHistoryButton onRetry={() => void refetch()} />
+      </div>
+    )
   }
 
   if (!sessions || sessions.length === 0) {

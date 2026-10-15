@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
 import { queryClient } from '../query/queryClient'
@@ -300,5 +300,114 @@ describe('useRollBootstrap', () => {
     expect(result.current.isPending).toBe(false)
     expect(result.current.isError).toBe(false)
     expect(result.current.error).toBeNull()
+  })
+})
+
+describe('useRollBootstrap retry progress (issue #3429)', () => {
+  function renderWithRetry(retry: number, retryDelay = 10) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry, retryDelay } },
+    })
+    return renderHook(() => useRollBootstrap(bootstrapApi), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>
+          <ToastProvider>{children}</ToastProvider>
+        </QueryClientProvider>
+      ),
+    })
+  }
+
+  it('reports zero failures on the fast path', async () => {
+    mockedBootstrap.mockResolvedValue(bootstrapResponse)
+
+    const { result } = renderWithRetry(1)
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(result.current.data).toBe(bootstrapResponse)
+    expect(result.current.failureCount).toBe(0)
+    expect(result.current.isRetrying).toBe(false)
+  })
+
+  it('records failed attempts while a timed-out bootstrap is retried', async () => {
+    mockedBootstrap.mockRejectedValue(new Error('timeout of 10000ms exceeded'))
+
+    const { result } = renderWithRetry(1)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    expect(mockedBootstrap).toHaveBeenCalledTimes(2)
+    expect(result.current.failureCount).toBe(2)
+    expect(result.current.isRetrying).toBe(false)
+  })
+
+  it('resets the failure count after a retry succeeds', async () => {
+    mockedBootstrap
+      .mockRejectedValueOnce(new Error('timeout of 10000ms exceeded'))
+      .mockResolvedValue(bootstrapResponse)
+
+    const { result } = renderWithRetry(1)
+
+    await waitFor(() => expect(result.current.data).toBe(bootstrapResponse))
+
+    expect(mockedBootstrap).toHaveBeenCalledTimes(2)
+    expect(result.current.failureCount).toBe(0)
+    expect(result.current.isRetrying).toBe(false)
+    expect(result.current.isError).toBe(false)
+  })
+
+  it('stays bounded while an automatic retry is still in flight', async () => {
+    const gate = deferred<RollBootstrapResponse>()
+    mockedBootstrap
+      .mockRejectedValueOnce(new Error('timeout of 10000ms exceeded'))
+      .mockReturnValue(gate.promise)
+
+    const { result } = renderWithRetry(1, 200)
+
+    await waitFor(() => expect(result.current.isRetrying).toBe(true))
+
+    expect(result.current.isPending).toBe(true)
+    expect(result.current.data).toBeNull()
+
+    await act(async () => {
+      gate.resolve(bootstrapResponse)
+    })
+
+    await waitFor(() => expect(result.current.data).toBe(bootstrapResponse))
+    expect(result.current.isRetrying).toBe(false)
+  })
+
+  it('keeps the bounded retry state while a user-initiated retry is in flight', async () => {
+    // refetch() resets React Query's failureCount to 0, so the bounded loading
+    // state has to be latched or RollPage drops the user back onto the bare
+    // loading splash the moment they press Retry (issue #3429).
+    const gate = deferred<RollBootstrapResponse>()
+    mockedBootstrap
+      .mockRejectedValueOnce(new Error('timeout of 10000ms exceeded'))
+      .mockRejectedValueOnce(new Error('timeout of 10000ms exceeded'))
+      .mockReturnValue(gate.promise)
+
+    const { result } = renderWithRetry(1)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    let pendingRefetch!: Promise<RollBootstrapResponse>
+    await act(async () => {
+      pendingRefetch = result.current.refetch()
+    })
+
+    await waitFor(() => expect(result.current.isPending).toBe(true))
+    expect(result.current.isRetrying).toBe(true)
+
+    await act(async () => {
+      gate.resolve(bootstrapResponse)
+      await pendingRefetch
+    })
+
+    // refetch() resolves with its own result before the observer re-renders,
+    // so the hook state only settles on a later tick.
+    await waitFor(() => expect(result.current.data).toBe(bootstrapResponse))
+    expect(result.current.isError).toBe(false)
+    expect(result.current.isRetrying).toBe(false)
   })
 })
