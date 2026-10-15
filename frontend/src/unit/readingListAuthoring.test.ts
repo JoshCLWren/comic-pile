@@ -78,6 +78,70 @@ describe('decodeCustomCBLError', () => {
     ])
   })
 
+  it('decodes legacy cycle edges without names and filters malformed endpoints', () => {
+    const detail = decodeCustomCBLError(axiosError(422, {
+      code: 'reading_list_cycle',
+      path: [
+        null,
+        { source_issue_id: '1', target_issue_id: 2 },
+        { source_issue_id: 1, target_issue_id: '2' },
+        {
+          source_issue_id: 1,
+          target_issue_id: 2,
+          source_issue_name: 42,
+          target_issue_name: null,
+          prerequisite_origin: 'reader',
+          provenance: ['Reader prerequisite', 42],
+        },
+        {
+          source_issue_id: 2,
+          target_issue_id: 1,
+          prerequisite_origin: 'converted',
+        },
+      ],
+    }))
+    expect(detail.cyclePath).toEqual([
+      {
+        source_issue_id: 1, target_issue_id: 2, origin: null,
+        prerequisite_origin: 'reader', provenance: ['Reader prerequisite'],
+      },
+      {
+        source_issue_id: 2, target_issue_id: 1, origin: null,
+        prerequisite_origin: 'converted', provenance: [],
+      },
+    ])
+    expect(describeCyclePath(detail.cyclePath, (id) => `Canonical #${id}`)).toContain(
+      'Canonical #1 → Canonical #2 → Canonical #1',
+    )
+  })
+
+  it('ignores malformed predecessor records and retains valid typed array members', () => {
+    const detail = decodeCustomCBLError(axiosError(409, {
+      predecessor_changes: [
+        null,
+        { issue_id: '1', issue_name: 'Invalid' },
+        { issue_id: 1, issue_name: 42 },
+        {
+          issue_id: 2,
+          issue_name: 'JSA #1',
+          before_issue_ids: [1, 'invalid'],
+          before_issue_names: ['Starman #55', null],
+        },
+      ],
+    }))
+    expect(detail.predecessorChanges).toEqual([{
+      issue_id: 2, issue_name: 'JSA #1',
+      before_issue_ids: [1], before_issue_names: ['Starman #55'],
+      after_issue_ids: [], after_issue_names: [],
+    }])
+  })
+
+  it.each([null, 42, [], undefined])('ignores unstructured detail %s', (detail) => {
+    expect(decodeCustomCBLError(axiosError(422, detail))).toEqual({
+      code: null, message: null, predecessorChanges: [], cyclePath: [],
+    })
+  })
+
   it('keeps a string detail as the message and ignores non-axios failures', () => {
     expect(decodeCustomCBLError(axiosError(404, 'Reading List not found')).message).toBe(
       'Reading List not found',

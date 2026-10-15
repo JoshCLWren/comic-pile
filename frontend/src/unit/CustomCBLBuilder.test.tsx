@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { queryKeys } from '../query/queryKeys'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -507,6 +508,28 @@ describe('CustomCBLBuilder', () => {
     )
     // The conflicting Issue is not a member of this list; the server names it.
     expect(alert).not.toHaveTextContent('Issue #99001')
+  })
+
+  it('preserves unsaved gate and skip edits when the selected list refreshes', async () => {
+    const { client } = renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Starman #55')
+    fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
+      target: { value: 'after_previous' },
+    })
+    fireEvent.click(screen.getByLabelText('Skip Starman #55 in this list'))
+
+    // Force a changed query result for the same identity, as a background refresh
+    // can do while the reader has an unsaved draft.
+    mocks.get.mockResolvedValueOnce({ ...existingList, updated_at: '2026-09-14T05:00:00Z' })
+    await act(async () => {
+      await client.refetchQueries({ queryKey: queryKeys.customCBLs.detail(9) })
+    })
+    expect(mocks.get).toHaveBeenCalledTimes(2)
+    expect(screen.getByLabelText('Wait behavior for All-Star Comics #1')).toHaveValue('after_previous')
+    expect(screen.getByLabelText('Skip Starman #55 in this list')).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Save custom CBL' })).toBeEnabled()
   })
 
   it('clears a stale cycle error when switching to another custom CBL', async () => {

@@ -75,6 +75,19 @@ If you edit files and run tests but stop before pushing, you have **not complete
 - **Push to the remote branch immediately** — do not wait for the user to ask
 
 
+## MANDATORY: Targeted local tests; full suites run in CI
+
+Run only targeted tests locally: select the test files or cases covering the changed behavior,
+including focused regression tests for bugs and focused Chromium tests for browser behavior.
+Leave full backend/frontend suites and aggregate coverage gates to CI. Do not run bare `pytest`,
+`make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
+requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
+full local suite rerun.
+
+This rule overrides full-local-suite requirements elsewhere in repository guidance and skills.
+It does not waive whole-repo Ruff/ty, frontend lint/typecheck/build, test fixes, or CI gates.
+Never skip, disable, or weaken tests; run the relevant tests locally and require full CI to pass.
+
 ## CRITICAL: NEVER USE CI AS A LOCAL DEBUGGER
 
 CI is not a debugging tool. Run focused local validation appropriate to the change before pushing whenever the execution environment provides a checkout and required dependencies.
@@ -91,7 +104,7 @@ Before pushing Python changes from a normal local checkout:
 Before pushing frontend changes from a normal local checkout:
 1. Run `cd frontend && pnpm run lint && pnpm run typecheck`.
 2. Run `cd frontend && pnpm run build`.
-3. Run `cd frontend && pnpm test`.
+3. Run targeted Vitest files/cases: `cd frontend && pnpm exec vitest run <changed-behavior-test-files>`. Full frontend tests and coverage run in CI.
 4. Run focused Chromium Playwright coverage when the change affects browser behavior.
 5. Fix every failure caused or exposed by the change before pushing.
 
@@ -447,7 +460,7 @@ make migrate  # Run migrations (or: alembic upgrade head)
 
 - Branch from `main`: `git checkout -b phase/X-description`
 - Commit messages: imperative, component-scoped (e.g., "Add thread creation API endpoint")
-- Run `make lint` and `make pytest` before committing
+- Run the required lint/typecheck/build gates and targeted tests before committing; leave full test suites and aggregate coverage to CI
 - Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
 - **Local factory sessions**: before the first commit of any issue-driven session, load the `local-factory-session` skill (`.agents/skills/local-factory-session/SKILL.md`). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
