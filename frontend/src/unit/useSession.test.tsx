@@ -295,3 +295,48 @@ it('reports zero session-list failures on the fast path', async () => {
   expect(result.current.failureCount).toBe(0)
   expect(result.current.isRetrying).toBe(false)
 })
+
+it('keeps the bounded retry state while a user-initiated retry is in flight', async () => {
+  // refetch() resets React Query's failureCount to 0, so the bounded loading
+  // state has to be latched or HistoryPage drops the user back onto the bare
+  // loading splash the moment they press Retry (issue #3429).
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  mockedSessionApi.list.mockReset()
+  mockedSessionApi.list
+    .mockRejectedValueOnce(new Error('timeout of 10000ms exceeded'))
+    .mockRejectedValueOnce(new Error('timeout of 10000ms exceeded'))
+    .mockImplementationOnce(() =>
+      // SAFETY: the stubbed page supplies only the fields the session pager reads
+      gate.then(() => ({ sessions: [{ id: 2 }], next_page_token: null } as never)),
+    )
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: 1, retryDelay: 10 }, mutations: { retry: false } },
+  })
+  const { result } = renderHook(() => useSessions(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
+    ),
+  })
+
+  await waitFor(() => expect(result.current.isError).toBe(true))
+
+  await act(async () => {
+    void result.current.refetch()
+  })
+
+  await waitFor(() => expect(result.current.isPending).toBe(true))
+  expect(result.current.isRetrying).toBe(true)
+
+  await act(async () => {
+    release()
+  })
+
+  await waitFor(() => expect(result.current.data).toHaveLength(1))
+  expect(result.current.isError).toBe(false)
+  expect(result.current.isRetrying).toBe(false)
+})

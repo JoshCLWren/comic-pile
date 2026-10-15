@@ -148,4 +148,25 @@ describe('RollPage bounded bootstrap loading (issue #3429)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(spies.refetch).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps the bounded loading state visible during a user-initiated retry', () => {
+    // React Query resets failureCount to 0 when refetch() starts. The page must
+    // stay on the bounded retry affordance instead of falling back to the bare
+    // splash the user just clicked Retry to escape.
+    mockedUseRollBootstrap.mockReturnValue({
+      data: null,
+      refetch: spies.refetch,
+      isPending: true,
+      isError: false,
+      error: null,
+      failureCount: 0,
+      isRetrying: true,
+    })
+
+    renderRollPage()
+
+    expect(screen.getByRole('status')).toHaveTextContent('Still loading')
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
 })

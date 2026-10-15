@@ -70,7 +70,7 @@ export default function RollPage() {
     isPending: isBootstrapLoading,
     isError: isBootstrapError,
     error: bootstrapError,
-    failureCount: bootstrapFailureCount,
+    isRetrying: isBootstrapRetrying,
   } = useRollBootstrap()
 
   const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
@@ -361,8 +361,10 @@ export default function RollPage() {
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     // A timed-out bootstrap stays pending through the shared retry policy
     // (issue #3429). Once an attempt has failed, say so and offer recovery
-    // instead of holding a bare spinner until retries exhaust.
-    if (bootstrapFailureCount > 0) {
+    // instead of holding a bare spinner until retries exhaust. isBootstrapRetrying
+    // stays true across a user-initiated retry, so pressing Retry never drops
+    // the user back onto the bare splash.
+    if (isBootstrapRetrying) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
           <div className="text-center space-y-4">

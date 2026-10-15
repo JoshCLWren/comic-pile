@@ -298,3 +298,25 @@ it('offers Retry on an initial load failure (issue #3429)', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(refetch).toHaveBeenCalledTimes(1)
 })
+
+it('keeps the bounded loading state visible during a user-initiated retry (issue #3429)', () => {
+  // React Query resets failureCount to 0 when refetch() starts. The page must
+  // stay on the bounded retry affordance instead of falling back to the bare
+  // splash the user just clicked Retry to escape.
+  const refetch = vi.fn()
+  mockedUseSessions.mockReturnValue({
+    data: [],
+    isPending: true,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+    failureCount: 0,
+    isRetrying: true,
+    refetch,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  expect(screen.getByRole('status')).toHaveTextContent('Still loading your history')
+  expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+})

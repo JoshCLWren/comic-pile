@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { sessionApi as defaultSessionApi } from "../services/api-sessions";
 import type { SessionApi } from "../services/apiTypes";
@@ -75,6 +75,20 @@ export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
     getNextPageParam: (lastPage: SessionListResponse) => lastPage.next_page_token ?? undefined,
   });
 
+  // `refetch()` resets React Query's `failureCount` to 0, so keying the bounded
+  // loading state on `failureCount` alone would drop the History page back to the
+  // bare loading splash the instant someone presses Retry, which is the
+  // frozen-splash symptom issue #3429 exists to remove. Latch the first failure
+  // so the affordance survives user-initiated retries until the load succeeds.
+  const [hasFailedLoad, setHasFailedLoad] = useState(false);
+  useEffect(() => {
+    if (query.failureCount > 0) {
+      setHasFailedLoad(true);
+    } else if (query.isSuccess) {
+      setHasFailedLoad(false);
+    }
+  }, [query.failureCount, query.isSuccess]);
+
   return useMemo(
     () => {
       const seenIds = new Set<number>();
@@ -103,19 +117,17 @@ export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
         loadMore,
         refetch: query.refetch,
         // Failed attempts so far. A timed-out first page stays pending through
-        // the shared retry policy (issue #3429), so the History page uses this
-        // to bound the loading state with progress and a Retry affordance
-        // instead of an indefinite spinner.
+        // the shared retry policy (issue #3429).
         failureCount: query.failureCount,
         // True while the initial load is still trying after at least one
-        // failure. Keyed on isPending (already observed) rather than
+        // failure, including the retries a user starts from the Retry
+        // affordance. Keyed on isPending (already observed) rather than
         // isFetching so the retry affordance never adds a new render
         // subscription of its own.
-        isRetrying:
-          query.isPending && !query.isFetchingNextPage && query.failureCount > 0,
+        isRetrying: isPending && hasFailedLoad,
       };
     },
-    [query],
+    [query, hasFailedLoad],
   );
 }
 
