@@ -31,6 +31,7 @@ class TestComicVineParallelPagination:
                 ] * 100,  # Simplified - actual test would have 100 unique issues
             },
             from_cache=False,
+            cache_key="test_cache_key",
         )
         
         page2_response = ComicVineResponse(
@@ -43,6 +44,7 @@ class TestComicVineParallelPagination:
                 ] * 100,  # Simplified - actual test would have 100 unique issues
             },
             from_cache=False,
+            cache_key="test_cache_key",
         )
         
         page3_response = ComicVineResponse(
@@ -55,6 +57,7 @@ class TestComicVineParallelPagination:
                 ] * 50,  # Simplified - actual test would have 50 unique issues
             },
             from_cache=False,
+            cache_key="test_cache_key",
         )
         
         # Mock the internal methods
@@ -97,6 +100,7 @@ class TestComicVineParallelPagination:
                 ],
             },
             from_cache=False,
+            cache_key="test_cache_key",
         )
         
         mock_client._fetch_single_page_issues = AsyncMock(
@@ -160,6 +164,7 @@ class TestComicVineParallelPagination:
                 }
             },
             from_cache=False,
+            cache_key="test_cache_key",
         )
         
         issues_response = [
