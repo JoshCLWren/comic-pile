@@ -2037,3 +2037,42 @@ def test_controller_writes_review_model_marker_on_approve(
         reviewer_agent="17",
     )
     assert ["issue", "comment", "1390", "--repo", module.REPO, "--body", expected] in commands
+
+
+@pytest.mark.parametrize(
+    "worker_script",
+    [
+        "free-model-factory-worker.sh",
+        "free-model-factory-worker-primitives.sh",
+        "nvidia-factory-worker.sh",
+        "omniroute-factory-worker.sh",
+    ],
+)
+def test_trusted_review_controller_stages_roster_and_pinned_tsv(worker_script: str) -> None:
+    """All worker paths stage code and roster from main before checkout."""
+    script = (SCRIPTS / worker_script).read_text(encoding="utf-8")
+    stage = script.split("stage_trusted_review_controller() {", 1)[1].split("\n}", 1)[0]
+    assert 'cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"' in stage
+    assert 'cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"' in stage
+
+
+def test_roster_model_lookup_ignores_untrusted_pr_checkout(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The staged controller must not trust a model mapping from the PR branch."""
+    controller = load_review_controller()
+    trusted = tmp_path / "staged-controller"
+    trusted.mkdir()
+    (trusted / "free-model-factories.tsv").write_text(
+        "54\tz-ai\tglm-4.5-flash\t0\tactive\tFactory 54\n",
+        encoding="utf-8",
+    )
+    untrusted = tmp_path / "pr-checkout"
+    (untrusted / ".github").mkdir(parents=True)
+    (untrusted / ".github" / "free-model-factories.tsv").write_text(
+        "54\tz-ai\timpersonated-model\t0\tactive\tUntrusted\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(untrusted)
+    monkeypatch.setattr(controller, "__file__", str(trusted / "factory-review-controller.py"))
+    assert controller.roster_model_for_worker("54") == "glm-4.5-flash"
