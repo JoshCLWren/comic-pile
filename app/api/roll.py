@@ -1070,7 +1070,6 @@ async def roll_bootstrap(
     )
 
 
-
 @v2_router.get("/bootstrap", response_model=RollV2BootstrapResponse)
 async def roll_v2_bootstrap(
     current_user: Annotated[User, Depends(get_current_user)],
