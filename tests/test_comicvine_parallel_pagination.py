@@ -98,7 +98,7 @@ class TestComicVineParallelPagination:
             volume = issue.get("volume")
             assert isinstance(volume, dict)
             assert volume.get("id") == 100
-        fetch_page.assert_called_once_with(100, 0, refresh=False)
+        fetch_page.assert_called_once_with(100, 0, False)
 
     @pytest.mark.asyncio
     async def test_parallel_pagination_error_handling(
@@ -133,10 +133,10 @@ class TestComicVineParallelPagination:
         monkeypatch.setattr(
             client,
             "_fetch_single_page_issues",
-            AsyncMock(side_effect=[_issue_rows(1, 1), _issue_rows(2, 2)]),
+            AsyncMock(side_effect=[_issue_rows(1, 1), _issue_rows(2, 2), _issue_rows(3, 3)]),
         )
 
-        with pytest.raises(ComicVineError, match="Expected 250 issues but received 2"):
+        with pytest.raises(ComicVineError, match="Expected 250 issues but received 3"):
             await client._fetch_volume_issues_parallel(100)
 
     @pytest.mark.asyncio
@@ -204,8 +204,24 @@ class TestComicVineParallelPagination:
             {"id": 2, "issue_number": "2", "name": "Issue 2", "volume": {"id": 200}},
         ]
 
-        monkeypatch.setattr(client, "request", AsyncMock(return_value=_probe_response(250)))
-        monkeypatch.setattr(client, "_fetch_single_page_issues", AsyncMock(return_value=mixed_rows))
+        # Mock the count probe response
+        monkeypatch.setattr(client, "request", AsyncMock(return_value=_probe_response(2)))
+        # Mock the page response with mixed volume data
+        page_response = ComicVineResponse(
+            payload={"number_of_total_results": 2, "results": mixed_rows},
+            from_cache=False,
+            cache_key="page_0",
+        )
+        # The second call to request is for the actual page fetch
+        call_count = {"count": 0}
+        
+        async def mock_request(*args, **kwargs):
+            call_count["count"] += 1
+            if call_count["count"] == 1:
+                return _probe_response(2)
+            return page_response
+        
+        monkeypatch.setattr(client, "request", mock_request)
 
         with pytest.raises(ComicVineError, match="ignored the requested volume filter"):
             await client._fetch_volume_issues_parallel(100)
