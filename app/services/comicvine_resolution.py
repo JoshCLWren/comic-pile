@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -208,7 +209,26 @@ async def get_comicvine_series_issues(
         )
 
     try:
-        issues_rows = await client.fetch_volume_issues(volume_id)
+        # If series_name is not provided, fetch both volume info and issues in parallel
+        if not series_name:
+            # Fetch volume info and issues concurrently
+            volume_task = client.fetch_volume(volume_id)
+            issues_task = client.fetch_volume_issues(volume_id)
+            
+            vol_response, issues_rows = await asyncio.gather(volume_task, issues_task)
+            
+            # Extract series name from volume response
+            vol_obj = vol_response.payload.get("results")
+            if isinstance(vol_obj, dict):
+                volume_name = vol_obj.get("name")
+                series_name = volume_name if isinstance(volume_name, str) else f"Volume {volume_id}"
+            else:
+                series_name = f"Volume {volume_id}"
+        else:
+            # Series name provided, just fetch issues
+            issues_rows = await client.fetch_volume_issues(volume_id)
+            series_name = series_name or f"Volume {volume_id}"
+            
     except Exception:
         logger.warning("Failed to fetch volume %d issues", volume_id, exc_info=True)
         return ComicVineSeriesIssuesResponse(
@@ -243,15 +263,6 @@ async def get_comicvine_series_issues(
                 else None,
             )
         )
-
-    if not series_name:
-        vol_response = await client.fetch_volume(volume_id)
-        vol_obj = vol_response.payload.get("results")
-        if isinstance(vol_obj, dict):
-            volume_name = vol_obj.get("name")
-            series_name = volume_name if isinstance(volume_name, str) else f"Volume {volume_id}"
-        else:
-            series_name = f"Volume {volume_id}"
 
     return ComicVineSeriesIssuesResponse(
         comicvine_volume_id=volume_id,

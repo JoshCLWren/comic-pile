@@ -527,35 +527,117 @@ class ComicVineClient:
             ComicVineError: When pagination metadata is inconsistent or a returned row belongs to
                 a different volume, which indicates that the provider ignored the collection filter.
         """
-        rows: list[dict[str, object]] = []
-        offset = 0
-        while True:
-            response = await self.request(
-                "issues",
-                "issues",
-                {
-                    "filter": f"volume:{volume_id}",
-                    "limit": COLLECTION_PAGE_LIMIT,
-                    "offset": offset,
-                },
-                refresh=refresh,
+        # Use parallel pagination for better performance
+        return await self._fetch_volume_issues_parallel(volume_id, refresh=refresh)
+
+    async def _fetch_volume_issues_parallel(
+        self,
+        volume_id: int,
+        *,
+        refresh: bool = False,
+    ) -> list[dict[str, object]]:
+        """Fetch all volume issues pages in parallel for significantly better performance.
+
+        Args:
+            volume_id: ComicVine volume ID.
+            refresh: Force live requests for every page.
+
+        Returns:
+            Ordered provider rows across all pages.
+
+        Raises:
+            ComicVineError: When pagination metadata is inconsistent or a returned row belongs to
+                a different volume, which indicates that the provider ignored the collection filter.
+        """
+        # First, get total count to determine how many pages we need
+        first_response = await self.request(
+            "issues",
+            "issues",
+            {
+                "filter": f"volume:{volume_id}",
+                "limit": 1,
+                "offset": 0,
+            },
+            refresh=refresh,
+        )
+        
+        total_results = first_response.payload.get("number_of_total_results")
+        if not isinstance(total_results, int) or total_results <= 0:
+            return []
+        
+        # If we can fit everything in one page, use the original method
+        if total_results <= COLLECTION_PAGE_LIMIT:
+            return await self._fetch_single_page_issues(volume_id, 0, refresh)
+        
+        # Calculate how many pages we need
+        pages_needed = (total_results + COLLECTION_PAGE_LIMIT - 1) // COLLECTION_PAGE_LIMIT
+        
+        # Create tasks for all pages in parallel
+        tasks = []
+        for page_num in range(pages_needed):
+            offset = page_num * COLLECTION_PAGE_LIMIT
+            task = self._fetch_single_page_issues(volume_id, offset, refresh)
+            tasks.append(task)
+        
+        # Execute all requests in parallel
+        page_results = await asyncio.gather(*tasks)
+        
+        # Combine and validate all pages
+        all_rows: list[dict[str, object]] = []
+        for page_rows in page_results:
+            all_rows.extend(page_rows)
+        
+        # Final validation against total count
+        if len(all_rows) != total_results:
+            raise ComicVineError(
+                f"Expected {total_results} issues but received {len(all_rows)} "
+                f"for volume {volume_id}"
             )
-            results = response.payload.get("results")
-            if not isinstance(results, list):
-                raise ComicVineError("ComicVine /issues response did not contain a results list")
-            page_rows = [row for row in results if isinstance(row, dict)]
-            for row in page_rows:
-                volume = row.get("volume")
-                if isinstance(volume, dict) and volume.get("id") not in (None, volume_id):
-                    raise ComicVineError(
-                        "ComicVine /issues ignored the requested volume filter; refusing mixed data"
-                    )
-            rows.extend(page_rows)
-            page_count = len(page_rows)
-            total = response.payload.get("number_of_total_results")
-            if isinstance(total, int) and len(rows) >= total:
-                break
-            if page_count < COLLECTION_PAGE_LIMIT:
-                break
-            offset += page_count
-        return rows
+        
+        return all_rows
+
+    async def _fetch_single_page_issues(
+        self,
+        volume_id: int,
+        offset: int,
+        refresh: bool = False,
+    ) -> list[dict[str, object]]:
+        """Fetch a single page of issues with validation.
+        
+        Args:
+            volume_id: ComicVine volume ID.
+            offset: Offset for pagination.
+            refresh: Force live request.
+            
+        Returns:
+            Validated page rows.
+            
+        Raises:
+            ComicVineError: When response is invalid or contains mixed volume data.
+        """
+        response = await self.request(
+            "issues",
+            "issues",
+            {
+                "filter": f"volume:{volume_id}",
+                "limit": COLLECTION_PAGE_LIMIT,
+                "offset": offset,
+            },
+            refresh=refresh,
+        )
+        
+        results = response.payload.get("results")
+        if not isinstance(results, list):
+            raise ComicVineError("ComicVine /issues response did not contain a results list")
+        
+        page_rows = [row for row in results if isinstance(row, dict)]
+        
+        # Validate that all rows belong to the correct volume
+        for row in page_rows:
+            volume = row.get("volume")
+            if isinstance(volume, dict) and volume.get("id") not in (None, volume_id):
+                raise ComicVineError(
+                    "ComicVine /issues ignored the requested volume filter; refusing mixed data"
+                )
+        
+        return page_rows
