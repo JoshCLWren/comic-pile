@@ -21,6 +21,9 @@ from app.models.external_identity import (
     IssueExternalIdentityMapping,
     ThreadExternalSeriesMapping,
 )
+from app.services import provider_issue_adoption
+from app.services.comicvine_fallback import metadata_needs_hydration
+from app.services.provider_issue_adoption import ProviderIssueAdoptionResult
 from comic_pile.comicvine_provider import ComicVineError, ComicVineResponse
 
 SERIES_URL = "/api/v1/comicvine/series:import"
@@ -500,11 +503,17 @@ async def test_unknown_reading_order_returns_not_found(
 
 
 @pytest.mark.asyncio
-async def test_series_import_does_not_hydrate_per_issue(
+async def test_series_import_skips_per_issue_provider_fetches(
     auth_client: AsyncClient,
+    async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Performance regression: series import avoids per-issue external fetches."""
+    """Performance regression (#3440): the roster already in hand is reused, not re-fetched.
+
+    Series import spent its request budget on one provider fetch per adopted
+    issue. It must normalize the roster rows it already fetched instead, and it
+    must still store those provider facts on the confirmed identity.
+    """
     calls: list[int] = []
 
     class CountingStub(_StubClient):
@@ -512,8 +521,126 @@ async def test_series_import_does_not_hydrate_per_issue(
             calls.append(issue_id)
             return await super().fetch_issue(issue_id, **_kwargs)
 
-    _install_client(monkeypatch, CountingStub(_issue_rows(701, 702, 703)))
+        async def fetch_story_arc(self, arc_id: int, **_kwargs: object) -> ComicVineResponse:
+            calls.append(arc_id)
+            return ComicVineResponse(
+                payload={"results": {"id": arc_id, "name": "Arc"}},
+                from_cache=False,
+                cache_key="story_arc",
+            )
+
+    rows = [
+        {
+            **_issue_rows(701)[0],
+            "cover_date": "1994-06-01",
+            "store_date": "1994-05-18",
+            "image": {"super_url": "https://example.test/701-super.jpg"},
+        },
+        _issue_rows(702)[0],
+        _issue_rows(703)[0],
+    ]
+    _install_client(monkeypatch, CountingStub(rows))
+
     response = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
+
     assert response.status_code == 201
-    # Hydration must not run per adopted issue during batch import.
-    assert len(calls) == 0
+    body = response.json()
+    assert body["issues_adopted"] == 3
+    # No request-path hydration: one provider call per adopted issue is what
+    # blew the 1000ms budget in production.
+    assert calls == []
+
+    identity = (
+        (
+            await async_db.execute(
+                select(ExternalIdentity).where(
+                    ExternalIdentity.provider == "comicvine",
+                    ExternalIdentity.external_id == "701",
+                )
+            )
+        )
+        .scalars()
+        .one()
+    )
+    metadata = identity.metadata_json
+    # Enrichment is deferred, not dropped: the roster facts land immediately and
+    # the missing deep relationship fields keep the identity eligible for the
+    # existing non-blocking reader-side hydration.
+    assert metadata["name"] == "Issue 701"
+    assert metadata["issue_number"] == "701"
+    assert metadata["cover_date"] == "1994-06-01"
+    assert metadata["store_date"] == "1994-05-18"
+    assert metadata["primary_image"] == "https://example.test/701-super.jpg"
+    assert metadata_needs_hydration(identity) is True
+
+
+@pytest.mark.asyncio
+async def test_one_failed_roster_row_does_not_abandon_the_rest_of_the_series(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A single bad provider row stays bounded and a retry completes the roster."""
+    real_adopt = provider_issue_adoption.adopt_comicvine_issue
+
+    async def _failing_adopt(
+        db: AsyncSession,
+        *,
+        user_id: int,
+        thread_id: int,
+        comicvine_issue_id: int,
+        issue_number: str,
+        external_url: str | None,
+        metadata: dict[str, object] | None,
+        thread: Thread | None,
+    ) -> ProviderIssueAdoptionResult:
+        if comicvine_issue_id == 603:
+            raise RuntimeError("roster row exploded")
+        return await real_adopt(
+            db,
+            user_id=user_id,
+            thread_id=thread_id,
+            comicvine_issue_id=comicvine_issue_id,
+            issue_number=issue_number,
+            external_url=external_url,
+            metadata=metadata,
+            thread=thread,
+        )
+
+    _install_client(monkeypatch, _StubClient(_issue_rows(601, 602, 603)))
+    monkeypatch.setattr(provider_issue_adoption, "adopt_comicvine_issue", _failing_adopt)
+
+    first = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
+
+    assert first.status_code == 201
+    first_body = first.json()
+    assert first_body["thread_created"] is True
+    # The healthy rows still land and the failure is reported per issue.
+    assert first_body["issues_adopted"] == 2
+    errors = [row for row in first_body["issue_results"] if row["outcome"] == "error"]
+    assert [row["comicvine_issue_id"] for row in errors] == [603]
+    assert first_body["issues_conflict"] == 0
+
+    partial = await async_db.get(Thread, first_body["thread_id"])
+    assert partial is not None
+    assert partial.total_issues == 2
+
+    # A healthy retry supplies the full roster for the same volume and adopts
+    # only the missing row into the existing series.
+    monkeypatch.setattr(provider_issue_adoption, "adopt_comicvine_issue", real_adopt)
+    _install_client(monkeypatch, _StubClient(_issue_rows(601, 602, 603)))
+
+    second = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
+
+    assert second.status_code == 201
+    second_body = second.json()
+    assert second_body["thread_created"] is False
+    assert second_body["thread_id"] == first_body["thread_id"]
+    assert second_body["issues_adopted"] == 1
+    assert second_body["issues_skipped"] == 2
+
+    thread = await async_db.get(Thread, first_body["thread_id"])
+    assert thread is not None
+    assert thread.total_issues == 3
+    assert thread.issues_remaining == 3
+    assert len(await _confirmed_mappings(async_db, thread.id)) == 3

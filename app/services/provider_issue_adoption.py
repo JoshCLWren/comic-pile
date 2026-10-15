@@ -149,9 +149,11 @@ async def adopt_comicvine_issue(
             boundary after the local state is safely established. A hydration
             failure is recorded on the result and never rolls back the local
             adoption, so a retry reuses the Issue instead of duplicating it.
-        thread: Optional pre-fetched thread object; when provided, validation
-            is skipped and the object is used directly. This optimization is
-            used during batch series import to avoid redundant thread lookups.
+        thread: Optional already-loaded target thread. Ownership is still
+            verified against ``user_id`` and ``thread_id``, but the extra
+            ownership lookup and row lock are skipped, so the caller must hold
+            the thread row lock itself. Batch series import uses this because it
+            locks the thread once for the whole roster instead of per issue.
 
     Returns:
         A :class:`ProviderIssueAdoptionResult` distinguishing ``created``,
@@ -207,14 +209,12 @@ async def adopt_comicvine_issue(
             metadata_json=None if identity_exists else (metadata or {}),
         )
 
-        found_issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
-        if found_issue is None:
-            found_issue = await create_issue_in_natural_order(db, thread_id, issue_number)
+        issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
+        if issue is None:
+            issue = await create_issue_in_natural_order(db, thread_id, issue_number)
             outcome = "created"
         else:
             outcome = "reused"
-
-        issue = found_issue
 
         try:
             await link_issue_external_identity(

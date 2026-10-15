@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.comicvine_hydration import normalize_issue
 from app.external_identities import (
     ExternalIdentityMappingError,
     link_issue_external_identity,
@@ -1034,10 +1035,12 @@ async def import_comicvine_series(
         user_id: Owner who will receive the imported thread.
         request: Validated import payload with optional reading progress and
             anchored placement.
-        comicvine_client: Optional configured ComicVine client. When present,
-            the caller controls per-issue hydration; the batch import path
-            deliberately passes no client so provider metadata is NOT hydrated
-            per adopted issue, avoiding one external fetch per roster row.
+        comicvine_client: Optional configured ComicVine client used to read the
+            volume and its issue roster. Provider metadata is normalized from
+            the roster rows already fetched, so batch import performs no extra
+            request per adopted issue; the remaining deep relationship fields
+            are filled in by the existing lazy hydration boundary once a reader
+            opens the imported issue.
 
     Returns:
         ImportSeriesResponse with thread details and per-issue adoption results.
@@ -1179,13 +1182,14 @@ async def import_comicvine_series(
             continue
 
         issue_number = row.get("issue_number")
-        issue_name = row.get("name")
         external_url = row.get("site_detail_url")
-        metadata = {}
-        if isinstance(issue_name, str):
-            metadata["name"] = issue_name
-        if isinstance(issue_number, str):
-            metadata["issue_number"] = issue_number
+        # The roster rows were already fetched to build this series, so the
+        # provider facts they carry (name, numbering, dates, cover image) are
+        # normalized into the identity here instead of re-fetching each issue.
+        # Deep relationship fields stay absent, which is exactly what
+        # ``metadata_needs_hydration`` treats as incomplete, so the existing
+        # non-blocking reader-side refresh deepens them outside this request.
+        metadata = normalize_issue(row)
 
         try:
             adoption_result = await adopt_comicvine_issue(
@@ -1195,7 +1199,7 @@ async def import_comicvine_series(
                 comicvine_issue_id=issue_id,
                 issue_number=str(issue_number) if issue_number is not None else str(idx + 1),
                 external_url=external_url if isinstance(external_url, str) else None,
-                metadata=metadata if metadata else None,
+                metadata=metadata,
                 thread=thread,
             )
 
