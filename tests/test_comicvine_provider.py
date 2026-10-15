@@ -6,18 +6,24 @@ import asyncio
 import json
 import time
 import urllib.error
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from unittest.mock import patch
 
+import httpx
 import pytest
 
 from comic_pile.comicvine_provider import (
     COLLECTION_PAGE_LIMIT,
+    DEFAULT_REQUEST_TIMEOUT_SECONDS,
     ComicVineClient,
     ComicVineError,
     ComicVineRateLimitError,
     PersistentEndpointLimiter,
     PersistentResourceThrottleTracker,
     _parse_retry_after,
+    close_shared_http_client,
+    get_shared_http_client,
 )
 
 
@@ -442,6 +448,46 @@ def test_throttle_sets_cooldown_on_request_failure(tmp_path: Path, monkeypatch: 
     assert client.throttle_tracker.get_cooldown("issue") is not None
 
 
+def test_throttled_request_reports_effective_cooldown_on_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A throttled request must surface the persisted effective cooldown on the error.
+
+    Both ``retry_after`` and ``retry_after_seconds`` must carry the cooldown that was
+    actually recorded, including the bounded headerless fallback when the provider
+    omits ``Retry-After``.
+    """
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited_no_header(request: object, timeout: float) -> FakeUrlResponse:
+        raise urllib.error.HTTPError("https://example.invalid", 429, "slow down", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited_no_header)
+    with pytest.raises(ComicVineRateLimitError) as exc_info:
+        asyncio.run(client.request("issue", "issue/4000-7", {}, refresh=True))
+
+    assert exc_info.value.retry_after == 60.0
+    assert exc_info.value.retry_after_seconds == 60.0
+    assert exc_info.value.resource == "issue"
+
+
+def test_throttled_request_reports_provider_retry_after_on_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider ``Retry-After`` header must reach callers unchanged on both attributes."""
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited(request: object, timeout: float) -> FakeUrlResponse:
+        raise FakeHttpErrorWithHeaders(429, {"Retry-After": "120"})
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited)
+    with pytest.raises(ComicVineRateLimitError) as exc_info:
+        asyncio.run(client.request("issue", "issue/4000-7", {}, refresh=True))
+
+    assert exc_info.value.retry_after == 120.0
+    assert exc_info.value.retry_after_seconds == 120.0
+
+
 def test_throttle_no_cached_response_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """When throttled and no cached response exists, the error must be raised."""
     client = ComicVineClient("secret", tmp_path)
@@ -533,4 +579,216 @@ async def test_live_request_starts_are_paced_without_pacing_cache_reads(
     assert len(delays) == 1
     assert delays[0] > 0
     assert client.live_request_starts == 2
+
+
+def _mocked_transport(
+    handler: Callable[[httpx.Request], httpx.Response],
+) -> httpx.AsyncClient:
+    """Build an offline async client whose transport answers with the handler."""
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+@pytest.mark.asyncio
+async def test_shared_http_client_is_reused_and_closed_deterministically(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The process-wide keep-alive client is one reusable pool that shutdown drains."""
+    monkeypatch.setattr("comic_pile.comicvine_provider._shared_http_client", None)
+
+    with patch("httpx.AsyncClient", wraps=httpx.AsyncClient) as client_factory:
+        first = get_shared_http_client()
+        second = get_shared_http_client()
+
+    assert first is second
+    assert first.is_closed is False
+    assert first.follow_redirects is True
+    assert client_factory.call_args.kwargs["limits"] == httpx.Limits(
+        max_keepalive_connections=20, max_connections=100
+    )
+    assert first.timeout.read == DEFAULT_REQUEST_TIMEOUT_SECONDS
+    assert first.timeout.connect == DEFAULT_REQUEST_TIMEOUT_SECONDS * 0.3
+
+    await close_shared_http_client()
+
+    assert first.is_closed is True
+    rebuilt = get_shared_http_client()
+    assert rebuilt is not first
+    assert rebuilt.is_closed is False
+
+    await close_shared_http_client()
+    assert rebuilt.is_closed is True
+
+
+def test_transport_timeout_scales_connect_budget_with_configured_timeout(
+    tmp_path: Path,
+) -> None:
+    """The per-request timeout keeps its read budget and a shorter connect budget."""
+    client = ComicVineClient("secret", tmp_path, timeout_seconds=2.0)
+
+    timeout = client._transport_timeout()
+
+    assert timeout.read == 2.0
+    assert timeout.write == 2.0
+    assert timeout.connect == 0.6
+
+
+@pytest.mark.asyncio
+async def test_request_async_uses_injected_client_and_decodes_payload(tmp_path: Path) -> None:
+    """The injected transport sends the provider contract and decodes the payload."""
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"status_code": 1, "results": [{"id": 471}]})
+
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
+    try:
+        response = await client.request(
+            "search",
+            "search",
+            {"query": "batman", "resources": "volume", "limit": 10, "page": 1},
+        )
+    finally:
+        await http_client.aclose()
+
+    assert response.from_cache is False
+    assert response.payload == {"status_code": 1, "results": [{"id": 471}]}
+    assert len(sent) == 1
+    request = sent[0]
+    assert str(request.url).startswith("https://comicvine.gamespot.com/api/search")
+    assert request.url.params["query"] == "batman"
+    assert request.url.params["resources"] == "volume"
+    assert request.url.params["limit"] == "10"
+    assert request.url.params["page"] == "1"
+    assert request.url.params["api_key"] == "secret"
+    assert request.url.params["format"] == "json"
+    assert request.headers["User-Agent"] == "ComicPile/1.0"
+
+
+@pytest.mark.asyncio
+async def test_request_async_falls_back_to_sync_transport_without_injected_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without an injected client the async transport still delegates to the sync path."""
+    client = ComicVineClient("secret", tmp_path)
+    calls: list[tuple[str, Mapping[str, object]]] = []
+
+    def fake_sync(endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
+        calls.append((endpoint, params))
+        return {"status_code": 1}
+
+    monkeypatch.setattr(client, "_request_sync", fake_sync)
+
+    payload = await client._request_async("search", {"query": "batman"})
+
+    assert payload == {"status_code": 1}
+    assert calls == [("search", {"query": "batman"})]
+
+
+@pytest.mark.asyncio
+async def test_request_async_maps_provider_throttle_to_rate_limit_error(tmp_path: Path) -> None:
+    """A throttled live response raises the rate-limit error with the provider delay."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"Retry-After": "120"})
+
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
+    try:
+        with pytest.raises(ComicVineRateLimitError) as exc_info:
+            await client.request("search", "search", {"query": "batman"}, refresh=True)
+    finally:
+        await http_client.aclose()
+
+    assert exc_info.value.retry_after == 120.0
+    assert exc_info.value.retry_after_seconds == 120.0
+    assert exc_info.value.resource == "search"
+    assert client.throttle_tracker.is_throttled("search") is True
+
+
+@pytest.mark.asyncio
+async def test_request_async_maps_http_error_status_to_provider_error(tmp_path: Path) -> None:
+    """A non-throttle provider status becomes a plain provider error."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text="upstream unavailable")
+
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
+    try:
+        with pytest.raises(ComicVineError) as exc_info:
+            await client.request("search", "search", {"query": "batman"}, refresh=True)
+    finally:
+        await http_client.aclose()
+
+    assert isinstance(exc_info.value, ComicVineError)
+    assert not isinstance(exc_info.value, ComicVineRateLimitError)
+    assert "ComicVine HTTP 503" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_request_async_maps_transport_failure_to_provider_error(tmp_path: Path) -> None:
+    """Network-level transport failures never escape as raw httpx exceptions."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
+    try:
+        with pytest.raises(ComicVineError) as exc_info:
+            await client.request("search", "search", {"query": "batman"}, refresh=True)
+    finally:
+        await http_client.aclose()
+
+    assert not isinstance(exc_info.value, ComicVineRateLimitError)
+    assert "request failed" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_request_async_maps_invalid_json_to_provider_error(tmp_path: Path) -> None:
+    """An undecodable body is a provider error, not an unhandled decode crash."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>gateway error</html>")
+
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
+    try:
+        with pytest.raises(ComicVineError) as exc_info:
+            await client.request("search", "search", {"query": "batman"}, refresh=True)
+    finally:
+        await http_client.aclose()
+
+    assert "JSON decode failed" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "expected_message"),
+    [
+        ([{"id": 1}], "non-object"),
+        ({"status_code": 101, "error": "Invalid API Key"}, "ComicVine API error"),
+    ],
+)
+async def test_request_async_rejects_unusable_payloads(
+    tmp_path: Path,
+    payload: object,
+    expected_message: str,
+) -> None:
+    """Non-object bodies and provider error payloads are both rejected deterministically."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    http_client = _mocked_transport(handler)
+    client = ComicVineClient("secret", tmp_path, http_client=http_client)
+    try:
+        with pytest.raises(ComicVineError, match=expected_message) as exc_info:
+            await client.request("search", "search", {"query": "batman"}, refresh=True)
+    finally:
+        await http_client.aclose()
+
+    assert not isinstance(exc_info.value, ComicVineRateLimitError)
 

@@ -67,10 +67,21 @@ def _get_comicvine_client():
     if not api_key:
         return None
 
-    from comic_pile.comicvine_provider import ComicVineClient
+    from comic_pile.comicvine_provider import ComicVineClient, get_shared_http_client
 
     cache_dir = Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine"))
-    return ComicVineClient(api_key=api_key, cache_dir=cache_dir)
+
+    # Reuse the process-wide keep-alive HTTP client so warm instances skip a
+    # fresh TLS handshake per provider call, and fail fast instead of hanging
+    # on an unresponsive ComicVine. The endpoint budget stays at the documented
+    # 180-requests-per-hour ceiling per bucket; raising it buys no latency and
+    # spends the provider's rate-limit headroom.
+    return ComicVineClient(
+        api_key=api_key,
+        cache_dir=cache_dir,
+        http_client=get_shared_http_client(),
+        timeout_seconds=10.0,
+    )
 
 
 @router.get(

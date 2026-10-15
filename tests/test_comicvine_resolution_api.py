@@ -1,13 +1,17 @@
 """Tests for ComicVine identity resolution and metadata correction API endpoints."""
 
 from datetime import UTC, datetime
+from pathlib import Path
 
+import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.comicvine_resolution import _get_comicvine_client
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.metadata_correction import IssueMetadataCorrection
+from comic_pile.comicvine_provider import DEFAULT_REQUESTS_PER_HOUR
 
 
 def _issue_identity(external_id: str, metadata: dict[str, object]) -> ExternalIdentity:
@@ -439,6 +443,33 @@ async def test_search_series_exposes_paging_defaults_without_client(
     assert body["limit"] == 20
     assert body["has_more"] is False
     assert body["next_offset"] is None
+
+
+def test_comicvine_client_reuses_shared_pool_and_documented_rate_ceiling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The provider client reuses the keep-alive pool and keeps the documented rate ceiling.
+
+    The rolling-hour budget must stay at the documented 180 requests per endpoint
+    bucket. Raising it to the provider's hard ceiling would spend rate-limit
+    headroom without improving per-request latency.
+    """
+    monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
+    monkeypatch.setenv("COMICVINE_CACHE_DIR", str(tmp_path))
+    shared = httpx.AsyncClient()
+    monkeypatch.setattr(
+        "comic_pile.comicvine_provider.get_shared_http_client",
+        lambda: shared,
+    )
+
+    client = _get_comicvine_client()
+
+    assert client is not None
+    assert client._http_client is shared
+    assert client.timeout_seconds == 10.0
+    assert client.limiter.requests_per_hour == DEFAULT_REQUESTS_PER_HOUR
+    assert client.limiter.requests_per_hour == 180
 
 
 @pytest.mark.asyncio

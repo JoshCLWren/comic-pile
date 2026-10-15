@@ -6,6 +6,7 @@ import asyncio
 import email.utils
 import hashlib
 import json
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -14,6 +15,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 from filelock import FileLock
 
 COMICVINE_BASE_URL = "https://comicvine.gamespot.com/api"
@@ -21,6 +23,7 @@ DEFAULT_REQUESTS_PER_HOUR = 180
 DEFAULT_NO_HEADER_COOLDOWN = 60.0
 DEFAULT_MAX_NO_HEADER_COOLDOWN = 3600.0
 DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 0.0
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 COLLECTION_PAGE_LIMIT = 100
 DEEP_ISSUE_FIELDS = (
     "id",
@@ -312,6 +315,58 @@ def _parse_retry_after(header_value: str | None, clock: Callable[[], float] = ti
     return None
 
 
+_shared_http_client: httpx.AsyncClient | None = None
+_shared_http_client_lock = threading.Lock()
+
+
+def _default_request_timeout() -> httpx.Timeout:
+    """Build the shared transport timeout used when no per-client override applies."""
+    return httpx.Timeout(
+        DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        connect=DEFAULT_REQUEST_TIMEOUT_SECONDS * 0.3,
+    )
+
+
+def get_shared_http_client() -> httpx.AsyncClient:
+    """Return the process-wide keep-alive HTTP client for live ComicVine calls.
+
+    Reusing one client across requests keeps TLS connections warm so warm
+    application instances do not pay a fresh handshake on every provider call.
+    Redirects are followed to match the historical urllib transport behavior.
+    The client is intended for the application's single event loop, and
+    application shutdown must call :func:`close_shared_http_client`.
+
+    Returns:
+        The shared async HTTP client, created on first use.
+    """
+    global _shared_http_client
+    if _shared_http_client is None:
+        with _shared_http_client_lock:
+            if _shared_http_client is None:
+                _shared_http_client = httpx.AsyncClient(
+                    timeout=_default_request_timeout(),
+                    limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+                    follow_redirects=True,
+                )
+    return _shared_http_client
+
+
+async def close_shared_http_client() -> None:
+    """Close the process-wide keep-alive client and clear the cached singleton.
+
+    Shutdown drains idle provider sockets deterministically instead of leaving
+    the pool to interpreter teardown. Calling this when no client was created
+    is a no-op, and the next :func:`get_shared_http_client` call builds a fresh
+    client.
+    """
+    global _shared_http_client
+    with _shared_http_client_lock:
+        client = _shared_http_client
+        _shared_http_client = None
+    if client is not None:
+        await client.aclose()
+
+
 class ComicVineClient:
     """Fetch ComicVine resources with endpoint-specific contracts, resource throttling, and resumable caching."""
 
@@ -325,7 +380,8 @@ class ComicVineClient:
             DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS
         ),
         base_url: str = COMICVINE_BASE_URL,
-        timeout_seconds: float = 30.0,
+        timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         """Configure the provider client.
 
@@ -335,7 +391,10 @@ class ComicVineClient:
             requests_per_hour: Rolling-hour budget per endpoint path.
             minimum_live_request_interval_seconds: Minimum delay between uncached live request starts.
             base_url: Provider API base URL.
-            timeout_seconds: Network timeout per request.
+            timeout_seconds: Network timeout per request on either transport.
+            http_client: Optional shared async HTTP client. When provided, live requests use it
+                with connection keep-alive; when None, live requests go through the synchronous
+                urllib transport on a worker thread.
         """
         if not api_key.strip():
             raise ValueError("api_key is required")
@@ -357,6 +416,7 @@ class ComicVineClient:
         self._live_request_lock = asyncio.Lock()
         self._last_live_request_started_at: float | None = None
         self.live_request_starts = 0
+        self._http_client = http_client
 
     @staticmethod
     def _cache_key(endpoint: str, params: Mapping[str, object]) -> str:
@@ -397,6 +457,80 @@ class ComicVineClient:
                         await asyncio.sleep(delay)
                 self._last_live_request_started_at = time.monotonic()
         self.live_request_starts += 1
+
+    def _transport_timeout(self) -> httpx.Timeout:
+        """Build the per-request timeout applied to the injected async transport.
+
+        The shared client is process-wide, so the configured ``timeout_seconds``
+        is passed per request instead of being frozen into the shared client.
+
+        Returns:
+            The read/write/pool timeout with a proportionally shorter connect budget.
+        """
+        return httpx.Timeout(self.timeout_seconds, connect=self.timeout_seconds * 0.3)
+
+    async def _request_async(
+        self, endpoint: str, params: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Fetch one raw provider payload over the configured HTTP transport.
+
+        When no async HTTP client was injected, the request falls back to the
+        synchronous urllib transport on a worker thread. The injected client
+        path reuses keep-alive connections and follows redirects, matching the
+        urllib transport's behavior.
+
+        Args:
+            endpoint: Relative API path.
+            params: Provider request parameters excluding credentials and output format.
+
+        Returns:
+            Decoded provider payload as a dictionary.
+
+        Raises:
+            ComicVineRateLimitError: When the provider answers with a throttle status.
+            ComicVineError: For HTTP, network, decoding, or provider payload failures.
+        """
+        if self._http_client is None:
+            return await asyncio.to_thread(self._request_sync, endpoint, params)
+        query = {
+            **params,
+            "api_key": self.api_key,
+            "format": "json",
+        }
+        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+
+        try:
+            response = await self._http_client.get(
+                url,
+                params=query,
+                headers={"User-Agent": "ComicPile/1.0"},
+                timeout=self._transport_timeout(),
+            )
+            response.raise_for_status()
+            decoded = response.json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (420, 429):
+                retry_after = _parse_retry_after(exc.response.headers.get("Retry-After"), self._clock)
+                raise ComicVineRateLimitError(
+                    f"ComicVine returned HTTP {exc.response.status_code}",
+                    retry_after=retry_after,
+                ) from exc
+            raise ComicVineError(f"ComicVine HTTP {exc.response.status_code} for {endpoint}") from exc
+        except httpx.RequestError as exc:
+            raise ComicVineError(f"ComicVine request failed for {endpoint}: {exc}") from exc
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ComicVineError(f"ComicVine response JSON decode failed for {endpoint}: {exc}") from exc
+
+        if not isinstance(decoded, dict):
+            raise ComicVineError(f"ComicVine returned a non-object response for {endpoint}")
+
+        status_code = decoded.get("status_code")
+        if status_code not in (None, 1):
+            raise ComicVineError(
+                f"ComicVine API error for {endpoint}: {decoded.get('error', status_code)!r}"
+            )
+
+        return decoded
 
     def _request_sync(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
         query = {
@@ -474,7 +608,7 @@ class ComicVineClient:
             raise
         await self._pace_live_request()
         try:
-            payload = await asyncio.to_thread(self._request_sync, endpoint, params)
+            payload = await self._request_async(endpoint, params)
         except ComicVineRateLimitError as exc:
             effective_delay = self.throttle_tracker.record_throttle(
                 endpoint_bucket,

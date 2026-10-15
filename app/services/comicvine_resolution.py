@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
@@ -53,6 +54,13 @@ logger = logging.getLogger(__name__)
 COMICVINE_PROVIDER = "comicvine"
 """Canonical provider key for ComicVine identities, mappings, and catalog rows."""
 
+PROVIDER_SLOW_SEARCH_LOG_MS = 500.0
+"""Provider-phase search latency above which a warning is logged in every environment.
+
+ComicVine series search answers well inside the request budget when the upstream
+call is warm, so a warning here means the provider phase itself is regressing.
+"""
+
 
 def _coerce_provider_int(value: object) -> int | None:
     """Coerce a ComicVine value into an int when it is numeric.
@@ -102,6 +110,8 @@ async def search_comicvine_series(
     Returns:
         Series search results with paging metadata.
     """
+    start_time = time.perf_counter()
+
     clamped_limit = max(1, min(limit, 100))
     clamped_offset = max(0, offset)
     # ComicVine /search pages with a 1-based page number (page size == limit).
@@ -117,6 +127,7 @@ async def search_comicvine_series(
             next_offset=None,
         )
 
+    # Request the fields the UI renders, including the cover thumbnail.
     response = await client.request(
         "search",
         "search",
@@ -128,33 +139,56 @@ async def search_comicvine_series(
             "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
+
+    request_time = (time.perf_counter() - start_time) * 1000
+
+    # Provider-phase latency only: the request-logging middleware measures total
+    # application time, so this isolates how much of a slow search is the upstream
+    # ComicVine call rather than our own work. Logged in every environment because
+    # the 1000 ms request budget is only observable in production traffic.
+    if request_time > PROVIDER_SLOW_SEARCH_LOG_MS:
+        logger.warning(
+            "ComicVine search took %.2fms for query: %s",
+            request_time,
+            query[:50] + "..." if len(query) > 50 else query,
+        )
+
     results = response.payload.get("results")
     if not isinstance(results, list):
         return ComicVineSeriesSearchResponse(
             query=query,
             results=[],
+            total_available=0,
             offset=clamped_offset,
             limit=clamped_limit,
+            has_more=False,
+            next_offset=None,
         )
 
     series_results: list[ComicVineSeriesResult] = []
     for row in results:
         if not isinstance(row, dict):
             continue
+
         volume_id = row.get("id")
         name = row.get("name")
         if not isinstance(volume_id, int) or not isinstance(name, str):
             continue
+
         publisher_raw = row.get("publisher")
-        publisher = None
-        if isinstance(publisher_raw, dict):
-            publisher = publisher_raw.get("name")
-        elif isinstance(publisher_raw, str):
-            publisher = publisher_raw
+        publisher = (
+            publisher_raw.get("name")
+            if isinstance(publisher_raw, dict)
+            else publisher_raw
+            if isinstance(publisher_raw, str)
+            else None
+        )
+
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
             image_url = image_raw.get("medium_url") or image_raw.get("small_url")
+
         series_results.append(
             ComicVineSeriesResult(
                 comicvine_volume_id=volume_id,
