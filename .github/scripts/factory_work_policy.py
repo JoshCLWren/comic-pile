@@ -523,6 +523,9 @@ def pr_is_static_candidate(
     if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
         return False
     labels = labels_of(pr)
+    # Explicit operator opt-out always wins, including on an already-enrolled PR.
+    if eligibility.is_manual_only(str(pr.get("body") or "")):
+        return False
     # Human-authored agent/* and chatgpt/* PRs are not autonomous factory work,
     # even if a stale/mistaken factory label was applied to them. Labeled local
     # Cursor/fix delivery PRs are admitted so they can finish through review.
