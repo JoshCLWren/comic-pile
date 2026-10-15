@@ -548,7 +548,9 @@ class ComicVineClient:
 
         Pagination stays tolerant of an inconsistent reported total: when the provider omits
         ``number_of_total_results`` or returns a short page, the rows the provider actually
-        supplied are returned rather than failing the whole roster.
+        supplied are returned rather than failing the whole roster. An omitted total with a
+        full first page falls back to walking forward until a short page, matching the legacy
+        sequential behavior.
 
         Args:
             volume_id: ComicVine volume ID.
@@ -563,10 +565,21 @@ class ComicVineClient:
         """
         first_page = await self._fetch_volume_issue_page(volume_id, 0, refresh=refresh)
         total = first_page.total_results
-        if total is None or len(first_page.rows) >= total:
-            return first_page.rows
-        if len(first_page.rows) < COLLECTION_PAGE_LIMIT:
-            # A short first page already carries every issue the provider is willing to return.
+        if total is None:
+            # The provider omitted the roster total. A short first page already carries every
+            # issue the provider is willing to return; a full one is walked forward until a
+            # short page, exactly as the legacy sequential pagination did.
+            rows = list(first_page.rows)
+            if len(first_page.rows) < COLLECTION_PAGE_LIMIT:
+                return rows
+            offset = len(first_page.rows)
+            while True:
+                page = await self._fetch_volume_issue_page(volume_id, offset, refresh=refresh)
+                rows.extend(page.rows)
+                if len(page.rows) < COLLECTION_PAGE_LIMIT:
+                    return rows
+                offset += len(page.rows)
+        if len(first_page.rows) >= total or len(first_page.rows) < COLLECTION_PAGE_LIMIT:
             return first_page.rows
 
         pages_needed = (total + COLLECTION_PAGE_LIMIT - 1) // COLLECTION_PAGE_LIMIT

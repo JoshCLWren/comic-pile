@@ -209,32 +209,42 @@ async def get_comicvine_series_issues(
         )
 
     # The roster and the volume metadata are independent provider reads. When the caller has not
-    # already resolved a series name, schedule the volume read alongside the roster so the two
-    # provider round trips overlap instead of running back to back.
+    # already resolved a series name, schedule both reads up front so the two provider round
+    # trips overlap instead of running back to back. Each read degrades independently: a roster
+    # failure keeps the resolved series name with an empty roster, while a volume-metadata
+    # failure keeps the fetched roster under the generic label. Both tasks are always awaited,
+    # so a failing sibling never leaves an orphaned task behind.
     volume_task = None if series_name else asyncio.ensure_future(client.fetch_volume(volume_id))
     issues_rows: list[dict[str, object]] = []
     vol_obj: object = None
-    try:
-        if volume_task is not None:
-            issues_rows, vol_response = await asyncio.gather(
-                client.fetch_volume_issues(volume_id), volume_task
+    if volume_task is None:
+        try:
+            issues_rows = await client.fetch_volume_issues(volume_id)
+        except Exception:
+            logger.warning("Failed to fetch volume %d issues", volume_id, exc_info=True)
+            return ComicVineSeriesIssuesResponse(
+                comicvine_volume_id=volume_id,
+                series_name=series_name,
+                issues=[],
             )
+    else:
+        roster_task = asyncio.ensure_future(client.fetch_volume_issues(volume_id))
+        try:
+            issues_rows = await roster_task
+        except Exception:
+            logger.warning("Failed to fetch volume %d issues", volume_id, exc_info=True)
+        try:
+            vol_response = await volume_task
+        except Exception:
+            logger.warning("Failed to fetch volume %d metadata", volume_id, exc_info=True)
+        else:
             payload = getattr(vol_response, "payload", None)
             vol_obj = payload.get("results") if isinstance(payload, dict) else None
-        else:
-            issues_rows = await client.fetch_volume_issues(volume_id)
-    except Exception:
-        logger.warning("Failed to fetch volume %d issues", volume_id, exc_info=True)
-        return ComicVineSeriesIssuesResponse(
-            comicvine_volume_id=volume_id,
-            series_name=series_name or f"Volume {volume_id}",
-            issues=[],
-        )
 
     if isinstance(vol_obj, dict):
         volume_name = vol_obj.get("name")
         series_name = volume_name if isinstance(volume_name, str) else f"Volume {volume_id}"
-    elif series_name is None:
+    elif not series_name:
         series_name = f"Volume {volume_id}"
 
     candidates: list[ComicVineIssueCandidate] = []

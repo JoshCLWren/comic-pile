@@ -154,6 +154,31 @@ async def test_roster_without_reported_total_returns_supplied_rows(
 
 
 @pytest.mark.asyncio
+async def test_roster_without_reported_total_walks_past_a_full_first_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing total with a full first page walks forward until a short page."""
+    client = _client(tmp_path)
+    observed: list[int] = []
+
+    def provider(endpoint: str, params: object) -> dict[str, object]:
+        assert endpoint == "issues"
+        assert isinstance(params, dict)
+        offset = int(params["offset"])
+        observed.append(offset)
+        count = COLLECTION_PAGE_LIMIT if offset < 200 else 30
+        first_id = offset + 1
+        return {"status_code": 1, "results": _rows(first_id, first_id + count - 1)}
+
+    monkeypatch.setattr(client, "_request_sync", provider)
+
+    rows = await client.fetch_volume_issues(VOLUME_ID, refresh=True)
+
+    assert [row["id"] for row in rows] == list(range(1, 231))
+    assert observed == [0, 100, 200]
+
+
+@pytest.mark.asyncio
 async def test_roster_tolerates_short_first_page(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
