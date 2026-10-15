@@ -104,7 +104,7 @@ async def search_comicvine_series(
         Series search results with paging metadata.
     """
     start_time = time.perf_counter()
-    
+
     clamped_limit = max(1, min(limit, 100))
     clamped_offset = max(0, offset)
     # ComicVine /search pages with a 1-based page number (page size == limit).
@@ -132,17 +132,18 @@ async def search_comicvine_series(
             "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
-    
+
     # Performance monitoring
     request_time = (time.perf_counter() - start_time) * 1000
-    
+
     # Log performance metrics for debugging (only in development)
     if request_time > 500:  # Log slow requests
         logger.warning(
-            "ComicVine search took %.2fms for query: %s", 
-            request_time, 
-            query[:50] + "..." if len(query) > 50 else query
+            "ComicVine search took %.2fms for query: %s",
+            request_time,
+            query[:50] + "..." if len(query) > 50 else query,
         )
+
     results = response.payload.get("results")
     if not isinstance(results, list):
         return ComicVineSeriesSearchResponse(
@@ -156,28 +157,29 @@ async def search_comicvine_series(
     for row in results:
         if not isinstance(row, dict):
             continue
-        
+
         # Fast path for essential fields
         volume_id = row.get("id")
         name = row.get("name")
         if not isinstance(volume_id, int) or not isinstance(name, str):
             continue
-            
+
         # Optimized publisher extraction
         publisher_raw = row.get("publisher")
         publisher = (
-            publisher_raw.get("name") 
-            if isinstance(publisher_raw, dict) 
-            else publisher_raw if isinstance(publisher_raw, str) 
+            publisher_raw.get("name")
+            if isinstance(publisher_raw, dict)
+            else publisher_raw
+            if isinstance(publisher_raw, str)
             else None
         )
-        
+
         # Optimized image URL extraction
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
             image_url = image_raw.get("medium_url") or image_raw.get("small_url")
-        
+
         # Create result with validated publisher
         series_results.append(
             ComicVineSeriesResult(
@@ -186,7 +188,9 @@ async def search_comicvine_series(
                 publisher=publisher if isinstance(publisher, str) else None,
                 start_year=_coerce_provider_int(row.get("start_year")),
                 issue_count=_coerce_provider_int(row.get("count_of_issues")),
-                site_detail_url=row.get("site_detail_url") if isinstance(row.get("site_detail_url"), str) else None,
+                site_detail_url=row.get("site_detail_url")
+                if isinstance(row.get("site_detail_url"), str)
+                else None,
                 image_url=image_url,
             )
         )

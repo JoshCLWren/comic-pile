@@ -469,7 +469,9 @@ class ComicVineClient:
         """
         return httpx.Timeout(self.timeout_seconds, connect=self.timeout_seconds * 0.3)
 
-    async def _request_async(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
+    async def _request_async(
+        self, endpoint: str, params: Mapping[str, object]
+    ) -> dict[str, object]:
         """Fetch one raw provider payload over the configured HTTP transport.
 
         When no async HTTP client was injected, the request falls back to the
