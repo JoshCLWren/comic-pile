@@ -325,7 +325,12 @@ async function reconcileMissingPrLabels({ github, context }) {
       }
     }
     await reconcileLabels(github, context, pr.number, {
-      owner: owners.length === 1 ? owners[0] : 'factory:unowned', stage,
+      // Never interpret a contradictory local+unowned label pair as a lease
+      // release. Keep the active local owner until its session hands off.
+      owner: current.has('factory:local')
+        ? 'factory:local'
+        : owners.length === 1 ? owners[0] : 'factory:unowned',
+      stage,
     });
   }
 }
