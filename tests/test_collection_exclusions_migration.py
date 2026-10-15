@@ -35,6 +35,7 @@ def test_collection_exclusion_migration_is_single_head() -> None:
 @pytest.mark.asyncio
 async def test_collection_exclusion_migration_roundtrip_postgres(
     async_db: AsyncSession,
+    sample_data: dict[str, object],
 ) -> None:
     """Upgrade, enforce constraints/indexes and downgrade in PostgreSQL."""
     spec = importlib.util.spec_from_file_location("exclusion_migration", _migration_path())
