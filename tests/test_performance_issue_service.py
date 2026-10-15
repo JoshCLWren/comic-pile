@@ -12,10 +12,11 @@ from app.services.perf_alarm_store import InMemoryPerfAlarmStore
 
 
 @pytest.fixture(autouse=True)
-def _clean_tracker():
-    """Isolate performance-alarm store and occurrence evidence between tests."""
+def _clean_tracker(monkeypatch: pytest.MonkeyPatch):
+    """Exercise the legacy auto-filing contract only with explicit opt-in."""
     from app.config import clear_settings_cache
 
+    monkeypatch.setenv("PERF_ALARM_GITHUB_ISSUES_ENABLED", "true")
     perf_issues.reset_for_tests()
     clear_settings_cache()
     yield
