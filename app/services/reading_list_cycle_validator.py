@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from heapq import heapify, heappop, heappush
+from typing import Literal
 
 from app.services.reading_list_evaluator import ReadingSnapshot
 
@@ -14,6 +15,8 @@ class ConstraintEdge:
     source_issue_id: int
     target_issue_id: int
     origin: str
+    prerequisite_origin: Literal["reader", "converted"] | None = None
+    provenance: tuple[str, ...] = ()
 
 
 class ReadingCycleError(ValueError):
@@ -120,6 +123,8 @@ def validate_reading_constraints(
                 else ""
             )
             + ")",
+            prerequisite_origin=p.origin,
+            provenance=p.provenance,
         )
         for p in snapshot.prerequisites
     )

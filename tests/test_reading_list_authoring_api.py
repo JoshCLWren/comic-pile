@@ -314,6 +314,13 @@ async def test_series_and_stable_prerequisite_cycles_reject_atomically(
     assert rejected.status_code == 422, rejected.text
     assert "prerequisite" in rejected.json()["detail"]["message"]
     assert "historical classification unknown" in rejected.json()["detail"]["message"]
+    requirement_edge = next(
+        edge
+        for edge in rejected.json()["detail"]["path"]
+        if edge["prerequisite_origin"] is not None
+    )
+    assert requirement_edge["prerequisite_origin"] == "converted"
+    assert requirement_edge["provenance"] == ["historical classification unknown", "explicit"]
     current = (await auth_client.get(url)).json()
     assert current["name"] == "Original" and current["mode"] == "loose"
 
@@ -458,7 +465,7 @@ async def test_strict_authoring_warns_about_omitted_unread_series_issues(
     )
     assert created.status_code == 201, created.text
     assert created.json()["warnings"] == [
-        "Strict list omits unread Issues from Series 0: Series 0 #2"
+        "Strict list omits 1 unread Issues from Series 0: Series 0 #2"
     ]
 
 
@@ -475,3 +482,86 @@ async def test_confirmation_is_put_only(auth_client: AsyncClient) -> None:
     )
     assert response.status_code == 422, response.text
     assert response.json()["detail"]["code"] == "reading_list_confirmation_put_only"
+
+
+@pytest.mark.asyncio
+async def test_warning_bounds_samples_and_counts_skipped_placements(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Large Threads produce a bounded sample, counting deliberately skipped members."""
+    a, _, _ = await _members(async_db)
+    first = await async_db.get(Issue, a)
+    assert first is not None
+    for position in range(2, 62):
+        async_db.add(
+            Issue(thread_id=first.thread_id, issue_number=str(position), position=position)
+        )
+    await async_db.commit()
+    response = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Partial",
+            "mode": "strict",
+            "issue_ids": [a],
+            "entry_intents": {str(a): {"skipped": True}},
+        },
+    )
+    assert response.status_code == 201, response.text
+    warning = response.json()["warnings"][0]
+    assert "omits 61 unread Issues" in warning
+    assert "Series 0 #1" in warning  # The skipped placement is omitted from execution.
+    assert "#6" not in warning and "(+56 more)" in warning
+    assert len(warning) < 600
+    opened = await auth_client.get(f"/api/v1/custom-cbls/{response.json()['id']}")
+    assert opened.json()["warnings"] == []  # Explicitly write-time diagnostics.
+
+
+@pytest.mark.asyncio
+async def test_warning_bounds_affected_threads_and_display_lengths(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Many partial Threads cannot expand a response into a full library inventory."""
+    ids = await _members(async_db, count=12)
+    for index, issue_id in enumerate(ids):
+        first = await async_db.get(Issue, issue_id)
+        assert first is not None
+        thread = await async_db.get(Thread, first.thread_id)
+        assert thread is not None
+        thread.title = f"{index:02d}" + "x" * 198
+        async_db.add(Issue(thread_id=first.thread_id, issue_number="2", position=2))
+    await async_db.commit()
+    response = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Partial",
+            "mode": "strict",
+            "issue_ids": ids,
+        },
+    )
+    assert response.status_code == 201, response.text
+    warnings = response.json()["warnings"]
+    assert len(warnings) == 11
+    assert warnings[-1] == "Partial coverage also affects 2 more Threads."
+    assert all(len(warning) < 250 for warning in warnings)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_corruption_is_not_misreported_as_reader_input(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Impossible missing-reference snapshots remain internal invariant errors."""
+    from app.repositories import reading_list_authoring_repository as repository
+    from app.services.reading_list_authoring import load_authoring_snapshot
+
+    a, _, _ = await _members(async_db)
+    user = await get_or_create_user_async(async_db)
+    created = await auth_client.post(
+        "/api/v1/custom-cbls", json={"name": "Order", "issue_ids": [a]}
+    )
+    assert created.status_code == 201, created.text
+    with patch.object(repository, "load_issues", AsyncMock(return_value=[])):
+        with pytest.raises(ValueError, match="missing referenced issues"):
+            await load_authoring_snapshot(async_db, user.id)

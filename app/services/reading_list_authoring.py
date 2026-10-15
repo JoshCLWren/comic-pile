@@ -137,6 +137,8 @@ async def validate_authored_list(
                         "source_issue_id": e.source_issue_id,
                         "target_issue_id": e.target_issue_id,
                         "origin": e.origin,
+                        "prerequisite_origin": e.prerequisite_origin,
+                        "provenance": list(e.provenance),
                     }
                     for e in exc.edges
                 ],
@@ -147,22 +149,36 @@ async def validate_authored_list(
         raise HTTPException(status_code=404, detail="Reading List not found")
     warnings: list[str] = []
     if after.mode == "strict":
-        members = {entry.issue_id for entry in after.entries}
-        represented = {issue.thread_id for issue in snapshot.issues if issue.issue_id in members}
-        omitted_by_thread: dict[int, list[str]] = {}
+        # Represented Threads include skipped placements so skipping the only
+        # member still warns about the unread material execution ignores.
+        placed = {entry.issue_id for entry in after.entries}
+        covered = {entry.issue_id for entry in after.entries if not entry.skipped}
+        represented = {issue.thread_id for issue in snapshot.issues if issue.issue_id in placed}
+        omitted_counts: dict[int, int] = {}
+        samples: dict[int, list[str]] = {}
         for issue in snapshot.issues:
             if (
                 issue.thread_id in represented
-                and issue.issue_id not in members
+                and issue.issue_id not in covered
                 and issue.status != "read"
                 and issue.issue_id not in snapshot.excluded_issue_ids
             ):
-                omitted_by_thread.setdefault(issue.thread_id, []).append(names[issue.issue_id])
-        for thread in snapshot.threads:
-            if omitted := omitted_by_thread.get(thread.thread_id):
-                warnings.append(
-                    f"Strict list omits unread Issues from {thread.name}: " + ", ".join(omitted)
-                )
+                omitted_counts[issue.thread_id] = omitted_counts.get(issue.thread_id, 0) + 1
+                sample = samples.setdefault(issue.thread_id, [])
+                if len(sample) < 5:
+                    sample.append(names[issue.issue_id][:80])
+        affected = [thread for thread in snapshot.threads if thread.thread_id in omitted_counts]
+        for thread in affected[:10]:
+            count = omitted_counts[thread.thread_id]
+            sample = samples[thread.thread_id]
+            suffix = f", … (+{count - len(sample)} more)" if count > len(sample) else ""
+            warnings.append(
+                f"Strict list omits {count} unread Issues from {thread.name[:80]}: "
+                + ", ".join(sample)
+                + suffix
+            )
+        if len(affected) > 10:
+            warnings.append(f"Partial coverage also affects {len(affected) - 10} more Threads.")
     if before is None:
         return [], warnings
     old = _requirements(before)
