@@ -61,6 +61,15 @@ const STAGE_LABELS = [
 ];
 const ADVANCED_PR_STAGES = new Set(['factory:review', 'factory:ci', 'factory:ready']);
 const MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->';
+
+function hasManualOnlyDirective(body) {
+  // Referencing this marker in inline or fenced documentation is not an opt-out.
+  // Only a standalone directive outside Markdown code spans qualifies.
+  const prose = String(body || '')
+    .replace(/`{3}[\s\S]*?`{3}/g, '')
+    .replace(/`[^`\n]*`/g, '');
+  return prose.split(/\r?\n/).some(line => line.trim() === MANUAL_ONLY_MARKER);
+}
 const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const TRUSTED_APP_SLUGS = new Set(['github-actions']);
 
@@ -296,7 +305,7 @@ async function reconcileMissingPrLabels({ github, context }) {
       || /^(dependabot|renovate)(\[bot\])?$/.test(pr.user?.login || '')) continue;
     // Manual-only PRs are operator-managed and must never be enrolled into the
     // factory queue (enroll would otherwise default them to factory:review).
-    if ((pr.body || '').includes(MANUAL_ONLY_MARKER)) continue;
+    if (hasManualOnlyDirective(pr.body)) continue;
     const current = await currentLabels(github, context, pr.number);
     // A local factory lease is a real active owner, not an exemption from
     // factory review. Preserve it until the local session explicitly releases
