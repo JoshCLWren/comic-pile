@@ -15,20 +15,6 @@ from app.models.revoked_token import RevokedToken
 from app.models.user import User
 
 
-async def is_token_revoked(db: AsyncSession, jti: str) -> bool:
-    """Check whether a token JTI has been revoked.
-
-    Args:
-        db: Database session.
-        jti: JWT token identifier to check.
-
-    Returns:
-        ``True`` when the JTI is present in the revoked-tokens table.
-    """
-    result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti).limit(1))
-    return result.scalar_one_or_none() is not None
-
-
 async def get_user_by_username_with_revocation_check(
     db: AsyncSession,
     username: str,

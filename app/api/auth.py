@@ -30,7 +30,9 @@ from app.repositories.failed_login_repository import (
     clear_attempts_for_username,
     record_failed_attempt,
 )
-from app.repositories.revoked_token_repository import is_token_revoked
+from app.repositories.revoked_token_repository import (
+    get_user_by_username_with_revocation_check,
+)
 from app.repositories.user_repository import (
     check_username_or_email_exists,
     create_user,
@@ -306,19 +308,24 @@ async def refresh_access_token(
             detail="Invalid refresh token",
         )
 
-    if await is_token_revoked(db, jti):
-        _log_refresh_outcome(request, outcome="rejected", reason="revoked_token")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked",
-        )
-
-    user = await get_user_by_username(db, username)
-    if not user:
+    # Single round trip: resolve the user and the revocation status with one
+    # LEFT JOIN query instead of sequential revoked-token + user lookups. Each
+    # pooled round trip costs budget on the size-2/no-overflow production pool,
+    # so the refresh path matches the get_current_user pattern from #1261.
+    try:
+        user, is_revoked = await get_user_by_username_with_revocation_check(db, username, jti)
+    except ValueError as e:
         _log_refresh_outcome(request, outcome="rejected", reason="invalid_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
+        ) from e
+
+    if is_revoked:
+        _log_refresh_outcome(request, outcome="rejected", reason="revoked_token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
         )
 
     payload_pc = payload.get("pc")
