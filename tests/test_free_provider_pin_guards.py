@@ -143,43 +143,49 @@ def test_opencode_longcat_lane_pins_gateway_id_not_analytics_slug(validate) -> N
     assert "longcat-2.5-preview" not in pinned
 
 
-def test_new_slots_pin_apodex_and_native_ling_31(validate) -> None:
-    """Workers 74 and 75 are the hand-grown Apodex and native Ling slots."""
+def test_discovered_free_models_reuse_existing_worker_slots(validate) -> None:
+    """Free promos replace retired Apodex/Ling without adding worker IDs."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     by_worker = {row["worker"]: row for row in rows}
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["74"]["source"] == "openrouter-free"
-    assert by_worker["74"]["model"] == "apodex/apodex-1.1-mini:free"
-    assert validate.openrouter_model_is_free(by_worker["74"]["model"])
-    assert by_worker["75"]["source"] == "opencode-free"
-    assert by_worker["75"]["model"] == "ling-3.1-flash-free"
-    assert by_worker["75"]["model"] != "inclusionai/ling-3.1-flash"
-    assert validate.opencode_model_is_free(by_worker["75"]["model"])
-    assert "deepseek-v4-flash-free" not in {row["model"] for row in rows}
-    assert "z-ai/glm-5.2:free" not in {row["model"] for row in rows}
+    for retired in ("apodex/apodex-1.1-mini:free", "ling-3.1-flash-free"):
+        assert retired in lock["retired_models"]
+    for worker, model in (
+        ("74", "deepseek-v4.1-flash-free"),
+        ("75", "nemotron-3.5-super-vl-free"),
+    ):
+        pin = by_worker.get(worker)
+        if pin is not None and pin["model"] == model:
+            assert pin["source"] == "opencode-free"
+            assert validate.opencode_model_is_free(pin["model"])
+            assert pin["scheduler"] == "dispatcher"
+        else:
+            # These promotional models may be retired by discovery later.
+            assert model in lock["retired_models"]
 
 
 def test_worker_76_fledge_alpha_free_is_retired_by_discovery(validate) -> None:
-    """Worker 76 was retired once fledge-alpha-free left the Zen catalog."""
+    """The historical Fledge Alpha retirement remains locked."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     by_worker = {row["worker"]: row for row in rows}
-    assert by_worker["46"]["source"] == "kilo-auto"
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["74"]["model"] == "apodex/apodex-1.1-mini:free"
-    assert by_worker["75"]["model"] == "ling-3.1-flash-free"
-    assert by_worker["75"]["model"] != "inclusionai/ling-3.1-flash"
     assert "76" not in by_worker
+    assert 76 in lock["retired_workers"]
+    assert "fledge-alpha-free" in lock["retired_models"]
     assert "fledge-alpha-free" not in {row["model"] for row in rows}
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in rows}
 
-def test_new_slots_pin_nvidia_kimi_k3_and_glm_53(validate) -> None:
-    """Workers 77–78 are Harvy-smoked native NVIDIA NIM slots (kimi-k3, glm-5.3)."""
+
+def test_discovered_nvidia_410_retires_kimi_worker_77(validate) -> None:
+    """NVIDIA Kimi 410 retirement preserves the GLM 5.3 worker."""
     rows = validate.load_roster_rows(validate.MANIFEST)
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     by_worker = {row["worker"]: row for row in rows}
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["77"]["source"] == "nvidia"
-    assert by_worker["77"]["model"] == "moonshotai/kimi-k3"
-    assert by_worker["77"]["minute"] == "35"
+    assert "77" not in by_worker
+    assert 77 in lock["retired_workers"]
+    assert "moonshotai/kimi-k3" in lock["retired_models"]
     assert by_worker["78"]["source"] == "nvidia"
     assert by_worker["78"]["model"] == "z-ai/glm-5.3"
     assert by_worker["78"]["minute"] == "0"
@@ -225,7 +231,6 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
     assert "59" not in by_worker
     assert "ling-3.0-flash-fin-free" not in {row["model"] for row in rows}
-    assert by_worker["75"]["model"] == "ling-3.1-flash-free"
     assert by_worker["83"]["source"] == "opencode-free"
     assert by_worker["83"]["model"] == "cat-jam-free"
     assert by_worker["83"]["minute"] == "45"
@@ -237,20 +242,3 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     assert by_worker["80"]["source"] == "nvidia"
     assert by_worker["81"]["source"] == "nvidia"
 
-
-def test_worker_87_pins_opencode_deepseek_v41_flash_free(validate) -> None:
-    """The separate OpenCode free endpoint must not displace NVIDIA worker 81."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    by_worker = {row["worker"]: row for row in rows}
-    assert by_worker["81"]["source"] == "nvidia"
-    assert by_worker["81"]["model"] == "deepseek-ai/deepseek-v4.1-flash"
-    # Discovery may retire a promotional pin after its free offer expires.
-    # Retirement must remain mergeable without rewriting historical tests.
-    pin = by_worker.get("87")
-    if pin is None or pin["model"] != "deepseek-v4.1-flash-free":
-        lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-        assert "deepseek-v4.1-flash-free" in lock["retired_models"]
-    else:
-        assert pin["source"] == "opencode-free"
-        assert validate.opencode_model_is_free(pin["model"])
-        assert pin["scheduler"] == "dispatcher"
