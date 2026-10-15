@@ -261,6 +261,7 @@ def test_passing_checks_continue_through_authorization_and_mechanical_gates(
         return {"decision": "pass", "reason": "all exact-head mechanical gates passed"}
 
     monkeypatch.setattr(module, "mechanical_merge_gate", mechanical_gate)
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
     monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: True)
     monkeypatch.setattr(
         module,
