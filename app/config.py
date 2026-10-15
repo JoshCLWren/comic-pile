@@ -159,6 +159,11 @@ class AppSettings(BaseSettings):
         description="Enable internal operations routes",
         json_schema_extra={"env": "ENABLE_INTERNAL_OPS_ROUTES"},
     )
+    perf_alarm_github_issues_enabled: bool = Field(
+        default=False,
+        description="Opt in to automatic GitHub issue filing from performance telemetry",
+        json_schema_extra={"env": "PERF_ALARM_GITHUB_ISSUES_ENABLED"},
+    )
     perf_alarm_daily_breach_threshold: int = Field(
         default=3,
         description=(
@@ -167,6 +172,16 @@ class AppSettings(BaseSettings):
         ),
         json_schema_extra={"env": "PERF_ALARM_DAILY_BREACH_THRESHOLD"},
     )
+
+    @field_validator("perf_alarm_github_issues_enabled", mode="before")
+    @classmethod
+    def validate_perf_alarm_github_issues_enabled(cls, value: object) -> bool:
+        """Require an explicit true/false value for optional GitHub filing."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
+            return value.strip().lower() == "true"
+        raise ValueError("PERF_ALARM_GITHUB_ISSUES_ENABLED must be true or false")
 
     @field_validator("perf_alarm_daily_breach_threshold")
     @classmethod
