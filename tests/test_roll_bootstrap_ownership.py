@@ -35,6 +35,9 @@ class _Result:
     def scalars(self):
         return self
 
+    def scalar_one_or_none(self):
+        return self._scalar_value
+
 
 def _mode_session(**kwargs):
     """Build a session double carrying every bootstrap-exposed mode attribute."""
@@ -122,6 +125,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
+        _Result(scalar_value=None),  # excluded tag IDs
         _Result(rows=[]),           # pool
         _Result(rows=[owned_snoozed]),  # snoozed threads
         _Result(scalar_value=0),   # blocked count
@@ -133,7 +137,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
-    snoozed_statement = db.execute.await_args_list[1].args[0]
+    snoozed_statement = db.execute.await_args_list[2].args[0]
     compiled = str(snoozed_statement)
     assert "threads.user_id" in compiled
     assert "threads.id" in compiled
@@ -199,6 +203,7 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
 
     db = AsyncMock()
     db.execute.side_effect = [
+        _Result(scalar_value=None),  # excluded tag IDs
         _Result(rows=pool_rows),   # pool
         _Result(scalar_value=0),   # blocked count
         _Result(rows=[]),          # blocked threads
@@ -209,7 +214,7 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
 
-    pool_statement = db.execute.await_args_list[0].args[0]
+    pool_statement = db.execute.await_args_list[1].args[0]
     compiled = str(pool_statement.compile(compile_kwargs={"literal_binds": True}))
     assert "LIMIT 100" in compiled
     assert response.current_die == 100
@@ -508,6 +513,7 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
+        _Result(scalar_value=None),  # excluded tag IDs
         _Result(rows=[]),           # pool
         _Result(scalar_value=0),   # blocked count
         _Result(rows=[]),          # blocked threads
@@ -577,6 +583,7 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
+        _Result(scalar_value=None),  # excluded tag IDs
         _Result(rows=[]),           # pool
         _Result(scalar_value=0),   # blocked count
         _Result(rows=[]),          # blocked threads
@@ -648,6 +655,7 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
+        _Result(scalar_value=None),  # excluded tag IDs
         _Result(rows=[]),           # pool
         _Result(scalar_value=0),   # blocked count
         _Result(rows=[]),          # blocked threads
@@ -748,6 +756,7 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
 
     db = AsyncMock()
     db.execute.side_effect = [
+        _Result(scalar_value=None),  # excluded tag IDs
         _Result(rows=[]),           # pool
         _Result(scalar_value=0),   # blocked count
         _Result(rows=[]),          # blocked threads

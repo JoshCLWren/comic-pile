@@ -56,7 +56,8 @@ async def update_user_preferences(
     complete, issue #1872) can never race on the select-then-insert path and
     surface a unique-violation failure as an unexpected 503. When ``theme`` is
     omitted, an existing row is left unchanged and a missing row is seeded
-    with the repository default.
+    with the repository default. Excluded tag IDs persist the same way, and
+    when both fields are present they apply together.
 
     Args:
         db: Database session.
@@ -68,6 +69,14 @@ async def update_user_preferences(
     """
     if payload.excluded_tag_ids is not None:
         persisted_excluded = await set_excluded_tag_ids(db, user_id, payload.excluded_tag_ids)
+        if payload.theme is not None:
+            persisted_theme = await upsert_theme(db, user_id, payload.theme)
+            await db.commit()
+            return UserPreferencesResponse(
+                theme=persisted_theme,
+                user_id=user_id,
+                excluded_tag_ids=persisted_excluded,
+            )
         await db.commit()
         theme = await get_theme(db, user_id)
         return UserPreferencesResponse(

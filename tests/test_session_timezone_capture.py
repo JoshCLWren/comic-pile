@@ -32,6 +32,9 @@ class _Result:
     def scalars(self):
         return self
 
+    def scalar_one_or_none(self):
+        return self._scalar_value
+
 
 def _session(timezone=None):
     return SimpleNamespace(
@@ -79,6 +82,7 @@ def _patch_bootstrap(monkeypatch, current_session):
 
     db = AsyncMock()
     db.execute.side_effect = [
+        _Result(scalar_value=None),  # excluded tag IDs
         _Result(rows=[]),          # pool
         _Result(scalar_value=0),  # blocked count
         _Result(rows=[]),          # blocked threads

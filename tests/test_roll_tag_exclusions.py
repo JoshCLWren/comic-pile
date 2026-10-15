@@ -29,7 +29,7 @@ async def _thread_with_issue(
 
     from app.models.issue import Issue
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="unread")
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
     db.add(issue)
     await db.flush()
     thread.next_unread_issue_id = issue.id
