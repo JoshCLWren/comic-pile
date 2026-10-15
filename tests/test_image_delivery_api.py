@@ -546,3 +546,40 @@ class TestOptimizeEndpoint:
         response = await client.get(endpoint_url, params={"url": ALLOWED_SOURCE, "width": 8})
 
         assert response.status_code == 422
+
+    async def test_dns_timeout_is_handled_gracefully(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        client: httpx.AsyncClient,
+        endpoint_url: str,
+    ) -> None:
+        """DNS timeouts are handled gracefully and don't cache the error."""
+        # Mock slow DNS resolution that times out
+        async def slow_dns_resolution(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+            await asyncio.sleep(2.0)  # Simulate slow DNS
+            return [ipaddress.IPv4Address("127.0.0.1")]
+
+        monkeypatch.setattr(
+            image_delivery, "_resolve_addresses_blocking", slow_dns_resolution
+        )
+
+        # First request should timeout
+        start_time = time.monotonic()
+        response = await client.get(
+            endpoint_url,
+            params={"url": ALLOWED_SOURCE, "width": 240},
+        )
+        elapsed = time.monotonic() - start_time
+        
+        assert response.status_code == 400
+        assert "timed out" in response.json()["detail"]
+        # Should timeout in less than 6 seconds (5s timeout + 1s buffer)
+        assert elapsed < 6.0
+
+        # Second request should also work (not cached error)
+        response = await client.get(
+            endpoint_url,
+            params={"url": ALLOWED_SOURCE, "width": 240},
+        )
+        assert response.status_code == 400
+        assert "timed out" in response.json()["detail"]

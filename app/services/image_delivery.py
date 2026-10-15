@@ -80,6 +80,8 @@ class OptimizedImage:
 # TTL of 5 minutes (300 seconds) balances freshness with performance
 _DNS_CACHE: dict[str, tuple[list[ipaddress.IPv4Address | ipaddress.IPv6Address], float]] = {}
 _DNS_CACHE_TTL = 300.0
+# DNS resolution timeout to prevent blocking for too long
+_DNS_RESOLUTION_TIMEOUT = 5.0
 
 # Upstream image cache: validated_url -> (payload_bytes, content_type)
 # Caches raw upstream bytes to avoid repeated fetches for different width buckets.
@@ -240,9 +242,14 @@ async def _resolve_and_validate_cached(hostname: str) -> list[ipaddress.IPv4Addr
         if now - timestamp < _DNS_CACHE_TTL:
             return addresses
 
-    # Cache miss or expired - resolve fresh
+    # Cache miss or expired - resolve fresh with timeout
     try:
-        addresses = await asyncio.to_thread(_resolve_addresses_blocking, hostname)
+        addresses = await asyncio.wait_for(
+            asyncio.to_thread(_resolve_addresses_blocking, hostname),
+            timeout=_DNS_RESOLUTION_TIMEOUT
+        )
+    except TimeoutError:
+        raise InvalidImageSourceError("DNS resolution timed out") from None
     except OSError as exc:
         raise InvalidImageSourceError("Upstream image host could not be resolved") from exc
 
