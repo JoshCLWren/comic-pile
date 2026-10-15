@@ -273,7 +273,7 @@ def linked_issue_for_pr(pr_number: int, branch: str | None) -> int | None:
         return linked
     body = str(pr_json(pr_number).get("body") or "")
     match = re.search(
-        r"(?i)\\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\\s+#(\\d+)",
+        r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
         body,
     )
     return int(match.group(1)) if match else None
