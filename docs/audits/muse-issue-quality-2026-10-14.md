@@ -313,6 +313,9 @@ Fields mark unknowns explicitly; the issue link provides the full original repor
 | #3620 | Session die ladder mismatch source verified, add executable regression AC | Re-fetched focused issue body; no exclusion directive |
 | #3687 | Repeated accessible link names source verified, add executable regression AC | Re-fetched focused issue body; no exclusion directive |
 | #3579 | Creator Rated/series-group population mismatch diagnosed; manual-only product gate | Re-fetched issue body and directive; no data touched |
+| #3447 | Lifecycle ACTIVE state distinguished from Snooze exclusions | Retitled, bug removed, enhancement + manual gate verified |
+| #3462 | Retired eight-plus disproved/mixed claims; residual missing-key bug verified | Issue body and title rewritten, kept executable |
+| #3595 | Negative progress explained by unchecked numerator and denominator | Body amended with read-only counter verification and no-clamp AC |
 
 No production data changed. Labels may continue showing `factory` and `factory:unowned` because `.github/scripts/factory-work-controller.py::replace_factory_labels` adds them on reconciliation. The shared static eligibility specifically honors each standalone body directive; **the live fixed-model controller's dynamic decision has not been executed for every issue**.
 
@@ -325,7 +328,7 @@ No production data changed. Labels may continue showing `factory` and `factory:u
 - `.github/scripts/factory-work-controller.py::replace_factory_labels` lines 169–206 unconditionally reconstructs `factory` and one owner label; `reconcile_contradictory_labels` (lines 637–706) may invoke it. This explains observed label reappearance, independently of issue eligibility.
 - The `enhancement` label is not a static factory exclusion. `app/services/github_service.py::_labels_for_report_type` returns `enhancement` for feature submissions, but does not itself encode approval or a human gate. A targeted intake-policy change with tests remains outstanding. Do **not** alter the accepted static exclusion contract globally for every `enhancement`, because #3460, #3461 and #3484 describe previously accepted product acceptance criteria.
 - #3717 was compared with `app/services/creator_comparison.py::_build_coverage`: within one computation the numerator is a subset of the denominator, so the screenshot contradicts the current code. Capture raw production response and deploy SHA rather than arbitrarily swapping the displayed values.
-- Unapproved open suggestions with pre-existing manual-only body directives were identified; the audited additions bring the observed open in-scope directives from 36 to **44**. These counts rely on issue-search bodies for the original 36 and eight independent direct issue rechecks. Some current factory labels on manually gated issues remain visible and are misleading.
+- Unapproved open suggestions with pre-existing manual-only body directives were identified; the audited additions bring the observed open in-scope directives from 36 to **45**. These counts rely on issue-search bodies for the original 36 and nine independent direct issue rechecks. Some current factory labels on manually gated issues remain visible and are misleading.
 
 
 ## Focused intake code correction
