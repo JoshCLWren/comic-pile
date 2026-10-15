@@ -346,20 +346,19 @@ async def test_retry_reuses_the_existing_thread_instead_of_duplicating_it(
 
 
 @pytest.mark.asyncio
-async def test_retry_after_partial_failure_adds_only_missing_issues(
+async def test_retry_after_full_import_reuses_existing_thread(
     auth_client: AsyncClient,
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A first import that fails mid-roster leaves state a retry can complete."""
-    # The third issue raises during hydration, so only the first two land.
-    partial = _StubClient(_issue_rows(601, 602, 603), fetch_issue_error=ComicVineError("boom"))
-    _install_client(monkeypatch, partial)
+    """A first full import creates the thread; a retry reuses it."""
+    _install_client(monkeypatch, _StubClient(_issue_rows(601, 602, 603)))
 
     first = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
     assert first.status_code == 201
     first_body = first.json()
     assert first_body["thread_created"] is True
+    assert first_body["issues_adopted"] == 3
 
     # A healthy retry supplies the full roster for the same volume.
     _install_client(monkeypatch, _StubClient(_issue_rows(601, 602, 603)))
@@ -369,6 +368,7 @@ async def test_retry_after_partial_failure_adds_only_missing_issues(
     second_body = second.json()
     assert second_body["thread_created"] is False
     assert second_body["thread_id"] == first_body["thread_id"]
+    assert second_body["issues_adopted"] == 0
 
     thread = await async_db.get(Thread, first_body["thread_id"])
     assert thread is not None
@@ -497,3 +497,24 @@ async def test_unknown_reading_order_returns_not_found(
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_series_import_does_not_hydrate_per_issue(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Performance regression: series import avoids per-issue external fetches."""
+    calls: list[int] = []
+    original = _StubClient.__init__
+
+    class CountingStub(_StubClient):
+        async def fetch_issue(self, issue_id: int, **_kwargs: object) -> ComicVineResponse:
+            calls.append(issue_id)
+            return await super().fetch_issue(issue_id, **_kwargs)
+
+    _install_client(monkeypatch, CountingStub(_issue_rows(701, 702, 703)))
+    response = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
+    assert response.status_code == 201
+    # Hydration must not run per adopted issue during batch import.
+    assert len(calls) == 0

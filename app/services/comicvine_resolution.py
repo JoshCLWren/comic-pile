@@ -1194,7 +1194,7 @@ async def import_comicvine_series(
                 issue_number=str(issue_number) if issue_number is not None else str(idx + 1),
                 external_url=external_url if isinstance(external_url, str) else None,
                 metadata=metadata if metadata else None,
-                comicvine_client=comicvine_client,
+                thread=thread,
             )
 
             result = ImportSeriesIssueResult(
