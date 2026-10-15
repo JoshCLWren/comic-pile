@@ -66,6 +66,26 @@ async def find_owned(
     return result.scalar_one_or_none()
 
 
+async def find_owned_bulk(
+    db: AsyncSession, user_id: int, thread_ids: list[int]
+) -> list[Thread]:
+    """Find multiple threads by IDs scoped to their owner.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the threads.
+        thread_ids: Primary keys of the threads.
+
+    Returns:
+        List of owned threads (may be fewer than requested if some are absent or foreign).
+    """
+    if not thread_ids:
+        return []
+    query = select(Thread).where(Thread.id.in_(thread_ids), Thread.user_id == user_id)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def threads_by_ids(db: AsyncSession, thread_ids: set[int]) -> dict[int, Thread]:
     """Load threads by primary key into a mapping.
 

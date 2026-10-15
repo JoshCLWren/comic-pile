@@ -368,3 +368,51 @@ class TagInheritanceService:
         return _combine_assignments(
             self_type="ContinuityPlan", self_id=plan_id, pairs=rows
         )
+
+    async def get_threads_effective_tags(
+        self, user: User, thread_ids: list[int]
+    ) -> dict[int, EffectiveTagsResult]:
+        """Return direct and effective tags for multiple owned threads.
+
+        Threads have no parents in v1, so effective tags are exactly the
+        directly assigned visible tags. This batch method avoids N+1 queries
+        when rendering lists of threads.
+
+        Args:
+            user: The requesting user; must own all threads.
+            thread_ids: Primary keys of the threads.
+
+        Returns:
+            Map from thread_id to EffectiveTagsResult for each thread.
+
+        Raises:
+            NotFoundError: When any thread does not exist or is not owned by
+                the user.
+        """
+        if not thread_ids:
+            return {}
+
+        threads = await thread_repository.find_owned_bulk(self._db, user.id, thread_ids)
+        if len(threads) != len(thread_ids):
+            found_ids = {t.id for t in threads}
+            missing = [tid for tid in thread_ids if tid not in found_ids]
+            raise NotFoundError(f"Thread(s) {missing} not found")
+
+        thread_map = {t.id: t for t in threads}
+        targets = [("Thread", tid) for tid in thread_ids]
+        pairs = await tag_repository.list_visible_assignments_for_targets(
+            self._db, user.id, targets
+        )
+
+        results: dict[int, EffectiveTagsResult] = {}
+        for tid in thread_ids:
+            thread = thread_map[tid]
+            thread_pairs = [
+                (tag, "Thread", tid, thread.title)
+                for tag, assignment in pairs
+                if assignment.target_id == tid and assignment.target_type == "Thread"
+            ]
+            results[tid] = _combine_assignments(
+                self_type="Thread", self_id=tid, pairs=thread_pairs
+            )
+        return results

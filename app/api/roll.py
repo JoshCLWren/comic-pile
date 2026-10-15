@@ -58,7 +58,9 @@ from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
     RollableThread,
 )
+from app.schemas.tags import TagResponse
 from app.services.roll_v2_projection import get_v2_rollable_projection
+from app.services.tag_inheritance_service import TagInheritanceService
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
@@ -1241,6 +1243,34 @@ async def roll_bootstrap(
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
     skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
+
+    # Collect all thread IDs from all lists for batch tag fetching
+    all_thread_ids: list[int] = []
+    all_thread_ids.extend(t.id for t in roll_pool)
+    all_thread_ids.extend(t.id for t in snoozed_threads)
+    all_thread_ids.extend(t.id for t in skipped_threads)
+    all_thread_ids.extend(t.id for t in blocked_threads)
+    if stale_thread is not None:
+        all_thread_ids.append(stale_thread.id)
+    # Deduplicate while preserving order
+    seen = set()
+    unique_thread_ids = [tid for tid in all_thread_ids if not (tid in seen or seen.add(tid))]
+
+    # Fetch effective tags for all threads (batched, no N+1)
+    tag_service = TagInheritanceService(db)
+    tags_map = await tag_service.get_threads_effective_tags(current_user, unique_thread_ids)
+
+    # Apply tags to all thread lists
+    for t in roll_pool:
+        t.tags = tags_map.get(t.id, []).direct_tags
+    for t in snoozed_threads:
+        t.tags = tags_map.get(t.id, []).direct_tags
+    for t in skipped_threads:
+        t.tags = tags_map.get(t.id, []).direct_tags
+    for t in blocked_threads:
+        t.tags = tags_map.get(t.id, []).direct_tags
+    if stale_thread is not None:
+        stale_thread.tags = tags_map.get(stale_thread.id, []).direct_tags
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)

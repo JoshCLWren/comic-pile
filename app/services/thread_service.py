@@ -35,8 +35,9 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
-from app.schemas.tags import TagTargetType
+from app.schemas.tags import TagResponse, TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
     QueueCursor,
@@ -165,7 +166,9 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
 
 
 def to_queue_list_item(
-    tr: ThreadResponse, mapping_health: dict | None = None
+    tr: ThreadResponse,
+    mapping_health: dict | None = None,
+    tags: list[TagResponse] | None = None,
 ) -> QueueThreadListItem:
     """Convert a full ThreadResponse to a narrow QueueThreadListItem.
 
@@ -178,6 +181,7 @@ def to_queue_list_item(
         mapping_health: Optional pre-computed mapping health row from the
             batched repository query. When provided, used to construct the
             ComicVineMappingHealth projection.
+        tags: Optional pre-fetched effective tags for the thread.
 
     Returns:
         Narrow list-item projection of the thread response.
@@ -231,6 +235,7 @@ def to_queue_list_item(
         created_at=tr.created_at,
         comicvine_mapping=comicvine_mapping,
         manual_creator_credits=tr.manual_creator_credits,
+        tags=tags or [],
     )
 
 
@@ -325,8 +330,19 @@ async def list_queue_threads(
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
+    # Fetch effective tags for all threads on this page (batched, no N+1)
+    thread_ids = [tr.id for tr in thread_responses]
+    tag_service = TagInheritanceService(db)
+    from app.models.user import User
+    # Create a minimal user object for the tag service
+    class _MinimalUser:
+        id: int
+    user_obj = _MinimalUser()
+    user_obj.id = user_id
+    tags_map = await tag_service.get_threads_effective_tags(user_obj, thread_ids)
+
     queue_items = [
-        to_queue_list_item(tr, mapping_health_map.get(tr.id))
+        to_queue_list_item(tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, []).direct_tags)
         for tr in thread_responses
     ]
 
@@ -413,8 +429,18 @@ async def list_completed_threads(
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
+    # Fetch effective tags for all threads on this page (batched, no N+1)
+    thread_ids = [tr.id for tr in thread_responses]
+    tag_service = TagInheritanceService(db)
+    from app.models.user import User
+    class _MinimalUser:
+        id: int
+    user_obj = _MinimalUser()
+    user_obj.id = user_id
+    tags_map = await tag_service.get_threads_effective_tags(user_obj, thread_ids)
+
     queue_items = [
-        to_queue_list_item(tr, mapping_health_map.get(tr.id))
+        to_queue_list_item(tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, []).direct_tags)
         for tr in thread_responses
     ]
 
