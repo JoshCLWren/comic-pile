@@ -26,7 +26,7 @@ def test_collection_exclusion_migration_is_single_head() -> None:
     root = Path(__file__).parents[1]
     cfg = Config(str(root / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == ["c36630000001"]
+    assert set(script.get_heads()) == {"c36630000001"}
     current = script.get_revision("c36630000001")
     assert current is not None
     assert current.down_revision == "c36620000001"
