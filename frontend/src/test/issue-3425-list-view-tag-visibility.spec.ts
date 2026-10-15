@@ -21,7 +21,13 @@ const TAGGED_TITLE = 'Tagged Series'
 const UNTAGGED_TITLE = 'Untagged Series'
 const TAG_NAME = 'Physical'
 
-async function authHeaders(page: Page): Promise<Record<string, string>> {
+type JsonRequestHeaders = {
+  'Content-Type': string
+  'X-CSRF-Token': string
+  Authorization?: string
+}
+
+async function authHeaders(page: Page): Promise<JsonRequestHeaders> {
   const token = await getAuthToken(page)
   const csrfResponse = await page.request.get('/api/auth/csrf', {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -30,12 +36,12 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
   // SAFETY: the CSRF bootstrap response always carries csrf_token.
   const { csrf_token: csrf } = (await csrfResponse.json()) as { csrf_token?: string }
   expect(csrf).toBeDefined()
-  const headers: Record<string, string> = {
+  const headers = {
     'Content-Type': 'application/json',
     'X-CSRF-Token': csrf!,
-  }
+  } satisfies JsonRequestHeaders
   if (token) {
-    headers.Authorization = `Bearer ${token}`
+    return { ...headers, Authorization: `Bearer ${token}` }
   }
   return headers
 }
