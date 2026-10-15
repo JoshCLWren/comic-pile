@@ -370,14 +370,14 @@ export default function RollPage() {
           <div className="text-center space-y-4">
             <p
               role="status"
-              className="text-center text-stone-500 font-black uppercase tracking-widest text-[10px]"
+              className="text-center text-[var(--theme-text-muted)] font-black uppercase tracking-widest text-[10px]"
             >
               Still loading… your library is safe.
             </p>
             <button
               type="button"
               onClick={() => refetchBootstrap()}
-              className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors"
+              className="px-4 py-2 bg-[var(--theme-warning)]/20 border border-[var(--theme-warning)]/50 rounded-lg text-xs font-black uppercase tracking-widest text-[var(--theme-warning)] hover:bg-[var(--theme-warning)]/30 transition-colors"
             >
               Retry
             </button>
@@ -404,7 +404,7 @@ export default function RollPage() {
           {status === 401 ? (
             <button
               onClick={() => navigate('/login')}
-              className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors"
+              className="px-4 py-2 bg-[var(--theme-warning)]/20 border border-[var(--theme-warning)]/50 rounded-lg text-xs font-black uppercase tracking-widest text-[var(--theme-warning)] hover:bg-[var(--theme-warning)]/30 transition-colors"
             >
               Go to Login
             </button>
