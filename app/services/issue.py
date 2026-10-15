@@ -8,6 +8,7 @@ lifecycle status are kept in sync with the issue set.
 import asyncio
 import logging
 import os
+from collections.abc import Coroutine
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -35,11 +36,11 @@ logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
-def _spawn_background(coro: asyncio.Task[None]) -> None:
+def _spawn_background(coro: Coroutine[object, object, None]) -> None:
     """Keep a background task referenced until it finishes.
 
     Args:
-        coro: Background task to schedule on the running loop.
+        coro: Background coroutine to schedule on the running loop.
     """
     try:
         loop = asyncio.get_running_loop()
