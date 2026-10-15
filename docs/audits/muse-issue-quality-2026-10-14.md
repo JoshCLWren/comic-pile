@@ -372,3 +372,10 @@ Read original issue bodies for #3437, #3463, #3471, #3476, #3510, #3526 and #356
 - #3526 (`GET /api/v1/tags`, one 1776 ms warm observation; 2 DB queries, 3.85 ms DB time): added the exact standalone `factory-execution:manual-only` marker to prevent automatic implementation from a single unexplained telemetry sample. No existing comments or verified implementation PR. Preserved original telemetry.
 - #3567 (`GET /api/v1/continuity-plans/{plan_id}/reader`, one 1607 ms warm observation; 8 DB queries, 1494.8 ms DB time): similarly gated pending recurrence/root-cause validation. No comments or verified implementation PR. Preserved original telemetry.
 - These are **temporary execution gates, not closures or evidence of remediation**. #3471, #3476 and #3510 contain recurrence comments and unusually large query counts; do not blanket-close these.
+
+
+### Open October 11–14 enhancement gate census, 2026-10-15
+
+Queried all **25 currently open** issues bearing `enhancement` and created during the incident window, then read each issue body. **19/25** contain the exact standalone `<!-- factory-execution:manual-only -->` marker: #3710, #3707, #3637, #3627, #3626, #3625, #3614, #3612, #3606, #3605, #3602, #3581, #3575, #3560, #3559, #3558, #3557, #3545, #3447. **Six do not**: #3522, #3502, #3484, #3461, #3460, #3365. These six must be evaluated against pre-existing accepted product requirements and active factory ownership before applying a blanket gate: #3460/#3461 reference explicit prior creator acceptance criteria, #3522 alleges regression against #3488, #3502 describes an agreed factory quota policy, #3484 references #3415, and #3365 mixes functional behavior and UI polish. Do not infer that missing manual-only directives means all six should be excluded.
+
+This verifies gate-marker presence only, not correctness of each feature's implementation or proof that the dynamic factory controller actually excludes the gated items. No markers were added to these 25 in this census.
