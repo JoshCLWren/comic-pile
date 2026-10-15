@@ -27,6 +27,8 @@ from app.database import Base
 
 # Load environment variables from .env file
 load_dotenv()
+import sys
+print("DATABASE_URL from os.getenv:", os.getenv("DATABASE_URL"), file=sys.stderr)
 
 config = context.config
 

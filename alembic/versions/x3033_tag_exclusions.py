@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "x3033_tag_exclusions"
-down_revision: str | Sequence[str] | None = "c36620000001"
+down_revision: str | Sequence[str] | None = "x3033_user_preference_tag_exclusions"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
