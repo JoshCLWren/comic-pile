@@ -14,7 +14,7 @@ class CollectionExclusionCreate(BaseModel):
     issue_id: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
-    def require_exact_target(self) -> "CollectionExclusionCreate":
+    def require_exact_target(self) -> CollectionExclusionCreate:
         """Require a paired external identity or one local target."""
         volume = self.external_volume_id is not None
         if sum((volume, self.thread_id is not None, self.issue_id is not None)) != 1:
