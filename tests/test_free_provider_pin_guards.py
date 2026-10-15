@@ -235,3 +235,15 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     assert by_worker["86"]["minute"] == "0"
     assert by_worker["80"]["source"] == "nvidia"
     assert by_worker["81"]["source"] == "nvidia"
+
+
+def test_worker_87_pins_opencode_deepseek_v41_flash_free(validate) -> None:
+    """The separate OpenCode free endpoint must not displace NVIDIA worker 81."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    by_worker = {row["worker"]: row for row in rows}
+    assert by_worker["81"]["source"] == "nvidia"
+    assert by_worker["81"]["model"] == "deepseek-ai/deepseek-v4.1-flash"
+    assert by_worker["87"]["source"] == "opencode-free"
+    assert by_worker["87"]["model"] == "deepseek-v4.1-flash-free"
+    assert validate.opencode_model_is_free(by_worker["87"]["model"])
+    assert by_worker["87"]["scheduler"] == "dispatcher"
