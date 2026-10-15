@@ -173,12 +173,11 @@ async def test_direct_sql_cannot_point_frontier_at_another_threads_issue(
     sibling_issue = await _make_issue(db, sibling_thread.id, "1", 1)
     await db.commit()
 
-    await db.execute(
-        text("UPDATE threads SET next_unread_issue_id = :issue_id WHERE id = :thread_id"),
-        {"issue_id": sibling_issue.id, "thread_id": thread_a.id},
-    )
     with pytest.raises(IntegrityError):
-        await db.commit()
+        await db.execute(
+            text("UPDATE threads SET next_unread_issue_id = :issue_id WHERE id = :thread_id"),
+            {"issue_id": sibling_issue.id, "thread_id": thread_a.id},
+        )
 
 
 @pytest.mark.asyncio
@@ -188,12 +187,11 @@ async def test_direct_sql_cannot_point_frontier_at_another_readers_issue(
     """A cross-reader frontier is rejected even when the catalog row is shared."""
     thread_a, _thread_b, _issue_a, issue_b = shared_catalog_threads
 
-    await db.execute(
-        text("UPDATE threads SET next_unread_issue_id = :issue_id WHERE id = :thread_id"),
-        {"issue_id": issue_b.id, "thread_id": thread_a.id},
-    )
     with pytest.raises(IntegrityError):
-        await db.commit()
+        await db.execute(
+            text("UPDATE threads SET next_unread_issue_id = :issue_id WHERE id = :thread_id"),
+            {"issue_id": issue_b.id, "thread_id": thread_a.id},
+        )
 
 
 @pytest.mark.asyncio
@@ -205,18 +203,17 @@ async def test_direct_sql_thread_insert_cannot_smuggle_a_foreign_frontier(
     foreign_issue = await _make_issue(db, foreign_thread.id, "1", 1)
     await db.commit()
 
-    await db.execute(
-        text(
-            "INSERT INTO threads (title, format, issues_remaining, queue_position, status,"
-            " user_id, manual_creator_credits, is_test, is_blocked, created_at,"
-            " next_unread_issue_id)"
-            " VALUES ('Smuggled', 'Comic', 0, 9, 'active', :user_id, '[]'::json, false,"
-            " false, now(), :issue_id)"
-        ),
-        {"user_id": reader_a.id, "issue_id": foreign_issue.id},
-    )
     with pytest.raises(IntegrityError):
-        await db.commit()
+        await db.execute(
+            text(
+                "INSERT INTO threads (title, format, issues_remaining, queue_position, status,"
+                " user_id, manual_creator_credits, is_test, is_blocked, created_at,"
+                " next_unread_issue_id)"
+                " VALUES ('Smuggled', 'Comic', 0, 9, 'active', :user_id, '[]'::json, false,"
+                " false, now(), :issue_id)"
+            ),
+            {"user_id": reader_a.id, "issue_id": foreign_issue.id},
+        )
 
 
 @pytest.mark.asyncio
@@ -228,12 +225,11 @@ async def test_direct_sql_cannot_point_a_session_at_another_readers_thread(
     db.add(ReadingSession(user_id=reader_a.id))
     await db.commit()
 
-    await db.execute(
-        text("UPDATE sessions SET pending_thread_id = :thread_id WHERE user_id = :user_id"),
-        {"thread_id": foreign_thread.id, "user_id": reader_a.id},
-    )
     with pytest.raises(IntegrityError):
-        await db.commit()
+        await db.execute(
+            text("UPDATE sessions SET pending_thread_id = :thread_id WHERE user_id = :user_id"),
+            {"thread_id": foreign_thread.id, "user_id": reader_a.id},
+        )
 
 
 @pytest.mark.asyncio
@@ -244,15 +240,14 @@ async def test_direct_sql_session_insert_cannot_smuggle_a_foreign_pending_thread
     foreign_thread = await _make_thread(db, reader_b.id, "Reader B New Session")
     await db.commit()
 
-    await db.execute(
-        text(
-            "INSERT INTO sessions (user_id, pending_thread_id, start_die, reading_mode_suggested,"
-            " started_at) VALUES (:user_id, :thread_id, 6, false, now())"
-        ),
-        {"user_id": reader_a.id, "thread_id": foreign_thread.id},
-    )
     with pytest.raises(IntegrityError):
-        await db.commit()
+        await db.execute(
+            text(
+                "INSERT INTO sessions (user_id, pending_thread_id, start_die, reading_mode_suggested,"
+                " started_at) VALUES (:user_id, :thread_id, 6, false, now())"
+            ),
+            {"user_id": reader_a.id, "thread_id": foreign_thread.id},
+        )
 
 
 @pytest.mark.asyncio

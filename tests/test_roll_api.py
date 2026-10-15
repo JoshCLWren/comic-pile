@@ -176,8 +176,9 @@ async def test_roll_pending_message_does_not_leak_other_user_thread_title(
     await async_db.execute(text("SET session_replication_role = replica"))
     current_session.pending_thread_id = private_thread.id
     current_session.pending_thread_updated_at = datetime.now(UTC)
-    await async_db.commit()
+    await async_db.flush()
     await async_db.execute(text("SET session_replication_role = origin"))
+    await async_db.commit()
 
     roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 409

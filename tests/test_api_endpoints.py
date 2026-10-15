@@ -659,21 +659,31 @@ async def test_get_session_current_returns_no_active_thread_when_pending_is_stal
     await async_db.commit()
     await async_db.refresh(other_user_thread)
 
-    session = ReadingSession(
-        start_die=6,
-        user_id=user.id,
-        pending_thread_id=other_user_thread.id,
-        started_at=datetime.now(UTC),
-    )
-    async_db.add(session)
     # #3225: the database now rejects a reading session that pins another
     # reader's thread. Seed this stale legacy row with triggers bypassed so the
     # test keeps proving that /sessions/current never falls back to a foreign
     # thread's title.
     await async_db.execute(text("SET session_replication_role = replica"))
-    await async_db.commit()
+    await async_db.execute(
+        text(
+            "INSERT INTO sessions (user_id, pending_thread_id, start_die, reading_mode_suggested, started_at)"
+            " VALUES (:user_id, :thread_id, 6, false, now()) RETURNING id"
+        ),
+        {"user_id": user.id, "thread_id": other_user_thread.id},
+    )
+    session_row = await async_db.execute(
+        text("SELECT id, user_id, pending_thread_id, start_die, started_at FROM sessions WHERE user_id = :user_id ORDER BY id DESC LIMIT 1"),
+        {"user_id": user.id},
+    )
+    session = session_row.first()
+    assert session is not None
+    session_id = session.id
     await async_db.execute(text("SET session_replication_role = origin"))
-    await async_db.refresh(session)
+    await async_db.commit()
+    # Fetch the session object for later use
+    session_obj = await async_db.get(ReadingSession, session_id)
+    assert session_obj is not None
+    session = session_obj
 
     roll_event = Event(
         type="roll",
