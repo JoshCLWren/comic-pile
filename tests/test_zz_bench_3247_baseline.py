@@ -151,7 +151,7 @@ class _QueryTimer:
         self.per_query: list[tuple[float, str]] = []
         self._engine = engine
 
-    def __enter__(self) -> "_QueryTimer":
+    def __enter__(self) -> _QueryTimer:
         self._before = event.contains(self._engine.sync_engine, "before_cursor_execute", self._pre)
 
         event.listen(self._engine.sync_engine, "before_cursor_execute", self._pre)
@@ -182,6 +182,7 @@ async def test_baseline_creator_detail_benchmark(
     db_engine: AsyncEngine,
     default_user: User,
 ) -> None:
+    """TEMPORARY baseline benchmark for issue #3247 (deleted after evidence capture)."""
     seeded = await _seed_library(async_db, default_user)
     total_issues = await async_db.scalar(text("SELECT COUNT(*) FROM issues"))
     print(f"\nSeeded: {total_issues} issues, target creator on {seeded}")
