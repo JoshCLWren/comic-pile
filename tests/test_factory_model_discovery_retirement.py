@@ -1249,7 +1249,9 @@ def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
     assert "59" not in by_worker
     assert "ling-3.0-flash-fin-free" in lock["retired_models"]
     assert "ling-3.0-flash-fin-free" not in models
-    assert by_worker["75"]["model"] == "ling-3.1-flash-free"
+    assert by_worker["75"]["model"] == "nemotron-3.5-super-vl-free"
+    assert "ling-3.1-flash-free" in lock["retired_models"]
+    assert "ling-3.1-flash-free" not in models
     assert "muse-spark-1.3-contributor-free" in models
     assert "deepseek-v4-flash" not in models
     assert by_worker["46"]["model"] == "kilo-auto/free"
@@ -1341,6 +1343,17 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     before_rows = ROSTER.load_roster_rows(roster)
     before_lock = ROSTER.load_roster_lock(lock_path)
     before_workers = [row["worker"] for row in before_rows]
+    # This test's catalog must include the currently committed free pins.
+    # Keep the historical shared fixture unchanged for planner regressions.
+    recorded = json.loads((FIXTURES / "keep-present.json").read_text(encoding="utf-8"))
+    recorded["providers"]["opencode"].extend(
+        [
+            {"id": "deepseek-v4.1-flash-free", "cost": {"input": 0, "output": 0}},
+            {"id": "nemotron-3.5-super-vl-free", "cost": {"input": 0, "output": 0}},
+        ]
+    )
+    current_fixture = tmp_path / "current-catalog.json"
+    current_fixture.write_text(json.dumps(recorded), encoding="utf-8")
 
     status = RETIRE.run(
         [
@@ -1350,7 +1363,7 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
             "--lock",
             str(lock_path),
             "--catalog-json",
-            str(FIXTURES / "keep-present.json"),
+            str(current_fixture),
             "--retirement-comments",
             str(FIXTURES / "nvidia-410-comments.json"),
         ]
@@ -1376,33 +1389,30 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["74"] == {
         "worker": "74",
-        "source": "openrouter-free",
-        "model": "apodex/apodex-1.1-mini:free",
+        "source": "opencode-free",
+        "model": "deepseek-v4.1-flash-free",
         "minute": "20",
         "scheduler": "dispatcher",
-        "display_name": "OpenRouter Apodex 1.1 Mini Free",
+        "display_name": "OpenCode Deepseek V4.1 Flash Free",
     }
     assert by_worker["75"] == {
         "worker": "75",
         "source": "opencode-free",
-        "model": "ling-3.1-flash-free",
+        "model": "nemotron-3.5-super-vl-free",
         "minute": "25",
         "scheduler": "dispatcher",
-        "display_name": "OpenCode Ling 3.1 Flash Free",
+        "display_name": "OpenCode Nemotron 3.5 Super Vl Free",
     }
+    assert "apodex/apodex-1.1-mini:free" in lock["retired_models"]
+    assert "ling-3.1-flash-free" in lock["retired_models"]
     assert "76" not in by_worker
     assert 76 not in lock["expected_workers"]
     assert 76 in lock["retired_workers"]
     assert "fledge-alpha-free" in lock["retired_models"]
     assert "fledge-alpha-free" not in {row["model"] for row in remaining}
-    assert by_worker["77"] == {
-        "worker": "77",
-        "source": "nvidia",
-        "model": "moonshotai/kimi-k3",
-        "minute": "35",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA Kimi K3",
-    }
+    assert "77" not in by_worker
+    assert 77 in lock["retired_workers"]
+    assert "moonshotai/kimi-k3" in lock["retired_models"]
     assert by_worker["78"] == {
         "worker": "78",
         "source": "nvidia",
