@@ -183,7 +183,7 @@ def pr_json(pr_number: int) -> dict[str, Any]:
             "--repo",
             REPO,
             "--json",
-            "state,isDraft,mergeable,headRefOid,headRefName,body,labels",
+            "state,isDraft,mergeable,headRefOid,headRefName,body,labels,author",
         ]
     )
     obj = json_object(payload)
