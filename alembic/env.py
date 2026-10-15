@@ -1,6 +1,7 @@
 """Alembic environment configuration."""
 
 import os
+import sys
 from logging.config import fileConfig
 
 from dotenv import load_dotenv

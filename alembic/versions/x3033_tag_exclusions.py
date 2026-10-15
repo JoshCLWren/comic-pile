@@ -11,7 +11,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "x3033_tag_exclusions"
+revision: str = "x3033_tag_exclusions_v2"
 down_revision: str | Sequence[str] | None = "x3033_user_preference_tag_exclusions"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
