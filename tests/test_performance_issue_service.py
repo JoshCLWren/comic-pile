@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Generator
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,7 +13,7 @@ from app.services.perf_alarm_store import InMemoryPerfAlarmStore
 
 
 @pytest.fixture(autouse=True)
-def _clean_tracker(monkeypatch: pytest.MonkeyPatch):
+def _clean_tracker(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
     """Exercise the legacy auto-filing contract only with explicit opt-in."""
     from app.config import clear_settings_cache
 
