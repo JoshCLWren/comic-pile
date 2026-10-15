@@ -241,10 +241,14 @@ async def get_thread_blocking_info(
     if not thread:
         return None
 
-    dependencies = await get_blocking_explanations(thread_id, user_id, db)
+    # Optimized: Use batch function to check blocking status in one query
+    # instead of separate get_blocked_thread_ids + get_blocking_explanations calls
+    explanations_map = await get_blocking_explanations_batch([thread_id], user_id, db)
+    dependencies = explanations_map.get(thread_id, [])
+    
     if not dependencies:
         return BlockingExplanation(is_blocked=False, blocking_reasons=[], blocking_dependencies=[])
-
+    
     return BlockingExplanation(
         is_blocked=True,
         blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],
@@ -275,6 +279,8 @@ async def get_threads_blocking_info(
     if thread_count != len(thread_ids):
         return None
 
+    # Optimized: Use single batch call to get explanations, then determine blocking status
+    # from presence of dependencies instead of separate get_blocked_thread_ids call
     reasons_map = await get_blocking_explanations_batch(
         thread_ids, user_id, db
     )
