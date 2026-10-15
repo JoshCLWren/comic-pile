@@ -373,6 +373,49 @@ def persist_author_model_marker(*, pr_number: int, head: str, worker: str) -> st
     return marker
 
 
+def persist_interactive_author_model_marker(
+    *, pr_number: int, head: str, pr: dict[str, Any]
+) -> str | None:
+    """Attest an owner-authored interactive head from GitHub commit evidence.
+
+    The factory review controller, never a PR body or model-generated comment,
+    writes this marker. A local factory's Model trailer is an attributed author
+    claim, while an owner-authored commit with no trailer is treated as human.
+    Unknown or conflicting identities fail closed; a human PR must not be
+    assigned a fabricated numbered-worker identity.
+    """
+    if producer_worker_from_pr(
+        branch=str(pr.get("headRefName") or ""),
+        body=str(pr.get("body") or ""),
+    ) is not None or "factory" not in labels_of(pr):
+        return None
+    author = json_object(pr.get("author"))
+    owner = REPO.split("/", 1)[0]
+    if author is None or str(author.get("login") or "") != owner:
+        return None
+    if current_head_author_identity(
+        model_comment_bodies(pr_number), pr=pr_number, head=head
+    ) is not None:
+        return None
+    commit = json_object(gh_json(["api", f"repos/{REPO}/commits/{head}"]))
+    if commit is None or str(commit.get("sha") or "") != head:
+        return None
+    identities = (json_object(commit.get("author")), json_object(commit.get("committer")))
+    if not any(identity is not None and identity.get("login") == owner for identity in identities):
+        return None
+    metadata = json_object(commit.get("commit"))
+    message = str(metadata.get("message") or "") if metadata is not None else ""
+    models = set(re.findall(r"(?m)^Model:[ \\t]*(\\S+)[ \\t]*$", message))
+    if len(models) > 1:
+        return None
+    model = next(iter(models)) if models else "human"
+    marker = agent_model_author_marker(
+        pr=pr_number, head=head, model=model, agent=f"interactive-{owner}"
+    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+    return marker
+
+
 def persist_cross_model_review_marker(
     *,
     pr_number: int,
@@ -1355,6 +1398,12 @@ def handle_review(
         verdict=verdict,
         excerpt=excerpt,
         note="Semantic approval is scoped to this exact reviewed PR head.",
+    )
+    # Local/interactive commits have no numbered producer to supply author
+    # provenance at push time. Establish it only from GitHub's exact-head
+    # commit author and model trailer, never from untrusted PR body text.
+    persist_interactive_author_model_marker(
+        pr_number=pr_number, head=reviewed_head, pr=pr
     )
     persist_cross_model_review_marker(
         pr_number=pr_number,
