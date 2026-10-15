@@ -41,6 +41,7 @@ const existingList = {
   user_id: 1,
   name: 'Starman into JSA',
   description: 'The bridge I actually want',
+  mode: 'loose',
   issue_count: 2,
   created_at: '2026-09-14T03:00:00Z',
   updated_at: '2026-09-14T03:00:00Z',
@@ -54,6 +55,8 @@ const existingList = {
       issue_number: '55',
       status: 'unread',
       is_checkpoint: false,
+      gate: 'none',
+      skipped: false,
     },
     {
       id: 92,
@@ -64,6 +67,8 @@ const existingList = {
       issue_number: '1',
       status: 'unread',
       is_checkpoint: false,
+      gate: 'none',
+      skipped: false,
     },
   ],
 }
@@ -76,6 +81,7 @@ describe('CustomCBLBuilder', () => {
         id: 9,
         name: existingList.name,
         description: existingList.description,
+        mode: existingList.mode,
         issue_count: 2,
         updated_at: existingList.updated_at,
       },
@@ -107,6 +113,8 @@ describe('CustomCBLBuilder', () => {
           issue_number: '1',
           status: 'unread',
           is_checkpoint: false,
+          gate: 'none',
+          skipped: false,
         },
       ],
     }
@@ -147,7 +155,13 @@ describe('CustomCBLBuilder', () => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
+        mode: 'loose',
         issue_ids: [26360, 30001, 30002],
+        entry_intents: {
+          26360: { gate: 'none', skipped: false },
+          30001: { gate: 'none', skipped: false },
+          30002: { gate: 'none', skipped: false },
+        },
         checkpoint_issue_ids: [],
       })
     })
@@ -166,6 +180,7 @@ describe('CustomCBLBuilder', () => {
       user_id: 1,
       name: 'Cosmic detour',
       description: null,
+      mode: 'loose',
       issue_count: 0,
       created_at: '2026-09-14T03:10:00Z',
       updated_at: '2026-09-14T03:10:00Z',
@@ -229,7 +244,11 @@ describe('CustomCBLBuilder', () => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
         name: 'Starman into JSA',
         description: null,
+        mode: 'loose',
         issue_ids: [30001],
+        entry_intents: {
+          30001: { gate: 'none', skipped: false },
+        },
         checkpoint_issue_ids: [],
       })
     })
@@ -266,17 +285,229 @@ describe('CustomCBLBuilder', () => {
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mark Starman #55 as checkpoint' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Starman #55 as crossover checkpoint' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
+        mode: 'loose',
         issue_ids: [26360, 30001],
+        entry_intents: {
+          26360: { gate: 'none', skipped: false },
+          30001: { gate: 'none', skipped: false },
+        },
         checkpoint_issue_ids: [26360],
       })
     })
+  })
+
+  it('saves strict mode with positional gates and list-local skips', async () => {
+    mocks.update.mockResolvedValue({
+      ...existingList,
+      mode: 'strict',
+      entries: [
+        { ...existingList.entries[0], skipped: true },
+        { ...existingList.entries[1], gate: 'after_previous' },
+      ],
+    })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('All-Star Comics #1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: /^Strict/ }))
+    fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
+      target: { value: 'after_previous' },
+    })
+    fireEvent.click(screen.getByLabelText('Skip Starman #55 in this list'))
+
+    expect(await screen.findByText('Skipped in this list')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+
+    await waitFor(() => {
+      expect(mocks.update).toHaveBeenCalledWith(9, {
+        name: 'Starman into JSA',
+        description: 'The bridge I actually want',
+        mode: 'strict',
+        issue_ids: [26360, 30001],
+        entry_intents: {
+          26360: { gate: 'none', skipped: true },
+          30001: { gate: 'after_previous', skipped: false },
+        },
+        checkpoint_issue_ids: [],
+      })
+    })
+  })
+
+  it('requires explicit confirmation before persisting changed waits', async () => {
+    const predecessorChange = {
+      issue_id: 30001,
+      issue_name: 'All-Star Comics #1',
+      before_issue_ids: [],
+      before_issue_names: [],
+      after_issue_ids: [26360],
+      after_issue_names: ['Starman #55'],
+    }
+    mocks.update
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: {
+          status: 409,
+          data: {
+            detail: {
+              code: 'reading_list_predecessor_confirmation_required',
+              predecessor_changes: [predecessorChange],
+            },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        ...existingList,
+        entries: [
+          existingList.entries[0],
+          { ...existingList.entries[1], gate: 'after_previous' },
+        ],
+      })
+
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
+      target: { value: 'after_previous' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm waiting changes' })
+    expect(dialog).toHaveTextContent('All-Star Comics #1 now waits on Starman #55.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and save' }))
+
+    await waitFor(() => {
+      expect(mocks.update).toHaveBeenNthCalledWith(2, 9, {
+        name: 'Starman into JSA',
+        description: 'The bridge I actually want',
+        mode: 'loose',
+        issue_ids: [26360, 30001],
+        entry_intents: {
+          26360: { gate: 'none', skipped: false },
+          30001: { gate: 'after_previous', skipped: false },
+        },
+        checkpoint_issue_ids: [],
+        confirmed_predecessor_changes: [predecessorChange],
+      })
+    })
+  })
+
+  it('leaves persisted content untouched when a predecessor confirmation is cancelled', async () => {
+    mocks.update.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: {
+          detail: {
+            code: 'reading_list_predecessor_confirmation_required',
+            predecessor_changes: [
+              {
+                issue_id: 30001,
+                issue_name: 'All-Star Comics #1',
+                before_issue_ids: [],
+                before_issue_names: [],
+                after_issue_ids: [26360],
+                after_issue_names: ['Starman #55'],
+              },
+            ],
+          },
+        },
+      },
+    })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
+      target: { value: 'after_previous' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+
+    await screen.findByRole('dialog', { name: 'Confirm waiting changes' })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Confirm waiting changes' })).not.toBeInTheDocument()
+    })
+    expect(mocks.update).toHaveBeenCalledTimes(1)
+    // The unsaved edit remains in the editor; nothing was persisted.
+    expect(screen.getByLabelText('Wait behavior for All-Star Comics #1')).toHaveValue('after_previous')
+  })
+
+  it('shows actionable feedback when a save would create a reading cycle', async () => {
+    mocks.update.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 422,
+        data: {
+          detail: {
+            code: 'reading_list_cycle',
+            message: 'Cycle detected',
+            path: [
+              {
+                source_issue_id: 26360,
+                target_issue_id: 30001,
+                origin: 'list',
+                prerequisite_origin: null,
+                provenance: [],
+              },
+              {
+                source_issue_id: 30001,
+                target_issue_id: 26360,
+                origin: 'list',
+                prerequisite_origin: null,
+                provenance: [],
+              },
+            ],
+          },
+        },
+      },
+    })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
+      target: { value: 'after_previous' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'This order would create a reading cycle: Starman #55 → All-Star Comics #1 → Starman #55.',
+    )
+  })
+
+  it('surfaces strict-mode coverage warnings returned by a successful save', async () => {
+    mocks.update.mockResolvedValue({
+      ...existingList,
+      mode: 'strict',
+      warnings: ['Strict list omits 2 unread Issues from Golden Path Series: #2, #3'],
+    })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: /^Strict/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+
+    expect(await screen.findByText('Coverage warnings')).toBeInTheDocument()
+    expect(
+      screen.getByText('Strict list omits 2 unread Issues from Golden Path Series: #2, #3'),
+    ).toBeInTheDocument()
   })
 
   it('shows export failures and revokes a created object URL', async () => {

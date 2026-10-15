@@ -1,6 +1,36 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
 
+/** Strict lists gate every entry on all earlier entries; loose lists only gate explicit intents. */
+export type ReadingListMode = 'strict' | 'loose'
+
+/** Positional intent for one member Issue in a Reading List. */
+export type ReadingListGate = 'none' | 'hold' | 'after_previous'
+
+export interface ReadingListEntryIntent {
+  gate: ReadingListGate
+  skipped: boolean
+}
+
+/** Named before/after stored requirements the reader must acknowledge before a semantic save. */
+export interface ReadingListPredecessorChange {
+  issue_id: number
+  issue_name: string
+  before_issue_ids: number[]
+  before_issue_names: string[]
+  after_issue_ids: number[]
+  after_issue_names: string[]
+}
+
+/** One structured edge in a rejected cycle path. */
+export interface ReadingListCycleEdge {
+  source_issue_id: number
+  target_issue_id: number
+  origin: string | null
+  prerequisite_origin: 'reader' | 'converted' | null
+  provenance: string[]
+}
+
 export interface CustomCBLEntry {
   id: number
   position: number
@@ -11,12 +41,15 @@ export interface CustomCBLEntry {
   status: string
   is_checkpoint?: boolean
   checkpoint_target_issue_ids?: number[]
+  gate: ReadingListGate
+  skipped: boolean
 }
 
 export interface CustomCBLListItem {
   id: number
   name: string
   description: string | null
+  mode: ReadingListMode
   issue_count: number
   updated_at: string
 }
@@ -25,6 +58,8 @@ export interface CustomCBL extends CustomCBLListItem {
   user_id: number
   created_at: string
   entries: CustomCBLEntry[]
+  predecessor_changes?: ReadingListPredecessorChange[]
+  warnings?: string[]
 }
 
 export interface CustomCBLIssueSearchResult {
@@ -38,9 +73,12 @@ export interface CustomCBLIssueSearchResult {
 export interface CustomCBLWrite {
   name: string
   description?: string | null
+  mode?: ReadingListMode
   issue_ids: number[]
+  entry_intents?: Record<number, ReadingListEntryIntent>
   checkpoint_issue_ids?: number[]
   checkpoint_targets?: Record<number, number[]>
+  confirmed_predecessor_changes?: ReadingListPredecessorChange[]
 }
 
 export interface CustomCBLApplyResult extends ContinuityPlan {
