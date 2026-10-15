@@ -748,8 +748,7 @@ async def test_paginated_roster_flows_through_sync(
         now=lambda: FIXED_SYNCED_AT,
     )
 
-    # First issues call is the count probe (limit=1); pages then fetch in parallel.
-    assert offsets == [0, 0, COLLECTION_PAGE_LIMIT]
+    assert offsets == [0, COLLECTION_PAGE_LIMIT]
     assert report.checked_sources == 1
     assert report.issues_checked == 105
     assert report.created_issues == 2

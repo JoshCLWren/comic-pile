@@ -191,8 +191,7 @@ async def test_repair_uses_live_search_only_after_local_miss(
         thread_issue_labels=["1", "2", "3", "4", "Revival"],
     )
 
-    # The live roster fetch issues a count probe (total=1) before its single page.
-    assert observed == ["search", "issues", "issues"]
+    assert observed == ["search", "issues"]
     assert len(scores) == 1
     assert scores[0].candidate.issue_id == 801
     assert scores[0].candidate.source == "comicvine-live"

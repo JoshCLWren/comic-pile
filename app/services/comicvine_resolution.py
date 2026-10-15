@@ -208,34 +208,31 @@ async def get_comicvine_series_issues(
             issues=[],
         )
 
+    # The roster and the volume metadata are independent provider reads. When the caller has not
+    # already resolved a series name, schedule the volume read alongside the roster so the two
+    # provider round trips overlap instead of running back to back.
+    volume_task = None if series_name else asyncio.ensure_future(client.fetch_volume(volume_id))
+    issues_rows: list[dict[str, object]] = []
     try:
-        # If series_name is not provided, fetch both volume info and issues in parallel
-        if not series_name:
-            # Fetch volume info and issues concurrently
-            volume_task = client.fetch_volume(volume_id)
-            issues_task = client.fetch_volume_issues(volume_id)
-            
-            vol_response, issues_rows = await asyncio.gather(volume_task, issues_task)
-            
-            # Extract series name from volume response
-            vol_obj = vol_response.payload.get("results")
-            if isinstance(vol_obj, dict):
-                volume_name = vol_obj.get("name")
-                series_name = volume_name if isinstance(volume_name, str) else f"Volume {volume_id}"
-            else:
-                series_name = f"Volume {volume_id}"
-        else:
-            # Series name provided, just fetch issues
-            issues_rows = await client.fetch_volume_issues(volume_id)
-            series_name = series_name or f"Volume {volume_id}"
-            
+        issues_rows = await client.fetch_volume_issues(volume_id)
     except Exception:
         logger.warning("Failed to fetch volume %d issues", volume_id, exc_info=True)
-        return ComicVineSeriesIssuesResponse(
-            comicvine_volume_id=volume_id,
-            series_name=series_name or f"Volume {volume_id}",
-            issues=[],
-        )
+
+    if volume_task is not None:
+        vol_obj: object = None
+        try:
+            vol_response = await volume_task
+        except Exception:
+            # The roster is still usable, so fall back to the generic volume label rather than
+            # discarding every issue the provider did return.
+            logger.warning("Failed to fetch volume %d metadata", volume_id, exc_info=True)
+        else:
+            vol_obj = vol_response.payload.get("results")
+        if isinstance(vol_obj, dict):
+            volume_name = vol_obj.get("name")
+            series_name = volume_name if isinstance(volume_name, str) else f"Volume {volume_id}"
+        else:
+            series_name = f"Volume {volume_id}"
 
     candidates: list[ComicVineIssueCandidate] = []
     for row in issues_rows:
