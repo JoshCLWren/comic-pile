@@ -181,8 +181,8 @@ class TestComicVineParallelPagination:
         assert result.series_name == "Test Series"
         assert len(result.issues) == 2
 
-    @pytest.mark.asyncio 
-    async def test_service_layer_with_pre fetched_series_name(self):
+    @pytest.mark.asyncio
+    async def test_service_layer_with_pre_fetched_series_name(self):
         """Test that service layer uses single request when series_name is provided."""
         mock_client = Mock()
         
