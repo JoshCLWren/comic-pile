@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -243,7 +244,13 @@ def test_worker_87_pins_opencode_deepseek_v41_flash_free(validate) -> None:
     by_worker = {row["worker"]: row for row in rows}
     assert by_worker["81"]["source"] == "nvidia"
     assert by_worker["81"]["model"] == "deepseek-ai/deepseek-v4.1-flash"
-    assert by_worker["87"]["source"] == "opencode-free"
-    assert by_worker["87"]["model"] == "deepseek-v4.1-flash-free"
-    assert validate.opencode_model_is_free(by_worker["87"]["model"])
-    assert by_worker["87"]["scheduler"] == "dispatcher"
+    # Discovery may retire a promotional pin after its free offer expires.
+    # Retirement must remain mergeable without rewriting historical tests.
+    pin = by_worker.get("87")
+    if pin is None or pin["model"] != "deepseek-v4.1-flash-free":
+        lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
+        assert "deepseek-v4.1-flash-free" in lock["retired_models"]
+    else:
+        assert pin["source"] == "opencode-free"
+        assert validate.opencode_model_is_free(pin["model"])
+        assert pin["scheduler"] == "dispatcher"
