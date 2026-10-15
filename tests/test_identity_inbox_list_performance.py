@@ -165,13 +165,17 @@ async def test_list_inbox_items_filters_by_status(async_db) -> None:
     user = await _user(async_db)
     thread = await _thread(async_db, user.id, "Status Thread")
     issue = await _issue(async_db, thread.id, "1")
-    identity = await _identity(async_db, "comicvine", "300")
+    identity_unresolved = await _identity(async_db, "comicvine", "300")
+    identity_candidate = await _identity(async_db, "comicvine", "301")
+    identity_deferred = await _identity(async_db, "comicvine", "302")
+    identity_confirmed = await _identity(async_db, "comicvine", "303")
+    identity_rejected = await _identity(async_db, "comicvine", "304")
 
-    await _mapping(async_db, issue.id, identity.id, status="unresolved")
-    await _mapping(async_db, issue.id, identity.id, status="candidate")
-    await _mapping(async_db, issue.id, identity.id, status="deferred")
-    await _mapping(async_db, issue.id, identity.id, status="confirmed")
-    await _mapping(async_db, issue.id, identity.id, status="rejected")
+    await _mapping(async_db, issue.id, identity_unresolved.id, status="unresolved")
+    await _mapping(async_db, issue.id, identity_candidate.id, status="candidate")
+    await _mapping(async_db, issue.id, identity_deferred.id, status="deferred")
+    await _mapping(async_db, issue.id, identity_confirmed.id, status="confirmed")
+    await _mapping(async_db, issue.id, identity_rejected.id, status="rejected")
 
     items, total = await list_inbox_items(async_db, user_id=user.id)
 
@@ -187,9 +191,8 @@ async def test_list_inbox_items_pagination(async_db) -> None:
     user = await _user(async_db)
     thread = await _thread(async_db, user.id, "Page Thread")
     issue = await _issue(async_db, thread.id, "1")
-    identity = await _identity(async_db, "comicvine", "400")
-
-    for _ in range(5):
+    for i in range(5):
+        identity = await _identity(async_db, "comicvine", f"40{i}")
         await _mapping(async_db, issue.id, identity.id, status="unresolved")
 
     first_page, total = await list_inbox_items(async_db, user_id=user.id, offset=0, limit=2)
@@ -209,11 +212,10 @@ async def test_list_inbox_items_ordered_by_created_at_desc(async_db) -> None:
     user = await _user(async_db)
     thread = await _thread(async_db, user.id, "Order Thread")
     issue = await _issue(async_db, thread.id, "1")
-    identity = await _identity(async_db, "comicvine", "500")
-
     now = datetime.now(UTC)
     mappings: list[IssueExternalIdentityMapping] = []
     for i in range(3):
+        identity = await _identity(async_db, "comicvine", f"50{i}")
         mapping = IssueExternalIdentityMapping(
             issue_id=issue.id,
             external_identity_id=identity.id,
