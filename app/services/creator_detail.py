@@ -23,10 +23,19 @@ Ordering semantics:
 Boundedness: each collection is a page (``limit``/``offset``) served by a fixed,
 small number of queries regardless of library size. No per-issue/role/thread
 N+1 fan-out and no provider request.
+
+Attribution indexing (#3247): the confirmed creator credits of every owned issue
+are filtered by creator id exactly once per request, in
+:func:`~app.services.creator_summary.build_creator_attribution`. The headline
+eligibility filter, the per-role statistics, the series/run aggregation, and
+every built issue row all read that one index. Re-filtering the credit lists
+per aggregate made the route cost scale as roles x attributed issues x credits
+and was the avoidable work behind the production ~1.3 s reads.
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,11 +61,14 @@ from app.services.creator_series import (
     aggregate_creator_series_groups,
     build_series_group,
     build_series_key,
-    creator_roles_on_issue,
     parse_series_key,
     select_series_group,
 )
-from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
+from app.services.creator_summary import (
+    HEADLINE_ROLES,
+    build_creator_attribution,
+    parse_creator_key,
+)
 
 
 def resolve_creator_issues(
@@ -65,6 +77,10 @@ def resolve_creator_issues(
     creator_id: int,
 ) -> tuple[frozenset[int], set[str], str]:
     """Resolve one creator's attributed issues, roles, and display name.
+
+    Thin projection of :func:`build_creator_attribution` for callers that only
+    need the three plain values. Creator detail reads use the attribution index
+    itself so no aggregate re-scans the credit lists (issue #3247).
 
     Args:
         inputs: User-scoped creator summary inputs.
@@ -77,45 +93,31 @@ def resolve_creator_issues(
     Raises:
         KeyError: When the creator is not present in the user's own library.
     """
-    issue_ids: set[int] = set()
-    roles: set[str] = set()
-    display_name: str | None = None
-    for issue_id, credits in inputs.issue_creator_credits.items():
-        for credit in credits:
-            if credit.external_id != creator_id:
-                continue
-            issue_ids.add(issue_id)
-            roles.update(credit.roles)
-            if display_name is None:
-                display_name = credit.display_name
-    if display_name is None:
-        raise KeyError(f"Creator {creator_id} not found in user's library")
-    return frozenset(issue_ids), roles, display_name
+    attribution = build_creator_attribution(inputs, creator_id=creator_id)
+    return attribution.issue_ids, set(attribution.roles), attribution.display_name
 
 
 def _build_issue_row(
-    inputs: CreatorSummaryInputs,
-    *,
-    creator_id: int,
     issue_id: int,
     issue_number: str,
     thread_id: int,
     thread_title: str,
     status: str,
+    *,
+    roles: list[str],
     effective_rating: float | None,
     rating_timestamp: datetime | None,
     sort_key: str,
 ) -> CreatorIssueRow:
-    """Build one detail row with roles resolved from the user-scoped inputs.
+    """Build one detail row from roles already resolved by the attribution index.
 
     Args:
-        inputs: User-scoped creator summary inputs.
-        creator_id: Stable external person id for the creator.
         issue_id: Local ComicPile issue ID.
         issue_number: Issue number.
         thread_id: Local ComicPile thread ID.
         thread_title: Title of the containing thread.
         status: Read/unread status.
+        roles: Sorted distinct roles the creator held on this issue.
         effective_rating: Latest effective rating for the issue, if any.
         rating_timestamp: Timestamp of the effective rating event, if any.
         sort_key: Deterministic local ordering information for the UI.
@@ -129,7 +131,7 @@ def _build_issue_row(
         thread_id=thread_id,
         thread_title=thread_title,
         status=status,
-        roles=creator_roles_on_issue(inputs, creator_id=creator_id, issue_id=issue_id),
+        roles=roles,
         effective_rating=effective_rating,
         rating_timestamp=rating_timestamp,
         sort_key=sort_key,
@@ -166,9 +168,13 @@ async def get_creator_detail(
 
     inputs = await load_creator_summary_inputs(db, user_id)
 
-    creator_id_set, creator_roles_all, display_name = resolve_creator_issues(
-        inputs, creator_id=creator_id
-    )
+    # One pass over the library's confirmed credits answers "which issues are
+    # this creator attributed to, and with which roles" for every aggregate
+    # below (issue #3247).
+    attribution = build_creator_attribution(inputs, creator_id=creator_id)
+    creator_id_set = attribution.issue_ids
+    creator_roles_all = attribution.roles
+    display_name = attribution.display_name
 
     # 1. Headline summary scoped to this creator, mirroring #2028 exactly:
     #    latest effective rate event wins, one issue counts at most once even
@@ -176,18 +182,10 @@ async def get_creator_detail(
     #    feed the headline average. The rated-issues collection below is scoped
     #    to this same headline-eligible set so the "Rated (N)" heading, the
     #    rating distribution, and the listed rows always agree (issue #3235).
-    def _has_headline_role(issue_id: int) -> bool:
-        return any(
-            role in HEADLINE_ROLES
-            for credit in inputs.issue_creator_credits[issue_id]
-            if credit.external_id == creator_id
-            for role in credit.roles
-        )
-
     rated_ids = frozenset(
         issue_id
-        for issue_id in creator_id_set
-        if issue_id in inputs.effective_ratings and _has_headline_role(issue_id)
+        for issue_id, roles in attribution.issue_roles.items()
+        if issue_id in inputs.effective_ratings and any(role in HEADLINE_ROLES for role in roles)
     )
     read_unrated_ids = frozenset(
         issue_id
@@ -254,18 +252,18 @@ async def get_creator_detail(
     )
 
     # 3. Role-specific statistics. Every distinct role is preserved honestly,
-    #    including pure cover/editorial and unknown roles.
+    #    including pure cover/editorial and unknown roles. The per-role issue
+    #    lists are inverted from the attribution index once, so this is linear
+    #    in attributed issues and their roles instead of re-filtering every
+    #    attributed issue's credit list once per role (issue #3247).
+    attributed_issues_by_role: dict[str, list[int]] = defaultdict(list)
+    for issue_id, roles in attribution.issue_roles.items():
+        for role in roles:
+            attributed_issues_by_role[role].append(issue_id)
+
     role_stats: list[CreatorRoleStat] = []
     for role in sorted(creator_roles_all):
-        role_issue_ids = [
-            issue_id
-            for issue_id in creator_id_set
-            if any(
-                role in credit.roles
-                for credit in inputs.issue_creator_credits[issue_id]
-                if credit.external_id == creator_id
-            )
-        ]
+        role_issue_ids = attributed_issues_by_role.get(role, [])
         role_rated_issue_ids = [
             issue_id
             for issue_id in role_issue_ids
@@ -321,13 +319,12 @@ async def get_creator_detail(
 
     rated_issues = [
         _build_issue_row(
-            inputs,
-            creator_id=creator_id,
-            issue_id=issue_id,
-            issue_number=issue_number,
-            thread_id=thread_id,
-            thread_title=thread_title,
-            status=status,
+            issue_id,
+            issue_number,
+            thread_id,
+            thread_title,
+            status,
+            roles=list(attribution.issue_roles.get(issue_id, ())),
             effective_rating=inputs.effective_ratings.get(issue_id),
             rating_timestamp=latest_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),
@@ -337,13 +334,12 @@ async def get_creator_detail(
 
     read_unrated_issues = [
         _build_issue_row(
-            inputs,
-            creator_id=creator_id,
-            issue_id=issue_id,
-            issue_number=issue_number,
-            thread_id=thread_id,
-            thread_title=thread_title,
-            status=status,
+            issue_id,
+            issue_number,
+            thread_id,
+            thread_title,
+            status,
+            roles=list(attribution.issue_roles.get(issue_id, ())),
             effective_rating=inputs.effective_ratings.get(issue_id),
             rating_timestamp=latest_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),
@@ -353,13 +349,12 @@ async def get_creator_detail(
 
     upcoming_issues = [
         _build_issue_row(
-            inputs,
-            creator_id=creator_id,
-            issue_id=issue_id,
-            issue_number=issue_number,
-            thread_id=thread_id,
-            thread_title=thread_title,
-            status=status,
+            issue_id,
+            issue_number,
+            thread_id,
+            thread_title,
+            status,
+            roles=list(attribution.issue_roles.get(issue_id, ())),
             effective_rating=inputs.effective_ratings.get(issue_id),
             rating_timestamp=latest_rating_timestamps.get(issue_id),
             sort_key=f"{queue_position:07d}:{issue_position:07d}:{issue_id}",
@@ -371,11 +366,7 @@ async def get_creator_detail(
     # 5. Series/run aggregates (issue #3088). Each aggregate is computed over
     #    the creator's complete attributed work for that thread, so paging the
     #    issue collections never changes a group's numbers.
-    series_aggregates = aggregate_creator_series_groups(
-        inputs,
-        creator_id=creator_id,
-        creator_issue_ids=creator_id_set,
-    )
+    series_aggregates = aggregate_creator_series_groups(inputs, attribution=attribution)
     series_groups = [
         build_series_group(aggregate)
         for aggregate in series_aggregates[page_offset : page_offset + limit]
@@ -444,14 +435,8 @@ async def get_creator_series_issues(
     page_offset = offset if offset is not None else 0
 
     inputs = await load_creator_summary_inputs(db, user_id)
-    creator_issue_ids, _roles, _display_name = resolve_creator_issues(
-        inputs, creator_id=creator_id
-    )
-    aggregates = aggregate_creator_series_groups(
-        inputs,
-        creator_id=creator_id,
-        creator_issue_ids=creator_issue_ids,
-    )
+    attribution = build_creator_attribution(inputs, creator_id=creator_id)
+    aggregates = aggregate_creator_series_groups(inputs, attribution=attribution)
     aggregate = select_series_group(aggregates, thread_id=thread_id)
     if aggregate is None:
         raise KeyError(f"Series {series_key} not found in user's library")
@@ -471,13 +456,12 @@ async def get_creator_series_issues(
     group = build_series_group(aggregate)
     issues = [
         _build_issue_row(
-            inputs,
-            creator_id=creator_id,
-            issue_id=issue_id,
-            issue_number=issue_number,
-            thread_id=row_thread_id,
-            thread_title=thread_title,
-            status=status,
+            issue_id,
+            issue_number,
+            row_thread_id,
+            thread_title,
+            status,
+            roles=list(attribution.issue_roles.get(issue_id, ())),
             effective_rating=inputs.effective_ratings.get(issue_id),
             rating_timestamp=latest_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),

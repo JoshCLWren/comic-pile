@@ -1,23 +1,33 @@
-"""Creator-read regression coverage for issue #3244.
+"""Creator-read regression coverage for issues #3244 and #3247.
 
-Production ``GET /api/v1/creators`` warm reads were taking 1.4-2.0 seconds. Two
-avoidable costs in ``load_creator_summary_inputs`` fed that budget:
+Production ``GET /api/v1/creators`` warm reads were taking 1.4-2.0 seconds, and
+the per-creator ``GET /api/v1/creators/creator:<id>`` read retained a 1337.60 ms
+log line. Avoidable costs fed that budget:
 
-1. the confirmed-identity read hydrated the whole normalized ComicVine issue
-   metadata for every owned issue, even though the creator read only consumes
-   ``creator_credits`` — the rest of that document is the retained
+1. (#3244) the confirmed-identity read hydrated the whole normalized ComicVine
+   issue metadata for every owned issue, even though the creator read only
+   consumes ``creator_credits`` — the rest of that document is the retained
    ``raw_provider_payload``;
-2. the effective-rating read collapsed rate events in Python and spelled
-   ``DISTINCT ON`` through the deprecated ``distinct(<expression>)`` argument,
-   which emits ``SADeprecationWarning`` on the pinned SQLAlchemy 2.1.
+2. (#3244) the effective-rating read collapsed rate events in Python and
+   spelled ``DISTINCT ON`` through the deprecated ``distinct(<expression>)``
+   argument, which emits ``SADeprecationWarning`` on the pinned SQLAlchemy 2.1;
+3. (#3247) the creator detail read re-filtered every owned issue's creator
+   credits once per aggregate — headline eligibility, each role statistic, the
+   series/run grouping, and every built issue row — so the route cost scale as
+   roles x attributed issues x credits per request;
+4. (#3247) an empty rated/read-but-unrated/upcoming collection still paid a
+   database round trip for an empty ``IN`` filter.
 
-These tests pin both properties so the read cannot quietly regress back to
-hydrating full provider payloads or onto a deprecated SQLAlchemy call, and so
+These tests pin all four properties so a read cannot quietly regress onto
+hydrating full provider payloads, onto a deprecated SQLAlchemy call, onto
+repeated per-role credit scans, or onto empty-collection round trips, and so
 the projected read provably returns identical creator semantics to the
 full-metadata read it replaced.
 """
 
+import inspect
 import re
+import time
 import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -33,9 +43,16 @@ from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories.creator_summary import (
     CREATOR_CREDITS_KEY,
+    CreatorCredit,
+    CreatorSummaryInputs,
     extract_creator_credit_list,
     extract_creator_credits,
 )
+from app.services import creator_detail as creator_detail_service
+from app.services import creator_series as creator_series_service
+from app.services.creator_detail import resolve_creator_issues
+from app.services.creator_series import aggregate_creator_series_groups
+from app.services.creator_summary import build_creator_attribution
 
 D1 = datetime(2026, 3, 1, tzinfo=UTC)
 
@@ -420,3 +437,351 @@ def test_extract_creator_credits_reads_the_named_key() -> None:
     raw = [{"id": 3, "name": "Three", "role": "writer"}]
     assert extract_creator_credits({CREATOR_CREDITS_KEY: raw}) == extract_creator_credit_list(raw)
     assert extract_creator_credits({"other": raw}) == []
+
+
+# ---------------------------------------------------------------------------
+# Issue #3247: creator-detail warm-read latency
+# ---------------------------------------------------------------------------
+
+#: A creator credited with exactly one role on every owned issue.
+SINGLE_ROLE_CREATOR = 61_001
+
+#: A creator credited with six roles on every owned issue, so per-role work is
+#: the only thing that differs from :data:`SINGLE_ROLE_CREATOR`.
+MULTI_ROLE_CREATOR = 61_002
+
+#: Role credit that normalizes to six distinct roles.
+MULTI_ROLE_CREDIT = "writer,penciler,inker,colorist,letterer,artist"
+
+#: Filler creators, so every issue carries a realistic multi-creator credit list
+#: instead of only the two creators under test.
+FILLER_CREATORS = (71_001, 71_002, 71_003)
+
+
+async def _seed_attribution_library(
+    db: AsyncSession,
+    user: User,
+    *,
+    thread_count: int,
+    issues_per_thread: int,
+    read_through: int,
+    rated_through: int,
+    credits: dict[int, tuple[str, int]],
+) -> list[Issue]:
+    """Create an owned library whose issues carry production-shaped credits.
+
+    Issue positions ``1..rated_through`` are read and rated, positions
+    ``rated_through + 1..read_through`` are read but unrated, and the rest are
+    unread. ``credits`` maps a creator id to the role string it is credited
+    with and the last issue position it is credited on, so one creator can own
+    only rated work while another owns rated, read-but-unrated, and upcoming
+    work in the same library.
+
+    Args:
+        db: Async database session.
+        user: Owner of the seeded library.
+        thread_count: Number of owned threads.
+        issues_per_thread: Contiguous issues created per thread.
+        read_through: Last issue position marked ``read``.
+        rated_through: Last issue position given an effective rating.
+        credits: Creator id to (role string, last credited issue position).
+
+    Returns:
+        Every seeded issue in creation order.
+    """
+    global _identity_serial
+
+    seeded: list[Issue] = []
+    for thread_index in range(1, thread_count + 1):
+        thread = Thread(
+            user_id=user.id,
+            title=f"Attribution Series {thread_index}",
+            format="Comic",
+            issues_remaining=issues_per_thread - read_through,
+            total_issues=issues_per_thread,
+            queue_position=thread_index,
+            status="active",
+        )
+        db.add(thread)
+        await db.flush()
+        for position in range(1, issues_per_thread + 1):
+            issue = Issue(
+                thread_id=thread.id,
+                issue_number=str(position),
+                position=position,
+                status="read" if position <= read_through else "unread",
+            )
+            db.add(issue)
+            await db.flush()
+            seeded.append(issue)
+
+            person_credits: list[dict[str, object]] = [
+                {
+                    "id": creator_id,
+                    "name": f"Creator {creator_id}",
+                    "api_detail_url": (
+                        f"https://comicvine.gamespot.com/api/person/1-{creator_id}/"
+                    ),
+                    "site_detail_url": (
+                        f"https://comicvine.gamespot.com/person/4000-{creator_id}/"
+                    ),
+                    "role": role,
+                }
+                for creator_id, (role, last_position) in credits.items()
+                if position <= last_position
+            ]
+            person_credits.extend(
+                {
+                    "id": filler_id,
+                    "name": f"Filler {filler_id}",
+                    "api_detail_url": (
+                        f"https://comicvine.gamespot.com/api/person/1-{filler_id}/"
+                    ),
+                    "site_detail_url": (
+                        f"https://comicvine.gamespot.com/person/4000-{filler_id}/"
+                    ),
+                    "role": "cover",
+                }
+                for filler_id in FILLER_CREATORS
+            )
+
+            _identity_serial += 1
+            provider_result = _provider_issue_result(_identity_serial, [])
+            provider_result["person_credits"] = person_credits
+            metadata = normalize_issue(provider_result)
+            identity = ExternalIdentity(
+                provider="comicvine",
+                entity_type="issue",
+                external_id=f"perf-{_identity_serial}",
+                metadata_json=metadata,
+            )
+            db.add(identity)
+            await db.flush()
+            db.add(
+                IssueExternalIdentityMapping(
+                    issue_id=issue.id,
+                    external_identity_id=identity.id,
+                    status="confirmed",
+                    confidence=1.0,
+                )
+            )
+            if position <= rated_through:
+                db.add(
+                    Event(
+                        type="rate",
+                        thread_id=thread.id,
+                        issue_id=issue.id,
+                        issue_number=issue.issue_number,
+                        rating=float(1 + (position % 5)),
+                        timestamp=D1,
+                    )
+                )
+    await db.flush()
+    return seeded
+
+
+def test_detail_path_never_re_filters_raw_credit_lists() -> None:
+    """Creator detail reads credit lists only through the attribution index.
+
+    This is the static guard for the dominant cost in #3247. Every aggregate
+    used to re-run ``for credit in inputs.issue_creator_credits[...]`` on its
+    own, so the read cost roles x attributed issues x credits. The raw mapping
+    must now appear nowhere in the detail service, and the series aggregation
+    must read roles from the prebuilt attribution instead of re-deriving them.
+    """
+    assert "issue_creator_credits" not in inspect.getsource(creator_detail_service)
+
+    aggregate_source = inspect.getsource(aggregate_creator_series_groups)
+    assert "issue_creator_credits" not in aggregate_source
+    assert "creator_roles_on_issue" not in aggregate_source
+
+
+def test_attribution_index_matches_the_legacy_resolution() -> None:
+    """The one-pass index returns exactly what the repeated scans returned."""
+    inputs = CreatorSummaryInputs(
+        owned_issues={1: "read", 2: "unread", 3: "read"},
+        owned_issue_series={},
+        issue_creator_credits={
+            1: (
+                CreatorCredit(external_id=9, roles=("writer",), display_name="Nine"),
+                CreatorCredit(external_id=4, roles=("cover",), display_name="Four"),
+            ),
+            # A confirmed credit with no role at all still attributes the issue.
+            2: (CreatorCredit(external_id=9, roles=(), display_name="Nine"),),
+            3: (
+                CreatorCredit(external_id=9, roles=("penciler", "artist"), display_name="Nine"),
+                CreatorCredit(external_id=9, roles=("writer",), display_name="Nine"),
+            ),
+        },
+    )
+
+    issue_ids, roles, display_name = resolve_creator_issues(inputs, creator_id=9)
+    attribution = build_creator_attribution(inputs, creator_id=9)
+
+    assert attribution.issue_ids == issue_ids == frozenset({1, 2, 3})
+    assert attribution.roles == frozenset(roles) == frozenset({"artist", "penciler", "writer"})
+    assert attribution.display_name == display_name == "Nine"
+    # Roles are stored sorted per issue, exactly like ``creator_roles_on_issue``.
+    assert attribution.issue_roles == {
+        1: ("writer",),
+        2: (),
+        3: ("artist", "penciler", "writer"),
+    }
+    assert resolve_creator_issues(inputs, creator_id=4)[0] == frozenset({1})
+
+
+def test_attribution_index_rejects_a_creator_outside_the_library() -> None:
+    """A creator with no confirmed credit is still not found."""
+    inputs = CreatorSummaryInputs(
+        issue_creator_credits={1: (CreatorCredit(external_id=9, roles=("writer",)),)},
+    )
+    with pytest.raises(KeyError):
+        build_creator_attribution(inputs, creator_id=404)
+
+
+@pytest.mark.asyncio
+async def test_detail_read_never_re_derives_per_issue_roles(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The per-issue role re-derivation helper is off the creator detail path.
+
+    ``creator_roles_on_issue`` scans one issue's stored credits, so calling it
+    once per attributed issue made the series/run grouping cost scale with the
+    creator's library. Replacing it with a call that raises proves the fixed
+    path never reaches it.
+    """
+
+    def _forbidden(*args: object, **kwargs: object) -> list[str]:
+        raise AssertionError("creator detail must not re-derive per-issue roles")
+
+    monkeypatch.setattr(creator_series_service, "creator_roles_on_issue", _forbidden)
+
+    await _seed_attribution_library(
+        async_db,
+        default_user,
+        thread_count=3,
+        issues_per_thread=6,
+        read_through=6,
+        rated_through=3,
+        credits={
+            MULTI_ROLE_CREATOR: (MULTI_ROLE_CREDIT, 6),
+            SINGLE_ROLE_CREATOR: ("writer", 6),
+        },
+    )
+
+    response = await auth_client.get(f"/api/v1/creators/creator:{MULTI_ROLE_CREATOR}")
+    assert response.status_code == 200
+    assert response.json()["series_groups"]
+
+
+@pytest.mark.asyncio
+async def test_detail_read_skips_queries_for_empty_collections(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """An empty collection short-circuits instead of round-tripping on ``IN ()``.
+
+    A creator with rated work only has no read-but-unrated and no upcoming
+    issues. The other creator in the same library has all three collections
+    populated, so the rated-only read must issue strictly fewer SELECTs. Each
+    avoided round trip is latency the read no longer spends. Before the fix both
+    reads issued the same number of SELECTs because the empty collections still
+    round-tripped.
+    """
+    issues_per_thread = 6
+    await _seed_attribution_library(
+        async_db,
+        default_user,
+        thread_count=3,
+        issues_per_thread=issues_per_thread,
+        read_through=issues_per_thread - 2,
+        rated_through=2,
+        credits={
+            # Rated work only: no read-but-unrated, no upcoming.
+            SINGLE_ROLE_CREATOR: ("writer", 2),
+            # Rated, read-but-unrated, and upcoming work.
+            MULTI_ROLE_CREATOR: ("writer", issues_per_thread),
+        },
+    )
+
+    await auth_client.get(f"/api/v1/creators/creator:{SINGLE_ROLE_CREATOR}")
+
+    with _captured_selects(db_engine) as rated_only:
+        rated_only_response = await auth_client.get(
+            f"/api/v1/creators/creator:{SINGLE_ROLE_CREATOR}"
+        )
+    with _captured_selects(db_engine) as full_shapes:
+        full_response = await auth_client.get(f"/api/v1/creators/creator:{MULTI_ROLE_CREATOR}")
+
+    assert rated_only_response.status_code == 200
+    assert full_response.status_code == 200
+
+    body = rated_only_response.json()
+    assert body["summary"]["ratings_count"] > 0
+    assert body["summary"]["read_unrated_count"] == 0
+    assert body["summary"]["upcoming_count"] == 0
+
+    assert len(rated_only) < len(full_shapes), (len(rated_only), len(full_shapes))
+    # Auth lookup, four aggregation reads, the rated page, and rating timestamps.
+    assert len(rated_only) <= 7, rated_only
+
+
+@pytest.mark.asyncio
+async def test_warm_detail_read_is_fast_for_a_prolific_creator(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A warm creator-detail read stays prompt on production-shaped data.
+
+    Production logged 1337.60 ms for ``GET /api/v1/creators/creator:42389``.
+    This seeds a library whose issues carry real ComicVine payload bulk and a
+    six-role creator, warms the connection and statement caches, then asserts
+    the warm read still returns well inside a generous bound. The ceiling is a
+    catastrophic-regression guard for shared CI hardware; the 500 ms product
+    budget is measured against production logs, not this fixture.
+    """
+    thread_count = 10
+    issues_per_thread = 20
+    issues = await _seed_attribution_library(
+        async_db,
+        default_user,
+        thread_count=thread_count,
+        issues_per_thread=issues_per_thread,
+        read_through=issues_per_thread,
+        rated_through=issues_per_thread,
+        credits={
+            MULTI_ROLE_CREATOR: (MULTI_ROLE_CREDIT, issues_per_thread),
+            SINGLE_ROLE_CREATOR: ("writer", issues_per_thread),
+        },
+    )
+
+    # Warm-up: connection pool, prepared statements, and page cache.
+    for _ in range(2):
+        warm = await auth_client.get(f"/api/v1/creators/creator:{MULTI_ROLE_CREATOR}")
+        assert warm.status_code == 200
+
+    timings: list[float] = []
+    for _ in range(3):
+        started = time.perf_counter()
+        response = await auth_client.get(f"/api/v1/creators/creator:{MULTI_ROLE_CREATOR}")
+        timings.append(time.perf_counter() - started)
+        assert response.status_code == 200
+
+    body = response.json()
+    assert body["summary"]["ratings_count"] == len(issues)
+    assert body["series_groups_total"] == thread_count
+    assert {stat["role"] for stat in body["role_stats"]} == {
+        "artist",
+        "colorist",
+        "inker",
+        "letterer",
+        "penciler",
+        "writer",
+    }
+    assert max(timings) < 5, timings

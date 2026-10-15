@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 
 from app.repositories.creator_summary import CreatorSummaryInputs
 from app.schemas.creator_detail import CreatorSeriesGroup
+from app.services.creator_summary import CreatorAttribution
 
 #: Prefix for the stable local series identity key.
 SERIES_KEY_PREFIX = "thread:"
@@ -73,6 +74,12 @@ def creator_roles_on_issue(
     issue_id: int,
 ) -> list[str]:
     """Return the sorted distinct roles one creator held on one issue.
+
+    This re-derives roles from raw credits and is therefore linear in the
+    credits stored on one issue. Creator detail reads must not call it: the
+    caller already holds a
+    :class:`~app.services.creator_summary.CreatorAttribution` index that answers
+    the same question without re-reading credit lists (issue #3247).
 
     Args:
         inputs: User-scoped creator summary inputs.
@@ -164,8 +171,7 @@ def _thread_metadata_completeness(
 def aggregate_creator_series_groups(
     inputs: CreatorSummaryInputs,
     *,
-    creator_id: int,
-    creator_issue_ids: frozenset[int],
+    attribution: CreatorAttribution,
 ) -> list[SeriesAggregate]:
     """Group one creator's attributed work into stable series/run aggregates.
 
@@ -173,10 +179,12 @@ def aggregate_creator_series_groups(
     most-rated first, then case-insensitive title, then exact title, then the
     stable thread id.
 
+    Per-issue roles are read from the caller's prebuilt attribution index rather
+    than re-filtering every attributed issue's credit list here (issue #3247).
+
     Args:
         inputs: User-scoped creator summary inputs.
-        creator_id: Stable external provider person id for the creator.
-        creator_issue_ids: Owned issue ids attributed to the creator.
+        attribution: Prebuilt attribution index for one creator.
 
     Returns:
         Deterministically ordered aggregates, one per distinct thread with
@@ -184,7 +192,7 @@ def aggregate_creator_series_groups(
     """
     completeness = _thread_metadata_completeness(inputs)
     aggregates: dict[int, SeriesAggregate] = {}
-    for issue_id in sorted(creator_issue_ids):
+    for issue_id in sorted(attribution.issue_roles):
         series = inputs.owned_issue_series.get(issue_id)
         if series is None:
             continue
@@ -197,9 +205,7 @@ def aggregate_creator_series_groups(
             )
             aggregates[series.thread_id] = aggregate
         aggregate.attributed_issue_count += 1
-        aggregate.roles.update(
-            creator_roles_on_issue(inputs, creator_id=creator_id, issue_id=issue_id)
-        )
+        aggregate.roles.update(attribution.issue_roles[issue_id])
         status = inputs.owned_issues.get(issue_id)
         rating = inputs.effective_ratings.get(issue_id)
         if status == "unread":

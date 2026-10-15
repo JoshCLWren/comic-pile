@@ -5,6 +5,10 @@ Every query is user-scoped to ensure that one user's creator data never leaks
 to another user. Collections are bounded by a page ``limit``/``offset`` and are
 ordered deterministically: recent-first for rated/read-but-unrated rows and
 ComicPile queue order for upcoming rows.
+
+An empty collection short-circuits without a round trip, matching the sibling
+reads in this module, so a creator with no upcoming work does not pay for an
+empty ``IN`` query on every read (issue #3247).
 """
 
 from __future__ import annotations
@@ -50,6 +54,8 @@ async def load_recent_creator_issue_rows(
     Returns:
         A bounded list of recent-first issue rows.
     """
+    if not creator_issue_ids:
+        return []
     result = await db.execute(
         select(
             Issue.id,
@@ -174,6 +180,8 @@ async def load_upcoming_creator_issue_rows(
     Returns:
         A bounded list of upcoming issue rows in queue order.
     """
+    if not creator_issue_ids:
+        return []
     result = await db.execute(
         select(
             Issue.id,

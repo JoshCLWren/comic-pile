@@ -31,6 +31,7 @@ Coverage semantics:
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,6 +73,85 @@ def parse_creator_key(key: str) -> int | None:
     if len(parts) != 2 or parts[0] != "creator" or not parts[1].isdigit():
         return None
     return int(parts[1])
+
+
+@dataclass(frozen=True)
+class CreatorAttribution:
+    """One creator's resolved attribution over the authenticated user's library.
+
+    Attribution is resolved once, in a single pass over confirmed creator
+    credits, and then reused by every downstream aggregate (issue #3247).
+
+    Each consumer used to re-filter every owned issue's credit list by creator
+    id on its own — the headline-eligibility filter, the per-role statistics,
+    the series/run aggregation, and every built issue row. On a wide library
+    that repeated the same scan four or more times per request and made the
+    detail read cost scale as roles x attributed issues x credits, which is the
+    avoidable work behind the production ~1.3 s reads. The index below is the
+    single answer every one of those aggregates now reads.
+
+    Attributes:
+        creator_id: Stable external provider person id for the creator.
+        display_name: Provider display name from the first matching credit.
+        roles: Every distinct role the creator holds across attributed issues.
+        issue_roles: Sorted distinct roles the creator held on each attributed
+            owned issue id. An issue appears here whenever the creator holds any
+            confirmed credit on it, including a credit whose role set is empty.
+    """
+
+    creator_id: int
+    display_name: str
+    roles: frozenset[str]
+    issue_roles: dict[int, tuple[str, ...]]
+
+    @property
+    def issue_ids(self) -> frozenset[int]:
+        """Owned issue ids attributed to this creator."""
+        return frozenset(self.issue_roles)
+
+
+def build_creator_attribution(
+    inputs: CreatorSummaryInputs,
+    *,
+    creator_id: int,
+) -> CreatorAttribution:
+    """Resolve one creator's attributed issues and per-issue roles in one pass.
+
+    Args:
+        inputs: User-scoped creator summary inputs.
+        creator_id: Stable external provider person id for the creator.
+
+    Returns:
+        The creator's attribution index, reused by every aggregate.
+
+    Raises:
+        KeyError: When the creator is not present in the user's own library.
+    """
+    issue_roles: dict[int, tuple[str, ...]] = {}
+    all_roles: set[str] = set()
+    display_name: str | None = None
+    for issue_id, credits in inputs.issue_creator_credits.items():
+        attributed = False
+        issue_creator_roles: set[str] = set()
+        for credit in credits:
+            if credit.external_id != creator_id:
+                continue
+            attributed = True
+            issue_creator_roles.update(credit.roles)
+            if display_name is None:
+                display_name = credit.display_name
+        if not attributed:
+            continue
+        issue_roles[issue_id] = tuple(sorted(issue_creator_roles))
+        all_roles.update(issue_creator_roles)
+    if display_name is None:
+        raise KeyError(f"Creator {creator_id} not found in user's library")
+    return CreatorAttribution(
+        creator_id=creator_id,
+        display_name=display_name,
+        roles=frozenset(all_roles),
+        issue_roles=issue_roles,
+    )
 
 
 def _build_coverage(
@@ -224,6 +304,8 @@ async def get_creator_summaries(
 
 __all__ = [
     "HEADLINE_ROLES",
+    "CreatorAttribution",
+    "build_creator_attribution",
     "get_creator_summaries",
     "parse_creator_key",
 ]
