@@ -125,12 +125,14 @@ async def test_database_exactly_one_target_constraint(
     async_db: AsyncSession, sample_data: dict[str, object]
 ) -> None:
     """Database enforcement remains effective for writers bypassing Pydantic."""
-    with pytest.raises(IntegrityError), async_db.begin_nested():
-        async_db.add(CollectionExclusion(user_id=1, thread_id=1, issue_id=6))
-        await async_db.flush()
-    with pytest.raises(IntegrityError), async_db.begin_nested():
-        async_db.add(CollectionExclusion(user_id=1, external_volume_id="4050-1"))
-        await async_db.flush()
+    with pytest.raises(IntegrityError):
+        async with async_db.begin_nested():
+            async_db.add(CollectionExclusion(user_id=1, thread_id=1, issue_id=6))
+            await async_db.flush()
+    with pytest.raises(IntegrityError):
+        async with async_db.begin_nested():
+            async_db.add(CollectionExclusion(user_id=1, external_volume_id="4050-1"))
+            await async_db.flush()
 
 
 def test_payload_validation_without_database() -> None:
