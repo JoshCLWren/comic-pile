@@ -165,6 +165,9 @@ stage_trusted_review_controller() {
   trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
   cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
   cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+  # Bind model provenance to a trusted main checkout snapshot, not PR data.
+  cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
+  cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
   cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
   # The staged policy imports canonical eligibility rules; pin this dependency
   # from trusted main too, never from an untrusted PR checkout or /scripts.
