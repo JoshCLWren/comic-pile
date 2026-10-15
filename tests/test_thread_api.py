@@ -700,7 +700,7 @@ async def test_bulk_issues_remaining_no_n_plus_one(
     async_db: AsyncSession,
     db_engine: AsyncEngine,
 ) -> None:
-    """List endpoint uses a single GROUP BY query instead of N per-thread COUNTs."""
+    """List endpoint uses a single batched issue-stats query instead of N per-thread COUNTs."""
     from sqlalchemy import event
 
     user = await get_or_create_user_async(async_db)
@@ -767,13 +767,12 @@ async def test_bulk_issues_remaining_no_n_plus_one(
     bulk_counts = [
         s
         for s in captured
-        if "group by" in s.lower()
-        and "issues" in s.lower()
+        if "from issues" in s.lower()
         and "issue_external_identity_mappings" not in s.lower()
         and "external_identities" not in s.lower()
     ]
     assert len(bulk_counts) == 1, (
-        f"Expected 1 bulk COUNT query, found {len(bulk_counts)}: {bulk_counts}"
+        f"Expected 1 batched issue-stats query, found {len(bulk_counts)}: {bulk_counts}"
     )
 
     assert len(captured) < 15, (

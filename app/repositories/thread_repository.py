@@ -502,32 +502,42 @@ async def fetch_comicvine_mapping_health(
     # Subquery: for each issue, determine its mapping state. The per-issue
     # grain is required so that fan-out from multiple mappings on one issue
     # cannot inflate thread-level counts, and so that issues with more than
-    # one confirmed mapping are detectable for review.
+    # one confirmed mapping are detectable for review. The confirmed/comicvine
+    # predicate lives in the JOIN conditions (issue #3463) so non-matching
+    # mappings never fan out into per-row FILTER evaluation; counting the
+    # non-null joined identity is exactly the confirmed ComicVine total.
+    # The tracked-threads semi-join preserves the legacy-threads-resolve-to-
+    # zero contract for every caller (see the #3384 regression test): orphan
+    # issue rows on a legacy thread never leak into the queue payload.
+    tracked_threads = (
+        select(Thread.id)
+        .where(Thread.id.in_(thread_ids))
+        .where(Thread.total_issues.is_not(None))
+        .subquery()
+    )
     issue_mapping_state = (
         select(
             Issue.id.label("issue_id"),
             Issue.thread_id.label("thread_id"),
-            func.count()
-            .filter(
-                and_(
-                    IssueExternalIdentityMapping.status == "confirmed",
-                    ExternalIdentity.provider == "comicvine",
-                )
-            )
-            .label("confirmed_count"),
+            func.count(ExternalIdentity.id).label("confirmed_count"),
         )
         .select_from(Issue)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(Thread.total_issues.is_not(None))
+        .where(Issue.thread_id.in_(select(tracked_threads.c.id)))
         .outerjoin(
             IssueExternalIdentityMapping,
-            IssueExternalIdentityMapping.issue_id == Issue.id,
+            and_(
+                IssueExternalIdentityMapping.issue_id == Issue.id,
+                IssueExternalIdentityMapping.status == "confirmed",
+            ),
         )
         .outerjoin(
             ExternalIdentity,
-            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+            and_(
+                ExternalIdentity.id
+                == IssueExternalIdentityMapping.external_identity_id,
+                ExternalIdentity.provider == "comicvine",
+            ),
         )
-        .where(Issue.thread_id.in_(thread_ids))
         .group_by(Issue.id, Issue.thread_id)
         .subquery()
     )

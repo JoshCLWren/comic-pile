@@ -46,7 +46,7 @@ from app.services.queue_pagination import (
     encode_queue_cursor,
     normalize_queue_search,
 )
-from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
+from app.services.thread_issue_stats import load_issue_stats
 from comic_pile.reading_session import get_current_die, get_or_create
 from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
 
@@ -151,8 +151,7 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
     Returns:
         One ThreadResponse per input thread, in input order.
     """
-    issue_map = await load_next_issue_numbers(threads, db)
-    remaining_map = await load_unread_counts(threads, db)
+    issue_map, remaining_map = await load_issue_stats(threads, db)
     return [
         await thread_to_response(
             thread,
@@ -594,11 +593,11 @@ async def update_thread(
     await db.commit()
     await db.refresh(thread)
 
-    # Pre-fetch statistics using the same batched maps as threads_to_responses,
-    # to avoid per-thread DB round-trips on the update path (issue #3442).
+    # Pre-fetch statistics with the same combined single-query loader as
+    # threads_to_responses, to avoid per-thread DB round-trips on the update
+    # path (issue #3442) and the second sequential stats query (issue #3463).
     if thread.uses_issue_tracking():
-        issues_remaining_map = await load_unread_counts([thread], db)
-        issue_number_map = await load_next_issue_numbers([thread], db)
+        issues_remaining_map, issue_number_map = await load_issue_stats([thread], db)
     else:
         issues_remaining_map = None
         issue_number_map = None
