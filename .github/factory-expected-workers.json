@@ -28,15 +28,13 @@
     73,
     74,
     75,
-    77,
     78,
     79,
     80,
     81,
     82,
     83,
-    86,
-    87
+    86
   ],
   "retired_workers": [
     9,
@@ -62,10 +60,12 @@
     71,
     72,
     76,
+    77,
     84,
     85
   ],
   "retired_models": [
+    "apodex/apodex-1.1-mini:free",
     "deepseek-v4-flash-free",
     "exo-free",
     "fledge-alpha-free",
@@ -75,9 +75,11 @@
     "jev-1.13-free",
     "laguna-s-2.1-free",
     "ling-3.0-flash-fin-free",
+    "ling-3.1-flash-free",
     "minimax/minimax-m2.7:free",
     "minimax/minimax-m3:free",
     "minimaxai/minimax-m3",
+    "moonshotai/kimi-k3",
     "muse-spark-1.2-contributor-free",
     "nvidia/llama-3.3-nemotron-super-49b-v1.5",
     "nvidia/nemotron-3-nano-30b-a3b",
