@@ -312,6 +312,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     return true
   }, [enqueueIssueMutation, focusMoveControl, issues])
 
+  // Held in a ref so loadIssues keeps a stable identity: the load effect keys
+  // off loadIssues, so depending on onLoad directly would re-trigger a fetch
+  // whenever a caller passed an unmemoized callback.
+  const onLoadRef = useRef(onLoad)
+  useEffect(() => {
+    onLoadRef.current = onLoad
+  }, [onLoad])
+
   const loadIssues = useCallback(async () => {
     const loadGeneration = ++loadGenerationRef.current
     setIsLoading(true)
@@ -340,7 +348,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     } finally {
       if (loadGeneration === loadGenerationRef.current) {
         setIsLoading(false)
-        onLoad?.()
+        onLoadRef.current?.()
       }
     }
   }, [fetchAllIssues, fetchDependencies, syncOptimisticIssues])
@@ -485,7 +493,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           onClick={() => {
             void loadIssues()
           }}
-          className="rounded-lg border border-[var(--theme-border)] px-3 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+          className="min-h-[36px] md:min-h-[44px] rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           data-testid="issue-load-retry"
         >
           Retry

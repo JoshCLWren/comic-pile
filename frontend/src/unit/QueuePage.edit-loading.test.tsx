@@ -70,6 +70,14 @@ vi.mock('../services/api-dependencies', () => ({
   },
 }))
 
+// The queue's batched crossover query is a separate service module; without this
+// stub the rendered page issues real requests and logs network errors.
+vi.mock('../services/api-dependency-groups', () => ({
+  dependencyGroupsApi: {
+    listForThreads: vi.fn().mockResolvedValue({}),
+  },
+}))
+
 vi.mock('../services/api-issues', () => ({
   issuesApi: {
     list: vi.fn(),
