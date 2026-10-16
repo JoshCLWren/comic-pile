@@ -70,7 +70,7 @@ class IssueExternalIdentityMapping(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('unresolved', 'candidate', 'confirmed', 'rejected')",
+            "status IN ('unresolved', 'candidate', 'confirmed', 'rejected', 'deferred')",
             name="ck_issue_external_identity_status",
         ),
         CheckConstraint(
@@ -109,7 +109,7 @@ class ThreadExternalSeriesMapping(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('unresolved', 'candidate', 'confirmed', 'rejected')",
+            "status IN ('unresolved', 'candidate', 'confirmed', 'rejected', 'deferred')",
             name="ck_thread_external_series_status",
         ),
         CheckConstraint(
