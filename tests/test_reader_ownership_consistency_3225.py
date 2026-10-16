@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -139,14 +139,19 @@ async def test_frontier_db_constraint_rejects_direct_sql(
     thread_b = await _make_thread(db, sample_user.id, "Series B")
     issue_b = await _make_issue(db, thread_b.id)
 
-    await db.execute(
-        update(Thread)
-        .where(Thread.id == thread_a.id)
-        .values(next_unread_issue_id=issue_b.id)
-    )
-    await db.flush()
+    # The shared ``db`` fixture joins an outer transaction with savepoints, so
+    # a DEFERRABLE INITIALLY DEFERRED constraint would only be enforced at that
+    # outer COMMIT — which the fixture rolls back and the test never reaches.
+    # Flipping this one constraint to IMMEDIATE makes PostgreSQL evaluate the
+    # violation while the fixture transaction is still alive. The stored
+    # constraint definition (deferrable, initially deferred) is untouched.
+    await db.execute(text("SET CONSTRAINTS fk_threads_frontier_same_thread IMMEDIATE"))
     with pytest.raises(IntegrityError):
-        await db.commit()
+        await db.execute(
+            update(Thread)
+            .where(Thread.id == thread_a.id)
+            .values(next_unread_issue_id=issue_b.id)
+        )
     await db.rollback()
 
 

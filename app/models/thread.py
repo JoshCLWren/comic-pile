@@ -61,7 +61,12 @@ class Thread(Base):
 
     __tablename__ = "threads"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # autoincrement=True keeps threads.id an implicit SERIAL/sequence under
+    # Base.metadata.create_all now that id also participates in the composite
+    # fk_threads_frontier_same_thread constraint: SQLAlchemy otherwise treats a
+    # primary key column with a foreign key as non-autoincrementing and omits
+    # it from INSERT, breaking every thread insert on schema-created databases.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     format: Mapped[str] = mapped_column(String(50), nullable=False)
     issues_remaining: Mapped[int] = mapped_column(Integer, default=0)
