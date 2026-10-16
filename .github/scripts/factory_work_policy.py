@@ -243,8 +243,9 @@ def is_factory_managed_pr(pr: dict[str, Any]) -> bool:
     head = str(pr.get('headRefName') or '')
     if head.startswith('factory/'):
         return True
-    if head.startswith(('agent/', 'chatgpt/')):
-        return False
+    # Explicitly factory-enrolled interactive PRs are reviewable regardless
+    # of the branch prefix. Their GitHub author and provenance are still
+    # verified by the trusted review controller before merge authorization.
     return 'factory' in labels_of(pr)
 
 
@@ -522,6 +523,9 @@ def pr_is_static_candidate(
     if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
         return False
     labels = labels_of(pr)
+    # Explicit operator opt-out always wins, including on an already-enrolled PR.
+    if eligibility.is_manual_only(str(pr.get("body") or "")):
+        return False
     # Human-authored agent/* and chatgpt/* PRs are not autonomous factory work,
     # even if a stale/mistaken factory label was applied to them. Labeled local
     # Cursor/fix delivery PRs are admitted so they can finish through review.

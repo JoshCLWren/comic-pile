@@ -183,7 +183,7 @@ def pr_json(pr_number: int) -> dict[str, Any]:
             "--repo",
             REPO,
             "--json",
-            "state,isDraft,mergeable,headRefOid,headRefName,body,labels",
+            "state,isDraft,mergeable,headRefOid,headRefName,body,labels,author",
         ]
     )
     obj = json_object(payload)
@@ -258,6 +258,24 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
     if not branch:
         return None
     match = re.match(r"^factory/\d+-(\d+)-", branch)
+    return int(match.group(1)) if match else None
+
+
+def linked_issue_for_pr(pr_number: int, branch: str | None) -> int | None:
+    """Resolve manual/local PR issue handoffs from explicit closing references.
+
+    A casual #number mention is not an issue-ownership claim. Preserve the
+    canonical factory branch identity when available; otherwise use a GitHub
+    PR body with GitHub's explicit closes/fixes/resolves syntax.
+    """
+    linked = linked_issue_from_branch(branch)
+    if linked is not None:
+        return linked
+    body = str(pr_json(pr_number).get("body") or "")
+    match = re.search(
+        r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
+        body,
+    )
     return int(match.group(1)) if match else None
 
 
@@ -368,6 +386,55 @@ def persist_author_model_marker(*, pr_number: int, head: str, worker: str) -> st
         head=head,
         model=model,
         agent=worker,
+    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+    return marker
+
+
+def persist_interactive_author_model_marker(
+    *, pr_number: int, head: str, pr: dict[str, Any]
+) -> str | None:
+    """Attest an owner-authored interactive head from GitHub commit evidence.
+
+    The factory review controller, never a PR body or model-generated comment,
+    writes this marker. A local factory's Model trailer is an attributed author
+    claim, while an owner-authored commit with no trailer is treated as human.
+    Unknown or conflicting identities fail closed; a human PR must not be
+    assigned a fabricated numbered-worker identity.
+    """
+    if producer_worker_from_pr(
+        branch=str(pr.get("headRefName") or ""),
+        body=str(pr.get("body") or ""),
+    ) is not None or "factory" not in labels_of(pr):
+        return None
+    author = json_object(pr.get("author"))
+    owner = REPO.split("/", 1)[0]
+    if author is None or str(author.get("login") or "") != owner:
+        return None
+    if current_head_author_identity(
+        model_comment_bodies(pr_number), pr=pr_number, head=head
+    ) is not None:
+        return None
+    commit = json_object(gh_json(["api", f"repos/{REPO}/commits/{head}"]))
+    if commit is None or str(commit.get("sha") or "") != head:
+        return None
+    identities = (
+        json_object(commit.get("author")),
+        json_object(commit.get("committer")),
+    )
+    if not any(
+        identity is not None and identity.get("login") == owner
+        for identity in identities
+    ):
+        return None
+    metadata = json_object(commit.get("commit"))
+    message = str(metadata.get("message") or "") if metadata is not None else ""
+    models = set(re.findall(r"(?m)^Model:[ \t]*(\S+)[ \t]*$", message))
+    if len(models) > 1:
+        return None
+    model = next(iter(models)) if models else "human"
+    marker = agent_model_author_marker(
+        pr=pr_number, head=head, model=model, agent=f"interactive-{owner}"
     )
     run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
     return marker
@@ -1016,7 +1083,7 @@ def transition_pr_and_linked_issue(
 ) -> None:
     """Release a reviewed PR and its linked issue to controller-owned state."""
     replace_factory_labels(pr_number, "factory:unowned", pr_stage)
-    issue = linked_issue_from_branch(branch)
+    issue = linked_issue_for_pr(pr_number, branch)
     if issue is None:
         return
     try:
@@ -1227,7 +1294,11 @@ def handle_review(
             review_comment_bodies(pr_number),
             pr=pr_number,
         )
-        if reviewed_head not in prior_repair_heads and len(prior_repair_heads) >= FACTORY_REPAIR_CYCLE_LIMIT:
+        if (
+            producer is not None
+            and reviewed_head not in prior_repair_heads
+            and len(prior_repair_heads) >= FACTORY_REPAIR_CYCLE_LIMIT
+        ):
             if not has_actionable_review_findings(excerpt):
                 raise RuntimeError("strike-limit repair requires durable actionable review findings")
             post_review_comment(
@@ -1376,6 +1447,12 @@ def handle_review(
         verdict=verdict,
         excerpt=excerpt,
         note="Semantic approval is scoped to this exact reviewed PR head.",
+    )
+    # Local/interactive commits have no numbered producer to supply author
+    # provenance at push time. Establish it only from GitHub's exact-head
+    # commit author and model trailer, never from untrusted PR body text.
+    persist_interactive_author_model_marker(
+        pr_number=pr_number, head=reviewed_head, pr=pr
     )
     persist_cross_model_review_marker(
         pr_number=pr_number,
@@ -1655,7 +1732,7 @@ def authorize_ready(pr_number: int) -> dict[str, Any]:
 
     if str(pr.get("state")) == "OPEN" and "factory:ready" in labels_of(pr):
         replace_factory_labels(pr_number, "factory:unowned", "factory:review")
-        issue = linked_issue_from_branch(branch)
+        issue = linked_issue_for_pr(pr_number, branch)
         if issue is not None:
             try:
                 issue_target = target_json(issue)
