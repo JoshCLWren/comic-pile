@@ -161,7 +161,7 @@ async def test_list_inbox_items_scoped_to_user(async_db) -> None:
 
 @pytest.mark.asyncio
 async def test_list_inbox_items_filters_by_status(async_db) -> None:
-    """list_inbox_items only returns unresolved, candidate, and confirmed mappings."""
+    """list_inbox_items only returns unresolved, candidate, and deferred mappings."""
     user = await _user(async_db)
     thread = await _thread(async_db, user.id, "Status Thread")
     issue = await _issue(async_db, thread.id, "1")
@@ -182,7 +182,7 @@ async def test_list_inbox_items_filters_by_status(async_db) -> None:
     assert total == 3
     assert len(items) == 3
     statuses = {item.status for item in items}
-    assert statuses == {"unresolved", "candidate", "confirmed"}
+    assert statuses == {"unresolved", "candidate", "deferred"}
 
 
 @pytest.mark.asyncio
