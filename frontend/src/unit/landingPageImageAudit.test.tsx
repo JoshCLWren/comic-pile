@@ -31,7 +31,7 @@ describe('LandingPage public image accessibility audit (issue #3069)', () => {
       // Empty string (`alt=""`) = deliberate decorative/redundant decision.
       expect(img).toHaveAttribute('alt')
       const alt = img.getAttribute('alt') ?? ''
-      expect(typeof alt === 'string').toBe(true)
+      expect(alt).toBeTypeOf('string')
     }
   })
 })
