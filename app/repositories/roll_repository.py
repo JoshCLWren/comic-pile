@@ -5,13 +5,23 @@ Functions return ORM models or plain tuples/dicts; callers
 (services) own transaction boundaries.
 """
 
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import ARRAY, cast, func, or_, select, update
-from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
+from sqlalchemy import Text, func, or_, select, update
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, ReadingSession, Snapshot, Thread
+from app.models import (
+    DependencyGroup,
+    DependencyGroupMembership,
+    Event,
+    Issue,
+    ReadingSession,
+    Snapshot,
+    Thread,
+)
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.schemas.roll import RollRecoveryInfo
 
@@ -235,31 +245,27 @@ async def fetch_session_for_unskip(
     return result.scalar_one_or_none()
 
 
-async def fetch_bootstrap_pool_data(
+async def fetch_bootstrap_pool_rows(
     db: AsyncSession,
     user_id: int,
     die_size: int,
-    snoozed_ids: list[int] | None = None,
-    skipped_ids: list[int] | None = None,
-) -> dict[str, object]:
-    """Fetch all pool-related data for the bootstrap endpoint.
+    excluded_ids: Sequence[int],
+) -> list[Row[int, str, str, int | None, str, Sequence[str]]]:
+    """Return the bounded roll-pool rows with their route labels.
+
+    Issue #3375: route labels stay inside the single pool statement as a
+    correlated aggregate, so the query count never scales with pool size or
+    membership count.
 
     Args:
         db: Database session.
         user_id: Owner of the threads.
-        die_size: Current die size for pool boundary.
-        snoozed_ids: Thread IDs currently snoozed.
-        skipped_ids: Thread IDs currently skipped.
+        die_size: Current die size bounding the pool.
+        excluded_ids: Thread IDs excluded from the pool in any scope.
 
     Returns:
-        Dictionary with pool_rows, snoozed_threads, skipped_threads,
-        blocked_count, blocked_threads, stale_thread_count, stale_thread.
+        Rows of (id, title, format, issue_id, issue_number, route_labels).
     """
-    from sqlalchemy import Text
-    from sqlalchemy.dialects.postgresql import ARRAY
-
-    from app.models import DependencyGroup, DependencyGroupMembership, Issue, Snapshot, Thread
-
     route_labels_subq = (
         select(
             func.array_agg(func.distinct(DependencyGroup.name)),
@@ -295,135 +301,150 @@ async def fetch_bootstrap_pool_data(
         .order_by(Thread.queue_position)
         .limit(die_size)
     )
-    if snoozed_ids:
-        pool_query = pool_query.where(Thread.id.not_in(snoozed_ids))
-    if skipped_ids:
-        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
+    if excluded_ids:
+        pool_query = pool_query.where(Thread.id.not_in(excluded_ids))
 
-    pool_result = await db.execute(pool_query)
-    pool_rows = pool_result.all()
+    result = await db.execute(pool_query)
+    return list(result.all())
 
-    roll_pool = [
-        {
-            "id": row.id,
-            "title": row.title,
-            "format": row.format,
-            "issue_id": row.issue_id,
-            "issue_number": row.issue_number,
-            "route_labels": list(row.route_labels or []),
-        }
-        for row in pool_rows
-    ]
 
-    snoozed_threads: list[dict[str, object]] = []
-    if snoozed_ids:
-        snoozed_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(snoozed_ids))
-        )
-        snoozed_threads = [
-            {"id": row.id, "title": row.title, "format": row.format}
-            for row in snoozed_result.all()
-        ]
+async def fetch_bootstrap_excluded_thread_rows(
+    db: AsyncSession,
+    user_id: int,
+    thread_ids: Sequence[int],
+) -> list[Row[int, str, str]]:
+    """Return id/title/format for every snoozed and skipped series at once.
 
-    skipped_threads: list[dict[str, object]] = []
-    if skipped_ids:
-        skipped_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(skipped_ids))
-        )
-        skipped_threads = [
-            {"id": row.id, "title": row.title, "format": row.format}
-            for row in skipped_result.all()
-        ]
+    Issue #3375: snoozed and skipped summaries are two answers to the same
+    question, so they are answered by one read instead of one read each.
 
-    blocked_count_result = await db.execute(
-        select(func.count())
-        .select_from(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(True))
-    )
-    blocked_count = blocked_count_result.scalar() or 0
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        thread_ids: Snoozed and skipped thread IDs, or empty when neither.
 
-    blocked_result = await db.execute(
+    Returns:
+        Rows of (id, title, format), or an empty list when nothing is excluded.
+    """
+    if not thread_ids:
+        return []
+
+    result = await db.execute(
         select(Thread.id, Thread.title, Thread.format)
+        .where(Thread.user_id == user_id)
+        .where(Thread.id.in_(thread_ids))
+    )
+    return list(result.all())
+
+
+async def fetch_bootstrap_blocked_rows(
+    db: AsyncSession,
+    user_id: int,
+    limit: int,
+) -> list[Row[int, str, str, int]]:
+    """Return the blocked summary rows plus the unbounded blocked total.
+
+    Issue #3375: the blocked count and the blocked rows are the same filtered
+    set, so a windowed count rides along on the rows instead of being counted
+    by a second statement. The window is evaluated before ``LIMIT``, so
+    ``blocked_total`` is the true total even when the row list is truncated.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        limit: Maximum number of blocked rows to return.
+
+    Returns:
+        Rows of (id, title, format, blocked_total).
+    """
+    result = await db.execute(
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            func.count().over().label("blocked_total"),
+        )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.is_blocked.is_(True))
         .order_by(Thread.queue_position)
-        .limit(20)
+        .limit(limit)
     )
-    blocked_threads = [
-        {"id": row.id, "title": row.title, "format": row.format}
-        for row in blocked_result.all()
-    ]
+    return list(result.all())
 
-    stale_cutoff = datetime.now(UTC) - __import__("datetime").timedelta(days=7)
+
+async def fetch_bootstrap_stale_rows(
+    db: AsyncSession,
+    user_id: int,
+    stale_cutoff: datetime,
+    excluded_ids: Sequence[int],
+) -> list[Row[int, str, str, datetime | None, int]]:
+    """Return every stale candidate row plus the unbounded stale total.
+
+    Issue #3375: the stale count, the stale candidate IDs, and the chosen
+    stale row are one filtered set. Reading the candidate rows once and
+    carrying a windowed count removes two of the three statements.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        stale_cutoff: Activity strictly older than this instant is stale.
+        excluded_ids: Thread IDs excluded from staleness in any scope.
+
+    Returns:
+        Rows of (id, title, format, last_activity_at, stale_total).
+    """
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
-    stale_base = (
-        select(func.count())
-        .select_from(Thread)
+    stale_query = (
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.last_activity_at,
+            func.count().over().label("stale_total"),
+        )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.is_blocked.is_(False))
         .where(effective_activity < stale_cutoff)
     )
-    if snoozed_ids:
-        stale_base = stale_base.where(Thread.id.not_in(snoozed_ids))
-    stale_count_result = await db.execute(stale_base)
-    stale_thread_count = stale_count_result.scalar() or 0
+    if excluded_ids:
+        stale_query = stale_query.where(Thread.id.not_in(excluded_ids))
 
-    stale_thread = None
-    if stale_thread_count > 0:
-        stale_ids_query = (
-            select(Thread.id)
-            .where(Thread.user_id == user_id)
-            .where(Thread.status == "active")
-            .where(Thread.is_blocked.is_(False))
-            .where(effective_activity < stale_cutoff)
+    result = await db.execute(stale_query)
+    return list(result.all())
+
+
+async def fetch_bootstrap_library_rows(
+    db: AsyncSession,
+    user_id: int,
+) -> list[Row[int, str, str, int, bool, str]]:
+    """Return active and completed series for exclusion transparency.
+
+    Issue #3375: both statuses are read by the same scan, so one statement
+    answers them and the caller partitions on ``status``.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+
+    Returns:
+        Rows of (id, title, format, queue_position, is_blocked, status).
+    """
+    result = await db.execute(
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.queue_position,
+            Thread.is_blocked,
+            Thread.status,
         )
-        if snoozed_ids:
-            stale_ids_query = stale_ids_query.where(Thread.id.not_in(snoozed_ids))
-        stale_ids_result = await db.execute(stale_ids_query)
-        stale_ids = [row[0] for row in stale_ids_result.all()]
-        if stale_ids:
-            import random
-            chosen_id = random.choice(stale_ids)
-            stale_detail_result = await db.execute(
-                select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
-                .where(Thread.id == chosen_id)
-            )
-            stale_row = stale_detail_result.first()
-            if stale_row:
-                stale_thread = {
-                    "id": stale_row.id,
-                    "title": stale_row.title,
-                    "format": stale_row.format,
-                    "last_activity_at": stale_row.last_activity_at.isoformat()
-                    if stale_row.last_activity_at
-                    else None,
-                }
-
-    active_session = await fetch_active_session(db, user_id)
-    session_id = active_session.id if active_session else -1
-    snapshot_count_result = await db.execute(
-        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session_id)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status.in_(("active", "completed")))
+        .order_by(Thread.queue_position)
     )
-    snapshot_count = snapshot_count_result.scalar() or 0
-
-    return {
-        "roll_pool": roll_pool,
-        "snoozed_threads": snoozed_threads,
-        "skipped_threads": skipped_threads,
-        "blocked_count": blocked_count,
-        "blocked_threads": blocked_threads,
-        "stale_thread_count": stale_thread_count,
-        "stale_thread": stale_thread,
-        "snapshot_count": snapshot_count,
-    }
+    return list(result.all())
 
 
 async def fetch_active_session(
@@ -484,37 +505,6 @@ async def count_snapshots(db: AsyncSession, session_id: int) -> int:
     return result.scalar() or 0
 
 
-async def fetch_stale_threads_for_bootstrap(
-    db: AsyncSession,
-    user_id: int,
-    cutoff_date: datetime,
-    snoozed_ids: list[int] | None = None,
-) -> list[Thread]:
-    """Fetch stale threads for bootstrap.
-
-    Args:
-        db: Database session.
-        user_id: Owner of the threads.
-        cutoff_date: Threads last read before this instant are stale.
-        snoozed_ids: Thread IDs currently snoozed; excluded from results.
-
-    Returns:
-        Stale threads ordered oldest activity first.
-    """
-    query = (
-        select(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(False))
-        .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
-        .order_by(Thread.last_activity_at.asc().nullsfirst())
-    )
-    if snoozed_ids:
-        query = query.where(Thread.id.not_in(snoozed_ids))
-    result = await db.execute(query)
-    return list(result.scalars().all())
-
-
 async def fetch_bootstrap_recovery_data(
     db: AsyncSession,
     user_id: int,
@@ -569,90 +559,3 @@ async def fetch_recommendation_explanation(
     if event.type != "roll":
         return None, None
     return event, session
-
-
-async def fetch_bootstrap_thread_data(
-    db: AsyncSession,
-    user_id: int,
-    snoozed_ids: list[int],
-    skipped_ids: list[int],
-    die_size: int,
-) -> tuple[list[tuple[int, str, str, int | None, str | None, list[str]]], int, int]:
-    """Fetch all thread data needed for bootstrap in bulk.
-
-    This replaces multiple separate queries with a single efficient query that
-    returns pool, snoozed, and skipped threads in one round trip. The query
-    includes route labels via a correlated subquery, maintaining the existing
-    behavior while reducing query count from 6+ to 2.
-
-    Args:
-        db: Async database session.
-        user_id: Authenticated user ID.
-        snoozed_ids: Thread IDs currently snoozed in session.
-        skipped_ids: Thread IDs currently skipped in session.
-        die_size: Current die size for pool limit.
-
-    Returns:
-        Tuple of (all_thread_rows, pool_count, total_threads) where:
-        - all_thread_rows: List of tuples (id, title, format, issue_id, issue_number, route_labels)
-        - pool_count: Number of threads in the pool (eligible and not excluded)
-        - total_threads: Total number of active threads (pool + excluded)
-    """
-    route_labels_subq = (
-        select(
-            func.array_agg(func.distinct(DependencyGroup.name)),
-        )
-        .select_from(DependencyGroupMembership)
-        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
-        .where(
-            or_(
-                DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
-            ),
-            DependencyGroup.user_id == user_id,
-        )
-        .correlate(Thread)
-        .scalar_subquery()
-        .cast(PG_ARRAY(Text))
-    )
-
-    all_threads_query = (
-        select(
-            Thread.id,
-            Thread.title,
-            Thread.format,
-            Thread.next_unread_issue_id,
-            Issue.issue_number,
-            route_labels_subq.label("route_labels"),
-        )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .order_by(Thread.queue_position)
-    )
-
-    pool_query = (
-        select(
-            Thread.id,
-            Thread.title,
-            Thread.format,
-            Thread.next_unread_issue_id,
-            Issue.issue_number,
-            route_labels_subq.label("route_labels"),
-        )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .where(Thread.is_blocked.is_(False))
-        .order_by(Thread.queue_position)
-        .limit(die_size)
-    )
-
-    all_result = await db.execute(all_threads_query)
-    all_rows = all_result.all()
-
-    pool_result = await db.execute(pool_query)
-    pool_rows = pool_result.all()
-
-    return pool_rows, len(all_rows)
