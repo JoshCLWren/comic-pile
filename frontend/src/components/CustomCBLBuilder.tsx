@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
@@ -149,6 +149,8 @@ export default function CustomCBLBuilder({
   onPendingChange,
 }: CustomCBLBuilderProps) {
   const queryClient = useQueryClient()
+  const issueSearchInput = useRef<HTMLInputElement>(null)
+  const issueSearchResults = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loadedListId, setLoadedListId] = useState<number | null>(null)
@@ -292,7 +294,7 @@ export default function CustomCBLBuilder({
     return describeCyclePath(saveErrorDetail.cyclePath, resolveName)
   }, [entryNames, saveErrorDetail])
 
-  const searchResults = (issueSearchQuery.data ?? []).filter(
+  const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : []).filter(
     (candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id),
   )
 
@@ -310,7 +312,31 @@ export default function CustomCBLBuilder({
   }
   const addIssue = (candidate: CustomCBLIssueSearchResult) => {
     setEntries((current) => [...current, draftEntry(candidate, current.length)])
-    setMessage(null)
+    setMessage(`Added ${candidate.series_name} #${candidate.issue_number} to this list. Save to keep your changes.`)
+    issueSearchInput.current?.focus()
+  }
+  const focusSearchResult = (event: KeyboardEvent<HTMLElement>, fromInput = false) => {
+    const buttons = Array.from(issueSearchResults.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
+    if (event.key === 'Escape' && !fromInput) {
+      event.preventDefault()
+      issueSearchInput.current?.focus()
+      return
+    }
+    if (buttons.length === 0) return
+    if (fromInput && event.key === 'Enter') {
+      // Results already belong to this query: do not resubmit or add an
+      // unintended issue. Enter adds only when a result button has focus.
+      event.preventDefault()
+      buttons[0].focus()
+      return
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    const current = event.target instanceof HTMLButtonElement ? buttons.indexOf(event.target) : -1
+    const next = event.key === 'ArrowDown'
+      ? (current + 1) % buttons.length
+      : (current <= 0 ? buttons.length : current) - 1
+    buttons[next].focus()
   }
   const removeIssue = (issueId: number) => {
     setEntries((current) => normalizePositions(current.filter((entry) => entry.issue_id !== issueId)))
@@ -450,14 +476,16 @@ export default function CustomCBLBuilder({
               </fieldset>
 
               <form onSubmit={search} className="flex flex-col gap-2 sm:flex-row">
-                <input aria-label="Search issues for custom CBL" value={issueQuery} onChange={(event) => setIssueQuery(event.target.value)} placeholder="Search your issues, e.g. All-Star Comics" maxLength={200} disabled={disabled || isPending} className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50" />
+                <input ref={issueSearchInput} onKeyDown={(event) => focusSearchResult(event, true)} aria-describedby="custom-cbl-search-help" aria-label="Search issues for custom CBL" value={issueQuery} onChange={(event) => setIssueQuery(event.target.value)} placeholder="Search your issues, e.g. All-Star Comics" maxLength={200} disabled={disabled || isPending} className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50" />
                 <button type="submit" disabled={!issueQuery.trim() || disabled || isPending || issueSearchQuery.isFetching} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">{issueSearchQuery.isFetching ? 'Searching…' : 'Find issues'}</button>
               </form>
 
+              <p id="custom-cbl-search-help" className="text-xs text-[var(--theme-text-muted)]">Find issues, then use the arrow keys to choose a result and Enter to add it. Escape returns to search.</p>
+
               {searchResults.length > 0 && (
-                <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
+                <div ref={issueSearchResults} className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
                   {searchResults.map((candidate) => (
-                    <button key={candidate.issue_id} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50">
+                    <button key={candidate.issue_id} onKeyDown={(event) => focusSearchResult(event)} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)] disabled:opacity-50">
                       <span>{candidate.series_name} #{candidate.issue_number}</span><span className="text-xs text-[var(--theme-text-dim)]">Add</span>
                     </button>
                   ))}
