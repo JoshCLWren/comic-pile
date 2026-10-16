@@ -20,7 +20,7 @@ BASE = "/api/v1/collection-exclusions"
 
 
 async def test_volume_idempotent_normalized_and_persists_without_thread(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict[str, object]
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
     """An excluded external volume survives removal of its original Thread."""
     payload = {"provider": " ComicVine ", "external_volume_id": "4050-1234"}
@@ -47,7 +47,7 @@ async def test_volume_idempotent_normalized_and_persists_without_thread(
 @pytest.mark.parametrize("target_kind", ["thread", "issue"])
 async def test_owned_local_target_roundtrip(
     auth_client: AsyncClient,
-    sample_data: dict[str, object],
+    sample_data: dict,
     target_kind: str,
 ) -> None:
     """Owners can exclude and remove their local Thread or Issue."""
@@ -69,7 +69,7 @@ async def test_owned_local_target_roundtrip(
 async def test_other_users_targets_not_available(
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    sample_data: dict[str, object],
+    sample_data: dict,
 ) -> None:
     """Reject cross-user Thread/Issue writes and hide foreign exclusion IDs."""
     other = User(username="exclusions_foreign", created_at=datetime.now(UTC))
@@ -112,7 +112,7 @@ async def test_other_users_targets_not_available(
     ],
 )
 async def test_invalid_targets_rejected(
-    auth_client: AsyncClient, sample_data: dict[str, object], payload: dict[str, object]
+    auth_client: AsyncClient, sample_data: dict, payload: dict[str, object]
 ) -> None:
     """Malformed or multiple target kinds never create a row."""
     assert (await auth_client.post(BASE, json=payload)).status_code == 422
@@ -120,7 +120,7 @@ async def test_invalid_targets_rejected(
 
 
 async def test_missing_local_targets_are_not_permitted(
-    auth_client: AsyncClient, sample_data: dict[str, object]
+    auth_client: AsyncClient, sample_data: dict
 ) -> None:
     """Only external identities may be excluded before materialization."""
     assert (await auth_client.post(BASE, json={"thread_id": 999999})).status_code == 404
@@ -128,7 +128,7 @@ async def test_missing_local_targets_are_not_permitted(
 
 
 async def test_database_exactly_one_target_constraint(
-    async_db: AsyncSession, sample_data: dict[str, object]
+    async_db: AsyncSession, sample_data: dict
 ) -> None:
     """Database enforcement remains effective for writers bypassing Pydantic."""
     sample_user = sample_data["user"]
@@ -191,7 +191,7 @@ async def test_concurrent_identical_volume_requests_share_one_record(
 
 
 async def test_all_target_kinds_survive_deleted_thread_and_issue(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict[str, object]
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
     """Durable exclusions outlive both the target issue and parent Thread."""
     thread_id = sample_data["threads"][1].id

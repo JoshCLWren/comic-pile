@@ -1,127 +1,178 @@
-"""Guard against hardcoded test IDs and user_id=1 coupling."""
+"""Shrink-only guard against hardcoded primary-key IDs.
+
+Issue #3767 removed two hidden couplings: tests forcing a specific primary key
+with ``User(id=<int>)`` or ``user_id=<int>`` literals, and application code
+hardcoding ``user_id=1``. Some legacy tests and production-migration services
+still carry such literals, so this module enforces the contract as a ratchet in
+the same style as ``tests/test_router_layering_conformance.py``:
+
+- ``tests/hardcoded_ids_baseline.json`` records every current occurrence;
+- any NEW ``User(id=<int>)`` / ``user_id=<int>`` literal in ``tests/`` or NEW
+  ``user_id=1`` literal in ``app/`` fails these tests;
+- fixing a coupling must remove its entry from the baseline, which can only
+  shrink.
+
+These tests are intentionally dependency-free so the contract can be checked
+without importing the application or touching a database.
+"""
 
 import ast
+import json
 from pathlib import Path
 
-# Baseline of known hardcoded IDs that are allowed to exist
-# This should only shrink over time, never grow
-KNOWN_HARDCODED_IDS = {
-    # These are legitimate uses that should remain
-    "tests/conftest.py": {
-        "_sync_id_sequence",  # Function name is OK
-        "user_id=user.id",   # Using dynamic user ID is OK
-    },
-    "app/services/admin_service.py": {
-        "user_id=user_id",    # Using parameter is OK
-    },
-    # Other test files that have hardcoded IDs but are not part of this issue
-    "tests/test_thread_api.py": {"User(id=999)"},
-    "tests/test_queue_api.py": {"User(id=123)"},
-    "tests/test_tags.py": {"User(id=2)", "User(id=3)"},
-    "tests/test_legacy_reading_order_production_migration.py": {"User(id=1)"},
-    "tests/test_tag_inheritance.py": {"User(id=2)", "User(id=3)", "User(id=4)"},
-    "tests/test_session_bandwidth_inference.py": {"User(id=1)", "User(id=2)", "User(id=3)", "User(id=4)", "User(id=5)", "User(id=6)"},
-    "tests/test_test_data_management.py": {"User(id=1)"},
-    "archive/scripts-oneoff/import_reading_orders.py": {"User(id=1)"},
-}
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+BASELINE_PATH = Path(__file__).resolve().parent / "hardcoded_ids_baseline.json"
+
+#: File name of this guard, excluded from its own scan.
+_GUARD_FILE_NAME = Path(__file__).name
+
+_SCOPE_DIRECTORIES = {"app": REPOSITORY_ROOT / "app", "tests": REPOSITORY_ROOT / "tests"}
 
 
-def check_hardcoded_ids_in_file(file_path: Path) -> list[str]:
-    """Check a Python file for hardcoded IDs that should be removed."""
-    issues = []
-    
-    try:
-        with open(file_path, encoding='utf-8') as f:
-            content = f.read()
-        
-        # Parse the AST to analyze the code
-        try:
-            tree = ast.parse(content)
-        except SyntaxError:
-            # Skip files that can't be parsed
-            return issues
-        
-        # Check for hardcoded User(id=...) patterns
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                # Check for User(id=...) patterns
-                if (isinstance(node.func, ast.Name) and node.func.id == 'User'):
-                    for keyword in node.keywords:
-                        if keyword.arg == 'id' and isinstance(keyword.value, ast.Constant):
-                            id_value = keyword.value.value
-                            if isinstance(id_value, int) and id_value > 0:
-                                issues.append(
-                                    f"Hardcoded User(id={id_value}) found at line {node.lineno}"
-                                )
-                
-                # Check for user_id=1 patterns in app code
-                if file_path.parts[0] == 'app':  # Only check app/ directory
-                    for keyword in node.keywords:
-                        if keyword.arg == 'user_id' and isinstance(keyword.value, ast.Constant):
-                            id_value = keyword.value.value
-                            if id_value == 1:
-                                issues.append(
-                                    f"Hardcoded user_id=1 found at line {node.lineno}"
-                                )
-        
-        # Check for hardcoded ID patterns in string literals (for cases not caught by AST)
-        lines = content.split('\n')
-        for line_num, line in enumerate(lines, 1):
-            # Skip comments and allow known patterns
-            line = line.strip()
-            if line.startswith('#') or line.startswith('"""') or line.startswith("'''"):
-                continue
-                
-            # Check for User(id=NUMBER) in strings (fallback)
-            if 'User(id=' in line and any(char.isdigit() for char in line):
-                # More specific check to avoid false positives
-                if 'User(id=' in line and 'id=' in line and any(c.isdigit() for c in line):
-                    # Only flag if it's not in the allowed patterns
-                    if 'user_id=user.id' not in line and 'user_id=user_id' not in line:
-                        issues.append(f"Potential hardcoded User(id=NUMBER) at line {line_num}")
-            
-            # Check for user_id=1 in app code
-            if file_path.parts[0] == 'app' and 'user_id=1' in line:
-                # Skip if it's part of a comment or allowed pattern
-                if not line.startswith('#') and 'user_id=user_id' not in line:
-                    issues.append(f"Hardcoded user_id=1 at line {line_num}")
-                    
-    except Exception as e:
-        issues.append(f"Error parsing {file_path}: {e}")
-    
-    return issues
+def _named_int_arguments(node: ast.Call) -> dict[str, int]:
+    """Return integer literal keyword arguments from a call node.
 
+    Args:
+        node: A call AST node to inspect.
 
-def test_no_hardcoded_ids():
-    """Test that no problematic hardcoded IDs exist in the codebase."""
-    all_issues = []
-    
-    # Check all Python files in the repository
-    repo_root = Path(__file__).parent.parent
-    python_files = list(repo_root.rglob('*.py'))
-    
-    for file_path in python_files:
-        # Skip test files that are specifically about checking hardcoded IDs
-        if 'test_hardcoded_ids' in file_path.name:
+    Returns:
+        Mapping of keyword name to the integer literal value it was passed.
+    """
+    arguments: dict[str, int] = {}
+    for keyword in node.keywords:
+        if keyword.arg is None or not isinstance(keyword.value, ast.Constant):
             continue
-            
-        relative_path = str(file_path.relative_to(repo_root))
-        
-        # Skip files in the allowed baseline
-        if relative_path in KNOWN_HARDCODED_IDS:
+        value = keyword.value.value
+        if isinstance(value, int):
+            arguments[keyword.arg] = value
+    return arguments
+
+
+def scan_source(source: str, *, scope: str) -> set[str]:
+    """Scan one module's source for hardcoded primary-key literals.
+
+    Args:
+        source: Full Python source text of a ``tests/`` or ``app/`` module.
+        scope: Either ``"tests"`` or ``"app"``, selecting which couplings to
+            report.
+
+    Returns:
+        The set of offending literals, such as ``"User(id=1)"``,
+        ``"user_id=7"``, or ``"user_id=1"``.
+
+    Raises:
+        ValueError: If ``scope`` is not ``"tests"`` or ``"app"``.
+    """
+    if scope not in _SCOPE_DIRECTORIES:
+        raise ValueError(f"Unknown scan scope: {scope!r}")
+
+    tree = ast.parse(source)
+    found: set[str] = set()
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
             continue
-        
-        issues = check_hardcoded_ids_in_file(file_path)
-        if issues:
-            all_issues.extend([f"{relative_path}: {issue}" for issue in issues])
-    
-    # If there are issues, fail the test with detailed output
-    if all_issues:
-        error_msg = "Found hardcoded IDs that should be removed:\n"
-        for issue in all_issues:
-            error_msg += f"  {issue}\n"
-        raise AssertionError(error_msg)
+        arguments = _named_int_arguments(node)
+        if scope == "tests":
+            is_user_constructor = isinstance(node.func, ast.Name) and node.func.id == "User"
+            if is_user_constructor and arguments.get("id", 0) > 0:
+                found.add(f"User(id={arguments['id']})")
+            if "user_id" in arguments:
+                found.add(f"user_id={arguments['user_id']}")
+        elif arguments.get("user_id") == 1:
+            found.add("user_id=1")
+
+    return found
 
 
-if __name__ == '__main__':
-    test_no_hardcoded_ids()
+def _scope_files(scope: str) -> list[Path]:
+    """List the Python modules that participate in one scan scope.
+
+    Args:
+        scope: Either ``"tests"`` or ``"app"``.
+
+    Returns:
+        Sorted module paths, excluding this guard's own file.
+    """
+    directory = _SCOPE_DIRECTORIES[scope]
+    paths = sorted(directory.rglob("*.py"))
+    if scope == "tests":
+        paths = [path for path in paths if path.name != _GUARD_FILE_NAME]
+    return paths
+
+
+def current_hardcoded_ids() -> dict[str, dict[str, list[str]]]:
+    """Compute today's hardcoded-ID literals across ``tests/`` and ``app/``.
+
+    Returns:
+        Mapping of scope to a mapping of repository-relative module path to the
+        sorted literals it contains.
+    """
+    violations: dict[str, dict[str, list[str]]] = {}
+    for scope in _SCOPE_DIRECTORIES:
+        per_scope: dict[str, list[str]] = {}
+        for path in _scope_files(scope):
+            found = scan_source(path.read_text(encoding="utf-8"), scope=scope)
+            if found:
+                per_scope[str(path.relative_to(REPOSITORY_ROOT))] = sorted(found)
+        violations[scope] = per_scope
+    return violations
+
+
+def load_baseline() -> dict[str, dict[str, list[str]]]:
+    """Load the frozen baseline of tolerated hardcoded-ID literals.
+
+    Returns:
+        Mapping of scope to a mapping of module path to allowed literals.
+    """
+    raw = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    return raw
+
+
+def test_no_new_hardcoded_ids() -> None:
+    """No module may introduce a hardcoded-ID literal beyond the baseline."""
+    baseline = load_baseline()
+    current = current_hardcoded_ids()
+
+    growth: dict[str, dict[str, list[str]]] = {}
+    for scope, per_scope in current.items():
+        allowed_scopes = baseline.get(scope, {})
+        for module, literals in per_scope.items():
+            allowed = set(allowed_scopes.get(module, []))
+            unexpected = [literal for literal in literals if literal not in allowed]
+            if unexpected:
+                growth.setdefault(scope, {})[module] = unexpected
+
+    assert not growth, (
+        "New hardcoded primary-key literals were introduced; use the "
+        "database-generated id (or the authenticated user id) instead of a "
+        f"hardcoded literal: {growth}"
+    )
+
+
+def test_scanner_detects_hardcoded_ids() -> None:
+    """The scanner flags hardcoded ids in synthetic test and app code."""
+    test_source = (
+        "user = User(id=1, username='x')\n"
+        "session = ReadingSession(user_id=7)\n"
+    )
+    app_source = "thread = Thread(user_id=1)\n"
+
+    assert scan_source(test_source, scope="tests") == {"User(id=1)", "user_id=7"}
+    assert scan_source(app_source, scope="app") == {"user_id=1"}
+
+
+def test_scanner_accepts_dynamic_ids() -> None:
+    """The scanner accepts database-generated and parameterized ids."""
+    dynamic_source = (
+        "user = User(username='x')\n"
+        "session = ReadingSession(user_id=user.id)\n"
+        "thread = Thread(user_id=user_id)\n"
+    )
+
+    assert scan_source(dynamic_source, scope="tests") == set()
+    assert scan_source(dynamic_source, scope="app") == set()
+
+
+if __name__ == "__main__":
+    test_no_new_hardcoded_ids()

@@ -401,6 +401,7 @@ class TestSiblingScopeCommit:
         assert preview_token is not None
         approved_row_ids = _approvable_row_ids(preview_data["rows"])
         assert len(approved_row_ids) == 2
+        approved_issue_ids = [int(row_id.split(":")[1]) for row_id in approved_row_ids]
 
         with (
             _patch_comicvine(roster),
@@ -420,11 +421,10 @@ class TestSiblingScopeCommit:
 
         assert commit.status_code == 200
         commit_data = commit.json()
-        assert sorted(commit_data["confirmed_issue_ids"]) == sorted(approved_row_ids)
+        assert sorted(commit_data["confirmed_issue_ids"]) == sorted(approved_issue_ids)
         assert commit_data["series_mapping"]["external_id"] == str(VOLUME_ID)
         assert commit_data["series_mapping"]["status"] == "confirmed"
 
-        approved_issue_ids = [int(row_id.split(":")[1]) for row_id in approved_row_ids]
         mapping_rows = (
             await async_db.execute(
                 select(IssueExternalIdentityMapping, ExternalIdentity)
