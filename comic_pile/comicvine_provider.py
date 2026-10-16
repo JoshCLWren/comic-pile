@@ -6,20 +6,18 @@ import asyncio
 import email.utils
 import hashlib
 import json
-import logging
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 import httpx
 from filelock import FileLock
-
-logger = logging.getLogger(__name__)
 
 COMICVINE_BASE_URL = "https://comicvine.gamespot.com/api"
 DEFAULT_REQUESTS_PER_HOUR = 180
@@ -28,6 +26,8 @@ DEFAULT_MAX_NO_HEADER_COOLDOWN = 3600.0
 DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 0.0
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 COLLECTION_PAGE_LIMIT = 100
+VOLUME_ISSUES_PAGE_CONCURRENCY = 4
+"""Maximum simultaneous live page requests used when paginating one volume issue roster."""
 DEEP_ISSUE_FIELDS = (
     "id",
     "name",
@@ -74,6 +74,13 @@ class ComicVineResponse:
     payload: dict[str, object]
     from_cache: bool
     cache_key: str
+
+
+class VolumeIssuePage(NamedTuple):
+    """One validated volume issue roster page plus the provider-reported roster total."""
+
+    rows: list[dict[str, object]]
+    total_results: int | None
 
 
 @dataclass(frozen=True)
@@ -155,6 +162,7 @@ class PersistentResourceThrottleTracker:
                 "cooldown_until": cooldown_until,
                 "retry_after": retry_after,
                 "headerless_attempts": attempts,
+                "recorded_at": float(self._clock()),
             }
             self._write(state)
 
@@ -182,14 +190,26 @@ class PersistentResourceThrottleTracker:
                 "cooldown_until": float(self._clock()) + delay,
                 "retry_after": retry_after,
                 "headerless_attempts": max(0, attempts),
+                "recorded_at": float(self._clock()),
             }
             self._write(state)
             return delay
 
-    def reset(self, resource: str) -> None:
-        """Clear the cooldown for a resource after a successful request."""
+    def reset(self, resource: str, *, observed_at: float | None = None) -> None:
+        """Clear the cooldown for a resource after a successful request.
+
+        Args:
+            resource: Resource key such as ``issue`` or ``issues``.
+            observed_at: Timestamp at which the successful request started. When the persisted
+                cooldown was recorded at or after that moment a concurrent sibling request
+                observed the throttle, so the cooldown is preserved instead of cleared.
+        """
         with self._lock:
             state = self._read()
+            if observed_at is not None:
+                recorded_at = state.get(resource, {}).get("recorded_at")
+                if isinstance(recorded_at, int | float) and float(recorded_at) >= observed_at:
+                    return
             state.pop(resource, None)
             self._write(state)
 
@@ -610,6 +630,7 @@ class ComicVineClient:
             exc.resource = endpoint_bucket
             raise
         await self._pace_live_request()
+        request_started_at = float(self._clock())
         try:
             payload = await self._request_async(endpoint, params)
         except ComicVineRateLimitError as exc:
@@ -624,7 +645,7 @@ class ComicVineClient:
             if cached is not None:
                 return ComicVineResponse(cached, True, cache_key)
             raise
-        self.throttle_tracker.reset(endpoint_bucket)
+        self.throttle_tracker.reset(endpoint_bucket, observed_at=request_started_at)
         self._write_cache(cache_key, payload)
         return ComicVineResponse(payload, False, cache_key)
 
@@ -653,6 +674,18 @@ class ComicVineClient:
     ) -> list[dict[str, object]]:
         """Fetch a complete volume issue roster using the documented 100-row page maximum.
 
+        Only the first page is awaited on its own. Its ``number_of_total_results`` metadata then
+        decides whether further pages exist, and those remaining pages are requested
+        concurrently with a fan-out bounded by :data:`VOLUME_ISSUES_PAGE_CONCURRENCY`. A
+        multi-page roster therefore costs two provider round trips instead of one round trip per
+        page, while issuing exactly the same live requests as a sequential walk would.
+
+        Pagination stays tolerant of an inconsistent reported total: when the provider omits
+        ``number_of_total_results`` or returns a short page, the rows the provider actually
+        supplied are returned rather than failing the whole roster. An omitted total with a
+        full first page falls back to walking forward until a short page, matching the legacy
+        sequential behavior.
+
         Args:
             volume_id: ComicVine volume ID.
             refresh: Force live requests for every page.
@@ -661,134 +694,109 @@ class ComicVineClient:
             Ordered provider rows across all pages.
 
         Raises:
-            ComicVineError: When pagination metadata is inconsistent or a returned row belongs to
-                a different volume, which indicates that the provider ignored the collection filter.
+            ComicVineError: When a page has no results list or a returned row belongs to a
+                different volume, which indicates that the provider ignored the collection filter.
         """
-        rows: list[dict[str, object]] = []
-        offset = 0
-        while True:
-            response = await self.request(
-                "issues",
-                "issues",
-                {
-                    "filter": f"volume:{volume_id}",
-                    "limit": COLLECTION_PAGE_LIMIT,
-                    "offset": offset,
-                },
-                refresh=refresh,
-            )
-            results = response.payload.get("results")
-            if not isinstance(results, list):
-                raise ComicVineError("ComicVine /issues response did not contain a results list")
-            page_rows = [row for row in results if isinstance(row, dict)]
-            for row in page_rows:
-                volume = row.get("volume")
-                if isinstance(volume, dict) and volume.get("id") not in (None, volume_id):
-                    raise ComicVineError(
-                        "ComicVine /issues ignored the requested volume filter; refusing mixed data"
-                    )
-            rows.extend(page_rows)
-            page_count = len(page_rows)
-            total = response.payload.get("number_of_total_results")
-            if isinstance(total, int) and len(rows) >= total:
-                break
-            if page_count < COLLECTION_PAGE_LIMIT:
-                break
-            offset += page_count
+        first_page = await self._fetch_volume_issue_page(volume_id, 0, refresh=refresh)
+        total = first_page.total_results
+        if total is None:
+            # The provider omitted the roster total. A short first page already carries every
+            # issue the provider is willing to return; a full one is walked forward until a
+            # short page, exactly as the legacy sequential pagination did.
+            rows = list(first_page.rows)
+            if len(first_page.rows) < COLLECTION_PAGE_LIMIT:
+                return rows
+            offset = len(first_page.rows)
+            while True:
+                page = await self._fetch_volume_issue_page(volume_id, offset, refresh=refresh)
+                rows.extend(page.rows)
+                if len(page.rows) < COLLECTION_PAGE_LIMIT:
+                    return rows
+                offset += len(page.rows)
+        if len(first_page.rows) >= total or len(first_page.rows) < COLLECTION_PAGE_LIMIT:
+            return first_page.rows
+
+        pages_needed = (total + COLLECTION_PAGE_LIMIT - 1) // COLLECTION_PAGE_LIMIT
+        remaining_offsets = [page * COLLECTION_PAGE_LIMIT for page in range(1, pages_needed)]
+        if not remaining_offsets:
+            return first_page.rows
+
+        rows = list(first_page.rows)
+        remaining_pages = await self._fetch_volume_issue_pages(
+            volume_id, remaining_offsets, refresh=refresh
+        )
+        for page in remaining_pages:
+            rows.extend(page.rows)
         return rows
 
-    async def fetch_volume_issues_parallel(
+    async def _fetch_volume_issue_pages(
         self,
         volume_id: int,
+        offsets: Sequence[int],
         *,
-        refresh: bool = False,
-        max_concurrent_pages: int = 5,
-    ) -> list[dict[str, object]]:
-        """Fetch a complete volume issue roster using parallel pagination for better performance.
-
-        This method fetches all pages concurrently instead of sequentially, which can
-        significantly reduce total fetch time for volumes with many issues.
+        refresh: bool,
+    ) -> list[VolumeIssuePage]:
+        """Fetch several roster pages concurrently without exceeding the concurrency cap.
 
         Args:
             volume_id: ComicVine volume ID.
-            refresh: Force live requests for every page.
-            max_concurrent_pages: Maximum number of concurrent page requests.
+            offsets: Page offsets to request, in the order the rows should be assembled.
+            refresh: Force a live request for every page.
 
         Returns:
-            Ordered provider rows across all pages.
+            Fetched pages in the same order as ``offsets``.
 
         Raises:
-            ComicVineError: When pagination metadata is inconsistent or a returned row belongs to
-                a different volume, which indicates that the provider ignored the collection filter.
+            ComicVineError: When any page is invalid or contains mixed-volume data.
         """
-        # First, get total count to determine number of pages
-        first_response = await self.request(
+        semaphore = asyncio.Semaphore(VOLUME_ISSUES_PAGE_CONCURRENCY)
+
+        async def fetch_page(offset: int) -> VolumeIssuePage:
+            async with semaphore:
+                return await self._fetch_volume_issue_page(volume_id, offset, refresh=refresh)
+
+        return list(await asyncio.gather(*(fetch_page(offset) for offset in offsets)))
+
+    async def _fetch_volume_issue_page(
+        self,
+        volume_id: int,
+        offset: int,
+        *,
+        refresh: bool,
+    ) -> VolumeIssuePage:
+        """Fetch and validate a single roster page at the documented page maximum.
+
+        Args:
+            volume_id: ComicVine volume ID.
+            offset: Offset for pagination.
+            refresh: Force a live request.
+
+        Returns:
+            The validated page rows plus the provider-reported roster total when available.
+
+        Raises:
+            ComicVineError: When the response has no results list or a returned row belongs to a
+                different volume, which indicates that the provider ignored the collection filter.
+        """
+        response = await self.request(
             "issues",
             "issues",
             {
                 "filter": f"volume:{volume_id}",
-                "limit": 1,
-                "offset": 0,
+                "limit": COLLECTION_PAGE_LIMIT,
+                "offset": offset,
             },
             refresh=refresh,
         )
-        
-        total_results = first_response.payload.get("number_of_total_results")
-        if not isinstance(total_results, int) or total_results <= 0:
-            return []
-        
-        # Calculate all page offsets
-        page_size = COLLECTION_PAGE_LIMIT
-        offsets = range(0, total_results, page_size)
-        
-        # Create semaphore to limit concurrent requests
-        semaphore = asyncio.Semaphore(max_concurrent_pages)
-        
-        async def fetch_page(offset: int) -> list[dict[str, object]]:
-            """Fetch a single page with semaphore control."""
-            async with semaphore:
-                response = await self.request(
-                    "issues",
-                    "issues",
-                    {
-                        "filter": f"volume:{volume_id}",
-                        "limit": page_size,
-                        "offset": offset,
-                    },
-                    refresh=refresh,
+        results = response.payload.get("results")
+        if not isinstance(results, list):
+            raise ComicVineError("ComicVine /issues response did not contain a results list")
+        rows = [row for row in results if isinstance(row, dict)]
+        for row in rows:
+            volume = row.get("volume")
+            if isinstance(volume, dict) and volume.get("id") not in (None, volume_id):
+                raise ComicVineError(
+                    "ComicVine /issues ignored the requested volume filter; refusing mixed data"
                 )
-                results = response.payload.get("results")
-                if not isinstance(results, list):
-                    raise ComicVineError("ComicVine /issues response did not contain a results list")
-                page_rows = [row for row in results if isinstance(row, dict)]
-                
-                # Validate volume filter for each row
-                for row in page_rows:
-                    volume = row.get("volume")
-                    if isinstance(volume, dict) and volume.get("id") not in (None, volume_id):
-                        raise ComicVineError(
-                            "ComicVine /issues ignored the requested volume filter; refusing mixed data"
-                        )
-                
-                return page_rows
-        
-        # Execute concurrent requests
-        page_tasks = [fetch_page(offset) for offset in offsets]
-        pages = await asyncio.gather(*page_tasks, return_exceptions=True)
-        
-        # Combine results and handle exceptions
-        all_rows = []
-        for i, page_result in enumerate(pages):
-            if isinstance(page_result, Exception):
-                logger.warning("Failed to fetch page %d for volume %d: %s", i, volume_id, str(page_result))
-                continue
-            all_rows.extend(page_result)
-        
-        # Validate total count
-        if isinstance(total_results, int) and len(all_rows) != total_results:
-            logger.warning(
-                "Expected %d issues for volume %d but got %d", 
-                total_results, volume_id, len(all_rows)
-            )
-        
-        return all_rows
+        total = response.payload.get("number_of_total_results")
+        return VolumeIssuePage(rows, total if isinstance(total, int) else None)

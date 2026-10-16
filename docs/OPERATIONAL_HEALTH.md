@@ -26,15 +26,54 @@ Structured logs emit the aggregate status, each dependency status, each dependen
 
 Investigate repeated database or cache probe durations above 500 ms while warm. A timeout always warrants investigation. Cold invocations may be slower, but the endpoint remains bounded and identifies the dependency responsible rather than allowing one hung provider to consume the whole monitoring request.
 
-## Performance alarm
+## Performance telemetry and GitHub filing
 
-Production request timings can open factory GitHub issues through `app/services/performance_issue_service.py` (issues #3245 and #3552). The alarm is noise-controlled:
+**Automatic performance-to-GitHub issue filing is disabled by default** (issue #3726).
+`PERF_ALARM_GITHUB_ISSUES_ENABLED=false` prevents automatic GitHub lookups,
+comments, claims, and issue creation for request samples and readiness-critical
+coroutine timeouts, including severe events. It does not disable diagnostics,
+logging, request warnings, error-level budget violations, startup timing, DB query
+counts/execution time, timeout enforcement, or health monitoring. Startup
+readiness samples already log separately without filing. Existing
+`perf_alarm_counters` and `perf_alarm_incidents` rows are preserved.
 
-- **Fingerprint.** One open issue per `kind + method + route template`. Warm/cold, workload class (db-heavy / app-heavy / mixed), and dominant phase are sample evidence, not separate issues. Lookup is rollout-compatible: it matches the current hash, the pre-#3552 `request|METHOD|route|warmth|phase|workload` hashes, and the `- Method + route:` / title identity so issues already open today are reused.
-- **Durable counters.** Daily breach counts and open-issue identity live in Postgres (`perf_alarm_counters` keyed by fingerprint + UTC day, `perf_alarm_incidents` for open/closed issue numbers, comment throttle, and filing claims). Process memory cannot implement N-hit filing on Vercel serverless. Concurrent instances increment with an atomic upsert and claim filing before creating an issue.
-- **Never file under budget.** Timings at or under the 1000 ms route budget never open an issue. 500-999 ms warnings are recorded locally only. Issue titles never show a duration below the budget.
-- **Ignore cold starts.** `warm/cold: cold` requests and `startup.*` readiness samples do not count toward filing. They are logged separately for the cold-start work tracked in issues 3479 and 3480. Those issues do not consume `performance_alarm_ignored_startup`, so a hard startup failure (2.5s or more) still logs at WARNING.
-- **Daily breach threshold.** A route files only after **N** warm over-budget hits in the same UTC day, counted in Postgres across instances. N defaults to **3** and is set with `PERF_ALARM_DAILY_BREACH_THRESHOLD` (1-100). Closed-issue regressions use the same threshold: the alarm reads `issue.state` before commenting, never comments on a closed issue, and a previously fixed route must breach N times again before a new issue is filed.
-- **Comment throttle.** At most one GitHub comment per fingerprint per hour. GitHub calls run in a worker thread and never block the user request.
+Treat the `Server-Timing: app;dur=...` value as the **request middleware's
+total span**, not an isolated route/business-logic timer. The `db;dur` metric
+measures instrumented SQL execution only; it does not include waiting for a
+connection, middleware, other awaits, or platform overhead outside the measured
+span. The remainder (`app;dur - db;dur`) is **unattributed**, not proof
+that application code is slow or that the platform is responsible. Compare
+warm/cold classification, DB queries and execution time, request/deployment
+identifiers, process/startup diagnostics, actual error/timeout evidence, and
+repeated requests before assigning an owner.
 
-Readiness-critical coroutine hard timeouts still file immediately unless that coroutine signature already has an open issue. GitHub API failure is logged and never fails the user request.
+Actionable investigations include reproducible warm regressions with supporting
+timing breakdowns, an unusual query count or high measured DB execution time,
+hard timeouts, and user-visible outages. File and triage these as focused,
+human-reviewed GitHub issues with evidence of recurrence or impact. A single
+marginal overrun of the 1000 ms budget is not itself a factory task. Hard failures
+remain visible through logs and health/monitoring surfaces when filing is off.
+
+**Optional legacy opt-in:** Set `PERF_ALARM_GITHUB_ISSUES_ENABLED=true` only
+after explicitly accepting the older automatic-filing behavior. When enabled:
+
+- **Fingerprint.** One open issue per `kind + method + route template`. Warm/cold,
+  workload class and dominant phase are evidence, not distinct issues. Legacy
+  hashes and method/route identity are checked for reuse.
+- **Durable counters.** Warm hits and incident identity are shared in Postgres.
+- **Never file under budget.** Request timings at or below 1000 ms do not file;
+  500-999 ms warnings are still logged.
+- **Cold/startup.** Cold requests and startup-readiness samples never file.
+  Hard startup failures log at WARNING.
+- **Daily breach threshold.** `PERF_ALARM_DAILY_BREACH_THRESHOLD` defaults to 3
+  warm over-budget hits per route per UTC day (valid 1-100). Closed regressions
+  require the same threshold.
+- **Comment throttle.** At most one comment per fingerprint per hour.
+- **Coroutine timeouts.** Readiness-critical coroutine hard timeouts are an
+  **immediate filing exception**, bypassing the daily threshold when opt-in is
+  enabled. They still raise/log normally with filing disabled.
+
+Opt-in can again produce noisy, high-priority factory issues on repeated threshold
+breaches; it is not a recommended substitute for investigating performance.
+The existing 500 ms warning, 1000 ms request-violation, and startup hard-deadline
+budgets are unchanged by this switch.

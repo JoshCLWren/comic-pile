@@ -376,11 +376,10 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                     },
                 )
 
-            # Auto-file actionable GitHub issues from performance violations
-            # (issues #3245 / #3552). Evaluation and GitHub calls run in
-            # bounded background work against durable Postgres counters, so a
-            # GitHub outage never delays or fails the production request.
-            # Under-budget and cold-start samples never open an issue.
+            # Optional performance GitHub alarm (#3726): disabled by default.
+            # The telemetry/logging above stays active; the service returns
+            # before durable counters and GitHub operations when not opted in.
+            # With opt-in, evaluation runs in bounded background work.
             if process_time_ms >= slow_request_threshold:
                 try:
                     from app.services import performance_issue_service as perf_issues

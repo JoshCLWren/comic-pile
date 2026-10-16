@@ -1,4 +1,5 @@
 import type { ReadingBandwidth, ReadingIntent, SessionMode, SessionThread } from './index'
+import type { Tag } from '../services/api-tags'
 
 export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectionGuidance } from './index'
 
@@ -11,6 +12,8 @@ export interface RollBootstrapThread {
   issue_number?: string | null
   route_labels?: string[]
   last_activity_at?: string | null
+  /** Visible direct tags, so a die face shows tag context before rolling (#3425). */
+  tags?: Tag[]
 }
 
 /** One series excluded from the roll pool, with the reason the user can understand. */

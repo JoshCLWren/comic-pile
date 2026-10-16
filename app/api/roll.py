@@ -59,6 +59,7 @@ from app.schemas.roll_v2 import (
     RollableThread,
 )
 from app.services.roll_v2_projection import get_v2_rollable_projection
+from app.services.tag_inheritance_service import TagInheritanceService
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
@@ -1289,6 +1290,18 @@ async def roll_bootstrap(
                     format=normalize_format_value(stale_row.format),
                     last_activity_at=stale_last_activity,
                 )
+
+    # One bounded tag read for every thread this bootstrap returns (issue
+    # #3425), so Roll rows show tags without a query per face. Threads have no
+    # parents in v1, so these are the directly assigned visible tags.
+    bootstrap_threads = [*roll_pool, *snoozed_threads, *skipped_threads, *blocked_threads]
+    if stale_thread is not None:
+        bootstrap_threads.append(stale_thread)
+    tags_by_thread = await TagInheritanceService(db).get_threads_direct_tags(
+        user_id, [thread.id for thread in bootstrap_threads]
+    )
+    for thread in bootstrap_threads:
+        thread.tags = tags_by_thread.get(thread.id, [])
 
     # Exclusion transparency for issue #3125: enumerate every series
     # not in the roll pool and explain why, so the user can see what

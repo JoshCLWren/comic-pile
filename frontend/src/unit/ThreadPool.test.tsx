@@ -264,4 +264,78 @@ describe('ThreadPool Component', () => {
     fireEvent.click(toggle)
     expect(onToggleSkipped).toHaveBeenCalledTimes(1)
   })
+  it('renders each die face with its visible thread tags (#3425)', () => {
+    renderPool({
+      pool: [
+        {
+          id: 11,
+          title: 'Amazing Spider-Man',
+          format: 'Mainline',
+          route_labels: [],
+          tags: [
+            {
+              id: 4,
+              name: 'Physical',
+              normalized_name: 'physical',
+              scope: 'global',
+              owner_user_id: null,
+              color: '#3B82F6',
+              created_at: '2024-01-01T00:00:00.000Z',
+              updated_at: '2024-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+        { id: 12, title: 'Batman', format: 'DC', route_labels: [] },
+      ],
+    })
+
+    expect(
+      screen.getByRole('region', { name: 'Tags for Amazing Spider-Man' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Physical')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'Tags for Batman' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('announces die face tags to assistive technology', () => {
+    renderPool({
+      pool: [
+        {
+          id: 11,
+          title: 'Amazing Spider-Man',
+          format: 'Mainline',
+          route_labels: [],
+          tags: [
+            {
+              id: 4,
+              name: 'Physical',
+              normalized_name: 'physical',
+              scope: 'global',
+              owner_user_id: null,
+              color: '#3B82F6',
+              created_at: '2024-01-01T00:00:00.000Z',
+              updated_at: '2024-01-01T00:00:00.000Z',
+            },
+            {
+              id: 5,
+              name: 'Annual',
+              normalized_name: 'annual',
+              scope: 'private',
+              owner_user_id: 7,
+              color: '#DC2626',
+              created_at: '2024-01-01T00:00:00.000Z',
+              updated_at: '2024-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(
+      screen.getByRole('button', {
+        name: /Die face 1: Amazing Spider-Man, tagged Physical, Annual\. Open series actions\./,
+      }),
+    ).toBeInTheDocument()
+  })
 })

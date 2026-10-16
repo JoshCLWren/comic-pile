@@ -261,6 +261,8 @@ def test_passing_checks_continue_through_authorization_and_mechanical_gates(
         return {"decision": "pass", "reason": "all exact-head mechanical gates passed"}
 
     monkeypatch.setattr(module, "mechanical_merge_gate", mechanical_gate)
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: True)
     monkeypatch.setattr(
         module,
         "replace_factory_labels",
@@ -273,3 +275,43 @@ def test_passing_checks_continue_through_authorization_and_mechanical_gates(
     assert result["head"] == HEAD
     assert mechanical_calls == [(PR_NUMBER, HEAD)]
     assert transitions == [(PR_NUMBER, "factory:unowned", "factory:ready")]
+
+
+def test_green_ci_does_not_promote_without_cross_model_identity(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A missing trusted model marker blocks promotion, not another review loop."""
+    module = load_review_controller()
+    recorded: list[tuple[int, str, str]] = []
+    semantic = module.review_marker(
+        pr=PR_NUMBER, head=HEAD, reviewer="17", producer="43", verdict="approve"
+    )
+    monkeypatch.setattr(module, "pr_json", lambda _pr: ci_pr_payload())
+    monkeypatch.setattr(
+        module,
+        "required_checks_gate",
+        lambda _pr: {"decision": "pass", "reason": "green"},
+    )
+    monkeypatch.setattr(
+        module,
+        "review_comment_bodies",
+        lambda _pr: [
+            module.head_contributor_marker(pr=PR_NUMBER, head=HEAD, worker="43", epoch=1),
+            semantic,
+        ],
+    )
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        module,
+        "mechanical_merge_gate",
+        lambda *_args: pytest.fail("missing model provenance must gate before merge checks"),
+    )
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage: recorded.append((number, owner, stage)),
+    )
+
+    result = module.reconcile_ci_pr(PR_NUMBER)
+    assert result["status"] == "cross-model-provenance-blocked"
+    assert recorded == [(PR_NUMBER, "factory:unowned", "factory:blocked")]

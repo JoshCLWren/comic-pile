@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.comicvine_hydration import normalize_issue
 from app.external_identities import (
     ExternalIdentityMappingError,
     link_issue_external_identity,
@@ -52,6 +55,13 @@ logger = logging.getLogger(__name__)
 
 COMICVINE_PROVIDER = "comicvine"
 """Canonical provider key for ComicVine identities, mappings, and catalog rows."""
+
+PROVIDER_SLOW_SEARCH_LOG_MS = 500.0
+"""Provider-phase search latency above which a warning is logged in every environment.
+
+ComicVine series search answers well inside the request budget when the upstream
+call is warm, so a warning here means the provider phase itself is regressing.
+"""
 
 
 def _coerce_provider_int(value: object) -> int | None:
@@ -102,6 +112,8 @@ async def search_comicvine_series(
     Returns:
         Series search results with paging metadata.
     """
+    start_time = time.perf_counter()
+
     clamped_limit = max(1, min(limit, 100))
     clamped_offset = max(0, offset)
     # ComicVine /search pages with a 1-based page number (page size == limit).
@@ -117,6 +129,7 @@ async def search_comicvine_series(
             next_offset=None,
         )
 
+    # Request the fields the UI renders, including the cover thumbnail.
     response = await client.request(
         "search",
         "search",
@@ -128,33 +141,56 @@ async def search_comicvine_series(
             "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
+
+    request_time = (time.perf_counter() - start_time) * 1000
+
+    # Provider-phase latency only: the request-logging middleware measures total
+    # application time, so this isolates how much of a slow search is the upstream
+    # ComicVine call rather than our own work. Logged in every environment because
+    # the 1000 ms request budget is only observable in production traffic.
+    if request_time > PROVIDER_SLOW_SEARCH_LOG_MS:
+        logger.warning(
+            "ComicVine search took %.2fms for query: %s",
+            request_time,
+            query[:50] + "..." if len(query) > 50 else query,
+        )
+
     results = response.payload.get("results")
     if not isinstance(results, list):
         return ComicVineSeriesSearchResponse(
             query=query,
             results=[],
+            total_available=0,
             offset=clamped_offset,
             limit=clamped_limit,
+            has_more=False,
+            next_offset=None,
         )
 
     series_results: list[ComicVineSeriesResult] = []
     for row in results:
         if not isinstance(row, dict):
             continue
+
         volume_id = row.get("id")
         name = row.get("name")
         if not isinstance(volume_id, int) or not isinstance(name, str):
             continue
+
         publisher_raw = row.get("publisher")
-        publisher = None
-        if isinstance(publisher_raw, dict):
-            publisher = publisher_raw.get("name")
-        elif isinstance(publisher_raw, str):
-            publisher = publisher_raw
+        publisher = (
+            publisher_raw.get("name")
+            if isinstance(publisher_raw, dict)
+            else publisher_raw
+            if isinstance(publisher_raw, str)
+            else None
+        )
+
         image_raw = row.get("image")
         image_url = None
         if isinstance(image_raw, dict):
             image_url = image_raw.get("medium_url") or image_raw.get("small_url")
+
         series_results.append(
             ComicVineSeriesResult(
                 comicvine_volume_id=volume_id,
@@ -207,15 +243,44 @@ async def get_comicvine_series_issues(
             issues=[],
         )
 
-    try:
-        issues_rows = await client.fetch_volume_issues(volume_id)
-    except Exception:
-        logger.warning("Failed to fetch volume %d issues", volume_id, exc_info=True)
-        return ComicVineSeriesIssuesResponse(
-            comicvine_volume_id=volume_id,
-            series_name=series_name or f"Volume {volume_id}",
-            issues=[],
-        )
+    # The roster and the volume metadata are independent provider reads. When the caller has not
+    # already resolved a series name, schedule both reads up front so the two provider round
+    # trips overlap instead of running back to back. Each read degrades independently: a roster
+    # failure keeps the resolved series name with an empty roster, while a volume-metadata
+    # failure keeps the fetched roster under the generic label. Both tasks are always awaited,
+    # so a failing sibling never leaves an orphaned task behind.
+    volume_task = None if series_name else asyncio.ensure_future(client.fetch_volume(volume_id))
+    issues_rows: list[dict[str, object]] = []
+    vol_obj: object = None
+    if volume_task is None:
+        try:
+            issues_rows = await client.fetch_volume_issues(volume_id)
+        except Exception:
+            logger.warning("Failed to fetch volume %d issues", volume_id, exc_info=True)
+            return ComicVineSeriesIssuesResponse(
+                comicvine_volume_id=volume_id,
+                series_name=series_name,
+                issues=[],
+            )
+    else:
+        roster_task = asyncio.ensure_future(client.fetch_volume_issues(volume_id))
+        try:
+            issues_rows = await roster_task
+        except Exception:
+            logger.warning("Failed to fetch volume %d issues", volume_id, exc_info=True)
+        try:
+            vol_response = await volume_task
+        except Exception:
+            logger.warning("Failed to fetch volume %d metadata", volume_id, exc_info=True)
+        else:
+            payload = getattr(vol_response, "payload", None)
+            vol_obj = payload.get("results") if isinstance(payload, dict) else None
+
+    if isinstance(vol_obj, dict):
+        volume_name = vol_obj.get("name")
+        series_name = volume_name if isinstance(volume_name, str) else f"Volume {volume_id}"
+    elif not series_name:
+        series_name = f"Volume {volume_id}"
 
     candidates: list[ComicVineIssueCandidate] = []
     for row in issues_rows:
@@ -243,15 +308,6 @@ async def get_comicvine_series_issues(
                 else None,
             )
         )
-
-    if not series_name:
-        vol_response = await client.fetch_volume(volume_id)
-        vol_obj = vol_response.payload.get("results")
-        if isinstance(vol_obj, dict):
-            volume_name = vol_obj.get("name")
-            series_name = volume_name if isinstance(volume_name, str) else f"Volume {volume_id}"
-        else:
-            series_name = f"Volume {volume_id}"
 
     return ComicVineSeriesIssuesResponse(
         comicvine_volume_id=volume_id,
@@ -1034,8 +1090,12 @@ async def import_comicvine_series(
         user_id: Owner who will receive the imported thread.
         request: Validated import payload with optional reading progress and
             anchored placement.
-        comicvine_client: Optional configured ComicVine client. When present,
-            provider metadata is hydrated for each adopted issue.
+        comicvine_client: Optional configured ComicVine client used to read the
+            volume and its issue roster. Provider metadata is normalized from
+            the roster rows already fetched, so batch import performs no extra
+            request per adopted issue; the remaining deep relationship fields
+            are filled in by the existing lazy hydration boundary once a reader
+            opens the imported issue.
 
     Returns:
         ImportSeriesResponse with thread details and per-issue adoption results.
@@ -1177,13 +1237,14 @@ async def import_comicvine_series(
             continue
 
         issue_number = row.get("issue_number")
-        issue_name = row.get("name")
         external_url = row.get("site_detail_url")
-        metadata = {}
-        if isinstance(issue_name, str):
-            metadata["name"] = issue_name
-        if isinstance(issue_number, str):
-            metadata["issue_number"] = issue_number
+        # The roster rows were already fetched to build this series, so the
+        # provider facts they carry (name, numbering, dates, cover image) are
+        # normalized into the identity here instead of re-fetching each issue.
+        # Deep relationship fields stay absent, which is exactly what
+        # ``metadata_needs_hydration`` treats as incomplete, so the existing
+        # non-blocking reader-side refresh deepens them outside this request.
+        metadata = normalize_issue(row)
 
         try:
             adoption_result = await adopt_comicvine_issue(
@@ -1193,8 +1254,8 @@ async def import_comicvine_series(
                 comicvine_issue_id=issue_id,
                 issue_number=str(issue_number) if issue_number is not None else str(idx + 1),
                 external_url=external_url if isinstance(external_url, str) else None,
-                metadata=metadata if metadata else None,
-                comicvine_client=comicvine_client,
+                metadata=metadata,
+                thread=thread,
             )
 
             result = ImportSeriesIssueResult(
