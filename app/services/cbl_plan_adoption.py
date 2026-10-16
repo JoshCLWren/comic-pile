@@ -76,6 +76,17 @@ from app.services.continuity_plan_writer import replace_compiled_rules, validate
 from app.services.reading_plan_normalization import drop_issue_nodes_from_plan_json
 from comic_pile.dependencies import refresh_user_blocked_status
 
+# Issue #3470 guard: bulk CBL source-order dependency materialization blocked.
+CBL_SOURCE_ORDER_DEPENDENCY_MATERIALIZATION_BLOCKED = True
+
+
+def _refuse_bulk_cbl_dependency_materialization(source_path: str) -> None:
+    """Raise if any path tries to write hard Dependencies from CBL source order."""
+    if CBL_SOURCE_ORDER_DEPENDENCY_MATERIALIZATION_BLOCKED:
+        raise RuntimeError(
+            f"Bulk CBL source-order dependency materialization blocked by #3470: {source_path}"
+        )
+
 
 class AdoptionCommitError(Exception):
     """Base class for adoption commit errors."""
