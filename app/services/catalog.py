@@ -62,6 +62,18 @@ SIBLING_ROSTER_DUPLICATE = "duplicate"
 SIBLING_ROSTER_NONE = "none"
 """The selected volume holds no issue with this normalized issue number."""
 
+SCOPE_MODE_CONFIRMED_ORIGIN = "confirmed_origin"
+"""Default generic preview mode: sibling scope requires confirmed origin evidence."""
+
+SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP = "queue_thread_bootstrap"
+"""Explicit Queue repair mode that may propose an entire owned thread.
+
+Unlike the generic preview, this mode is licensed for a completely unmapped thread: it
+validates the selected provider volume's real issue roster and matches every issue in the
+anchor's own thread, including the first issue, by unique normalized number on both sides.
+It never widens scope beyond that one owned thread and never proposes a fuzzy match.
+"""
+
 
 async def upsert_catalog_series(
     db: AsyncSession,
@@ -489,6 +501,7 @@ async def build_series_mapping_plan(
     origin_issue_id: int,
     provider: str,
     provider_series_external_id: str,
+    scope_mode: str = SCOPE_MODE_CONFIRMED_ORIGIN,
 ) -> dict[str, object]:
     """Build the read-only series-mapping plan that a preview token binds.
 
@@ -496,17 +509,32 @@ async def build_series_mapping_plan(
     material facts, so the returned ``state_digest`` must stay deterministic for an unchanged
     database: rows are de-duplicated per issue and ordered before the digest is computed.
 
+    The default ``confirmed_origin`` mode keeps the generic contract: sibling scope is
+    licensed only by confirmed origin evidence. ``queue_thread_bootstrap`` is the explicit
+    Queue repair mode that may propose the anchor's whole owned thread even when nothing is
+    confirmed yet; the two modes are never interchangeable and both are encoded in the digest.
+
     Args:
         db: Database session.
         user_id: User ID for authorization.
         origin_issue_id: The anchor issue ID for the mapping preview.
         provider: External provider name (e.g., "comicvine").
         provider_series_external_id: Provider-specific series identifier.
+        scope_mode: ``confirmed_origin`` (generic) or ``queue_thread_bootstrap``.
 
     Returns:
         Plan dict with ``scope``, ``provider_series``, ``counts``, ``rows``, ``scope_key``,
         ``issue_numbers``, and ``state_digest``.
     """
+    if scope_mode == SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP:
+        return await _build_queue_thread_bootstrap_plan(
+            db,
+            user_id=user_id,
+            origin_issue_id=origin_issue_id,
+            provider=provider,
+            provider_series_external_id=provider_series_external_id,
+        )
+
     from app.repositories.catalog_repository import (
         get_issue_by_id,
         get_series_with_issues,
@@ -517,7 +545,9 @@ async def build_series_mapping_plan(
     # Get the origin issue to establish context
     origin_issue = await get_issue_by_id(db, origin_issue_id, user_id)
     if origin_issue is None:
-        return _unavailable_series_mapping_plan(origin_issue_id, basis="origin_issue_not_found")
+        return _unavailable_series_mapping_plan(
+            origin_issue_id, basis="origin_issue_not_found", scope_mode=scope_mode
+        )
 
     # Try local catalog first
     series_info, issues_with_mappings = await get_series_with_issues(
@@ -605,7 +635,9 @@ async def build_series_mapping_plan(
 
     # If we still don't have series info, return unavailable scope
     if series_info is None:
-        return _unavailable_series_mapping_plan(origin_issue_id, basis="series_not_found")
+        return _unavailable_series_mapping_plan(
+            origin_issue_id, basis="series_not_found", scope_mode=scope_mode
+        )
 
     assert series_info is not None
 
@@ -641,6 +673,7 @@ async def build_series_mapping_plan(
         scope_key=scope_key,
         scope_basis=scope_basis,
         rows=classified_rows,
+        scope_mode=scope_mode,
     )
 
     return {
@@ -667,6 +700,7 @@ async def preview_series_mapping(
     origin_issue_id: int,
     provider: str,
     provider_series_external_id: str,
+    scope_mode: str = SCOPE_MODE_CONFIRMED_ORIGIN,
 ) -> dict[str, object]:
     """Preview a series mapping with safe scoping and classification.
 
@@ -676,6 +710,7 @@ async def preview_series_mapping(
         origin_issue_id: The anchor issue ID for the mapping preview.
         provider: External provider name (e.g., "comicvine").
         provider_series_external_id: Provider-specific series identifier.
+        scope_mode: ``confirmed_origin`` (generic) or ``queue_thread_bootstrap``.
 
     Returns:
         Preview response with scope information, counts, classified rows, and a
@@ -687,6 +722,7 @@ async def preview_series_mapping(
         origin_issue_id=origin_issue_id,
         provider=provider,
         provider_series_external_id=provider_series_external_id,
+        scope_mode=scope_mode,
     )
 
     scope = plan["scope"] if isinstance(plan.get("scope"), dict) else plan.get("scope")
@@ -706,6 +742,7 @@ async def preview_series_mapping(
             expires_at=expires_at or issued_at,
             issue_numbers=_plan_issue_numbers(plan),
             classification_digest=_plan_state_digest_text(plan),
+            scope_mode=scope_mode,
         )
 
     return {
@@ -955,6 +992,281 @@ def _build_sibling_mapping_rows(
     return rows
 
 
+async def _build_queue_thread_bootstrap_plan(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    origin_issue_id: int,
+    provider: str,
+    provider_series_external_id: str,
+) -> dict[str, object]:
+    """Build the explicit Queue-thread bootstrap plan for a completely unmapped thread.
+
+    Issue #3727: the Queue ``Map series`` surface must be able to bootstrap a thread that has
+    no confirmed mapping yet. This mode is deliberately separate from generic preview
+    semantics: it is bound to one authenticated user, one anchor issue, and that anchor's own
+    thread, and it only proposes local issues in that thread whose normalized issue number is
+    unique on both sides (the thread and the selected provider volume's real roster). The
+    first issue is eligible alongside its siblings; the generic confirmed-origin guard is
+    never relaxed here.
+
+    Args:
+        db: Database session.
+        user_id: Authenticated user ID.
+        origin_issue_id: Anchor issue the Queue dialog is repairing.
+        provider: External provider name (e.g., "comicvine").
+        provider_series_external_id: Selected provider volume identifier.
+
+    Returns:
+        A plan dict matching the generic builder's shape, with the bootstrap scope mode
+        encoded in ``state_digest``.
+    """
+    from app.repositories.catalog_repository import (
+        get_issue_by_id,
+        get_series_with_issues,
+        get_thread_issues_for_queue_bootstrap_scope,
+    )
+
+    origin_issue = await get_issue_by_id(db, origin_issue_id, user_id)
+    if origin_issue is None:
+        return _unavailable_series_mapping_plan(
+            origin_issue_id,
+            basis="origin_issue_not_found",
+            scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
+        )
+
+    origin_issue_thread_id = origin_issue.get("thread_id")
+    if not isinstance(origin_issue_thread_id, int):
+        return _unavailable_series_mapping_plan(
+            origin_issue_id,
+            basis="origin_issue_without_thread",
+            scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
+        )
+
+    series_info, _ = await get_series_with_issues(
+        db, provider=provider, series_external_id=provider_series_external_id, user_id=user_id
+    )
+
+    roster_rows: list[dict[str, object]] = []
+    if series_info is None:
+        # No local catalog entry: the live provider roster is required, and its absence is a
+        # 503 rather than a silently empty plan.
+        series_info, roster_rows = await _load_provider_volume_roster(
+            provider_series_external_id, []
+        )
+        if series_info is None:
+            return _unavailable_series_mapping_plan(
+                origin_issue_id,
+                basis="series_not_found",
+                scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
+            )
+    else:
+        # The volume is known locally, so the roster lookup is best-effort: an outage degrades
+        # to an unavailable bootstrap scope instead of failing the whole request.
+        try:
+            _, roster_rows = await _load_provider_volume_roster(provider_series_external_id, [])
+        except HTTPException as exc:
+            if exc.status_code != status.HTTP_503_SERVICE_UNAVAILABLE:
+                raise
+            roster_rows = []
+
+    if not roster_rows:
+        # Without the real provider roster there is nothing to validate a match against.
+        return _unavailable_series_mapping_plan(
+            origin_issue_id,
+            basis="provider_roster_unavailable",
+            scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
+        )
+
+    thread_issues = await get_thread_issues_for_queue_bootstrap_scope(
+        db, thread_id=origin_issue_thread_id, user_id=user_id
+    )
+    if not thread_issues:
+        return _unavailable_series_mapping_plan(
+            origin_issue_id,
+            basis="thread_has_no_issues",
+            scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
+        )
+
+    counts = _empty_preview_counts()
+    classified_rows = _classify_queue_thread_bootstrap_rows(
+        _dedupe_rows_by_issue(thread_issues),
+        roster_rows,
+        provider=provider,
+        counts=counts,
+    )
+    scope_key = _derive_scope_key(classified_rows, origin_issue_id)
+    scope_status = "available" if scope_key is not None else "unavailable"
+    scope_basis = (
+        "queue_thread_bootstrap_exact_match"
+        if scope_key is not None
+        else "queue_thread_bootstrap_no_exact_match"
+    )
+
+    if scope_status == "unavailable":
+        # Mirrors the generic contract: an unavailable scope reports zero counts and no rows.
+        counts = _empty_preview_counts()
+        classified_rows = []
+
+    issue_numbers = [
+        str(row.get("issue_number", ""))
+        for row in classified_rows
+        if row.get("issue_number")
+    ]
+    state_digest = _plan_state_digest(
+        provider=provider,
+        provider_series_external_id=provider_series_external_id,
+        origin_issue_id=origin_issue_id,
+        scope_key=scope_key,
+        scope_basis=scope_basis,
+        rows=classified_rows,
+        scope_mode=SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP,
+    )
+
+    return {
+        "scope": {
+            "status": scope_status,
+            "scope_key": scope_key,
+            "origin_issue_id": origin_issue_id,
+            "series_label": series_info.get("name") if isinstance(series_info.get("name"), str) else None,
+            "basis": scope_basis,
+        },
+        "provider_series": series_info,
+        "counts": counts,
+        "rows": classified_rows,
+        "scope_key": scope_key,
+        "issue_numbers": issue_numbers,
+        "state_digest": state_digest,
+    }
+
+
+def _classify_queue_thread_bootstrap_rows(
+    thread_issues: list[dict[str, object]],
+    roster_rows: list[dict[str, object]],
+    *,
+    provider: str,
+    counts: dict[str, int],
+) -> list[dict[str, object]]:
+    """Classify one row per owned thread issue using unique cardinality on both sides.
+
+    An owned issue becomes ``safe_exact_match`` only when its normalized number resolves to
+    exactly one issue in the thread *and* exactly one issue in the selected provider volume's
+    real roster. Confirmed identities are preserved (agreement is idempotent, disagreement is
+    reported as a conflict), special and ambiguous numbers stay out of the safe offer, and
+    provider issues that no owned issue claims are reported as provider inventory. No fuzzy
+    matching is ever performed.
+
+    Args:
+        thread_issues: De-duplicated owned thread rows, in thread order.
+        roster_rows: Live provider volume roster rows.
+        provider: Selected provider name.
+        counts: Counter updated in place for every classification.
+
+    Returns:
+        Deterministically ordered rows: owned thread rows first, then provider inventory.
+    """
+    roster_by_number: dict[str, list[dict[str, object]]] = {}
+    for roster in roster_rows:
+        number = _normalize_issue_number(_issue_number_text(roster.get("issue_number")))
+        if number:
+            roster_by_number.setdefault(number, []).append(roster)
+
+    thread_number_counts: dict[str, int] = {}
+    for issue in thread_issues:
+        raw_number = _issue_number_text(issue.get("issue_number"))
+        if _is_special_issue(raw_number) or _is_ambiguous(raw_number):
+            continue
+        normalized = _normalize_issue_number(raw_number)
+        if normalized:
+            thread_number_counts[normalized] = thread_number_counts.get(normalized, 0) + 1
+
+    rows: list[dict[str, object]] = []
+    consumed_external_ids: set[str] = set()
+
+    for issue in thread_issues:
+        raw_number = _issue_number_text(issue.get("issue_number"))
+        row = dict(issue)
+
+        if _is_special_issue(raw_number):
+            classification = "excluded_special"
+        elif _is_conflicting_mapping(issue, provider):
+            classification = "needs_review_conflict"
+        elif _is_ambiguous(raw_number):
+            classification = "needs_review_ambiguous"
+        elif issue.get("current_mapping_status") == "confirmed":
+            classification = _classify_confirmed_bootstrap_issue(
+                issue, raw_number, roster_by_number
+            )
+        else:
+            normalized = _normalize_issue_number(raw_number)
+            matches = roster_by_number.get(normalized, []) if normalized else []
+            thread_count = thread_number_counts.get(normalized, 0) if normalized else 0
+            if normalized and thread_count == 1 and len(matches) == 1:
+                match = matches[0]
+                row.update({
+                    "provider": provider,
+                    "external_id": match.get("external_id"),
+                    "title": match.get("title") or issue.get("title"),
+                    "confidence": match.get("confidence"),
+                })
+                consumed_external_ids.add(str(match.get("external_id")))
+                classification = "safe_exact_match"
+            elif normalized and (thread_count > 1 or len(matches) > 1):
+                classification = "needs_review_ambiguous"
+            else:
+                classification = "unresolved"
+
+        counts[classification] += 1
+        row["row_id"] = _preview_row_id(row.get("issue_id"))
+        row["classification"] = classification
+        row["proposed_mapping"] = classification in ("safe_exact_match", "already_confirmed")
+        row["default_selected"] = classification == "safe_exact_match"
+        rows.append(row)
+
+    for roster in roster_rows:
+        if str(roster.get("external_id")) in consumed_external_ids:
+            continue
+        row = dict(roster)
+        row["_roster_only"] = True
+        row["row_id"] = _preview_row_id(row.get("issue_id"), roster_only=True)
+        row["classification"] = "unresolved"
+        row["proposed_mapping"] = False
+        row["default_selected"] = False
+        counts["unresolved"] += 1
+        rows.append(row)
+
+    return rows
+
+
+def _classify_confirmed_bootstrap_issue(
+    issue: dict[str, object],
+    raw_number: str,
+    roster_by_number: dict[str, list[dict[str, object]]],
+) -> str:
+    """Classify an issue that already carries confirmed provider evidence.
+
+    A confirmed identity is settled evidence and is never rewritten. It is reported as
+    ``already_confirmed`` unless the selected volume's real roster holds exactly one issue with
+    the same normalized number and that issue's identity disagrees, which is a conflict the
+    caller must resolve rather than an idempotent replay.
+
+    Args:
+        issue: Owned issue row with a confirmed mapping.
+        raw_number: Raw issue number text for the owned issue.
+        roster_by_number: Provider roster rows keyed by normalized issue number.
+
+    Returns:
+        ``already_confirmed`` or ``needs_review_conflict``.
+    """
+    normalized = _normalize_issue_number(raw_number)
+    matches = roster_by_number.get(normalized, []) if normalized else []
+    confirmed_external_id = str(issue.get("external_id") or "")
+    if len(matches) == 1 and str(matches[0].get("external_id")) != confirmed_external_id:
+        return "needs_review_conflict"
+    # Same-provider agreement or an unavailable roster comparison stays settled evidence.
+    return "already_confirmed"
+
+
 def _dedupe_rows_by_issue(rows: list[dict[str, object]]) -> list[dict[str, object]]:
     """Collapse candidate rows to one deterministic row per issue.
 
@@ -1033,7 +1345,12 @@ def _plan_state_digest_text(plan: dict[str, object]) -> str:
     return state_digest if isinstance(state_digest, str) else ""
 
 
-def _unavailable_series_mapping_plan(origin_issue_id: int, *, basis: str) -> dict[str, object]:
+def _unavailable_series_mapping_plan(
+    origin_issue_id: int,
+    *,
+    basis: str,
+    scope_mode: str = SCOPE_MODE_CONFIRMED_ORIGIN,
+) -> dict[str, object]:
     """Return a normal, non-error unavailable-scope plan."""
     return {
         "scope": {
@@ -1055,6 +1372,7 @@ def _unavailable_series_mapping_plan(origin_issue_id: int, *, basis: str) -> dic
             scope_key=None,
             scope_basis=basis,
             rows=[],
+            scope_mode=scope_mode,
         ),
     }
 
@@ -1067,12 +1385,14 @@ def _plan_state_digest(
     scope_key: str | None,
     scope_basis: str,
     rows: list[dict[str, object]],
+    scope_mode: str = SCOPE_MODE_CONFIRMED_ORIGIN,
 ) -> str:
     """Digest every material fact a preview token binds.
 
     Commit recomputes this digest and refuses to write when it changes, so any change to the
     selected provider series, scope evidence, issue numbers, mapping state, or selected
-    provider identities invalidates the preview.
+    provider identities invalidates the preview. The scope mode is included so a generic token
+    can never be replayed as bootstrap authority, or vice versa.
 
     Args:
         provider: Selected provider name.
@@ -1081,11 +1401,13 @@ def _plan_state_digest(
         scope_key: Derived scope key, or ``None`` when the scope is unavailable.
         scope_basis: Why the scope is available or unavailable.
         rows: Deterministically ordered classified rows.
+        scope_mode: The preview scope mode this plan was built for.
 
     Returns:
         Hex SHA-256 digest of the bound material facts.
     """
     parts = [
+        f"mode={scope_mode}",
         f"provider={provider}",
         f"series={provider_series_external_id}",
         f"origin={origin_issue_id}",
@@ -1194,6 +1516,7 @@ def _generate_preview_token(
     expires_at: float,
     issue_numbers: list[str] | None = None,
     classification_digest: str | None = None,
+    scope_mode: str = SCOPE_MODE_CONFIRMED_ORIGIN,
 ) -> str:
     """Generate an HMAC-signed preview token."""
     # Use the application secret key; fall back to env for test isolation
@@ -1214,6 +1537,7 @@ def _generate_preview_token(
         "scope_key": scope_key,
         "issue_numbers": issue_numbers or [],
         "classification_digest": classification_digest or "",
+        "scope_mode": scope_mode,
         "issued_at": issued_at,
         "expires_at": expires_at,
     }

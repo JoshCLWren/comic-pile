@@ -47,6 +47,7 @@ from app.repositories.catalog_commit_repository import (
     list_owned_issue_ids,
 )
 from app.services.catalog import (
+    SCOPE_MODE_CONFIRMED_ORIGIN,
     build_series_mapping_plan,
     upsert_catalog_series,
     verify_preview_token,
@@ -139,6 +140,7 @@ async def commit_series_mapping(
 
     provider = str(payload.get("provider") or "")
     series_external_id = str(payload.get("provider_series_external_id") or "")
+    scope_mode = str(payload.get("scope_mode") or SCOPE_MODE_CONFIRMED_ORIGIN)
     origin_issue_id = payload.get("origin_issue_id")
     if not isinstance(origin_issue_id, int) or not provider or not series_external_id:
         raise SeriesMappingCommitConflictError(ERROR_PREVIEW_STALE)
@@ -149,6 +151,7 @@ async def commit_series_mapping(
         origin_issue_id=origin_issue_id,
         provider=provider,
         provider_series_external_id=series_external_id,
+        scope_mode=scope_mode,
     )
     scope_status = _plan_scope_status(plan)
     plan_rows = _plan_rows(plan)
@@ -425,6 +428,7 @@ async def _apply_identity_writes(
             if isinstance(row, dict)
             and row.get("classification") == "already_confirmed"
             and isinstance(row.get("issue_id"), int)
+            and isinstance(row.get("thread_id"), int)
         ],
         "needs_review_issue_ids": [
             int(row["issue_id"])
@@ -432,6 +436,7 @@ async def _apply_identity_writes(
             if isinstance(row, dict)
             and row.get("classification") in LEFTOVER_CLASSIFICATIONS
             and isinstance(row.get("issue_id"), int)
+            and isinstance(row.get("thread_id"), int)
         ],
         "hydration_queued_issue_ids": list(confirmed_issue_ids),
         "series_mapping": {

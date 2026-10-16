@@ -465,6 +465,69 @@ async def get_thread_issues_for_sibling_scope(
     return rows
 
 
+async def get_thread_issues_for_queue_bootstrap_scope(
+    db: AsyncSession,
+    *,
+    thread_id: int,
+    user_id: int,
+) -> list[dict[str, object]]:
+    """Return every issue in one owned thread with its current mapping state.
+
+    Queue-thread bootstrap (issue #3727) repairs a thread that has no confirmed mapping yet,
+    so unlike sibling scoping it must include the anchor issue itself: the first issue is
+    eligible alongside its siblings. Only issues the caller owns are returned, and scope never
+    widens beyond this one thread.
+
+    Args:
+        db: Database session.
+        thread_id: The owned thread to enumerate.
+        user_id: User ID for ownership filtering.
+
+    Returns:
+        Plain row dicts matching the preview candidate-row shape, in reading order. An issue
+        without any mapping row reports ``current_mapping_status``, ``provider``, and
+        ``external_id`` as ``None``.
+    """
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+    from app.models.issue import Issue
+    from app.models.thread import Thread
+
+    result = await db.execute(
+        select(Issue, Thread, IssueExternalIdentityMapping, ExternalIdentity)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .outerjoin(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
+        )
+        .outerjoin(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
+            Issue.thread_id == thread_id,
+            Thread.user_id == user_id,
+        )
+        .order_by(Issue.position, Issue.id)
+    )
+
+    rows: list[dict[str, object]] = []
+    for issue, thread, mapping, identity in result:
+        rows.append(
+            {
+                "issue_id": issue.id,
+                "issue_number": issue.issue_number,
+                "title": identity.metadata_json.get("name") if identity and identity.metadata_json else None,
+                "thread_id": thread.id,
+                "thread_title": thread.title,
+                "current_mapping_status": mapping.status if mapping is not None else None,
+                "provider": identity.provider if identity is not None else None,
+                "external_id": identity.external_id if identity is not None else None,
+                "confidence": mapping.confidence if mapping is not None else None,
+            }
+        )
+    return rows
+
+
 async def get_issue_by_id(
     db: AsyncSession,
     issue_id: int,

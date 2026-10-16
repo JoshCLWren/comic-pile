@@ -263,12 +263,37 @@ describe('QueueMapSeriesDialog', () => {
       origin_issue_id: 1,
       provider: 'comicvine',
       provider_series_external_id: '20764',
+      scope_mode: 'queue_thread_bootstrap',
     })
     expect(screen.getByTestId('queue-map-series-approve')).toHaveTextContent('Map 1 issue')
     expect(screen.getByText('Needs review')).toBeInTheDocument()
     expect(screen.getByTestId('queue-map-series-provider-inventory')).toHaveTextContent(
       '1 other issue is in this volume but not in your library',
     )
+  })
+
+  it('bootstraps a completely unmapped thread with every owned issue selectable', async () => {
+    const user = userEvent.setup()
+    const ownedRows = [1, 2, 3, 4, 5].map((number) =>
+      previewRow({
+        row_id: `issue:${number}`,
+        issue_id: number,
+        issue_number: String(number),
+        title: `Chapter ${number}`,
+      }),
+    )
+    mockedPreview.mockResolvedValue(previewResponse(ownedRows))
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await screen.findByTestId('queue-map-series-preview')
+
+    expect(mockedPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ scope_mode: 'queue_thread_bootstrap' }),
+    )
+    // The reported bug: the approval button read "Map 0 issues" for a matching miniseries.
+    expect(screen.getByTestId('queue-map-series-approve')).toHaveTextContent('Map 5 issues')
+    expect(screen.queryByTestId('queue-map-series-provider-inventory')).not.toBeInTheDocument()
   })
 
   it('commits only safe exact rows and refreshes the Queue without a reload', async () => {

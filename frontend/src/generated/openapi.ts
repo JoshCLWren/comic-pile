@@ -12171,6 +12171,12 @@ export interface components {
              * @description Provider-specific series identifier
              */
             provider_series_external_id: string;
+            /**
+             * Scope Mode
+             * @description Preview scope mode: 'confirmed_origin' (generic, requires confirmed origin evidence for sibling scope) or 'queue_thread_bootstrap' (queue repair may propose the anchor's whole owned thread, including its first issue)
+             * @default confirmed_origin
+             */
+            scope_mode: string;
         };
         /**
          * SeriesMappingPreviewResponse

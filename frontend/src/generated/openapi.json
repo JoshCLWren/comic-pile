@@ -14173,6 +14173,12 @@
             "minLength": 1,
             "title": "Provider Series External Id",
             "type": "string"
+          },
+          "scope_mode": {
+            "default": "confirmed_origin",
+            "description": "Preview scope mode: 'confirmed_origin' (generic, requires confirmed origin evidence for sibling scope) or 'queue_thread_bootstrap' (queue repair may propose the anchor's whole owned thread, including its first issue)",
+            "title": "Scope Mode",
+            "type": "string"
           }
         },
         "required": [
