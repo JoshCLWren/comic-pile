@@ -21,7 +21,7 @@ import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
-import { dependenciesApi, issueDependenciesApi } from '../services/api-dependencies'
+import { issueDependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import type { IssueListResponse, ThreadListItem } from '../types'
@@ -111,8 +111,6 @@ const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedListForThread = vi.mocked(issueDependenciesApi).listForThread as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedThreadsApi = vi.mocked(threadsApi) as any
@@ -139,7 +137,7 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-const MIGRATED_THREAD: ThreadListItem = {
+const MIGRATED_THREAD = {
   id: 1,
   title: 'Saga',
   format: 'Comic',
@@ -148,9 +146,12 @@ const MIGRATED_THREAD: ThreadListItem = {
   issues_remaining: 5,
   total_issues: 6,
   is_blocked: false,
-}
+  blocking_reasons: [],
+  created_at: '2026-03-08T00:00:00Z',
+  last_activity_at: null,
+} as ThreadListItem
 
-const UNMIGRATED_THREAD: ThreadListItem = {
+const UNMIGRATED_THREAD = {
   id: 7,
   title: 'Descender',
   format: 'Comic',
@@ -159,7 +160,10 @@ const UNMIGRATED_THREAD: ThreadListItem = {
   issues_remaining: 3,
   total_issues: null,
   is_blocked: false,
-}
+  blocking_reasons: [],
+  created_at: '2026-03-08T00:00:00Z',
+  last_activity_at: null,
+} as ThreadListItem
 
 function renderQueue() {
   render(
