@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -36,7 +35,6 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
-  const [isIssuesLoading, setIsIssuesLoading] = useState(false)
   const isSearching = searchQuery.trim() !== ''
 
   const {
@@ -181,10 +179,7 @@ export default function QueuePage() {
           onMoveToFront={() => actions.handleMoveToFront(thread.id)}
           onMoveToBack={() => actions.handleMoveToBack(thread.id)}
           onReposition={() => modals.openRepositionModal(thread)}
-          onEdit={() => {
-  setIsIssuesLoading(true)
-  modals.showEditModal(thread)
-}}
+          onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
           onDelete={() => actions.requestDelete(thread)}
         />
@@ -321,7 +316,7 @@ export default function QueuePage() {
           onOpenMigrationDialog={modals.openMigrationDialog}
           onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
           onIssueChanged={handleIssueChanged}
-          onIssuesLoaded={() => setIsIssuesLoading(false)}
+          onIssuesLoaded={modals.markIssuesLoaded}
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
@@ -351,4 +346,3 @@ export default function QueuePage() {
     </PositionMenuProvider>
   )
 }
-export type { QueueSortBy }

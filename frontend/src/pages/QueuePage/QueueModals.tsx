@@ -235,7 +235,8 @@ interface QueueModalsProps {
   isPendingCreate: boolean
   isPendingEdit: boolean
   isPendingReactivate: boolean
-  isIssuesLoading: boolean
+  /** True while the edit dialog's IssueToggleList is still loading. */
+  isIssuesLoading?: boolean
   showRollNudge: boolean
   onDismissRollNudge: () => void
   onRollNudgeNavigate: () => void
@@ -290,7 +291,7 @@ export function QueueModals({
   isPendingCreate,
   isPendingEdit,
   isPendingReactivate,
-  isIssuesLoading,
+  isIssuesLoading = false,
   showRollNudge,
   onDismissRollNudge,
   onRollNudgeNavigate,
@@ -591,15 +592,8 @@ export function QueueModals({
               deferred
               onOpenDependencies={onOpenDependencies}
               onIssueChanged={onIssueChanged}
-              onLoad={() => {
-                setIsIssuesLoading(false)
-                onIssuesLoaded?.()
-              }}
+              onLoad={onIssuesLoaded}
             />
-          )}
-          
-          {editingThread && editingThread.total_issues != null && isIssuesLoading && (
-            <div className="text-xs text-stone-500">Loading issues...</div>
           )}
 
           <button
