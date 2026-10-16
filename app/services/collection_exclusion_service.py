@@ -6,6 +6,7 @@ from app.models.collection_exclusion import CollectionExclusion
 from app.repositories import collection_exclusion_repository as repository
 from app.schemas.collection_exclusion import CollectionExclusionCreate
 from app.services.errors import NotFoundError
+from app.repositories.reading_list_authoring_repository import lock_reader
 
 
 async def list_collection_exclusions(
@@ -23,6 +24,7 @@ async def create_collection_exclusion(
     An external volume identity may not exist locally yet: excluding an absent
     volume is intentional and prevents its subsequent adoption.
     """
+    await lock_reader(db, user_id)
     if payload.thread_id is not None and not await repository.get_owned_thread(
         db, user_id, payload.thread_id
     ):
@@ -46,6 +48,7 @@ async def delete_collection_exclusion(
     db: AsyncSession, *, user_id: int, exclusion_id: int
 ) -> None:
     """Remove only an exclusion that belongs to the current user."""
+    await lock_reader(db, user_id)
     if not await repository.delete_for_owner(db, user_id, exclusion_id):
         raise NotFoundError("Collection exclusion not found")
     await db.commit()

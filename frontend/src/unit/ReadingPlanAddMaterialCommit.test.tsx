@@ -280,4 +280,19 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     fireEvent.click(refreshButton)
     await waitFor(() => expect(mocks.preview).toHaveBeenCalledTimes(2))
   })
+
+  it('shows collection exclusion and disables the Include checkbox', async () => {
+  mocks.discover.mockResolvedValue([source])
+  mocks.preview.mockResolvedValue(preview([
+    { ...existingEntry, adopted: false, adoption_decision: 'excluded', collection_excluded: true, collection_exclusion_reason: 'collection_issue_excluded' },
+    missingSelected,
+  ]))
+  render(<ReadingPlanAddMaterialImpl planId={9} planName="B.P.R.D." defaultOpen />)
+  fireEvent.click(await screen.findByRole('button', { name: /B.P.R.D. Plague of Frogs Vol. 3/i }))
+  expect(await screen.findByText('Excluded from your collection')).toBeVisible()
+  const include = screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Black Flame #6' })
+  expect(include).toBeDisabled()
+  expect(include).not.toBeChecked()
+})
+
 })

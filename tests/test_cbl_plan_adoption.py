@@ -114,6 +114,8 @@ class _FakeDB:
         self.rollback_count = 0
 
     async def execute(self, _query: object) -> _Rows:
+        if any(table in str(_query) for table in ("FROM users", "FROM collection_exclusions")):
+            return _Rows([])
         if self._call_count >= len(self._execute_results):
             return _Rows([])
         result = self._execute_results[self._call_count]

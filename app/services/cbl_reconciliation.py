@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.services.issue_identity_reconciliation import resolve_cbl_entries_to_canonical
+from app.services.collection_exclusion_guard import annotate_collection_exclusions
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,7 +152,17 @@ def calculate_cbl_adoption_plan(
             if importable
             else "ambiguous_unresolved"
         )
-        if not selectable:
+        if entry.get("collection_excluded"):
+            if (
+                entry.get("collection_exclusion_reason") == "collection_identity_requires_review"
+                and entry_choices.get(entry_key, series_choices.get(series_group_id, True))
+            ):
+                decision = "unresolved"
+                unresolved += 1
+            else:
+                decision = "excluded"
+                excluded += 1
+        elif not selectable:
             # An explicit per-entry skip lets the reader defer one ambiguous
             # entry without blocking adoption of the whole source.
             if entry_key in entry_choices and entry_choices[entry_key] is False:
@@ -404,10 +415,14 @@ async def reconcile_cbl_source_list(
             }
         )
 
+    report_entries = await annotate_collection_exclusions(db, user_id, report_entries)
+
     # First unread ordered entry after overlaying actual read history.
     first_unread_position: int | None = None
     first_unread_entry: dict[str, object] | None = None
     for entry in report_entries:
+        if entry.get("collection_excluded"):
+            continue
         if entry.get("read_status") == "unread" and entry.get("resolved_issue_id") is not None:
             first_unread_position = cast(int, entry["cbl_position"])
             first_unread_entry = entry

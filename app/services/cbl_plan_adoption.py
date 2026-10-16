@@ -66,9 +66,14 @@ from app.models.external_identity import (
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.repositories import cbl_adoption_receipt_repository, issue_repository, thread_repository
+from app.repositories.reading_list_authoring_repository import lock_reader
 from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
+from app.services.collection_exclusion_guard import (
+    annotate_collection_exclusions,
+    load_collection_guard,
+)
 from app.services.continuity_plan_labels import issue_step_label
 from app.services.issue_insertion import create_issue_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
@@ -213,6 +218,7 @@ def _request_fingerprint(
     entry_decisions: dict[int, SourceBackedDecision],
     series_overrides: dict[int, SourceBackedDecision],
     series_decisions: dict[str, SourceBackedDecision],
+    collection_constraints: list[dict[str, object]] | None = None,
 ) -> str:
     """Return a stable SHA-256 of the source identity plus reviewed decisions.
 
@@ -227,11 +233,12 @@ def _request_fingerprint(
         entry_decisions: Per-entry include/exclude map.
         series_overrides: Per-position overrides of series decisions.
         series_decisions: Per-series include/exclude map.
+        collection_constraints: Current blocked positions and explicit decision IDs.
 
     Returns:
         Hex digest of the canonical request payload.
     """
-    payload = {
+    payload: dict[str, object] = {
         "content_hash": content_hash,
         "revision_sha": revision_sha,
         "entry_decisions": [
@@ -247,6 +254,8 @@ def _request_fingerprint(
             for name, decision in sorted(series_decisions.items())
         ],
     }
+    if collection_constraints:
+        payload["collection_constraints"] = collection_constraints
     encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -525,6 +534,10 @@ async def _ensure_missing_issue_created(
         ConflictingComicVineIdentityError: The number is already a different comic.
         AdoptionCommitError: If the entry cannot be materialized safely.
     """
+    await lock_reader(db, user_id)
+    collection_guard = await load_collection_guard(db, user_id, [fact])
+    if decision := collection_guard.check(fact):
+        raise AdoptionCommitError(f"Collection adoption refused: {decision.reason}")
     series_name = str(fact.get("series_name") or "")
     issue_number = str(fact.get("issue_number") or "")
     comicvine_id = _comicvine_issue_id(fact)
@@ -538,6 +551,12 @@ async def _ensure_missing_issue_created(
             external_id=comicvine_id,
         )
         if existing is not None:
+            existing_fact = {
+                **fact, "resolved_issue_id": existing.id, "thread_id": existing.thread_id,
+            }
+            reuse_guard = await load_collection_guard(db, user_id, [existing_fact])
+            if decision := reuse_guard.check(existing_fact):
+                raise AdoptionCommitError(f"Collection adoption refused: {decision.reason}")
             return MaterializedIssue(existing, False)
 
     thread = await _find_or_create_series_thread(
@@ -552,6 +571,10 @@ async def _ensure_missing_issue_created(
         volume_year=volume_year,
     )
 
+    target_fact = {**fact, "thread_id": thread.id}
+    target_guard = await load_collection_guard(db, user_id, [target_fact])
+    if decision := target_guard.check(target_fact):
+        raise AdoptionCommitError(f"Collection adoption refused: {decision.reason}")
     if thread.queue_position < 1:
         thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1
 
@@ -825,6 +848,9 @@ async def _merge_adopted_nodes(
         The machine-readable reused/created/excluded/unresolved source positions
         for this merge pass.
     """
+    await lock_reader(db, user_id)
+    checked = await annotate_collection_exclusions(db, user_id, list(facts_by_entry_id.values()))
+    facts_by_entry_id = dict(zip(facts_by_entry_id, checked, strict=True))
     existing_nodes = list(plan.nodes_json or [])
     nodes_by_id = {str(node.get("id")): node for node in existing_nodes}
     issues_by_id: dict[int, dict[str, object]] = {}
@@ -861,6 +887,14 @@ async def _merge_adopted_nodes(
             series_overrides,
             series_decisions,
         )
+        if fact is not None and fact.get("collection_excluded"):
+            if (
+                fact.get("collection_exclusion_reason") == "collection_identity_requires_review"
+                and early_decision != SourceBackedDecision.EXCLUDE
+            ):
+                unresolved_positions.append(entry.position)
+                continue
+            early_decision = SourceBackedDecision.EXCLUDE
         if early_decision == SourceBackedDecision.EXCLUDE:
             excluded_positions.append(entry.position)
             excluded_node_ids.add(f"cbl-{entry.id}")
@@ -1023,6 +1057,7 @@ async def adopt_cbl_material_into_reading_plan(
         StalePreviewError: If the preview fingerprint has changed.
         AdoptionCommitError: For other adoption failures.
     """
+    await lock_reader(db, user_id)
     effective_overrides: dict[int, SourceBackedDecision] = series_overrides or {}
     result = await db.execute(
         select(CBLSourceList).where(CBLSourceList.id == list_id)
@@ -1063,6 +1098,15 @@ async def adopt_cbl_material_into_reading_plan(
         entry_decisions=entry_decisions,
         series_overrides=effective_overrides,
         series_decisions=series_decisions,
+        collection_constraints=[
+            {
+                "entry_id": fact.get("cbl_entry_id"),
+                "reason": fact.get("collection_exclusion_reason"),
+                "exclusion_ids": fact.get("collection_exclusion_ids"),
+            }
+            for fact in report.entries
+            if fact.get("collection_excluded")
+        ],
     )
     claim = await _load_adoption_claim(db, user_id, list_id)
     replay = await _replay_matching_claim(db, claim, fingerprint)

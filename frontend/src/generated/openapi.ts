@@ -6132,6 +6132,15 @@ export interface components {
             cbl_entry_id: number;
             /** Cbl Position */
             cbl_position: number;
+            /**
+             * Collection Excluded
+             * @default false
+             */
+            collection_excluded: boolean;
+            /** Collection Exclusion Ids */
+            collection_exclusion_ids?: number[];
+            /** Collection Exclusion Reason */
+            collection_exclusion_reason?: string | null;
             /** Comicvine Issue Id */
             comicvine_issue_id: string | null;
             /** Comicvine Series Id */
@@ -6234,6 +6243,15 @@ export interface components {
             cbl_entry_id: number;
             /** Cbl Position */
             cbl_position: number;
+            /**
+             * Collection Excluded
+             * @default false
+             */
+            collection_excluded: boolean;
+            /** Collection Exclusion Ids */
+            collection_exclusion_ids?: number[];
+            /** Collection Exclusion Reason */
+            collection_exclusion_reason?: string | null;
             /** Comicvine Issue Id */
             comicvine_issue_id: string | null;
             /** Comicvine Series Id */

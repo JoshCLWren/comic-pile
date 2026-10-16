@@ -642,6 +642,29 @@
             "title": "Cbl Position",
             "type": "integer"
           },
+          "collection_excluded": {
+            "default": false,
+            "title": "Collection Excluded",
+            "type": "boolean"
+          },
+          "collection_exclusion_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Collection Exclusion Ids",
+            "type": "array"
+          },
+          "collection_exclusion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Exclusion Reason"
+          },
           "comicvine_issue_id": {
             "anyOf": [
               {
@@ -942,6 +965,29 @@
           "cbl_position": {
             "title": "Cbl Position",
             "type": "integer"
+          },
+          "collection_excluded": {
+            "default": false,
+            "title": "Collection Excluded",
+            "type": "boolean"
+          },
+          "collection_exclusion_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Collection Exclusion Ids",
+            "type": "array"
+          },
+          "collection_exclusion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Exclusion Reason"
           },
           "comicvine_issue_id": {
             "anyOf": [

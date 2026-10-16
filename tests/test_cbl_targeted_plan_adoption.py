@@ -55,6 +55,8 @@ class _DB:
         self.rollbacks = 0
 
     async def execute(self, _query: object) -> _Rows:
+        if any(table in str(_query) for table in ("FROM users", "FROM collection_exclusions")):
+            return _Rows([])
         result = self.results[self.index]
         self.index += 1
         return result
