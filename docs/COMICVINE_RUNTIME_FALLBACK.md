@@ -48,3 +48,18 @@ For explicit bulk research or repair work, continue to use the existing
 `scripts/hydrate_comicvine_issues.py` workflow. The runtime fallback is deliberately narrow: it
 repairs metadata for confirmed issue identities encountered by the product rather than becoming a
 candidate-discovery or bulk-import mechanism.
+
+### Individual identity confirmation
+
+Individual ComicVine confirmation and replacement commit the owned issue's explicit provider
+identity before refreshing metadata through the same bounded fallback used by sibling approval.
+Stored raw issue evidence is normalized first, so an existing provider cover can be recovered
+without a network request. Complete fresh metadata, including an explicit provider response with
+no cover, does not trigger another lookup. Missing metadata uses the confirmed issue ID and the
+existing timeout, retry, and deduplication controls. Provider failure leaves the confirmed mapping
+intact; Roll and rating continue to serve stored data through their existing nonblocking reads.
+The origin remains excluded from sibling approval.
+
+Confirmation preserves an existing identity's metadata timestamp when only its URL or local
+normalization changes. Those edits are not a provider refresh: stale evidence must remain stale
+through the post-commit fallback's own freshness check.

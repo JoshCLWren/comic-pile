@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -101,6 +101,8 @@ async def test_bootstrap_excludes_threads_with_excluded_tag(
     tag = await _tag(async_db, user.id, "Physical")
     tagged, _ = await _thread_with_issue(async_db, user, tag_id=tag.id)
     clean, _ = await _thread_with_issue(async_db, user)
+    tagged.last_activity_at = datetime.now(UTC) - timedelta(days=14)
+    clean.last_activity_at = datetime.now(UTC) - timedelta(days=14)
     await async_db.commit()
 
     patched = await auth_client.patch(
@@ -118,6 +120,9 @@ async def test_bootstrap_excludes_threads_with_excluded_tag(
     assert tagged.id not in {item.id for item in payload.roll_pool}
     assert clean.id in {item.id for item in payload.roll_pool}
     assert payload.available_threads == 1
+    assert payload.stale_thread_count == 1
+    assert payload.stale_thread is not None
+    assert payload.stale_thread.id == clean.id
 
 
 @pytest.mark.asyncio

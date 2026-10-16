@@ -4004,6 +4004,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/roll/tag-exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Roll Tag Exclusions
+         * @description Return the authenticated user's account-wide excluded tag IDs.
+         *
+         *     Args:
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The persisted excluded tag IDs plus resolved tag summaries, so the
+         *         Roll UI can show which tags are responsible for a filtered pool.
+         */
+        get: operations["get_roll_tag_exclusions_api_v1_roll_tag_exclusions_get"];
+        put?: never;
+        /**
+         * Add Roll Tag Exclusion
+         * @description Persist one or more account-wide tag exclusions.
+         *
+         *     When the pending roll's next unread issue becomes ineligible because of
+         *     the new exclusion, the exclusion persists, the pending result is cleared,
+         *     and another eligible roll is selected automatically without recording a
+         *     snooze or recommendation penalty.
+         *
+         *     Args:
+         *         request: FastAPI request for rate limiting.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *         payload: Request body with ``tag_id`` or ``tag_ids``.
+         *
+         *     Returns:
+         *         The persisted excluded tag IDs and, when a reroll happened, the
+         *         new ``RollResponse`` under ``roll``.
+         */
+        post: operations["add_roll_tag_exclusion_api_v1_roll_tag_exclusions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/tag-exclusions/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Roll Tag Exclusion
+         * @description Remove one account-wide tag exclusion.
+         *
+         *     Args:
+         *         tag_id: Tag ID to make eligible again.
+         *         request: FastAPI request for rate limiting.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The remaining excluded tag IDs and their resolved summaries.
+         */
+        delete: operations["remove_roll_tag_exclusion_api_v1_roll_tag_exclusions__tag_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/": {
         parameters: {
             query?: never;
@@ -11789,6 +11865,74 @@ export interface components {
             total_issues?: number | null;
         };
         /**
+         * RollTagExclusionAddResponse
+         * @description Result of adding one or more account-wide tag exclusions.
+         *
+         *     Attributes:
+         *         excluded_tag_ids: The persisted exclusions after the merge.
+         *         excluded_tags: Resolved summaries of the persisted exclusions.
+         *         rerolled: True when the pending roll became ineligible and another
+         *             eligible result was selected without recording a snooze.
+         *         roll: The replacement roll result when ``rerolled`` is true.
+         */
+        RollTagExclusionAddResponse: {
+            /** Excluded Tag Ids */
+            excluded_tag_ids: number[];
+            /** Excluded Tags */
+            excluded_tags: components["schemas"]["RollTagExclusionTag"][];
+            /**
+             * Rerolled
+             * @default false
+             */
+            rerolled: boolean;
+            roll?: components["schemas"]["RollResponse"] | null;
+        };
+        /**
+         * RollTagExclusionRemoveResponse
+         * @description Result of removing one account-wide tag exclusion.
+         *
+         *     Attributes:
+         *         excluded_tag_ids: The exclusions that remain after the removal.
+         *         excluded_tags: Resolved summaries of the remaining exclusions.
+         */
+        RollTagExclusionRemoveResponse: {
+            /** Excluded Tag Ids */
+            excluded_tag_ids: number[];
+            /** Excluded Tags */
+            excluded_tags: components["schemas"]["RollTagExclusionTag"][];
+        };
+        /**
+         * RollTagExclusionTag
+         * @description One account-wide tag exclusion resolved to its reader-facing identity.
+         */
+        RollTagExclusionTag: {
+            /** Color */
+            color: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Scope */
+            scope: string;
+        };
+        /**
+         * RollTagExclusionsResponse
+         * @description The authenticated user's account-wide Roll tag exclusions.
+         *
+         *     Attributes:
+         *         excluded_tag_ids: Every persisted excluded tag ID, including IDs whose
+         *             tag row no longer exists.
+         *         excluded_tags: Resolved summaries for the exclusions that still exist,
+         *             so the Roll UI can show which tags are responsible for an empty
+         *             or filtered pool.
+         */
+        RollTagExclusionsResponse: {
+            /** Excluded Tag Ids */
+            excluded_tag_ids: number[];
+            /** Excluded Tags */
+            excluded_tags: components["schemas"]["RollTagExclusionTag"][];
+        };
+        /**
          * RollV2BootstrapResponse
          * @description V2 bootstrap response superset with rollable and last_read fields.
          *
@@ -13307,7 +13451,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue";
+            reason: "blocked" | "snoozed" | "skipped" | "completed" | "not_in_queue" | "excluded_tag";
             /** Thread Id */
             thread_id: number;
             /** Title */
@@ -13592,8 +13736,12 @@ export interface components {
          *     Attributes:
          *         theme: Optional theme id to apply. When omitted, the current theme
          *             is left unchanged. Unknown values are rejected by validation.
+         *         excluded_tag_ids: Optional complete list of excluded tag IDs to apply.
+         *             When omitted, exclusions are left unchanged.
          */
         UserPreferencesPatchRequest: {
+            /** Excluded Tag Ids */
+            excluded_tag_ids?: number[] | null;
             /** Theme */
             theme?: ("classic" | "ink-gold" | "command-center") | null;
         };
@@ -13607,6 +13755,8 @@ export interface components {
          *         user_id: Owning user id, always matching the authenticated principal.
          */
         UserPreferencesResponse: {
+            /** Excluded Tag Ids */
+            excluded_tag_ids?: number[];
             /**
              * Theme
              * @default classic
@@ -18900,6 +19050,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RollPrerequisiteSwitchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_roll_tag_exclusions_api_v1_roll_tag_exclusions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollTagExclusionsResponse"];
+                };
+            };
+        };
+    };
+    add_roll_tag_exclusion_api_v1_roll_tag_exclusions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollTagExclusionAddResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_roll_tag_exclusion_api_v1_roll_tag_exclusions__tag_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollTagExclusionRemoveResponse"];
                 };
             };
             /** @description Validation Error */

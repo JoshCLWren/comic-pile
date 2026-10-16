@@ -13380,6 +13380,125 @@
         "title": "RollResponse",
         "type": "object"
       },
+      "RollTagExclusionAddResponse": {
+        "description": "Result of adding one or more account-wide tag exclusions.\n\nAttributes:\n    excluded_tag_ids: The persisted exclusions after the merge.\n    excluded_tags: Resolved summaries of the persisted exclusions.\n    rerolled: True when the pending roll became ineligible and another\n        eligible result was selected without recording a snooze.\n    roll: The replacement roll result when ``rerolled`` is true.",
+        "properties": {
+          "excluded_tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Tag Ids",
+            "type": "array"
+          },
+          "excluded_tags": {
+            "items": {
+              "$ref": "#/components/schemas/RollTagExclusionTag"
+            },
+            "title": "Excluded Tags",
+            "type": "array"
+          },
+          "rerolled": {
+            "default": false,
+            "title": "Rerolled",
+            "type": "boolean"
+          },
+          "roll": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RollResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "excluded_tag_ids",
+          "excluded_tags"
+        ],
+        "title": "RollTagExclusionAddResponse",
+        "type": "object"
+      },
+      "RollTagExclusionRemoveResponse": {
+        "description": "Result of removing one account-wide tag exclusion.\n\nAttributes:\n    excluded_tag_ids: The exclusions that remain after the removal.\n    excluded_tags: Resolved summaries of the remaining exclusions.",
+        "properties": {
+          "excluded_tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Tag Ids",
+            "type": "array"
+          },
+          "excluded_tags": {
+            "items": {
+              "$ref": "#/components/schemas/RollTagExclusionTag"
+            },
+            "title": "Excluded Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "excluded_tag_ids",
+          "excluded_tags"
+        ],
+        "title": "RollTagExclusionRemoveResponse",
+        "type": "object"
+      },
+      "RollTagExclusionTag": {
+        "description": "One account-wide tag exclusion resolved to its reader-facing identity.",
+        "properties": {
+          "color": {
+            "title": "Color",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "color",
+          "scope"
+        ],
+        "title": "RollTagExclusionTag",
+        "type": "object"
+      },
+      "RollTagExclusionsResponse": {
+        "description": "The authenticated user's account-wide Roll tag exclusions.\n\nAttributes:\n    excluded_tag_ids: Every persisted excluded tag ID, including IDs whose\n        tag row no longer exists.\n    excluded_tags: Resolved summaries for the exclusions that still exist,\n        so the Roll UI can show which tags are responsible for an empty\n        or filtered pool.",
+        "properties": {
+          "excluded_tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Tag Ids",
+            "type": "array"
+          },
+          "excluded_tags": {
+            "items": {
+              "$ref": "#/components/schemas/RollTagExclusionTag"
+            },
+            "title": "Excluded Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "excluded_tag_ids",
+          "excluded_tags"
+        ],
+        "title": "RollTagExclusionsResponse",
+        "type": "object"
+      },
       "RollV2BootstrapResponse": {
         "description": "V2 bootstrap response superset with rollable and last_read fields.\n\nReplaces the v1 roll_pool with rollable[] and adds nullable last_read.\nMaintains all v1 session/recovery/partition fields with unchanged semantics.",
         "properties": {
@@ -16832,7 +16951,8 @@
               "snoozed",
               "skipped",
               "completed",
-              "not_in_queue"
+              "not_in_queue",
+              "excluded_tag"
             ],
             "title": "Reason",
             "type": "string"
@@ -17471,8 +17591,22 @@
         "type": "object"
       },
       "UserPreferencesPatchRequest": {
-        "description": "Partial update of the authenticated user's preferences.\n\nAttributes:\n    theme: Optional theme id to apply. When omitted, the current theme\n        is left unchanged. Unknown values are rejected by validation.",
+        "description": "Partial update of the authenticated user's preferences.\n\nAttributes:\n    theme: Optional theme id to apply. When omitted, the current theme\n        is left unchanged. Unknown values are rejected by validation.\n    excluded_tag_ids: Optional complete list of excluded tag IDs to apply.\n        When omitted, exclusions are left unchanged.",
         "properties": {
+          "excluded_tag_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Tag Ids"
+          },
           "theme": {
             "anyOf": [
               {
@@ -17496,6 +17630,13 @@
       "UserPreferencesResponse": {
         "description": "Current preference values for the authenticated user.\n\nAttributes:\n    theme: The user's selected visual theme id. Resolves to ``classic``\n        when no preference row has been persisted yet.\n    user_id: Owning user id, always matching the authenticated principal.",
         "properties": {
+          "excluded_tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Tag Ids",
+            "type": "array"
+          },
           "theme": {
             "default": "classic",
             "enum": [
@@ -26537,6 +26678,131 @@
         "tags": [
           "dependencies",
           "dependencies",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/tag-exclusions": {
+      "get": {
+        "description": "Return the authenticated user's account-wide excluded tag IDs.\n\nArgs:\n    current_user: The authenticated user.\n    db: Database session.\n\nReturns:\n    The persisted excluded tag IDs plus resolved tag summaries, so the\n    Roll UI can show which tags are responsible for a filtered pool.",
+        "operationId": "get_roll_tag_exclusions_api_v1_roll_tag_exclusions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollTagExclusionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Roll Tag Exclusions",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      },
+      "post": {
+        "description": "Persist one or more account-wide tag exclusions.\n\nWhen the pending roll's next unread issue becomes ineligible because of\nthe new exclusion, the exclusion persists, the pending result is cleared,\nand another eligible roll is selected automatically without recording a\nsnooze or recommendation penalty.\n\nArgs:\n    request: FastAPI request for rate limiting.\n    current_user: The authenticated user.\n    db: Database session.\n    payload: Request body with ``tag_id`` or ``tag_ids``.\n\nReturns:\n    The persisted excluded tag IDs and, when a reroll happened, the\n    new ``RollResponse`` under ``roll``.",
+        "operationId": "add_roll_tag_exclusion_api_v1_roll_tag_exclusions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollTagExclusionAddResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Roll Tag Exclusion",
+        "tags": [
+          "roll",
+          "roll"
+        ]
+      }
+    },
+    "/api/v1/roll/tag-exclusions/{tag_id}": {
+      "delete": {
+        "description": "Remove one account-wide tag exclusion.\n\nArgs:\n    tag_id: Tag ID to make eligible again.\n    request: FastAPI request for rate limiting.\n    current_user: The authenticated user.\n    db: Database session.\n\nReturns:\n    The remaining excluded tag IDs and their resolved summaries.",
+        "operationId": "remove_roll_tag_exclusion_api_v1_roll_tag_exclusions__tag_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "title": "Tag Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollTagExclusionRemoveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Roll Tag Exclusion",
+        "tags": [
+          "roll",
           "roll"
         ]
       }

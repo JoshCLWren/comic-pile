@@ -35,14 +35,13 @@ from app.services.comicvine_resolution import (
     ImportTargetNotFoundError,
     SeriesImportError,
     apply_metadata_correction,
-    confirm_comicvine_identity,
     get_comicvine_series_issues,
     get_issue_identity_state,
     import_comicvine_issue,
     import_comicvine_series,
     list_metadata_corrections,
     remove_comicvine_identity,
-    replace_comicvine_identity,
+    save_confirmed_comicvine_identity,
     request_provider_refresh,
     resolve_comicvine_input,
     revert_metadata_correction,
@@ -212,17 +211,12 @@ async def api_confirm_identity(
         current_user: Authenticated owner.
         db: Async database session.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
     try:
-        await confirm_comicvine_identity(
+        return await save_confirmed_comicvine_identity(
             db,
             user_id=current_user.id,
             issue_id=issue_id,
             comicvine_issue_id=request.comicvine_issue_id,
-        )
-        await db.commit()
-        return await get_issue_identity_state(
-            db, user_id=current_user.id, issue_id=issue_id
         )
     except ExternalIdentityMappingError as exc:
         raise HTTPException(
@@ -360,18 +354,14 @@ async def api_replace_identity(
         current_user: Authenticated owner.
         db: Async database session.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
     try:
-        await replace_comicvine_identity(
+        return await save_confirmed_comicvine_identity(
             db,
             user_id=current_user.id,
             issue_id=issue_id,
             comicvine_issue_id=request.comicvine_issue_id,
+            replace_existing=True,
             reason=request.reason,
-        )
-        await db.commit()
-        return await get_issue_identity_state(
-            db, user_id=current_user.id, issue_id=issue_id
         )
     except ExternalIdentityMappingError as exc:
         raise HTTPException(

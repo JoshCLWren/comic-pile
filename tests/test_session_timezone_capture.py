@@ -84,11 +84,9 @@ def _patch_bootstrap(monkeypatch, current_session):
     db.execute.side_effect = [
         _Result(scalar_value=None),  # excluded tag IDs
         _Result(rows=[]),          # pool
-        _Result(scalar_value=0),  # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),  # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),          # blocked threads (windowed blocked total)
+        _Result(rows=[]),          # stale candidates (windowed stale total)
+        _Result(rows=[]),          # active and completed library
     ]
     return db
 

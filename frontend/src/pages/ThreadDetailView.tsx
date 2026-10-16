@@ -25,7 +25,7 @@ import { TagEditor } from '../components/Tags/TagEditor'
 import { TagSection } from '../components/Tags/TagSection'
 import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
-import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
+import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
@@ -36,6 +36,7 @@ export default function ThreadDetailView() {
   const updateMutation = useUpdateThread()
   const activeThreadIdRef = useRef<number | null>(null)
   const editAutoOpenRef = useRef(false)
+  const issueToggleListRef = useRef<IssueToggleListHandle>(null)
 
   // Normalize malformed ids (non-numeric, fractional, or non-positive) to null
   // so the view renders "Thread not found" instead of stalling on the loading
@@ -150,6 +151,11 @@ export default function ThreadDetailView() {
     const currentThread = thread!
 
     try {
+      // First, flush any pending issue mutations (add, delete, reorder)
+      if (issueToggleListRef.current && issueToggleListRef.current.hasPendingMutations()) {
+        await issueToggleListRef.current.flush()
+      }
+
       const updateData: EditThreadData = {
         title: editForm.title,
         format: editForm.format,
@@ -171,8 +177,10 @@ export default function ThreadDetailView() {
       if (updatedThread.total_issues !== null && issuesLoaded) {
         await issuesQuery.refetch()
       }
-    } catch {
-      console.error('Failed to update thread')
+    } catch (error) {
+      console.error('Failed to update thread or flush issues:', error)
+      // The error is already handled by the mutation's error boundary,
+      // but we keep the console error for debugging
     }
   }
 
@@ -655,12 +663,14 @@ export default function ThreadDetailView() {
 
           {thread.total_issues !== null && (
             <IssueToggleList
+              ref={issueToggleListRef}
               threadId={thread.id}
               onOpenDependencies={() => setIsDependencyOpen(true)}
               onIssueChanged={() => {
                 // Refetch thread data to update STATUS display after issue mutations
                 refetch()
               }}
+              deferred={true}
             />
           )}
 

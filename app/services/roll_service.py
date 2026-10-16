@@ -6,18 +6,27 @@ and cache invalidation. Query construction lives in
 """
 
 import logging
-from datetime import UTC, datetime
-from typing import TypedDict
+import random
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal, TypedDict
 
 # Import comic_pile first to resolve circular dependency with
 # comic_pile.bandwidth -> app.services.reading_effort.
 from fastapi import HTTPException, status
+from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, ReadingSession, Thread
 from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.repositories.roll_repository import (
+    fetch_bootstrap_blocked_rows,
+    fetch_bootstrap_excluded_thread_rows,
+    fetch_bootstrap_library_rows,
+    fetch_bootstrap_pool_rows,
+    fetch_bootstrap_stale_rows,
     fetch_issue_by_id,
     fetch_session_events,
     insert_recommendation_context,
@@ -31,6 +40,7 @@ from app.services.reading_effort import (
 )
 from app.services.bandwidth_selection import select_bandwidth_weighted
 from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
+from app.services.tag_roll_exclusion_service import derive_tag_excluded_thread_ids
 from app.schemas.recommendation_context import (
     CandidateFactor,
     RecommendationContextCreate,
@@ -55,7 +65,7 @@ from comic_pile.recommendation_version import (
 from comic_pile.reading_session import get_current_die_for_session, get_or_create
 
 from app.config import get_recommendation_settings
-from app.schemas import RollResponse
+from app.schemas import RollBootstrapThread, RollResponse, ThreadExclusionReason
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +97,151 @@ class _SelectionArtifacts(TypedDict):
     rec_context_create: RecommendationContextCreate
 
 
+@dataclass(frozen=True)
+class BootstrapLibrarySummary:
+    """Exclusion-transparency classification of a user's whole library.
+
+    Every owned series is either available or excluded, and every exclusion
+    carries a reason the user can read, so the response totals always add up.
+    """
+
+    total_threads: int
+    available_ids: set[int]
+    excluded: dict[int, ThreadExclusionReason]
+    inactive: list[ThreadExclusionReason]
+    blocked_ids: list[int]
+
+
+@dataclass(frozen=True)
+class BootstrapThreadData:
+    """Thread-shaped sections of the Roll bootstrap payload."""
+
+    roll_pool: list[RollBootstrapThread]
+    snoozed_threads: list[RollBootstrapThread]
+    skipped_threads: list[RollBootstrapThread]
+    blocked_threads: list[RollBootstrapThread]
+    blocked_count: int
+    stale_thread: RollBootstrapThread | None
+    stale_thread_count: int
+    library: BootstrapLibrarySummary
+
+
+def _summary_thread(row: Row[Any]) -> RollBootstrapThread:
+    """Build the id/title/format summary shared by every summary list.
+
+    Args:
+        row: Row carrying ``id``, ``title``, and ``format``.
+
+    Returns:
+        Minimal thread summary for the bootstrap response.
+    """
+    return RollBootstrapThread(
+        id=row.id, title=row.title, format=normalize_format_value(row.format)
+    )
+
+
+def _classify_library(
+    library_rows: Sequence[Row[Any]],
+    *,
+    snoozed_set: set[int],
+    derived_snoozed_ids: set[int],
+    skipped_set: set[int],
+    tag_excluded_set: set[int],
+) -> BootstrapLibrarySummary:
+    """Split the owned library into available series and explained exclusions.
+
+    Availability mirrors the roll pool's own predicates: queued, unblocked,
+    and not snoozed or skipped in any scope. A rollable series beyond the die
+    window is still available, so a series is never reported as excluded just
+    because the pool query is capped.
+
+    Args:
+        library_rows: Active and completed rows for the owner.
+        snoozed_set: Thread IDs snoozed in the current session.
+        derived_snoozed_ids: Thread IDs excluded by cross-session backoff.
+        skipped_set: Thread IDs skipped in the current session.
+        tag_excluded_set: Thread IDs excluded by account-wide effective tags.
+
+    Returns:
+        BootstrapLibrarySummary with totals, availability, and exclusions.
+    """
+    available_ids: set[int] = set()
+    excluded: dict[int, ThreadExclusionReason] = {}
+    inactive: list[ThreadExclusionReason] = []
+    blocked_ids: list[int] = []
+
+    for row in library_rows:
+        thread_id = row.id
+        if row.status == "completed":
+            # Completed series sit outside the active status and never reach
+            # the pool query, so they vanish silently unless explained here.
+            reason = ThreadExclusionReason(
+                thread_id=thread_id,
+                title=row.title,
+                format=normalize_format_value(row.format),
+                reason="completed",
+                detail="Read the full series",
+            )
+            excluded[thread_id] = reason
+            inactive.append(reason)
+            continue
+
+        is_blocked = bool(row.is_blocked)
+        is_rollable = (
+            row.queue_position >= 1
+            and not is_blocked
+            and thread_id not in snoozed_set
+            and thread_id not in derived_snoozed_ids
+            and thread_id not in skipped_set
+            and thread_id not in tag_excluded_set
+        )
+        if is_rollable:
+            available_ids.add(thread_id)
+            continue
+
+        if is_blocked:
+            blocked_ids.append(thread_id)
+            reason_value: Literal["blocked", "snoozed", "skipped", "excluded_tag", "not_in_queue"] = "blocked"
+            detail = None
+        elif thread_id in snoozed_set:
+            reason_value = "snoozed"
+            detail = "Snoozed in current session"
+        elif thread_id in derived_snoozed_ids:
+            reason_value = "snoozed"
+            detail = "Snoozed by cross-session backoff"
+        elif thread_id in skipped_set:
+            reason_value = "skipped"
+            detail = "Skipped in current session"
+        elif thread_id in tag_excluded_set:
+            reason_value = "excluded_tag"
+            detail = "Excluded tag"
+        else:
+            reason_value = "not_in_queue"
+            detail = "Not in the active queue"
+
+        reason = ThreadExclusionReason(
+            thread_id=thread_id,
+            title=row.title,
+            format=normalize_format_value(row.format),
+            reason=reason_value,
+            detail=detail,
+        )
+        excluded[thread_id] = reason
+        # Snoozed, skipped, and blocked series keep their own dedicated Roll
+        # sections, so only series that vanished from the queue entirely are
+        # reported as inactive alongside completed ones.
+        if reason_value == "not_in_queue":
+            inactive.append(reason)
+
+    return BootstrapLibrarySummary(
+        total_threads=len(library_rows),
+        available_ids=available_ids,
+        excluded=excluded,
+        inactive=inactive,
+        blocked_ids=blocked_ids,
+    )
+
+
 class RollService:
     """Service for roll orchestration.
 
@@ -97,6 +252,116 @@ class RollService:
     def __init__(self, db: AsyncSession) -> None:
         """Initialize the RollService with a database session."""
         self._db = db
+
+    async def load_bootstrap_thread_data(
+        self,
+        *,
+        user_id: int,
+        die_size: int,
+        snoozed_ids: list[int],
+        skipped_ids: list[int],
+        derived_snoozed_ids: set[int],
+        summary_limit: int,
+    ) -> BootstrapThreadData:
+        """Load every thread-shaped section of the Roll bootstrap payload.
+
+        Issue #3375 recorded this endpoint at 1962 ms against a 1000 ms
+        budget with 36 database queries, because each response section asked
+        the ``threads`` table its own question: the pool, the snoozed list,
+        the skipped list, the blocked count, the blocked rows, the stale
+        count, the stale candidates, the chosen stale row, the active library,
+        and the completed library. Every one of those reads hits the same
+        owner-scoped rows, so this method answers them with a fixed set of
+        batched reads whose count does not depend on the library size:
+        windowed counts replace the separate ``COUNT`` statements, and the
+        snoozed, skipped, active, and completed sets are each read once.
+
+        Args:
+            user_id: Authenticated owner of the library.
+            die_size: Current die size bounding the roll pool.
+            snoozed_ids: Thread IDs snoozed in the current session.
+            skipped_ids: Thread IDs skipped in the current session.
+            derived_snoozed_ids: Thread IDs excluded by cross-session backoff.
+            summary_limit: Maximum rows kept per summary list in the response.
+
+        Returns:
+            BootstrapThreadData with the pool, summary lists, stale pick, and
+            the exclusion-transparency library classification.
+        """
+        effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
+        tag_excluded_ids = await derive_tag_excluded_thread_ids(self._db, user_id)
+        pool_excluded_ids = sorted(set(effective_snoozed_ids) | set(skipped_ids) | tag_excluded_ids)
+
+        pool_rows = await fetch_bootstrap_pool_rows(
+            self._db, user_id, die_size, pool_excluded_ids
+        )
+        roll_pool = [
+            RollBootstrapThread(
+                id=row.id,
+                title=row.title,
+                format=normalize_format_value(row.format),
+                issue_id=row.issue_id,
+                issue_number=row.issue_number,
+                route_labels=list(row.route_labels or []),
+            )
+            for row in pool_rows
+        ]
+
+        excluded_rows = await fetch_bootstrap_excluded_thread_rows(
+            self._db, user_id, sorted(set(snoozed_ids) | set(skipped_ids))
+        )
+        snoozed_set = set(snoozed_ids)
+        skipped_set = set(skipped_ids)
+        snoozed_threads = [
+            _summary_thread(row) for row in excluded_rows if row.id in snoozed_set
+        ]
+        skipped_threads = [
+            _summary_thread(row) for row in excluded_rows if row.id in skipped_set
+        ]
+
+        blocked_rows = await fetch_bootstrap_blocked_rows(self._db, user_id, summary_limit)
+        blocked_threads = [_summary_thread(row) for row in blocked_rows]
+        blocked_count = blocked_rows[0].blocked_total if blocked_rows else 0
+
+        stale_cutoff = datetime.now(UTC) - timedelta(days=7)
+        stale_rows = await fetch_bootstrap_stale_rows(
+            self._db, user_id, stale_cutoff, sorted(set(effective_snoozed_ids) | tag_excluded_ids)
+        )
+        stale_thread_count = stale_rows[0].stale_total if stale_rows else 0
+        stale_thread = None
+        if stale_rows:
+            # Pick by ID so the choice stays a uniform draw over candidates,
+            # then look the winner up instead of re-reading it from the DB.
+            stale_by_id = {row.id: row for row in stale_rows}
+            chosen = stale_by_id[random.choice(list(stale_by_id))]
+            stale_thread = RollBootstrapThread(
+                id=chosen.id,
+                title=chosen.title,
+                format=normalize_format_value(chosen.format),
+                last_activity_at=(
+                    chosen.last_activity_at.isoformat() if chosen.last_activity_at else None
+                ),
+            )
+
+        library_rows = await fetch_bootstrap_library_rows(self._db, user_id)
+        library = _classify_library(
+            library_rows,
+            snoozed_set=snoozed_set,
+            derived_snoozed_ids=derived_snoozed_ids,
+            skipped_set=skipped_set,
+            tag_excluded_set=tag_excluded_ids,
+        )
+
+        return BootstrapThreadData(
+            roll_pool=roll_pool,
+            snoozed_threads=snoozed_threads,
+            skipped_threads=skipped_threads,
+            blocked_threads=blocked_threads,
+            blocked_count=blocked_count,
+            stale_thread=stale_thread,
+            stale_thread_count=stale_thread_count,
+            library=library,
+        )
 
     async def select_pending_thread(
         self,

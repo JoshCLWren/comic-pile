@@ -57,6 +57,7 @@ interface UseQueueModalsResult {
   closeCreateModal: () => void
   showEditModal: (thread: ThreadListItem) => void
   closeEditModal: () => void
+  markIssuesLoaded: () => void
   openReactivateModal: (thread: ThreadListItem | null) => void
   closeReactivateModal: () => void
   openRepositionModal: (thread: ThreadListItem) => void
@@ -72,6 +73,7 @@ interface UseQueueModalsResult {
   handleMigrationSkip: () => void
   isPendingCreate: boolean
   isPendingEdit: boolean
+  isIssuesLoading: boolean
   showRollNudge: boolean
   dismissRollNudge: () => void
   rollNudgeNavigate: () => void
@@ -116,6 +118,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
   const [issueParseWarnings, setIssueParseWarnings] = useState<string[]>([])
   const [issueParseBreakdown, setIssueParseBreakdown] = useState<ParsedIssueRangeDetail['breakdown']>([])
+  const [isIssuesLoading, setIsIssuesLoading] = useState(false)
 
   const showRollNudge = params.showRollNudge
 
@@ -140,6 +143,9 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
 
   const showEditModal = useCallback(
     (thread: ThreadListItem) => {
+      // Only migrated threads render IssueToggleList; its load completion
+      // clears this flag. Unmigrated threads never enter the loading state.
+      const issuesLoadRequired = thread.total_issues != null
       setEditingThread(thread)
       setEditForm({
         title: thread.title,
@@ -150,6 +156,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         lastIssueRead: 0,
         manualCreatorCredits: getManualCreatorCreditList(thread),
       })
+      setIsIssuesLoading(issuesLoadRequired)
       setOpenModal('edit')
       setRestoreAction(() => {
         setEditingThread(thread)
@@ -162,6 +169,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           lastIssueRead: 0,
           manualCreatorCredits: getManualCreatorCreditList(thread),
         })
+        setIsIssuesLoading(issuesLoadRequired)
         setOpenModal('edit')
       })
     },
@@ -170,10 +178,15 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
 
   const closeEditModal = useCallback(() => {
     setEditingThread(null)
+    setIsIssuesLoading(false)
     setOpenModal(null)
     clearRestoreAction()
     clearQueueModalState()
   }, [clearQueueModalState, clearRestoreAction])
+
+  const markIssuesLoaded = useCallback(() => {
+    setIsIssuesLoading(false)
+  }, [])
 
   const openReactivateModal = useCallback((thread: ThreadListItem | null) => {
     setReactivateThreadId(thread?.id ? String(thread.id) : '')
@@ -446,6 +459,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     closeCreateModal,
     showEditModal,
     closeEditModal,
+    markIssuesLoaded,
     openReactivateModal,
     closeReactivateModal,
     openRepositionModal,
@@ -463,6 +477,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     handleMigrationSkip,
     isPendingCreate,
     isPendingEdit,
+    isIssuesLoading,
     showRollNudge,
     dismissRollNudge,
     rollNudgeNavigate,

@@ -28,6 +28,7 @@ from app.models import ContinuityPlan, Issue, Tag, TagAssignment, Thread, User
 from app.repositories import tag_repository
 from app.schemas.tags import TagScope
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.ownership_guard import target_owner_id
 
 
 @dataclass
@@ -234,9 +235,11 @@ async def _validate_target(
     attach their own tag to a target they own, so a private vocabulary can
     never be pushed onto another user's object. It is ``False`` for global
     tags, which only administrators may assign and which must be assignable to
-    any existing target. Issue ownership is resolved through the owning thread
-    with an explicit query so no relationship is ever lazy-loaded inside the
-    async session.
+    any existing target. Issue ownership resolves join-through-thread via the
+    central ownership guard (issue #3225) with an explicit query so no
+    relationship is ever lazy-loaded inside the async session. Shared catalog
+    links are never consulted: a shared ``CatalogIssue`` never authorizes a
+    tag assignment to another reader's row.
 
     Args:
         db: Database session.
@@ -260,13 +263,7 @@ async def _validate_target(
     if not enforce_ownership:
         return
 
-    if isinstance(target, Issue):
-        owner_row = await db.execute(
-            select(Thread.user_id).where(Thread.id == target.thread_id)
-        )
-        owner_id = owner_row.scalar_one_or_none()
-    else:
-        owner_id = target.user_id
+    owner_id = await target_owner_id(db, target_type, target_id)
 
     if owner_id != user.id:
         raise ForbiddenError(

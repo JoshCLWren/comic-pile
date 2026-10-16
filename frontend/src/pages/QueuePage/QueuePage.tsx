@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -317,9 +316,11 @@ export default function QueuePage() {
           onOpenMigrationDialog={modals.openMigrationDialog}
           onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
           onIssueChanged={handleIssueChanged}
+          onIssuesLoaded={modals.markIssuesLoaded}
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
+          isIssuesLoading={modals.isIssuesLoading}
           showRollNudge={modals.showRollNudge}
           onDismissRollNudge={modals.dismissRollNudge}
           onRollNudgeNavigate={modals.rollNudgeNavigate}
@@ -345,4 +346,3 @@ export default function QueuePage() {
     </PositionMenuProvider>
   )
 }
-export type { QueueSortBy }
