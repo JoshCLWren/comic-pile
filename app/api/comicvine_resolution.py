@@ -15,7 +15,6 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.external_identities import ExternalIdentityMappingError
 from app.models.user import User
-from app.services.errors import NotFoundError
 from app.schemas.comicvine_resolution import (
     ComicVineResolveResponse,
     ComicVineSeriesIssuesResponse,
@@ -36,14 +35,13 @@ from app.services.comicvine_resolution import (
     ImportTargetNotFoundError,
     SeriesImportError,
     apply_metadata_correction,
-    confirm_comicvine_identity,
     get_comicvine_series_issues,
     get_issue_identity_state,
     import_comicvine_issue,
     import_comicvine_series,
     list_metadata_corrections,
     remove_comicvine_identity,
-    replace_comicvine_identity,
+    save_confirmed_comicvine_identity,
     request_provider_refresh,
     resolve_comicvine_input,
     revert_metadata_correction,
@@ -175,28 +173,12 @@ async def api_get_issue_identity(
 
     Shows confirmed, candidate, and unresolved mappings.
 
-Args:
+    Args:
         issue_id: ComicPile issue ID.
         current_user: Authenticated owner.
         db: Async database session.
     """
-    try:
-        await get_owned_issue_or_404(db, current_user.id, issue_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
     try:
         return await get_issue_identity_state(
             db, user_id=current_user.id, issue_id=issue_id
@@ -230,22 +212,11 @@ async def api_confirm_identity(
         db: Async database session.
     """
     try:
-        await get_owned_issue_or_404(db, current_user.id, issue_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
-    try:
-        await confirm_comicvine_identity(
+        return await save_confirmed_comicvine_identity(
             db,
             user_id=current_user.id,
             issue_id=issue_id,
             comicvine_issue_id=request.comicvine_issue_id,
-        )
-        await db.commit()
-        return await get_issue_identity_state(
-            db, user_id=current_user.id, issue_id=issue_id
         )
     except ExternalIdentityMappingError as exc:
         raise HTTPException(
@@ -384,23 +355,13 @@ async def api_replace_identity(
         db: Async database session.
     """
     try:
-        await get_owned_issue_or_404(db, current_user.id, issue_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
-    try:
-        await replace_comicvine_identity(
+        return await save_confirmed_comicvine_identity(
             db,
             user_id=current_user.id,
             issue_id=issue_id,
             comicvine_issue_id=request.comicvine_issue_id,
+            replace_existing=True,
             reason=request.reason,
-        )
-        await db.commit()
-        return await get_issue_identity_state(
-            db, user_id=current_user.id, issue_id=issue_id
         )
     except ExternalIdentityMappingError as exc:
         raise HTTPException(
@@ -455,13 +416,7 @@ async def api_apply_correction(
         current_user: Authenticated owner.
         db: Async database session.
     """
-    try:
-        await get_owned_issue_or_404(db, current_user.id, issue_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
     try:
         await apply_metadata_correction(
             db,
@@ -521,13 +476,7 @@ async def api_revert_correction(
         current_user: Authenticated owner.
         db: Async database session.
     """
-    try:
-        await get_owned_issue_or_404(db, current_user.id, issue_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
     try:
         await revert_metadata_correction(
             db,
@@ -569,13 +518,7 @@ async def api_remove_identity(
     Returns:
         Confirmation of the removal.
     """
-    try:
-        await get_owned_issue_or_404(db, current_user.id, issue_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
     try:
         await remove_comicvine_identity(
             db,
