@@ -1,0 +1,52 @@
+name: Factory PR Review Wakeup
+
+# A bounded idle dispatcher stops its five-minute roster chain. This small
+# trusted event bridge wakes the canonical controller when new PR work arrives.
+# Never checkout or execute the PR head: pull_request_target has a write token.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, labeled, synchronize]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: factory-pr-review-wakeup
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      !github.event.pull_request.draft &&
+      (
+        github.event.action == 'opened' ||
+        github.event.action == 'reopened' ||
+        github.event.action == 'ready_for_review' ||
+        (github.event.action == 'labeled' && github.event.label.name == 'factory:review') ||
+        (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'factory:review'))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validate current PR and wake canonical dispatcher
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -Eeuo pipefail
+          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          if ! jq -e --arg repo "$GITHUB_REPOSITORY" '
+            .state == "open"
+            and (.draft | not)
+            and .base.ref == "main"
+            and .head.repo.full_name == $repo
+          ' <<<"$pr" >/dev/null; then
+            echo "PR #${PR_NUMBER} is no longer eligible; no dispatch"
+            exit 0
+          fi
+          gh workflow run fixed-model-factory-dispatch.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
