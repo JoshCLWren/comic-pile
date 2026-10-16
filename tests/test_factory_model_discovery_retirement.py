@@ -1420,14 +1420,11 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
         "scheduler": "dispatcher",
         "display_name": "NVIDIA GLM 5.3",
     }
-    assert by_worker["79"] == {
-        "worker": "79",
-        "source": "opencode-free",
-        "model": "step-5-preview-free",
-        "minute": "30",
-        "scheduler": "dispatcher",
-        "display_name": "OpenCode Step 5 Preview Free",
-    }
+    assert "79" not in by_worker
+    assert 79 not in lock["expected_workers"]
+    assert 79 in lock["retired_workers"]
+    assert "step-5-preview-free" in lock["retired_models"]
+    assert "step-5-preview-free" not in {row["model"] for row in remaining}
     assert by_worker["80"] == {
         "worker": "80",
         "source": "nvidia",

@@ -29,7 +29,6 @@
     74,
     75,
     78,
-    79,
     80,
     81,
     82,
@@ -61,6 +60,7 @@
     72,
     76,
     77,
+    79,
     84,
     85
   ],
@@ -92,6 +92,7 @@
     "qwen/qwen3.8-27b:free",
     "stealth/pixel-canary",
     "stealth/union-alpha",
+    "step-5-preview-free",
     "stepfun-ai/step-3.7-flash",
     "thinkingmachines/inkling",
     "union-alpha"
