@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import userEvent from '@testing-library/user-event'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
@@ -107,6 +108,59 @@ describe('CustomCBLBuilder', () => {
         status: 'unread',
       },
     ])
+  })
+
+  it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {
+    const user = userEvent.setup()
+    mocks.searchIssues.mockResolvedValue([
+      { issue_id: 30002, thread_id: 9002, series_name: 'Fantastic Four', issue_number: '1', status: 'unread' },
+      { issue_id: 30003, thread_id: 9002, series_name: 'Fantastic Four', issue_number: '2', status: 'unread' },
+    ])
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
+    const input = await screen.findByLabelText('Search issues for custom CBL')
+    await user.type(input, 'Fantastic Four{Enter}')
+    await waitFor(() => expect(mocks.searchIssues).toHaveBeenCalledWith('Fantastic Four'))
+    const first = await screen.findByRole('button', { name: /Fantastic Four #1/ })
+    const second = screen.getByRole('button', { name: /Fantastic Four #2/ })
+    await user.keyboard('{ArrowDown}')
+    expect(first).toHaveFocus()
+    await user.keyboard('{ArrowDown}')
+    expect(second).toHaveFocus()
+    await user.keyboard('{ArrowUp}')
+    expect(first).toHaveFocus()
+    await user.keyboard('{ArrowUp}')
+    expect(second).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(input).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(first).toHaveFocus()
+    expect(mocks.searchIssues).toHaveBeenCalledTimes(1)
+    expect(mocks.update).not.toHaveBeenCalled()
+    await user.keyboard('{Enter}')
+    expect(input).toHaveFocus()
+    expect(screen.getByRole('status')).toHaveTextContent('Added Fantastic Four #1 to this list.')
+    const ordered = screen.getByRole('list', { name: 'Custom CBL ordered issues' })
+    expect(ordered).toHaveTextContent('Fantastic Four #1')
+    expect(ordered).not.toHaveTextContent('Fantastic Four #2')
+    expect(first).not.toBeInTheDocument()
+  })
+
+  it('hides results from the previous query while a different search is being typed', async () => {
+    const user = userEvent.setup()
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
+    const input = await screen.findByLabelText('Search issues for custom CBL')
+    await user.type(input, 'JSA{Enter}')
+    await waitFor(() => expect(mocks.searchIssues).toHaveBeenCalledWith('JSA'))
+    expect(await screen.findByRole('button', { name: /JSA #1/ })).toBeVisible()
+    await user.clear(input)
+    await user.type(input, 'Batman')
+    expect(screen.queryByRole('button', { name: /JSA #1/ })).not.toBeInTheDocument()
+    await user.keyboard('{ArrowDown}')
+    expect(input).toHaveFocus()
   })
 
   it('edits a custom CBL using real issues, saves exact order, and applies it to the Reading Plan', async () => {

@@ -91,10 +91,29 @@ test.describe('Reading List gate authoring', () => {
     await page.getByLabel('New custom CBL name').fill(listName)
     await page.getByRole('button', { name: 'Create' }).click()
 
-    for (const series of ['Gate First Series', 'Gate Skipped Series', 'Gate Last Series']) {
+    const seriesNames = ['Gate First Series', 'Gate Skipped Series', 'Gate Last Series']
+    for (const [index, series] of seriesNames.entries()) {
+      await page.setViewportSize(index === 0 ? { width: 390, height: 844 } : { width: 820, height: 1180 })
       await page.getByLabel('Search issues for custom CBL').fill(series)
       await page.getByRole('button', { name: 'Find issues' }).click()
-      await page.getByRole('button', { name: new RegExp(`${series} #1`) }).click()
+      const result = page.getByRole('button', { name: new RegExp(`${series} #1`) })
+      await expect(result).toBeVisible()
+      if (index < 2) {
+        const search = page.getByLabel('Search issues for custom CBL')
+        await search.focus()
+        await search.press(index === 0 ? 'ArrowDown' : 'ArrowUp')
+        await expect(result).toBeFocused()
+        await result.press('Escape')
+        await expect(search).toBeFocused()
+        await search.press('Enter')
+        await expect(result).toBeFocused()
+        await result.press('Enter')
+        await expect(search).toBeFocused()
+      } else {
+        await result.click()
+      }
+      await expect(builder.getByRole('list', { name: 'Custom CBL ordered issues' })).toContainText(`${series} #1`)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     }
 
     await builder.getByRole('radio', { name: /^Strict/ }).check()
@@ -121,6 +140,8 @@ test.describe('Reading List gate authoring', () => {
     await reloadedBuilder.getByRole('button', { name: 'Create or edit custom CBL' }).click()
     await page.getByLabel('Custom CBL', { exact: true }).selectOption({ index: 1 })
 
+    await expect(reloadedBuilder.getByRole('list', { name: 'Custom CBL ordered issues' })).toContainText('Gate First Series #1')
+    await expect(reloadedBuilder.getByRole('list', { name: 'Custom CBL ordered issues' })).toContainText('Gate Last Series #1')
     await expect(reloadedBuilder.getByRole('radio', { name: /^Strict/ })).toBeChecked()
     await expect(
       reloadedBuilder.getByLabel('Wait behavior for Gate Last Series #1'),
