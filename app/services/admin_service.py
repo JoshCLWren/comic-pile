@@ -16,7 +16,7 @@ from app.services.summary_service import build_narrative_summary
 
 
 async def import_csv(
-    file: Annotated[UploadFile, File(...)], db: AsyncSession
+    file: Annotated[UploadFile, File(...)], db: AsyncSession, user_id: int
 ) -> dict[str, int | list[str]]:
     """Import threads from CSV file.
 
@@ -30,6 +30,7 @@ async def import_csv(
     Args:
         file: CSV file to import.
         db: SQLAlchemy session for database operations.
+        user_id: ID of the user importing the threads.
 
     Returns:
         Dictionary with "imported" count and "errors" list.
@@ -82,7 +83,7 @@ async def import_csv(
                 issues_remaining=issues_remaining,
                 queue_position=1,
                 status="active",
-                user_id=1,
+                user_id=user_id,
             )
             db.add(new_thread)
             imported_threads.append(new_thread)
@@ -100,13 +101,14 @@ async def import_csv(
     return {"imported": imported, "errors": errors}
 
 
-async def export_csv(db: AsyncSession) -> io.BytesIO:
+async def export_csv(db: AsyncSession, user_id: int) -> io.BytesIO:
     """Export active threads as CSV file.
 
     Format matches Google Sheets: title, format, issues_remaining
 
     Args:
         db: SQLAlchemy session for database operations.
+        user_id: ID of the user making the request.
 
     Returns:
         BytesIO with CSV data.
@@ -133,13 +135,14 @@ async def export_csv(db: AsyncSession) -> io.BytesIO:
     return io.BytesIO(output.getvalue().encode())
 
 
-async def export_json(db: AsyncSession) -> io.BytesIO:
+async def export_json(db: AsyncSession, user_id: int) -> io.BytesIO:
     """Export full database as JSON for backups.
 
     Includes all data: users, threads, sessions, events (excludes test data)
 
     Args:
         db: SQLAlchemy session for database operations.
+        user_id: ID of the user making the request.
 
     Returns:
         BytesIO with JSON data.
@@ -213,11 +216,12 @@ async def export_json(db: AsyncSession) -> io.BytesIO:
     return io.BytesIO(json_output.encode())
 
 
-async def delete_test_data(db: AsyncSession) -> dict[str, int]:
+async def delete_test_data(db: AsyncSession, user_id: int) -> dict[str, int]:
     """Delete all test data (threads, sessions, events marked as test).
 
     Args:
         db: SQLAlchemy session for database operations.
+        user_id: ID of the user making the request.
 
     Returns:
         Dictionary with counts of deleted threads, sessions, and events.
@@ -254,7 +258,7 @@ async def delete_test_data(db: AsyncSession) -> dict[str, int]:
         .values(pending_thread_id=None)
     )
 
-    sessions_result = await db.execute(select(ReadingSession).where(ReadingSession.user_id == 1))
+    sessions_result = await db.execute(select(ReadingSession).where(ReadingSession.user_id == user_id))
     sessions = sessions_result.scalars().all()
     for session in sessions:
         session_events_result = await db.execute(
@@ -293,7 +297,7 @@ async def delete_test_data(db: AsyncSession) -> dict[str, int]:
     }
 
 
-async def export_summary(db: AsyncSession) -> tuple[io.BytesIO, str]:
+async def export_summary(db: AsyncSession, user_id: int) -> tuple[io.BytesIO, str]:
     """Export narrative session summaries as markdown file.
 
     Formats all sessions with read, skipped, and completed lists per PRD Section 11.
@@ -301,6 +305,7 @@ async def export_summary(db: AsyncSession) -> tuple[io.BytesIO, str]:
 
     Args:
         db: SQLAlchemy session for database operations.
+        user_id: ID of the user making the request.
 
     Returns:
         BytesIO with markdown data.
