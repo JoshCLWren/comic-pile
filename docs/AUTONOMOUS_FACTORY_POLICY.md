@@ -237,6 +237,24 @@ Rules:
   existing owner/stage, defaults missing ownership to `factory:unowned`, and uses
   exact-head trusted review markers when recovering a missing stage; otherwise
   it requests `factory:review`. Green CI alone never establishes readiness.
+- A Josh-authored manual PR or local factory PR follows the same review,
+  repair handoff, exact-head CI, and merge-drain stages. Branches named
+  `local/*`, `agent/*`, and `chatgpt/*` are eligible when enrolled with
+  `factory`. The controller checks the PR's verified GitHub author and exact
+  head commit for the local `Model:` trailer; missing trailers on verified
+  Josh-authored human commits are attributed to `human`. A PR whose author
+  cannot be established does not receive fabricated model provenance.
+  Keep manual-only PRs out of this workflow with
+  `<!-- factory-execution:manual-only -->`.
+- `factory:local` remains an active local-work lease, not an opt-out from
+  enrollment. A local session MUST release that lease to `factory:unowned`
+  when it opens a ready-for-review PR or finishes a repair; the fleet never
+  steals an actively edited local checkout. Review findings hand off as
+  `factory:changes-requested`, and independent workers can pick up the PR
+  once the lease is released.
+- The manual/local review controller follows only explicit `Closes #N`,
+  `Fixes #N`, or `Resolves #N` references when reconciling a linked issue;
+  casual issue mentions do not create ownership or issue mutations.
 - `factory:building`, `factory:review`, `factory:changes-requested`, `factory:ci`, `factory:ready`, and `factory:blocked` are mutually exclusive workflow states.
 - `factory:unowned`, `factory:local`, and every `factory:<number>` owner label are mutually exclusive next-action owners.
 - Never leave a factory-produced or factory-managed open PR without `factory`, one truthful workflow-state label, and one truthful owner label.

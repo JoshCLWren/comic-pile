@@ -747,6 +747,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collection-exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Exclusions
+         * @description Return exclusions explicitly entered by this reader.
+         */
+        get: operations["list_exclusions_api_v1_collection_exclusions_get"];
+        put?: never;
+        /**
+         * Create Exclusion
+         * @description Idempotently exclude one external volume, Thread or Issue.
+         */
+        post: operations["create_exclusion_api_v1_collection_exclusions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collection-exclusions/{exclusion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Exclusion
+         * @description Remove one owned exclusion without changing the underlying comic.
+         */
+        delete: operations["delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/comicvine/issues/{issue_id}/identity": {
         parameters: {
             query?: never;
@@ -5123,12 +5167,12 @@ export interface paths {
          *
          *     Ordinary numeric issue numbers are inserted at their natural position in the
          *     series rather than always appended, so adding ``#2`` to ``#33, #34, #35``
-         *     saves ``#2, #33, #34, #35``. When that placement would be ambiguous — an
-         *     ``insert_after_issue_id`` anchor, irregular numbering such as ``Annual 1``
-         *     or ``0``, or a series the reader reordered by hand — new issues are appended
-         *     after the last existing issue. When ``insert_after_issue_id`` is provided,
+         *     saves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural
+         *     placement. Send explicit JSON ``null`` to append at the end (the UI
+         *     "At the end" choice). When ``insert_after_issue_id`` is a concrete issue ID,
          *     existing issues later in the thread are shifted upward so the new issues are
-         *     inserted immediately after that issue.
+         *     inserted immediately after that issue. Irregular numbering such as
+         *     ``Annual 1`` or ``0`` falls back to append-only placement.
          *
          *     Args:
          *         thread_id: The thread ID to create issues for.
@@ -6380,6 +6424,43 @@ export interface components {
             updated_at: number;
         };
         /**
+         * CollectionExclusionCreate
+         * @description Exactly one target: external volume identity, Thread or Issue.
+         */
+        CollectionExclusionCreate: {
+            /** External Volume Id */
+            external_volume_id?: string | null;
+            /** Issue Id */
+            issue_id?: number | null;
+            /** Provider */
+            provider?: string | null;
+            /** Thread Id */
+            thread_id?: number | null;
+        };
+        /**
+         * CollectionExclusionResponse
+         * @description Stored exclusion, with an ID for explicit removal.
+         */
+        CollectionExclusionResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** External Volume Id */
+            external_volume_id: string | null;
+            /** Id */
+            id: number;
+            /** Issue Id */
+            issue_id: number | null;
+            /** Provider */
+            provider: string | null;
+            /** Thread Id */
+            thread_id: number | null;
+            /** User Id */
+            user_id: number;
+        };
+        /**
          * ComicVineComicPileMatch
          * @description One user-owned ComicPile representation of an external issue.
          */
@@ -6830,6 +6911,10 @@ export interface components {
          * @description One ordered reference in a continuity plan.
          */
         ContinuityPlanNode: {
+            /** Checkpoint Target Ref Id */
+            checkpoint_target_ref_id?: number | null;
+            /** Checkpoint Target Ref Ids */
+            checkpoint_target_ref_ids?: number[];
             /** Convergence Gate */
             convergence_gate?: components["schemas"]["ConvergenceGateTarget"][];
             /** Id */
@@ -8440,6 +8525,14 @@ export interface components {
          * @description One resolved custom CBL entry.
          */
         CustomCBLEntryResponse: {
+            /** Checkpoint Target Issue Ids */
+            checkpoint_target_issue_ids?: number[];
+            /**
+             * Gate
+             * @default none
+             * @enum {string}
+             */
+            gate: "none" | "hold" | "after_previous";
             /** Id */
             id: number;
             /**
@@ -8455,6 +8548,11 @@ export interface components {
             position: number;
             /** Series Name */
             series_name: string;
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
             /** Status */
             status: string;
             /** Thread Id */
@@ -8487,6 +8585,12 @@ export interface components {
             id: number;
             /** Issue Count */
             issue_count: number;
+            /**
+             * Mode
+             * @default loose
+             * @enum {string}
+             */
+            mode: "strict" | "loose";
             /** Name */
             name: string;
             /**
@@ -8513,8 +8617,16 @@ export interface components {
             id: number;
             /** Issue Count */
             issue_count: number;
+            /**
+             * Mode
+             * @default loose
+             * @enum {string}
+             */
+            mode: "strict" | "loose";
             /** Name */
             name: string;
+            /** Predecessor Changes */
+            predecessor_changes?: components["schemas"]["ReadingListPredecessorChange"][];
             /**
              * Updated At
              * Format: date-time
@@ -8522,6 +8634,8 @@ export interface components {
             updated_at: string;
             /** User Id */
             user_id: number;
+            /** Warnings */
+            warnings?: string[];
         };
         /**
          * CustomCBLWrite
@@ -8529,11 +8643,23 @@ export interface components {
          */
         CustomCBLWrite: {
             /** Checkpoint Issue Ids */
-            checkpoint_issue_ids?: number[];
+            checkpoint_issue_ids?: number[] | null;
+            /** Checkpoint Targets */
+            checkpoint_targets?: {
+                [key: string]: number[];
+            } | null;
+            /** Confirmed Predecessor Changes */
+            confirmed_predecessor_changes?: components["schemas"]["ReadingListPredecessorChange"][] | null;
             /** Description */
             description?: string | null;
+            /** Entry Intents */
+            entry_intents?: {
+                [key: string]: components["schemas"]["ReadingListEntryIntent"];
+            } | null;
             /** Issue Ids */
             issue_ids?: number[];
+            /** Mode */
+            mode?: ("strict" | "loose") | null;
             /** Name */
             name: string;
         };
@@ -9754,7 +9880,7 @@ export interface components {
         IssueCreateRange: {
             /**
              * Insert After Issue Id
-             * @description Insert new issues after this issue ID. If null, append to end.
+             * @description Insert new issues after this issue ID. Omit the field to place ordinary numeric issues in natural series order. Send explicit null to append at the end.
              */
             insert_after_issue_id?: number | null;
             /**
@@ -10339,6 +10465,8 @@ export interface components {
             queue_position: number;
             /** Status */
             status: string;
+            /** Tags */
+            tags?: components["schemas"]["TagResponse"][];
             /** Title */
             title: string;
             /** Total Issues */
@@ -10639,6 +10767,41 @@ export interface components {
             recent_ratings?: components["schemas"]["ReaderContextRecentRating"][];
             /** Series Name */
             series_name?: string | null;
+        };
+        /**
+         * ReadingListEntryIntent
+         * @description Explicit positional intent for one stable member Issue.
+         */
+        ReadingListEntryIntent: {
+            /**
+             * Gate
+             * @default none
+             * @enum {string}
+             */
+            gate: "none" | "hold" | "after_previous";
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
+        };
+        /**
+         * ReadingListPredecessorChange
+         * @description Named before/after requirements that the reader must acknowledge.
+         */
+        ReadingListPredecessorChange: {
+            /** After Issue Ids */
+            after_issue_ids: number[];
+            /** After Issue Names */
+            after_issue_names: string[];
+            /** Before Issue Ids */
+            before_issue_ids: number[];
+            /** Before Issue Names */
+            before_issue_names: string[];
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Name */
+            issue_name: string;
         };
         /**
          * ReadingModeResponse
@@ -11441,6 +11604,8 @@ export interface components {
             last_activity_at?: string | null;
             /** Route Labels */
             route_labels?: string[];
+            /** Tags */
+            tags?: components["schemas"]["TagResponse"][];
             /** Title */
             title: string;
         };
@@ -14323,6 +14488,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CBLAdoptionCommitResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_exclusions_api_v1_collection_exclusions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionExclusionResponse"][];
+                };
+            };
+        };
+    };
+    create_exclusion_api_v1_collection_exclusions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionExclusionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionExclusionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                exclusion_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

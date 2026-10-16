@@ -4,6 +4,7 @@ import Tooltip from '../../components/Tooltip'
 import { MarqueeTitle } from '../../components/MarqueeTitle'
 import PositionMenu from '../../components/PositionMenu'
 import { CrossoverTags } from '../../components/CrossoverTags'
+import { ThreadTagChips } from '../../components/Tags/ThreadTagChips'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
 import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
@@ -185,6 +186,11 @@ export default function QueueThreadCard({
               </span>
             )}
           </div>
+          <ThreadTagChips
+            tags={thread.tags}
+            label={`Tags for ${thread.title}`}
+            className="mt-1.5"
+          />
           {thread.notes && <p className="mt-1.5 text-xs text-[var(--theme-text-muted)] [overflow-wrap:anywhere] break-words">{thread.notes}</p>}
           <div className="mt-1.5">
             {crossoverGroupsLoading ? (

@@ -72,6 +72,9 @@ async def create_custom_cbl(
         issue_ids=payload.issue_ids,
         checkpoint_issue_ids=payload.checkpoint_issue_ids,
         checkpoint_targets=payload.checkpoint_targets,
+        mode=payload.mode,
+        entry_intents=payload.entry_intents,
+        confirmed_predecessor_changes=payload.confirmed_predecessor_changes,
     )
 
 
@@ -106,6 +109,9 @@ async def update_custom_cbl(
         issue_ids=payload.issue_ids,
         checkpoint_issue_ids=payload.checkpoint_issue_ids,
         checkpoint_targets=payload.checkpoint_targets,
+        mode=payload.mode,
+        entry_intents=payload.entry_intents,
+        confirmed_predecessor_changes=payload.confirmed_predecessor_changes,
     )
 
 

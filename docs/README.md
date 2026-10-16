@@ -22,6 +22,7 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [Code of Conduct](../CODE_OF_CONDUCT.md): community participation and enforcement expectations.
 - [Deployment](DEPLOYMENT.md): maintained Vercel/Neon production architecture and the Neon self-hosting path.
 - [Agent engineering rules](../AGENTS.md): mandatory repository conventions for coding agents.
+- [Manual QA behavior inventory](manual-qa/README.md): agent-friendly workflows and expected outcomes for manual product QA.
 - [Autonomous factory policy](AUTONOMOUS_FACTORY_POLICY.md): canonical autonomous delivery lifecycle and merge policy.
 - [Issue execution protocol](ISSUE_EXECUTION_PROTOCOL.md): issue ownership, implementation, validation, and closure procedure.
 - [Factory GitHub visibility](FACTORY_GITHUB_VISIBILITY.md): canonical factory labels and GitHub visibility rules.

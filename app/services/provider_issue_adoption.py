@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
+from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -130,6 +131,7 @@ async def adopt_comicvine_issue(
     external_url: str | None = None,
     metadata: dict[str, object] | None = None,
     comicvine_client: ComicVineClient | None = None,
+    thread: Thread | None = None,
 ) -> ProviderIssueAdoptionResult:
     """Adopt one ComicVine issue into an owned thread, idempotently.
 
@@ -147,6 +149,11 @@ async def adopt_comicvine_issue(
             boundary after the local state is safely established. A hydration
             failure is recorded on the result and never rolls back the local
             adoption, so a retry reuses the Issue instead of duplicating it.
+        thread: Optional already-loaded target thread. Ownership is still
+            verified against ``user_id`` and ``thread_id``, but the extra
+            ownership lookup and row lock are skipped, so the caller must hold
+            the thread row lock itself. Batch series import uses this because it
+            locks the thread once for the whole roster instead of per issue.
 
     Returns:
         A :class:`ProviderIssueAdoptionResult` distinguishing ``created``,
@@ -155,7 +162,14 @@ async def adopt_comicvine_issue(
     Raises:
         HTTPException: 404 when the thread does not exist or is not owned.
     """
-    thread = await get_owned_thread_or_404(db, user_id, thread_id, for_update=True)
+    if thread is not None:
+        if thread.id != thread_id or thread.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Thread {thread_id} not found",
+            )
+    else:
+        thread = await get_owned_thread_or_404(db, user_id, thread_id, for_update=True)
     external_id = str(comicvine_issue_id)
 
     existing = await issue_repository.find_owned_issue_by_confirmed_identity(

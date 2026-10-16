@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from heapq import heapify, heappop, heappush
+from typing import Literal
 
 from app.services.reading_list_evaluator import ReadingSnapshot
 
@@ -14,6 +15,8 @@ class ConstraintEdge:
     source_issue_id: int
     target_issue_id: int
     origin: str
+    prerequisite_origin: Literal["reader", "converted"] | None = None
+    provenance: tuple[str, ...] = ()
 
 
 class ReadingCycleError(ValueError):
@@ -79,11 +82,7 @@ def validate_reading_constraints(
             for a, b in zip(ids, ids[1:], strict=False)
         )
     for reading_list in snapshot.lists:
-        entries = [
-            entry
-            for entry in reading_list.entries
-            if not entry.skipped
-        ]
+        entries = [entry for entry in reading_list.entries if not entry.skipped]
         name = named_lists[reading_list.list_id]
         ids = [entry.issue_id for entry in entries]
         if reading_list.mode == "strict":
@@ -115,7 +114,17 @@ def validate_reading_constraints(
                 since_hold.append(entry.issue_id)
     edges.update(
         ConstraintEdge(
-            p.source_issue_id, p.target_issue_id, f"prerequisite {p.prerequisite_id} ({p.origin})"
+            p.source_issue_id,
+            p.target_issue_id,
+            f"prerequisite {p.prerequisite_id} ({p.origin}"
+            + (
+                "; historical classification unknown"
+                if "historical classification unknown" in p.provenance
+                else ""
+            )
+            + ")",
+            prerequisite_origin=p.origin,
+            provenance=p.provenance,
         )
         for p in snapshot.prerequisites
     )

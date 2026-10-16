@@ -23,6 +23,15 @@ Existing Custom CBLs become Reading Lists. They are **not regenerated from publi
 - **Collection exclusions:** A small durable user-owned exclusion table, targeting an external series/volume identity, a Thread, or an Issue. Do not infer exclusions from mere absence in a list. They survive Thread removal and prevent Roll, CBL import and release sync from adopting or offering deliberately excluded material (e.g., Absolute Flash and Absolute Green Lantern). Only the reader can remove one.
 - **List-local skip:** `skipped=true` means only that list ignores this issue; other lists, its Thread, and Roll may still offer it. A globally excluded issue is ignored by every list and skipped as a frontier candidate. Refuse an exclusion that strands an explicit prerequisite until the reader resolves that prerequisite.
 
+### Inactive storage rollout
+
+The additive storage slice (#3662) exposes stored mode, gate and skip values in list
+responses and preserves them when older clients replace membership. Defaults are
+loose, none and false. These fields do not activate eligibility or accept new
+authoring intent through the legacy write API; owner-scoped writes, cycle validation
+and reorder confirmation belong to #3667. Roll remains on its existing authority
+until the guarded adapter and production acceptance stages.
+
 ### Modes and loose-list gates
 
 - **Strict:** every remaining entry waits for all earlier remaining entries. At most its first unread remaining entry is available from that list. This fits the Julix Mignolaverse and JLI/JLE reading orders. Warn if the list omits unread issues from a partially represented Thread; do not silently gate omitted material.

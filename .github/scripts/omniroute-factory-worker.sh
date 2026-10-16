@@ -291,6 +291,9 @@ stage_trusted_review_controller() {
     trusted_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/comic-pile-review-controller.XXXXXX")"
     cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
     cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
+    # Bind model provenance to a trusted main checkout snapshot, not PR data.
+    cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
+    cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
     chmod +x "$trusted_dir/factory-review-controller.py"
     TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
     export TRUSTED_REVIEW_CONTROLLER

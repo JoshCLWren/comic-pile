@@ -5,6 +5,7 @@ from app.models.cbl_adoption_receipt import CblAdoptionReceipt
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.catalog_commit_receipt import CatalogCommitReceipt
+from app.models.collection_exclusion import CollectionExclusion
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
@@ -21,6 +22,7 @@ from app.models.external_identity import (
 from app.models.failed_login_attempt import FailedLoginAttempt
 from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
+from app.models.password_reset_token import PasswordResetToken
 from app.models.perf_alarm import PerfAlarmCounter, PerfAlarmIncident
 from app.models.performance_metric import PerformanceMetric
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
@@ -49,6 +51,7 @@ __all__ = [
     "CatalogCommitReceipt",
     "CatalogIssue",
     "CatalogSeries",
+    "CollectionExclusion",
     "ContinuityPlan",
     "ContinuityRule",
     "ContinuityRuleSelectedMember",
@@ -65,6 +68,7 @@ __all__ = [
     "Issue",
     "IssueExternalIdentityMapping",
     "IssueMetadataCorrection",
+    "PasswordResetToken",
     "PerfAlarmCounter",
     "PerfAlarmIncident",
     "PerformanceMetric",

@@ -100,6 +100,9 @@ def wire_controller(
     )
     monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: list(comments))
     monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: list(comments))
+    # Most tests exercise existing semantic/mechanical behavior; independently
+    # test the fail-closed cross-model gate with an explicit override below.
+    monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: True)
     monkeypatch.setattr(
         module,
         "roster_model_for_worker",
@@ -380,6 +383,32 @@ def test_controller_promotes_independent_green_review(monkeypatch: MonkeyPatch) 
     assert result["status"] == "ready"
     assert transitions[-1]["pr_stage"] == "factory:ready"
 
+
+def test_approved_head_without_cross_model_provenance_is_blocked(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A semantic APPROVE cannot loop reviews or become ready without author identity."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch,
+        module,
+        [payload],
+        comments=producer_contribution(),
+        mechanical=True,
+    )
+    monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: False)
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+    assert result["status"] == "cross-model-provenance-blocked"
+    assert transitions[-1]["pr_stage"] == "factory:blocked"
+    assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+    assert "cross-model" in str(posted[-1]["note"])
 
 def test_controller_mechanical_failure_routes_to_repair(
     monkeypatch: MonkeyPatch,
@@ -1716,20 +1745,19 @@ def test_authorization_paths_do_not_read_pull_reviews() -> None:
     assert "/reviews" not in auth_src
 
 
-def test_no_workflow_wires_factory_visibility_reconcile_on_pull_request_review() -> None:
-    """pull_request_review must not invoke factory-visibility reconcile."""
-    for wf_path in sorted(WORKFLOWS.glob("*.yml")):
-        content = wf_path.read_text(encoding="utf-8")
-        if "pull_request_review" not in content:
-            continue
-        uses_visibility = (
-            "factory-visibility.cjs" in content
-            or "factory-visibility" in content and "reconcile" in content
-        )
-        assert not uses_visibility, (
-            f"{wf_path.name} triggers on pull_request_review and runs factory-visibility reconcile"
-        )
-
+def test_trusted_native_changes_requested_routes_to_repair_only() -> None:
+    """Native review feedback can request repairs, not bypass merge authorization."""
+    workflow = (
+        WORKFLOWS / "factory-issue-pr-state-reconciler.yml"
+    ).read_text(encoding="utf-8")
+    assert "pull_request_review:" in workflow
+    assert "types: [submitted, dismissed]" in workflow
+    assert "await visibility({ github, context });" in workflow
+    assert '[[ "$EVENT_NAME" == \'pull_request_review\' ]] && exit 0' in workflow
+    # Review votes never feed ready or merge gates. Those remain controller-only.
+    controller = (SCRIPTS / "factory-review-controller.py").read_text(encoding="utf-8")
+    assert "head_has_cross_model_review" in controller
+    assert "def authorize_ready" in controller
 
 def test_merge_drain_never_reads_native_review_state_for_merge() -> None:
     """factory-ready-merge-drain merges only via controller authorized + gates."""
@@ -2037,3 +2065,135 @@ def test_controller_writes_review_model_marker_on_approve(
         reviewer_agent="17",
     )
     assert ["issue", "comment", "1390", "--repo", module.REPO, "--body", expected] in commands
+
+
+def test_interactive_author_marker_uses_verified_exact_head_commit(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """An interactive model attribution is controller-recorded, not PR text."""
+    module = load_review_controller()
+    payload = {
+        "state": "OPEN", "headRefName": "local/refactor",
+        "body": "Closes #2380.\nModel: forged-from-pr-body",
+        "author": {"login": "JoshCLWren"},
+        "labels": [{"name": "factory"}],
+    }
+    sent: list[list[str]] = []
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        module, "gh_json",
+        lambda _args: {
+            "sha": REVIEWED_HEAD,
+            "author": {"login": "JoshCLWren"},
+            "committer": None,
+            "commit": {"message": "Fix behavior\n\nModel: opencode/mimo-v2.6-flash-free"},
+        },
+    )
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda args: sent.append(args),
+    )
+    marker = module.persist_interactive_author_model_marker(
+        pr_number=1390, head=REVIEWED_HEAD, pr=payload
+    )
+    assert marker == agent_model_author_marker(
+        pr=1390, head=REVIEWED_HEAD, model="opencode/mimo-v2.6-flash-free",
+        agent="interactive-JoshCLWren",
+    )
+    assert sent and sent[0][-1] == marker
+
+
+@pytest.mark.parametrize("unsafe", ["fork-author", "unattributed-commit", "stale-head"])
+def test_interactive_author_attribution_fails_closed(
+    monkeypatch: MonkeyPatch, unsafe: str
+) -> None:
+    """No fabricated model provenance for untrusted PR authors or head changes."""
+    module = load_review_controller()
+    payload = {
+        "headRefName": "local/refactor",
+        "body": "Closes #2380",
+        "author": {"login": "intruder" if unsafe == "fork-author" else "JoshCLWren"},
+        "labels": [{"name": "factory"}],
+    }
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        module, "gh_json",
+        lambda _args: {
+            "sha": MOVED_HEAD if unsafe == "stale-head" else REVIEWED_HEAD,
+            "author": {"login": "intruder" if unsafe == "unattributed-commit" else "JoshCLWren"},
+            "committer": None,
+            "commit": {"message": "Fix bug\n\nModel: cursor-grok-4.6"},
+        },
+    )
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda *_a: pytest.fail("untrusted attribution must not be persisted"),
+    )
+    assert module.persist_interactive_author_model_marker(
+        pr_number=1390, head=REVIEWED_HEAD, pr=payload
+    ) is None
+
+
+def test_interactive_handoff_uses_explicit_body_issue_without_factory_branch(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Review changes-requested transitions propagate to linked manual PR issues."""
+    module = load_review_controller()
+    transitions: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Closes #2380"})
+    monkeypatch.setattr(module, "target_json", lambda _issue: {"state": "open"})
+    monkeypatch.setattr(module, "target_owned_by_worker", lambda _issue, _worker: True)
+    monkeypatch.setattr(
+        module, "replace_factory_labels",
+        lambda number, owner, stage: transitions.append((number, owner, stage)),
+    )
+    module.transition_pr_and_linked_issue(
+        pr_number=1390, branch="local/feature", worker="17",
+        pr_stage="factory:changes-requested",
+    )
+    assert transitions == [
+        (1390, "factory:unowned", "factory:changes-requested"),
+        (2380, "factory:unowned", "factory:changes-requested"),
+    ]
+    assert module.linked_issue_for_pr(1390, "local/feature") == 2380
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Related to #2380"})
+    assert module.linked_issue_for_pr(1390, "local/feature") is None
+
+
+@pytest.mark.parametrize(
+    "worker_script",
+    [
+        "free-model-factory-worker.sh",
+        "free-model-factory-worker-primitives.sh",
+        "nvidia-factory-worker.sh",
+        "omniroute-factory-worker.sh",
+    ],
+)
+def test_trusted_review_controller_stages_roster_and_pinned_tsv(worker_script: str) -> None:
+    """All worker paths stage code and roster from main before checkout."""
+    script = (SCRIPTS / worker_script).read_text(encoding="utf-8")
+    stage = script.split("stage_trusted_review_controller() {", 1)[1].split("\n}", 1)[0]
+    assert 'cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"' in stage
+    assert 'cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"' in stage
+
+
+def test_roster_model_lookup_ignores_untrusted_pr_checkout(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The staged controller must not trust a model mapping from the PR branch."""
+    controller = load_review_controller()
+    trusted = tmp_path / "staged-controller"
+    trusted.mkdir()
+    (trusted / "free-model-factories.tsv").write_text(
+        "54\tz-ai\tglm-4.5-flash\t0\tactive\tFactory 54\n",
+        encoding="utf-8",
+    )
+    untrusted = tmp_path / "pr-checkout"
+    (untrusted / ".github").mkdir(parents=True)
+    (untrusted / ".github" / "free-model-factories.tsv").write_text(
+        "54\tz-ai\timpersonated-model\t0\tactive\tUntrusted\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(untrusted)
+    monkeypatch.setattr(controller, "__file__", str(trusted / "factory-review-controller.py"))
+    assert controller.roster_model_for_worker("54") == "glm-4.5-flash"

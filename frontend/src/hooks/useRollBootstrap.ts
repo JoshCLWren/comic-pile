@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { RollBootstrapApi } from '../services/apiTypes'
@@ -28,7 +28,7 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
   // has superseded it (mirrors the pre-React-Query generation guard).
   const requestGenerationRef = useRef(0)
 
-  const { data, isPending, isError, error, refetch } = useQuery({
+  const { data, isPending, isError, error, failureCount, isSuccess, refetch } = useQuery({
     queryKey: queryKeys.roll.bootstrap(),
     queryFn: async (): Promise<RollBootstrapResponse | null> => {
       const generation = ++requestGenerationRef.current
@@ -57,6 +57,21 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
       }
     },
   })
+
+  // React Query resets `failureCount` to 0 on every fetch, including the retry
+  // a user starts from the Retry affordance. Keying the bounded loading state
+  // on `failureCount` alone therefore drops RollPage back to the bare loading
+  // splash the instant someone presses Retry, which is the frozen-splash symptom
+  // issue #3429 exists to remove. Latch the first failure instead so the
+  // affordance survives user-initiated retries until the load actually succeeds.
+  const [hasFailedLoad, setHasFailedLoad] = useState(false)
+  useEffect(() => {
+    if (failureCount > 0) {
+      setHasFailedLoad(true)
+    } else if (isSuccess) {
+      setHasFailedLoad(false)
+    }
+  }, [failureCount, isSuccess])
 
   // Persist the active reading session and greet on a genuinely new session.
   // Previously lived inside the manual fetch; now runs whenever authoritative
@@ -121,6 +136,14 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
     isError,
     // SAFETY: the bootstrap queryFn normalizes failures to Error, so the query error value is Error | null.
     error: (error as Error | null) ?? null,
+    // Number of failed attempts so far. The shared retry policy keeps a
+    // timed-out bootstrap in pending through several retries (issue #3429).
+    failureCount,
+    // True while the initial load is still trying after at least one failure,
+    // including the retries a user starts from the Retry affordance. Keyed on
+    // isPending (already observed) rather than isFetching so the retry
+    // affordance never adds a new render subscription of its own.
+    isRetrying: isPending && hasFailedLoad,
     refetch: refetchBootstrap,
   }
 }

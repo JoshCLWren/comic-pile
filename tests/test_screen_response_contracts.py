@@ -27,6 +27,7 @@ QUEUE_FIELDS = {
     "created_at",
     "comicvine_mapping",
     "manual_creator_credits",
+    "tags",
 }
 QUEUE_DROPPED_FIELDS = {
     "last_rating",
@@ -120,15 +121,15 @@ def _component_schema(name: str) -> dict[str, object]:
 
 
 def test_queue_item_contract_is_exact_and_measurably_narrower() -> None:
-    """Queue items expose only the documented 15-field screen contract."""
+    """Queue items expose only the documented 16-field screen contract."""
     full_fields = set(ThreadResponse.model_fields)
     queue_fields = set(QueueThreadListItem.model_fields)
 
     assert queue_fields == QUEUE_FIELDS
     assert full_fields - queue_fields == QUEUE_DROPPED_FIELDS
     assert len(full_fields) == 18
-    assert len(queue_fields) == 15
-    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 3 / 18
+    assert len(queue_fields) == 16
+    assert (len(full_fields) - len(queue_fields)) / len(full_fields) == 2 / 18
 
 
 def test_queue_item_records_serialized_byte_reduction() -> None:
@@ -295,17 +296,21 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
     ) == {"$ref": "#/components/schemas/BlockingExplanation"}
 
 
-def test_no_collection_specific_contracts_remain_in_openapi() -> None:
-    """No collection-specific response model or route survives in the OpenAPI document."""
+def test_no_legacy_collection_contracts_remain_in_openapi() -> None:
+    """Reject removed collection endpoints while allowing Option E exclusions."""
     schema = app.openapi()
-    collection_paths = [path for path in schema["paths"] if "collection" in path.lower()]
-    collection_schemas = [
-        name
-        for name in schema["components"]["schemas"]
-        if "collection" in name.lower()
-    ]
-    assert collection_paths == []
-    assert collection_schemas == []
+    collection_paths = {path for path in schema["paths"] if "collection" in path.lower()}
+    assert collection_paths == {
+        "/api/v1/collection-exclusions",
+        "/api/v1/collection-exclusions/{exclusion_id}",
+    }
+    collection_schemas = {
+        name for name in schema["components"]["schemas"] if "collection" in name.lower()
+    }
+    assert collection_schemas == {
+        "CollectionExclusionCreate",
+        "CollectionExclusionResponse",
+    }
 
 
 def test_component_schemas_expose_exact_screen_contracts() -> None:

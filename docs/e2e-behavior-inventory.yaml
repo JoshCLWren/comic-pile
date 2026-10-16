@@ -263,6 +263,13 @@ behaviors:
     status: covered
     specs: ["issue-3147-focus-management.spec.ts"]
 
+  - id: REG-007
+    area: regression
+    behavior: "A failed Roll bootstrap or History first page stays recoverable in place without a forced reload"
+    priority: P1
+    status: covered
+    specs: ["issue-3429-bootstrap-recovery.spec.ts"]
+
   - id: MOBILE-002
     area: mobile
     behavior: "Blocked Roll content stays usable on narrow mobile screens"

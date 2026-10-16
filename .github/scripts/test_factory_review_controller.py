@@ -170,6 +170,10 @@ def test_reconcile_ci_promotes_green_authorized_pr_without_worker(monkeypatch):
         "mechanical_merge_gate",
         lambda _pr, _head: {"decision": "pass", "reason": "green"},
     )
+    monkeypatch.setattr(controller, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        controller, "head_has_cross_model_review", lambda *_a, **_kw: True
+    )
     writes = []
     monkeypatch.setattr(controller, "replace_factory_labels", lambda *args: writes.append(args))
 

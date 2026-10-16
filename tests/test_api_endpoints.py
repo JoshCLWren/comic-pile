@@ -1,6 +1,7 @@
 """API endpoint integration tests."""
 
 import pytest
+from datetime import UTC, datetime
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -332,6 +333,78 @@ async def test_update_thread_active_status(
     db_thread = await async_db.get(Thread, 3)
     assert db_thread is not None
     assert db_thread.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_update_thread_performance_issue_tracking(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Test that update_thread correctly handles issue-tracking threads.
+
+    Verifies that for migrated threads (total_issues set), the response includes
+    issues_remaining and next_unread_issue_number without extra per-thread DB
+    queries (issue #3442). The fix pre-fetches these values before calling
+    thread_to_response to avoid additional round-trips.
+    """
+    from app.models import Issue, Thread
+
+    now = datetime.now(UTC)
+
+    # Create a thread with issue tracking enabled
+    thread = Thread(
+        title="Perf Test Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=1,
+        total_issues=5,
+        reading_progress="in_progress",
+        last_activity_at=now,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    # Create issue records
+    issues = [
+        Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            position=i,
+            status="unread" if i > 1 else "read",
+            read_at=now if i <= 1 else None,
+        )
+        for i in range(1, 6)
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+
+    # Set next_unread_issue_id to the first unread issue
+    thread.next_unread_issue_id = issues[1].id  # issue #2 is unread
+    await async_db.flush()
+
+    # Update the thread
+    update_data = {"title": "Perf Test Thread Updated"}
+    response = await auth_client.put(
+        f"/api/v1/threads/{thread.id}", json=update_data
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["title"] == "Perf Test Thread Updated"
+    assert data["issues_remaining"] == 4
+    assert data["status"] == "active"
+    assert data["queue_position"] == 1
+    assert data["total_issues"] == 5
+    assert "next_unread_issue_number" in data
+    assert data["next_unread_issue_number"] == "2"  # issue #2's number
+
+    # Verify DB thread state
+    db_thread = await async_db.get(Thread, thread.id)
+    assert db_thread is not None
+    assert db_thread.title == "Perf Test Thread Updated"
+    assert db_thread.total_issues == 5
+    assert db_thread.issues_remaining == 3
 
 
 @pytest.mark.asyncio

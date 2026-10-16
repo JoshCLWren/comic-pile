@@ -49,6 +49,11 @@ def _create_bug_report_issue_sync(
         f"**Report type:** {report_label}\n\n{description}"
     )
 
+    # Feature feedback is unapproved product scope, not a factory task. The
+    # "enhancement" label alone does not disable autonomous execution.
+    if report_type == "feature":
+        body = "<!-- factory-execution:manual-only -->\n\n" + body
+
     if diagnostics_data:
         timestamp = diagnostics_data.timestamp
         url = diagnostics_data.url

@@ -291,6 +291,7 @@ def mount_subrouters() -> None:
     if _subrouters_mounted:
         return
 
+    from app.api import collection_exclusions
     from app.api import cbl_sources
     from app.api import continuity_plan
     from app.api import continuity_rule
@@ -314,6 +315,7 @@ def mount_subrouters() -> None:
     router.include_router(continuity_template.router)
     router.include_router(reading_order_projection.router)
     router.include_router(reading_plan_release_source.router)
+    router.include_router(collection_exclusions.router)
     router.include_router(cbl_sources.router)
     router.include_router(custom_cbl.router)
     router.include_router(roll_recovery_switch.router, prefix="/roll")

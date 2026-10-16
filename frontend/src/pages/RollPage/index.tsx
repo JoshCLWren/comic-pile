@@ -70,6 +70,7 @@ export default function RollPage() {
     isPending: isBootstrapLoading,
     isError: isBootstrapError,
     error: bootstrapError,
+    isRetrying: isBootstrapRetrying,
   } = useRollBootstrap()
 
   const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
@@ -358,6 +359,32 @@ export default function RollPage() {
   const hasRollableContent = pool.length > 0 || blockedThreads.length > 0 || snoozedThreads.length > 0
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
+    // A timed-out bootstrap stays pending through the shared retry policy
+    // (issue #3429). Once an attempt has failed, say so and offer recovery
+    // instead of holding a bare spinner until retries exhaust. isBootstrapRetrying
+    // stays true across a user-initiated retry, so pressing Retry never drops
+    // the user back onto the bare splash.
+    if (isBootstrapRetrying) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-4">
+          <div className="text-center space-y-4">
+            <p
+              role="status"
+              className="text-center text-[var(--theme-text-muted)] font-black uppercase tracking-widest text-[10px]"
+            >
+              Still loading… your library is safe.
+            </p>
+            <button
+              type="button"
+              onClick={() => refetchBootstrap()}
+              className="px-4 py-2 bg-[var(--theme-warning)]/20 border border-[var(--theme-warning)]/50 rounded-lg text-xs font-black uppercase tracking-widest text-[var(--theme-warning)] hover:bg-[var(--theme-warning)]/30 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="text-center py-10 text-stone-500 font-black uppercase tracking-widest text-[10px]">
         Loading...
@@ -377,7 +404,7 @@ export default function RollPage() {
           {status === 401 ? (
             <button
               onClick={() => navigate('/login')}
-              className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors"
+              className="px-4 py-2 bg-[var(--theme-warning)]/20 border border-[var(--theme-warning)]/50 rounded-lg text-xs font-black uppercase tracking-widest text-[var(--theme-warning)] hover:bg-[var(--theme-warning)]/30 transition-colors"
             >
               Go to Login
             </button>

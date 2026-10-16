@@ -988,6 +988,14 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             except Exception:
                 logger.warning("Neon monitor shutdown skipped", exc_info=True)
 
+        # Release the process-wide ComicVine keep-alive pool.
+        try:
+            from comic_pile.comicvine_provider import close_shared_http_client
+
+            await close_shared_http_client()
+        except Exception:
+            logger.warning("ComicVine shared HTTP client shutdown skipped", exc_info=True)
+
     return app
 
 

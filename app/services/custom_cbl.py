@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from html import escape
-from typing import cast
+from typing import Literal, cast
 
 from fastapi import HTTPException
 from sqlalchemy import delete, func, or_, select
@@ -16,6 +16,7 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories import reading_list_authoring_repository as authoring_repository
 from app.schemas.continuity_plan import (
     CBLPlacement,
     ContinuityPlanLane,
@@ -28,6 +29,8 @@ from app.schemas.custom_cbl import (
     CustomCBLIssueSearchResult,
     CustomCBLListItem,
     CustomCBLResponse,
+    ReadingListEntryIntent,
+    ReadingListPredecessorChange,
 )
 from app.services.continuity_plan_writer import (
     guard_plan_write,
@@ -36,6 +39,8 @@ from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
 )
+from app.services.reading_list_authoring import validate_authored_list
+from app.services.reading_list_evaluator import ReadingList, ReadingListEntry
 from app.services.reading_plan_normalization import editor_nodes_for_plan, editor_plan_response
 from comic_pile.dependencies import refresh_user_blocked_status
 
@@ -52,6 +57,8 @@ class CustomCBLEntryView:
     issue_number: str
     status: str
     is_checkpoint: bool
+    gate: Literal["none", "hold", "after_previous"]
+    skipped: bool
     checkpoint_target_issue_ids: tuple[int, ...] = ()
 
 
@@ -118,6 +125,8 @@ async def load_custom_cbl_entries(db: AsyncSession, *, list_id: int) -> list[Cus
             issue_number=issue.issue_number,
             status=issue.status,
             is_checkpoint=entry.is_checkpoint,
+            gate=entry.gate,
+            skipped=entry.skipped,
             checkpoint_target_issue_ids=tuple(entry.checkpoint_target_issue_ids or []),
         )
         for entry, issue, thread in result.all()
@@ -135,9 +144,10 @@ async def replace_custom_cbl_entries(
 ) -> None:
     """Replace membership after proving every referenced issue belongs to the user."""
     checkpoint_set = set(checkpoint_issue_ids or ())
+    previous = await load_custom_cbl_entries(db, list_id=list_row.id)
+    previous_intent = {entry.issue_id: (entry.gate, entry.skipped) for entry in previous}
     targets = checkpoint_targets
     if targets is None:
-        previous = await load_custom_cbl_entries(db, list_id=list_row.id)
         targets = {}
         for index, entry in enumerate(previous):
             if entry.checkpoint_target_issue_ids:
@@ -181,11 +191,14 @@ async def replace_custom_cbl_entries(
 
     await db.execute(delete(CustomCBLEntry).where(CustomCBLEntry.list_id == list_row.id))
     for position, issue_id in enumerate(issue_ids):
+        gate, skipped = previous_intent.get(issue_id, ("none", False))
         db.add(
             CustomCBLEntry(
                 list_id=list_row.id,
                 issue_id=issue_id,
                 position=position,
+                gate=gate,
+                skipped=skipped,
                 is_checkpoint=bool(targets.get(issue_id)),
                 checkpoint_target_issue_ids=targets.get(issue_id, []),
             )
@@ -493,6 +506,8 @@ def _entry_response(entry: CustomCBLEntryView) -> CustomCBLEntryResponse:
         issue_number=entry.issue_number,
         status=entry.status,
         is_checkpoint=entry.is_checkpoint,
+        gate=entry.gate,
+        skipped=entry.skipped,
         checkpoint_target_issue_ids=list(entry.checkpoint_target_issue_ids),
     )
 
@@ -505,6 +520,7 @@ async def _full_response(db: AsyncSession, row: CustomCBLList) -> CustomCBLRespo
         user_id=row.user_id,
         name=row.name,
         description=row.description,
+        mode=row.mode,
         issue_count=len(entries),
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -520,6 +536,7 @@ async def list_custom_cbl_responses(db: AsyncSession, *, user_id: int) -> list[C
             id=row.id,
             name=row.name,
             description=row.description,
+            mode=row.mode,
             issue_count=count,
             updated_at=row.updated_at,
         )
@@ -557,11 +574,18 @@ async def create_custom_cbl_for_user(
     issue_ids: Sequence[int],
     checkpoint_issue_ids: Sequence[int] | None = None,
     checkpoint_targets: dict[int, list[int]] | None = None,
+    mode: Literal["strict", "loose"] | None = None,
+    entry_intents: dict[int, ReadingListEntryIntent] | None = None,
+    confirmed_predecessor_changes: list[ReadingListPredecessorChange] | None = None,
 ) -> CustomCBLResponse:
     """Create one custom CBL, persist exact membership, and return its full representation."""
+    if confirmed_predecessor_changes is not None:
+        raise HTTPException(status_code=422, detail={"code": "reading_list_confirmation_put_only"})
     try:
+        await authoring_repository.lock_reader(db, user_id)
         row = CustomCBLList(
             user_id=user_id,
+            mode=mode or "loose",
             name=name.strip(),
             description=description.strip() if description else None,
         )
@@ -575,12 +599,25 @@ async def create_custom_cbl_for_user(
             checkpoint_issue_ids=checkpoint_issue_ids,
             checkpoint_targets=checkpoint_targets,
         )
+        await authoring_repository.set_entry_intents(
+            db,
+            row.id,
+            {i: (intent.gate, intent.skipped) for i, intent in (entry_intents or {}).items()},
+        )
+        _, warnings = await validate_authored_list(
+            db,
+            user_id=user_id,
+            list_id=row.id,
+            before=None,
+            confirmed=confirmed_predecessor_changes,
+        )
+        response = await _full_response(db, row)
+        response.warnings = warnings
         await db.commit()
     except Exception:
         await db.rollback()
         raise
-    await db.refresh(row)
-    return await _full_response(db, row)
+    return response
 
 
 async def get_custom_cbl_response(
@@ -601,10 +638,25 @@ async def update_custom_cbl_for_user(
     issue_ids: Sequence[int],
     checkpoint_issue_ids: Sequence[int] | None = None,
     checkpoint_targets: dict[int, list[int]] | None = None,
+    mode: Literal["strict", "loose"] | None = None,
+    entry_intents: dict[int, ReadingListEntryIntent] | None = None,
+    confirmed_predecessor_changes: list[ReadingListPredecessorChange] | None = None,
 ) -> CustomCBLResponse:
     """Replace one owned custom CBL's metadata and ordered membership atomically."""
     try:
+        await authoring_repository.lock_reader(db, user_id)
         row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+        previous = await load_custom_cbl_entries(db, list_id=list_id)
+        before = ReadingList(
+            row.id,
+            row.mode,
+            tuple(
+                ReadingListEntry(entry.issue_id, entry.gate, entry.skipped) for entry in previous
+            ),
+            row.name,
+        )
+        if mode is not None:
+            row.mode = mode
         row.name = name.strip()
         row.description = description.strip() if description else None
         row.updated_at = datetime.now(UTC)
@@ -616,17 +668,32 @@ async def update_custom_cbl_for_user(
             checkpoint_issue_ids=checkpoint_issue_ids,
             checkpoint_targets=checkpoint_targets,
         )
+        await authoring_repository.set_entry_intents(
+            db,
+            row.id,
+            {i: (intent.gate, intent.skipped) for i, intent in (entry_intents or {}).items()},
+        )
+        changes, warnings = await validate_authored_list(
+            db,
+            user_id=user_id,
+            list_id=row.id,
+            before=before,
+            confirmed=confirmed_predecessor_changes,
+        )
+        response = await _full_response(db, row)
+        response.predecessor_changes = changes
+        response.warnings = warnings
         await db.commit()
     except Exception:
         await db.rollback()
         raise
-    await db.refresh(row)
-    return await _full_response(db, row)
+    return response
 
 
 async def delete_custom_cbl_for_user(db: AsyncSession, *, user_id: int, list_id: int) -> None:
     """Delete one owned custom CBL without touching its canonical issues or Reading Plans."""
     try:
+        await authoring_repository.lock_reader(db, user_id)
         row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
         await db.delete(row)
         await db.commit()

@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.issue import Issue
@@ -17,6 +18,89 @@ from app.models.thread import Thread
 from app.models.user import User
 from app.services import custom_cbl as custom_cbl_service
 from tests.conftest import get_or_create_user_async
+
+
+@pytest.mark.asyncio
+async def test_inactive_intent_survives_legacy_save(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A legacy save retains stored list intent and historical checkpoint targets."""
+    user = await get_or_create_user_async(async_db)
+    first = await _issue(
+        async_db, user_id=user.id, title="First", issue_number="1", queue_position=1
+    )
+    second = await _issue(
+        async_db, user_id=user.id, title="Second", issue_number="1", queue_position=2
+    )
+    await async_db.commit()
+    issue_ids = [first.id, second.id]
+    first_id, second_id = issue_ids
+    created = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Order",
+            "issue_ids": issue_ids,
+            "checkpoint_targets": {str(first.id): [second.id]},
+        },
+    )
+    assert created.status_code == 201, created.text
+    list_id = created.json()["id"]
+    list_row = await async_db.get(CustomCBLList, list_id)
+    assert list_row is not None
+    assert list_row.mode == "loose"
+    list_row.mode = "strict"
+    rows = (
+        (
+            await async_db.execute(
+                select(CustomCBLEntry)
+                .where(CustomCBLEntry.list_id == list_id)
+                .order_by(CustomCBLEntry.position)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [row.gate for row in rows] == ["none", "none"]
+    assert [row.skipped for row in rows] == [False, False]
+    rows[0].skipped = True
+    rows[1].gate = "after_previous"
+    await async_db.commit()
+    saved = await auth_client.put(
+        f"/api/v1/custom-cbls/{list_id}",
+        json={
+            "name": "Order",
+            "issue_ids": issue_ids,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    async_db.expire_all()
+    list_row = await async_db.get(CustomCBLList, list_id)
+    assert list_row is not None and list_row.mode == "strict"
+    rows = (
+        (
+            await async_db.execute(
+                select(CustomCBLEntry)
+                .where(CustomCBLEntry.list_id == list_id)
+                .order_by(CustomCBLEntry.position)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [(row.issue_id, row.position, row.gate, row.skipped) for row in rows] == [
+        (first_id, 0, "none", True),
+        (second_id, 1, "after_previous", False),
+    ]
+    assert rows[0].checkpoint_target_issue_ids == [second_id]
+    for response in (saved, await auth_client.get(f"/api/v1/custom-cbls/{list_id}")):
+        assert response.status_code == 200
+        assert response.json()["mode"] == "strict"
+        assert [(entry["gate"], entry["skipped"]) for entry in response.json()["entries"]] == [
+            ("none", True),
+            ("after_previous", False),
+        ]
+    listing = await auth_client.get("/api/v1/custom-cbls")
+    assert listing.json()[0]["mode"] == "strict"
 
 
 @pytest.mark.asyncio

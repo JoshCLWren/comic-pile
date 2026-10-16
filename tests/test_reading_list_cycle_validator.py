@@ -1,5 +1,7 @@
 """Combined Option E constraint validation regressions."""
 
+from typing import Literal
+
 import pytest
 
 from app.services.reading_list_cycle_validator import (
@@ -304,7 +306,8 @@ def test_exclusion_cannot_conceal_cycle_through_excluded_entry() -> None:
     with pytest.raises(ReadingCycleError) as error:
         validate_reading_constraints(state)
     assert {edge.origin for edge in error.value.edges} == {
-        "list First strict order", "list Second strict order"
+        "list First strict order",
+        "list Second strict order",
     }
 
 
@@ -319,8 +322,10 @@ def test_long_strict_list_with_many_holds_has_linear_edges() -> None:
             ReadingList(
                 1,
                 "strict",
-                tuple(ReadingListEntry(i, "hold" if i % 2 == 0 else "none")
-                      for i in range(1, issue_count + 1)),
+                tuple(
+                    ReadingListEntry(i, "hold" if i % 2 == 0 else "none")
+                    for i in range(1, issue_count + 1)
+                ),
                 name="Long Event",
             ),
         ),
@@ -344,3 +349,19 @@ def test_cycle_search_passes_residual_dead_end() -> None:
         (1, 3),
         (3, 1),
     ]
+
+
+@pytest.mark.parametrize("origin", ["reader", "converted"])
+def test_cycle_edge_preserves_structured_prerequisite_provenance(
+    origin: Literal["reader", "converted"],
+) -> None:
+    """Clients receive typed provenance without parsing the human edge label."""
+    state = snapshot(
+        (ReadingList(1, "strict", (ReadingListEntry(2), ReadingListEntry(1))),),
+        (ReadingPrerequisite(7, 1, 2, origin, ("reviewed evidence",)),),
+    )
+    with pytest.raises(ReadingCycleError) as error:
+        validate_reading_constraints(state)
+    edge = next(edge for edge in error.value.edges if edge.prerequisite_origin is not None)
+    assert edge.prerequisite_origin == origin
+    assert edge.provenance == ("reviewed evidence",)

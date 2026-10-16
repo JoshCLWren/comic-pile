@@ -48,7 +48,8 @@ Any other bare `/api` route is a regression and fails the contract test.
 ## Collections
 
 Collections were removed. The OpenAPI document contains no supported Collections route,
-schema, or operation. References to a *retired* `collection_id` query parameter in legacy
+schema, or operation. The distinct `/api/v1/collection-exclusions` API protects durable
+reader exclusions under Option E; it does not restore the retired Collections domain. References to a *retired* `collection_id` query parameter in legacy
 operation descriptions are documentation of removed behavior, not supported surface.
 
 ## Verification
