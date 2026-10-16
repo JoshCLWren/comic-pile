@@ -37,6 +37,10 @@ from app.schemas import (
 )
 from app.schemas.tags import TagResponse, TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.ownership_guard import (
+    require_frontier_in_thread,
+    require_session_pending_consistent,
+)
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
@@ -900,6 +904,16 @@ async def set_pending_thread(
     current_session.pending_thread_id = thread_id_int
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
+    # A manual selection retargets the whole pending pair: a pending issue
+    # pinned to a different thread is superseded, never carried over, so the
+    # pair always references one thread (issue #3225).
+    if current_session.pending_issue_id is not None:
+        stale_issue = await issue_repository.get_issue(db, current_session.pending_issue_id)
+        if stale_issue is None or stale_issue.thread_id != thread_id_int:
+            current_session.pending_issue_id = None
+
+    await require_session_pending_consistent(db, current_session)
+
     if thread_id_int in snoozed_ids:
         snoozed_ids.remove(thread_id_int)
         current_session.snoozed_thread_ids = snoozed_ids
@@ -1162,6 +1176,10 @@ async def set_current_issue(
                 issue.read_at = None
 
     thread.total_issues = len(all_issues)
+    # Defense in depth: the target was resolved inside this thread, and the
+    # guard plus fk_threads_frontier_same_thread reject a frontier pointing
+    # at any other thread — even one owned by the same reader (issue #3225).
+    await require_frontier_in_thread(db, thread_id, target_issue.id)
     thread.next_unread_issue_id = target_issue.id
     thread.reading_progress = "in_progress"
     thread.issues_remaining = await thread.get_issues_remaining(db)
@@ -1182,6 +1200,8 @@ async def set_current_issue(
     current_session.pending_thread_id = thread_id
     current_session.pending_issue_id = target_issue_id
     current_session.pending_thread_updated_at = now
+
+    await require_session_pending_consistent(db, current_session)
 
     await db.commit()
 

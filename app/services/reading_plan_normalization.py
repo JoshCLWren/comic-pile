@@ -49,6 +49,7 @@ from app.schemas.reading_plan_membership import (
     ReadingPlanSourceSnapshot,
 )
 from app.services.cbl_source_public import public_cbl_repository, public_cbl_source_path
+from app.services.ownership_guard import require_dependency_endpoints_owned
 
 
 def ensure_plan_issue_uniqueness(nodes: list[ContinuityPlanNode]) -> None:
@@ -1256,19 +1257,20 @@ async def link_dependency_to_plan(
     dependency = await db.get(Dependency, dependency_id)
     if dependency is None:
         raise HTTPException(status_code=404, detail=f"Dependency {dependency_id} not found")
-    owned = await continuity_repository.owned_issue_ids_for_user(
-        db,
-        user_id,
-        [dependency.source_issue_id, dependency.target_issue_id],
-    )
-    if len(owned) != 2:
+    # Both edge endpoints must be owned by the plan owner (issue #3225):
+    # shared catalog identity never authorizes a plan link.
+    try:
+        await require_dependency_endpoints_owned(
+            db, user_id, dependency.source_issue_id, dependency.target_issue_id
+        )
+    except HTTPException as exc:
         raise HTTPException(
             status_code=422,
             detail={
                 "code": "dangling_plan_reference",
                 "dependency_id": dependency_id,
             },
-        )
+        ) from exc
     link = await reading_plan_repository.link_plan_dependency(
         db, plan_id=plan.id, dependency_id=dependency.id, explanation=explanation
     )

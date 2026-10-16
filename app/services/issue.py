@@ -3,6 +3,13 @@
 This service coordinates issue CRUD operations, reordering, and continuity plan
 pruning. It ensures that thread counters (next-unread, remaining) and
 lifecycle status are kept in sync with the issue set.
+
+Ownership boundary (issue #3225): every Issue-to-Thread write is gated on
+parent-thread ownership — the thread must belong to the caller and anchors
+must belong to that same thread. Shared catalog links
+(``issues.catalog_issue_id``) are never consulted: a shared ``CatalogIssue``
+never authorizes creation, moves, reorders, or deletes in another reader's
+library.
 """
 
 import logging
