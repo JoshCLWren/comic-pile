@@ -253,6 +253,7 @@ def test_event_wakeup_never_checks_out_untrusted_pr_code_or_assigns_workers():
     ).read_text(encoding="utf-8")
 
     assert "actions: write" in wake
+    assert "pull-requests: read" in wake
     assert "cancel-in-progress: false" in wake
     assert "actions/checkout" not in wake
     assert "factory-work-controller.py" not in wake
