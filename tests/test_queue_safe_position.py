@@ -17,7 +17,7 @@ async def test_move_to_safe_position_no_blocked(
     # Superman is at position 1, die=6 => safe position should be min(7, active_count)
     # Active threads after superman: Batman(2), Flash(4), Aquaman(5) = 4 total
     # So die_size(6) + 1 = 7, but max is 4 => position 4 (back)
-    await move_to_safe_position(thread.id, default_user.id, 6, async_db)
+    await move_to_safe_position(thread.id, sample_data["user"].id, 6, async_db)
     await async_db.refresh(thread)
     # Die size=6, 4 active threads. count blocked in range = 0
     # target = min(6+1+0, 4) = min(7, 4) = 4 (back)
@@ -40,7 +40,7 @@ async def test_move_to_safe_position_with_blocked_threads(
     # But Flash(4) is blocked, so there's a blocked thread at seq 4
     # die=6 => die_size(6) + 1 + blocked_in_range(1) = 8, min(8, 3) = 3
     # blocked threads in first (6+0=6) slots: Flash is at seq 4, which is < 6, so yes
-    await move_to_safe_position(thread.id, default_user.id, 6, async_db)
+    await move_to_safe_position(thread.id, sample_data["user"].id, 6, async_db)
     await async_db.refresh(thread)
     assert thread.queue_position == 4  # Went to back (4 is max with 4 active threads)
 

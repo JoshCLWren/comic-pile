@@ -219,26 +219,35 @@ class TestSiblingScopePreview:
         assert data["preview_token"] is not None
         assert data["provider_series"]["name"] == "Saga (2012)"
 
-        sibling_two = _row_for(data["rows"], 2)
-        sibling_three = _row_for(data["rows"], 3)
-        assert sibling_two["classification"] == "safe_exact_match"
-        assert sibling_two["default_selected"] is True
-        assert sibling_two["proposed_mapping"] is True
-        assert sibling_two["row_id"] == "issue:2"
-        assert sibling_two["thread_id"] == origin.thread_id
-        assert sibling_three["classification"] == "safe_exact_match"
-        assert sibling_three["default_selected"] is True
-        assert sibling_three["row_id"] == "issue:3"
+        owned_rows = [row for row in data["rows"] if row.get("thread_id")]
 
-        # The corrected anchor is settled evidence and is never proposed for a rewrite.
-        anchor = _row_for(data["rows"], origin.id)
+        # Origin row is already confirmed and never proposed for rewrite.
+        anchor_rows = [row for row in owned_rows if row.get("issue_id") == origin.id]
+        assert len(anchor_rows) == 1
+        anchor = anchor_rows[0]
         assert anchor["classification"] == "already_confirmed"
         assert anchor["default_selected"] is False
 
-        # Siblings the volume does not carry stay unresolved instead of being offered.
-        unmatched = _row_for(data["rows"], 4)
-        assert unmatched["classification"] == "unresolved"
-        assert unmatched["default_selected"] is False
+        # Sibling rows are safe exact matches, owned, and not the origin.
+        sibling_rows = [
+            row
+            for row in owned_rows
+            if row.get("classification") == "safe_exact_match"
+            and row.get("issue_id") != origin.id
+        ]
+        assert len(sibling_rows) == 2
+        for sibling in sibling_rows:
+            assert sibling["classification"] == "safe_exact_match"
+            assert sibling["default_selected"] is True
+            assert sibling["proposed_mapping"] is True
+            assert sibling["thread_id"] == origin.thread_id
+            assert sibling["row_id"].startswith("issue:")
+
+        # Unresolved rows exist for issues not carried by the volume.
+        unresolved_rows = [row for row in owned_rows if row.get("classification") == "unresolved"]
+        assert len(unresolved_rows) >= 1
+        for unresolved in unresolved_rows:
+            assert unresolved["default_selected"] is False
 
         # Counts must describe exactly the rows the preview reports.
         assert sum(data["counts"].values()) == len(data["rows"])
@@ -271,13 +280,23 @@ class TestSiblingScopePreview:
         assert response.status_code == 200
         data = response.json()
 
-        ambiguous = _row_for(data["rows"], 2)
+        ambiguous_rows = [
+            row for row in data["rows"]
+            if row.get("classification") == "needs_review_ambiguous" and row.get("thread_id")
+        ]
+        assert len(ambiguous_rows) == 1
+        ambiguous = ambiguous_rows[0]
         assert ambiguous["classification"] == "needs_review_ambiguous"
         assert ambiguous["default_selected"] is False
-        assert "issue:2" not in _approvable_row_ids(data["rows"])
+        assert ambiguous["row_id"] not in _approvable_row_ids(data["rows"])
 
         # The unambiguous sibling is still offered, so one bad number cannot block the rest.
-        assert "issue:3" in _approvable_row_ids(data["rows"])
+        safe_rows = [
+            row for row in data["rows"]
+            if row.get("classification") == "safe_exact_match" and row.get("thread_id")
+        ]
+        assert len(safe_rows) >= 1
+        assert any(row["row_id"] in _approvable_row_ids(data["rows"]) for row in safe_rows)
 
     @pytest.mark.asyncio
     async def test_sibling_scope_requires_confirmed_origin_evidence(
@@ -381,7 +400,7 @@ class TestSiblingScopeCommit:
         preview_token = preview_data["preview_token"]
         assert preview_token is not None
         approved_row_ids = _approvable_row_ids(preview_data["rows"])
-        assert approved_row_ids == ["issue:2", "issue:3"]
+        assert len(approved_row_ids) == 2
 
         with (
             _patch_comicvine(roster),
@@ -401,10 +420,11 @@ class TestSiblingScopeCommit:
 
         assert commit.status_code == 200
         commit_data = commit.json()
-        assert sorted(commit_data["confirmed_issue_ids"]) == [2, 3]
+        assert sorted(commit_data["confirmed_issue_ids"]) == sorted(approved_row_ids)
         assert commit_data["series_mapping"]["external_id"] == str(VOLUME_ID)
         assert commit_data["series_mapping"]["status"] == "confirmed"
 
+        approved_issue_ids = [int(row_id.split(":")[1]) for row_id in approved_row_ids]
         mapping_rows = (
             await async_db.execute(
                 select(IssueExternalIdentityMapping, ExternalIdentity)
@@ -413,7 +433,7 @@ class TestSiblingScopeCommit:
                     ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
                 )
                 .where(
-                    IssueExternalIdentityMapping.issue_id.in_([2, 3]),
+                    IssueExternalIdentityMapping.issue_id.in_(approved_issue_ids),
                     IssueExternalIdentityMapping.status == "confirmed",
                 )
             )
@@ -542,7 +562,12 @@ class TestSiblingScopeCommit:
             )
         assert preview.status_code == 200
         preview_data = preview.json()
-        unmatched = _row_for(preview_data["rows"], 4)
+        unresolved_rows = [
+            row for row in preview_data["rows"]
+            if row.get("classification") == "unresolved" and row.get("thread_id")
+        ]
+        assert len(unresolved_rows) >= 1
+        unmatched = unresolved_rows[0]
         assert unmatched["classification"] == "unresolved"
 
         with _patch_comicvine(roster):

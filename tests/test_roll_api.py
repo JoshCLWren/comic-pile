@@ -29,8 +29,7 @@ async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None
 @pytest.mark.asyncio
 async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> None:
     """POST /roll/override/ sets specific thread."""
-    _ = sample_data
-    thread_id = 1
+    thread_id = sample_data["threads"][0].id
     response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
     assert response.status_code == 200
 

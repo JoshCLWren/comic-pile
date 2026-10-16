@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ReadingSession, Thread
+from app.models import ReadingSession, Thread, User
 
 
 @pytest.mark.asyncio
@@ -337,7 +337,7 @@ async def test_update_thread_active_status(
 
 @pytest.mark.asyncio
 async def test_update_thread_performance_issue_tracking(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that update_thread correctly handles issue-tracking threads.
 
@@ -357,7 +357,7 @@ async def test_update_thread_performance_issue_tracking(
         issues_remaining=3,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=default_user.id,
         total_issues=5,
         reading_progress="in_progress",
         last_activity_at=now,
@@ -412,16 +412,16 @@ async def test_delete_thread(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
     """Test DELETE /api/v1/threads/{id} removes thread."""
-    _ = sample_data
-    response = await auth_client.delete("/api/v1/threads/1")
+    thread_id = sample_data["threads"][0].id
+    response = await auth_client.delete(f"/api/v1/threads/{thread_id}")
     assert response.status_code == 204
 
     from app.models import Thread
 
-    db_thread = await async_db.get(Thread, 1)
+    db_thread = await async_db.get(Thread, thread_id)
     assert db_thread is None
 
-    response = await auth_client.get("/api/v1/threads/1")
+    response = await auth_client.get(f"/api/v1/threads/{thread_id}")
     assert response.status_code == 404
 
 
@@ -793,14 +793,14 @@ async def test_get_sessions_pagination(auth_client: AsyncClient, sample_data: di
 @pytest.mark.asyncio
 async def test_get_session(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/{id} returns single session."""
-    _ = sample_data
-    response = await auth_client.get("/api/v1/sessions/1")
+    session_id = sample_data["sessions"][0].id
+    response = await auth_client.get(f"/api/v1/sessions/{session_id}")
     assert response.status_code == 200
 
     session = response.json()
-    assert session["id"] == 1
+    assert session["id"] == session_id
     assert session["start_die"] == 6
-    assert session["user_id"] == 1
+    assert session["user_id"] == sample_data["user"].id
     assert "ladder_path" in session
 
 
@@ -815,12 +815,12 @@ async def test_get_session_not_found(auth_client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_get_session_details(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/{id}/details returns events as JSON."""
-    _ = sample_data
-    response = await auth_client.get("/api/v1/sessions/1/details")
+    session_id = sample_data["sessions"][0].id
+    response = await auth_client.get(f"/api/v1/sessions/{session_id}/details")
     assert response.status_code == 200
 
     data = response.json()
-    assert data["session_id"] == 1
+    assert data["session_id"] == session_id
     assert "events" in data
     assert len(data["events"]) > 0
 
@@ -859,11 +859,11 @@ async def test_session_timestamp_consistency(
     await async_db.commit()
     await async_db.refresh(snapshot)
 
-    details_response = await auth_client.get("/api/v1/sessions/1/details")
+    details_response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert details_response.status_code == 200
     details_data = details_response.json()
 
-    snapshots_response = await auth_client.get("/api/v1/sessions/1/snapshots")
+    snapshots_response = await auth_client.get(f"/api/v1/sessions/{session.id}/snapshots")
     assert snapshots_response.status_code == 200
     snapshots_data = snapshots_response.json()
 

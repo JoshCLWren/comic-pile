@@ -88,6 +88,7 @@ async def test_put_verdict_creates_signal_and_returns_canonical_response(
     Args:
         auth_client: Authenticated HTTP client for API requests.
         async_db: Async database session for direct database queries.
+        default_user: The authenticated user owning the taste signal.
     """
     response = await auth_client.put(VERDICT_URL, json={"verdict": "confirmed"})
     assert response.status_code == 200

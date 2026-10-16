@@ -56,7 +56,7 @@ async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "START_DIE" in str(exc_info.value)
 
 async def test_get_or_create_ignores_advisory_lock_failure(
-    async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    async_db: AsyncSession, default_user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Advisory lock errors should not prevent session creation."""
     original_execute = async_db.execute
@@ -68,9 +68,9 @@ async def test_get_or_create_ignores_advisory_lock_failure(
 
     monkeypatch.setattr(async_db, "execute", wrapped_execute)
 
-    session = await get_or_create(async_db, user_id=1)
+    session = await get_or_create(async_db, user_id=default_user.id)
     assert session.id is not None
-    assert session.user_id == 1
+    assert session.user_id == default_user.id
 
 async def test_is_active_true(async_db: AsyncSession, default_user: User) -> None:
     """Session created < 6 hours ago is active."""
@@ -150,12 +150,12 @@ async def test_get_or_create_existing(async_db: AsyncSession, sample_data: dict)
     active_session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
-        user_id=1,
+        user_id=sample_data["user"].id,
     )
     async_db.add(active_session)
     await async_db.commit()
 
-    result = await get_or_create(async_db, user_id=1)
+    result = await get_or_create(async_db, user_id=sample_data["user"].id)
     assert result.id == active_session.id
 
 async def test_get_or_create_new(async_db: AsyncSession, sample_data: dict) -> None:
@@ -164,9 +164,9 @@ async def test_get_or_create_new(async_db: AsyncSession, sample_data: dict) -> N
         session.ended_at = datetime.now(UTC)
     await async_db.commit()
 
-    new_session = await get_or_create(async_db, user_id=1)
+    new_session = await get_or_create(async_db, user_id=sample_data["user"].id)
     assert new_session.start_die == 6
-    assert new_session.user_id == 1
+    assert new_session.user_id == sample_data["user"].id
 
 async def test_end_session(async_db: AsyncSession, sample_data: dict) -> None:
     """Marks session as ended."""
@@ -403,7 +403,7 @@ async def test_get_or_create_non_deadlock_operational_error(
 
     with patch.object(async_db, "commit", side_effect=mock_commit):
         with pytest.raises(OperationalError, match="some other error"):
-            await get_or_create(async_db, user_id=1)
+            await get_or_create(async_db, user_id=sample_data["user"].id)
 
 async def test_is_active_with_naive_datetime(async_db: AsyncSession, default_user: User) -> None:
     """Test that is_active handles datetime without timezone.

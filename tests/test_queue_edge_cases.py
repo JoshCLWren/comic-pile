@@ -206,21 +206,21 @@ async def test_move_to_position_thread_not_in_active_list(
 
 @pytest.mark.asyncio
 async def test_move_to_position_clamps_negative_position(
-    async_db: AsyncSession, default_user: User, sample_data: dict
+    async_db: AsyncSession, sample_data: dict
 ) -> None:
     """move_to_position with new_position < 1 raises ValueError."""
     thread_id = sample_data["threads"][0].id
 
     with pytest.raises(ValueError, match="Position must be at least 1"):
-        await move_to_position(thread_id, default_user.id, 0, async_db)
+        await move_to_position(thread_id, sample_data["user"].id, 0, async_db)
 
 
 @pytest.mark.asyncio
-async def test_get_roll_pool(async_db: AsyncSession, default_user: User, sample_data: dict) -> None:
+async def test_get_roll_pool(async_db: AsyncSession, sample_data: dict) -> None:
     """get_roll_pool returns all active threads ordered by position."""
     from comic_pile.queue import get_roll_pool
 
-    pool = await get_roll_pool(default_user.id, async_db)
+    pool = await get_roll_pool(sample_data["user"].id, async_db)
 
     active_threads = [t for t in sample_data["threads"] if t.status == "active"]
     assert len(pool) == len(active_threads)
