@@ -7,7 +7,7 @@ from typing import cast
 import pytest
 from sqlalchemy import select
 
-from app.models import Event, Issue, Thread
+from app.models import Event, Issue, Thread, User
 from comic_pile.queue import QueuePositionChanges, get_bounded_roll_pool_rows
 from httpx import AsyncClient
 from app.models import ReadingSession
@@ -930,7 +930,7 @@ def test_rating_settings_validates_range(monkeypatch: pytest.MonkeyPatch) -> Non
 
 @pytest.mark.asyncio
 async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict, default_user: User
 ) -> None:
     """Regression test for MissingGreenlet error when accessing snoozed_thread_ids after commit.
 
@@ -941,7 +941,7 @@ async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
 
     # Create a session
     session = ReadingSession(
-        user_id=1,
+        user_id=default_user.id,
         start_die=20,
         manual_die=None,
         snoozed_thread_ids=[threads[0].id],

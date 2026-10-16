@@ -237,6 +237,7 @@ async def test_get_thread_not_found(auth_client: AsyncClient) -> None:
 async def test_update_thread(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
+    """Test updating a thread."""
     thread_obj = next(t for t in sample_data["threads"] if t.title == "Superman")
     update_data = {
         "title": "Superman Updated",

@@ -44,13 +44,17 @@ async def test_volume_idempotent_normalized_and_persists_without_thread(
     assert listing.json()[0]["external_volume_id"] == "4050-1234"
 
 
-@pytest.mark.parametrize("target", [{"thread_id": 1}, {"issue_id": 6}])
+@pytest.mark.parametrize("target_kind", ["thread", "issue"])
 async def test_owned_local_target_roundtrip(
     auth_client: AsyncClient,
     sample_data: dict[str, object],
-    target: dict[str, int],
+    target_kind: str,
 ) -> None:
     """Owners can exclude and remove their local Thread or Issue."""
+    if target_kind == "thread":
+        target = {"thread_id": sample_data["threads"][0].id}
+    else:
+        target = {"issue_id": sample_data["issues"][5].id}
     created = await auth_client.post(BASE, json=target)
     assert created.status_code == 200, created.text
     assert all(created.json()[key] == value for key, value in target.items())
@@ -127,13 +131,16 @@ async def test_database_exactly_one_target_constraint(
     async_db: AsyncSession, sample_data: dict[str, object]
 ) -> None:
     """Database enforcement remains effective for writers bypassing Pydantic."""
+    sample_user = sample_data["user"]
+    sample_thread = sample_data["threads"][0].id
+    sample_issue = sample_data["issues"][5].id
     with pytest.raises(IntegrityError):
         async with async_db.begin_nested():
-            async_db.add(CollectionExclusion(user_id=1, thread_id=1, issue_id=6))
+            async_db.add(CollectionExclusion(user_id=sample_user.id, thread_id=sample_thread, issue_id=sample_issue))
             await async_db.flush()
     with pytest.raises(IntegrityError):
         async with async_db.begin_nested():
-            async_db.add(CollectionExclusion(user_id=1, external_volume_id="4050-1"))
+            async_db.add(CollectionExclusion(user_id=sample_user.id, external_volume_id="4050-1"))
             await async_db.flush()
 
 
@@ -187,10 +194,12 @@ async def test_all_target_kinds_survive_deleted_thread_and_issue(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict[str, object]
 ) -> None:
     """Durable exclusions outlive both the target issue and parent Thread."""
+    thread_id = sample_data["threads"][1].id
+    issue_id = sample_data["issues"][5].id
     targets = (
         {"provider": "comicvine", "external_volume_id": "4050-777"},
-        {"thread_id": 2},
-        {"issue_id": 6},
+        {"thread_id": thread_id},
+        {"issue_id": issue_id},
     )
     recorded = []
     for target in targets:
@@ -198,12 +207,12 @@ async def test_all_target_kinds_survive_deleted_thread_and_issue(
         assert response.status_code == 200, response.text
         recorded.append(response.json())
 
-    await async_db.execute(delete(Issue).where(Issue.id == 6))
+    await async_db.execute(delete(Issue).where(Issue.id == issue_id))
     await async_db.commit()
     before_thread_delete = (await auth_client.get(BASE)).json()
     assert before_thread_delete == recorded
 
-    await async_db.execute(delete(Thread).where(Thread.id == 2))
+    await async_db.execute(delete(Thread).where(Thread.id == thread_id))
     await async_db.commit()
     after_thread_delete = (await auth_client.get(BASE)).json()
     assert after_thread_delete == recorded
