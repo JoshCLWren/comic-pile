@@ -48,9 +48,9 @@ class Issue(Base):
         # Composite identity backing fk_threads_frontier_same_thread (#3225):
         # lets threads(id, next_unread_issue_id) reference
         # issues(thread_id, id) so a frontier can never point at another
-        # thread's issue. Redundant with the primary key by design — a
-        # foreign key must reference an explicit unique constraint.
-        UniqueConstraint("thread_id", "id", name="uq_issues_thread_id_id"),
+        # thread's issue. This constraint is created in the migration 
+        # p322500000001_frontier_same_thread_fk.py to ensure it exists
+        # before the foreign key is created.
         Index("ix_issue_thread_id", "thread_id"),
         Index("ix_issue_thread_is_read", "thread_id", "status"),
         Index("ix_issue_thread_position", "thread_id", "position"),
