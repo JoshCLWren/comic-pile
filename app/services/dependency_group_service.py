@@ -258,7 +258,59 @@ class DependencyGroupService:
             The user's groups with memberships resolved to comic metadata.
         """
         groups = await groups_repo.list_groups_for_user(self._db, user_id)
-        return [await self._group_response(group) for group in groups]
+        # Batch-resolve membership metadata across all groups to avoid per-group
+        # N+1 queries (each group previously re-queried memberships plus batched
+        # thread/issue lookups).
+        all_memberships: list[DependencyGroupMembership] = []
+        for group in groups:
+            all_memberships.extend(group.memberships or [])
+
+        thread_ids = {
+            member.thread_id for member in all_memberships if member.thread_id is not None
+        }
+        issue_ids = {
+            member.issue_id for member in all_memberships if member.issue_id is not None
+        }
+
+        thread_titles: dict[int, str] = {}
+        if thread_ids:
+            thread_titles = await groups_repo.thread_titles_by_id(self._db, thread_ids)
+
+        issue_metadata: dict[int, tuple[str | None, str | None]] = {}
+        if issue_ids:
+            issue_metadata = await groups_repo.issue_series_metadata_by_id(self._db, issue_ids)
+
+        responses: list[DependencyGroupResponse] = []
+        for group in groups:
+            memberships = list(group.memberships or [])
+            member_responses: list[DependencyGroupMemberResponse] = []
+            for member in memberships:
+                if member.thread_id is not None:
+                    series_title = thread_titles.get(member.thread_id)
+                    issue_number = None
+                else:
+                    issue_number, series_title = issue_metadata.get(
+                        member.issue_id
+                    ) or (None, None)
+                member_responses.append(
+                    DependencyGroupMemberResponse(
+                        id=member.id,
+                        thread_id=member.thread_id,
+                        issue_id=member.issue_id,
+                        series_title=series_title,
+                        issue_number=issue_number,
+                        sequence_order=member.sequence_order,
+                    )
+                )
+            responses.append(
+                DependencyGroupResponse(
+                    id=group.id,
+                    name=group.name,
+                    created_at=group.created_at,
+                    memberships=member_responses,
+                )
+            )
+        return responses
 
     async def create_group(
         self,
