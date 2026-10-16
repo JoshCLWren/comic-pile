@@ -765,6 +765,27 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
         replace_factory_labels(pr_number, "factory:unowned", "factory:review")
         return {"pr": pr_number, "status": "review", "head": head}
 
+    # CI reconciliation is also a ready-promoter, not just the review callback.
+    # Both must enforce the same trusted exact-head cross-model identity gate.
+    try:
+        cross_model = head_has_cross_model_review(
+            model_comment_bodies(pr_number), pr=pr_number, head=head
+        )
+    except (RuntimeError, json.JSONDecodeError) as exc:
+        return {
+            "pr": pr_number,
+            "status": "retry-ci",
+            "reason": f"cross-model provenance could not be inspected: {exc}",
+        }
+    if not cross_model:
+        replace_factory_labels(pr_number, "factory:unowned", "factory:blocked")
+        return {
+            "pr": pr_number,
+            "status": "cross-model-provenance-blocked",
+            "head": head,
+            "reason": "trusted exact-head author/reviewer model markers are missing",
+        }
+
     mechanical = mechanical_merge_gate(pr_number, head)
     current_head = str(pr_json(pr_number).get("headRefOid") or "")
     if current_head != head:
@@ -1361,6 +1382,32 @@ def handle_review(
         head=reviewed_head,
         reviewer=worker,
     )
+
+    # A semantic approval alone cannot make this head mergeable. If an agent
+    # bypassed the wrapper's trusted contribution record, the cross-model
+    # gate cannot establish the author and MUST fail closed instead of sending
+    # the same unchanged head through another costly reviewer session.
+    if not head_has_cross_model_review(
+        model_comment_bodies(pr_number), pr=pr_number, head=reviewed_head
+    ):
+        return return_to_review(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            reviewer=worker,
+            verdict=verdict,
+            excerpt="",
+            note=(
+                "Blocked: exact-head cross-model author/reviewer provenance is "
+                "missing or invalid. Verify the trusted wrapper's contributor "
+                "recording; do not re-review this unchanged head."
+            ),
+            status="cross-model-provenance-blocked",
+            head=reviewed_head,
+            producer=producer,
+            marker=marker,
+            stage="factory:blocked",
+        )
 
     mechanical = mechanical_merge_gate(pr_number, reviewed_head)
     latest = pr_json(pr_number)

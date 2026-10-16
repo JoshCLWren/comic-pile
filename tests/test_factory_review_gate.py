@@ -100,6 +100,9 @@ def wire_controller(
     )
     monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: list(comments))
     monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: list(comments))
+    # Most tests exercise existing semantic/mechanical behavior; independently
+    # test the fail-closed cross-model gate with an explicit override below.
+    monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: True)
     monkeypatch.setattr(
         module,
         "roster_model_for_worker",
@@ -380,6 +383,32 @@ def test_controller_promotes_independent_green_review(monkeypatch: MonkeyPatch) 
     assert result["status"] == "ready"
     assert transitions[-1]["pr_stage"] == "factory:ready"
 
+
+def test_approved_head_without_cross_model_provenance_is_blocked(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A semantic APPROVE cannot loop reviews or become ready without author identity."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch,
+        module,
+        [payload],
+        comments=producer_contribution(),
+        mechanical=True,
+    )
+    monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: False)
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+    assert result["status"] == "cross-model-provenance-blocked"
+    assert transitions[-1]["pr_stage"] == "factory:blocked"
+    assert all(item["pr_stage"] != "factory:ready" for item in transitions)
+    assert "cross-model" in str(posted[-1]["note"])
 
 def test_controller_mechanical_failure_routes_to_repair(
     monkeypatch: MonkeyPatch,
