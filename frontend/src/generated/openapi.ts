@@ -12739,6 +12739,16 @@ export interface components {
             created_issues: number;
             /** Enabled Sources */
             enabled_sources: number;
+            /**
+             * Excluded Issues
+             * @default 0
+             */
+            excluded_issues: number;
+            /**
+             * Excluded Sources
+             * @default 0
+             */
+            excluded_sources: number;
             /** Failed Sources */
             failed_sources: number;
             /** Failures */
@@ -12751,6 +12761,11 @@ export interface components {
             issues_checked: number;
             /** Reused Issues */
             reused_issues: number;
+            /**
+             * Skipped Sources
+             * @default 0
+             */
+            skipped_sources: number;
             /** Successful Sources */
             successful_sources: number;
             /** Total Sources */

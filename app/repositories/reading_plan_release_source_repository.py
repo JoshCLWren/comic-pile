@@ -199,3 +199,37 @@ async def mark_synced(db: AsyncSession, *, source_id: int, synced_at: datetime) 
         .where(ReadingPlanReleaseSource.id == source_id)
         .values(last_synced_at=synced_at)
     )
+
+
+async def get_current_for_sync(
+    db: AsyncSession, *, source_id: int, user_id: int,
+) -> ReadingPlanReleaseSource | None:
+    """Reload ownership and current enable state after provider I/O, locking the row."""
+    return (await db.scalars(
+        _base_statement().where(ReadingPlanReleaseSource.id == source_id,
+                                ContinuityPlan.user_id == user_id)
+        .with_for_update(of=ReadingPlanReleaseSource)
+        .execution_options(populate_existing=True)
+    )).one_or_none()
+
+
+async def enabled_siblings(
+    db: AsyncSession, *, source: ReadingPlanReleaseSource, user_id: int,
+) -> list[ReadingPlanReleaseSource]:
+    """Lock only this owner's enabled subscriptions to the same Thread and volume."""
+    return list((await db.scalars(
+        _base_statement().where(
+            ReadingPlanReleaseSource.thread_id == source.thread_id,
+            ReadingPlanReleaseSource.external_identity_id == source.external_identity_id,
+            ReadingPlanReleaseSource.enabled.is_(True), ContinuityPlan.user_id == user_id,
+        ).order_by(ReadingPlanReleaseSource.id).with_for_update(of=ReadingPlanReleaseSource)
+    )).all())
+
+
+async def owned_plan_for_extension(
+    db: AsyncSession, *, plan_id: int, user_id: int,
+) -> ContinuityPlan | None:
+    """Lock a plan before appending material, without crossing reader ownership."""
+    return (await db.scalars(select(ContinuityPlan).where(
+        ContinuityPlan.id == plan_id, ContinuityPlan.user_id == user_id,
+    ).with_for_update().execution_options(populate_existing=True))).one_or_none()
