@@ -89,7 +89,7 @@ async def list_inbox_items(
         )
         .where(
             Thread.user_id == user_id,
-            IssueExternalIdentityMapping.status.in_(["unresolved", "candidate", "deferred"]),
+            IssueExternalIdentityMapping.status.in_(["unresolved", "candidate", "confirmed", "rejected"]),
         )
     )
 

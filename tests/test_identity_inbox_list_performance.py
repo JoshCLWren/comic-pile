@@ -161,28 +161,28 @@ async def test_list_inbox_items_scoped_to_user(async_db) -> None:
 
 @pytest.mark.asyncio
 async def test_list_inbox_items_filters_by_status(async_db) -> None:
-    """list_inbox_items only returns unresolved, candidate, and deferred mappings."""
+    """list_inbox_items only returns unresolved, candidate, and confirmed mappings."""
     user = await _user(async_db)
     thread = await _thread(async_db, user.id, "Status Thread")
     issue = await _issue(async_db, thread.id, "1")
     identity_unresolved = await _identity(async_db, "comicvine", "300")
     identity_candidate = await _identity(async_db, "comicvine", "301")
-    identity_deferred = await _identity(async_db, "comicvine", "302")
-    identity_confirmed = await _identity(async_db, "comicvine", "303")
-    identity_rejected = await _identity(async_db, "comicvine", "304")
+    identity_confirmed = await _identity(async_db, "comicvine", "302")
+    identity_rejected = await _identity(async_db, "comicvine", "303")
+    identity_deferred = await _identity(async_db, "comicvine", "304")
 
     await _mapping(async_db, issue.id, identity_unresolved.id, status="unresolved")
     await _mapping(async_db, issue.id, identity_candidate.id, status="candidate")
-    await _mapping(async_db, issue.id, identity_deferred.id, status="deferred")
     await _mapping(async_db, issue.id, identity_confirmed.id, status="confirmed")
     await _mapping(async_db, issue.id, identity_rejected.id, status="rejected")
+    await _mapping(async_db, issue.id, identity_deferred.id, status="deferred")
 
     items, total = await list_inbox_items(async_db, user_id=user.id)
 
     assert total == 3
     assert len(items) == 3
     statuses = {item.status for item in items}
-    assert statuses == {"unresolved", "candidate", "deferred"}
+    assert statuses == {"unresolved", "candidate", "confirmed"}
 
 
 @pytest.mark.asyncio
