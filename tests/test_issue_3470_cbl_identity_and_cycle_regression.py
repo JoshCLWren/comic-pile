@@ -2,7 +2,6 @@
 no false cycles, bulk dependency materialization blocked, idempotent repair."""
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
