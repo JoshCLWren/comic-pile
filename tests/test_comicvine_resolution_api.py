@@ -656,3 +656,65 @@ async def test_origin_cover_persists_via_existing_hydrator_after_confirmation(
     sibling_state = await auth_client.get(f"/api/v1/comicvine/issues/{sibling_id}/identity")
     assert sibling_state.status_code == 200
     assert sibling_state.json()["has_confirmed_identity"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["confirm", "replace"])
+@pytest.mark.parametrize("old_url", [
+    None,
+    "https://comicvine.gamespot.com/ff-7/4000-281813/",
+    "https://comicvine.gamespot.com/issue/4000-281813/",
+])
+async def test_confirmation_preserves_stale_metadata_age_for_fallback(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+    old_url: str | None,
+) -> None:
+    """URL updates and local normalization cannot make stale provider evidence fresh."""
+    from datetime import timedelta
+    from unittest.mock import AsyncMock
+
+    from app.services import comicvine_fallback
+
+    thread = Thread(
+        user_id=default_user.id, title="FF", format="issue", issues_remaining=1,
+        total_issues=1, queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="7", position=1, status="unread")
+    async_db.add(issue)
+    old_timestamp = datetime.now(UTC) - timedelta(days=31)
+    identity = _issue_identity("281813", {"raw_provider_payload": {
+        "id": 281813, "name": "FF Seven", "issue_number": "7",
+        "cover_date": "2011-09-01", "store_date": None,
+        "image": {"original_url": "https://example.com/old-cover.jpg"},
+        "volume": {"id": 39453}, "person_credits": [], "character_credits": [],
+        "team_credits": [], "story_arc_credits": [], "date_last_updated": None,
+    }})
+    identity.external_url = old_url
+    identity.updated_at = old_timestamp
+    async_db.add(identity)
+    await async_db.flush()
+    issue_id, identity_id = issue.id, identity.id
+
+    async def refresh(target_id: int) -> bool:
+        assert target_id == identity_id
+        # Recheck after commit, as the real fallback does in its own session.
+        await async_db.refresh(identity)
+        assert comicvine_fallback.metadata_needs_hydration(identity)
+        assert identity.updated_at == old_timestamp
+        return False
+
+    refresh_spy = AsyncMock(side_effect=refresh)
+    monkeypatch.setattr(comicvine_fallback, "refresh_issue_metadata", refresh_spy)
+    response = await auth_client.post(
+        f"/api/v1/comicvine/issues/{issue_id}/identity:{action}",
+        json={"comicvine_issue_id": 281813},
+    )
+    assert response.status_code == 200
+    refresh_spy.assert_awaited_once_with(identity_id)
+    assert response.json()["confirmed_mappings"][0]["comicvine_id"] == "281813"

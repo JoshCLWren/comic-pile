@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.comicvine_hydration import normalize_issue
 from app.external_identities import (
@@ -677,6 +678,10 @@ async def save_confirmed_comicvine_identity(
     from app.services.ownership import get_owned_issue_or_404
 
     await get_owned_issue_or_404(db, user_id, issue_id)
+    existing_identity = await catalog_repository.get_provider_issue_identity(
+        db, provider="comicvine", external_id=str(comicvine_issue_id),
+    )
+    metadata_updated_at = existing_identity.updated_at if existing_identity is not None else None
     if replace_existing:
         mapping = await replace_comicvine_identity(
             db, user_id=user_id, issue_id=issue_id,
@@ -695,6 +700,11 @@ async def save_confirmed_comicvine_identity(
         if isinstance(raw, dict) and str(raw.get("id")) == str(comicvine_issue_id):
             # Recover curated fields from already-stored provider evidence first.
             identity.metadata_json = {**identity.metadata_json, **normalize_issue(raw)}
+        if metadata_updated_at is not None:
+            # URL changes and local normalization are not a provider refresh. Keep the
+            # old age visible to both this check and the fallback's separate session.
+            identity.updated_at = metadata_updated_at
+            flag_modified(identity, "updated_at")
         needs_refresh = metadata_needs_hydration(identity)
     # The fallback uses a separate session, so the mapping must be durable first.
     # Construct the response before commit to avoid expired ORM attribute access.

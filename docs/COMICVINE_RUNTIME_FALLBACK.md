@@ -59,3 +59,7 @@ no cover, does not trigger another lookup. Missing metadata uses the confirmed i
 existing timeout, retry, and deduplication controls. Provider failure leaves the confirmed mapping
 intact; Roll and rating continue to serve stored data through their existing nonblocking reads.
 The origin remains excluded from sibling approval.
+
+Confirmation preserves an existing identity's metadata timestamp when only its URL or local
+normalization changes. Those edits are not a provider refresh: stale evidence must remain stale
+through the post-commit fallback's own freshness check.
