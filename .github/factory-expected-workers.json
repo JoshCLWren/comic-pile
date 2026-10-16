@@ -33,7 +33,9 @@
     81,
     82,
     83,
-    86
+    86,
+    87,
+    88
   ],
   "retired_workers": [
     9,
@@ -66,6 +68,7 @@
   ],
   "retired_models": [
     "apodex/apodex-1.1-mini:free",
+    "cat-jam-free",
     "deepseek-v4-flash-free",
     "exo-free",
     "fledge-alpha-free",

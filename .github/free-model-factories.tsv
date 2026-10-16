@@ -31,5 +31,7 @@
 80	nvidia	z-ai/glm-5.3-flash	40	dispatcher	NVIDIA GLM 5.3 Flash
 81	nvidia	deepseek-ai/deepseek-v4.1-flash	50	dispatcher	NVIDIA DeepSeek V4.1 Flash
 82	z-ai	glm-4.7-flash	55	dispatcher	Z.AI GLM 4.7 Flash
-83	opencode-free	cat-jam-free	45	dispatcher	OpenCode Cat Jam Free
+83	opencode-free	beam-free	45	dispatcher	OpenCode Beam Free
 86	nvidia	meta/muse-glimmer-30b	0	dispatcher	NVIDIA Muse Glimmer 30B
+87	opencode-free	glm-5.3-flash-free	30	dispatcher	OpenCode Glm 5.3 Flash Free
+88	opencode-free	ll-alpha-free	35	dispatcher	OpenCode Ll Alpha Free
