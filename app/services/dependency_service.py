@@ -9,9 +9,11 @@ sibling repositories; HTTP status mapping lives in routers.
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException
 
 from app.models import Dependency, Issue, Thread
 from app.repositories import dependency_repository, issue_repository
+from app.services.ownership_guard import require_dependency_endpoints_owned
 from app.schemas.dependency import (
     BlockingDependency,
     BlockingExplanation,
@@ -307,10 +309,15 @@ async def create_dependency(
     """Create a hard-block dependency between owned threads or owned issues."""
     from app.repositories import issue_repository, thread_repository
     
-    # Validate both issues exist and belong to the user
-    source_issue = await issue_repository.get_issue(db, source_issue_id)
-    target_issue = await issue_repository.get_issue(db, target_issue_id)
-    if not source_issue or not target_issue:
+    # Both endpoints must belong to the requesting reader. Shared catalog
+    # links (issues.catalog_issue_id) are never consulted here: two readers
+    # may reference one CatalogIssue while their personal Issue rows stay
+    # distinct, so catalog identity can never authorize a cross-user edge.
+    try:
+        source_issue, target_issue = await require_dependency_endpoints_owned(
+            db, user_id, source_issue_id, target_issue_id
+        )
+    except HTTPException:
         return None, "Issue not found"
 
     source_thread = await thread_repository.find_owned(db, user_id, source_issue.thread_id)
