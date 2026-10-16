@@ -292,9 +292,11 @@ def head_contributor_provenance(
     only the workers recorded against ``head`` would let an earlier repairer
     approve a later head that still carries its own commits, which is the #2846
     defect one repair cycle later. ``provenance_complete`` reports whether a
-    controller-authored marker exists for this exact head; when one does not,
-    review independence must fail closed instead of assuming the apparent
-    reviewer never touched the head.
+    controller-authored contributor marker exists for this exact head; when one
+    does not, review independence must fail closed instead of assuming the
+    apparent reviewer never touched the head. A caller that also holds a
+    controller-authored exact-head author attestation composes that in; see
+    :func:`factory-review-controller.exact_head_provenance`.
     """
     exact = current_head_contributors(comments, pr=pr, head=head)
     contributors = recorded_pr_contributors(comments, pr=pr)
