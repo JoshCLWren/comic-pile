@@ -15,11 +15,11 @@ AUTH_MODULES = (
     REPOSITORY_ROOT / "app" / "auth.py",
     REPOSITORY_ROOT / "app" / "api" / "auth.py",
     REPOSITORY_ROOT / "app" / "services" / "password_reset_service.py",
-    REPOSITORY_ROOT / "services" / "password_reset_mailer.py",
-    REPOSITORY_ROOT / "repositories" / "user_repository.py",
-    REPOSITORY_ROOT / "repositories" / "revoked_token_repository.py",
-    REPOSITORY_ROOT / "repositories" / "password_reset_token_repository.py",
-    REPOSITORY_ROOT / "repositories" / "failed_login_repository.py",
+    REPOSITORY_ROOT / "app" / "services" / "password_reset_mailer.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "user_repository.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "revoked_token_repository.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "password_reset_token_repository.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "failed_login_repository.py",
 )
 
 READING_SESSION_REPOSITORY_PATTERNS = [
@@ -114,16 +114,16 @@ def test_auth_code_does_not_touch_reading_session_domain() -> None:
     """
     findings: list[str] = []
     for module_path in AUTH_MODULES:
-        if module_path.exists():
-            findings.extend(_scan_module_for_patterns(module_path, READING_SESSION_MODEL_PATTERNS))
+        assert module_path.exists(), f"AUTH_MODULES entry does not exist: {module_path}"
+        findings.extend(_scan_module_for_patterns(module_path, READING_SESSION_MODEL_PATTERNS))
     for module_path in AUTH_MODULES:
-        if module_path.exists():
-            findings.extend(
-                _scan_module_for_patterns(
-                    module_path,
-                    READING_SESSION_REPOSITORY_PATTERNS + READING_SESSION_SERVICE_PATTERNS,
-                )
+        assert module_path.exists(), f"AUTH_MODULES entry does not exist: {module_path}"
+        findings.extend(
+            _scan_module_for_patterns(
+                module_path,
+                READING_SESSION_REPOSITORY_PATTERNS + READING_SESSION_SERVICE_PATTERNS,
             )
+        )
 
     assert not findings, (
         "Auth code must not import or call reading-session repository/service/model "
@@ -245,3 +245,23 @@ def test_reading_session_repository_documents_its_auth_boundary() -> None:
     assert "authentication state" in content.lower(), (
         "reading_session_repository.py must document that it does not touch authentication state"
     )
+
+
+def test_guard_detects_violation_in_previously_unscanned_module() -> None:
+    """A planted reading-session import in a previously skipped module is flagged.
+
+    Regression for #3772: before the path fix the five auth-state modules were
+    silently skipped, so this violation would have gone unnoticed. The guard
+    now scans them and reports the offending import.
+    """
+    module_path = REPOSITORY_ROOT / "app" / "services" / "password_reset_mailer.py"
+    original = module_path.read_bytes()
+    try:
+        module_path.write_bytes(
+            original + b"\nfrom app.models.reading_session import ReadingSession\n"
+        )
+        assert module_path.exists()
+        findings = _scan_module_for_patterns(module_path, READING_SESSION_MODEL_PATTERNS)
+        assert findings, "guard must report the planted reading-session import"
+    finally:
+        module_path.write_bytes(original)
