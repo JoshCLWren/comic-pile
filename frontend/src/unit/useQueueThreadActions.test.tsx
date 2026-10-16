@@ -4,8 +4,6 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { SessionRefetch } from '../hooks/useSession'
-
-const navigateSpy = vi.fn()
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import type { UseQueueThreadActionsDeps } from '../pages/QueuePage/useQueueThreadActions'
 import { queryClient as sharedQueryClient } from '../query/queryClient'
@@ -66,16 +64,6 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
     ...overrides,
   }
 }
-
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return {
-    ...actual,
-    useNavigate: () => navigateSpy,
-    useLocation: () => ({ state: null, pathname: '/', search: '', hash: '', key: 'test' }),
-    Navigate: () => null,
-  }
-})
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
