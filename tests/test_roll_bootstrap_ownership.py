@@ -123,12 +123,10 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
     db = AsyncMock()
     db.execute.side_effect = [
         _Result(rows=[]),           # pool
-        _Result(rows=[owned_snoozed]),  # snoozed threads
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[owned_snoozed]),  # snoozed and skipped threads
+        _Result(rows=[]),          # blocked threads (windowed blocked total)
+        _Result(rows=[]),          # stale candidates (windowed stale total)
+        _Result(rows=[]),          # active and completed library
         _Result(rows=[]),          # thread tags
     ]
 
@@ -202,11 +200,9 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
     db = AsyncMock()
     db.execute.side_effect = [
         _Result(rows=pool_rows),   # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),          # blocked threads (windowed blocked total)
+        _Result(rows=[]),          # stale candidates (windowed stale total)
+        _Result(rows=[]),          # active and completed library
         _Result(rows=[]),          # thread tags
     ]
 
@@ -512,11 +508,9 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
     db = AsyncMock()
     db.execute.side_effect = [
         _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),          # blocked threads (windowed blocked total)
+        _Result(rows=[]),          # stale candidates (windowed stale total)
+        _Result(rows=[]),          # active and completed library
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -581,11 +575,9 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
     db = AsyncMock()
     db.execute.side_effect = [
         _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),          # blocked threads (windowed blocked total)
+        _Result(rows=[]),          # stale candidates (windowed stale total)
+        _Result(rows=[]),          # active and completed library
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -652,11 +644,9 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
     db = AsyncMock()
     db.execute.side_effect = [
         _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=0),   # stale count
-        _Result(rows=[]),          # all active
-        _Result(rows=[]),          # completed
+        _Result(rows=[]),          # blocked threads (windowed blocked total)
+        _Result(rows=[]),          # stale candidates (windowed stale total)
+        _Result(rows=[]),          # active and completed library
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)
@@ -743,8 +733,11 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
     original_choice = random_mod.choice
 
     def _capturing_choice(seq):
+        # Record every candidate the service considered, then pick a fixed one
+        # so the chosen-row assertion stays deterministic.
         if seq and isinstance(seq[0], int) and len(seq) > 0:
             stale_ids_captured.extend(seq)
+            return seq[1]
         return original_choice(seq)
 
     monkeypatch.setattr(random_mod, "choice", _capturing_choice)
@@ -752,23 +745,34 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
     db = AsyncMock()
     db.execute.side_effect = [
         _Result(rows=[]),           # pool
-        _Result(scalar_value=0),   # blocked count
-        _Result(rows=[]),          # blocked threads
-        _Result(scalar_value=3),   # stale count
-        _Result(rows=[(10,), (20,), (30,)]),
+        _Result(rows=[]),          # blocked threads (windowed blocked total)
         _Result(
             rows=[
+                SimpleNamespace(
+                    id=10,
+                    title="Stale Alpha",
+                    format="ongoing",
+                    last_activity_at=datetime(2026, 6, 1, tzinfo=UTC),
+                    stale_total=3,
+                ),
                 SimpleNamespace(
                     id=20,
                     title="Chosen Stale",
                     format="ongoing",
                     last_activity_at=datetime(2026, 7, 1, tzinfo=UTC),
-                )
+                    stale_total=3,
+                ),
+                SimpleNamespace(
+                    id=30,
+                    title="Stale Gamma",
+                    format="ongoing",
+                    last_activity_at=datetime(2026, 8, 1, tzinfo=UTC),
+                    stale_total=3,
+                ),
             ]
         ),
-        _Result(rows=[]),
-        _Result(rows=[]),
-        _Result(rows=[]),  # thread tags
+        _Result(rows=[]),          # active and completed library
+        _Result(rows=[]),          # thread tags
     ]
 
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db, timezone=None)

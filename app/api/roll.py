@@ -10,15 +10,14 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import Text, func, or_, select
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.config import get_recommendation_settings
 from app.database import get_db
 from app.middleware import limiter
-from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, ReadingSession, Snapshot, Thread
+from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
@@ -45,14 +44,12 @@ from app.schemas import (
     OverrideRequest,
     RecommendationExplanationResponse,
     RollBootstrapResponse,
-    RollBootstrapThread,
     RollRequest,
     RollResponse,
     SessionMode,
     SessionModeResponse,
     SessionModeUpdateRequest,
     SessionResponse,
-    ThreadExclusionReason,
 )
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
@@ -1123,173 +1120,35 @@ async def roll_bootstrap(
         pending_thread_title=pending_thread_title,
     )
 
-    route_labels_subq = (
-        select(
-            func.array_agg(func.distinct(DependencyGroup.name)),
-        )
-        .select_from(DependencyGroupMembership)
-        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
-        .where(
-            or_(
-                DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
-            ),
-            DependencyGroup.user_id == user_id,
-        )
-        .correlate(Thread)
-        .scalar_subquery()
-        .cast(ARRAY(Text))
-    )
-
-    pool_query = (
-        select(
-            Thread.id,
-            Thread.title,
-            Thread.format,
-            Thread.next_unread_issue_id.label("issue_id"),
-            Issue.issue_number,
-            route_labels_subq.label("route_labels"),
-        )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .where(Thread.is_blocked.is_(False))
-        .order_by(Thread.queue_position)
-        .limit(die_size)
-    )
-
+    # Issue #3375: every thread-shaped section of this response is one
+    # batched read answered by the service layer, so the query count no
+    # longer scales with the size of the library.
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
     derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
-    snoozed_id_set = set(snoozed_ids)
-    skipped_id_set = set(skipped_ids)
-    effective_snoozed_set = snoozed_id_set | derived_snoozed_ids
-    effective_snoozed_ids = sorted(effective_snoozed_set)
-    if effective_snoozed_ids:
-        pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
-    if skipped_ids:
-        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
 
-    pool_result = await db.execute(pool_query)
-    pool_rows = pool_result.all()
-
-    roll_pool = [
-        RollBootstrapThread(
-            id=row.id,
-            title=row.title,
-            format=normalize_format_value(row.format),
-            issue_id=row.issue_id,
-            issue_number=row.issue_number,
-            route_labels=list(row.route_labels or []),
-        )
-        for row in pool_rows
-    ]
-
-    snoozed_threads: list[RollBootstrapThread] = []
-    if snoozed_ids:
-        snoozed_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(snoozed_ids))
-        )
-        snoozed_threads = [
-            RollBootstrapThread(
-                id=row.id, title=row.title, format=normalize_format_value(row.format)
-            )
-            for row in snoozed_result.all()
-        ]
-
-    skipped_threads: list[RollBootstrapThread] = []
-    if skipped_ids:
-        skipped_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(skipped_ids))
-        )
-        skipped_threads = [
-            RollBootstrapThread(
-                id=row.id, title=row.title, format=normalize_format_value(row.format)
-            )
-            for row in skipped_result.all()
-        ]
-
-    blocked_count_result = await db.execute(
-        select(func.count())
-        .select_from(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(True))
-    )
-    blocked_count = blocked_count_result.scalar() or 0
-
-    blocked_result = await db.execute(
-        select(Thread.id, Thread.title, Thread.format)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(True))
-        .order_by(Thread.queue_position)
-        .limit(20)
+    bootstrap_data = await RollService(db).load_bootstrap_thread_data(
+        user_id=user_id,
+        die_size=die_size,
+        snoozed_ids=snoozed_ids,
+        skipped_ids=skipped_ids,
+        derived_snoozed_ids=derived_snoozed_ids,
+        summary_limit=RollBootstrapResponse.summary_limit,
     )
 
-    blocked_threads = [
-        RollBootstrapThread(
-            id=row.id, title=row.title, format=normalize_format_value(row.format)
-        )
-        for row in blocked_result.all()
-    ]
+    roll_pool = bootstrap_data.roll_pool
+    snoozed_threads = bootstrap_data.snoozed_threads
+    skipped_threads = bootstrap_data.skipped_threads
+    blocked_threads = bootstrap_data.blocked_threads
+    blocked_count = bootstrap_data.blocked_count
+    stale_thread = bootstrap_data.stale_thread
+    stale_thread_count = bootstrap_data.stale_thread_count
+    library = bootstrap_data.library
+
     snoozed_count = len(snoozed_threads)
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
     skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
-
-    stale_cutoff = datetime.now(UTC) - timedelta(days=7)
-    effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
-    stale_base = (
-        select(func.count())
-        .select_from(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(False))
-        .where(effective_activity < stale_cutoff)
-    )
-    if effective_snoozed_ids:
-        stale_base = stale_base.where(Thread.id.not_in(effective_snoozed_ids))
-    stale_count_result = await db.execute(stale_base)
-    stale_thread_count = stale_count_result.scalar() or 0
-
-    stale_thread = None
-    if stale_thread_count > 0:
-        stale_ids_query = (
-            select(Thread.id)
-            .where(Thread.user_id == user_id)
-            .where(Thread.status == "active")
-            .where(Thread.is_blocked.is_(False))
-            .where(effective_activity < stale_cutoff)
-        )
-        if effective_snoozed_ids:
-            stale_ids_query = stale_ids_query.where(Thread.id.not_in(effective_snoozed_ids))
-        stale_ids_result = await db.execute(stale_ids_query)
-        stale_ids = [row[0] for row in stale_ids_result.all()]
-        if stale_ids:
-            chosen_id = random.choice(stale_ids)
-            stale_detail_result = await db.execute(
-                select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
-                .where(Thread.id == chosen_id)
-            )
-            stale_row = stale_detail_result.first()
-            if stale_row:
-                stale_last_activity = (
-                    stale_row.last_activity_at.isoformat()
-                    if stale_row.last_activity_at
-                    else None
-                )
-                stale_thread = RollBootstrapThread(
-                    id=stale_row.id,
-                    title=stale_row.title,
-                    format=normalize_format_value(stale_row.format),
-                    last_activity_at=stale_last_activity,
-                )
 
     # One bounded tag read for every thread this bootstrap returns (issue
     # #3425), so Roll rows show tags without a query per face. Threads have no
@@ -1303,130 +1162,26 @@ async def roll_bootstrap(
     for thread in bootstrap_threads:
         thread.tags = tags_by_thread.get(thread.id, [])
 
-    # Exclusion transparency for issue #3125: enumerate every series
-    # not in the roll pool and explain why, so the user can see what
-    # vanished and why. The pool query above is capped at the die size
-    # and only drives the face mapping, so availability is decided by
-    # the pool filters themselves: a rollable series beyond the die
-    # window is still available and must never be reported as excluded.
-    all_active_result = await db.execute(
-        select(
-            Thread.id,
-            Thread.title,
-            Thread.format,
-            Thread.queue_position,
-            Thread.is_blocked,
-        )
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .order_by(Thread.queue_position)
-    )
-    all_active_rows = all_active_result.all()
-
-    available_ids: set[int] = set()
-    excluded: dict[int, ThreadExclusionReason] = {}
-    inactive: list[ThreadExclusionReason] = []
-    blocked_ids: list[int] = []
-
-    for row in all_active_rows:
-        tid = row.id
-        title = row.title
-        fmt = normalize_format_value(row.format)
-        queue_pos = row.queue_position
-        # Mirrors pool_query's WHERE clause exactly: active (already
-        # filtered above), queued, unblocked, and not snoozed or
-        # skipped in any scope.
-        is_blocked = row.is_blocked
-        is_rollable = (
-            queue_pos >= 1
-            and not is_blocked
-            and tid not in effective_snoozed_set
-            and tid not in skipped_id_set
-        )
-        if is_rollable:
-            available_ids.add(tid)
-            continue
-        if is_blocked:
-            blocked_ids.append(tid)
-            exc = ThreadExclusionReason(
-                thread_id=tid, title=title, format=fmt, reason="blocked",
-            )
-        elif tid in snoozed_id_set:
-            exc = ThreadExclusionReason(
-                thread_id=tid,
-                title=title,
-                format=fmt,
-                reason="snoozed",
-                detail="Snoozed in current session",
-            )
-        elif tid in derived_snoozed_ids:
-            exc = ThreadExclusionReason(
-                thread_id=tid,
-                title=title,
-                format=fmt,
-                reason="snoozed",
-                detail="Snoozed by cross-session backoff",
-            )
-        elif tid in skipped_id_set:
-            exc = ThreadExclusionReason(
-                thread_id=tid,
-                title=title,
-                format=fmt,
-                reason="skipped",
-                detail="Skipped in current session",
-            )
-        else:
-            exc = ThreadExclusionReason(
-                thread_id=tid,
-                title=title,
-                format=fmt,
-                reason="not_in_queue",
-                detail="Not in the active queue",
-            )
-            inactive.append(exc)
-        excluded[tid] = exc
-
-    # Completed series sit outside the active status and never reach the
-    # pool query, so they vanish silently unless explained here.
-    completed_result = await db.execute(
-        select(Thread.id, Thread.title, Thread.format)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "completed")
-        .order_by(Thread.queue_position)
-    )
-    completed_rows = completed_result.all()
-    for row in completed_rows:
-        tid = row.id
-        title = row.title
-        fmt = normalize_format_value(row.format)
-        exc = ThreadExclusionReason(
-            thread_id=tid,
-            title=title,
-            format=fmt,
-            reason="completed",
-            detail="Read the full series",
-        )
-        excluded[tid] = exc
-        inactive.append(exc)
+    excluded = library.excluded
 
     # Attach human-readable blocking detail where it exists, then
     # materialize the bounded exclusion lists for the response. Every
     # active row is either available or excluded and every completed
     # row is excluded, so total - available always equals the union of
     # all exclusion reasons.
-    if blocked_ids:
+    if library.blocked_ids:
         blocking_map = await get_blocking_explanations_batch(
-            sorted(blocked_ids), user_id, db
+            sorted(library.blocked_ids), user_id, db
         )
         for tid, explanations in blocking_map.items():
             if tid in excluded and explanations:
                 excluded[tid].detail = explanations[0].label
 
-    total_threads = len(all_active_rows) + len(completed_rows)
-    available_threads = len(available_ids)
+    total_threads = library.total_threads
+    available_threads = len(library.available_ids)
     excluded_list = list(excluded.values())
     excluded_count = len(excluded_list)
-    inactive_count = len(inactive)
+    inactive_count = len(library.inactive)
 
     return RollBootstrapResponse(
         current_die=die_size,
@@ -1456,7 +1211,7 @@ async def roll_bootstrap(
         excluded_count=excluded_count,
         excluded_threads=excluded_list,
         inactive_count=inactive_count,
-        inactive_threads=inactive,
+        inactive_threads=library.inactive,
     )
 
 
