@@ -148,3 +148,18 @@ describe('applyCblAdoptionChoices', () => {
     expect(none.entries[0]?.adoption_decision).toBe('excluded')
   })
 })
+
+it('keeps collection exclusions out even when both include choices are true', () => {
+  const blocked = entry({ collection_excluded: true, collection_exclusion_reason: 'collection_volume_excluded' })
+  const next = applyCblAdoptionChoices({ ...preview, entries: [blocked] }, { [blocked.series_group_id]: true }, { [String(blocked.cbl_entry_id)]: true })
+  expect(next.entries[0]?.adopted).toBe(false)
+  expect(next.entries[0]?.adoption_decision).toBe('excluded')
+  expect(next.summary.final_adopted_count).toBe(0)
+})
+
+it('keeps uncertain volume identity unresolved despite an Include choice', () => {
+  const blocked = entry({ collection_excluded: true, collection_exclusion_reason: 'collection_identity_requires_review' })
+  const next = applyCblAdoptionChoices({ ...preview, entries: [blocked] }, {}, { [String(blocked.cbl_entry_id)]: true })
+  expect(next.entries[0]?.adoption_decision).toBe('unresolved')
+  expect(next.summary.unresolved_count).toBe(1)
+})

@@ -24,6 +24,7 @@ from app.services.cbl_plan_adoption import (
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
 from comic_pile.dependencies import refresh_user_blocked_status
+from app.repositories.reading_list_authoring_repository import lock_reader
 
 
 def _adoption_lane_id(plan: ContinuityPlan) -> str:
@@ -80,6 +81,7 @@ async def adopt_cbl_into_existing_reading_plan(
     The target plan must already exist and belong to ``user_id``. This function
     never creates a Reading Plan and never searches for one by CBL provenance.
     """
+    await lock_reader(db, user_id)
     plan = (
         await db.execute(
             select(ContinuityPlan)

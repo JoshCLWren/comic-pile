@@ -30,7 +30,16 @@ export function applyCblAdoptionChoices(
     const selectable = resolved || importable
 
     let decision: CBLAdoptionPreviewEntry['adoption_decision']
-    if (!selectable) {
+    if (entry.collection_excluded) {
+      if (entry.collection_exclusion_reason === 'collection_identity_requires_review'
+        && (entryDecisions[entryKey] ?? seriesDecisions[entry.series_group_id] ?? true)) {
+        decision = 'unresolved'
+        unresolved.push(entry.cbl_position)
+      } else {
+        decision = 'excluded'
+        excluded.push(entry.cbl_position)
+      }
+    } else if (!selectable) {
       if (entryKey in entryDecisions && entryDecisions[entryKey] === false) {
         decision = 'excluded'
         excluded.push(entry.cbl_position)

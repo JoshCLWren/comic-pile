@@ -20,6 +20,9 @@ export type CBLAdoptionDecision =
   | 'unresolved'
 
 export interface CBLAdoptionPreviewEntry {
+  collection_excluded?: boolean
+  collection_exclusion_reason?: string | null
+  collection_exclusion_ids?: number[]
   cbl_position: number
   cbl_entry_id: number
   series_name: string

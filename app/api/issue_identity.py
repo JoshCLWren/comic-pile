@@ -151,6 +151,10 @@ class CBLSourceFingerprintResponse(BaseModel):
 class CBLAdoptionEntryResponse(BaseModel):
     """Typed reconciliation and adoption state for one source position."""
 
+    collection_excluded: bool = False
+    collection_exclusion_reason: str | None = None
+    collection_exclusion_ids: list[int] = Field(default_factory=list)
+
     cbl_position: int
     cbl_entry_id: int
     series_name: str
@@ -477,6 +481,10 @@ async def api_consolidate(
 
 class CBLReconciliationEntryResponse(BaseModel):
     """Typed reconciliation and read-state data for one CBL source position."""
+
+    collection_excluded: bool = False
+    collection_exclusion_reason: str | None = None
+    collection_exclusion_ids: list[int] = Field(default_factory=list)
 
     cbl_position: int
     series_name: str

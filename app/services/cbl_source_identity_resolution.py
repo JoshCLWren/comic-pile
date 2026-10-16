@@ -27,7 +27,11 @@ from app.models.external_identity import (
 from app.models.issue import Issue
 from app.models.thread import Thread
 
+from app.services.collection_exclusion_guard import load_collection_guard
+
 ResolutionStatus = Literal[
+    "collection_excluded",
+    "collection_identity_requires_review",
     "unique_confirmed_identity",
     "resolved_comicvine_volume",
     "ambiguous_duplicate_copies",
@@ -120,11 +124,37 @@ async def report_cbl_source_identity_resolution(
                 .where(CBLSourceEntry.list_id == source_list_id)
                 .order_by(CBLSourceEntry.position, CBLSourceEntry.id)
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     rows: list[IdentityResolutionRow] = []
     for entry in entries:
         rows.append(await _resolve_entry(db, user_id=user_id, entry=entry))
+    facts = [
+        {
+            "resolved_issue_id": row.chosen_issue_id,
+            "comicvine_series_id": row.comicvine_series_id,
+            "volume_id": row.volume_id,
+            "external_issue_identity_id": entry.external_issue_identity_id,
+            "external_series_identity_id": entry.external_series_identity_id,
+        }
+        for row, entry in zip(rows, entries, strict=True)
+    ]
+    guard = await load_collection_guard(db, user_id, facts)
+    for row, fact in zip(rows, facts, strict=True):
+        if decision := guard.check(fact):
+            row.chosen_issue_id = None
+            row.status = (
+                "collection_identity_requires_review"
+                if decision.reason == "collection_identity_requires_review"
+                else "collection_excluded"
+            )
+            row.evidence = (
+                "Volume identity requires review before collection exclusions can be checked"
+                if row.status == "collection_identity_requires_review"
+                else "This comic is excluded from your collection"
+            )
     return rows
 
 
@@ -148,11 +178,15 @@ async def _resolve_entry(
         series_identity = await db.get(ExternalIdentity, entry.external_series_identity_id)
     comicvine_issue_id = None if issue_identity is None else issue_identity.external_id
     comicvine_series_id = None if series_identity is None else series_identity.external_id
-    cover_date = None if issue_identity is None else _metadata_text(
-        issue_identity.metadata_json, "cover_date"
+    cover_date = (
+        None
+        if issue_identity is None
+        else _metadata_text(issue_identity.metadata_json, "cover_date")
     )
-    volume_id = None if issue_identity is None else _metadata_text(
-        issue_identity.metadata_json, "volume_id"
+    volume_id = (
+        None
+        if issue_identity is None
+        else _metadata_text(issue_identity.metadata_json, "volume_id")
     )
     if volume_id is None:
         volume_id = comicvine_series_id
@@ -181,8 +215,7 @@ async def _resolve_entry(
     if not candidates:
         base.status = "unmatched"
         base.evidence = (
-            "no owned confirmed mapping for ComicVine issue "
-            f"{comicvine_issue_id}; not omitted"
+            f"no owned confirmed mapping for ComicVine issue {comicvine_issue_id}; not omitted"
         )
         return base
     if len(candidates) == 1:
@@ -190,9 +223,7 @@ async def _resolve_entry(
         base.status = "unique_confirmed_identity"
         base.chosen_issue_id = chosen.issue_id
         base.classification = "a"
-        base.evidence = (
-            f"single owned confirmed mapping to ComicVine issue {comicvine_issue_id}"
-        )
+        base.evidence = f"single owned confirmed mapping to ComicVine issue {comicvine_issue_id}"
         return base
     volume_hits = [cand for cand in candidates if cand.series_identity_matches_cbl]
     if len(volume_hits) == 1:
@@ -250,11 +281,15 @@ async def _candidates_for_entry(
     candidates: list[IdentityCandidate] = []
     seen_issue_ids: set[int] = set()
     issue_identity = await db.get(ExternalIdentity, entry.external_issue_identity_id)
-    cover_date = None if issue_identity is None else _metadata_text(
-        issue_identity.metadata_json, "cover_date"
+    cover_date = (
+        None
+        if issue_identity is None
+        else _metadata_text(issue_identity.metadata_json, "cover_date")
     )
-    volume_id = None if issue_identity is None else _metadata_text(
-        issue_identity.metadata_json, "volume_id"
+    volume_id = (
+        None
+        if issue_identity is None
+        else _metadata_text(issue_identity.metadata_json, "volume_id")
     )
     for issue, thread, _mapping in mapped:
         if issue.id in seen_issue_ids:
@@ -339,14 +374,15 @@ async def _thread_series_match(
                     ThreadExternalSeriesMapping.id,
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     if not mappings:
         return None, False
     identity = await db.get(ExternalIdentity, mappings[0].external_identity_id)
     external_id = None if identity is None else identity.external_id
-    matches = (
-        cbl_series_identity_id is not None
-        and any(mapping.external_identity_id == cbl_series_identity_id for mapping in mappings)
+    matches = cbl_series_identity_id is not None and any(
+        mapping.external_identity_id == cbl_series_identity_id for mapping in mappings
     )
     return external_id, matches

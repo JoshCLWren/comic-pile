@@ -24,6 +24,11 @@ interface ReadingPlanAddMaterialProps {
 }
 
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
+  if (entry.collection_excluded) {
+    return entry.collection_exclusion_reason === 'collection_identity_requires_review'
+      ? 'Volume identity needs review before collection exclusions can be checked'
+      : 'Excluded from your collection'
+  }
   switch (entry.adoption_decision) {
     case 'included_existing':
       return entry.read_status === 'read' ? 'Already in ComicPile · read' : 'Already in ComicPile'
@@ -378,7 +383,7 @@ export default function ReadingPlanAddMaterial({
                         <input
                           type="checkbox"
                           checked={entry.adopted}
-                          disabled={isCommitting}
+                          disabled={isCommitting || entry.collection_excluded}
                           aria-label={`Include ${entry.series_name} #${entry.issue_number}`}
                           onChange={(event) => chooseEntry(entry, event.target.checked)}
                         />
