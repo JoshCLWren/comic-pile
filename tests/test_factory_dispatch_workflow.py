@@ -219,3 +219,44 @@ def test_dispatch_batch_checks_live_quota_and_stops_roster_chain_at_reserve():
     chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[0]
     assert "steps.api_budget.outputs.allow == 'true'" in chain
     assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" in chain
+
+def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick():
+    """New manually authored PRs must not wait for hourly dispatcher recovery."""
+    wake = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "factory-pr-review-wakeup.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "pull_request_target:" in wake
+    for action in ("opened", "reopened", "ready_for_review", "labeled", "synchronize"):
+        assert action in wake
+    assert "github.event.action == 'opened'" in wake
+    assert "github.event.label.name == 'factory:review'" in wake
+    assert "github.event.pull_request.labels.*.name" in wake
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in wake
+    assert "github.event.pull_request.user.login == github.repository_owner" in wake
+    assert ".base.ref == 'main'" in wake
+    assert "!github.event.pull_request.draft" in wake
+    assert "gh workflow run fixed-model-factory-dispatch.yml" in wake
+    assert "--ref main -f mode=roster" in wake
+
+
+def test_event_wakeup_never_checks_out_untrusted_pr_code_or_assigns_workers():
+    """Privileged pull_request_target may only wake the trusted dispatcher."""
+    wake = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "factory-pr-review-wakeup.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "actions: write" in wake
+    assert "pull-requests: read" in wake
+    assert "cancel-in-progress: false" in wake
+    assert "actions/checkout" not in wake
+    assert "factory-work-controller.py" not in wake
+    assert 'gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"' in wake
+    assert '.state == "open"' in wake
+    assert '.head.repo.full_name == $repo' in wake
