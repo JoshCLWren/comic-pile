@@ -104,6 +104,12 @@ async def test_global_three_list_cycle_rolls_back(
     assert cycle.status_code == 422, cycle.text
     assert cycle.json()["detail"]["code"] == "reading_list_cycle"
     assert "First" in cycle.json()["detail"]["message"]
+    path = cycle.json()["detail"]["path"]
+    assert path
+    canonical = {a: "Series 0 #1", b: "Series 1 #1", c: "Series 2 #1"}
+    for edge in path:
+        assert edge["source_issue_name"] == canonical[edge["source_issue_id"]]
+        assert edge["target_issue_name"] == canonical[edge["target_issue_id"]]
     assert len((await auth_client.get("/api/v1/custom-cbls")).json()) == 2
 
 

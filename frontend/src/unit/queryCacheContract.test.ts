@@ -368,13 +368,14 @@ describe('targeted cache effects', () => {
       id: 42,
       name: 'My Custom List',
       description: 'A test custom list',
+      mode: 'loose',
       issue_count: 5,
       user_id: 1,
       created_at: '2026-08-03T00:00:00Z',
       updated_at: '2026-08-03T00:00:00Z',
       entries: [
-        { id: 1, position: 0, issue_id: 100, thread_id: 7, series_name: 'Batman', issue_number: '#1', status: 'read', is_checkpoint: false },
-        { id: 2, position: 1, issue_id: 101, thread_id: 8, series_name: 'Superman', issue_number: '#1', status: 'unread', is_checkpoint: false },
+        { id: 1, position: 0, issue_id: 100, thread_id: 7, series_name: 'Batman', issue_number: '#1', status: 'read', is_checkpoint: false, gate: 'none', skipped: false },
+        { id: 2, position: 1, issue_id: 101, thread_id: 8, series_name: 'Superman', issue_number: '#1', status: 'unread', is_checkpoint: false, gate: 'none', skipped: false },
       ],
     }
 
