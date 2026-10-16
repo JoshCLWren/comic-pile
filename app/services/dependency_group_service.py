@@ -282,7 +282,11 @@ class DependencyGroupService:
 
         responses: list[DependencyGroupResponse] = []
         for group in groups:
-            memberships = list(group.memberships or [])
+            # Preserve the prior id-ordered membership contract from
+            # ``list_memberships``; selectinload alone does not guarantee order.
+            memberships = sorted(
+                (group.memberships or []), key=lambda member: member.id
+            )
             member_responses: list[DependencyGroupMemberResponse] = []
             for member in memberships:
                 if member.thread_id is not None:

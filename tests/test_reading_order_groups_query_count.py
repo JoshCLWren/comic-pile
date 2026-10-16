@@ -98,7 +98,7 @@ async def test_reading_order_groups_constant_query_count(
     try:
         from types import SimpleNamespace
 
-        await list_groups(
+        responses = await list_groups(
             current_user=SimpleNamespace(id=user.id),
             db=async_db,
         )
@@ -108,3 +108,12 @@ async def test_reading_order_groups_constant_query_count(
     # The batch design must cap SELECTs: groups + memberships (via selectinload)
     # + 2 batched metadata queries = bounded; allowing <= 5 for headroom.
     assert len(select_statements) <= 5, f"Too many SELECTs ({len(select_statements)}): {select_statements}"
+
+    # The batch path must preserve the id-ordered membership contract that
+    # ``list_groups`` previously established through ``list_memberships``.
+    flat_ids = [
+        member.id
+        for group in responses
+        for member in group.memberships
+    ]
+    assert flat_ids == sorted(flat_ids)
