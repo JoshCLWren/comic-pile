@@ -31,6 +31,9 @@ marker_model_token = _review_policy.marker_model_token
 normalize_model_family = _review_policy.normalize_model_family
 parse_review_marker = _review_policy.parse_review_marker
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
+owner_attested_head_identity = _review_policy.owner_attested_head_identity
+model_trailer_models = _review_policy.model_trailer_models
+HUMAN_AUTHOR_MODEL = _review_policy.HUMAN_AUTHOR_MODEL
 review_marker = _review_policy.review_marker
 semantic_repair_heads = _review_policy.semantic_repair_heads
 trusted_comment_bodies = _review_policy.trusted_comment_bodies
@@ -391,6 +394,33 @@ def persist_author_model_marker(*, pr_number: int, head: str, worker: str) -> st
     return marker
 
 
+def head_commit_evidence(head: str) -> tuple[str | None, str | None, str] | None:
+    """Return GitHub-attributed identities and message for one exact commit.
+
+    Args:
+        head: Exact commit SHA that must still match the fetched commit.
+
+    Returns:
+        ``(author_login, committer_login, message)`` when GitHub reports the
+        requested SHA, otherwise ``None``. A ``None`` login means GitHub
+        attributed no verified account to that half of the commit.
+    """
+    commit = json_object(gh_json(["api", f"repos/{REPO}/commits/{head}"]))
+    if commit is None or str(commit.get("sha") or "") != head:
+        return None
+    author = json_object(commit.get("author"))
+    committer = json_object(commit.get("committer"))
+    metadata = json_object(commit.get("commit"))
+    author_login = None
+    if author is not None and author.get("login"):
+        author_login = str(author["login"])
+    committer_login = None
+    if committer is not None and committer.get("login"):
+        committer_login = str(committer["login"])
+    message = str(metadata.get("message") or "") if metadata is not None else ""
+    return author_login, committer_login, message
+
+
 def persist_interactive_author_model_marker(
     *, pr_number: int, head: str, pr: dict[str, Any]
 ) -> str | None:
@@ -401,6 +431,11 @@ def persist_interactive_author_model_marker(
     claim, while an owner-authored commit with no trailer is treated as human.
     Unknown or conflicting identities fail closed; a human PR must not be
     assigned a fabricated numbered-worker identity.
+
+    This automatic path stays narrow: it requires a non-numbered branch and a
+    commit GitHub itself attributes to the owner, so a PR branch never supplies
+    its own authority. Heads advanced outside the wrapper on a ``factory/``
+    branch use the explicit :func:`reconcile_provenance` command instead.
     """
     if producer_worker_from_pr(
         branch=str(pr.get("headRefName") or ""),
@@ -415,29 +450,155 @@ def persist_interactive_author_model_marker(
         model_comment_bodies(pr_number), pr=pr_number, head=head
     ) is not None:
         return None
-    commit = json_object(gh_json(["api", f"repos/{REPO}/commits/{head}"]))
-    if commit is None or str(commit.get("sha") or "") != head:
+    evidence = head_commit_evidence(head)
+    if evidence is None:
         return None
-    identities = (
-        json_object(commit.get("author")),
-        json_object(commit.get("committer")),
-    )
-    if not any(
-        identity is not None and identity.get("login") == owner
-        for identity in identities
-    ):
+    commit_author, commit_committer, message = evidence
+    if owner not in {commit_author, commit_committer}:
         return None
-    metadata = json_object(commit.get("commit"))
-    message = str(metadata.get("message") or "") if metadata is not None else ""
-    models = set(re.findall(r"(?m)^Model:[ \t]*(\S+)[ \t]*$", message))
+    models = model_trailer_models(message)
     if len(models) > 1:
         return None
-    model = next(iter(models)) if models else "human"
+    model = next(iter(models)) if models else HUMAN_AUTHOR_MODEL
     marker = agent_model_author_marker(
         pr=pr_number, head=head, model=model, agent=f"interactive-{owner}"
     )
     run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
     return marker
+
+
+RECONCILIATION_MARKER_PREFIX = "comic-pile-factory-provenance-reconciliation-v1"
+
+
+def reconciliation_marker(*, pr: int, head: str, model: str, agent: str) -> str:
+    """Build the durable audit marker for one explicit provenance reconciliation.
+
+    The marker is informational: it records which head a maintainer reconciled
+    and the identity that was attested, so a later auditor can see that the
+    attribution was an explicit reconciliation rather than a wrapper push.
+    """
+    return (
+        f"<!-- {RECONCILIATION_MARKER_PREFIX}:"
+        f"pr-{pr}:head-{head}:model-{model}:agent-{agent} -->"
+    )
+
+
+def attest_owner_head(
+    *, pr_number: int, head: str, pr: dict[str, Any]
+) -> tuple[str, str] | None:
+    """Attest one owner-authored head that no numbered wrapper recorded.
+
+    Unlike :func:`persist_interactive_author_model_marker`, this path accepts a
+    ``factory/`` branch. It is only reachable through the explicit
+    ``reconcile-provenance`` command, and it still anchors every decision on the
+    pull request's verified GitHub author and the exact head's commit evidence.
+
+    Args:
+        pr_number: Pull request number.
+        head: Exact current head being attested.
+        pr: Authoritative PR payload from :func:`pr_json`.
+
+    Returns:
+        ``(model_family, agent)`` when the marker was written, else ``None``.
+    """
+    if "factory" not in labels_of(pr):
+        return None
+    evidence = head_commit_evidence(head)
+    if evidence is None:
+        return None
+    commit_author, commit_committer, message = evidence
+    author = json_object(pr.get("author"))
+    owner = REPO.split("/", 1)[0]
+    identity = owner_attested_head_identity(
+        pr_author_login=str(author.get("login") or "") if author is not None else None,
+        owner_login=owner,
+        commit_author_login=commit_author,
+        commit_committer_login=commit_committer,
+        commit_message=message,
+    )
+    if identity is None:
+        return None
+    model, agent = identity
+    marker = agent_model_author_marker(
+        pr=pr_number, head=head, model=model, agent=agent
+    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
+    return model, agent
+
+
+def reconcile_provenance(
+    pr_number: int, expected_head: str | None = None
+) -> dict[str, Any]:
+    """Explicitly reconcile exact-head provenance for a wrapper-less head.
+
+    A head advanced outside the numbered-worker wrapper - an owner-pushed merge
+    or rebase, or trusted repository automation - has no controller-authored
+    author marker, so the exact-head cross-model gate fails closed forever and
+    the PR is parked in ``factory:blocked``. This command establishes that
+    provenance from GitHub-authoritative evidence without inventing a worker
+    identity, then releases the head back to review so any approvals already
+    recorded for it and the new author marker can complete the merge gate.
+
+    Args:
+        pr_number: Pull request number to reconcile.
+        expected_head: Optional exact head the caller believes is current. A
+            mismatch fails closed so a moved head is never attested blindly.
+
+    Returns:
+        JSON-serializable result describing the reconciliation status.
+    """
+    pr = pr_json(pr_number)
+    if str(pr.get("state")) != "OPEN":
+        return {"pr": pr_number, "status": "not-open"}
+    if "factory" not in labels_of(pr):
+        return {"pr": pr_number, "status": "not-factory"}
+    head = str(pr.get("headRefOid") or "")
+    if not HEAD_RE.fullmatch(head):
+        return {"pr": pr_number, "status": "invalid-head"}
+    if expected_head is not None and expected_head != head:
+        return {
+            "pr": pr_number,
+            "status": "stale-head",
+            "head": head,
+            "expected": expected_head,
+        }
+    if current_head_author_identity(
+        model_comment_bodies(pr_number), pr=pr_number, head=head
+    ) is not None:
+        replace_factory_labels(pr_number, "factory:unowned", "factory:review")
+        return {"pr": pr_number, "status": "already-attested", "head": head}
+    identity = attest_owner_head(pr_number=pr_number, head=head, pr=pr)
+    if identity is None:
+        return {
+            "pr": pr_number,
+            "status": "unattested",
+            "head": head,
+            "reason": (
+                "no owner-attested exact-head identity: the pull-request author, "
+                "the head commit identity, or the Model trailer is untrusted; "
+                "repair the head through a numbered worker wrapper instead"
+            ),
+        }
+    model, agent = identity
+    run_gh(
+        [
+            "issue",
+            "comment",
+            str(pr_number),
+            "--repo",
+            REPO,
+            "--body",
+            reconciliation_marker(pr=pr_number, head=head, model=model, agent=agent),
+        ]
+    )
+    replace_factory_labels(pr_number, "factory:unowned", "factory:review")
+    return {
+        "pr": pr_number,
+        "status": "attested",
+        "head": head,
+        "model": model,
+        "agent": agent,
+    }
 
 
 def persist_cross_model_review_marker(
@@ -1477,7 +1638,10 @@ def handle_review(
             note=(
                 "Blocked: exact-head cross-model author/reviewer provenance is "
                 "missing or invalid. Verify the trusted wrapper's contributor "
-                "recording; do not re-review this unchanged head."
+                "recording; do not re-review this unchanged head. For an "
+                "owner-authored head advanced outside the wrapper, run "
+                "`factory-review-controller.py reconcile-provenance --pr "
+                f"{pr_number}` from trusted main to attest exact-head provenance."
             ),
             status="cross-model-provenance-blocked",
             head=reviewed_head,
@@ -1845,6 +2009,10 @@ def main() -> int:
     record.add_argument("--pr", type=int, required=True)
     record.add_argument("--head", required=True)
 
+    reconcile_provenance_parser = subparsers.add_parser("reconcile-provenance")
+    reconcile_provenance_parser.add_argument("--pr", type=int, required=True)
+    reconcile_provenance_parser.add_argument("--head")
+
     subparsers.add_parser("reconcile-ci")
     subparsers.add_parser("reconcile-terminal")
 
@@ -1867,6 +2035,10 @@ def main() -> int:
             pr_number=args.pr,
             head=args.head,
         )
+    elif args.command == "reconcile-provenance":
+        if args.head is not None and not HEAD_RE.fullmatch(args.head):
+            raise RuntimeError("head must be a full lowercase Git SHA")
+        result = reconcile_provenance(args.pr, args.head)
     elif args.command == "reconcile-ci":
         result = {"results": reconcile_ci()}
     elif args.command == "reconcile-terminal":
