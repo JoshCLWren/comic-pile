@@ -120,7 +120,7 @@ def test_no_hardcoded_ids():
         error_msg = "Found hardcoded IDs that should be removed:\n"
         for issue in all_issues:
             error_msg += f"  {issue}\n"
-        assert False, error_msg
+        raise AssertionError(error_msg)
 
 
 if __name__ == '__main__':

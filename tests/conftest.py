@@ -297,7 +297,7 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
             if not user:
                 raise RuntimeError(
                     "Default test user missing after rollback in _ensure_default_user_async"
-                )
+                ) from None
 
     await _sync_id_sequence(db, "users")
     return user
@@ -764,7 +764,7 @@ async def auth_client(
                 if not user:
                     raise RuntimeError(
                         "Authenticated test user missing after rollback in auth_client"
-                    )
+                    ) from None
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})

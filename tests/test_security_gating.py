@@ -43,7 +43,8 @@ async def test_admin_routes_accessible_when_enabled(
     async_db: AsyncSession,
 ) -> None:
     """Admin routes work when ENABLE_INTERNAL_OPS_ROUTES is true."""
-    _ = sample_data
+    user = sample_data["user"]
+    from app.auth import create_access_token
     from app.database import get_db
     from httpx import ASGITransport, AsyncClient
 
@@ -55,19 +56,21 @@ async def test_admin_routes_accessible_when_enabled(
     app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     try:
+        token = create_access_token(data={"sub": user.username, "jti": "test"})
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            ac.headers.update({"Authorization": f"Bearer {token}"})
             response = await ac.get("/api/admin/export/csv/")
-            assert response.status_code in [200, 404], (
+            assert response.status_code == 200, (
                 f"Unexpected status code: {response.status_code}"
             )
 
             response = await ac.get("/api/admin/export/json/")
-            assert response.status_code in [200, 404], (
+            assert response.status_code == 200, (
                 f"Unexpected status code: {response.status_code}"
             )
 
             response = await ac.get("/api/admin/export/summary/")
-            assert response.status_code in [200, 404], (
+            assert response.status_code == 200, (
                 f"Unexpected status code: {response.status_code}"
             )
     finally:

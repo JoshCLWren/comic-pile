@@ -10,7 +10,7 @@ from app.models import Issue, Thread, User
 
 @pytest.mark.asyncio
 async def test_delete_thread_with_issues_reproduces_lazy_raise_bug(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that deleting a thread with issues triggers lazy='raise' error.
 
@@ -25,8 +25,7 @@ async def test_delete_thread_with_issues_reproduces_lazy_raise_bug(
     5. lazy="raise" causes InvalidRequestError
     """
     # Create a user
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one()
+    user = default_user
     user_id = user.id
 
     # Create a thread with issue tracking

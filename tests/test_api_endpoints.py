@@ -440,11 +440,10 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
     _ = sample_data
     from datetime import UTC, datetime
 
-    from app.models import Event, ReadingSession, Snapshot, Thread, User
+    from app.models import Event, ReadingSession, Snapshot, Thread
 
     now = datetime.now(UTC)
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one()
+    user = sample_data["user"]
     user_id = user.id  # Extract before commit
 
     thread = Thread(
