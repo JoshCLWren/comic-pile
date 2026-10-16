@@ -239,7 +239,7 @@ export const queueThreadCardMock: QueueThreadCardMock = {
     <article>
       <button onClick={props.onCardClick as () => void}>card callback</button>
       <button
-        onClick={() => (props.onDragStart as (event: unknown) => void)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } })}
+        onClick={() => (props.onDragStart as (event: unknown) => void)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } })}>
       >
         drag start
       </button>
