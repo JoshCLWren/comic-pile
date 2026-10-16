@@ -733,3 +733,25 @@ async def get_catalog_issue_by_id(
         The CatalogIssue if found, None otherwise.
     """
     return await db.get(CatalogIssue, catalog_issue_id)
+
+
+async def get_provider_issue_identity(
+    db: AsyncSession, *, provider: str, external_id: str,
+) -> ExternalIdentity | None:
+    """Read an exact provider issue identity without creating or updating it.
+
+    Args:
+        db: Async database session.
+        provider: Canonical provider name.
+        external_id: Explicit provider issue ID.
+
+    Returns:
+        Existing identity or None.
+    """
+    return await db.scalar(
+        select(ExternalIdentity).where(
+            ExternalIdentity.provider == provider,
+            ExternalIdentity.entity_type == "issue",
+            ExternalIdentity.external_id == external_id,
+        )
+    )
