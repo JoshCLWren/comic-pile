@@ -247,16 +247,22 @@ Rules:
   Keep manual-only PRs out of this workflow with
   `<!-- factory-execution:manual-only -->`.
 - A head advanced outside the numbered-worker wrapper (an owner-pushed merge or
-  rebase, or trusted repository automation) has no controller-authored author
-  marker, so the exact-head cross-model gate fails closed and parks the PR in
-  `factory:blocked`. Reconcile that provenance explicitly with
+  rebase, a local agent, or trusted repository automation) has no
+  controller-authored author marker. The review controller repairs that
+  automatically during the ordinary review pass, so such a head is reviewable
+  exactly like a wrapper-pushed one: it attests the exact-head author from the
+  wrapper's own contributor record when there is one, otherwise from the pull
+  request's verified GitHub author and the head commit's `Model:` trailer (or
+  `human` when the trailer is absent), and never invents a numbered-worker
+  identity. A controller-authored exact-head attestation counts as complete
+  provenance, so one independent approval authorizes the head, the same as for a
+  wrapper push. For a head that will not receive another review pass, reconcile
+  it explicitly with
   `python3 .github/scripts/factory-review-controller.py reconcile-provenance --pr N`
   from trusted main, or the `Factory Provenance Reconcile` workflow for the same
-  effect as `github-actions[bot]`. The command attests only identities GitHub
-  already attributes to the owner or to trusted automation, never invents a
-  numbered-worker identity, and then releases the head to `factory:review` so
-  approvals already recorded for it can complete the merge gate. `--head`
-  optionally pins the exact SHA and fails closed on a moved head.
+  effect as `github-actions[bot]`; the command releases the head to
+  `factory:review`. `--head` optionally pins the exact SHA and fails closed on a
+  moved head.
 - `factory:local` remains an active local-work lease, not an opt-out from
   enrollment. A local session MUST release that lease to `factory:unowned`
   when it opens a ready-for-review PR or finishes a repair; the fleet never
