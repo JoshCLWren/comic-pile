@@ -214,9 +214,9 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
         {/* Rolling average line */}
         {rollingAverageData.length > 0 && (
           <path
-            d={rollingAverageData
-              .map((point, i) => `${xScale(point.timestamp.getTime())},${yScale(point.rating)}`)
-              .join(' L ')}
+            d={`M ${rollingAverageData
+              .map((point) => `${xScale(point.timestamp.getTime())},${yScale(point.rating)}`)
+              .join(' L ')}`}
             fill="none"
             style={{ 
               stroke: 'var(--theme-comic-accent)', 

@@ -240,7 +240,21 @@ export default function CreatorDetailPage() {
             {' '}Counts shown are lower bounds, not exhaustive totals.
           </p>
         )}
-      </section>
+       </section>
+
+      {summary.ratings_count > 0 && (
+        <section aria-labelledby="creator-rating-history-heading" className="mt-6">
+          <SectionHeading id="creator-rating-history-heading">Rating history</SectionHeading>
+          <div className="mt-2">
+            <RatingHistoryChart ratedIssues={ratedIssues} />
+          </div>
+          {ratingsPartial && (
+            <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
+              History reflects only rated issues with confirmed creator metadata and is a lower bound.
+            </p>
+          )}
+        </section>
+      )}
 
       {ratingDistribution != null ? (
         <section aria-labelledby="creator-distribution-heading" className="mt-6">
