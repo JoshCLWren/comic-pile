@@ -80,7 +80,7 @@ async def list_inbox_items(
 ) -> tuple[list[IdentityInboxItem], int]:
     """List unresolved or ambiguous external identity mappings for a user."""
     base_query = (
-        select(IssueExternalIdentityMapping, ExternalIdentity)
+        select(IssueExternalIdentityMapping, Issue, Thread, ExternalIdentity)
         .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
         .join(Thread, Thread.id == Issue.thread_id)
         .join(
@@ -106,13 +106,7 @@ async def list_inbox_items(
     rows = result.all()
 
     items = []
-    for mapping, identity in rows:
-        issue = await db.get(Issue, mapping.issue_id)
-        thread = await db.get(Thread, issue.thread_id) if issue else None
-
-        if not issue or not thread or identity is None:
-            continue
-
+    for mapping, issue, thread, identity in rows:
         issue_number = issue.issue_number or ""
         thread_title = thread.title or ""
         metadata = identity.metadata_json or {}

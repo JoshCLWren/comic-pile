@@ -1,10 +1,10 @@
 """Regression tests for GET /api/v1/identity-inbox list performance.
 
-Covers the N+1 query fix in list_inbox_items: ExternalIdentity must be
-eager-loaded in the base query so the per-mapping db.get() calls are identity
-map hits instead of separate round trips. Without this fix each mapping
-triggers an additional ExternalIdentity lookup, scaling query count with
-result set size and blowing the 1000 ms route budget.
+Covers the N+1 query fix in list_inbox_items: Issue, Thread, and
+ExternalIdentity must all be eager-loaded in the base query so the route
+issues exactly two queries (count + page) regardless of result set size.
+Without this fix each mapping triggers separate db.get() lookups, scaling
+query count with result set size and blowing the 1000 ms route budget.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.auth import create_access_token
 from app.models.external_identity import (
@@ -268,4 +269,42 @@ async def test_api_list_inbox_endpoint(async_db, client) -> None:
     assert item["status"] == "candidate"
     assert item["provider"] == "comicvine"
     assert item["source_entry_summary"] == "API Thread #1 (Test Volume) - Test Publisher"
+
+
+@pytest.mark.asyncio
+async def test_list_inbox_items_query_count_is_constant(
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """list_inbox_items issues exactly two queries (count + page) for any mapping count."""
+    user = await _user(async_db)
+    for i in range(5):
+        thread = await _thread(async_db, user.id, f"Query Thread {i}")
+        issue = await _issue(async_db, thread.id, str(i))
+        identity = await _identity(async_db, "comicvine", f"70{i}")
+        await _mapping(async_db, issue.id, identity.id, status="unresolved")
+
+    statements: list[str] = []
+
+    def _capture_statement(
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        normalized_statement = statement.lstrip().upper()
+        if normalized_statement.startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture_statement)
+    try:
+        items, total = await list_inbox_items(async_db, user_id=user.id)
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture_statement)
+
+    assert total == 5
+    assert len(items) == 5
+    assert len(statements) == 2, statements
 
