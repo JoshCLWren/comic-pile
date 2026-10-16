@@ -14,6 +14,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_serializer
 
+from app.schemas.tags import TagResponse
+
 BandwidthLevel = Literal["light", "balanced", "deep"]
 BandwidthSource = Literal["inferred", "manual", "snooze", "quiz"]
 IntentLevel = Literal["balanced", "momentum", "familiar", "explore", "random"]
@@ -210,6 +212,7 @@ class ActiveThreadInfo(BaseModel):
     reading_progress: str | None = None
     issues_read: int | None = None
     last_rating: float | None = None
+    tags: list[TagResponse] = Field(default_factory=list)
 
     issue_id: int | None = Field(
         default=None,

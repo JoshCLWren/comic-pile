@@ -226,19 +226,27 @@ export function RollModals({
             >
               <option value="">Select a series...</option>
               <optgroup label="Active series">
-                {(overrideThreads ?? []).map((thread) => (
-                  <option key={thread.id} value={thread.id}>
-                    {thread.title} ({thread.format})
-                  </option>
-                ))}
+                {(overrideThreads ?? []).map((thread) => {
+                  const tagNames = (thread.tags ?? []).map(t => t.name).join(', ')
+                  const label = `${thread.title} (${thread.format})${tagNames ? ' · ' + tagNames : ''}`
+                  return (
+                    <option key={thread.id} value={thread.id}>
+                      {label}
+                    </option>
+                  )
+                })}
               </optgroup>
               {snoozedThreads.length > 0 && (
                 <optgroup label="Snoozed series">
-                  {snoozedThreads.map((thread) => (
-                    <option key={thread.id} value={thread.id}>
-                      {thread.title} ({thread.format})
-                    </option>
-                  ))}
+                  {snoozedThreads.map((thread) => {
+                    const tagNames = (thread.tags ?? []).map(t => t.name).join(', ')
+                    const label = `${thread.title} (${thread.format})${tagNames ? ' · ' + tagNames : ''}`
+                    return (
+                      <option key={thread.id} value={thread.id}>
+                        {label}
+                      </option>
+                    )
+                  })}
                 </optgroup>
               )}
             </select>

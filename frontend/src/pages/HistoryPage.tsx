@@ -180,6 +180,11 @@ export default function HistoryPage() {
                       {session.active_thread.next_issue_number ? (
                         <span className="text-stone-400"> · #{session.active_thread.next_issue_number}</span>
                       ) : null}
+                      {session.active_thread.tags && session.active_thread.tags.length > 0 ? (
+                        <span className="text-stone-400">
+                          {' · ' + session.active_thread.tags.map(t => t.name).join(', ')}
+                        </span>
+                      ) : null}
                     </p>
                     {activityLine ? (
                       <p className="text-xs text-stone-400">
