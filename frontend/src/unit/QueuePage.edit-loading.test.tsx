@@ -148,7 +148,7 @@ const MIGRATED_THREAD: ThreadListItem = {
   issues_remaining: 5,
   total_issues: 6,
   is_blocked: false,
-} as ThreadListItem
+}
 
 const UNMIGRATED_THREAD: ThreadListItem = {
   id: 7,
@@ -159,7 +159,7 @@ const UNMIGRATED_THREAD: ThreadListItem = {
   issues_remaining: 3,
   total_issues: null,
   is_blocked: false,
-} as ThreadListItem
+}
 
 function renderQueue() {
   render(
@@ -296,7 +296,8 @@ describe('Edit Series loading gate (#3443)', () => {
   })
 
   it('re-enables Save once a failed issue load settles so the dialog is never stuck', async () => {
-    mockedIssuesApi.list.mockRejectedValue(new Error('load failed'))
+    const issuesRequest = deferred<IssueListResponse>()
+    mockedIssuesApi.list.mockReturnValue(issuesRequest.promise)
     const update = vi.fn().mockResolvedValue({})
     mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
 
@@ -304,7 +305,15 @@ describe('Edit Series loading gate (#3443)', () => {
     renderQueue()
     await openEditSeries(user)
 
-    expect(screen.getByRole('button', { name: /loading issues/i })).toBeDisabled()
+    // While the issue list request is in flight the Save button is disabled
+    const loadingButton = screen.getByRole('button', { name: /loading issues/i })
+    expect(loadingButton).toBeDisabled()
+    expect(update).not.toHaveBeenCalled()
+
+    // Fail the load; the dialog must not stay stuck
+    await act(async () => {
+      issuesRequest.reject(new Error('load failed'))
+    })
 
     const saveButton = await screen.findByRole('button', { name: /save changes/i })
     await waitFor(() => expect(saveButton).toBeEnabled())
