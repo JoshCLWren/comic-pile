@@ -5,11 +5,9 @@ lookups per group (N+1). After the batch fix it must stay bounded regardless of
 group/member count.
 """
 
-from inspect import unwrap
-
 import pytest
 from sqlalchemy import event
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.api.dependency_group import list_groups
@@ -96,23 +94,11 @@ async def test_reading_order_groups_constant_query_count(
         if statement.lstrip().upper().startswith("SELECT"):
             select_statements.append(statement)
 
-    route = unwrap(list_groups)
     event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
     try:
-        from starlette.requests import Request
         from types import SimpleNamespace
 
-        request = Request(
-            {
-                "type": "http",
-                "method": "GET",
-                "path": "/api/v1/reading-order-groups/",
-                "headers": [],
-                "query_string": b"",
-            }
-        )
-        await route(
-            request=request,
+        await list_groups(
             current_user=SimpleNamespace(id=user.id),
             db=async_db,
         )
