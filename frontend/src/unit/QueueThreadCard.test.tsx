@@ -842,6 +842,36 @@ describe('QueueThreadCard', () => {
       expect(screen.queryByTestId('mock-map-series-dialog')).not.toBeInTheDocument()
     })
 
+  it('renders the thread tags on the Queue row so tags are scannable before rolling (#3425)', () => {
+    const thread = createMockThread({
+      title: 'Spider-Man',
+      tags: [
+        {
+          id: 4,
+          name: 'Physical',
+          normalized_name: 'physical',
+          scope: 'global',
+          owner_user_id: null,
+          color: '#3B82F6',
+          created_at: '2024-01-01T00:00:00.000Z',
+          updated_at: '2024-01-01T00:00:00.000Z',
+        },
+      ],
+    })
+    renderCard(thread)
+
+    const group = screen.getByRole('region', { name: 'Tags for Spider-Man' })
+    expect(within(group).getByText('Physical')).toBeInTheDocument()
+  })
+
+  it('renders no tag group on an untagged Queue row', () => {
+    renderCard(createMockThread({ title: 'Untagged Saga' }))
+
+    expect(
+      screen.queryByRole('region', { name: 'Tags for Untagged Saga' }),
+    ).not.toBeInTheDocument()
+  })
+
     it('distinguishes review-needed indicator from an ordinary unmapped pill', () => {
       const threadWithMapping: ThreadListItem = {
         ...createMockThread(),

@@ -92,6 +92,33 @@ def label_names(item: dict[str, object]) -> set[str]:
     return names
 
 
+def test_explicitly_factory_enrolled_manual_and_agent_prs_reach_review_queue() -> None:
+    """Branch name does not exclude an explicitly enrolled interactive PR."""
+    for branch in ("local/feature", "feature/manual-fix", "agent/123", "chatgpt/fix"):
+        item = pr_fixture(
+            number=2400, issue=2401,
+            labels=["factory", "factory:unowned", "factory:review"],
+        )
+        item["headRefName"] = branch
+        item["body"] = "Closes #2401"
+        assert policy.is_factory_managed_pr(item)
+        result = policy.build_candidates([], [item])
+        assert [(c.kind, c.number, c.stage) for c in result] == [
+            ("pr", 2400, "factory:review")
+        ]
+
+    excluded = pr_fixture(
+        number=2402, issue=2403,
+        labels=["factory:unowned", "factory:review"],
+    )
+    excluded["headRefName"] = "agent/not-enrolled"
+    assert not policy.is_factory_managed_pr(excluded)
+
+    opted_out = dict(item)
+    opted_out["body"] = "Closes #2401\n\n<!-- factory-execution:manual-only -->"
+    assert not policy.pr_is_static_candidate(opted_out, {}, no_diff_attempts=0)
+
+
 def test_producing_worker_cannot_receive_own_semantic_review():
     """Review assignment itself enforces producer/reviewer independence."""
     own_review = candidate(

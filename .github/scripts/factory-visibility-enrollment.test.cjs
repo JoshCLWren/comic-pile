@@ -39,6 +39,33 @@ test('open event enrolls a manual PR and preserves unrelated labels atomically',
     new Set(['bug', 'factory', 'factory:review', 'factory:unowned']));
 });
 
+test('local factory lease is preserved while its missing review stage is enrolled', async () => {
+  const { writes } = await run({ labels: ['factory:local', 'bug'] });
+  assert.equal(writes.length, 1);
+  assert.deepEqual(new Set(writes[0].labels),
+    new Set(['bug', 'factory', 'factory:review', 'factory:local']));
+});
+
+test('complete local lease stays untouched until local session releases it', async () => {
+  const { writes } = await run({ labels: ['factory', 'factory:local', 'factory:review'] });
+  assert.deepEqual(writes, []);
+});
+
+test('mentioning a manual-only marker in documentation does not opt out a PR', async () => {
+  const inline = { ...pr(), body: 'To opt out, use `<!-- factory-execution:manual-only -->`.' };
+  const documented = { ...pr(), body: 'Example:\n```markdown\n<!-- factory-execution:manual-only -->\n```' };
+  for (const item of [inline, documented]) {
+    const { writes } = await run({ prs: [item] });
+    assert.equal(writes.length, 1);
+    assert.ok(writes[0].labels.includes('factory:review'));
+  }
+});
+
+test('a standalone manual-only directive opts out even with factory labels', async () => {
+  const explicit = { ...pr(), body: 'Operator-only work.\n<!-- factory-execution:manual-only -->\n' };
+  const { writes } = await run({ prs: [explicit], labels: ['factory'] });
+  assert.deepEqual(writes, []);
+});
 test('scheduled sweep paginates all open PRs', async () => {
   const { writes, reads } = await run({ prs: [pr(1), pr(2)] });
   assert.deepEqual(writes.map(input => input.issue_number), [1, 2]);
