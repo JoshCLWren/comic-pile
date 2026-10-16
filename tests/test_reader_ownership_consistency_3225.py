@@ -11,7 +11,7 @@ grant no personal access.
 from __future__ import annotations
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -276,8 +276,9 @@ async def test_shared_catalog_grants_no_personal_access(
 
     with pytest.raises(NotFoundError):
         await get_thread_detail(db, sample_user2.id, thread_a.id)
-    with pytest.raises(NotFoundError):
+    with pytest.raises(HTTPException) as exc_info:
         await get_owned_issue_or_404(db, sample_user2.id, issue_a.id)
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
