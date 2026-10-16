@@ -118,7 +118,7 @@ describe('AddSeriesFromComicVineDialog search step', () => {
     await search('Stormwatch')
 
     await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10, 0))
-    expect(screen.getByText('Stormwatch')).toBeInTheDocument()
+    expect(await screen.findByText('Stormwatch')).toBeInTheDocument()
     expect(screen.getByText('WildStorm · 1993 · 12 issues')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Stormwatch - WildStorm, 1993, 12 issues' })).toBeInTheDocument()
   })
