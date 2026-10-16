@@ -254,6 +254,11 @@ async def create_thread(
 ) -> ThreadResponse:
     """Create a new thread at the end of the user's queue.
 
+    Duplicate submits sharing one idempotency key converge on the first
+    created thread (issue #3466). The key may arrive as the
+    ``Idempotency-Key`` header or the ``idempotency_key`` body field; the
+    header takes precedence when both are present.
+
     Args:
         request: FastAPI request object for rate limiting.
         thread_data: Thread creation data.
@@ -263,7 +268,15 @@ async def create_thread(
     Returns:
         ThreadResponse with created thread details.
     """
-    return await thread_service.create_thread_with_retry(db, current_user.id, thread_data)
+    try:
+        return await thread_service.create_thread_with_retry(
+            db,
+            current_user.id,
+            thread_data,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+        )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
 
 
 @router.get("/{thread_id}", response_model=ThreadDetail)

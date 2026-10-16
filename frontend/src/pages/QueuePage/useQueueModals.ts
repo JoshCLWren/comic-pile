@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import type { Thread, ThreadListItem, ThreadCreatePayload } from '../../types'
@@ -116,6 +116,20 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
   const [issueParseWarnings, setIssueParseWarnings] = useState<string[]>([])
   const [issueParseBreakdown, setIssueParseBreakdown] = useState<ParsedIssueRangeDetail['breakdown']>([])
+  // One idempotency key per Add Series opening so a double-click retries the
+  // same logical creation (#3466). The in-flight flag closes the same-tick
+  // gap before React Query flips `isPendingCreate` and re-renders disabled.
+  const createIdempotencyKeyRef = useRef<string | null>(null)
+  const createInFlightRef = useRef(false)
+
+  const newCreateIdempotencyKey = useCallback(() => {
+    try {
+      const uuid = crypto.randomUUID()
+      createIdempotencyKeyRef.current = uuid
+    } catch {
+      createIdempotencyKeyRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }
+  }, [])
 
   const showRollNudge = params.showRollNudge
 
@@ -125,12 +139,14 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
 
   const showCreateModal = useCallback(() => {
     setCreateForm(DEFAULT_CREATE_STATE)
+    newCreateIdempotencyKey()
     setOpenModal('create')
     setRestoreAction(() => {
       setCreateForm(DEFAULT_CREATE_STATE)
+      newCreateIdempotencyKey()
       setOpenModal('create')
     })
-  }, [setRestoreAction])
+  }, [newCreateIdempotencyKey, setRestoreAction])
 
   const closeCreateModal = useCallback(() => {
     setOpenModal(null)
@@ -296,6 +312,9 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const handleCreateSubmit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault()
+      // Drop same-tick double submits before `isPendingCreate` re-renders.
+      if (createInFlightRef.current || isPendingCreate) return
+      createInFlightRef.current = true
       try {
         const { parseIssueRange } = await import('../../utils/issueParser')
         const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
@@ -303,6 +322,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         if (hasIssueRange) {
           issuesRemaining = parseIssueRange(createForm.issues)
         }
+        if (!createIdempotencyKeyRef.current) newCreateIdempotencyKey()
         // SAFETY: submitCreate resolves to the created thread record or null when creation is skipped.
         const result = (await submitCreate({
           title: createForm.title,
@@ -310,6 +330,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
           issues_remaining: issuesRemaining,
           notes: createForm.notes ?? null,
           manual_creator_credits: createForm.manualCreatorCredits,
+          idempotency_key: createIdempotencyKeyRef.current ?? undefined,
         })) as { id?: number } | null
 
         if (hasIssueRange && result?.id) {
@@ -342,14 +363,17 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         }
 
         setCreateForm(DEFAULT_CREATE_STATE)
+        createIdempotencyKeyRef.current = null
         closeCreateModal()
         await onCreated()
       } catch (error: unknown) {
         console.error('Failed to create thread:', error)
         window.alert(`Failed to create series: ${getApiErrorDetail(error)}`)
+      } finally {
+        createInFlightRef.current = false
       }
     },
-    [createForm, closeCreateModal, onCreated, submitCreate],
+    [createForm, closeCreateModal, isPendingCreate, newCreateIdempotencyKey, onCreated, submitCreate],
   )
 
   const handleEditSubmit = useCallback(

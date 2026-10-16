@@ -40,6 +40,7 @@ from app.models.snapshot import Snapshot
 from app.models.tag import Tag, TagAssignment
 from app.models.taste_signal import TasteSignal
 from app.models.thread import Thread
+from app.models.thread_create_receipt import ThreadCreateReceipt
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
 
@@ -87,6 +88,7 @@ __all__ = [
     "Tag",
     "TagAssignment",
     "Thread",
+    "ThreadCreateReceipt",
     "ThreadExternalSeriesMapping",
     "User",
     "UserPreferences",

@@ -68,6 +68,7 @@ export interface ThreadCreatePayload {
   total_issues?: number;
   notes?: string | null;
   manual_creator_credits?: ManualCreatorCredit[];
+  idempotency_key?: string;
 }
 
 export interface ThreadUpdatePayload {

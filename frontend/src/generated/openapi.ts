@@ -13202,6 +13202,11 @@ export interface components {
             /** Format */
             format: string;
             /**
+             * Idempotency Key
+             * @description Caller-supplied key; retries reuse the first created thread
+             */
+            idempotency_key?: string | null;
+            /**
              * Is Test
              * @default false
              */

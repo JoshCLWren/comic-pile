@@ -16521,6 +16521,20 @@
             "title": "Format",
             "type": "string"
           },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Caller-supplied key; retries reuse the first created thread",
+            "title": "Idempotency Key"
+          },
           "is_test": {
             "default": false,
             "title": "Is Test",

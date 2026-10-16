@@ -89,6 +89,12 @@ class ThreadCreate(BaseModel):
     notes: str | None = None
     manual_creator_credits: list[ManualCreatorCredit] = Field(default_factory=list)
     is_test: bool = False
+    idempotency_key: str | None = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Caller-supplied key; retries reuse the first created thread",
+    )
 
     @field_validator("manual_creator_credits")
     @classmethod

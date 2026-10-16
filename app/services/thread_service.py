@@ -6,6 +6,8 @@ sibling repositories; HTTP status mapping lives in routers.
 """
 
 import asyncio
+import hashlib
+import json
 import logging
 import os
 from typing import cast
@@ -20,6 +22,7 @@ from app.repositories import (
     continuity_repository,
     issue_repository,
     reading_session_repository,
+    thread_create_receipt_repository,
     thread_repository,
 )
 from app.schemas import (
@@ -36,7 +39,12 @@ from app.schemas import (
     ThreadUpdate,
 )
 from app.schemas.tags import TagResponse, TagTargetType
-from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.errors import (
+    ConflictError,
+    ForbiddenError,
+    InvalidRequestError,
+    NotFoundError,
+)
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
@@ -499,10 +507,189 @@ async def active_threads_html(db: AsyncSession, user_id: int) -> str:
     return items or '<p class="text-gray-500 text-center py-4">No active threads available</p>'
 
 
+def normalize_thread_idempotency_key(raw: str | None) -> str | None:
+    """Normalize a caller-supplied thread-creation idempotency key.
+
+    Args:
+        raw: Raw key from the request body or ``Idempotency-Key`` header.
+
+    Returns:
+        The stripped key, or ``None`` when absent/blank.
+
+    Raises:
+        InvalidRequestError: When the key exceeds the stored bound.
+    """
+    if raw is None:
+        return None
+    cleaned = raw.strip()
+    if not cleaned:
+        return None
+    if len(cleaned) > 100:
+        raise InvalidRequestError("idempotency_key must be at most 100 characters")
+    return cleaned
+
+
+def thread_create_fingerprint(thread_data: ThreadCreate) -> str:
+    """Digest a thread-creation payload for idempotency comparison.
+
+    Args:
+        thread_data: Thread creation data.
+
+    Returns:
+        SHA-256 hex digest of the material creation fields.
+    """
+    material = json.dumps(
+        {
+            "title": thread_data.title,
+            "format": normalize_format_value(thread_data.format),
+            "issues_remaining": thread_data.issues_remaining,
+            "total_issues": thread_data.total_issues,
+            "notes": thread_data.notes,
+            "manual_creator_credits": thread_data.manual_creator_credits,
+            "is_test": thread_data.is_test,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+async def _replay_thread_create_receipt(
+    db: AsyncSession,
+    user_id: int,
+    idempotency_key: str,
+    fingerprint: str,
+) -> ThreadResponse | None:
+    """Return the original thread for a matching receipt, if it still exists.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        idempotency_key: Normalized caller key.
+        fingerprint: Digest of the current creation payload.
+
+    Returns:
+        The original ThreadResponse, or ``None`` when the key is unused or its
+        thread is gone (the stale receipt is removed so creation proceeds).
+
+    Raises:
+        ConflictError: When the key was already used for different input.
+    """
+    receipt = await thread_create_receipt_repository.find_create_receipt(
+        db, user_id=user_id, idempotency_key=idempotency_key
+    )
+    if receipt is None:
+        return None
+    if receipt.request_fingerprint != fingerprint:
+        raise ConflictError("idempotency_key was already used for a different series")
+    thread = await thread_repository.find_owned(db, user_id, receipt.thread_id)
+    if thread is None:
+        await thread_create_receipt_repository.delete_create_receipt(db, receipt)
+        await db.commit()
+        return None
+    return await thread_to_response(thread, db)
+
+
 async def create_thread_with_retry(
-    db: AsyncSession, user_id: int, thread_data: ThreadCreate
+    db: AsyncSession,
+    user_id: int,
+    thread_data: ThreadCreate,
+    idempotency_key: str | None = None,
 ) -> ThreadResponse:
     """Create a new thread at the end of the user's queue with deadlock retry.
+
+    Duplicate submits sharing one idempotency key converge on the first
+    created thread instead of creating two series (issue #3466).
+
+    Args:
+        db: Database session.
+        user_id: Owner of the new thread.
+        thread_data: Thread creation data.
+        idempotency_key: Optional caller key (header takes precedence over the
+            body field); blank values behave as no key.
+
+    Returns:
+        ThreadResponse with created thread details.
+
+    Raises:
+        RuntimeError: If creation keeps deadlocking past the retry budget.
+        ConflictError: When the key was reused for materially different input.
+        InvalidRequestError: When the key exceeds the stored bound.
+    """
+    effective_key = normalize_thread_idempotency_key(idempotency_key)
+    if effective_key is None:
+        effective_key = normalize_thread_idempotency_key(thread_data.idempotency_key)
+    if effective_key is None:
+        return await _create_thread_without_idempotency(db, user_id, thread_data)
+
+    fingerprint = thread_create_fingerprint(thread_data)
+    replayed = await _replay_thread_create_receipt(db, user_id, effective_key, fingerprint)
+    if replayed is not None:
+        return replayed
+
+    max_retries = 3
+    initial_delay = 0.1
+    retries = 0
+
+    while retries < max_retries:
+        try:
+            # Another worker may have won while we backed off.
+            replayed = await _replay_thread_create_receipt(db, user_id, effective_key, fingerprint)
+            if replayed is not None:
+                return replayed
+
+            max_position = await thread_repository.max_queue_position(db, user_id)
+            format_value = normalize_format_value(thread_data.format)
+
+            new_thread = Thread(
+                title=thread_data.title,
+                format=format_value,
+                issues_remaining=thread_data.issues_remaining,
+                total_issues=thread_data.total_issues,
+                queue_position=max_position + 1,
+                user_id=user_id,
+                notes=thread_data.notes,
+                manual_creator_credits=thread_data.manual_creator_credits,
+                is_test=thread_data.is_test,
+            )
+            await thread_repository.insert_thread(db, new_thread)
+            await db.flush()
+            await thread_create_receipt_repository.insert_create_receipt(
+                db,
+                user_id=user_id,
+                idempotency_key=effective_key,
+                thread_id=new_thread.id,
+                request_fingerprint=fingerprint,
+            )
+            await db.commit()
+            await db.refresh(new_thread)
+
+            return await thread_to_response(new_thread, db)
+        except IntegrityError:
+            await db.rollback()
+            replayed = await _replay_thread_create_receipt(db, user_id, effective_key, fingerprint)
+            if replayed is not None:
+                return replayed
+            raise
+        except OperationalError as e:
+            if "deadlock" in str(e).lower():
+                await db.rollback()
+                retries += 1
+                if retries >= max_retries:
+                    raise
+                delay = initial_delay * (2 ** (retries - 1))
+                await asyncio.sleep(delay)
+            else:
+                raise
+
+    raise RuntimeError(f"Failed to create thread after {max_retries} retries")
+
+
+async def _create_thread_without_idempotency(
+    db: AsyncSession, user_id: int, thread_data: ThreadCreate
+) -> ThreadResponse:
+    """Create a thread without an idempotency receipt (legacy path).
 
     Args:
         db: Database session.
@@ -511,9 +698,6 @@ async def create_thread_with_retry(
 
     Returns:
         ThreadResponse with created thread details.
-
-    Raises:
-        RuntimeError: If creation keeps deadlocking past the retry budget.
     """
     max_retries = 3
     initial_delay = 0.1
