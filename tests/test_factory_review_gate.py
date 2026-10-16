@@ -2134,6 +2134,79 @@ def test_interactive_author_attribution_fails_closed(
     ) is None
 
 
+@pytest.mark.parametrize("producer_location", ["branch", "body"])
+@pytest.mark.parametrize(
+    ("unsafe", "allowed"),
+    [
+        ("none", True),
+        ("scheduled", False),
+        ("unlinked", False),
+        ("foreign", False),
+        ("stale", False),
+        ("conflicting-models", False),
+        ("conflicting-sessions", False),
+        ("no-model", False),
+    ],
+)
+def test_interactive_factory_repair_attestation_preserves_producer(
+    monkeypatch: MonkeyPatch, producer_location: str, unsafe: str, allowed: bool,
+) -> None:
+    """Only verified explicit interactive repairs bypass roster-only attribution."""
+    module = load_review_controller()
+    payload = {
+        "headRefName": (
+            "factory/83-3033-catalog-free" if producer_location == "branch" else "local/repair"
+        ),
+        "body": (
+            "Worker: opencode-free-model-factory-83"
+            if producer_location == "body" else "Closes #3033"
+        ),
+        "author": {"login": "intruder" if unsafe == "foreign" else "JoshCLWren"},
+        "labels": [{"name": "factory"}],
+    }
+    trailer = "Authoring session: interactive Codex session, no registered factory-worker identity"
+    message = "Repair bootstrap\n\nModel: gpt-6\n" + trailer
+    if unsafe == "scheduled":
+        message = "Scheduled implementation\n\nModel: roster-model-83"
+    elif unsafe == "conflicting-models":
+        message += "\nModel: other-model"
+    elif unsafe == "conflicting-sessions":
+        message += "\nAuthoring session: scheduled factory"
+    elif unsafe == "no-model":
+        message = "Repair bootstrap\n\n" + trailer
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(module, "gh_json", lambda _args: {
+        "sha": MOVED_HEAD if unsafe == "stale" else REVIEWED_HEAD,
+        "author": None if unsafe == "unlinked" else {"login": "JoshCLWren"},
+        "committer": None,
+        "commit": {"message": message},
+    })
+    sent: list[list[str]] = []
+    monkeypatch.setattr(module, "run_gh", lambda args: sent.append(args))
+    producer = producer_worker_from_pr(branch=payload["headRefName"], body=payload["body"])
+    assert producer == "83"
+    marker = module.persist_interactive_author_model_marker(
+        pr_number=1390, head=REVIEWED_HEAD, pr=payload,
+    )
+    assert bool(marker) is allowed
+    assert len(sent) == int(allowed)
+    if allowed:
+        assert marker == agent_model_author_marker(
+            pr=1390, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren",
+        )
+        historical = head_contributor_marker(pr=1390, head=MOVED_HEAD, worker="74", epoch=1)
+        contributors, _complete = head_contributor_provenance(
+            [historical], pr=1390, head=REVIEWED_HEAD, producer=producer,
+        )
+        assert contributors == {"74", "83"}
+        assert not head_has_authorized_approval(
+            contributors=contributors, approvers={"83"}, provenance_complete=False,
+        )
+    assert producer_worker_from_pr(
+        branch=payload["headRefName"], body=payload["body"],
+    ) == "83"
+
+
 def test_interactive_handoff_uses_explicit_body_issue_without_factory_branch(
     monkeypatch: MonkeyPatch,
 ) -> None:

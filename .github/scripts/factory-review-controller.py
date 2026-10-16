@@ -402,10 +402,11 @@ def persist_interactive_author_model_marker(
     Unknown or conflicting identities fail closed; a human PR must not be
     assigned a fabricated numbered-worker identity.
     """
-    if producer_worker_from_pr(
+    producer = producer_worker_from_pr(
         branch=str(pr.get("headRefName") or ""),
         body=str(pr.get("body") or ""),
-    ) is not None or "factory" not in labels_of(pr):
+    )
+    if "factory" not in labels_of(pr):
         return None
     author = json_object(pr.get("author"))
     owner = REPO.split("/", 1)[0]
@@ -432,6 +433,20 @@ def persist_interactive_author_model_marker(
     models = set(re.findall(r"(?m)^Model:[ \t]*(\S+)[ \t]*$", message))
     if len(models) > 1:
         return None
+    # A factory branch records historical contributors, not necessarily the
+    # author of a later interactive repair. Keep that producer for reviewer
+    # independence, but require explicit commit evidence before taking this
+    # path instead of the scheduled wrapper's roster attribution.
+    if producer is not None:
+        sessions = re.findall(r"(?m)^Authoring session:[ \t]*(.+?)[ \t]*$", message)
+        if (
+            len(models) != 1
+            or len(sessions) != 1
+            or re.fullmatch(
+                r"interactive .+ session, no registered factory-worker identity", sessions[0]
+            ) is None
+        ):
+            return None
     model = next(iter(models)) if models else "human"
     marker = agent_model_author_marker(
         pr=pr_number, head=head, model=model, agent=f"interactive-{owner}"
