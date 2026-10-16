@@ -5,6 +5,7 @@ import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
 import type { CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
 import Breadcrumbs from '../components/Breadcrumbs'
+import { RatingHistoryChart } from '../components/RatingHistoryChart'
 
 function formatRatingDate(value: string | null): string | null {
   if (!value) return null
