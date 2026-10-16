@@ -43,6 +43,77 @@ async def owned_issue_threads(
     return dict(rows.all())
 
 
+async def series_threads(
+    db: AsyncSession,
+    user_id: int,
+    identity_ids: Collection[int],
+) -> dict[int, set[int]]:
+    """Map a source series identity to the owned Threads that confirmed it.
+
+    Preview needs this so an entry that would land in an excluded Thread is
+    explained before commit instead of only failing during materialization.
+
+    Args:
+        db: Async database session.
+        user_id: Owner user ID whose Threads are eligible.
+        identity_ids: External series identity row ids referenced by the source.
+
+    Returns:
+        Identity row id to the set of owned Thread ids confirming it.
+    """
+    if not identity_ids:
+        return {}
+    rows = await db.execute(
+        select(ThreadExternalSeriesMapping.external_identity_id, Thread.id)
+        .join(Thread, Thread.id == ThreadExternalSeriesMapping.thread_id)
+        .where(
+            ThreadExternalSeriesMapping.external_identity_id.in_(identity_ids),
+            ThreadExternalSeriesMapping.status == "confirmed",
+            Thread.user_id == user_id,
+        )
+    )
+    mapped: dict[int, set[int]] = {}
+    for identity_id, thread_id in rows:
+        mapped.setdefault(identity_id, set()).add(thread_id)
+    return mapped
+
+
+async def confirmed_issues(
+    db: AsyncSession,
+    user_id: int,
+    identity_ids: Collection[int],
+) -> dict[int, set[int]]:
+    """Map a source issue identity to the owned Issues that confirmed it.
+
+    Preview needs this so an entry that would reuse an excluded Issue is
+    explained before commit.
+
+    Args:
+        db: Async database session.
+        user_id: Owner user ID whose Issues are eligible.
+        identity_ids: External issue identity row ids referenced by the source.
+
+    Returns:
+        Identity row id to the set of owned Issue ids confirming it.
+    """
+    if not identity_ids:
+        return {}
+    rows = await db.execute(
+        select(IssueExternalIdentityMapping.external_identity_id, Issue.id)
+        .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(
+            IssueExternalIdentityMapping.external_identity_id.in_(identity_ids),
+            IssueExternalIdentityMapping.status == "confirmed",
+            Thread.user_id == user_id,
+        )
+    )
+    mapped: dict[int, set[int]] = {}
+    for identity_id, issue_id in rows:
+        mapped.setdefault(identity_id, set()).add(issue_id)
+    return mapped
+
+
 async def thread_volumes(
     db: AsyncSession,
     user_id: int,

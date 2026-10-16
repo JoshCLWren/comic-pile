@@ -29,11 +29,11 @@ class CollectionGuard:
     identity_volumes: dict[int, set[tuple[str, str]]] = field(default_factory=dict)
     thread_identities: dict[int, set[tuple[str, str]]] = field(default_factory=dict)
     issue_volumes: dict[int, set[tuple[str, str]]] = field(default_factory=dict)
+    series_threads: dict[int, set[int]] = field(default_factory=dict)
+    issue_targets: dict[int, set[int]] = field(default_factory=dict)
 
-    def check(self, fact: dict[str, object]) -> CollectionGuardDecision | None:
-        """Fail closed on excluded or ambiguous material without using its title."""
-        if not (self.volumes or self.threads or self.issues):
-            return None
+    def _local_decision(self, fact: dict[str, object]) -> CollectionGuardDecision | None:
+        """Resolve owned Issue and Thread targets the source entry would land in."""
         issue_id = fact.get("resolved_issue_id")
         thread_id = fact.get("thread_id")
         if isinstance(issue_id, int):
@@ -44,6 +44,35 @@ class CollectionGuard:
             thread_id = self.issue_threads.get(issue_id, thread_id)
         if isinstance(thread_id, int) and thread_id in self.threads:
             return CollectionGuardDecision("collection_thread_excluded", (self.threads[thread_id],))
+        issue_identity_id = fact.get("external_issue_identity_id")
+        if isinstance(issue_identity_id, int):
+            for target in self.issue_targets.get(issue_identity_id, ()):
+                if target in self.issues:
+                    return CollectionGuardDecision(
+                        "collection_issue_excluded", (self.issues[target],)
+                    )
+                target_thread = self.issue_threads.get(target)
+                if target_thread is not None and target_thread in self.threads:
+                    return CollectionGuardDecision(
+                        "collection_thread_excluded", (self.threads[target_thread],)
+                    )
+        series_identity_id = fact.get("external_series_identity_id")
+        if isinstance(series_identity_id, int):
+            for target in self.series_threads.get(series_identity_id, ()):
+                if target in self.threads:
+                    return CollectionGuardDecision(
+                        "collection_thread_excluded", (self.threads[target],)
+                    )
+        return None
+
+    def check(self, fact: dict[str, object]) -> CollectionGuardDecision | None:
+        """Fail closed on excluded or ambiguous material without using its title."""
+        if not (self.volumes or self.threads or self.issues):
+            return None
+        if local := self._local_decision(fact):
+            return local
+        issue_id = fact.get("resolved_issue_id")
+        thread_id = fact.get("thread_id")
         candidates: set[tuple[str, str]] = set()
         for key in ("external_series_identity_id", "external_issue_identity_id"):
             identity_id = fact.get(key)
@@ -128,6 +157,8 @@ async def load_collection_guard(
         for key in ("external_series_identity_id", "external_issue_identity_id")
         if isinstance(value := fact.get(key), int)
     }
+    guard.series_threads = await repository.series_threads(db, user_id, identity_ids)
+    guard.issue_targets = await repository.confirmed_issues(db, user_id, identity_ids)
     for identity in await repository.identities(db, identity_ids):
         values = (
             _metadata_volumes(identity.provider, identity.metadata_json)
@@ -136,7 +167,12 @@ async def load_collection_guard(
         )
         guard.identity_volumes[identity.id] = values
     issue_ids = {value for fact in facts if isinstance(value := fact.get("resolved_issue_id"), int)}
-    guard.issue_threads = await repository.owned_issue_threads(db, user_id, issue_ids)
+    reused_issue_ids = {
+        issue_id for targets in guard.issue_targets.values() for issue_id in targets
+    }
+    guard.issue_threads = await repository.owned_issue_threads(
+        db, user_id, issue_ids | reused_issue_ids
+    )
     thread_ids = {value for fact in facts if isinstance(value := fact.get("thread_id"), int)}
     thread_ids.update(guard.issue_threads.values())
     for thread_id, provider, external_id in await repository.thread_volumes(

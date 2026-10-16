@@ -11,7 +11,7 @@ from app.models import Issue, Thread
 from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.collection_exclusion import CollectionExclusion
-from app.models.external_identity import ExternalIdentity
+from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.services.cbl_source_identity_resolution import report_cbl_source_identity_resolution
 from app.services.collection_exclusion_guard import (
     CollectionGuard,
@@ -177,6 +177,79 @@ def test_identity_conflicts_and_missing_identity_fail_closed_without_name_guessi
         CollectionGuard(threads={9: 2}, issue_threads={7: 9}).check({"resolved_issue_id": 7})
         is not None
     )
+
+
+def test_source_identity_evidence_reaches_local_exclusions() -> None:
+    """Confirmed source identities resolve the owned target preview cannot see yet."""
+    guard = CollectionGuard(
+        threads={9: 2},
+        issues={7: 1},
+        issue_threads={7: 9},
+        issue_targets={5: {7}},
+        series_threads={3: {9}},
+    )
+    reused = guard.check({"external_issue_identity_id": 5})
+    assert reused is not None and reused.reason == "collection_issue_excluded"
+    assert reused.exclusion_ids == (1,)
+    landed = guard.check({"external_series_identity_id": 3})
+    assert landed is not None and landed.reason == "collection_thread_excluded"
+    assert landed.exclusion_ids == (2,)
+    assert guard.check({"external_series_identity_id": 4}) is None
+    assert guard.check({"external_issue_identity_id": 6}) is None
+
+
+async def test_excluded_thread_target_excludes_one_position_instead_of_failing(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A Thread exclusion reached only at commit stays a per-position outcome."""
+    user = await get_or_create_user_async(async_db)
+    source, volumes = await _source(async_db)
+    thread = Thread(
+        user_id=user.id,
+        title="CBL: ABSOLUTE  FLASH (alternate spelling)",
+        format="comic",
+        queue_position=1,
+        status="active",
+        reading_progress="not_started",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    async_db.add(
+        ThreadExternalSeriesMapping(
+            thread_id=thread.id,
+            external_identity_id=volumes[0].id,
+            status="confirmed",
+            evidence_source="cbl_adoption_commit",
+        )
+    )
+    exclusion = CollectionExclusion(user_id=user.id, thread_id=thread.id)
+    async_db.add(exclusion)
+    await async_db.commit()
+
+    preview = await auth_client.get(f"/api/v1/issue-identity/cbl/{source.id}/adoption-preview")
+    assert preview.status_code == 200, preview.text
+    first = preview.json()["entries"][0]
+    assert first["adoption_decision"] == "excluded"
+    assert first["collection_exclusion_reason"] == "collection_thread_excluded"
+    assert first["collection_exclusion_ids"] == [exclusion.id]
+
+    response = await auth_client.post(
+        f"/api/v1/cbl/{source.id}/adoption-commit",
+        json={"content_hash": "hash", "revision_sha": "abc"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["excluded_positions"] == [0]
+    assert response.json()["created_positions"] == [1, 2]
+    assert await async_db.scalar(select(func.count()).select_from(Issue)) == 2
+    # The refused position must not leave a partially created series Thread behind.
+    titles = set((await async_db.scalars(select(Thread.title))).all())
+    assert titles == {
+        "CBL: ABSOLUTE  FLASH (alternate spelling)",
+        "CBL: Absolute Green Lantern",
+        "CBL: Absolute Batman",
+    }
 
 
 @pytest.mark.parametrize(

@@ -100,6 +100,27 @@ class ConflictingComicVineIdentityError(AdoptionCommitError):
     """
 
 
+class CollectionAdoptionRefusedError(AdoptionCommitError):
+    """The resolved adoption target is excluded from the reader's collection.
+
+    Raised inside the materialization savepoint so a partially created Thread
+    or Issue never survives the refusal. The merge pass records the source
+    position as excluded (or unresolved when identity is uncertain) and keeps
+    adopting the rest of the list, matching the preview's per-entry contract.
+    """
+
+    def __init__(self, reason: str, exclusion_ids: tuple[int, ...] = ()) -> None:
+        """Record why materialization was refused.
+
+        Args:
+            reason: Machine-readable collection guard reason.
+            exclusion_ids: Owner-scoped exclusion rows responsible for it.
+        """
+        super().__init__(f"Collection adoption refused: {reason}")
+        self.reason = reason
+        self.exclusion_ids = exclusion_ids
+
+
 class MaterializedIssue(NamedTuple):
     """An issue reused or inserted for one approved CBL entry."""
 
@@ -532,12 +553,13 @@ async def _ensure_missing_issue_created(
 
     Raises:
         ConflictingComicVineIdentityError: The number is already a different comic.
+        CollectionAdoptionRefusedError: The resolved target is excluded from the collection.
         AdoptionCommitError: If the entry cannot be materialized safely.
     """
     await lock_reader(db, user_id)
     collection_guard = await load_collection_guard(db, user_id, [fact])
     if decision := collection_guard.check(fact):
-        raise AdoptionCommitError(f"Collection adoption refused: {decision.reason}")
+        raise CollectionAdoptionRefusedError(decision.reason, decision.exclusion_ids)
     series_name = str(fact.get("series_name") or "")
     issue_number = str(fact.get("issue_number") or "")
     comicvine_id = _comicvine_issue_id(fact)
@@ -556,80 +578,84 @@ async def _ensure_missing_issue_created(
             }
             reuse_guard = await load_collection_guard(db, user_id, [existing_fact])
             if decision := reuse_guard.check(existing_fact):
-                raise AdoptionCommitError(f"Collection adoption refused: {decision.reason}")
+                raise CollectionAdoptionRefusedError(decision.reason, decision.exclusion_ids)
             return MaterializedIssue(existing, False)
 
-    thread = await _find_or_create_series_thread(
-        db,
-        user_id,
-        series_name=series_name,
-        external_series_identity_id=(
-            int(external_series_identity_id)
-            if isinstance(external_series_identity_id, int)
-            else None
-        ),
-        volume_year=volume_year,
-    )
+    # The whole target materialization runs in one savepoint so a refusal or a
+    # conflicting-identity unresolved position never leaves a partially created
+    # Thread behind while the rest of the list still commits.
+    async with db.begin_nested():
+        thread = await _find_or_create_series_thread(
+            db,
+            user_id,
+            series_name=series_name,
+            external_series_identity_id=(
+                int(external_series_identity_id)
+                if isinstance(external_series_identity_id, int)
+                else None
+            ),
+            volume_year=volume_year,
+        )
 
-    target_fact = {**fact, "thread_id": thread.id}
-    target_guard = await load_collection_guard(db, user_id, [target_fact])
-    if decision := target_guard.check(target_fact):
-        raise AdoptionCommitError(f"Collection adoption refused: {decision.reason}")
-    if thread.queue_position < 1:
-        thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1
+        target_fact = {**fact, "thread_id": thread.id}
+        target_guard = await load_collection_guard(db, user_id, [target_fact])
+        if decision := target_guard.check(target_fact):
+            raise CollectionAdoptionRefusedError(decision.reason, decision.exclusion_ids)
+        if thread.queue_position < 1:
+            thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1
 
-    existing_rows = await issue_repository.locked_issue_rows(db, thread.id)
-    existing_by_number_row = next(
-        (item for item in existing_rows if item[1] == issue_number),
-        None,
-    )
-    if existing_by_number_row is not None:
-        existing_by_number = await issue_repository.get_issue(db, existing_by_number_row[0])
-        if existing_by_number is None:
-            raise AdoptionCommitError(
-                f"Could not load {series_name} #{issue_number} after locking the thread."
-            )
-        confirmed_ids = await _confirmed_comicvine_issue_ids(db, existing_by_number.id)
-        if comicvine_id is None:
-            if confirmed_ids:
-                raise ConflictingComicVineIdentityError(
-                    f"{series_name} #{issue_number} is already confirmed as a different "
-                    "ComicVine issue, so this entry was left unresolved."
+        existing_rows = await issue_repository.locked_issue_rows(db, thread.id)
+        existing_by_number_row = next(
+            (item for item in existing_rows if item[1] == issue_number),
+            None,
+        )
+        if existing_by_number_row is not None:
+            existing_by_number = await issue_repository.get_issue(db, existing_by_number_row[0])
+            if existing_by_number is None:
+                raise AdoptionCommitError(
+                    f"Could not load {series_name} #{issue_number} after locking the thread."
                 )
-        elif comicvine_id not in confirmed_ids and confirmed_ids:
-            raise ConflictingComicVineIdentityError(
-                f"{series_name} #{issue_number} is already confirmed as ComicVine "
-                f"{', '.join(sorted(confirmed_ids))}, not {comicvine_id}, so this "
-                "entry was left unresolved."
-            )
-        elif comicvine_id not in confirmed_ids:
-            await _confirm_comicvine_issue_mapping(db, existing_by_number, comicvine_id)
-        return MaterializedIssue(existing_by_number, False)
+            confirmed_ids = await _confirmed_comicvine_issue_ids(db, existing_by_number.id)
+            if comicvine_id is None:
+                if confirmed_ids:
+                    raise ConflictingComicVineIdentityError(
+                        f"{series_name} #{issue_number} is already confirmed as a different "
+                        "ComicVine issue, so this entry was left unresolved."
+                    )
+            elif comicvine_id not in confirmed_ids and confirmed_ids:
+                raise ConflictingComicVineIdentityError(
+                    f"{series_name} #{issue_number} is already confirmed as ComicVine "
+                    f"{', '.join(sorted(confirmed_ids))}, not {comicvine_id}, so this "
+                    "entry was left unresolved."
+                )
+            elif comicvine_id not in confirmed_ids:
+                await _confirm_comicvine_issue_mapping(db, existing_by_number, comicvine_id)
+            return MaterializedIssue(existing_by_number, False)
 
-    try:
-        async with db.begin_nested():
-            issue = await create_issue_in_natural_order(
-                db, thread.id, issue_number, existing_rows=existing_rows
-            )
-    except IntegrityError as exc:
-        existing = await issue_repository.find_in_thread_by_number(db, thread.id, issue_number)
-        if existing is None:
-            raise AdoptionCommitError(
-                f"Could not add {series_name} #{issue_number} to the library; "
-                "it collides with an issue that is already owned."
-            ) from exc
+        try:
+            async with db.begin_nested():
+                issue = await create_issue_in_natural_order(
+                    db, thread.id, issue_number, existing_rows=existing_rows
+                )
+        except IntegrityError as exc:
+            existing = await issue_repository.find_in_thread_by_number(db, thread.id, issue_number)
+            if existing is None:
+                raise AdoptionCommitError(
+                    f"Could not add {series_name} #{issue_number} to the library; "
+                    "it collides with an issue that is already owned."
+                ) from exc
+            if comicvine_id is not None:
+                await _confirm_comicvine_issue_mapping(db, existing, comicvine_id)
+            return MaterializedIssue(existing, False)
+
+        tracked_issues = await issue_repository.get_issues_by_thread(db, thread.id)
+        apply_thread_issue_tracking_state(thread, tracked_issues)
+        thread.status = "active"
+
         if comicvine_id is not None:
-            await _confirm_comicvine_issue_mapping(db, existing, comicvine_id)
-        return MaterializedIssue(existing, False)
+            await _confirm_comicvine_issue_mapping(db, issue, comicvine_id)
 
-    tracked_issues = await issue_repository.get_issues_by_thread(db, thread.id)
-    apply_thread_issue_tracking_state(thread, tracked_issues)
-    thread.status = "active"
-
-    if comicvine_id is not None:
-        await _confirm_comicvine_issue_mapping(db, issue, comicvine_id)
-
-    return MaterializedIssue(issue, True)
+        return MaterializedIssue(issue, True)
 
 
 async def _find_or_create_series_thread(
@@ -935,6 +961,15 @@ async def _merge_adopted_nodes(
                     fact=fact,
                     volume_year=entry.volume_year,
                 )
+            except CollectionAdoptionRefusedError as refusal:
+                # The target is excluded from the reader's collection. Report
+                # the source position like any other unavailable entry instead
+                # of failing the whole reviewed adoption.
+                if refusal.reason == "collection_identity_requires_review":
+                    unresolved_positions.append(entry.position)
+                else:
+                    excluded_positions.append(entry.position)
+                continue
             except ConflictingComicVineIdentityError:
                 unresolved_positions.append(entry.position)
                 continue
