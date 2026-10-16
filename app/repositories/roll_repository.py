@@ -7,7 +7,8 @@ Functions return ORM models or plain tuples/dicts; callers
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import ARRAY, cast, func, or_, select, update
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread
@@ -568,3 +569,90 @@ async def fetch_recommendation_explanation(
     if event.type != "roll":
         return None, None
     return event, session
+
+
+async def fetch_bootstrap_thread_data(
+    db: AsyncSession,
+    user_id: int,
+    snoozed_ids: list[int],
+    skipped_ids: list[int],
+    die_size: int,
+) -> tuple[list[tuple[int, str, str, int | None, str | None, list[str]]], int, int]:
+    """Fetch all thread data needed for bootstrap in bulk.
+
+    This replaces multiple separate queries with a single efficient query that
+    returns pool, snoozed, and skipped threads in one round trip. The query
+    includes route labels via a correlated subquery, maintaining the existing
+    behavior while reducing query count from 6+ to 2.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated user ID.
+        snoozed_ids: Thread IDs currently snoozed in session.
+        skipped_ids: Thread IDs currently skipped in session.
+        die_size: Current die size for pool limit.
+
+    Returns:
+        Tuple of (all_thread_rows, pool_count, total_threads) where:
+        - all_thread_rows: List of tuples (id, title, format, issue_id, issue_number, route_labels)
+        - pool_count: Number of threads in the pool (eligible and not excluded)
+        - total_threads: Total number of active threads (pool + excluded)
+    """
+    route_labels_subq = (
+        select(
+            func.array_agg(func.distinct(DependencyGroup.name)),
+        )
+        .select_from(DependencyGroupMembership)
+        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
+        .where(
+            or_(
+                DependencyGroupMembership.thread_id == Thread.id,
+                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+            ),
+            DependencyGroup.user_id == user_id,
+        )
+        .correlate(Thread)
+        .scalar_subquery()
+        .cast(PG_ARRAY(Text))
+    )
+
+    all_threads_query = (
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.next_unread_issue_id,
+            Issue.issue_number,
+            route_labels_subq.label("route_labels"),
+        )
+        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .order_by(Thread.queue_position)
+    )
+
+    pool_query = (
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.next_unread_issue_id,
+            Issue.issue_number,
+            route_labels_subq.label("route_labels"),
+        )
+        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.is_blocked.is_(False))
+        .order_by(Thread.queue_position)
+        .limit(die_size)
+    )
+
+    all_result = await db.execute(all_threads_query)
+    all_rows = all_result.all()
+
+    pool_result = await db.execute(pool_query)
+    pool_rows = pool_result.all()
+
+    return pool_rows, len(all_rows)

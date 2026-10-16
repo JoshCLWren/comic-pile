@@ -18,6 +18,7 @@ from app.models import Event, ReadingSession, Thread
 from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.repositories.roll_repository import (
+    fetch_bootstrap_thread_data,
     fetch_issue_by_id,
     fetch_session_events,
     insert_recommendation_context,

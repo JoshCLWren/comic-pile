@@ -1123,56 +1123,17 @@ async def roll_bootstrap(
         pending_thread_title=pending_thread_title,
     )
 
-    route_labels_subq = (
-        select(
-            func.array_agg(func.distinct(DependencyGroup.name)),
-        )
-        .select_from(DependencyGroupMembership)
-        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
-        .where(
-            or_(
-                DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
-            ),
-            DependencyGroup.user_id == user_id,
-        )
-        .correlate(Thread)
-        .scalar_subquery()
-        .cast(ARRAY(Text))
-    )
-
-    pool_query = (
-        select(
-            Thread.id,
-            Thread.title,
-            Thread.format,
-            Thread.next_unread_issue_id.label("issue_id"),
-            Issue.issue_number,
-            route_labels_subq.label("route_labels"),
-        )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .where(Thread.is_blocked.is_(False))
-        .order_by(Thread.queue_position)
-        .limit(die_size)
-    )
-
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
     derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
-    snoozed_id_set = set(snoozed_ids)
-    skipped_id_set = set(skipped_ids)
-    effective_snoozed_set = snoozed_id_set | derived_snoozed_ids
-    effective_snoozed_ids = sorted(effective_snoozed_set)
-    if effective_snoozed_ids:
-        pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
-    if skipped_ids:
-        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
 
-    pool_result = await db.execute(pool_query)
-    pool_rows = pool_result.all()
+    pool_rows, total_threads = await fetch_bootstrap_thread_data(
+        db,
+        user_id=user_id,
+        snoozed_ids=snoozed_ids,
+        skipped_ids=skipped_ids,
+        die_size=die_size,
+    )
 
     roll_pool = [
         RollBootstrapThread(
@@ -1185,34 +1146,6 @@ async def roll_bootstrap(
         )
         for row in pool_rows
     ]
-
-    snoozed_threads: list[RollBootstrapThread] = []
-    if snoozed_ids:
-        snoozed_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(snoozed_ids))
-        )
-        snoozed_threads = [
-            RollBootstrapThread(
-                id=row.id, title=row.title, format=normalize_format_value(row.format)
-            )
-            for row in snoozed_result.all()
-        ]
-
-    skipped_threads: list[RollBootstrapThread] = []
-    if skipped_ids:
-        skipped_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(skipped_ids))
-        )
-        skipped_threads = [
-            RollBootstrapThread(
-                id=row.id, title=row.title, format=normalize_format_value(row.format)
-            )
-            for row in skipped_result.all()
-        ]
 
     blocked_count_result = await db.execute(
         select(func.count())
