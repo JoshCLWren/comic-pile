@@ -124,6 +124,7 @@ beforeEach(() => {
     page_size: 100,
   })
   mockedIssuesApiCreate.mockReset()
+  // SAFETY: the stubbed create response supplies only the fields this view reads
   mockedIssuesApiCreate.mockResolvedValue({
     issues: [],
     next_page_token: null,
