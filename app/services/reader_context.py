@@ -12,13 +12,11 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from typing import Literal
-from fastapi import HTTPException, status
 from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
-from app.services.errors import NotFoundError
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.event import Event
@@ -829,13 +827,7 @@ async def get_reader_context(
     Raises:
         HTTPException: When the issue does not belong to the user.
     """
-    try:
-        issue = await get_owned_issue_or_404(db, user_id, issue_id)
-    except NotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        ) from exc
+    issue = await get_owned_issue_or_404(db, user_id, issue_id)
     thread_id = issue.thread_id
     current_position = issue.position
 
