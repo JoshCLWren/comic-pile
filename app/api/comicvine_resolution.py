@@ -15,6 +15,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.external_identities import ExternalIdentityMappingError
 from app.models.user import User
+from app.services.errors import NotFoundError
 from app.schemas.comicvine_resolution import (
     ComicVineResolveResponse,
     ComicVineSeriesIssuesResponse,
@@ -174,12 +175,28 @@ async def api_get_issue_identity(
 
     Shows confirmed, candidate, and unresolved mappings.
 
-    Args:
+Args:
         issue_id: ComicPile issue ID.
         current_user: Authenticated owner.
         db: Async database session.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        await get_owned_issue_or_404(db, current_user.id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     try:
         return await get_issue_identity_state(
             db, user_id=current_user.id, issue_id=issue_id
@@ -212,7 +229,13 @@ async def api_confirm_identity(
         current_user: Authenticated owner.
         db: Async database session.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        await get_owned_issue_or_404(db, current_user.id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     try:
         await confirm_comicvine_identity(
             db,
@@ -360,7 +383,13 @@ async def api_replace_identity(
         current_user: Authenticated owner.
         db: Async database session.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        await get_owned_issue_or_404(db, current_user.id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     try:
         await replace_comicvine_identity(
             db,
@@ -426,7 +455,13 @@ async def api_apply_correction(
         current_user: Authenticated owner.
         db: Async database session.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        await get_owned_issue_or_404(db, current_user.id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     try:
         await apply_metadata_correction(
             db,
@@ -486,7 +521,13 @@ async def api_revert_correction(
         current_user: Authenticated owner.
         db: Async database session.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        await get_owned_issue_or_404(db, current_user.id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     try:
         await revert_metadata_correction(
             db,
@@ -528,7 +569,13 @@ async def api_remove_identity(
     Returns:
         Confirmation of the removal.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        await get_owned_issue_or_404(db, current_user.id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     try:
         await remove_comicvine_identity(
             db,

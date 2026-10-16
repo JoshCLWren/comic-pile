@@ -1,6 +1,7 @@
 """Ownership-scoped data access helpers."""
 
 from fastapi import HTTPException, status
+from app.services.errors import NotFoundError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,10 +38,7 @@ async def get_owned_issue_or_404(db: AsyncSession, user_id: int, issue_id: int) 
     )
     issue = result.scalar_one_or_none()
     if issue is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
+        raise NotFoundError(f"Issue {issue_id} not found")
     return issue
 
 

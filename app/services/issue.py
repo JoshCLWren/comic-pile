@@ -22,6 +22,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
+from app.services.errors import NotFoundError
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.repositories import issue_repository
 from app.schemas.tags import TagTargetType
@@ -537,7 +538,13 @@ async def mark_issue_read(
         issue_id: Issue to mark read.
         current_user_id: User owning the issue.
     """
-    issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+    try:
+        issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     thread = await get_owned_thread_or_404(db, current_user_id, issue.thread_id)
 
     if issue.status == "read":
@@ -585,7 +592,13 @@ async def mark_issue_unread(
         issue_id: Issue to mark unread.
         current_user_id: User owning the issue.
     """
-    issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+    try:
+        issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     thread = await get_owned_thread_or_404(db, current_user_id, issue.thread_id)
 
     if issue.status == "unread":
@@ -643,7 +656,13 @@ async def bulk_mark_issue_read(
     # Load and verify ownership for all requested IDs
     issues: list[Issue] = []
     for issue_id in issue_ids:
-        issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+        try:
+            issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+        except NotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue {issue_id} not found",
+            ) from exc
         if issue.status == "read":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -702,7 +721,13 @@ async def bulk_mark_issue_unread(
 
     issues: list[Issue] = []
     for issue_id in issue_ids:
-        issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+        try:
+            issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+        except NotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue {issue_id} not found",
+            ) from exc
         if issue.status == "unread":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

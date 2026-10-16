@@ -276,7 +276,7 @@ async def test_shared_catalog_grants_no_personal_access(
 
     with pytest.raises(NotFoundError):
         await get_thread_detail(db, sample_user2.id, thread_a.id)
-    with pytest.raises(HTTPException):
+    with pytest.raises(NotFoundError):
         await get_owned_issue_or_404(db, sample_user2.id, issue_a.id)
 
 

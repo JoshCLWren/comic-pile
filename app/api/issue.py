@@ -26,6 +26,7 @@ from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.schemas.reader_context import ReaderContextResponse
 from app.services import issue as issue_service
 from app.services.comicvine_intelligence import get_issue_intelligence
+from app.services.errors import NotFoundError
 from app.services.reader_context import get_reader_context
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from comic_pile.dependencies import validate_position_dependency_consistency
@@ -54,7 +55,13 @@ async def get_issue_comicvine_intelligence(
     Returns:
         Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.
     """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        await get_owned_issue_or_404(db, current_user.id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
     return await get_issue_intelligence(db, issue_id, current_user.id)
 
 
@@ -284,7 +291,13 @@ async def get_issue(
     Raises:
         HTTPException: If issue not found.
     """
-    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
+    try:
+        issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        ) from exc
 
     return issue_to_response(issue)
 
