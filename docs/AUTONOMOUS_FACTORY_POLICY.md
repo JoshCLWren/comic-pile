@@ -246,6 +246,17 @@ Rules:
   cannot be established does not receive fabricated model provenance.
   Keep manual-only PRs out of this workflow with
   `<!-- factory-execution:manual-only -->`.
+- A head advanced outside the numbered-worker wrapper (an owner-pushed merge or
+  rebase, or trusted repository automation) has no controller-authored author
+  marker, so the exact-head cross-model gate fails closed and parks the PR in
+  `factory:blocked`. Reconcile that provenance explicitly with
+  `python3 .github/scripts/factory-review-controller.py reconcile-provenance --pr N`
+  from trusted main, or the `Factory Provenance Reconcile` workflow for the same
+  effect as `github-actions[bot]`. The command attests only identities GitHub
+  already attributes to the owner or to trusted automation, never invents a
+  numbered-worker identity, and then releases the head to `factory:review` so
+  approvals already recorded for it can complete the merge gate. `--head`
+  optionally pins the exact SHA and fails closed on a moved head.
 - `factory:local` remains an active local-work lease, not an opt-out from
   enrollment. A local session MUST release that lease to `factory:unowned`
   when it opens a ready-for-review PR or finishes a repair; the fleet never

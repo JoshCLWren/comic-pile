@@ -2197,3 +2197,226 @@ def test_roster_model_lookup_ignores_untrusted_pr_checkout(
     monkeypatch.chdir(untrusted)
     monkeypatch.setattr(controller, "__file__", str(trusted / "factory-review-controller.py"))
     assert controller.roster_model_for_worker("54") == "glm-4.5-flash"
+
+
+def test_model_trailer_models_reports_distinct_trailers() -> None:
+    """Only the head's own Model trailer values count, one distinct value is safe."""
+    assert _review_policy.model_trailer_models(None) == set()
+    assert _review_policy.model_trailer_models("") == set()
+    assert _review_policy.model_trailer_models("Fix bug\n\nBody text") == set()
+    assert _review_policy.model_trailer_models("Fix bug\n\nModel: gpt-6\n") == {"gpt-6"}
+    assert _review_policy.model_trailer_models(
+        "Fix bug\n\nModel: gpt-6\n\nModel: gpt-6\n"
+    ) == {"gpt-6"}
+    assert _review_policy.model_trailer_models(
+        "Fix bug\n\nModel: gpt-6\n\nModel: grok-4.6\n"
+    ) == {"gpt-6", "grok-4.6"}
+
+
+@pytest.mark.parametrize(
+    ("case", "commit_author", "commit_committer", "message", "expected"),
+    [
+        ("owner-local-merge", None, None, "Merge main\n\nModel: gpt-6", ("gpt-6", "interactive-JoshCLWren")),
+        (
+            "trusted-automation",
+            "github-actions[bot]",
+            "github-actions[bot]",
+            "Sync roster",
+            ("human", "interactive-JoshCLWren"),
+        ),
+        ("owner-commit", "JoshCLWren", "JoshCLWren", "Fix", ("human", "interactive-JoshCLWren")),
+        ("foreign-commit", "opencode-free-model-factory-51[bot]", None, "Fix", None),
+        ("mixed-foreign", "JoshCLWren", "intruder", "Fix", None),
+        ("ambiguous-trailers", None, None, "Merge\n\nModel: gpt-6\nModel: grok-4.6", None),
+    ],
+)
+def test_owner_attested_head_identity_is_fail_closed(
+    case: str,
+    commit_author: str | None,
+    commit_committer: str | None,
+    message: str,
+    expected: tuple[str, str] | None,
+) -> None:
+    """Owner PRs attest only from trusted commit evidence, never a guessed model."""
+    result = _review_policy.owner_attested_head_identity(
+        pr_author_login="JoshCLWren",
+        owner_login="JoshCLWren",
+        commit_author_login=commit_author,
+        commit_committer_login=commit_committer,
+        commit_message=message,
+    )
+    assert result == expected, case
+    assert (
+        _review_policy.owner_attested_head_identity(
+            pr_author_login="intruder",
+            owner_login="JoshCLWren",
+            commit_author_login=commit_author,
+            commit_committer_login=commit_committer,
+            commit_message=message,
+        )
+        is None
+    ), case
+
+
+def _reconcile_pr(*, author: str = "JoshCLWren", branch: str = "factory/54-3437-z-ai") -> dict[str, Any]:
+    return {
+        "state": "OPEN",
+        "headRefOid": REVIEWED_HEAD,
+        "headRefName": branch,
+        "body": "Closes #3437",
+        "author": {"login": author},
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:blocked"},
+            {"name": "factory:unowned"},
+        ],
+    }
+
+
+def reconcile_harness(
+    monkeypatch: MonkeyPatch,
+    module: ModuleType,
+    *,
+    pr: dict[str, Any],
+    commit: dict[str, Any],
+    comments: Sequence[str] = (),
+) -> tuple[list[list[str]], list[tuple[int, str, str]]]:
+    """Wire the explicit reconciliation command against recorded evidence."""
+    sent: list[list[str]] = []
+    transitions: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(module, "pr_json", lambda _pr: pr)
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: list(comments))
+    monkeypatch.setattr(module, "gh_json", lambda _args: commit)
+    monkeypatch.setattr(module, "run_gh", lambda args: sent.append(args))
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage: transitions.append((number, owner, stage)),
+    )
+    return sent, transitions
+
+
+def test_reconcile_provenance_attests_wrapperless_factory_head(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """An owner-pushed merge head is attested and returned to review."""
+    module = load_review_controller()
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(),
+        commit={
+            "sha": REVIEWED_HEAD,
+            "author": None,
+            "committer": None,
+            "commit": {
+                "message": "Merge main into issue creation performance fix\n\nModel: gpt-6"
+            },
+        },
+    )
+    result = module.reconcile_provenance(3747, REVIEWED_HEAD)
+    assert result == {
+        "pr": 3747,
+        "status": "attested",
+        "head": REVIEWED_HEAD,
+        "model": "gpt-6",
+        "agent": "interactive-JoshCLWren",
+    }
+    assert agent_model_author_marker(
+        pr=3747, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren"
+    ) in [command[-1] for command in sent]
+    assert transitions == [(3747, "factory:unowned", "factory:review")]
+
+
+def test_reconcile_provenance_is_idempotent_for_attested_head(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """An already-attested head is released to review without a second marker."""
+    module = load_review_controller()
+    existing = agent_model_author_marker(
+        pr=3747, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren"
+    )
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(),
+        commit={"sha": REVIEWED_HEAD, "commit": {"message": "Merge main\n\nModel: gpt-6"}},
+        comments=[existing],
+    )
+    result = module.reconcile_provenance(3747, REVIEWED_HEAD)
+    assert result == {"pr": 3747, "status": "already-attested", "head": REVIEWED_HEAD}
+    assert sent == []
+    assert transitions == [(3747, "factory:unowned", "factory:review")]
+
+
+def test_reconcile_provenance_fails_closed_without_mutation(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Untrusted authors, moved heads, and foreign commits never get attested."""
+    module = load_review_controller()
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(author="intruder"),
+        commit={"sha": REVIEWED_HEAD, "commit": {"message": "Fix\n\nModel: gpt-6"}},
+    )
+    result = module.reconcile_provenance(3747, REVIEWED_HEAD)
+    assert result["status"] == "unattested"
+    assert sent == []
+    assert transitions == []
+
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(),
+        commit={"sha": REVIEWED_HEAD, "commit": {"message": "Fix\n\nModel: gpt-6"}},
+    )
+    assert module.reconcile_provenance(3747, MOVED_HEAD)["status"] == "stale-head"
+    assert sent == []
+    assert transitions == []
+
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(),
+        commit={
+            "sha": REVIEWED_HEAD,
+            "author": {"login": "opencode-free-model-factory-51[bot]"},
+            "committer": None,
+            "commit": {"message": "Merge branch 'main'"},
+        },
+    )
+    assert module.reconcile_provenance(3747, None)["status"] == "unattested"
+    assert sent == []
+    assert transitions == []
+
+
+def test_interactive_attestation_still_refuses_numbered_factory_branch(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The automatic interactive path stays narrower than explicit reconciliation."""
+    module = load_review_controller()
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        module,
+        "run_gh",
+        lambda *_a: pytest.fail("automatic path must not attest a factory branch"),
+    )
+    assert (
+        module.persist_interactive_author_model_marker(
+            pr_number=3747,
+            head=REVIEWED_HEAD,
+            pr=_reconcile_pr(),
+        )
+        is None
+    )
+
+
+def test_provenance_reconcile_workflow_runs_trusted_main() -> None:
+    """The reconciliation entry point is an explicit, maintainer-run workflow."""
+    workflow = (WORKFLOWS / "factory-provenance-reconcile.yml").read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in workflow
+    assert "reconcile-provenance" in workflow
+    assert "factory-review-controller.py" in workflow
+    assert "ref: main" in workflow
+    assert "pull-requests: write" in workflow
