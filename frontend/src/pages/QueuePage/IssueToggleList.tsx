@@ -78,6 +78,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
 }, ref) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [addRange, setAddRange] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
@@ -314,6 +315,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const loadIssues = useCallback(async () => {
     const loadGeneration = ++loadGenerationRef.current
     setIsLoading(true)
+    setLoadError(null)
 
     try {
       const nextIssues = await fetchAllIssues()
@@ -330,8 +332,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       }
 
       setDependencies(nextDependencies)
-    } catch {
-      // Non-critical
+    } catch (err: unknown) {
+      if (loadGeneration !== loadGenerationRef.current) {
+        return
+      }
+      setLoadError(getApiErrorDetail(err))
     } finally {
       if (loadGeneration === loadGenerationRef.current) {
         setIsLoading(false)
@@ -468,7 +473,26 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     }
   }
 
-if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
+ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
+
+  if (loadError) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+        <p className="text-xs text-red-400">Could not load issues: {loadError}</p>
+        <button
+          type="button"
+          onClick={() => {
+            void loadIssues()
+          }}
+          className="rounded-lg border border-[var(--theme-border)] px-3 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+          data-testid="issue-load-retry"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   const visibleIssues = getVisibleIssues()
   const hasHiddenIssues = issues.length > 5 && !isExpanded && !isReorderMode
@@ -509,6 +533,9 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
         <p className="text-xs text-stone-500 italic">
           Showing {visibleIssues.length} of {issues.length} issues around your current position
         </p>
+      )}
+      {issues.length === 0 && (
+        <p className="text-xs text-stone-500">No issues yet. Add the first range below.</p>
       )}
       {isReorderMode ? (
         <div className="space-y-1 max-h-64 overflow-auto" data-testid="issue-reorder-list">

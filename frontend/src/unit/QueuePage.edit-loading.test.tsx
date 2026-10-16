@@ -137,7 +137,7 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-const MIGRATED_THREAD = {
+const MIGRATED_THREAD: ThreadListItem = {
   id: 1,
   title: 'Saga',
   format: 'Comic',
@@ -149,9 +149,9 @@ const MIGRATED_THREAD = {
   blocking_reasons: [],
   created_at: '2026-03-08T00:00:00Z',
   last_activity_at: null,
-} as ThreadListItem
+}
 
-const UNMIGRATED_THREAD = {
+const UNMIGRATED_THREAD: ThreadListItem = {
   id: 7,
   title: 'Descender',
   format: 'Comic',
@@ -163,7 +163,7 @@ const UNMIGRATED_THREAD = {
   blocking_reasons: [],
   created_at: '2026-03-08T00:00:00Z',
   last_activity_at: null,
-} as ThreadListItem
+}
 
 function renderQueue() {
   render(
@@ -299,9 +299,26 @@ describe('Edit Series loading gate (#3443)', () => {
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
   })
 
-  it('re-enables Save once a failed issue load settles so the dialog is never stuck', async () => {
-    const issuesRequest = deferred<IssueListResponse>()
-    mockedIssuesApi.list.mockReturnValue(issuesRequest.promise)
+  it('shows an error with retry when the issue load fails, then recovers on retry', async () => {
+    const failingRequest = deferred<IssueListResponse>()
+    mockedIssuesApi.list.mockReturnValueOnce(failingRequest.promise)
+    mockedIssuesApi.list.mockReturnValue(
+      Promise.resolve({
+        issues: [
+          {
+            id: 11,
+            issue_number: '1',
+            status: 'unread',
+            thread_id: 1,
+            read_at: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ],
+        total_count: 1,
+        page_size: 100,
+        next_page_token: null,
+      }),
+    )
     const update = vi.fn().mockResolvedValue({})
     mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
 
@@ -314,11 +331,39 @@ describe('Edit Series loading gate (#3443)', () => {
     expect(loadingButton).toBeDisabled()
     expect(update).not.toHaveBeenCalled()
 
-    // Fail the load; the dialog must not stay stuck
+    // Fail the load; the Issues area names the failure and offers recovery
+    // instead of going blank, and the dialog is never stuck.
     await act(async () => {
-      issuesRequest.reject(new Error('load failed'))
+      failingRequest.reject(new Error('load failed'))
     })
 
+    expect(await screen.findByText(/could not load issues/i)).toBeInTheDocument()
+    const retryButton = screen.getByRole('button', { name: /retry/i })
+    const saveButton = await screen.findByRole('button', { name: /save changes/i })
+    await waitFor(() => expect(saveButton).toBeEnabled())
+
+    await user.click(retryButton)
+    await waitFor(() => expect(screen.getByTestId('issue-pill-11')).toBeInTheDocument())
+
+    await user.click(saveButton)
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+  })
+
+  it('shows an explicit empty state when a migrated thread has no issues', async () => {
+    mockedIssuesApi.list.mockResolvedValue({
+      issues: [],
+      total_count: 0,
+      page_size: 100,
+      next_page_token: null,
+    })
+    const update = vi.fn().mockResolvedValue({})
+    mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
+
+    const user = userEvent.setup()
+    renderQueue()
+    await openEditSeries(user)
+
+    expect(await screen.findByText(/no issues yet/i)).toBeInTheDocument()
     const saveButton = await screen.findByRole('button', { name: /save changes/i })
     await waitFor(() => expect(saveButton).toBeEnabled())
 
