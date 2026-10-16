@@ -47,6 +47,9 @@ class SyncReport(BaseModel):
     unknown_date_skips: int
     conflicts: int
     issue_failures: int
+    excluded_sources: int = 0
+    excluded_issues: int = 0
+    skipped_sources: int = 0
     failures: list[SourceSyncFailure]
 
 

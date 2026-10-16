@@ -16,7 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.continuity_plan import ContinuityPlan
 from app.models.issue import Issue
 from app.models.reading_plan_membership import ReadingPlanIssue
-from app.models.reading_plan_release_source import ReadingPlanReleaseSource
+from app.repositories import issue_repository, thread_repository
+from app.repositories import reading_plan_release_source_repository as source_repository
+from app.repositories.reading_list_authoring_repository import lock_reader
+from app.services.release_exclusion_service import comicvine_volume_id, load_release_exclusions
 from app.schemas.continuity_plan import ContinuityPlanNode
 from app.services.reading_plan_normalization import rebuild_plan_membership
 
@@ -26,6 +29,7 @@ class ExtensionResult:
     """Outcome of extending plans with one adopted issue."""
 
     issue_id: int
+    excluded: bool = False
     plans_extended: list[int] = field(default_factory=list)
     plans_skipped_duplicate: list[int] = field(default_factory=list)
     plans_needing_review: list[int] = field(default_factory=list)
@@ -56,12 +60,14 @@ async def extend_plans_with_issue(
     *,
     issue_id: int,
     source_id: int,
+    user_id: int,
     store_date: datetime | None,
 ) -> ExtensionResult:
     """Add an adopted issue to every plan following the source.
 
     Args:
-        db: Database session.
+        db: Caller-owned transaction; this helper flushes but never commits.
+        user_id: Authenticated owner of the source and target Issue.
         issue_id: Canonical Issue just adopted.
         source_id: Release source that triggered the adoption.
         store_date: Provider store_date for deterministic ordering.
@@ -71,39 +77,35 @@ async def extend_plans_with_issue(
     """
     result = ExtensionResult(issue_id=issue_id)
 
-    # Find the source to get its plan.
-    source = (
-        await db.execute(
-            select(ReadingPlanReleaseSource).where(
-                ReadingPlanReleaseSource.id == source_id
-            )
-        )
-    ).scalar_one_or_none()
-    if source is None:
+    initial = await source_repository.get_by_id(db, source_id=source_id, user_id=user_id)
+    if initial is None:
         return result
-
-    # Find all plans following this source's volume+thread.
-    # For v1: the source's own plan. Multi-plan follows share the volume,
-    # so query all enabled sources for the same volume+thread.
-    stmt = select(ReadingPlanReleaseSource).where(
-        ReadingPlanReleaseSource.thread_id == source.thread_id,
-        ReadingPlanReleaseSource.external_identity_id
-        == source.external_identity_id,
-        ReadingPlanReleaseSource.enabled.is_(True),
-    )
-    sources = list((await db.execute(stmt)).scalars().all())
-    plan_ids = sorted({s.plan_id for s in sources})
-
-    issue = (await db.execute(select(Issue).where(Issue.id == issue_id))).scalar_one_or_none()
-    if issue is None:
+    thread_id = initial.thread_id
+    await lock_reader(db, user_id)
+    thread = await thread_repository.lock_thread(db, thread_id)
+    source = await source_repository.get_current_for_sync(db, source_id=source_id, user_id=user_id)
+    if source is None or not source.enabled or thread is None:
         return result
+    issue = await issue_repository.get_issue(db, issue_id)
+    if (thread.user_id != user_id or source.thread_id != thread_id
+        or issue is None or issue.thread_id != thread_id):
+        result.plans_needing_review.append(source.plan_id)
+        return result
+    exclusions = await load_release_exclusions(db, user_id)
+    volume_id = comicvine_volume_id(source.external_identity.external_id)
+    if exclusions.excludes_source(thread_id, volume_id) or issue_id in exclusions.issue_ids:
+        result.excluded = True
+        return result
+    if not await source_repository.has_confirmed_thread_volume(
+        db, thread_id=thread_id, external_identity_id=source.external_identity_id,
+    ):
+        result.plans_needing_review.append(source.plan_id)
+        return result
+    sources = await source_repository.enabled_siblings(db, source=source, user_id=user_id)
+    plan_ids = sorted({row.plan_id for row in sources})
 
     for plan_id in plan_ids:
-        plan = (
-            await db.execute(
-                select(ContinuityPlan).where(ContinuityPlan.id == plan_id)
-            )
-        ).scalar_one_or_none()
+        plan = await source_repository.owned_plan_for_extension(db, plan_id=plan_id, user_id=user_id)
         if plan is None:
             continue
         nodes = await _load_nodes(plan)
@@ -144,5 +146,5 @@ async def extend_plans_with_issue(
         await rebuild_plan_membership(db, plan_id=plan_id, nodes=nodes)
         result.plans_extended.append(plan_id)
 
-    await db.commit()
+    await db.flush()
     return result

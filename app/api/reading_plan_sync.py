@@ -48,6 +48,9 @@ def _to_report(report: ServiceReport) -> SyncReport:
         unknown_date_skips=report.unknown_date_skips,
         conflicts=report.conflicts,
         issue_failures=report.issue_failures,
+        excluded_sources=report.excluded_sources,
+        excluded_issues=report.excluded_issues,
+        skipped_sources=report.skipped_sources,
         failures=[
             {
                 "source_id": failure.source_id,
@@ -74,7 +77,8 @@ def _message(report: ServiceReport) -> str:
         f"Sync completed: {report.successful_sources} successful, "
         f"{report.failed_sources} failed, "
         f"{report.created_issues} created, "
-        f"{report.reused_issues} reused"
+        f"{report.reused_issues} reused, "
+        f"{report.excluded_sources} sources and {report.excluded_issues} issues excluded"
     )
 
 
