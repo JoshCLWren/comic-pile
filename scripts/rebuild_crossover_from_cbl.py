@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Rebuild one crossover's issue membership from a reconciled CBL source list.
 
+# Issue #3470 guard: never materialize bulk CBL source-order hard Dependencies.
+Source order is advisory until explicit user-approved Reading Plan; only
+canonical adjacent dependencies (reading_plan_dependencies / continuity rules)
+are authoritative. Re-run must be idempotent and must not restore removed
+historical source edges (e.g. the 931 removed source-generated Dependencies
+targeting the 55 Fourth World Kirby issues).
+
 This one-off, auditable repair carries authoritative CBL source order through
 canonical reconciliation into a production crossover. It defaults to Ultimate
 Universe crossover #15 for user 1, but all targets are explicit CLI arguments.

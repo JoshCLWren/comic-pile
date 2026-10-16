@@ -51,6 +51,18 @@ from datetime import UTC, datetime
 from typing import NamedTuple, cast
 
 from pydantic import ValidationError
+
+# Issue #3470 guard: bulk CBL source-order dependency materialization blocked.
+CBL_SOURCE_ORDER_DEPENDENCY_MATERIALIZATION_BLOCKED = True
+
+
+def _refuse_bulk_cbl_dependency_materialization(source_path: str) -> None:
+    """Raise if any path tries to write hard Dependencies from CBL source order."""
+    if CBL_SOURCE_ORDER_DEPENDENCY_MATERIALIZATION_BLOCKED:
+        raise RuntimeError(
+            f"Bulk CBL source-order dependency materialization blocked by #3470: {source_path}"
+        )
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -825,6 +837,8 @@ async def _merge_adopted_nodes(
         The machine-readable reused/created/excluded/unresolved source positions
         for this merge pass.
     """
+    # Issue #3470: bulk CBL source-order dependency materialization blocked.
+    _refuse_bulk_cbl_dependency_materialization("cbl_plan_adoption:_merge_adopted_nodes")
     existing_nodes = list(plan.nodes_json or [])
     nodes_by_id = {str(node.get("id")): node for node in existing_nodes}
     issues_by_id: dict[int, dict[str, object]] = {}

@@ -4,6 +4,10 @@ Imported X-Men Era Ten and Fantastic Four Early Years lists must not be
 adopted while entries are unmatched or multi-matched. This helper never
 omits unresolved positions and never picks the lowest issue id when several
 owned comics share an external identity. It does not insert ContinuityPlans.
+
+# Issue #3470: ComicVine external series + issue identity takes precedence.
+# Do not resolve 1988 Forever People to 1971 The Forever People by near-equal
+title/issue number; distinct external_series_identity_id must stay distinct.
 """
 
 from __future__ import annotations
@@ -261,6 +265,15 @@ async def _candidates_for_entry(
             thread_id=thread.id,
             cbl_series_identity_id=entry.external_series_identity_id,
         )
+        # Issue #3470: if CBL provides a series identity and the thread does not
+        # match it exactly, do not guess by title/issue number across volumes.
+        if (
+            entry.external_series_identity_id is not None
+            and not matches
+            and series_external_id is not None
+        ):
+            # Cross-volume: skip this candidate rather than collapse 1971/1988.
+            continue
         candidates.append(
             IdentityCandidate(
                 issue_id=issue.id,
