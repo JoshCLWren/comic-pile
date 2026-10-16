@@ -210,12 +210,12 @@ async def test_queue_and_completed_paginate_independently(
 @pytest.mark.asyncio
 async def test_get_thread(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /api/v1/threads/{id} returns single thread."""
-    _ = sample_data
-    response = await auth_client.get("/api/v1/threads/1")
+    thread_obj = next(t for t in sample_data["threads"] if t.title == "Superman")
+    response = await auth_client.get(f"/api/v1/threads/{thread_obj.id}")
     assert response.status_code == 200
 
     thread = response.json()
-    assert thread["id"] == 1
+    assert thread["id"] == thread_obj.id
     assert thread["title"] == "Superman"
     assert thread["format"] == "Comic"
     assert thread["issues_remaining"] == 10
@@ -237,25 +237,24 @@ async def test_get_thread_not_found(auth_client: AsyncClient) -> None:
 async def test_update_thread(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
-    """Test PUT /api/v1/threads/{id} updates thread."""
-    _ = sample_data
+    thread_obj = next(t for t in sample_data["threads"] if t.title == "Superman")
     update_data = {
         "title": "Superman Updated",
         "format": "Trade Paperback",
         "issues_remaining": 8,
     }
-    response = await auth_client.put("/api/v1/threads/1", json=update_data)
+    response = await auth_client.put(f"/api/v1/threads/{thread_obj.id}", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
-    assert thread["id"] == 1
+    assert thread["id"] == thread_obj.id
     assert thread["title"] == "Superman Updated"
     assert thread["format"] == "Trade Paperback"
     assert thread["issues_remaining"] == 8
 
     from app.models import Thread
 
-    db_thread = await async_db.get(Thread, 1)
+    db_thread = await async_db.get(Thread, thread_obj.id)
     assert db_thread is not None
     assert db_thread.title == "Superman Updated"
     assert db_thread.format == "Trade Paperback"
@@ -265,11 +264,11 @@ async def test_update_thread(
 @pytest.mark.asyncio
 async def test_update_thread_partial(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test PUT /api/v1/threads/{id} with partial data."""
-    _ = sample_data
+    thread_obj = next(t for t in sample_data["threads"] if t.title == "Batman")
     update_data = {
         "title": "Batman Updated",
     }
-    response = await auth_client.put("/api/v1/threads/2", json=update_data)
+    response = await auth_client.put(f"/api/v1/threads/{thread_obj.id}", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -293,11 +292,11 @@ async def test_update_thread_complete_status(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
     """Test PUT /api/v1/threads/{id} sets completed status when issues_remaining is 0."""
-    _ = sample_data
+    thread_obj = next(t for t in sample_data["threads"] if t.title == "Superman")
     update_data = {
         "issues_remaining": 0,
     }
-    response = await auth_client.put("/api/v1/threads/1", json=update_data)
+    response = await auth_client.put(f"/api/v1/threads/{thread_obj.id}", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -307,7 +306,7 @@ async def test_update_thread_complete_status(
 
     from app.models import Thread
 
-    db_thread = await async_db.get(Thread, 1)
+    db_thread = await async_db.get(Thread, thread_obj.id)
     assert db_thread is not None
     assert db_thread.status == "completed"
 
@@ -317,11 +316,11 @@ async def test_update_thread_active_status(
     auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
 ) -> None:
     """Test PUT /api/v1/threads/{id} sets active status when issues_remaining > 0."""
-    _ = sample_data
+    thread_obj = next(t for t in sample_data["threads"] if t.title == "Wonder Woman")
     update_data = {
         "issues_remaining": 5,
     }
-    response = await auth_client.put("/api/v1/threads/3", json=update_data)
+    response = await auth_client.put(f"/api/v1/threads/{thread_obj.id}", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -330,7 +329,7 @@ async def test_update_thread_active_status(
 
     from app.models import Thread
 
-    db_thread = await async_db.get(Thread, 3)
+    db_thread = await async_db.get(Thread, thread_obj.id)
     assert db_thread is not None
     assert db_thread.status == "active"
 
