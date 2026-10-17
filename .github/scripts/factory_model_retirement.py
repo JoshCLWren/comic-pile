@@ -524,6 +524,7 @@ def plan_retirement(
     lock: RosterLock | None = None,
     retired_410_models: Iterable[str] | None = None,
     add_unused_free: bool = True,
+    dynamic_opencode_free: bool = False,
 ) -> RetirementPlan:
     """Diff roster pins against OpenCode catalogs and NVIDIA 410 markers.
 
@@ -534,6 +535,8 @@ def plan_retirement(
         retired_410_models: Bare NVIDIA model ids with a #1093 410 marker.
         add_unused_free: When True (default), unused free OpenCode models
             become TSV additions. Paid Zen is never added.
+        dynamic_opencode_free: Keep durable OpenCode worker slots regardless
+            of their advisory historical model pin; report live catalog only.
 
     Returns:
         Retirement-and-add plan plus unused-free discovery report.
@@ -543,7 +546,16 @@ def plan_retirement(
         str(item).strip() for item in (retired_410_models or ()) if str(item).strip()
     }
     decisions = [
-        decide_pin(row, catalogs, retired_models, retired_410) for row in rows
+        PinDecision(
+            worker=row["worker"],
+            source=row["source"],
+            model=row["model"],
+            action="keep",
+            reason="runtime selects from live free OpenCode catalog",
+        )
+        if dynamic_opencode_free and row["source"] == "opencode-free"
+        else decide_pin(row, catalogs, retired_models, retired_410)
+        for row in rows
     ]
     retirements = tuple(item for item in decisions if item.action == "retire")
     kept = tuple(item for item in decisions if item.action == "keep")
@@ -566,7 +578,7 @@ def plan_retirement(
             lock=lock,
             reusable_slots=reusable_slots,
         )
-        if add_unused_free
+        if add_unused_free and not dynamic_opencode_free
         else ()
     )
     return RetirementPlan(
@@ -700,6 +712,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Exit 1 when dead pins exist (CI fail-closed without applying).",
     )
     parser.add_argument(
+        "--dynamic-opencode-free",
+        action="store_true",
+        help="Preserve OpenCode worker slots; audit live free models without roster churn.",
+    )
+    parser.add_argument(
         "--add-unused-free",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -766,6 +783,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         lock=lock,
         retired_410_models=retired_410,
         add_unused_free=bool(args.add_unused_free),
+        dynamic_opencode_free=bool(args.dynamic_opencode_free),
     )
     report = json.dumps(plan.as_dict(), indent=2, sort_keys=True)
     if args.report is not None:
