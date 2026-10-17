@@ -1,0 +1,610 @@
+{
+  "command": [
+    "mypy",
+    "--strict",
+    "--no-error-summary",
+    "--show-error-codes"
+  ],
+  "rows": [
+    {
+      "code": "arg-type",
+      "count": 38,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.api"
+    },
+    {
+      "code": "assignment",
+      "count": 1,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.api"
+    },
+    {
+      "code": "attr-defined",
+      "count": 1,
+      "design_problem": false,
+      "family": "attribute-and-name-resolution",
+      "module": "app.api"
+    },
+    {
+      "code": "call-overload",
+      "count": 2,
+      "design_problem": true,
+      "family": "overload-and-call-signature",
+      "module": "app.api"
+    },
+    {
+      "code": "index",
+      "count": 6,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.api"
+    },
+    {
+      "code": "list-item",
+      "count": 1,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.api"
+    },
+    {
+      "code": "misc",
+      "count": 1,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.api"
+    },
+    {
+      "code": "no-untyped-call",
+      "count": 4,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.api"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.api"
+    },
+    {
+      "code": "operator",
+      "count": 1,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.api"
+    },
+    {
+      "code": "type-arg",
+      "count": 3,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.api"
+    },
+    {
+      "code": "union-attr",
+      "count": 3,
+      "design_problem": false,
+      "family": "attribute-and-name-resolution",
+      "module": "app.api"
+    },
+    {
+      "code": "unreachable",
+      "count": 1,
+      "design_problem": false,
+      "family": "other",
+      "module": "app.api"
+    },
+    {
+      "code": "no-any-return",
+      "count": 3,
+      "design_problem": false,
+      "family": "any-escapes",
+      "module": "app.auth.py"
+    },
+    {
+      "code": "type-arg",
+      "count": 3,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.auth.py"
+    },
+    {
+      "code": "assignment",
+      "count": 2,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.continuity_chains.py"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 2,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.continuity_rules.py"
+    },
+    {
+      "code": "type-arg",
+      "count": 2,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.continuity_rules.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 3,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.database.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 2,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.exception_handlers.py"
+    },
+    {
+      "code": "assignment",
+      "count": 2,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.exception_handlers.py"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 4,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.exception_handlers.py"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 13,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.main.py"
+    },
+    {
+      "code": "type-arg",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.main.py"
+    },
+    {
+      "code": "unreachable",
+      "count": 1,
+      "design_problem": false,
+      "family": "other",
+      "module": "app.main.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 1,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.middleware"
+    },
+    {
+      "code": "no-any-return",
+      "count": 2,
+      "design_problem": false,
+      "family": "any-escapes",
+      "module": "app.middleware"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 6,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.middleware"
+    },
+    {
+      "code": "type-arg",
+      "count": 6,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.middleware"
+    },
+    {
+      "code": "type-arg",
+      "count": 4,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.models"
+    },
+    {
+      "code": "type-arg",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.momentum.py"
+    },
+    {
+      "code": "type-arg",
+      "count": 12,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.performance_budgets.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 8,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.repositories"
+    },
+    {
+      "code": "assignment",
+      "count": 2,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.repositories"
+    },
+    {
+      "code": "call-overload",
+      "count": 3,
+      "design_problem": true,
+      "family": "overload-and-call-signature",
+      "module": "app.repositories"
+    },
+    {
+      "code": "misc",
+      "count": 1,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.repositories"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.repositories"
+    },
+    {
+      "code": "type-arg",
+      "count": 4,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.repositories"
+    },
+    {
+      "code": "unreachable",
+      "count": 4,
+      "design_problem": false,
+      "family": "other",
+      "module": "app.repositories"
+    },
+    {
+      "code": "var-annotated",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.repositories"
+    },
+    {
+      "code": "unreachable",
+      "count": 1,
+      "design_problem": false,
+      "family": "other",
+      "module": "app.roll_recovery.py"
+    },
+    {
+      "code": "var-annotated",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.roll_recovery.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 6,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.schemas"
+    },
+    {
+      "code": "assignment",
+      "count": 1,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.schemas"
+    },
+    {
+      "code": "type-arg",
+      "count": 4,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.schemas"
+    },
+    {
+      "code": "unreachable",
+      "count": 1,
+      "design_problem": false,
+      "family": "other",
+      "module": "app.schemas"
+    },
+    {
+      "code": "no-any-return",
+      "count": 1,
+      "design_problem": false,
+      "family": "any-escapes",
+      "module": "app.security.py"
+    },
+    {
+      "code": "type-arg",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.security.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 97,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.services"
+    },
+    {
+      "code": "assignment",
+      "count": 39,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.services"
+    },
+    {
+      "code": "attr-defined",
+      "count": 33,
+      "design_problem": false,
+      "family": "attribute-and-name-resolution",
+      "module": "app.services"
+    },
+    {
+      "code": "call-arg",
+      "count": 11,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "app.services"
+    },
+    {
+      "code": "call-overload",
+      "count": 52,
+      "design_problem": true,
+      "family": "overload-and-call-signature",
+      "module": "app.services"
+    },
+    {
+      "code": "index",
+      "count": 18,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.services"
+    },
+    {
+      "code": "list-item",
+      "count": 1,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.services"
+    },
+    {
+      "code": "misc",
+      "count": 1,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.services"
+    },
+    {
+      "code": "no-any-return",
+      "count": 8,
+      "design_problem": false,
+      "family": "any-escapes",
+      "module": "app.services"
+    },
+    {
+      "code": "no-redef",
+      "count": 1,
+      "design_problem": false,
+      "family": "import-and-stub-boundary",
+      "module": "app.services"
+    },
+    {
+      "code": "no-untyped-call",
+      "count": 6,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.services"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 2,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.services"
+    },
+    {
+      "code": "operator",
+      "count": 3,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.services"
+    },
+    {
+      "code": "return-value",
+      "count": 1,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "app.services"
+    },
+    {
+      "code": "type-arg",
+      "count": 33,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.services"
+    },
+    {
+      "code": "type-var",
+      "count": 3,
+      "design_problem": false,
+      "family": "import-and-stub-boundary",
+      "module": "app.services"
+    },
+    {
+      "code": "unreachable",
+      "count": 17,
+      "design_problem": false,
+      "family": "other",
+      "module": "app.services"
+    },
+    {
+      "code": "var-annotated",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "app.services"
+    },
+    {
+      "code": "arg-type",
+      "count": 1,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.bandwidth.py"
+    },
+    {
+      "code": "assignment",
+      "count": 2,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.bandwidth_correction.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 1,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.comicvine_candidate_discovery.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 1,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.comicvine_deep_hydration.py"
+    },
+    {
+      "code": "assignment",
+      "count": 1,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.comicvine_hydrator.py"
+    },
+    {
+      "code": "unreachable",
+      "count": 1,
+      "design_problem": false,
+      "family": "other",
+      "module": "comic_pile.comicvine_hydrator.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 2,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.comicvine_provider.py"
+    },
+    {
+      "code": "call-overload",
+      "count": 2,
+      "design_problem": true,
+      "family": "overload-and-call-signature",
+      "module": "comic_pile.comicvine_provider.py"
+    },
+    {
+      "code": "no-any-return",
+      "count": 1,
+      "design_problem": false,
+      "family": "any-escapes",
+      "module": "comic_pile.comicvine_provider.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 3,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.dependencies.py"
+    },
+    {
+      "code": "assignment",
+      "count": 1,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.dependencies.py"
+    },
+    {
+      "code": "type-arg",
+      "count": 2,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "comic_pile.dependencies.py"
+    },
+    {
+      "code": "unreachable",
+      "count": 1,
+      "design_problem": false,
+      "family": "other",
+      "module": "comic_pile.dependencies.py"
+    },
+    {
+      "code": "arg-type",
+      "count": 2,
+      "design_problem": true,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.queue.py"
+    },
+    {
+      "code": "attr-defined",
+      "count": 3,
+      "design_problem": false,
+      "family": "attribute-and-name-resolution",
+      "module": "comic_pile.queue.py"
+    },
+    {
+      "code": "misc",
+      "count": 1,
+      "design_problem": false,
+      "family": "narrowing-compatibility",
+      "module": "comic_pile.queue.py"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "comic_pile.queue.py"
+    },
+    {
+      "code": "no-untyped-def",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "comic_pile.reading_session.py"
+    },
+    {
+      "code": "type-arg",
+      "count": 1,
+      "design_problem": false,
+      "family": "missing-annotations",
+      "module": "comic_pile.reading_session.py"
+    }
+  ],
+  "targets": [
+    "app",
+    "comic_pile"
+  ],
+  "total_errors": 528
+}

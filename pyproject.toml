@@ -38,6 +38,7 @@ dependencies = [
     # Remote cover delivery fetches upstream artwork on the production request path.
     "httpx>=0.28.1",
     "PyGithub>=2.0.0",
+    "mypy>=2.4.0",
 ]
 
 # Local development and test tooling. Installed by default for `uv sync` /
