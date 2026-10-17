@@ -7502,6 +7502,177 @@
         "title": "DiagnosticViewport",
         "type": "object"
       },
+      "DiscoveryMode": {
+        "description": "Supported creator discovery modes.",
+        "enum": [
+          "consistently_loved",
+          "polarizing",
+          "most_read",
+          "highest_top_rating_rate",
+          "great_average_small_sample",
+          "loved_with_unread"
+        ],
+        "title": "DiscoveryMode",
+        "type": "string"
+      },
+      "DiscoveryModesResponse": {
+        "description": "Response for listing available discovery modes.",
+        "properties": {
+          "modes": {
+            "description": "List of available discovery modes with metadata.",
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Modes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "modes"
+        ],
+        "title": "DiscoveryModesResponse",
+        "type": "object"
+      },
+      "DiscoveryResponse": {
+        "description": "Response body for a creator discovery endpoint.",
+        "properties": {
+          "description": {
+            "description": "Explanation of what this discovery mode shows and how it works.",
+            "title": "Description",
+            "type": "string"
+          },
+          "items": {
+            "description": "Discovery results ordered by relevance for this mode.",
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryResultItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size requested.",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/DiscoveryMode",
+            "description": "The discovery mode being used."
+          },
+          "offset": {
+            "description": "Page offset requested.",
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "title": {
+            "description": "Human-readable title for this discovery mode.",
+            "title": "Title",
+            "type": "string"
+          },
+          "total": {
+            "description": "Total number of creators matching the discovery criteria.",
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "title",
+          "description",
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "DiscoveryResponse",
+        "type": "object"
+      },
+      "DiscoveryResultItem": {
+        "description": "One row in a creator discovery collection.\n\nEach result shows the creator and the specific metrics that qualified them\nfor this discovery mode, making the results explainable and transparent.",
+        "properties": {
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Personal average rating across headline-eligible issues.",
+            "title": "Average Rating"
+          },
+          "canonical_creator_key": {
+            "description": "Stable normalized creator key (e.g. ``creator:12345``).",
+            "title": "Canonical Creator Key",
+            "type": "string"
+          },
+          "display_name": {
+            "description": "Human-readable creator name from confirmed issue metadata.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "normalized_roles": {
+            "description": "Distinct roles seen for this creator across the user's issues.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Normalized Roles",
+            "type": "array"
+          },
+          "qualifying_metrics": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Specific metrics that qualified this creator for the discovery mode.",
+            "title": "Qualifying Metrics",
+            "type": "object"
+          },
+          "ratings_count": {
+            "default": 0,
+            "description": "Number of distinct rated issues contributing to the average.",
+            "minimum": 0.0,
+            "title": "Ratings Count",
+            "type": "integer"
+          },
+          "read_unrated_count": {
+            "default": 0,
+            "description": "Number of read-but-unrated issues attributed to this creator.",
+            "minimum": 0.0,
+            "title": "Read Unrated Count",
+            "type": "integer"
+          },
+          "upcoming_count": {
+            "default": 0,
+            "description": "Number of unread issues attributed to this creator.",
+            "minimum": 0.0,
+            "title": "Upcoming Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name"
+        ],
+        "title": "DiscoveryResultItem",
+        "type": "object"
+      },
       "DuplicateAnomalyResponse": {
         "description": "One duplicated ComicVine physical identity across user issues.",
         "properties": {
@@ -21765,6 +21936,111 @@
           }
         ],
         "summary": "Compare Creators Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
+    "/api/v1/creators/discovery": {
+      "get": {
+        "description": "Return creator discovery results for the specified mode.\n\nDiscovery views surface useful patterns in the user's creator ratings that\nthey may not think to search for manually, while keeping every result\ndeterministic and explainable. Each mode uses explicit calculations with\nclear minimum sample requirements to ensure statistical validity.\n\nArgs:\n    current_user: Authenticated user whose library is analyzed.\n    mode: Discovery mode to use.\n    limit: Page size (bounded, max 50).\n    offset: Page offset.\n    db: Async database session.\n    \nReturns:\n    Discovery results for the specified mode with qualifying metrics.\n    \nRaises:\n    HTTPException: When the mode parameter is invalid.",
+        "operationId": "get_discovery_endpoint_api_v1_creators_discovery_get",
+        "parameters": [
+          {
+            "description": "Discovery mode to use (see /discovery/modes for options)",
+            "in": "query",
+            "name": "mode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DiscoveryMode",
+              "description": "Discovery mode to use (see /discovery/modes for options)"
+            }
+          },
+          {
+            "description": "Page size (bounded, max 50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Page size (bounded, max 50)",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page offset",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Page offset",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Discovery Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
+    "/api/v1/creators/discovery/modes": {
+      "get": {
+        "description": "Return list of available creator discovery modes.\n\nThis endpoint provides metadata about all available discovery modes that\nsurface useful patterns in the user's creator ratings.\n\nArgs:\n    current_user: Authenticated user whose library is analyzed.\n    \nReturns:\n    List of available discovery modes with descriptions.",
+        "operationId": "get_discovery_modes_endpoint_api_v1_creators_discovery_modes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryModesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Discovery Modes Endpoint",
         "tags": [
           "creators",
           "creators"

@@ -37,11 +37,13 @@ from app.schemas.creator_comparison import (
     CreatorSeriesDrilldown,
 )
 from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
+from app.schemas.creator_discovery import DiscoveryMode, DiscoveryModesResponse, DiscoveryResponse
 from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
 from app.schemas.creator_team_chemistry import CreatorTeamChemistryResponse
 from app.services.creator_comparison import get_creator_comparison
 from app.services.creator_detail import get_creator_detail, get_creator_series_issues
+from app.services.creator_discovery import get_discovery, get_discovery_modes
 from app.services.creator_list import get_creator_list
 from app.services.creator_summary import get_creator_summaries
 from app.services.creator_metric_drilldown import get_creator_metric_drilldown
@@ -409,6 +411,73 @@ async def get_creator_series_issues_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Series {series_key} not found in your library",
         ) from None
+
+
+@router.get("/discovery/modes", response_model=DiscoveryModesResponse)
+async def get_discovery_modes_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> DiscoveryModesResponse:
+    """Return list of available creator discovery modes.
+    
+    This endpoint provides metadata about all available discovery modes that
+    surface useful patterns in the user's creator ratings.
+    
+    Args:
+        current_user: Authenticated user whose library is analyzed.
+        
+    Returns:
+        List of available discovery modes with descriptions.
+    """
+    return await get_discovery_modes()
+
+
+@router.get("/discovery", response_model=DiscoveryResponse)
+async def get_discovery_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    mode: DiscoveryMode = Query(
+        ...,
+        description="Discovery mode to use (see /discovery/modes for options)",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+        description="Page size (bounded, max 50)",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Page offset",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> DiscoveryResponse:
+    """Return creator discovery results for the specified mode.
+    
+    Discovery views surface useful patterns in the user's creator ratings that
+    they may not think to search for manually, while keeping every result
+    deterministic and explainable. Each mode uses explicit calculations with
+    clear minimum sample requirements to ensure statistical validity.
+    
+    Args:
+        current_user: Authenticated user whose library is analyzed.
+        mode: Discovery mode to use.
+        limit: Page size (bounded, max 50).
+        offset: Page offset.
+        db: Async database session.
+        
+    Returns:
+        Discovery results for the specified mode with qualifying metrics.
+        
+    Raises:
+        HTTPException: When the mode parameter is invalid.
+    """
+    return await get_discovery(
+        db=db,
+        user_id=current_user.id,
+        mode=mode,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/{creator_key}", response_model=CreatorDetailResponse)

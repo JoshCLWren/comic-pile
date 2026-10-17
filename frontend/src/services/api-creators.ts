@@ -123,6 +123,48 @@ export interface CreatorListParams {
   min_ratings?: number
 }
 
+/** Discovery mode identifiers (issue #3093). */
+export type DiscoveryMode = 'consistently_loved' | 'polarizing' | 'most_read' | 'highest_top_rating_rate' | 'great_average_small_sample' | 'loved_with_unread'
+
+/** Discovery result item with qualifying metrics (issue #3093). */
+export interface DiscoveryResultItem {
+  canonical_creator_key: string
+  display_name: string
+  normalized_roles: string[]
+  average_rating: number | null
+  ratings_count: number
+  qualifying_metrics: Record<string, number | string>
+  read_unrated_count: number
+  upcoming_count: number
+}
+
+/** Discovery response for a specific mode (issue #3093). */
+export interface DiscoveryResponse {
+  mode: DiscoveryMode
+  title: string
+  description: string
+  items: DiscoveryResultItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** Discovery modes list response (issue #3093). */
+export interface DiscoveryModesResponse {
+  modes: Array<{
+    mode: DiscoveryMode
+    title: string
+    description: string
+  }>
+}
+
+/** Discovery API parameters (issue #3093). */
+export interface DiscoveryParams {
+  mode: DiscoveryMode
+  limit?: number
+  offset?: number
+}
+
 /**
  * Build the creator service bound to an HTTP client.
  *
@@ -164,6 +206,26 @@ export function createCreatorsApi(client: HttpClient) {
         queryParams.min_ratings = params.min_ratings
       }
       return client.get<CreatorListResponse>('/v1/creators', {
+        params: queryParams,
+        ...RECOVERY_CONFIG,
+      })
+    },
+
+    getDiscoveryModes: () => {
+      return client.get<DiscoveryModesResponse>('/v1/creators/discovery/modes', {
+        ...RECOVERY_CONFIG,
+      })
+    },
+
+    getDiscovery: (params: DiscoveryParams) => {
+      const queryParams: Record<string, string | number> = {}
+      if (params.limit !== undefined) {
+        queryParams.limit = params.limit
+      }
+      if (params.offset !== undefined && params.offset > 0) {
+        queryParams.offset = params.offset
+      }
+      return client.get<DiscoveryResponse>(`/v1/creators/discovery?mode=${encodeURIComponent(params.mode)}`, {
         params: queryParams,
         ...RECOVERY_CONFIG,
       })

@@ -1,5 +1,9 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useDiscoveryModes, useDiscovery } from '../hooks/useCreatorDiscovery'
+import { isNumber } from '../utils/runtimeChecks'
+import type { DiscoveryMode } from '../services/api-creators'
+import type { DiscoveryResultItem } from '../services/api-creators'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
 import { useDebounce } from '../hooks/useDebounce'
@@ -13,6 +17,40 @@ const SEARCH_DEBOUNCE_MS = 300
 
 /** Maximum number of creators that can be selected for comparison. */
 const MAX_COMPARISON_SELECTION = 4
+
+/** Discovery mode options (issue #3093). */
+const DISCOVERY_MODE_OPTIONS: ReadonlyArray<{ value: DiscoveryMode; title: string; description: string }> = [
+  { 
+    value: 'consistently_loved', 
+    title: 'Most Consistently Loved', 
+    description: 'High average with consistent ratings'
+  },
+  { 
+    value: 'polarizing', 
+    title: 'Most Polarizing', 
+    description: 'Broad range of ratings'
+  },
+  { 
+    value: 'most_read', 
+    title: 'Most Read', 
+    description: 'Highest rated sample count'
+  },
+  { 
+    value: 'highest_top_rating_rate', 
+    title: 'Highest Top Rating Rate', 
+    description: 'Highest percentage of 5-star ratings'
+  },
+  { 
+    value: 'great_average_small_sample', 
+    title: 'Great Average, Small Sample', 
+    description: 'Promising with limited evidence'
+  },
+  { 
+    value: 'loved_with_unread', 
+    title: 'Loved with Unread', 
+    description: 'Highly-rated with unread work'
+  },
+]
 
 /**
  * Server-side browse orderings exposed by `GET /api/v1/creators`. Labels stay
@@ -40,6 +78,110 @@ function isCreatorListSort(value: string): value is CreatorListSort {
   return SORT_OPTIONS.some((option) => option.value === value)
 }
 
+function DiscoveryResultRow({
+  item,
+  isSelected,
+  onToggle,
+  selectionCount,
+  maxSelection,
+}: {
+  item: DiscoveryResultItem
+  isSelected: boolean
+  onToggle: () => void
+  selectionCount: number
+  maxSelection: number
+}) {
+  const key = item.canonical_creator_key
+  const parsedKey = parseCreatorKey(key)
+  const detailPath = parsedKey ? creatorRoutePath(key) : null
+  const roles = item.normalized_roles.join(', ')
+  const ratingsCount = item.ratings_count
+  const average = item.average_rating
+  const canSelect = !isSelected && selectionCount < maxSelection
+
+  // Format qualifying metrics for display
+  const formatQualifyingMetric = (key: string, value: number | string) => {
+    if (isNumber(value)) {
+      if (key.includes('rate') || key.includes('score') || key.includes('percentage')) {
+        return `${value}%`
+      }
+      if (key.includes('count') || key.includes('size') || key.includes('sample')) {
+        return value.toString()
+      }
+      return value.toFixed(1)
+    }
+    return String(value)
+  }
+
+  const metricsDisplay = Object.entries(item.qualifying_metrics).map(([key, value]) => {
+    const formattedValue = formatQualifyingMetric(key, value)
+    return (
+      <span key={key} className="text-xs font-medium" style={{ color: 'var(--theme-text-muted)' }}>
+        {formattedValue}
+      </span>
+    )
+  })
+
+  const body = (
+    <>
+      <span className="block min-w-0 break-words text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+        {item.display_name}
+      </span>
+      <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+        {roles.length > 0 && <span className="break-words">{roles}</span>}
+        <span>
+          {ratingsCount} rated issue{ratingsCount === 1 ? '' : 's'}
+        </span>
+        {average != null ? (
+          <span className="font-bold" style={{ color: 'var(--theme-personal-accent)' }} aria-label={`Your average rating ${average} out of 5 from ${ratingsCount} rated issues`}>
+            {average.toFixed(1)}★
+          </span>
+        ) : (
+          <span>unrated</span>
+        )}
+        {/* Display qualifying metrics */}
+        <div className="flex flex-wrap gap-1">
+          {metricsDisplay}
+        </div>
+        {item.upcoming_count > 0 && (
+          <span className="text-xs" style={{ color: 'var(--theme-info)' }}>
+            {item.upcoming_count} unread
+          </span>
+        )}
+      </span>
+    </>
+  )
+
+  const checkbox = (
+    <input
+      type="checkbox"
+      checked={isSelected}
+      onChange={onToggle}
+      disabled={!canSelect}
+      aria-label={`Select ${item.display_name} for comparison`}
+      className="mt-1.5 h-4 w-4 rounded border-[var(--theme-border)] text-[var(--theme-primary-action)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+    />
+  )
+
+  return (
+    <li className="min-w-0 rounded-xl border px-3 py-3 flex items-start gap-3" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <div className="flex-shrink-0 self-center">{checkbox}</div>
+      <div className="min-w-0 flex-1">
+        {detailPath ? (
+          <Link
+            to={detailPath}
+            className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+          >
+            {body}
+          </Link>
+        ) : (
+          <div className="min-w-0">{body}</div>
+        )}
+      </div>
+    </li>
+  )
+}
+
 function CreatorRow({
   item,
   isSelected,
@@ -54,7 +196,8 @@ function CreatorRow({
   maxSelection: number
 }) {
   const key = item.canonical_creator_key
-  const detailPath = parseCreatorKey(key) != null ? creatorRoutePath(key) : null
+  const parsedKey = parseCreatorKey(key)
+  const detailPath = parsedKey ? creatorRoutePath(key) : null
   const roles = item.normalized_roles.join(', ')
   const ratingsCount = item.ratings_count
   const average = item.average_rating
@@ -121,10 +264,12 @@ export default function CreatorsPage() {
   const [sort, setSort] = useState<CreatorListSort>('name')
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [minRatings, setMinRatings] = useState<number>(0)
+  const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode | null>(null)
   const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS)
   const activeSearch = debouncedSearch.trim()
   const navigate = useNavigate()
 
+  // Regular browsing hooks
   const {
     items,
     total,
@@ -143,11 +288,42 @@ export default function CreatorsPage() {
   } = useCreatorTeamChemistry()
 
   const hasItems = items.length > 0
+
+  // Discovery hooks
+  const { isLoading: isLoadingDiscoveryModes } = useDiscoveryModes()
+  const {
+    data: discovery,
+    isPending: isDiscoveryPending,
+    isError: isDiscoveryError,
+    refetch: refetchDiscovery,
+  } = useDiscovery(
+    {
+      mode: discoveryMode || 'consistently_loved',
+      limit: 20,
+      offset: 0,
+    },
+    !!discoveryMode,
+  )
   const ratingsPartial = coverage != null && !coverage.ratings_complete
   const showFirstLoadError = isError && !hasItems
   const showMoreError = isError && hasItems
   const selectionCount = selectedKeys.size
   const canCompare = selectionCount >= 2
+
+  // Clear discovery mode when switching to regular browsing
+  const handleSearchChange = (value: string) => {
+    setSearch(value)
+    if (value && discoveryMode) {
+      setDiscoveryMode(null)
+    }
+  }
+
+  const handleDiscoveryModeChange = (mode: DiscoveryMode | null) => {
+    setDiscoveryMode(mode)
+    if (mode) {
+      setSearch('') // Clear search when switching to discovery
+    }
+  }
 
   const handleToggleSelection = (key: string) => {
     setSelectedKeys((prev) => {
@@ -185,59 +361,105 @@ export default function CreatorsPage() {
         <h2 id="creators-controls-heading" className="sr-only">
           Browse your rated creators
         </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-          <div className="min-w-0">
-            <label htmlFor="creators-search" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
-              Search creators by name
-            </label>
-            <input
-              id="creators-search"
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              maxLength={100}
-              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
-            />
-          </div>
-          <div>
-            <label htmlFor="creators-sort" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
-              Sort
-            </label>
-            <select
-              id="creators-sort"
-              value={sort}
-              onChange={(event) => {
-                if (isCreatorListSort(event.target.value)) {
-                  setSort(event.target.value)
-                }
-              }}
-              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm sm:w-auto"
+        
+        {/* Discovery mode selector */}
+        <div className="mb-4">
+          <label className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+            Discovery Insights
+          </label>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleDiscoveryModeChange(null)}
+              className={`min-h-10 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                !discoveryMode 
+                  ? 'bg-[var(--theme-primary-action)] text-white' 
+                  : 'bg-[var(--theme-bg-secondary)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]'
+              }`}
             >
-              {SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="creators-min-ratings" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
-              Minimum rated
-            </label>
-            <select
-              id="creators-min-ratings"
-              value={minRatings}
-              onChange={(event) => setMinRatings(Number(event.target.value))}
-              className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm sm:w-auto"
-            >
-              {MIN_RATINGS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              Browse Creators
+            </button>
+            
+            {isLoadingDiscoveryModes ? (
+              <div className="min-h-10 rounded-lg bg-[var(--theme-bg-secondary)] px-4 py-2 text-sm text-[var(--theme-text-muted)]">
+                Loading insights...
+              </div>
+            ) : (
+              DISCOVERY_MODE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleDiscoveryModeChange(option.value)}
+                  className={`min-h-10 max-w-[200px] rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    discoveryMode === option.value
+                      ? 'bg-[var(--theme-primary-action)] text-white'
+                      : 'bg-[var(--theme-bg-secondary)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]'
+                  }`}
+                  title={option.description}
+                >
+                  <div className="truncate">{option.title}</div>
+                </button>
+              ))
+            )}
           </div>
         </div>
+
+        {/* Regular browsing controls (hidden in discovery mode) */}
+        {!discoveryMode && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+            <div className="min-w-0">
+              <label htmlFor="creators-search" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+                Search creators by name
+              </label>
+              <input
+                id="creators-search"
+                type="search"
+                value={search}
+                onChange={(event) => handleSearchChange(event.target.value)}
+                maxLength={100}
+                className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="creators-sort" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+                Sort
+              </label>
+              <select
+                id="creators-sort"
+                value={sort}
+                onChange={(event) => {
+                  if (isCreatorListSort(event.target.value)) {
+                    setSort(event.target.value)
+                  }
+                }}
+                className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm sm:w-auto"
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="creators-min-ratings" className="text-xs font-semibold" style={{ color: 'var(--theme-text-muted)' }}>
+                Minimum rated
+              </label>
+              <select
+                id="creators-min-ratings"
+                value={minRatings}
+                onChange={(event) => setMinRatings(Number(event.target.value))}
+                className="form-control mt-1 w-full rounded-xl px-3 py-2.5 text-base md:text-sm sm:w-auto"
+              >
+                {MIN_RATINGS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
       </section>
 
       {selectionCount > 0 && (
@@ -270,7 +492,83 @@ export default function CreatorsPage() {
         </div>
       )}
 
-      {showFirstLoadError ? (
+      {/* Discovery mode header */}
+      {discoveryMode && discovery && (
+        <section className="mt-4 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <h2 className="text-lg font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+                {discovery.title}
+              </h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+                {discovery.description}
+              </p>
+              <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+                Showing {discovery.items.length} of {discovery.total} creators
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleDiscoveryModeChange(null)}
+              className="text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-muted)' }}
+            >
+              Back to browse
+            </button>
+          </div>
+        </section>
+      )}
+
+      {discoveryMode ? (
+        isDiscoveryPending ? (
+          <div aria-label="Loading discovery" className="mt-6 space-y-2">
+            {[0, 1, 2, 3].map((row) => (
+              <div key={row} className="h-14 animate-pulse rounded-xl" style={{ backgroundColor: 'var(--theme-bg-panel)' }} />
+            ))}
+          </div>
+        ) : isDiscoveryError ? (
+          <div role="alert" className="mt-6 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-danger)' }}>
+            <p className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+              Could not load discovery results
+            </p>
+            <p className="mt-1 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+              Your data is unchanged. Please try again.
+            </p>
+            <button
+              type="button"
+              onClick={() => { void refetchDiscovery() }}
+              className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <section aria-labelledby="discovery-results-heading" className="mt-6">
+            <h2 id="discovery-results-heading" className="text-base font-bold md:text-lg" style={{ color: 'var(--theme-text-primary)' }}>
+              {discovery?.title ?? 'Discovery'}
+            </h2>
+            {discovery && discovery.items.length > 0 ? (
+              <ul className="mt-2 space-y-2">
+                {discovery.items.map((item) => (
+                  <DiscoveryResultRow
+                    key={item.canonical_creator_key}
+                    item={item}
+                    isSelected={selectedKeys.has(item.canonical_creator_key)}
+                    onToggle={() => handleToggleSelection(item.canonical_creator_key)}
+                    selectionCount={selectionCount}
+                    maxSelection={MAX_COMPARISON_SELECTION}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+                No creators match this discovery view yet.
+              </p>
+            )}
+          </section>
+        )
+      ) : showFirstLoadError ? (
         <div role="alert" className="mt-6 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-danger)' }}>
           <p className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
             Could not load your creators

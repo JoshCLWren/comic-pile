@@ -432,6 +432,19 @@ export const queryKeys = {
       })
       return ['creators', 'seriesStats', creatorKey, seriesKey, normalizedParams] as const
     },
+    /**
+     * Creator discovery modes list (issue #3093).
+     */
+    discovery: {
+      all: () => ['creators', 'discovery'] as const,
+      modes: () => ['creators', 'discovery', 'modes'] as const,
+      /**
+       * Canonical creator discovery results key (issue #3093).
+       * The pagination cursor lives in `pageParam`, not the key.
+       */
+      detail: (mode: string, limit?: number, offset?: number) =>
+        ['creators', 'discovery', 'detail', mode, { limit, offset }] as const,
+    },
   },
   continuityCorrection: {
     groups: () => ['continuityCorrection', 'groups'] as const,

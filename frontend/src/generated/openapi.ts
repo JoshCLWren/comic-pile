@@ -1561,6 +1561,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/creators/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Discovery Endpoint
+         * @description Return creator discovery results for the specified mode.
+         *
+         *     Discovery views surface useful patterns in the user's creator ratings that
+         *     they may not think to search for manually, while keeping every result
+         *     deterministic and explainable. Each mode uses explicit calculations with
+         *     clear minimum sample requirements to ensure statistical validity.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is analyzed.
+         *         mode: Discovery mode to use.
+         *         limit: Page size (bounded, max 50).
+         *         offset: Page offset.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Discovery results for the specified mode with qualifying metrics.
+         *
+         *     Raises:
+         *         HTTPException: When the mode parameter is invalid.
+         */
+        get: operations["get_discovery_endpoint_api_v1_creators_discovery_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/creators/discovery/modes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Discovery Modes Endpoint
+         * @description Return list of available creator discovery modes.
+         *
+         *     This endpoint provides metadata about all available discovery modes that
+         *     surface useful patterns in the user's creator ratings.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is analyzed.
+         *
+         *     Returns:
+         *         List of available discovery modes with descriptions.
+         */
+        get: operations["get_discovery_modes_endpoint_api_v1_creators_discovery_modes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/creators/summaries": {
         parameters: {
             query?: never;
@@ -9473,6 +9540,117 @@ export interface components {
             width: number;
         };
         /**
+         * DiscoveryMode
+         * @description Supported creator discovery modes.
+         * @enum {string}
+         */
+        DiscoveryMode: "consistently_loved" | "polarizing" | "most_read" | "highest_top_rating_rate" | "great_average_small_sample" | "loved_with_unread";
+        /**
+         * DiscoveryModesResponse
+         * @description Response for listing available discovery modes.
+         */
+        DiscoveryModesResponse: {
+            /**
+             * Modes
+             * @description List of available discovery modes with metadata.
+             */
+            modes: {
+                [key: string]: string;
+            }[];
+        };
+        /**
+         * DiscoveryResponse
+         * @description Response body for a creator discovery endpoint.
+         */
+        DiscoveryResponse: {
+            /**
+             * Description
+             * @description Explanation of what this discovery mode shows and how it works.
+             */
+            description: string;
+            /**
+             * Items
+             * @description Discovery results ordered by relevance for this mode.
+             */
+            items: components["schemas"]["DiscoveryResultItem"][];
+            /**
+             * Limit
+             * @description Page size requested.
+             */
+            limit: number;
+            /** @description The discovery mode being used. */
+            mode: components["schemas"]["DiscoveryMode"];
+            /**
+             * Offset
+             * @description Page offset requested.
+             */
+            offset: number;
+            /**
+             * Title
+             * @description Human-readable title for this discovery mode.
+             */
+            title: string;
+            /**
+             * Total
+             * @description Total number of creators matching the discovery criteria.
+             */
+            total: number;
+        };
+        /**
+         * DiscoveryResultItem
+         * @description One row in a creator discovery collection.
+         *
+         *     Each result shows the creator and the specific metrics that qualified them
+         *     for this discovery mode, making the results explainable and transparent.
+         */
+        DiscoveryResultItem: {
+            /**
+             * Average Rating
+             * @description Personal average rating across headline-eligible issues.
+             */
+            average_rating?: number | null;
+            /**
+             * Canonical Creator Key
+             * @description Stable normalized creator key (e.g. ``creator:12345``).
+             */
+            canonical_creator_key: string;
+            /**
+             * Display Name
+             * @description Human-readable creator name from confirmed issue metadata.
+             */
+            display_name: string;
+            /**
+             * Normalized Roles
+             * @description Distinct roles seen for this creator across the user's issues.
+             */
+            normalized_roles?: string[];
+            /**
+             * Qualifying Metrics
+             * @description Specific metrics that qualified this creator for the discovery mode.
+             */
+            qualifying_metrics?: {
+                [key: string]: number | string;
+            };
+            /**
+             * Ratings Count
+             * @description Number of distinct rated issues contributing to the average.
+             * @default 0
+             */
+            ratings_count: number;
+            /**
+             * Read Unrated Count
+             * @description Number of read-but-unrated issues attributed to this creator.
+             * @default 0
+             */
+            read_unrated_count: number;
+            /**
+             * Upcoming Count
+             * @description Number of unread issues attributed to this creator.
+             * @default 0
+             */
+            upcoming_count: number;
+        };
+        /**
          * DuplicateAnomalyResponse
          * @description One duplicated ComicVine physical identity across user issues.
          */
@@ -16275,6 +16453,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_discovery_endpoint_api_v1_creators_discovery_get: {
+        parameters: {
+            query: {
+                /** @description Discovery mode to use (see /discovery/modes for options) */
+                mode: components["schemas"]["DiscoveryMode"];
+                /** @description Page size (bounded, max 50) */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_discovery_modes_endpoint_api_v1_creators_discovery_modes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryModesResponse"];
                 };
             };
         };
