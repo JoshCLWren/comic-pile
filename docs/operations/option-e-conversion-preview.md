@@ -20,7 +20,11 @@ To obtain the initial fingerprint, provide `{"source_fingerprint":"unreviewed"}`
 The refused stale-snapshot result includes the current `source_fingerprint`; copy
 that value into a reviewed intent document after consulting the census. Every list
 requires an explicit mode. Historical prerequisites with unknown classification
-require an explicit decision; omission does not approve them.
+require an explicit decision; omission does not approve them. For a specifically
+reviewed, untyped historical edge, the action `preserve_unknown` keeps its
+original null provenance and existing blocking behavior. This is an explicit,
+fingerprint-bound no-op, not an assertion that the edge is reader-authored.
+Other undecided unknown edges still refuse the manifest.
 
 An intent document has this shape (IDs below are illustrative):
 
