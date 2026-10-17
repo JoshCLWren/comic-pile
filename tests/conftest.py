@@ -279,7 +279,7 @@ async def db_engine(
 
 
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
-    """Ensure default user exists in database (user_id=1 for API compatibility).
+    """Ensure default user exists in database (dynamic id, no hardcoded coupling).
 
     This function is idempotent and safe for concurrent execution from multiple
     pytest-xdist workers. If multiple workers attempt to create the user simultaneously,
@@ -291,7 +291,7 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     user = result.scalar_one_or_none()
 
     if not user:
-        user = User(id=1, username=username, created_at=datetime.now(UTC))
+        user = User(username=username, created_at=datetime.now(UTC))
         db.add(user)
         try:
             await db.commit()
@@ -301,8 +301,9 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
             result = await db.execute(select(User).where(User.username == username))
             user = result.scalar_one_or_none()
             if not user:
-                result = await db.execute(select(User).where(User.id == 1))
-                user = result.scalar_one()
+                raise RuntimeError(
+                    "Default test user missing after rollback in _ensure_default_user_async"
+                ) from None
 
     await _sync_id_sequence(db, "users")
     return user
@@ -542,10 +543,11 @@ async def _create_async_db_override(
 @pytest_asyncio.fixture(scope="function")
 async def sample_data(
     async_db: SQLAlchemyAsyncSession,
+    default_user: User,
 ) -> dict[str, Thread | ReadingSession | Event | User | list | object]:
     """Create sample threads, sessions for async testing."""
     from sqlalchemy import delete
-    from app.models import Issue, Snapshot, Event, Thread, ReadingSession, User
+    from app.models import Issue, Snapshot, Event, Thread, ReadingSession
 
     batman_issues = []
 
@@ -553,26 +555,19 @@ async def sample_data(
     await async_db.execute(delete(Event))
     await async_db.execute(delete(Thread))
     await async_db.execute(delete(ReadingSession))
-    await async_db.execute(delete(User))
-
-    await async_db.execute(delete(Snapshot))
-    await async_db.execute(delete(Event))
-    await async_db.execute(delete(Thread))
-    await async_db.execute(delete(ReadingSession))
-    await async_db.execute(delete(User))
     await async_db.flush()
 
     now = datetime.now(UTC)
-    username = _default_test_username()
-    user = await async_db.execute(select(User).where(User.username == username))
-    user = user.scalar_one_or_none()
-    if not user:
-        user = User(username=username, id=1, created_at=now)
-        async_db.add(user)
-        await async_db.flush()
-        await async_db.refresh(user)
-        await _sync_id_sequence(async_db, "users")
+    # Reuse the default test user instead of recreating it. The user row is
+    # never deleted here: tests that also request ``default_user`` must see the
+    # same user id that owns the sample threads, and the per-test
+    # ``async_db`` rollback already isolates it from other tests.
+    user = default_user
 
+    # Thread, Issue, ReadingSession, and Event primary keys stay explicit here:
+    # a large part of the suite asserts against these exact ids, so they are
+    # semantically required rather than incidental. Only the test User id is
+    # database-generated (see ``_ensure_default_user_async``).
     threads = [
         Thread(
             id=1,
@@ -751,9 +746,9 @@ async def auth_client(
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
-            # app/api/admin.py still hardcodes user_id=1 for import/export paths,
-            # so the authenticated test user must match that contract for now.
-            user = User(id=1, username=test_username, created_at=datetime.now(UTC))
+            # Admin endpoints now use current_user.id (no hardcoded user_id=1).
+            # The authenticated test user is created dynamically.
+            user = User(username=test_username, created_at=datetime.now(UTC))
             async_db.add(user)
             try:
                 await async_db.commit()
@@ -763,8 +758,9 @@ async def auth_client(
                 result = await async_db.execute(select(User).where(User.username == test_username))
                 user = result.scalar_one_or_none()
                 if not user:
-                    result = await async_db.execute(select(User).where(User.id == 1))
-                    user = result.scalar_one()
+                    raise RuntimeError(
+                        "Authenticated test user missing after rollback in auth_client"
+                    ) from None
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})

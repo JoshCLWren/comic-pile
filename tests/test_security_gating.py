@@ -57,17 +57,17 @@ async def test_admin_routes_accessible_when_enabled(
     try:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.get("/api/admin/export/csv/")
-            assert response.status_code in [200, 404], (
+            assert response.status_code == 200, (
                 f"Unexpected status code: {response.status_code}"
             )
 
             response = await ac.get("/api/admin/export/json/")
-            assert response.status_code in [200, 404], (
+            assert response.status_code == 200, (
                 f"Unexpected status code: {response.status_code}"
             )
 
             response = await ac.get("/api/admin/export/summary/")
-            assert response.status_code in [200, 404], (
+            assert response.status_code == 200, (
                 f"Unexpected status code: {response.status_code}"
             )
     finally:

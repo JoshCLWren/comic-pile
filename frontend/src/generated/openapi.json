@@ -18493,7 +18493,7 @@
     },
     "/api/v1/admin/delete-test-data/": {
       "post": {
-        "description": "Delete all test data (threads, sessions, events marked as test).\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Dictionary with counts of deleted threads, sessions, and events.",
+        "description": "Delete all test data (threads, sessions, events marked as test).\n\nArgs:\n    db: SQLAlchemy session for database operations.\n    current_user: Authenticated user making the request.\n\nReturns:\n    Dictionary with counts of deleted threads, sessions, and events.",
         "operationId": "delete_test_data_api_v1_admin_delete_test_data__post",
         "responses": {
           "200": {
@@ -18511,6 +18511,11 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Delete Test Data",
         "tags": [
           "admin",
@@ -18583,7 +18588,7 @@
     },
     "/api/v1/admin/import/csv/": {
       "post": {
-        "description": "Import threads from CSV file.\n\nCSV format: title, format, issues_remaining\n- title: Thread title (required)\n- format: Thread format (required)\n- issues_remaining: Number of issues remaining (required, integer)\n\nThreads are inserted at position 1 (front of queue).\n\nArgs:\n    file: CSV file to import.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Dictionary with \"imported\" count and \"errors\" list.\n\nRaises:\n    HTTPException: If file is not a CSV.",
+        "description": "Import threads from CSV file.\n\nCSV format: title, format, issues_remaining\n- title: Thread title (required)\n- format: Thread format (required)\n- issues_remaining: Number of issues remaining (required, integer)\n\nThreads are inserted at position 1 (front of queue).\n\nArgs:\n    file: CSV file to import.\n    db: SQLAlchemy session for database operations.\n    current_user: Authenticated user importing the threads.\n\nReturns:\n    Dictionary with \"imported\" count and \"errors\" list.\n\nRaises:\n    HTTPException: If file is not a CSV.",
         "operationId": "import_csv_api_v1_admin_import_csv__post",
         "requestBody": {
           "content": {
@@ -18631,6 +18636,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Import Csv",
         "tags": [
           "admin",

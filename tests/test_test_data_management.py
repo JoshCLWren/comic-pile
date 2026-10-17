@@ -11,15 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_seed_data_marks_as_test(async_db: AsyncSession) -> None:
+async def test_seed_data_marks_as_test(async_db: AsyncSession, default_user: User) -> None:
     """Test that seeded data is marked as test data."""
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(id=1, username="test_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = default_user
 
     thread = Thread(
         title="Test Comic",
@@ -39,15 +33,11 @@ async def test_seed_data_marks_as_test(async_db: AsyncSession) -> None:
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_bulk_delete_test_data(client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_bulk_delete_test_data(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test bulk delete of test data."""
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(id=1, username="test_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = default_user
 
     test_thread1 = Thread(
         title="Test Comic 1",
@@ -114,7 +104,7 @@ async def test_bulk_delete_test_data(client: AsyncClient, async_db: AsyncSession
     async_db.add_all([event1, event2])
     await async_db.commit()
 
-    response = await client.post("/api/admin/delete-test-data/")
+    response = await auth_client.post("/api/admin/delete-test-data/")
     assert response.status_code == 200
     data = response.json()
     assert data["deleted_threads"] == 2
@@ -128,15 +118,11 @@ async def test_bulk_delete_test_data(client: AsyncClient, async_db: AsyncSession
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_export_csv_excludes_test_data(client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_export_csv_excludes_test_data(
+    client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test that CSV export excludes test data."""
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(id=1, username="test_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = default_user
 
     test_thread = Thread(
         title="Test Comic",
@@ -169,17 +155,13 @@ async def test_export_csv_excludes_test_data(client: AsyncClient, async_db: Asyn
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_export_json_excludes_test_data(client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_export_json_excludes_test_data(
+    client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test that JSON export excludes test data."""
     import json
 
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(id=1, username="test_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = default_user
 
     test_thread = Thread(
         title="Test Comic",
@@ -213,16 +195,10 @@ async def test_export_json_excludes_test_data(client: AsyncClient, async_db: Asy
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_export_summary_excludes_test_only_sessions(
-    client: AsyncClient, async_db: AsyncSession
+    client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that session summary export excludes sessions with only test data."""
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(id=1, username="test_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = default_user
 
     test_thread = Thread(
         title="Test Comic",
@@ -298,7 +274,7 @@ async def test_export_summary_excludes_test_only_sessions(
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_delete_test_data_clears_pending_thread_id(
-    client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Regression test for BUG-131: IntegrityError when deleting test thread with pending_thread_id.
 
@@ -306,13 +282,7 @@ async def test_delete_test_data_clears_pending_thread_id(
     set does not cause a ForeignViolation error. The fix ensures that the UPDATE
     to clear pending_thread_id is flushed before the DELETE executes.
     """
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(id=1, username="test_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = default_user
 
     test_thread = Thread(
         title="Test Comic",
@@ -340,7 +310,7 @@ async def test_delete_test_data_clears_pending_thread_id(
 
     assert session.pending_thread_id == test_thread.id
 
-    response = await client.post("/api/admin/delete-test-data/")
+    response = await auth_client.post("/api/admin/delete-test-data/")
 
     assert response.status_code == 200, (
         f"Expected 200, got {response.status_code}: {response.text if hasattr(response, 'text') else ''}"
@@ -357,7 +327,7 @@ async def test_delete_test_data_clears_pending_thread_id(
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_delete_test_data_with_selected_thread_id(
-    client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Regression test for HIGH-005: Session deletion must check both thread_id and selected_thread_id.
 
@@ -365,13 +335,7 @@ async def test_delete_test_data_with_selected_thread_id(
     are properly identified as test sessions and deleted. The bug was that the deletion
     logic only checked thread_id, missing roll events that selected test threads.
     """
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(id=1, username="test_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = default_user
 
     test_thread = Thread(
         title="Test Comic",
@@ -468,7 +432,7 @@ async def test_delete_test_data_with_selected_thread_id(
     )
     await async_db.commit()
 
-    response = await client.post("/api/admin/delete-test-data/")
+    response = await auth_client.post("/api/admin/delete-test-data/")
     assert response.status_code == 200
     data = response.json()
     assert data["deleted_threads"] == 1

@@ -339,7 +339,7 @@ class TestCriterion4VerdictSurvivesRecomputation:
         """Re-inference updates evidence but keeps the explicit verdict."""
         now = datetime.now(UTC)
         signal = TasteSignal(
-            user_id=1,
+            user_id=default_user.id,
             signal_type=SIGNAL_CREATOR,
             external_key="creator:writer:alice",
             display_name="Alice",
@@ -409,7 +409,7 @@ class TestCriterion5DiscoveryNonBlocking:
     ) -> None:
         """A prompt-eligible discovery does not interrupt rolling or rating."""
         strong = TasteSignal(
-            user_id=1,
+            user_id=sample_data["user"].id,
             signal_type=SIGNAL_CREATOR,
             external_key="creator:writer:alice",
             display_name="Alice",

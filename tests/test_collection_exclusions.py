@@ -124,16 +124,22 @@ async def test_missing_local_targets_are_not_permitted(
 
 
 async def test_database_exactly_one_target_constraint(
-    async_db: AsyncSession, sample_data: dict[str, object]
+    async_db: AsyncSession, sample_data: dict[str, object], default_user: User
 ) -> None:
     """Database enforcement remains effective for writers bypassing Pydantic."""
+    _ = sample_data
+    user_id = default_user.id
     with pytest.raises(IntegrityError):
         async with async_db.begin_nested():
-            async_db.add(CollectionExclusion(user_id=1, thread_id=1, issue_id=6))
+            async_db.add(
+                CollectionExclusion(user_id=user_id, thread_id=1, issue_id=6)
+            )
             await async_db.flush()
     with pytest.raises(IntegrityError):
         async with async_db.begin_nested():
-            async_db.add(CollectionExclusion(user_id=1, external_volume_id="4050-1"))
+            async_db.add(
+                CollectionExclusion(user_id=user_id, external_volume_id="4050-1")
+            )
             await async_db.flush()
 
 

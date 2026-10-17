@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.access_control import require_internal_ops_routes
+from app.auth import get_current_user
+from app.models.user import User
 from app.services.admin_service import (
     import_csv as svc_import_csv,
     export_csv as svc_export_csv,
@@ -22,7 +24,9 @@ router = APIRouter(
 
 @router.post("/import/csv/")
 async def import_csv(
-    file: Annotated[UploadFile, File(...)], db: Annotated[AsyncSession, Depends(get_db)]
+    file: Annotated[UploadFile, File(...)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, int | list[str]]:
     """Import threads from CSV file.
 
@@ -36,6 +40,7 @@ async def import_csv(
     Args:
         file: CSV file to import.
         db: SQLAlchemy session for database operations.
+        current_user: Authenticated user importing the threads.
 
     Returns:
         Dictionary with "imported" count and "errors" list.
@@ -43,7 +48,7 @@ async def import_csv(
     Raises:
         HTTPException: If file is not a CSV.
     """
-    return await svc_import_csv(file, db)
+    return await svc_import_csv(file, db, current_user.id)
 
 
 @router.get("/export/csv/")
@@ -87,16 +92,20 @@ async def export_json(db: Annotated[AsyncSession, Depends(get_db)]) -> Streaming
 
 
 @router.post("/delete-test-data/")
-async def delete_test_data(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, int]:
+async def delete_test_data(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, int]:
     """Delete all test data (threads, sessions, events marked as test).
 
     Args:
         db: SQLAlchemy session for database operations.
+        current_user: Authenticated user making the request.
 
     Returns:
         Dictionary with counts of deleted threads, sessions, and events.
     """
-    return await svc_delete_test_data(db)
+    return await svc_delete_test_data(db, current_user.id)
 
 
 @router.get("/export/summary/")

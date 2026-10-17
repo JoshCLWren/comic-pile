@@ -23,6 +23,9 @@ def make_signal(**overrides: object) -> TasteSignal:
     The defaults clear every eligibility threshold from the canonical engine
     (evidence >= 3, confidence >= 0.6, |affinity| >= 0.3, diversity >= 2).
 
+    ``user_id`` has no default: callers that persist a signal must supply the
+    owning user's database-generated id. Pure copy tests never read it.
+
     Args:
         **overrides: Column values to replace on the defaults.
 
@@ -30,7 +33,6 @@ def make_signal(**overrides: object) -> TasteSignal:
         An unsaved TasteSignal.
     """
     signal = TasteSignal(
-        user_id=1,
         signal_type=SIGNAL_CREATOR,
         external_key="creator:writer:alan-moore",
         display_name="Alan Moore",
@@ -117,34 +119,37 @@ async def _seed_user(db: AsyncSession, username: str = "taste_other") -> User:
 class TestDiscoveryAPI:
     """End-to-end discovery listing, cooldown, and dismissal flows."""
 
-    async def seed_signal(self, db: AsyncSession, **overrides: object) -> TasteSignal:
-        """Persist one strong taste signal for the primary test user.
+    async def seed_signal(self, db: AsyncSession, *, user_id: int, **overrides: object) -> TasteSignal:
+        """Persist one strong taste signal owned by ``user_id``.
 
         Args:
             db: Async database session.
+            user_id: Database-generated id of the owning user.
             **overrides: Column overrides applied to strong defaults.
 
         Returns:
             The persisted signal (flushed, id assigned).
         """
-        signal = make_signal(**overrides)
+        signal = make_signal(user_id=user_id, **overrides)
         db.add(signal)
         await db.flush()
         return signal
 
     async def test_only_eligible_discoveries_are_returned(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """Sparse evidence and explicit verdicts stay hidden; strength surfaces."""
-        await self.seed_signal(async_db)
+        await self.seed_signal(async_db, user_id=default_user.id)
         await self.seed_signal(
             async_db,
+            user_id=default_user.id,
             external_key="creator:writer:sparse",
             display_name="Sparse",
             evidence_count=2,
         )
         await self.seed_signal(
             async_db,
+            user_id=default_user.id,
             external_key="creator:writer:done",
             display_name="Done",
             user_verdict="confirmed",
@@ -164,17 +169,19 @@ class TestDiscoveryAPI:
         assert discovery["distinct_thread_count"] == 3
 
     async def test_weak_effect_and_low_confidence_stay_hidden(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """Signals below the affinity or confidence gates never become prompts."""
         await self.seed_signal(
             async_db,
+            user_id=default_user.id,
             external_key="creator:writer:weak",
             display_name="Weak",
             affinity_estimate=0.2,
         )
         await self.seed_signal(
             async_db,
+            user_id=default_user.id,
             external_key="creator:writer:unsure",
             display_name="Unsure",
             confidence=0.4,
@@ -186,10 +193,10 @@ class TestDiscoveryAPI:
         assert response.json()["discoveries"] == []
 
     async def test_single_thread_evidence_fails_diversity(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """Evidence from one thread only is not diverse enough to prompt."""
-        await self.seed_signal(async_db, distinct_thread_count=1)
+        await self.seed_signal(async_db, user_id=default_user.id, distinct_thread_count=1)
 
         response = await auth_client.get("/api/v1/taste/discoveries")
 
@@ -197,10 +204,10 @@ class TestDiscoveryAPI:
         assert response.json()["discoveries"] == []
 
     async def test_listing_records_prompt_and_starts_cooldown(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """Surfacing records ``last_prompted_at`` so repeats are suppressed."""
-        signal = await self.seed_signal(async_db)
+        signal = await self.seed_signal(async_db, user_id=default_user.id)
 
         first = await auth_client.get("/api/v1/taste/discoveries")
         assert len(first.json()["discoveries"]) == 1
@@ -214,11 +221,12 @@ class TestDiscoveryAPI:
         assert second.json()["discoveries"] == []
 
     async def test_cooldown_expiry_allows_reprompting(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """A signal prompted outside the cooldown window may ask again."""
         await self.seed_signal(
             async_db,
+            user_id=default_user.id,
             last_prompted_at=days_before_now(DEFAULT_CONFIG.cooldown_days + 1),
         )
 
@@ -232,10 +240,14 @@ class TestDiscoveryAPI:
 
     @pytest.mark.parametrize("verdict", ["confirmed", "sometimes", "rejected"])
     async def test_explicit_verdicts_are_never_surfaced(
-        self, auth_client: AsyncClient, async_db: AsyncSession, verdict: str
+        self,
+        auth_client: AsyncClient,
+        async_db: AsyncSession,
+        default_user: User,
+        verdict: str,
     ) -> None:
         """Any explicit verdict removes the signal from discovery entirely."""
-        await self.seed_signal(async_db, user_verdict=verdict)
+        await self.seed_signal(async_db, user_id=default_user.id, user_verdict=verdict)
 
         response = await auth_client.get("/api/v1/taste/discoveries")
 
@@ -243,11 +255,12 @@ class TestDiscoveryAPI:
         assert response.json()["discoveries"] == []
 
     async def test_rank_orders_strongest_first(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """Eligible discoveries are ranked strongest to weakest."""
         await self.seed_signal(
             async_db,
+            user_id=default_user.id,
             external_key="creator:writer:low",
             display_name="Low",
             affinity_estimate=0.31,
@@ -257,6 +270,7 @@ class TestDiscoveryAPI:
         )
         await self.seed_signal(
             async_db,
+            user_id=default_user.id,
             external_key="creator:writer:mid",
             display_name="Mid",
             affinity_estimate=0.6,
@@ -266,6 +280,7 @@ class TestDiscoveryAPI:
         )
         await self.seed_signal(
             async_db,
+            user_id=default_user.id,
             external_key="creator:writer:top",
             display_name="Top",
             affinity_estimate=1.0,
@@ -281,12 +296,13 @@ class TestDiscoveryAPI:
         assert names == ["Top", "Mid", "Low"]
 
     async def test_limit_bounds_results(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """The limit parameter caps how many discoveries are returned."""
         for index in range(3):
             await self.seed_signal(
                 async_db,
+                user_id=default_user.id,
                 external_key=f"creator:writer:batch-{index}",
                 display_name=f"Batch {index}",
             )
@@ -297,10 +313,10 @@ class TestDiscoveryAPI:
         assert len(response.json()["discoveries"]) == 1
 
     async def test_dismissal_suppresses_without_confirmation(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """Dismissing hides the card temporarily but never sets a verdict."""
-        signal = await self.seed_signal(async_db)
+        signal = await self.seed_signal(async_db, user_id=default_user.id)
 
         response = await auth_client.post(f"/api/v1/taste/discoveries/{signal.id}/dismiss")
 
@@ -317,10 +333,10 @@ class TestDiscoveryAPI:
         assert suppressed.json()["discoveries"] == []
 
     async def test_expired_dismissal_window_allows_reprompting(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """Once the dismissal window passes, the pattern may ask again."""
-        signal = await self.seed_signal(async_db)
+        signal = await self.seed_signal(async_db, user_id=default_user.id)
 
         dismissed = await auth_client.post(
             f"/api/v1/taste/discoveries/{signal.id}/dismiss"
@@ -336,7 +352,7 @@ class TestDiscoveryAPI:
         assert [item["id"] for item in later.json()["discoveries"]] == [signal.id]
 
     async def test_cross_user_signal_is_invisible(
-        self, auth_client: AsyncClient, async_db: AsyncSession
+        self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
         """Another user's signals can neither be listed nor mutated."""
         other = await _seed_user(async_db)
