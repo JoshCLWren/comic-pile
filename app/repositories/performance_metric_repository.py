@@ -120,38 +120,56 @@ async def get_performance_metrics_summary(
     Returns:
         Dict with count, min, max, median, p95 response times grouped by cold/warm.
     """
-    base_query = select(PerformanceMetric)
-
+    # Count by cold/warm - apply filters directly to avoid Cartesian product
+    count_conditions = []
     if metric_type is not None:
-        base_query = base_query.where(PerformanceMetric.metric_type == metric_type)
+        count_conditions.append(PerformanceMetric.metric_type == metric_type)
     if deployment_id is not None:
-        base_query = base_query.where(PerformanceMetric.deployment_id == deployment_id)
+        count_conditions.append(PerformanceMetric.deployment_id == deployment_id)
     if start_time is not None:
-        base_query = base_query.where(PerformanceMetric.timestamp >= start_time)
+        count_conditions.append(PerformanceMetric.timestamp >= start_time)
     if end_time is not None:
-        base_query = base_query.where(PerformanceMetric.timestamp <= end_time)
+        count_conditions.append(PerformanceMetric.timestamp <= end_time)
 
-    # Count by cold/warm
-    count_query = select(
-        PerformanceMetric.cold,
-        func.count(PerformanceMetric.id).label("count"),
-    ).select_from(base_query.subquery()).group_by(PerformanceMetric.cold)
+    if count_conditions:
+        count_query = select(
+            PerformanceMetric.cold,
+            func.count(PerformanceMetric.id).label("count"),
+        ).where(*count_conditions).group_by(PerformanceMetric.cold)
+    else:
+        count_query = select(
+            PerformanceMetric.cold,
+            func.count(PerformanceMetric.id).label("count"),
+        ).group_by(PerformanceMetric.cold)
 
     count_result = await db.execute(count_query)
     by_cold: dict[bool, int] = {row.cold: int(row.count) for row in count_result.all()}
 
-    # Response time stats by cold/warm
-    stats_query = select(
-        PerformanceMetric.cold,
-        func.min(PerformanceMetric.response_time_ms).label("min"),
-        func.max(PerformanceMetric.response_time_ms).label("max"),
-        func.percentile_cont(0.5).within_group(
-            PerformanceMetric.response_time_ms
-        ).label("median"),
-        func.percentile_cont(0.95).within_group(
-            PerformanceMetric.response_time_ms
-        ).label("p95"),
-    ).select_from(base_query.subquery()).group_by(PerformanceMetric.cold)
+    # Response time stats by cold/warm - apply filters directly to avoid Cartesian product
+    if count_conditions:
+        stats_query = select(
+            PerformanceMetric.cold,
+            func.min(PerformanceMetric.response_time_ms).label("min"),
+            func.max(PerformanceMetric.response_time_ms).label("max"),
+            func.percentile_cont(0.5).within_group(
+                PerformanceMetric.response_time_ms
+            ).label("median"),
+            func.percentile_cont(0.95).within_group(
+                PerformanceMetric.response_time_ms
+            ).label("p95"),
+        ).where(*count_conditions).group_by(PerformanceMetric.cold)
+    else:
+        stats_query = select(
+            PerformanceMetric.cold,
+            func.min(PerformanceMetric.response_time_ms).label("min"),
+            func.max(PerformanceMetric.response_time_ms).label("max"),
+            func.percentile_cont(0.5).within_group(
+                PerformanceMetric.response_time_ms
+            ).label("median"),
+            func.percentile_cont(0.95).within_group(
+                PerformanceMetric.response_time_ms
+            ).label("p95"),
+        ).group_by(PerformanceMetric.cold)
 
     stats_result = await db.execute(stats_query)
     by_cold_stats: dict[bool, dict[str, float | None]] = {
