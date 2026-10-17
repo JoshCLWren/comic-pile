@@ -11,6 +11,7 @@ CATALOG_HELPER = ROOT / "scripts" / "opencode-model-catalog.sh"
 
 
 def fake_cli(tmp_path: Path, version: str, expected_args: str) -> Path:
+    """Create a model-catalog CLI double for either interface."""
     cli = tmp_path / "opencode"
     cli.write_text(
         "#!/usr/bin/env bash\n"
@@ -28,6 +29,7 @@ def fake_cli(tmp_path: Path, version: str, expected_args: str) -> Path:
 
 
 def run_catalog(cli: Path) -> subprocess.CompletedProcess[str]:
+    """Invoke the shared catalog helper with a controlled executable."""
     env = os.environ.copy()
     env["OPENCODE_BIN"] = str(cli)
     return subprocess.run(
@@ -41,12 +43,14 @@ def run_catalog(cli: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_v2_lists_models_without_v1_provider_or_flags(tmp_path: Path) -> None:
+    """OpenCode 2 uses the unfiltered standalone model list."""
     result = run_catalog(fake_cli(tmp_path, "opencode v2.0.32", "models --standalone"))
     assert result.returncode == 0, result.stderr
     assert result.stdout == "opencode/big-pickle\n"
 
 
 def test_v1_catalog_remains_compatible_with_local_tooling(tmp_path: Path) -> None:
+    """Legacy local OpenCode 1 commands retain their existing flags."""
     result = run_catalog(
         fake_cli(tmp_path, "opencode v1.18.32", "models opencode --refresh --verbose")
     )
