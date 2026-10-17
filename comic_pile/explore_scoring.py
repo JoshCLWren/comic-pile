@@ -164,10 +164,10 @@ def novelty_factor(thread_exposure: int, series_exposure: int | None = None) -> 
         Factor in ``(0, 1]``; 1.0 for something entirely unexposed and trending
         toward 0 as exposure accumulates.
     """
-    effective = max(0, thread_exposure)
+    effective: float = max(0, thread_exposure)
     if series_exposure is not None and series_exposure > 0:
         effective += series_exposure * EXPLORE_SERIES_EXPOSURE_DISCOUNT
-    return 1.0 / (1.0 + float(effective))
+    return 1.0 / (1.0 + effective)
 
 
 def _era_is_nearby(candidate_years: tuple[int, ...], anchor_years: tuple[int, ...]) -> bool:

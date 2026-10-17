@@ -64,6 +64,8 @@ dev = [
     "jsonschema>=4.0.0",
     "pyyaml>=6.0.0",
     "pytest-mock>=3.16.0",
+    # Locked mypy version: the strict gate and inventory must be reproducible.
+    "mypy==2.4.0",
 ]
 
 # Database migration + operator tooling (alembic + its sync psycopg driver).
