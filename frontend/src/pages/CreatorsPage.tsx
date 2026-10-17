@@ -7,10 +7,8 @@ import type { DiscoveryResultItem } from '../services/api-creators'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
 import { useDebounce } from '../hooks/useDebounce'
-import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { creatorRoutePath, parseCreatorKey } from '../utils/creatorKey'
 import type { CreatorListItem } from '../services/api-creators'
-import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 
 /** Quiet period before a typed name search becomes a new bounded query. */
 const SEARCH_DEBOUNCE_MS = 300
