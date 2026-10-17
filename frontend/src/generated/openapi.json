@@ -119,6 +119,13 @@
             ],
             "title": "Reading Progress"
           },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagResponse"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -5250,6 +5257,307 @@
         "title": "CreatorSummaryItem",
         "type": "object"
       },
+      "CreatorTeamChemistryResponse": {
+        "description": "Response payload for the creator team-chemistry endpoint.",
+        "properties": {
+          "coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorTeamCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_ranked_pairs": {
+            "description": "Bounding constant applied to the returned pair list.",
+            "minimum": 1.0,
+            "title": "Max Ranked Pairs",
+            "type": "integer"
+          },
+          "min_shared_team_sample": {
+            "default": 3,
+            "description": "Minimum shared sample required before a pair may rank.",
+            "minimum": 1.0,
+            "title": "Min Shared Team Sample",
+            "type": "integer"
+          },
+          "pairs": {
+            "description": "Ranked recurring teams, strongest shared average first.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamPair"
+            },
+            "title": "Pairs",
+            "type": "array"
+          },
+          "pairs_total": {
+            "default": 0,
+            "description": "Pairs meeting the minimum shared sample before ranking truncation.",
+            "minimum": 0.0,
+            "title": "Pairs Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_ranked_pairs"
+        ],
+        "title": "CreatorTeamChemistryResponse",
+        "type": "object"
+      },
+      "CreatorTeamCoverage": {
+        "description": "Explicit metadata-coverage state for the team-chemistry aggregation.",
+        "properties": {
+          "rated_issues_total": {
+            "description": "Rated issues in the library.",
+            "minimum": 0.0,
+            "title": "Rated Issues Total",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "description": "Rated issues carrying at least one usable confirmed credit.",
+            "minimum": 0.0,
+            "title": "Rated Issues With Creator Metadata",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "description": "True when every rated issue carries confirmed creator metadata; otherwise pair results are lower bounds.",
+            "title": "Ratings Complete",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "title": "CreatorTeamCoverage",
+        "type": "object"
+      },
+      "CreatorTeamIssueRef": {
+        "description": "One bounded, navigable shared-issue drilldown reference.",
+        "properties": {
+          "effective_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Rating"
+          },
+          "issue_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Issue number within the thread.",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "status": {
+            "description": "Owned issue status (read/unread).",
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "Owning local thread/series id.",
+            "exclusiveMinimum": 0.0,
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Thread title, for display only.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "title": "CreatorTeamIssueRef",
+        "type": "object"
+      },
+      "CreatorTeamMember": {
+        "description": "One canonical creator identity inside a ranked team pair.",
+        "properties": {
+          "baseline_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Creator's personal baseline average, or null when unrated.",
+            "title": "Baseline Average Rating"
+          },
+          "baseline_rated_count": {
+            "description": "Creator's personal headline-eligible rated sample size.",
+            "minimum": 0.0,
+            "title": "Baseline Rated Count",
+            "type": "integer"
+          },
+          "canonical_creator_key": {
+            "description": "Stable ``creator:<id>`` key.",
+            "title": "Canonical Creator Key",
+            "type": "string"
+          },
+          "difference_from_baseline": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shared-pair average minus this creator's baseline average. Descriptive context only.",
+            "title": "Difference From Baseline"
+          },
+          "display_name": {
+            "description": "Latest confirmed display name.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "roles": {
+            "description": "Interior-storytelling roles on shared issues.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "roles",
+          "baseline_rated_count"
+        ],
+        "title": "CreatorTeamMember",
+        "type": "object"
+      },
+      "CreatorTeamPair": {
+        "description": "One ranked recurring creator pair with explainable shared metrics.",
+        "properties": {
+          "creators": {
+            "description": "The two canonical creator identities of this team.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamMember"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Creators",
+            "type": "array"
+          },
+          "max_shared_issue_refs": {
+            "default": 5,
+            "description": "Bounding constant applied to the returned issue sample.",
+            "minimum": 1.0,
+            "title": "Max Shared Issue Refs",
+            "type": "integer"
+          },
+          "pair_key": {
+            "description": "Stable unordered pair key, ``a|b`` sorted.",
+            "title": "Pair Key",
+            "type": "string"
+          },
+          "shared_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average of the shared issues' effective ratings.",
+            "title": "Shared Average Rating"
+          },
+          "shared_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamIssueRef"
+            },
+            "title": "Shared Issue Refs",
+            "type": "array"
+          },
+          "shared_median_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Median Rating"
+          },
+          "shared_rated_issue_count": {
+            "description": "Shared rated issues carrying eligible interior credits for both members.",
+            "minimum": 0.0,
+            "title": "Shared Rated Issue Count",
+            "type": "integer"
+          },
+          "shared_rating_distribution": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Shared Rating Distribution",
+            "type": "object"
+          },
+          "shared_series": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamSeriesRef"
+            },
+            "title": "Shared Series",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pair_key",
+          "creators",
+          "shared_rated_issue_count"
+        ],
+        "title": "CreatorTeamPair",
+        "type": "object"
+      },
+      "CreatorTeamSeriesRef": {
+        "description": "Bounded shared-series context behind one team pair.",
+        "properties": {
+          "shared_issue_count": {
+            "description": "Pair issues from this thread.",
+            "minimum": 1.0,
+            "title": "Shared Issue Count",
+            "type": "integer"
+          },
+          "thread_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Thread title, for display only.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "shared_issue_count"
+        ],
+        "title": "CreatorTeamSeriesRef",
+        "type": "object"
+      },
       "CrossRepoDeliveryRequest": {
         "description": "Schema for requesting a cross-repository delivery operation.",
         "properties": {
@@ -7181,6 +7489,177 @@
           "height"
         ],
         "title": "DiagnosticViewport",
+        "type": "object"
+      },
+      "DiscoveryMode": {
+        "description": "Supported creator discovery modes.",
+        "enum": [
+          "consistently_loved",
+          "polarizing",
+          "most_read",
+          "highest_top_rating_rate",
+          "great_average_small_sample",
+          "loved_with_unread"
+        ],
+        "title": "DiscoveryMode",
+        "type": "string"
+      },
+      "DiscoveryModesResponse": {
+        "description": "Response for listing available discovery modes.",
+        "properties": {
+          "modes": {
+            "description": "List of available discovery modes with metadata.",
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Modes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "modes"
+        ],
+        "title": "DiscoveryModesResponse",
+        "type": "object"
+      },
+      "DiscoveryResponse": {
+        "description": "Response body for a creator discovery endpoint.",
+        "properties": {
+          "description": {
+            "description": "Explanation of what this discovery mode shows and how it works.",
+            "title": "Description",
+            "type": "string"
+          },
+          "items": {
+            "description": "Discovery results ordered by relevance for this mode.",
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryResultItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size requested.",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/DiscoveryMode",
+            "description": "The discovery mode being used."
+          },
+          "offset": {
+            "description": "Page offset requested.",
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "title": {
+            "description": "Human-readable title for this discovery mode.",
+            "title": "Title",
+            "type": "string"
+          },
+          "total": {
+            "description": "Total number of creators matching the discovery criteria.",
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "title",
+          "description",
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "DiscoveryResponse",
+        "type": "object"
+      },
+      "DiscoveryResultItem": {
+        "description": "One row in a creator discovery collection.\n\nEach result shows the creator and the specific metrics that qualified them\nfor this discovery mode, making the results explainable and transparent.",
+        "properties": {
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Personal average rating across headline-eligible issues.",
+            "title": "Average Rating"
+          },
+          "canonical_creator_key": {
+            "description": "Stable normalized creator key (e.g. ``creator:12345``).",
+            "title": "Canonical Creator Key",
+            "type": "string"
+          },
+          "display_name": {
+            "description": "Human-readable creator name from confirmed issue metadata.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "normalized_roles": {
+            "description": "Distinct roles seen for this creator across the user's issues.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Normalized Roles",
+            "type": "array"
+          },
+          "qualifying_metrics": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Specific metrics that qualified this creator for the discovery mode.",
+            "title": "Qualifying Metrics",
+            "type": "object"
+          },
+          "ratings_count": {
+            "default": 0,
+            "description": "Number of distinct rated issues contributing to the average.",
+            "minimum": 0.0,
+            "title": "Ratings Count",
+            "type": "integer"
+          },
+          "read_unrated_count": {
+            "default": 0,
+            "description": "Number of read-but-unrated issues attributed to this creator.",
+            "minimum": 0.0,
+            "title": "Read Unrated Count",
+            "type": "integer"
+          },
+          "upcoming_count": {
+            "default": 0,
+            "description": "Number of unread issues attributed to this creator.",
+            "minimum": 0.0,
+            "title": "Upcoming Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name"
+        ],
+        "title": "DiscoveryResultItem",
         "type": "object"
       },
       "DuplicateAnomalyResponse": {
@@ -9961,6 +10440,148 @@
           "new_position"
         ],
         "title": "PositionRequest",
+        "type": "object"
+      },
+      "PrerequisiteCreate": {
+        "additionalProperties": false,
+        "description": "Create one stable pair; provenance is server-controlled.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source_issue_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Source Issue Id",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Target Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "title": "PrerequisiteCreate",
+        "type": "object"
+      },
+      "PrerequisiteNoteUpdate": {
+        "additionalProperties": false,
+        "description": "Edit reader prose without changing endpoints or classification.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "PrerequisiteNoteUpdate",
+        "type": "object"
+      },
+      "PrerequisiteResponse": {
+        "description": "Expose historical uncertainty without claiming approval.",
+        "properties": {
+          "classification": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reader",
+                  "converted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance"
+          },
+          "source_issue_id": {
+            "title": "Source Issue Id",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "title": "Target Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "source_issue_id",
+          "target_issue_id",
+          "created_at",
+          "note",
+          "origin",
+          "classification",
+          "provenance"
+        ],
+        "title": "PrerequisiteResponse",
         "type": "object"
       },
       "ProgressScope": {
@@ -14173,6 +14794,12 @@
             "minLength": 1,
             "title": "Provider Series External Id",
             "type": "string"
+          },
+          "scope_mode": {
+            "default": "confirmed_origin",
+            "description": "Preview scope mode: 'confirmed_origin' (generic, requires confirmed origin evidence for sibling scope) or 'queue_thread_bootstrap' (queue repair may propose the anchor's whole owned thread, including its first issue)",
+            "title": "Scope Mode",
+            "type": "string"
           }
         },
         "required": [
@@ -14276,6 +14903,18 @@
             "title": "Default Selected",
             "type": "boolean"
           },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider-specific identifier",
+            "title": "External Id"
+          },
           "issue_id": {
             "description": "Internal issue ID",
             "title": "Issue Id",
@@ -14290,6 +14929,18 @@
             "description": "Whether this issue would be mapped in the proposed scope",
             "title": "Proposed Mapping",
             "type": "boolean"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "External provider name",
+            "title": "Provider"
           },
           "reason": {
             "anyOf": [
@@ -21123,6 +21774,111 @@
         ]
       }
     },
+    "/api/v1/creators/discovery": {
+      "get": {
+        "description": "Return creator discovery results for the specified mode.\n\nDiscovery views surface useful patterns in the user's creator ratings that\nthey may not think to search for manually, while keeping every result\ndeterministic and explainable. Each mode uses explicit calculations with\nclear minimum sample requirements to ensure statistical validity.\n\nArgs:\n    current_user: Authenticated user whose library is analyzed.\n    mode: Discovery mode to use.\n    limit: Page size (bounded, max 50).\n    offset: Page offset.\n    db: Async database session.\n    \nReturns:\n    Discovery results for the specified mode with qualifying metrics.\n    \nRaises:\n    HTTPException: When the mode parameter is invalid.",
+        "operationId": "get_discovery_endpoint_api_v1_creators_discovery_get",
+        "parameters": [
+          {
+            "description": "Discovery mode to use (see /discovery/modes for options)",
+            "in": "query",
+            "name": "mode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DiscoveryMode",
+              "description": "Discovery mode to use (see /discovery/modes for options)"
+            }
+          },
+          {
+            "description": "Page size (bounded, max 50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Page size (bounded, max 50)",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page offset",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Page offset",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Discovery Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
+    "/api/v1/creators/discovery/modes": {
+      "get": {
+        "description": "Return list of available creator discovery modes.\n\nThis endpoint provides metadata about all available discovery modes that\nsurface useful patterns in the user's creator ratings.\n\nArgs:\n    current_user: Authenticated user whose library is analyzed.\n    \nReturns:\n    List of available discovery modes with descriptions.",
+        "operationId": "get_discovery_modes_endpoint_api_v1_creators_discovery_modes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryModesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Discovery Modes Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
     "/api/v1/creators/summaries": {
       "get": {
         "description": "Return bounded personal summary statistics for the requested creator keys.\n\nOnly creator keys visible in the authenticated user's own confirmed issue\nmetadata are summarized; unknown or foreign keys are silently omitted so a\ncreator key can never leak another user's library state.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    keys: Comma-separated canonical creator keys.\n    db: Async database session.\n\nReturns:\n    Batch summary keyed by requested visible creator keys, plus explicit\n    coverage state.\n\nRaises:\n    HTTPException: When the ``keys`` parameter is missing, unbounded, or malformed.",
@@ -21175,6 +21931,34 @@
           }
         ],
         "summary": "Get Creator Summaries Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
+    "/api/v1/creators/team-chemistry": {
+      "get": {
+        "description": "Return ranked recurring creator-team pairs for the authenticated user.\n\nA team is a pair of stable canonical creator identities credited together\non shared rated issues with eligible interior-storytelling roles. Pairs\nbelow ``min_shared_team_sample`` shared rated issues are never ranked, the\nreturned issue drilldown sample is bounded, and every metric stays\ndescriptive personal-reading data: no causation or significance is\nexpressed or implied.\n\nOnly creator identities visible in the authenticated user's own confirmed\nissue metadata are considered, so a creator key can never leak another\nuser's library state, and same-name creators remain distinct via their\ncanonical keys.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    db: Async database session.\n\nReturns:\n    Ranked bounded team pairs with shared sample, average, distribution,\n    baseline context, and navigable issue references, plus explicit\n    metadata-coverage state.",
+        "operationId": "get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorTeamChemistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Creator Team Chemistry Endpoint",
         "tags": [
           "creators",
           "creators"
@@ -24591,6 +25375,187 @@
         "tags": [
           "performance-metrics",
           "performance-metrics"
+        ]
+      }
+    },
+    "/api/v1/prerequisites/": {
+      "get": {
+        "description": "Read stable endpoints and their unmodified provenance.",
+        "operationId": "list_prerequisites_api_v1_prerequisites__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrerequisiteResponse"
+                  },
+                  "title": "Response List Prerequisites Api V1 Prerequisites  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Prerequisites",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "prerequisites"
+        ]
+      },
+      "post": {
+        "description": "Create one explicit reader prerequisite after combined cycle validation.",
+        "operationId": "create_prerequisite_api_v1_prerequisites__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrerequisiteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrerequisiteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Prerequisite",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "prerequisites"
+        ]
+      }
+    },
+    "/api/v1/prerequisites/{prerequisite_id}": {
+      "delete": {
+        "description": "Remove a reader requirement without changing read state or list intent.",
+        "operationId": "delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prerequisite_id",
+            "required": true,
+            "schema": {
+              "title": "Prerequisite Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Prerequisite",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "prerequisites"
+        ]
+      },
+      "patch": {
+        "description": "Edit the note of a new reader-authored requirement.",
+        "operationId": "update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prerequisite_id",
+            "required": true,
+            "schema": {
+              "title": "Prerequisite Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrerequisiteNoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrerequisiteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Prerequisite Note",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "prerequisites"
         ]
       }
     },
@@ -28134,6 +29099,107 @@
         ]
       }
     },
+    "/api/v1/threads/excluded/threads": {
+      "get": {
+        "description": "List excluded threads with deterministic cursor-based pagination.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order – ``title`` or ``created``.\n    page_size: Threads per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Paginated excluded threads plus ``next_page_token`` when more pages exist.\n\nRaises:\n    HTTPException: If the sort value is unsupported or the page token is stale/malformed.",
+        "operationId": "list_excluded_threads_api_v1_threads_excluded_threads_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Sort order: title or created",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "created",
+              "description": "Sort order: title or created",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of threads to return per page (default 50, max 200)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Number of threads to return per page (default 50, max 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor token for pagination continuation",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination continuation",
+              "title": "Page Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueThreadListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Excluded Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/groups:batch": {
       "post": {
         "description": "List crossover groups for several owned threads in one request.",
@@ -28596,6 +29662,55 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/exclude": {
+      "post": {
+        "description": "Remove a thread from the active queue without deleting data.\n\nRaises:\n    HTTPException: 404 when not found; 400 when thread is not active.",
+        "operationId": "exclude_thread_api_v1_threads__thread_id__exclude_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Exclude Thread",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/{thread_id}/issue-dependencies": {
       "get": {
         "description": "Return dependency edges for every issue in one thread using bulk queries.\n\nThis endpoint replaces the frontend's previous one-request-per-issue pattern.\nEmpty dependency payloads are included so clients can distinguish a complete\nresponse from missing data without issuing fallback requests.",
@@ -29012,6 +30127,55 @@
         "tags": [
           "reading-orders",
           "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/restore": {
+      "post": {
+        "description": "Restore an excluded thread back to the active queue.\n\nRaises:\n    HTTPException: 404 when not found; 400 when thread is not excluded.",
+        "operationId": "restore_thread_api_v1_threads__thread_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Thread",
+        "tags": [
+          "threads",
+          "threads"
         ]
       }
     },

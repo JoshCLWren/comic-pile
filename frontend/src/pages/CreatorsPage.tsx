@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useCreatorsList } from '../hooks/useCreatorsList'
 import { useDiscoveryModes, useDiscovery } from '../hooks/useCreatorDiscovery'
-import type { CreatorListSort } from '../hooks/useCreatorsList'
+import { isNumber } from '../utils/runtimeChecks'
 import type { DiscoveryMode } from '../services/api-creators'
+import type { DiscoveryResultItem } from '../services/api-creators'
+import { useCreatorsList } from '../hooks/useCreatorsList'
+import type { CreatorListSort } from '../hooks/useCreatorsList'
 import { useDebounce } from '../hooks/useDebounce'
 import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { creatorRoutePath, parseCreatorKey } from '../utils/creatorKey'
-import { isNumber } from '../utils/runtimeChecks'
-import type { CreatorListItem, DiscoveryResultItem } from '../services/api-creators'
+import type { CreatorListItem } from '../services/api-creators'
 import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 
 /** Quiet period before a typed name search becomes a new bounded query. */
@@ -280,6 +281,13 @@ export default function CreatorsPage() {
     loadMore,
     refetch,
   } = useCreatorsList({ search: activeSearch || undefined, sort, minRatings: minRatings || undefined })
+  const {
+    data: teamChemistry,
+    isError: teamChemistryError,
+    refetch: refetchTeamChemistry,
+  } = useCreatorTeamChemistry()
+
+  const hasItems = items.length > 0
 
   // Discovery hooks
   const { isLoading: isLoadingDiscoveryModes } = useDiscoveryModes()
@@ -296,14 +304,6 @@ export default function CreatorsPage() {
     },
     !!discoveryMode,
   )
-
-  const {
-    data: teamChemistry,
-    isError: teamChemistryError,
-    refetch: refetchTeamChemistry,
-  } = useCreatorTeamChemistry()
-
-  const hasItems = items.length > 0
   const ratingsPartial = coverage != null && !coverage.ratings_complete
   const showFirstLoadError = isError && !hasItems
   const showMoreError = isError && hasItems

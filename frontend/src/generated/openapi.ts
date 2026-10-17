@@ -1561,6 +1561,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/creators/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Discovery Endpoint
+         * @description Return creator discovery results for the specified mode.
+         *
+         *     Discovery views surface useful patterns in the user's creator ratings that
+         *     they may not think to search for manually, while keeping every result
+         *     deterministic and explainable. Each mode uses explicit calculations with
+         *     clear minimum sample requirements to ensure statistical validity.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is analyzed.
+         *         mode: Discovery mode to use.
+         *         limit: Page size (bounded, max 50).
+         *         offset: Page offset.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Discovery results for the specified mode with qualifying metrics.
+         *
+         *     Raises:
+         *         HTTPException: When the mode parameter is invalid.
+         */
+        get: operations["get_discovery_endpoint_api_v1_creators_discovery_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/creators/discovery/modes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Discovery Modes Endpoint
+         * @description Return list of available creator discovery modes.
+         *
+         *     This endpoint provides metadata about all available discovery modes that
+         *     surface useful patterns in the user's creator ratings.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is analyzed.
+         *
+         *     Returns:
+         *         List of available discovery modes with descriptions.
+         */
+        get: operations["get_discovery_modes_endpoint_api_v1_creators_discovery_modes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/creators/summaries": {
         parameters: {
             query?: never;
@@ -1589,6 +1656,47 @@ export interface paths {
          *         HTTPException: When the ``keys`` parameter is missing, unbounded, or malformed.
          */
         get: operations["get_creator_summaries_endpoint_api_v1_creators_summaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/creators/team-chemistry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Creator Team Chemistry Endpoint
+         * @description Return ranked recurring creator-team pairs for the authenticated user.
+         *
+         *     A team is a pair of stable canonical creator identities credited together
+         *     on shared rated issues with eligible interior-storytelling roles. Pairs
+         *     below ``min_shared_team_sample`` shared rated issues are never ranked, the
+         *     returned issue drilldown sample is bounded, and every metric stays
+         *     descriptive personal-reading data: no causation or significance is
+         *     expressed or implied.
+         *
+         *     Only creator identities visible in the authenticated user's own confirmed
+         *     issue metadata are considered, so a creator key can never leak another
+         *     user's library state, and same-name creators remain distinct via their
+         *     canonical keys.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is aggregated.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Ranked bounded team pairs with shared sample, average, distribution,
+         *         baseline context, and navigable issue references, plus explicit
+         *         metadata-coverage state.
+         */
+        get: operations["get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3019,6 +3127,54 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prerequisites/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Prerequisites
+         * @description Read stable endpoints and their unmodified provenance.
+         */
+        get: operations["list_prerequisites_api_v1_prerequisites__get"];
+        put?: never;
+        /**
+         * Create Prerequisite
+         * @description Create one explicit reader prerequisite after combined cycle validation.
+         */
+        post: operations["create_prerequisite_api_v1_prerequisites__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prerequisites/{prerequisite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Prerequisite
+         * @description Remove a reader requirement without changing read state or list intent.
+         */
+        delete: operations["delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Prerequisite Note
+         * @description Edit the note of a new reader-authored requirement.
+         */
+        patch: operations["update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch"];
         trace?: never;
     };
     "/api/v1/queue/shuffle/": {
@@ -4935,6 +5091,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/excluded/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Excluded Threads
+         * @description List excluded threads with deterministic cursor-based pagination.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         search: Optional case-insensitive title search filter.
+         *         sort: Sort order – ``title`` or ``created``.
+         *         page_size: Threads per page (default 50, max 200).
+         *         page_token: Opaque cursor token for pagination continuation.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         Paginated excluded threads plus ``next_page_token`` when more pages exist.
+         *
+         *     Raises:
+         *         HTTPException: If the sort value is unsupported or the page token is stale/malformed.
+         */
+        get: operations["list_excluded_threads_api_v1_threads_excluded_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/groups:batch": {
         parameters: {
             query?: never;
@@ -5104,6 +5295,29 @@ export interface paths {
         get: operations["check_thread_dependency_order_api_v1_threads__thread_id__dependency_order_check_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/exclude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exclude Thread
+         * @description Remove a thread from the active queue without deleting data.
+         *
+         *     Raises:
+         *         HTTPException: 404 when not found; 400 when thread is not active.
+         */
+        post: operations["exclude_thread_api_v1_threads__thread_id__exclude_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5301,6 +5515,29 @@ export interface paths {
         get: operations["get_thread_reading_orders_api_v1_threads__thread_id__reading_orders_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Thread
+         * @description Restore an excluded thread back to the active queue.
+         *
+         *     Raises:
+         *         HTTPException: 404 when not found; 400 when thread is not excluded.
+         */
+        post: operations["restore_thread_api_v1_threads__thread_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5884,6 +6121,8 @@ export interface components {
             queue_position: number;
             /** Reading Progress */
             reading_progress?: string | null;
+            /** Tags */
+            tags?: components["schemas"]["TagResponse"][];
             /** Title */
             title: string;
             /** Total Issues */
@@ -8326,6 +8565,182 @@ export interface components {
             upcoming_count: number;
         };
         /**
+         * CreatorTeamChemistryResponse
+         * @description Response payload for the creator team-chemistry endpoint.
+         */
+        CreatorTeamChemistryResponse: {
+            coverage?: components["schemas"]["CreatorTeamCoverage"] | null;
+            /**
+             * Max Ranked Pairs
+             * @description Bounding constant applied to the returned pair list.
+             */
+            max_ranked_pairs: number;
+            /**
+             * Min Shared Team Sample
+             * @description Minimum shared sample required before a pair may rank.
+             * @default 3
+             */
+            min_shared_team_sample: number;
+            /**
+             * Pairs
+             * @description Ranked recurring teams, strongest shared average first.
+             */
+            pairs?: components["schemas"]["CreatorTeamPair"][];
+            /**
+             * Pairs Total
+             * @description Pairs meeting the minimum shared sample before ranking truncation.
+             * @default 0
+             */
+            pairs_total: number;
+        };
+        /**
+         * CreatorTeamCoverage
+         * @description Explicit metadata-coverage state for the team-chemistry aggregation.
+         */
+        CreatorTeamCoverage: {
+            /**
+             * Rated Issues Total
+             * @description Rated issues in the library.
+             */
+            rated_issues_total: number;
+            /**
+             * Rated Issues With Creator Metadata
+             * @description Rated issues carrying at least one usable confirmed credit.
+             */
+            rated_issues_with_creator_metadata: number;
+            /**
+             * Ratings Complete
+             * @description True when every rated issue carries confirmed creator metadata; otherwise pair results are lower bounds.
+             */
+            ratings_complete: boolean;
+        };
+        /**
+         * CreatorTeamIssueRef
+         * @description One bounded, navigable shared-issue drilldown reference.
+         */
+        CreatorTeamIssueRef: {
+            /** Effective Rating */
+            effective_rating?: number | null;
+            /** Issue Id */
+            issue_id: number;
+            /**
+             * Issue Number
+             * @description Issue number within the thread.
+             */
+            issue_number: string;
+            /**
+             * Status
+             * @description Owned issue status (read/unread).
+             */
+            status: string;
+            /**
+             * Thread Id
+             * @description Owning local thread/series id.
+             */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Thread title, for display only.
+             */
+            thread_title: string;
+        };
+        /**
+         * CreatorTeamMember
+         * @description One canonical creator identity inside a ranked team pair.
+         */
+        CreatorTeamMember: {
+            /**
+             * Baseline Average Rating
+             * @description Creator's personal baseline average, or null when unrated.
+             */
+            baseline_average_rating?: number | null;
+            /**
+             * Baseline Rated Count
+             * @description Creator's personal headline-eligible rated sample size.
+             */
+            baseline_rated_count: number;
+            /**
+             * Canonical Creator Key
+             * @description Stable ``creator:<id>`` key.
+             */
+            canonical_creator_key: string;
+            /**
+             * Difference From Baseline
+             * @description Shared-pair average minus this creator's baseline average. Descriptive context only.
+             */
+            difference_from_baseline?: number | null;
+            /**
+             * Display Name
+             * @description Latest confirmed display name.
+             */
+            display_name: string;
+            /**
+             * Roles
+             * @description Interior-storytelling roles on shared issues.
+             */
+            roles: string[];
+        };
+        /**
+         * CreatorTeamPair
+         * @description One ranked recurring creator pair with explainable shared metrics.
+         */
+        CreatorTeamPair: {
+            /**
+             * Creators
+             * @description The two canonical creator identities of this team.
+             */
+            creators: components["schemas"]["CreatorTeamMember"][];
+            /**
+             * Max Shared Issue Refs
+             * @description Bounding constant applied to the returned issue sample.
+             * @default 5
+             */
+            max_shared_issue_refs: number;
+            /**
+             * Pair Key
+             * @description Stable unordered pair key, ``a|b`` sorted.
+             */
+            pair_key: string;
+            /**
+             * Shared Average Rating
+             * @description Average of the shared issues' effective ratings.
+             */
+            shared_average_rating?: number | null;
+            /** Shared Issue Refs */
+            shared_issue_refs?: components["schemas"]["CreatorTeamIssueRef"][];
+            /** Shared Median Rating */
+            shared_median_rating?: number | null;
+            /**
+             * Shared Rated Issue Count
+             * @description Shared rated issues carrying eligible interior credits for both members.
+             */
+            shared_rated_issue_count: number;
+            /** Shared Rating Distribution */
+            shared_rating_distribution?: {
+                [key: string]: number;
+            };
+            /** Shared Series */
+            shared_series?: components["schemas"]["CreatorTeamSeriesRef"][];
+        };
+        /**
+         * CreatorTeamSeriesRef
+         * @description Bounded shared-series context behind one team pair.
+         */
+        CreatorTeamSeriesRef: {
+            /**
+             * Shared Issue Count
+             * @description Pair issues from this thread.
+             */
+            shared_issue_count: number;
+            /** Thread Id */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Thread title, for display only.
+             */
+            thread_title: string;
+        };
+        /**
          * CrossRepoDeliveryRequest
          * @description Schema for requesting a cross-repository delivery operation.
          */
@@ -9101,6 +9516,117 @@ export interface components {
             height: number;
             /** Width */
             width: number;
+        };
+        /**
+         * DiscoveryMode
+         * @description Supported creator discovery modes.
+         * @enum {string}
+         */
+        DiscoveryMode: "consistently_loved" | "polarizing" | "most_read" | "highest_top_rating_rate" | "great_average_small_sample" | "loved_with_unread";
+        /**
+         * DiscoveryModesResponse
+         * @description Response for listing available discovery modes.
+         */
+        DiscoveryModesResponse: {
+            /**
+             * Modes
+             * @description List of available discovery modes with metadata.
+             */
+            modes: {
+                [key: string]: string;
+            }[];
+        };
+        /**
+         * DiscoveryResponse
+         * @description Response body for a creator discovery endpoint.
+         */
+        DiscoveryResponse: {
+            /**
+             * Description
+             * @description Explanation of what this discovery mode shows and how it works.
+             */
+            description: string;
+            /**
+             * Items
+             * @description Discovery results ordered by relevance for this mode.
+             */
+            items: components["schemas"]["DiscoveryResultItem"][];
+            /**
+             * Limit
+             * @description Page size requested.
+             */
+            limit: number;
+            /** @description The discovery mode being used. */
+            mode: components["schemas"]["DiscoveryMode"];
+            /**
+             * Offset
+             * @description Page offset requested.
+             */
+            offset: number;
+            /**
+             * Title
+             * @description Human-readable title for this discovery mode.
+             */
+            title: string;
+            /**
+             * Total
+             * @description Total number of creators matching the discovery criteria.
+             */
+            total: number;
+        };
+        /**
+         * DiscoveryResultItem
+         * @description One row in a creator discovery collection.
+         *
+         *     Each result shows the creator and the specific metrics that qualified them
+         *     for this discovery mode, making the results explainable and transparent.
+         */
+        DiscoveryResultItem: {
+            /**
+             * Average Rating
+             * @description Personal average rating across headline-eligible issues.
+             */
+            average_rating?: number | null;
+            /**
+             * Canonical Creator Key
+             * @description Stable normalized creator key (e.g. ``creator:12345``).
+             */
+            canonical_creator_key: string;
+            /**
+             * Display Name
+             * @description Human-readable creator name from confirmed issue metadata.
+             */
+            display_name: string;
+            /**
+             * Normalized Roles
+             * @description Distinct roles seen for this creator across the user's issues.
+             */
+            normalized_roles?: string[];
+            /**
+             * Qualifying Metrics
+             * @description Specific metrics that qualified this creator for the discovery mode.
+             */
+            qualifying_metrics?: {
+                [key: string]: number | string;
+            };
+            /**
+             * Ratings Count
+             * @description Number of distinct rated issues contributing to the average.
+             * @default 0
+             */
+            ratings_count: number;
+            /**
+             * Read Unrated Count
+             * @description Number of read-but-unrated issues attributed to this creator.
+             * @default 0
+             */
+            read_unrated_count: number;
+            /**
+             * Upcoming Count
+             * @description Number of unread issues attributed to this creator.
+             * @default 0
+             */
+            upcoming_count: number;
         };
         /**
          * DuplicateAnomalyResponse
@@ -10397,6 +10923,51 @@ export interface components {
         PositionRequest: {
             /** New Position */
             new_position: number;
+        };
+        /**
+         * PrerequisiteCreate
+         * @description Create one stable pair; provenance is server-controlled.
+         */
+        PrerequisiteCreate: {
+            /** Note */
+            note?: string | null;
+            /** Source Issue Id */
+            source_issue_id: number;
+            /** Target Issue Id */
+            target_issue_id: number;
+        };
+        /**
+         * PrerequisiteNoteUpdate
+         * @description Edit reader prose without changing endpoints or classification.
+         */
+        PrerequisiteNoteUpdate: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * PrerequisiteResponse
+         * @description Expose historical uncertainty without claiming approval.
+         */
+        PrerequisiteResponse: {
+            /** Classification */
+            classification: ("A" | "B" | "C" | "D") | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /** Origin */
+            origin: ("reader" | "converted") | null;
+            /** Provenance */
+            provenance: string | null;
+            /** Source Issue Id */
+            source_issue_id: number;
+            /** Target Issue Id */
+            target_issue_id: number;
         };
         /**
          * ProgressScope
@@ -12171,6 +12742,12 @@ export interface components {
              * @description Provider-specific series identifier
              */
             provider_series_external_id: string;
+            /**
+             * Scope Mode
+             * @description Preview scope mode: 'confirmed_origin' (generic, requires confirmed origin evidence for sibling scope) or 'queue_thread_bootstrap' (queue repair may propose the anchor's whole owned thread, including its first issue)
+             * @default confirmed_origin
+             */
+            scope_mode: string;
         };
         /**
          * SeriesMappingPreviewResponse
@@ -12225,6 +12802,11 @@ export interface components {
              */
             default_selected: boolean;
             /**
+             * External Id
+             * @description Provider-specific identifier
+             */
+            external_id?: string | null;
+            /**
              * Issue Id
              * @description Internal issue ID
              */
@@ -12239,6 +12821,11 @@ export interface components {
              * @description Whether this issue would be mapped in the proposed scope
              */
             proposed_mapping: boolean;
+            /**
+             * Provider
+             * @description External provider name
+             */
+            provider?: string | null;
             /**
              * Reason
              * @description Explanation for the classification
@@ -15774,6 +16361,62 @@ export interface operations {
             };
         };
     };
+    get_discovery_endpoint_api_v1_creators_discovery_get: {
+        parameters: {
+            query: {
+                /** @description Discovery mode to use (see /discovery/modes for options) */
+                mode: components["schemas"]["DiscoveryMode"];
+                /** @description Page size (bounded, max 50) */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_discovery_modes_endpoint_api_v1_creators_discovery_modes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryModesResponse"];
+                };
+            };
+        };
+    };
     get_creator_summaries_endpoint_api_v1_creators_summaries_get: {
         parameters: {
             query?: {
@@ -15802,6 +16445,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorTeamChemistryResponse"];
                 };
             };
         };
@@ -17693,6 +18356,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PerformanceMetricComparison"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_prerequisites_api_v1_prerequisites__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrerequisiteResponse"][];
+                };
+            };
+        };
+    };
+    create_prerequisite_api_v1_prerequisites__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrerequisiteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrerequisiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prerequisite_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prerequisite_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrerequisiteNoteUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrerequisiteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -19863,6 +20643,43 @@ export interface operations {
             };
         };
     };
+    list_excluded_threads_api_v1_threads_excluded_threads_get: {
+        parameters: {
+            query?: {
+                search?: string | null;
+                /** @description Sort order: title or created */
+                sort?: string;
+                /** @description Number of threads to return per page (default 50, max 200) */
+                page_size?: number;
+                /** @description Opaque cursor token for pagination continuation */
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueThreadListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_thread_groups_batch_api_v1_threads_groups_batch_post: {
         parameters: {
             query?: never;
@@ -20151,6 +20968,37 @@ export interface operations {
             };
         };
     };
+    exclude_thread_api_v1_threads__thread_id__exclude_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_thread_issue_dependencies_api_v1_threads__thread_id__issue_dependencies_get: {
         parameters: {
             query?: never;
@@ -20370,6 +21218,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_thread_api_v1_threads__thread_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
                 };
             };
             /** @description Validation Error */
