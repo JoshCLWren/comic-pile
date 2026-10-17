@@ -1,9 +1,8 @@
 name: Factory Model Discovery
 
-# Sync `.github/free-model-factories.tsv` with OpenCode CLI catalogs both
-# ways: retire dead/410 pins AND add unused free OpenCode models (cost==0,
-# not paid Zen). Surplus big-pickle slots convert first. Unused
-# big-pickle is never grown as a first pin. This is not
+# Audit OpenCode 2 catalog without changing durable OpenCode Free worker slots.
+# Only fixed-provider retirements require a roster PR. New free models are
+# selected by live execution without a TSV change. This is not
 # OmniRoute routing. NVIDIA catalog presence is `opencode models nvidia`,
 # never integrate.api.nvidia.com alone. NVIDIA catalog adds are out of
 # scope. A #1093 410 marker with Source: nvidia is the durable "turned
@@ -18,12 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: Open or update a PR that retires dead pins and adds unused free OpenCode models to the TSV
-        required: false
-        type: boolean
-        default: true
-      add_unused_free:
-        description: Pin unused free OpenCode models onto the TSV (default on for schedule and dispatch)
+        description: Open a PR only for retiring unavailable fixed-provider pins
         required: false
         type: boolean
         default: true
@@ -103,7 +97,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           CATALOG_FIXTURE: ${{ inputs.catalog_fixture }}
-          ADD_UNUSED_FREE: ${{ github.event_name == 'workflow_dispatch' && inputs.add_unused_free == false && 'false' || 'true' }}
         run: |
           set -Eeuo pipefail
           mkdir -p "$RUNNER_TEMP/factory-model-discovery"
@@ -114,10 +107,9 @@ jobs:
             --report "$report"
             --github-output "$GITHUB_OUTPUT"
             --retirement-comments "$comments"
+            --dynamic-opencode-free
+            --no-add-unused-free
           )
-          if [[ "${ADD_UNUSED_FREE:-true}" == "false" ]]; then
-            args+=(--no-add-unused-free)
-          fi
           if [[ -n "${CATALOG_FIXTURE:-}" ]]; then
             args+=(--catalog-json "$CATALOG_FIXTURE")
           else
@@ -153,13 +145,13 @@ jobs:
           if-no-files-found: warn
 
       - name: Fail closed when dispatch asked not to apply
-        if: ${{ (steps.plan.outputs.retire == 'true' || steps.plan.outputs.add == 'true') && (github.event_name == 'workflow_dispatch' && inputs.apply == false) }}
+        if: ${{ steps.plan.outputs.retire == 'true' && (github.event_name == 'workflow_dispatch' && inputs.apply == false) }}
         run: |
           echo '::error::Factory TSV is out of sync with OpenCode catalogs. Re-run with apply=true or run factory_model_retirement.py apply locally.'
           exit 1
 
       - name: Open or update roster sync PR
-        if: ${{ (steps.plan.outputs.retire == 'true' || (steps.plan.outputs.add == 'true' && (github.event_name != 'workflow_dispatch' || inputs.add_unused_free != false))) && (github.event_name != 'workflow_dispatch' || inputs.apply != false) }}
+        if: ${{ steps.plan.outputs.retire == 'true' && (github.event_name != 'workflow_dispatch' || inputs.apply != false) }}
         env:
           GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN || github.token }}
           PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
@@ -168,7 +160,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           CATALOG_FIXTURE: ${{ inputs.catalog_fixture }}
-          ADD_UNUSED_FREE: ${{ github.event_name == 'workflow_dispatch' && inputs.add_unused_free == false && 'false' || 'true' }}
         run: |
           set -Eeuo pipefail
           if [[ -z "${PR_REBASE_TOKEN:-}" ]]; then
@@ -190,10 +181,9 @@ jobs:
             python3 .github/scripts/factory_model_retirement.py apply
             --report "$report"
             --retirement-comments "$comments"
+            --dynamic-opencode-free
+            --no-add-unused-free
           )
-          if [[ "${ADD_UNUSED_FREE:-true}" == "false" ]]; then
-            args+=(--no-add-unused-free)
-          fi
           if [[ -n "${CATALOG_FIXTURE:-}" ]]; then
             args+=(--catalog-json "$CATALOG_FIXTURE")
           else
@@ -212,10 +202,8 @@ jobs:
           if [[ -n "${PR_REBASE_TOKEN:-}" ]]; then
             git remote set-url origin "https://x-access-token:${PR_REBASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           fi
-          # The branch is regenerated from main on every run; workers may have
-          # advanced it, so replace it with an explicit lease on the observed tip.
-          remote_sha="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
-          git push -u --force-with-lease="refs/heads/$branch:${remote_sha}" origin "$branch"
+          # The existing-PR check above protects in-review branches.
+          git push -u origin "$branch"
           body="$(python3 - <<'PY'
           import json
           import os
@@ -226,14 +214,11 @@ jobs:
               "",
               "This PR updates `.github/free-model-factories.tsv` (and the generated",
               "`.github/factory-expected-workers.json` lock) so the fixed-model roster",
-              "matches live OpenCode CLI catalogs both ways:",
+              "only for catalog-absent fixed-provider pins and NVIDIA HTTP 410 markers.",
               "",
-              "- **Retire** pins that disappeared from `opencode models <provider>` or that",
-              "  have a sticky #1093 `factory-model-retired-410:v1` NVIDIA marker.",
-              "- **Add** unused free OpenCode models (`cost==0` or free-roster name) that",
-              "  were missing from the TSV. Surplus `big-pickle` duplicate slots convert",
-              "  first so unique free models do not grow the roster without bound.",
-              "  Unused `big-pickle` is never grown as a first pin.",
+              "OpenCode Free model membership is now dynamic. The runtime selects",
+              "eligible free models immediately, without adding or retiring",
+              "OpenCode worker IDs or requiring a generated roster PR.",
               "",
               "Paid Zen is never added. Models in `retired_models` or the 410 lock are",
               "never silently re-pinned. NVIDIA catalog adds are out of scope.",
@@ -290,12 +275,10 @@ jobs:
                   "### Operator flow",
                   "",
                   "1. Dispatch **Factory Model Discovery** (or wait for the six-hour schedule).",
-                  "2. When unused free OpenCode models appear in `opencode models opencode`,",
-                  "   or dead/410 pins disappear, this bot PR updates the TSV and lock.",
-                  "3. Future unused free ride the same add path — no Harvy hand-edit of the TSV.",
-                  "4. Merge after `validate-free-model-factories.py` and CI are green.",
-                  "",
-                  "Closes nothing automatically. NVIDIA catalog presence is `opencode models nvidia`,",
+                  "2. OpenCode Free catalog changes are reported without roster writes.",
+              "3. Fixed-provider retirement PRs still require reviewed CI.",
+              "",
+              "Closes nothing automatically. NVIDIA catalog presence is `opencode models nvidia`,",
                   "never integrate.api.nvidia.com. Sticky #1093 `factory-model-retired-410:v1`",
                   "comments with `Source: nvidia` retire matching bare model ids.",
               ]
