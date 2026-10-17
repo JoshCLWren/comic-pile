@@ -463,17 +463,18 @@ class TestStartupBudgetEnforcement:
         assert recorded.context["deployment_id"] == "dep-1"
         assert manager.get_startup_violations() == [recorded]
 
-    def test_production_hard_budget_fails_initialization(self) -> None:
-        """Crossing the hard budget in production fails initialization."""
+    def test_production_hard_budget_records_violation_without_failing(self) -> None:
+        """Crossing the readiness hard budget in production records telemetry only."""
         manager = get_performance_budget_manager()
         manager.clear_all()
 
-        with pytest.raises(StartupBudgetError) as exc_info:
-            enforce_startup_budget(72420.56, environment="production")
+        recorded = enforce_startup_budget(72420.56, environment="production")
 
-        assert exc_info.value.operation == "startup.readiness"
-        assert exc_info.value.elapsed_ms == 72420.56
-        assert exc_info.value.timeout_ms == STARTUP_TIMEOUT_MS
+        assert recorded is not None
+        assert recorded.severity == "violation"
+        assert recorded.operation == "startup.readiness"
+        assert recorded.elapsed_ms == 72420.56
+        assert recorded.context["deadline_ms"] == STARTUP_TIMEOUT_MS
         assert manager.violation_counts_by_operation() == {"startup.readiness": 1}
 
     def test_production_inside_budget_does_not_fail(self) -> None:

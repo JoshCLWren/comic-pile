@@ -889,10 +889,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                     logger.warning("Neon monitor startup skipped", exc_info=True)
 
             ready_snapshot = startup_event_snapshot()
-            # Use startup_duration (measured from import) rather than process_age_ms
-            # (which includes platform provisioning/cold-start overhead) to decide
-            # whether to hard-fail the startup budget in production.
-            readiness_ms = startup_duration if startup_duration > 0 else ready_snapshot.process_age_ms
+            readiness_ms = max(startup_duration, ready_snapshot.process_age_ms)
             try:
                 enforce_startup_budget(
                     readiness_ms,

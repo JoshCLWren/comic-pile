@@ -365,13 +365,15 @@ def enforce_startup_budget(
     operation: str = "startup.readiness",
     context: dict | None = None,
 ) -> PerformanceWarning | None:
-    """Evaluate the total ping-ready startup budget and fail production startup.
+    """Evaluate the ping-ready startup budget and record the telemetry verdict.
 
-    Production fails initialization when the hard budget is crossed so a
-    pathological process fails attributable instead of serving toward a
-    multi-second cold start. Other environments record and log the violation and
-    continue, because a slow developer machine or a loaded test runner is not a
-    production startup regression.
+    ``startup.readiness`` wall-clock time on serverless platforms includes
+    container freeze, provisioning, and boot time the application does not
+    control (issue #3808), so a production process must not abort its own
+    initialization when that wall clock crosses the hard budget. The violation
+    is still evaluated, recorded, and logged for observability. Operations that
+    measure app-controlled deadlines (for example the heavy-init database path
+    via ``run_bounded``) keep their hard-failure contract.
 
     Args:
         elapsed_ms: Measured ping-ready startup duration in milliseconds.
@@ -383,10 +385,16 @@ def enforce_startup_budget(
         The recorded warning or violation, or None when inside budget.
 
     Raises:
-        StartupBudgetError: In production when the hard startup budget is crossed.
+        StartupBudgetError: In production for non-readiness operations when the
+            hard startup budget is crossed.
     """
     recorded = evaluate_startup_budget(elapsed_ms, operation=operation, context=context)
-    if recorded is not None and recorded.severity == "violation" and environment == "production":
+    if (
+        recorded is not None
+        and recorded.severity == "violation"
+        and environment == "production"
+        and operation != "startup.readiness"
+    ):
         raise StartupBudgetError(operation, recorded.elapsed_ms, STARTUP_TIMEOUT_MS)
     return recorded
 
