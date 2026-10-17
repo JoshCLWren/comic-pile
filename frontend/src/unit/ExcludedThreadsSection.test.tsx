@@ -16,11 +16,10 @@ function makeExcluded(overrides: Partial<ThreadListItem> = {}): ThreadListItem {
     is_blocked: false,
     blocking_reasons: [],
     last_activity_at: null,
-    last_rating: 4.5,
     notes: null,
     created_at: '2024-01-01T00:00:00Z',
     ...overrides,
-  } as ThreadListItem
+  }
 }
 
 describe('ExcludedThreadsSection', () => {

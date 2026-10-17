@@ -107,9 +107,12 @@ describe('DeleteThreadDialog', () => {
     expect(screen.getByText(/ratings and events/i)).toBeInTheDocument()
     expect(screen.getByText(/ComicVine mapping links/i)).toBeInTheDocument()
     expect(screen.getByText(/Reading-plan membership/i)).toBeInTheDocument()
-    expect(
-      screen.getByText(/choose\s*Remove from Queue\s*instead/i),
-    ).toBeInTheDocument()
+    // The paragraph splits the phrase across a bold span, so match the
+    // paragraph by its own leading copy and assert on its full text.
+    const reversibleHint = screen.getByText((content) =>
+      /take it out of the queue/i.test(content),
+    )
+    expect(reversibleHint).toHaveTextContent(/choose\s*Remove from Queue\s*instead/i)
   })
 
   it('labels the destructive confirm action with the pending state', () => {

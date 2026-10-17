@@ -10,7 +10,7 @@ import {
 } from '../hooks/useQueue'
 import { useExcludeThread } from '../hooks/useThread'
 import { threadsApi as realThreadsApi } from '../services/api-threads'
-import type { ThreadListItem } from '../types'
+import type { Thread } from '../types'
 
 // SAFETY: each double stands in for one threadsApi method with that method's
 // own argument list and resolved value, so the module double matches the real
@@ -31,7 +31,7 @@ vi.mock('../services/api-threads', () => ({
 const invalidate = vi.fn<QueueInvalidateFn>()
 const restoreApi: RestoreThreadApi = { restore: mockRestore }
 
-function makeThread(overrides: Partial<ThreadListItem> = {}): ThreadListItem {
+function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: 7,
     title: 'Descender',
@@ -43,9 +43,12 @@ function makeThread(overrides: Partial<ThreadListItem> = {}): ThreadListItem {
     is_blocked: false,
     blocking_reasons: [],
     last_activity_at: null,
+    last_rating: null,
+    notes: null,
+    is_test: false,
     created_at: '2024-01-01T00:00:00Z',
     ...overrides,
-  } as ThreadListItem
+  }
 }
 
 function createWrapper() {
@@ -59,14 +62,13 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: the endpoint returns a list envelope, so the double resolves to it.
   mockListExcluded.mockResolvedValue({
+    active_count: 1,
     threads: [makeThread()],
     next_page_token: null,
-  } as never)
-  // SAFETY: both endpoints return the affected thread record.
-  mockRestore.mockResolvedValue(makeThread() as never)
-  mockExclude.mockResolvedValue(makeThread() as never)
+  })
+  mockRestore.mockResolvedValue(makeThread())
+  mockExclude.mockResolvedValue(makeThread())
   invalidate.mockResolvedValue()
 })
 
@@ -91,7 +93,11 @@ describe('useExcludedThreads', () => {
   })
 
   it('reports an empty shelf rather than failing when nothing is excluded', async () => {
-    mockListExcluded.mockResolvedValue({ threads: [], next_page_token: null } as never)
+    mockListExcluded.mockResolvedValue({
+      active_count: 0,
+      threads: [],
+      next_page_token: null,
+    })
     const wrapper = createWrapper()
     const { result } = renderHook(() => useExcludedThreads(true), { wrapper })
 
@@ -136,7 +142,7 @@ describe('useRestoreThread', () => {
     await expect(result.current.mutate(7)).rejects.toThrow('restore rejected')
 
     expect(invalidate).not.toHaveBeenCalled()
-    expect(result.current.isError).toBe(true)
+    await waitFor(() => expect(result.current.isError).toBe(true))
   })
 })
 

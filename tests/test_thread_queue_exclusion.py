@@ -287,7 +287,7 @@ async def _assert_thread_preserved(
         ids: Series identifiers.
         before: Curated state captured before the removal.
     """
-    await async_db.expire_all()
+    async_db.expire_all()
 
     thread = await async_db.get(Thread, ids.thread_id)
     assert thread is not None, "queue removal deleted the thread"
@@ -305,7 +305,7 @@ async def _assert_issue_rows_unchanged(async_db: AsyncSession, ids: SeriesIds) -
         async_db: Database session owned by the test.
         ids: Series identifiers.
     """
-    await async_db.expire_all()
+    async_db.expire_all()
     issues = await _issue_rows(async_db, ids.thread_id)
     assert [issue.id for issue in issues] == [ids.read_issue_id, *ids.unread_issue_ids]
     assert [issue.issue_number for issue in issues] == ["1", "2", "3"]
@@ -428,7 +428,7 @@ async def test_exclusion_survives_reading_the_final_unread_issue(
         mark_read = await auth_client.post(f"/api/v1/issues/{issue_id}:markRead")
         assert mark_read.status_code == 204
 
-    await async_db.expire_all()
+    async_db.expire_all()
     thread = await async_db.get(Thread, ids.thread_id)
     assert thread is not None
     assert thread.status == "excluded"
@@ -436,7 +436,7 @@ async def test_exclusion_survives_reading_the_final_unread_issue(
     assert thread.issues_remaining == 0
 
     # Read state is recorded normally; only the lifecycle status is preserved.
-    await async_db.expire_all()
+    async_db.expire_all()
     issues = await _issue_rows(async_db, ids.thread_id)
     assert [issue.status for issue in issues] == ["read", "read", "read"]
     assert all(issue.read_at is not None for issue in issues)
@@ -474,7 +474,7 @@ async def test_restore_returns_a_fully_read_series_to_the_finished_shelf(
     assert restore_response.status_code == 200
     assert restore_response.json()["status"] == "completed"
 
-    await async_db.expire_all()
+    async_db.expire_all()
     restored = await async_db.get(Thread, ids.thread_id)
     assert restored is not None
     assert restored.status == "completed"
@@ -499,7 +499,7 @@ async def test_excluded_series_stays_out_of_the_roll_pool(
     exclude_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/exclude")
     assert exclude_response.status_code == 200
 
-    await async_db.expire_all()
+    async_db.expire_all()
     assert ids.thread_id in await derive_effective_roll_excluded_thread_ids(
         async_db, default_user.id
     )
@@ -507,7 +507,7 @@ async def test_excluded_series_stays_out_of_the_roll_pool(
     restore_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/restore")
     assert restore_response.status_code == 200
 
-    await async_db.expire_all()
+    async_db.expire_all()
     assert ids.thread_id not in await derive_effective_roll_excluded_thread_ids(
         async_db, default_user.id
     )
@@ -530,7 +530,7 @@ async def test_appending_issues_does_not_reactivate_an_excluded_series(
     exclude_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/exclude")
     assert exclude_response.status_code == 200
 
-    from app.services import issue_service
+    from app.services import issue as issue_service
 
     await issue_service.create_issues(
         async_db,
@@ -541,7 +541,7 @@ async def test_appending_issues_does_not_reactivate_an_excluded_series(
     )
     await async_db.commit()
 
-    await async_db.expire_all()
+    async_db.expire_all()
     thread = await async_db.get(Thread, ids.thread_id)
     assert thread is not None
     assert thread.status == "excluded"
@@ -593,7 +593,7 @@ async def test_exclusion_is_isolated_per_reader(
     assert owner_library.status_code == 200
     assert ids.thread_id in [row["id"] for row in owner_library.json()["threads"]]
 
-    await async_db.expire_all()
+    async_db.expire_all()
     thread = await async_db.get(Thread, ids.thread_id)
     assert thread is not None
     assert thread.status == "excluded"
@@ -611,14 +611,14 @@ async def test_queue_removal_is_not_permanent_deletion(
     exclude_response = await auth_client.post(f"/api/v1/threads/{kept.thread_id}/exclude")
     assert exclude_response.status_code == 200
 
-    await async_db.expire_all()
+    async_db.expire_all()
     assert await async_db.get(Thread, kept.thread_id) is not None
     assert len(await _issue_rows(async_db, kept.thread_id)) == 3
 
     delete_response = await auth_client.delete(f"/api/v1/threads/{deleted.thread_id}")
     assert delete_response.status_code == 204
 
-    await async_db.expire_all()
+    async_db.expire_all()
     assert await async_db.get(Thread, deleted.thread_id) is None
     assert await _issue_rows(async_db, deleted.thread_id) == []
 
