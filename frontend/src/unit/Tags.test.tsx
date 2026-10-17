@@ -321,6 +321,48 @@ describe('tag chip visibility (issue #3393)', () => {
   })
 })
 
+describe('tag chip duplicates (issue #3426)', () => {
+  it('renders one chip when a tag is both direct and inherited, indicating both', () => {
+    render(
+      <MemoryRouter>
+        <TagChips data={directStateChipData()} />
+      </MemoryRouter>,
+    )
+
+    // The tag is held directly and inherited through B.P.R.D.: exactly one
+    // direct chip carries it, with the extra inheritance folded into that
+    // chip's source list instead of a second dashed chip.
+    expect(screen.getAllByText('Horror')).toHaveLength(1)
+    expect(screen.queryByText('Inherited')).toBeNull()
+    expect(screen.getByRole('button', { name: /show additional sources for tag horror/i }))
+      .toHaveTextContent('+1 inherited')
+  })
+
+  it('collapses a malformed duplicate entry into a single chip (issue #3426)', () => {
+    const data = directStateChipData()
+    const withMalformedDuplicate: EffectiveTagsResponse = {
+      ...data,
+      effective_tags: [
+        ...data.effective_tags,
+        {
+          tag: data.direct_tags[0],
+          direct: false,
+          sources: [{ target_type: 'Thread', target_id: 3, display_name: 'B.P.R.D.' }],
+        },
+      ],
+    }
+
+    render(
+      <MemoryRouter>
+        <TagChips data={withMalformedDuplicate} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getAllByText('Horror')).toHaveLength(1)
+    expect(screen.queryByText('Inherited')).toBeNull()
+  })
+})
+
 describe('inheritance source navigation (issue #3032)', () => {
   it('links threads and Reading Plans to their detail routes', () => {
     expect(sourceRoute({ target_type: 'Thread', target_id: 3, display_name: 'Saga' })).toBe(
