@@ -318,6 +318,47 @@ async def fetch_completed_page(
     return list(result.scalars().all())
 
 
+async def fetch_excluded_page(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None,
+    sort: QueueSort,
+    cursor: QueueCursor | None,
+    limit: int,
+) -> list[Thread]:
+    """Fetch one deterministic page of a user's EXCLUDED threads.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        search: Normalized case-insensitive title substring, or None.
+        sort: Validated sort order key with deterministic tie-breakers.
+        cursor: Decoded continuation cursor, or None for the first page.
+        limit: Maximum number of threads to return.
+
+    Returns:
+        Excluded threads in canonical page order, at most ``limit`` rows.
+    """
+    query = select(Thread).where(
+        Thread.user_id == user_id,
+        Thread.status == "excluded"
+    )
+
+    if search:
+        query = query.where(Thread.title.ilike(f"%{search}%"))
+
+    for col in build_sort_order(sort):
+        query = query.order_by(col)
+
+    if cursor is not None:
+        query = query.where(build_cursor_filter(cursor))
+
+    query = query.limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def fetch_completed_threads(db: AsyncSession, user_id: int) -> list[Thread]:
     """Fetch a user's completed threads, newest created first.
 

@@ -487,6 +487,86 @@ async def list_completed_threads(
     )
 
 
+async def list_excluded_threads(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None,
+    sort: str,
+    page_size: int,
+    page_token: str | None,
+) -> QueueThreadListResponse:
+    """List EXCLUDED threads with deterministic cursor-based pagination.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        search: Optional case-insensitive title search filter.
+        sort: Validated sort order – ``title`` or ``created``.
+        page_size: Number of threads to return per page (max 200).
+        page_token: Opaque cursor token for pagination continuation.
+
+    Returns:
+        QueueThreadListResponse with paginated EXCLUDED threads.
+
+    Raises:
+        InvalidRequestError: When the page token is stale or malformed.
+    """
+    validated_sort: QueueSort = cast(QueueSort, sort)
+    # Excluded threads do not have queue positions; normalize position to created.
+    effective_sort: QueueSort = "created" if validated_sort == "position" else validated_sort
+    normalized_search = normalize_queue_search(search)
+
+    cursor = None
+    if page_token:
+        try:
+            cursor = decode_queue_cursor(page_token, sort=effective_sort, search=search)
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
+    threads = await thread_repository.fetch_excluded_page(
+        db,
+        user_id,
+        search=normalized_search,
+        sort=effective_sort,
+        cursor=cursor,
+        limit=page_size + 1,
+    )
+
+    has_more = len(threads) > page_size
+    threads_to_return = threads[:page_size]
+
+    thread_responses = await threads_to_responses(threads_to_return, db)
+
+    tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
+    mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
+    tags_map = await TagInheritanceService(db).get_threads_direct_tags(
+        user_id, [tr.id for tr in thread_responses]
+    )
+
+    queue_items = [
+        to_queue_list_item(
+            tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, [])
+        )
+        for tr in thread_responses
+    ]
+
+    next_token = None
+    if has_more and threads_to_return:
+        last = threads_to_return[-1]
+        page_cursor = QueueCursor(
+            sort=effective_sort,
+            search=normalized_search,
+            values=build_cursor_values_from_row(effective_sort, last),
+        )
+        next_token = encode_queue_cursor(page_cursor)
+
+    return QueueThreadListResponse(
+        threads=queue_items,
+        next_page_token=next_token,
+    )
+
+
 async def completed_threads_html(db: AsyncSession, user_id: int) -> str:
     """Render completed threads as option elements for the reactivation modal.
 
@@ -799,6 +879,69 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         await db.rollback()
         logger.exception("Unexpected error deleting thread %s", thread_id)
         raise InvalidRequestError(f"Cannot delete thread: {exc}") from exc
+
+
+async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> ThreadResponse:
+    """Remove a thread from the active queue without deleting its data.
+
+    The thread's status is changed to 'excluded' and its queue position is
+    cleared. Reading history, issues, ratings, mappings and plan memberships
+    are preserved.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread.
+
+    Returns:
+        ThreadResponse for the excluded thread.
+
+    Raises:
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread is not active.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    if thread.status != "active":
+        raise InvalidRequestError(f"Thread {thread_id} is not active and cannot be excluded")
+    if thread.status == "excluded":
+        # Idempotent
+        return await thread_to_response(thread, db)
+
+    thread.status = "excluded"
+    thread.queue_position = 0
+    await db.commit()
+    await db.refresh(thread)
+    return await thread_to_response(thread, db)
+
+
+async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> ThreadResponse:
+    """Restore an excluded thread back to the active queue.
+
+    The thread's status is set to 'active' and it is appended to the end of
+    the user's queue. All historic data is retained.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread.
+
+    Returns:
+        ThreadResponse for the restored thread.
+
+    Raises:
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread is not excluded.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    if thread.status != "excluded":
+        raise InvalidRequestError(f"Thread {thread_id} is not excluded")
+    # Assign new queue position at end
+    max_position = await thread_repository.max_queue_position(db, user_id)
+    thread.status = "active"
+    thread.queue_position = max_position + 1
+    await db.commit()
+    await db.refresh(thread)
+    return await thread_to_response(thread, db)
 
 
 async def reactivate_completed_thread(

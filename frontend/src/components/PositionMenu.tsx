@@ -14,6 +14,8 @@ interface PositionMenuProps {
   onDependencies: (thread: ThreadListItem) => void
   // called when the user selects the Delete action from the menu
   onDelete: (threadId: number) => void
+  // called when the user selects the Remove from Queue action
+  onRemoveFromQueue?: (threadId: number) => void
   snoozeIcon?: string
   snoozeLabel?: string
   snoozeDisabled?: boolean
@@ -33,6 +35,7 @@ export default function PositionMenu({
   onEdit,
   onDependencies,
   onDelete,
+  onRemoveFromQueue,
   snoozeIcon,
   snoozeLabel,
   snoozeDisabled,
@@ -267,6 +270,15 @@ export default function PositionMenu({
         closeMenu()
       },
     },
+    ...(onRemoveFromQueue ? [{
+      label: 'Remove from Queue',
+      icon: '\u{1F5D4}\uFE0E',
+      ariaLabel: 'Remove from queue',
+      action: () => {
+        onRemoveFromQueue(thread.id)
+        closeMenu()
+      },
+    }] : []),
     {
       label: 'Delete Series',
       icon: '\u{1F5D1}',

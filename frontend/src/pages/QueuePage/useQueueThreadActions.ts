@@ -135,6 +135,8 @@ export function useQueueThreadActions(
   const [reorderError, setReorderError] = useState<string | null>(null)
   const [pendingDeleteThread, setPendingDeleteThread] = useState<ThreadListItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [pendingRemoveThread, setPendingRemoveThread] = useState<ThreadListItem | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
   const [isShuffleConfirmOpen, setIsShuffleConfirmOpen] = useState(false)
 
   const handleDragStart = useCallback(
@@ -197,6 +199,33 @@ export function useQueueThreadActions(
     setDeleteError(null)
     setPendingDeleteThread(null)
   }, [])
+
+  const requestRemove = useCallback((thread: ThreadListItem) => {
+    setRemoveError(null)
+    setPendingRemoveThread(thread)
+  }, [])
+
+  const cancelRemove = useCallback(() => {
+    setRemoveError(null)
+    setPendingRemoveThread(null)
+  }, [])
+
+  const confirmRemove = useCallback(async () => {
+    if (!pendingRemoveThread) return
+    const threadId = pendingRemoveThread.id
+    const threadTitle = pendingRemoveThread.title
+    setRemoveError(null)
+    try {
+      await threadsApi.exclude(threadId)
+      setPendingRemoveThread(null)
+      showToast(`Removed "${threadTitle}" from queue`, 'success')
+      await invalidateAfterQueueMutation(queryClient)
+    } catch (err: unknown) {
+      const detail = getApiErrorDetail(err)
+      setRemoveError(detail)
+      showToast(`Failed to remove series: ${detail}`, 'error')
+    }
+  }, [pendingRemoveThread, showToast])
 
   const confirmDelete = useCallback(async () => {
     if (!pendingDeleteThread) return
@@ -335,6 +364,11 @@ export function useQueueThreadActions(
     requestDelete,
     confirmDelete,
     cancelDelete,
+    pendingRemoveThread,
+    removeError,
+    requestRemove,
+    confirmRemove,
+    cancelRemove,
     isShuffleConfirmOpen,
     requestShuffle,
     confirmShuffle,

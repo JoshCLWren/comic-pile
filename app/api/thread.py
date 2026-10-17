@@ -214,6 +214,63 @@ async def list_completed_threads(
         raise _map_service_error(exc) from exc
 
 
+@v1_router.get("/excluded/threads", response_model=QueueThreadListResponse)
+@limiter.limit("100/minute")
+async def list_excluded_threads(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    search: str | None = Query(default=None, min_length=1),
+    sort: str = Query(
+        default="created",
+        description="Sort order: title or created",
+    ),
+    page_size: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="Number of threads to return per page (default 50, max 200)",
+    ),
+    page_token: str | None = Query(
+        default=None, description="Opaque cursor token for pagination continuation"
+    ),
+) -> QueueThreadListResponse:
+    """List excluded threads with deterministic cursor-based pagination.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        search: Optional case-insensitive title search filter.
+        sort: Sort order – ``title`` or ``created``.
+        page_size: Threads per page (default 50, max 200).
+        page_token: Opaque cursor token for pagination continuation.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Paginated excluded threads plus ``next_page_token`` when more pages exist.
+
+    Raises:
+        HTTPException: If the sort value is unsupported or the page token is stale/malformed.
+    """
+    if sort not in {"position", "title", "created"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sort must be one of: position, title, created",
+        )
+
+    try:
+        return await thread_service.list_excluded_threads(
+            db,
+            current_user.id,
+            search=search,
+            sort=sort,
+            page_size=page_size,
+            page_token=page_token,
+        )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+
 @router.get("/completed", response_class=HTMLResponse)
 async def list_completed_threads_html(
     request: Request,
@@ -310,6 +367,40 @@ async def delete_thread(
     """
     try:
         await thread_service.delete_thread(db, current_user.id, thread_id)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+
+@router.post("/{thread_id}/exclude", response_model=ThreadResponse)
+async def exclude_thread(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Remove a thread from the active queue without deleting data.
+
+    Raises:
+        HTTPException: 404 when not found; 400 when thread is not active.
+    """
+    try:
+        return await thread_service.exclude_thread(db, current_user.id, thread_id)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+
+@router.post("/{thread_id}/restore", response_model=ThreadResponse)
+async def restore_thread(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Restore an excluded thread back to the active queue.
+
+    Raises:
+        HTTPException: 404 when not found; 400 when thread is not excluded.
+    """
+    try:
+        return await thread_service.restore_thread(db, current_user.id, thread_id)
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
 
