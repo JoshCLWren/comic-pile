@@ -1,6 +1,5 @@
 """Contract tests for the factory model discovery workflow."""
 
-import re
 from pathlib import Path
 
 
@@ -16,8 +15,6 @@ FACTORY_RUN = (
     / "workflows"
     / "free-model-factory-run.yml"
 )
-PINNED_OPENCODE_VERSION = "1.18.32"
-PINNED_OPENCODE_SHA256 = "3046e0404fdc60fb80307e7a47824ba07477364178a4d09baa8548496dd6d43b"
 
 
 def test_discovery_workflow_is_scheduled_and_dispatchable() -> None:
@@ -47,26 +44,22 @@ def test_discovery_uses_opencode_cli_not_omniroute_or_integrate_api() -> None:
     assert "catalog_fixture" in workflow
 
 
-def _opencode_pin(text: str) -> tuple[str, str]:
-    """Extract the pinned OpenCode version and linux-x64 sha256."""
-    version = re.search(r"OPENCODE_VERSION: '([^']+)'", text)
-    sha = re.search(r"OPENCODE_LINUX_X64_SHA256: '([^']+)'", text)
-    assert version is not None
-    assert sha is not None
-    return version.group(1), sha.group(1)
-
-
-def test_discovery_and_factory_run_pin_the_same_opencode_release() -> None:
-    """Discovery and factory-run must share the live-audit OpenCode CLI pin."""
-    discovery_version, discovery_sha = _opencode_pin(WORKFLOW.read_text(encoding="utf-8"))
-    run_version, run_sha = _opencode_pin(FACTORY_RUN.read_text(encoding="utf-8"))
-
-    assert discovery_version == PINNED_OPENCODE_VERSION
-    assert run_version == PINNED_OPENCODE_VERSION
-    assert discovery_sha == PINNED_OPENCODE_SHA256
-    assert run_sha == PINNED_OPENCODE_SHA256
-    assert discovery_version == run_version
-    assert discovery_sha == run_sha
+def test_discovery_and_runner_use_unpinned_opencode_v2() -> None:
+    """Both workflows use the current OpenCode 2 release, not repository pins."""
+    discovery = WORKFLOW.read_text(encoding="utf-8")
+    runner = FACTORY_RUN.read_text(encoding="utf-8")
+    installer = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "scripts"
+        / "install-opencode-v2.sh"
+    ).read_text(encoding="utf-8")
+    assert "@opencode/cli@latest" in installer
+    assert "OpenCode 2 required" in installer
+    for workflow in (discovery, runner):
+        assert "bash .github/scripts/install-opencode-v2.sh" in workflow
+        assert "OPENCODE_VERSION:" not in workflow
+        assert "OPENCODE_LINUX_X64_SHA256:" not in workflow
 
 
 def test_discovery_adds_unused_free_by_default() -> None:
