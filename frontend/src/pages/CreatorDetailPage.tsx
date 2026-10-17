@@ -7,6 +7,7 @@ import { parseCreatorKey } from '../utils/creatorKey'
 import type { CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
 import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import Breadcrumbs from '../components/Breadcrumbs'
+import { RatingHistoryChart } from '../components/RatingHistoryChart'
 
 function formatRatingDate(value: string | null): string | null {
   if (!value) return null
@@ -247,6 +248,20 @@ export default function CreatorDetailPage() {
           </p>
         )}
       </section>
+
+      {summary.ratings_count > 0 && (
+        <section aria-labelledby="creator-rating-history-heading" className="mt-6">
+          <SectionHeading id="creator-rating-history-heading">Rating history</SectionHeading>
+          <div className="mt-2">
+            <RatingHistoryChart ratedIssues={ratedIssues} totalRatings={summary.ratings_count} />
+          </div>
+          {ratingsPartial && (
+            <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
+              History reflects only rated issues with confirmed creator metadata and is a lower bound.
+            </p>
+          )}
+        </section>
+      )}
 
       {ratingDistribution != null ? (
         <section aria-labelledby="creator-distribution-heading" className="mt-6">
