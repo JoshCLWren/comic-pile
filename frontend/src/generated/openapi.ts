@@ -1597,6 +1597,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/creators/team-chemistry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Creator Team Chemistry Endpoint
+         * @description Return ranked recurring creator-team pairs for the authenticated user.
+         *
+         *     A team is a pair of stable canonical creator identities credited together
+         *     on shared rated issues with eligible interior-storytelling roles. Pairs
+         *     below ``min_shared_team_sample`` shared rated issues are never ranked, the
+         *     returned issue drilldown sample is bounded, and every metric stays
+         *     descriptive personal-reading data: no causation or significance is
+         *     expressed or implied.
+         *
+         *     Only creator identities visible in the authenticated user's own confirmed
+         *     issue metadata are considered, so a creator key can never leak another
+         *     user's library state, and same-name creators remain distinct via their
+         *     canonical keys.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is aggregated.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Ranked bounded team pairs with shared sample, average, distribution,
+         *         baseline context, and navigable issue references, plus explicit
+         *         metadata-coverage state.
+         */
+        get: operations["get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/creators/{creator_key}": {
         parameters: {
             query?: never;
@@ -8374,6 +8415,182 @@ export interface components {
              * @default 0
              */
             upcoming_count: number;
+        };
+        /**
+         * CreatorTeamChemistryResponse
+         * @description Response payload for the creator team-chemistry endpoint.
+         */
+        CreatorTeamChemistryResponse: {
+            coverage?: components["schemas"]["CreatorTeamCoverage"] | null;
+            /**
+             * Max Ranked Pairs
+             * @description Bounding constant applied to the returned pair list.
+             */
+            max_ranked_pairs: number;
+            /**
+             * Min Shared Team Sample
+             * @description Minimum shared sample required before a pair may rank.
+             * @default 3
+             */
+            min_shared_team_sample: number;
+            /**
+             * Pairs
+             * @description Ranked recurring teams, strongest shared average first.
+             */
+            pairs?: components["schemas"]["CreatorTeamPair"][];
+            /**
+             * Pairs Total
+             * @description Pairs meeting the minimum shared sample before ranking truncation.
+             * @default 0
+             */
+            pairs_total: number;
+        };
+        /**
+         * CreatorTeamCoverage
+         * @description Explicit metadata-coverage state for the team-chemistry aggregation.
+         */
+        CreatorTeamCoverage: {
+            /**
+             * Rated Issues Total
+             * @description Rated issues in the library.
+             */
+            rated_issues_total: number;
+            /**
+             * Rated Issues With Creator Metadata
+             * @description Rated issues carrying at least one usable confirmed credit.
+             */
+            rated_issues_with_creator_metadata: number;
+            /**
+             * Ratings Complete
+             * @description True when every rated issue carries confirmed creator metadata; otherwise pair results are lower bounds.
+             */
+            ratings_complete: boolean;
+        };
+        /**
+         * CreatorTeamIssueRef
+         * @description One bounded, navigable shared-issue drilldown reference.
+         */
+        CreatorTeamIssueRef: {
+            /** Effective Rating */
+            effective_rating?: number | null;
+            /** Issue Id */
+            issue_id: number;
+            /**
+             * Issue Number
+             * @description Issue number within the thread.
+             */
+            issue_number: string;
+            /**
+             * Status
+             * @description Owned issue status (read/unread).
+             */
+            status: string;
+            /**
+             * Thread Id
+             * @description Owning local thread/series id.
+             */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Thread title, for display only.
+             */
+            thread_title: string;
+        };
+        /**
+         * CreatorTeamMember
+         * @description One canonical creator identity inside a ranked team pair.
+         */
+        CreatorTeamMember: {
+            /**
+             * Baseline Average Rating
+             * @description Creator's personal baseline average, or null when unrated.
+             */
+            baseline_average_rating?: number | null;
+            /**
+             * Baseline Rated Count
+             * @description Creator's personal headline-eligible rated sample size.
+             */
+            baseline_rated_count: number;
+            /**
+             * Canonical Creator Key
+             * @description Stable ``creator:<id>`` key.
+             */
+            canonical_creator_key: string;
+            /**
+             * Difference From Baseline
+             * @description Shared-pair average minus this creator's baseline average. Descriptive context only.
+             */
+            difference_from_baseline?: number | null;
+            /**
+             * Display Name
+             * @description Latest confirmed display name.
+             */
+            display_name: string;
+            /**
+             * Roles
+             * @description Interior-storytelling roles on shared issues.
+             */
+            roles: string[];
+        };
+        /**
+         * CreatorTeamPair
+         * @description One ranked recurring creator pair with explainable shared metrics.
+         */
+        CreatorTeamPair: {
+            /**
+             * Creators
+             * @description The two canonical creator identities of this team.
+             */
+            creators: components["schemas"]["CreatorTeamMember"][];
+            /**
+             * Max Shared Issue Refs
+             * @description Bounding constant applied to the returned issue sample.
+             * @default 5
+             */
+            max_shared_issue_refs: number;
+            /**
+             * Pair Key
+             * @description Stable unordered pair key, ``a|b`` sorted.
+             */
+            pair_key: string;
+            /**
+             * Shared Average Rating
+             * @description Average of the shared issues' effective ratings.
+             */
+            shared_average_rating?: number | null;
+            /** Shared Issue Refs */
+            shared_issue_refs?: components["schemas"]["CreatorTeamIssueRef"][];
+            /** Shared Median Rating */
+            shared_median_rating?: number | null;
+            /**
+             * Shared Rated Issue Count
+             * @description Shared rated issues carrying eligible interior credits for both members.
+             */
+            shared_rated_issue_count: number;
+            /** Shared Rating Distribution */
+            shared_rating_distribution?: {
+                [key: string]: number;
+            };
+            /** Shared Series */
+            shared_series?: components["schemas"]["CreatorTeamSeriesRef"][];
+        };
+        /**
+         * CreatorTeamSeriesRef
+         * @description Bounded shared-series context behind one team pair.
+         */
+        CreatorTeamSeriesRef: {
+            /**
+             * Shared Issue Count
+             * @description Pair issues from this thread.
+             */
+            shared_issue_count: number;
+            /** Thread Id */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Thread title, for display only.
+             */
+            thread_title: string;
         };
         /**
          * CrossRepoDeliveryRequest
@@ -15913,6 +16130,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorTeamChemistryResponse"];
                 };
             };
         };

@@ -171,6 +171,14 @@ NEAR_MATCH_LIMIT: int = 8
 MIN_RATED_FOR_RELIABLE: int = 3
 MIN_RATED_ISSUES_PER_SERIES: int = MIN_RATED_FOR_RELIABLE
 
+#: Minimum number of shared rated issues a pair of canonical creators must
+#: credit before the pair is ranked as a strong or weak team. Below this sample
+#: a pair is omitted from ranked results entirely rather than ranked on a thin
+#: shared average (issue #3094). Shared by the aggregation layer and the
+#: response schema so the documented minimum and the enforced contract cannot
+#: drift apart.
+MIN_SHARED_TEAM_SAMPLE: int = 3
+
 
 def validate_tag_color(color: object) -> tuple[str, str]:
     """Validate and normalize a tag color against the fixed palette.

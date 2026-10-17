@@ -323,6 +323,12 @@ export const queryKeys = {
     compare: (keys: string[]) =>
       ['creators', 'compare', [...keys].sort()] as const,
     /**
+     * Canonical bounded creator-team chemistry key (issue #3094). The
+     * aggregation covers the authenticated user's whole library, so the key
+     * carries no parameters beyond the domain prefix.
+     */
+    teamChemistry: () => ['creators', 'team-chemistry'] as const,
+    /**
      * Canonical creator metric drilldown key (issue #3176).
      * Supports different metric types with optional parameters for role, rating value, series, and pagination.
      */

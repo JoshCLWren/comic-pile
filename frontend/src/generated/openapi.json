@@ -5257,6 +5257,307 @@
         "title": "CreatorSummaryItem",
         "type": "object"
       },
+      "CreatorTeamChemistryResponse": {
+        "description": "Response payload for the creator team-chemistry endpoint.",
+        "properties": {
+          "coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorTeamCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_ranked_pairs": {
+            "description": "Bounding constant applied to the returned pair list.",
+            "minimum": 1.0,
+            "title": "Max Ranked Pairs",
+            "type": "integer"
+          },
+          "min_shared_team_sample": {
+            "default": 3,
+            "description": "Minimum shared sample required before a pair may rank.",
+            "minimum": 1.0,
+            "title": "Min Shared Team Sample",
+            "type": "integer"
+          },
+          "pairs": {
+            "description": "Ranked recurring teams, strongest shared average first.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamPair"
+            },
+            "title": "Pairs",
+            "type": "array"
+          },
+          "pairs_total": {
+            "default": 0,
+            "description": "Pairs meeting the minimum shared sample before ranking truncation.",
+            "minimum": 0.0,
+            "title": "Pairs Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_ranked_pairs"
+        ],
+        "title": "CreatorTeamChemistryResponse",
+        "type": "object"
+      },
+      "CreatorTeamCoverage": {
+        "description": "Explicit metadata-coverage state for the team-chemistry aggregation.",
+        "properties": {
+          "rated_issues_total": {
+            "description": "Rated issues in the library.",
+            "minimum": 0.0,
+            "title": "Rated Issues Total",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "description": "Rated issues carrying at least one usable confirmed credit.",
+            "minimum": 0.0,
+            "title": "Rated Issues With Creator Metadata",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "description": "True when every rated issue carries confirmed creator metadata; otherwise pair results are lower bounds.",
+            "title": "Ratings Complete",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "title": "CreatorTeamCoverage",
+        "type": "object"
+      },
+      "CreatorTeamIssueRef": {
+        "description": "One bounded, navigable shared-issue drilldown reference.",
+        "properties": {
+          "effective_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Rating"
+          },
+          "issue_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Issue number within the thread.",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "status": {
+            "description": "Owned issue status (read/unread).",
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "Owning local thread/series id.",
+            "exclusiveMinimum": 0.0,
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Thread title, for display only.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "title": "CreatorTeamIssueRef",
+        "type": "object"
+      },
+      "CreatorTeamMember": {
+        "description": "One canonical creator identity inside a ranked team pair.",
+        "properties": {
+          "baseline_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Creator's personal baseline average, or null when unrated.",
+            "title": "Baseline Average Rating"
+          },
+          "baseline_rated_count": {
+            "description": "Creator's personal headline-eligible rated sample size.",
+            "minimum": 0.0,
+            "title": "Baseline Rated Count",
+            "type": "integer"
+          },
+          "canonical_creator_key": {
+            "description": "Stable ``creator:<id>`` key.",
+            "title": "Canonical Creator Key",
+            "type": "string"
+          },
+          "difference_from_baseline": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shared-pair average minus this creator's baseline average. Descriptive context only.",
+            "title": "Difference From Baseline"
+          },
+          "display_name": {
+            "description": "Latest confirmed display name.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "roles": {
+            "description": "Interior-storytelling roles on shared issues.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "roles",
+          "baseline_rated_count"
+        ],
+        "title": "CreatorTeamMember",
+        "type": "object"
+      },
+      "CreatorTeamPair": {
+        "description": "One ranked recurring creator pair with explainable shared metrics.",
+        "properties": {
+          "creators": {
+            "description": "The two canonical creator identities of this team.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamMember"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Creators",
+            "type": "array"
+          },
+          "max_shared_issue_refs": {
+            "default": 5,
+            "description": "Bounding constant applied to the returned issue sample.",
+            "minimum": 1.0,
+            "title": "Max Shared Issue Refs",
+            "type": "integer"
+          },
+          "pair_key": {
+            "description": "Stable unordered pair key, ``a|b`` sorted.",
+            "title": "Pair Key",
+            "type": "string"
+          },
+          "shared_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average of the shared issues' effective ratings.",
+            "title": "Shared Average Rating"
+          },
+          "shared_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamIssueRef"
+            },
+            "title": "Shared Issue Refs",
+            "type": "array"
+          },
+          "shared_median_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Median Rating"
+          },
+          "shared_rated_issue_count": {
+            "description": "Shared rated issues carrying eligible interior credits for both members.",
+            "minimum": 0.0,
+            "title": "Shared Rated Issue Count",
+            "type": "integer"
+          },
+          "shared_rating_distribution": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Shared Rating Distribution",
+            "type": "object"
+          },
+          "shared_series": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamSeriesRef"
+            },
+            "title": "Shared Series",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pair_key",
+          "creators",
+          "shared_rated_issue_count"
+        ],
+        "title": "CreatorTeamPair",
+        "type": "object"
+      },
+      "CreatorTeamSeriesRef": {
+        "description": "Bounded shared-series context behind one team pair.",
+        "properties": {
+          "shared_issue_count": {
+            "description": "Pair issues from this thread.",
+            "minimum": 1.0,
+            "title": "Shared Issue Count",
+            "type": "integer"
+          },
+          "thread_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Thread title, for display only.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "shared_issue_count"
+        ],
+        "title": "CreatorTeamSeriesRef",
+        "type": "object"
+      },
       "CrossRepoDeliveryRequest": {
         "description": "Schema for requesting a cross-repository delivery operation.",
         "properties": {
@@ -21354,6 +21655,34 @@
           }
         ],
         "summary": "Get Creator Summaries Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
+    "/api/v1/creators/team-chemistry": {
+      "get": {
+        "description": "Return ranked recurring creator-team pairs for the authenticated user.\n\nA team is a pair of stable canonical creator identities credited together\non shared rated issues with eligible interior-storytelling roles. Pairs\nbelow ``min_shared_team_sample`` shared rated issues are never ranked, the\nreturned issue drilldown sample is bounded, and every metric stays\ndescriptive personal-reading data: no causation or significance is\nexpressed or implied.\n\nOnly creator identities visible in the authenticated user's own confirmed\nissue metadata are considered, so a creator key can never leak another\nuser's library state, and same-name creators remain distinct via their\ncanonical keys.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    db: Async database session.\n\nReturns:\n    Ranked bounded team pairs with shared sample, average, distribution,\n    baseline context, and navigable issue references, plus explicit\n    metadata-coverage state.",
+        "operationId": "get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorTeamChemistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Creator Team Chemistry Endpoint",
         "tags": [
           "creators",
           "creators"

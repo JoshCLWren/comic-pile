@@ -1,9 +1,11 @@
 import { Link, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
+import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
 import type { CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
+import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 function formatRatingDate(value: string | null): string | null {
@@ -109,6 +111,11 @@ export default function CreatorDetailPage() {
     loadMore,
     refetch,
   } = useCreatorDetail(isValidKey ? creatorKey : null)
+  const {
+    data: teamChemistry,
+    isError: teamChemistryError,
+    refetch: refetchTeamChemistry,
+  } = useCreatorTeamChemistry(isValidKey)
 
   if (!isValidKey) {
     return (
@@ -394,6 +401,25 @@ export default function CreatorDetailPage() {
             ))}
           </ul>
         </section>
+      )}
+
+      {teamChemistry && (
+        <CreatorTeamChemistrySection data={teamChemistry} forCreatorKey={creatorKey ?? null} />
+      )}
+      {teamChemistryError && (
+        <p role="alert" className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+          Could not load team chemistry for this creator. Your ratings are unchanged.
+          <button
+            type="button"
+            onClick={() => {
+              void refetchTeamChemistry()
+            }}
+            className="ml-2 underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            style={{ color: 'var(--theme-text-primary)' }}
+          >
+            Try again
+          </button>
+        </p>
       )}
 
       {isError && (
