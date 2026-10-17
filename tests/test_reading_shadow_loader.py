@@ -160,7 +160,8 @@ async def test_cross_owner_references_are_diagnostic_without_foreign_payload(
     foreign = await _owner(async_db, "private_foreign_username")
     _, own_issues = await _series(async_db, user, "Own", 1)
     _, foreign_issues = await _series(async_db, foreign, "private_foreign_title", 1)
-    edge = Dependency(source_issue_id=foreign_issues[0].id, target_issue_id=own_issues[0].id)
+    edge = Dependency(source_issue_id=foreign_issues[0].id, target_issue_id=own_issues[0].id,
+                      origin="reader", classification="A", provenance="Invalid cross-owner edge")
     async_db.add(edge)
     await async_db.commit()
     inputs = await load_shadow_inputs(async_db, user.id)
@@ -170,6 +171,24 @@ async def test_cross_owner_references_are_diagnostic_without_foreign_payload(
     assert result["valid"] is False
     assert "private_foreign" not in str(result)
     assert "unresolved_reference" in str(result)
+
+
+async def test_cross_owner_historical_edge_cannot_block_a_readers_frontier(
+    async_db: AsyncSession,
+) -> None:
+    """A stale cross-account dependency is neither canonical nor a validation error."""
+    user = await _owner(async_db, "historical_own")
+    foreign = await _owner(async_db, "historical_foreign")
+    own_thread, own_issues = await _series(async_db, user, "Own list", 1)
+    _, foreign_issues = await _series(async_db, foreign, "Foreign old copy", 1)
+    async_db.add(Dependency(source_issue_id=foreign_issues[0].id,
+                            target_issue_id=own_issues[0].id, note="Historical copy"))
+    await async_db.commit()
+    inputs = await load_shadow_inputs(async_db, user.id)
+    assert inputs.prerequisites == ()
+    assert not inputs.unresolved
+    rows = compare_reading_eligibility(inputs)["threads"]
+    assert any(row["thread_id"] == own_thread.id and row["proposed_eligible"] for row in rows)
 
 
 async def test_report_transaction_is_read_only_and_leaves_state_unchanged(
