@@ -465,7 +465,7 @@ async def rate_thread(
             seen_ids.add(ch["id"])
             deduped_issue_changes.append(ch)
     issue_changes = deduped_issue_changes
-    created_issues: list[Issue] = []
+    created_issues_list: list[Issue] = []
     current_die = await get_current_die_for_session(current_session, db)
     pre_session_state = {
         "start_die": current_session.start_die,
@@ -508,7 +508,7 @@ async def rate_thread(
         current_issue = await find_in_thread_by_number(
             db, thread.id, issue_number
         )
-        created_issues = []
+        created_issues_list = []
 
         if not current_issue:
             try:
@@ -530,10 +530,10 @@ async def rate_thread(
                         position=issue_position,
                     )
                     db.add(issue)
-                    created_issues.append(issue)
+                    created_issues_list.append(issue)
                 await db.flush()
                 current_issue = next(
-                    (i for i in created_issues if i.issue_number == issue_number),
+                    (i for i in created_issues_list if i.issue_number == issue_number),
                     None,
                 )
                 if not current_issue:
@@ -558,8 +558,8 @@ async def rate_thread(
                     detail="Migration failed.",
                 ) from error
 
-        if created_issues:
-            all_issues = sorted(created_issues, key=lambda i: i.position)
+        if created_issues_list:
+            all_issues = sorted(created_issues_list, key=lambda i: i.position)
         else:
             all_issues = await issues_ordered(db, thread.id)
         for issue in all_issues:
@@ -772,7 +772,7 @@ async def rate_thread(
         blocked_changes=blocked_changes,
         pre_session_state=pre_session_state,
         issue_changes=issue_changes,
-        created_issues=[_issue_preimage(i) for i in created_issues] if created_issues else None,
+        created_issues=[_issue_preimage(i) for i in created_issues_list] if created_issues_list else None,
         deleted_issues=None,
     )
     response_eligibility = await get_execution_eligibility(db, user_id)
