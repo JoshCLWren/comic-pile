@@ -5,7 +5,8 @@
 change reading progress. A requirement has no owning list: list placement, reordering,
 skipping and deletion do not rewrite its endpoints.
 
-- `GET /` returns both-endpoint-owned requirements and read-only provenance.
+- `GET /` returns the reader's **active authored prerequisites** only. Historical
+  and converted rows remain stored for audit, but do not appear as current blockers.
 - `POST /` accepts `source_issue_id`, `target_issue_id` and an optional `note`.
   Identical already-authored pairs are idempotent. A deliberate POST of a historical
   pair validates the canonical graph, then adopts that same row as `origin=reader`,
