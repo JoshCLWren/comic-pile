@@ -35,6 +35,7 @@ from app.services.session_response import build_ladder_path, build_session_event
 from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
 from app.services.session_history_projection import project_session_history_events
+from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.thread_issue_stats import load_issue_stats
 from app.services.correction_examples import generate_correction_examples
 from comic_pile.reading_session import get_current_die, get_or_create, is_active
@@ -135,6 +136,9 @@ async def get_session_with_thread_safe(
             issues_remaining = await pending_thread.get_issues_remaining(db)
             issue_id, issue_number = await _fetch_thread_issue_metadata(pending_thread, db)
             tags = []
+            tags = await TagInheritanceService(db).get_threads_direct_tags(
+                session.user_id, [pending_thread.id]
+            )
             return session, ActiveThreadInfo(
                 id=pending_thread.id,
                 title=pending_thread.title,
@@ -148,7 +152,7 @@ async def get_session_with_thread_safe(
                 issue_number=issue_number,
                 next_issue_id=issue_id,
                 next_issue_number=issue_number,
-                tags=tags.get(pending_thread.id, []),
+                tags=tags
             )
         return session, None
 
@@ -158,6 +162,9 @@ async def get_session_with_thread_safe(
             issues_remaining = await thread.get_issues_remaining(db)
             issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
             tags = []
+            tags = await TagInheritanceService(db).get_threads_direct_tags(
+                session.user_id, [thread.id]
+            )
             return session, ActiveThreadInfo(
                 id=thread.id,
                 title=thread.title,
@@ -171,7 +178,7 @@ async def get_session_with_thread_safe(
                 issue_number=issue_number,
                 next_issue_id=issue_id,
                 next_issue_number=issue_number,
-                tags=tags.get(thread.id, []),
+                tags=tags
             )
 
     # When a thread is just completed by rating and no pending thread is set,
@@ -239,6 +246,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
     issues_remaining = await thread.get_issues_remaining(db)
     issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
         tags = []
+    tags = await TagInheritanceService(db).get_threads_direct_tags(user_id, [thread.id])
     return ActiveThreadInfo(
         id=thread.id,
         title=thread.title,
@@ -528,6 +536,9 @@ async def list_sessions(
         threads_by_id = {t.id: t for t in threads_result.scalars().all()}
         threads = list(threads_by_id.values())
         unread_counts, issue_numbers = await load_issue_stats(threads, db)
+        tags_map = await TagInheritanceService(db).get_threads_direct_tags(
+            current_user.id, list(thread_ids)
+        )
 
         for sid in session_ids:
             roll_event = projection.latest_roll_by_session.get(sid)
