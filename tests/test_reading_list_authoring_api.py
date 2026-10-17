@@ -120,7 +120,8 @@ async def test_gate_removal_preserves_stable_prerequisite_and_read_state(
 ) -> None:
     """List edits and deletion cannot rewrite stable source/target requirements."""
     a, b, c = await _members(async_db)
-    requirement = Dependency(source_issue_id=a, target_issue_id=c, note="reader-authored")
+    requirement = Dependency(source_issue_id=a, target_issue_id=c, note="reader-authored",
+                             origin="reader", classification="A", provenance="Explicit reader prerequisite")
     async_db.add(requirement)
     await async_db.commit()
     requirement_id = requirement.id
@@ -184,7 +185,8 @@ async def test_exclusion_stranding_requirement_fails_closed(
     """Authoring cannot silently hide an excluded prerequisite source."""
     a, b, _ = await _members(async_db)
     user = await get_or_create_user_async(async_db)
-    async_db.add(Dependency(source_issue_id=a, target_issue_id=b))
+    async_db.add(Dependency(source_issue_id=a, target_issue_id=b,
+                            origin="reader", classification="A", provenance="Explicit reader prerequisite"))
     issue = await async_db.get(Issue, a)
     assert issue is not None
     if target == "issue":
@@ -298,7 +300,8 @@ async def test_series_and_stable_prerequisite_cycles_reject_atomically(
 ) -> None:
     """A failed mode edit restores metadata and cannot reverse a stable requirement."""
     a, b, c = await _members(async_db)
-    async_db.add(Dependency(source_issue_id=a, target_issue_id=c, note="explicit"))
+    async_db.add(Dependency(source_issue_id=a, target_issue_id=c, note="explicit",
+                            origin="reader", classification="A", provenance="Explicit reader prerequisite"))
     await async_db.commit()
     created = await auth_client.post(
         "/api/v1/custom-cbls",
@@ -319,14 +322,14 @@ async def test_series_and_stable_prerequisite_cycles_reject_atomically(
     )
     assert rejected.status_code == 422, rejected.text
     assert "prerequisite" in rejected.json()["detail"]["message"]
-    assert "historical classification unknown" in rejected.json()["detail"]["message"]
+    assert "Explicit reader prerequisite" in rejected.json()["detail"]["message"]
     requirement_edge = next(
         edge
         for edge in rejected.json()["detail"]["path"]
         if edge["prerequisite_origin"] is not None
     )
-    assert requirement_edge["prerequisite_origin"] == "converted"
-    assert requirement_edge["provenance"] == ["historical classification unknown", "explicit"]
+    assert requirement_edge["prerequisite_origin"] == "reader"
+    assert requirement_edge["provenance"] == ["Explicit reader prerequisite", "explicit"]
     current = (await auth_client.get(url)).json()
     assert current["name"] == "Original" and current["mode"] == "loose"
 

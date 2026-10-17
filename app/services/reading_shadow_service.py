@@ -89,12 +89,15 @@ def compare_reading_eligibility(
     statuses = {thread.thread_id: thread.status for thread in inputs.threads}
     active = {thread.thread_id for thread in inputs.threads if thread.status == "active"}
     unread = {issue.issue_id for issue in inputs.issues if issue.status != "read"}
-    targets = {
-        row.target_issue_id
-        for row in inputs.prerequisites
-        if row.source_issue_id in unread and row.target_issue_id in by_id
-        and row.prerequisite_id not in inputs.legacy_note_ignored_prerequisite_ids
-    }
+    targets = (
+        inputs.legacy_enforced_targets
+        if inputs.legacy_enforced_targets is not None
+        else frozenset(
+            row.target_issue_id for row in inputs.prerequisites
+            if row.source_issue_id in unread and row.target_issue_id in by_id
+            and row.prerequisite_id not in inputs.legacy_note_ignored_prerequisite_ids
+        )
+    )
     rows: list[dict[str, object]] = []
     for stored in sorted(inputs.stored, key=lambda row: row.thread_id):
         frontier = frontiers.get(stored.thread_id)

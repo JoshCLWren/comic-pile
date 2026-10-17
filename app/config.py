@@ -658,7 +658,6 @@ class ReadingExecutionSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OPTION_E_", extra="ignore")
     enabled: bool = False
     approved_preview: str = ""
-    reader_ids: frozenset[int] = frozenset()
 
     @model_validator(mode="after")
     def require_approved_preview(self) -> Self:
@@ -667,8 +666,6 @@ class ReadingExecutionSettings(BaseSettings):
             raise ValueError(
                 "Option E requires a fresh owner-approved production preview reference"
             )
-        if self.enabled and (not self.reader_ids or any(value < 1 for value in self.reader_ids)):
-            raise ValueError("Option E requires explicit approved reader IDs")
         return self
 
 

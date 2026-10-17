@@ -74,10 +74,10 @@ async def test_idempotent_fanout_survives_list_delete(
     assert len((await auth_client.get("/api/v1/prerequisites/")).json()) == 1
 
 
-async def test_historical_unknown_is_not_reader_approval(
+async def test_explicit_reader_post_adopts_existing_historical_pair(
     auth_client, async_db, prerequisite_issues
 ):
-    """Duplicate creation cannot overwrite legacy provenance or allow retirement."""
+    """Historical evidence is inert until the reader deliberately authors the pair."""
     source, target, _ = prerequisite_issues
     row = Dependency(source_issue_id=source.id, target_issue_id=target.id, note="legacy evidence")
     async_db.add(row)
@@ -88,16 +88,16 @@ async def test_historical_unknown_is_not_reader_approval(
         json={"source_issue_id": source.id, "target_issue_id": target.id, "note": "replacement"},
     )
     assert result.status_code == 201
-    assert result.json()["origin"] is None
-    assert result.json()["classification"] is None
-    assert result.json()["note"] == "legacy evidence"
-    for response in (
-        await auth_client.patch(f"/api/v1/prerequisites/{row_id}", json={"note": "changed"}),
-        await auth_client.delete(f"/api/v1/prerequisites/{row_id}"),
-    ):
-        assert response.status_code == 409
+    assert result.json()["id"] == row_id
+    assert result.json()["origin"] == "reader"
+    assert result.json()["classification"] == "A"
+    assert result.json()["note"] == "replacement"
+    edited = await auth_client.patch(f"/api/v1/prerequisites/{row_id}", json={"note": "changed"})
+    assert edited.status_code == 200
     await async_db.refresh(row)
-    assert row.note == "legacy evidence"
+    assert row.note == "changed"
+    deleted = await auth_client.delete(f"/api/v1/prerequisites/{row_id}")
+    assert deleted.status_code == 204
 
 
 async def test_invalid_pairs_and_cycles_fail_closed(auth_client, async_db, prerequisite_issues):
@@ -172,7 +172,7 @@ async def test_cycle_includes_strict_list_and_read_issues(
 
 
 async def test_converted_provenance_is_read_only(auth_client, async_db, prerequisite_issues):
-    """Converted unknown evidence stays visible and cannot be silently approved."""
+    """Archived converted evidence is not displayed as an active prerequisite."""
     source, target, _ = prerequisite_issues
     row = Dependency(
         source_issue_id=source.id,
@@ -184,9 +184,10 @@ async def test_converted_provenance_is_read_only(auth_client, async_db, prerequi
     )
     async_db.add(row)
     await async_db.commit()
-    result = (await auth_client.get("/api/v1/prerequisites/")).json()[0]
-    assert result["classification"] == "D"
-    assert result["provenance"] == "archive dependency 44; intent unknown"
+    assert (await auth_client.get("/api/v1/prerequisites/")).json() == []
+    await async_db.refresh(row)
+    assert row.classification == "D"
+    assert row.provenance == "archive dependency 44; intent unknown"
     response = await auth_client.delete(f"/api/v1/prerequisites/{row.id}")
     assert response.status_code == 409
     forged = await auth_client.post(
