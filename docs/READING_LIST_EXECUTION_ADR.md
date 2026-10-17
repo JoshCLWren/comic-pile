@@ -117,3 +117,7 @@ On 2026-10-13 production, the known baseline included 18 Custom CBLs with 1,055 
 **Rejected:** Retaining the existing Reading Plan graph/compilation, replacing its compiler with another edge compiler, inferring hard annual/crossover rules from labels, rebuilding all reader sequences from external CBLs, and treating an unchanged Roll state at technical cutover as success.
 
 **Explicitly out of scope:** Adding further gate types, a graph database, a general workflow engine, or speculative schema layers.
+
+### Read now selection acceptance
+
+App-wide activation must exercise Queue **Read & Rate** (the `set-pending` API), not only dice Roll and override. Manual selection records the exact canonical Issue ID and number in its roll event, regardless of cached Thread frontier or blocked flags. Rating must consume that same offered Issue; undo restores its unread state. A successful selection response alone is insufficient acceptance evidence. Session skips and durable snooze backoff remain enforced before offering a manual selection; an explicit current-session unsnooze is recorded durably. Set current issue → rate and prerequisite recovery Read now → rate must also bind the exact canonical Issue, without consulting retired frontier flags or generated dependencies.

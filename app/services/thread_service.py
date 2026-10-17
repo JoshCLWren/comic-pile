@@ -47,6 +47,7 @@ from app.services.ownership_guard import (
     require_frontier_in_thread,
     require_session_pending_consistent,
 )
+from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
@@ -1046,9 +1047,7 @@ async def reactivate_completed_thread(
     return await thread_to_response(thread, db)
 
 
-async def set_pending_thread(
-    db: AsyncSession, user_id: int, thread_id: int
-) -> RollResponse:
+async def set_pending_thread(db: AsyncSession, user_id: int, thread_id: int) -> RollResponse:
     """Set a thread as pending for rating (manual selection).
 
     Manual selection sets the pending pointer directly; no random roll is
@@ -1067,12 +1066,16 @@ async def set_pending_thread(
         NotFoundError: When the thread does not exist for this user.
         InvalidRequestError: When the thread is not active, blocked, or has no issues left.
     """
-    thread = await _require_owned_thread(db, user_id, thread_id)
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    eligibility = await get_execution_eligibility(db, user_id)
 
     if thread.status != "active":
         raise InvalidRequestError(f"Thread {thread_id} is not active")
 
-    if thread.is_blocked:
+    if eligibility is not None and thread_id not in eligibility.candidate_ids():
+        raise InvalidRequestError(f"Thread {thread_id} has no available issue")
+
+    if eligibility is None and thread.is_blocked:
         dependencies = await get_blocking_explanations(thread_id, user_id, db)
         reason = ""
         if dependencies:
@@ -1090,7 +1093,11 @@ async def set_pending_thread(
 
     thread_issue_id = None
     thread_issue_number = None
-    if thread.uses_issue_tracking() and thread_next_unread_issue_id:
+    if eligibility is not None:
+        thread_issue_id = eligibility.threads[thread_id].next_issue_id
+        thread_issue_number = eligibility.issue_numbers.get(thread_issue_id)
+        thread_issues = eligibility.unread_counts.get(thread_id, 0)
+    elif thread.uses_issue_tracking() and thread_next_unread_issue_id:
         next_issue = await issue_repository.get_issue(db, thread_next_unread_issue_id)
         if next_issue:
             thread_issue_id = next_issue.id
@@ -1102,6 +1109,20 @@ async def set_pending_thread(
     current_session = await get_or_create(db, user_id=user_id)
     current_session_id = current_session.id
     current_die = await get_current_die(current_session_id, db)
+
+    if eligibility is not None:
+        # Read now explicitly clears a current-session snooze. Record that
+        # decision so durable backoff and rating see the same unsnooze.
+        if thread_id in (current_session.snoozed_thread_ids or []):
+            db.add(Event(type="unsnooze", session_id=current_session_id, thread_id=thread_id))
+            await db.flush()
+        excluded = await derive_effective_roll_excluded_thread_ids(
+            db,
+            user_id,
+            session_skipped_ids=current_session.skipped_thread_ids,
+        )
+        if thread_id in excluded:
+            raise InvalidRequestError(f"Thread {thread_id} is excluded from this reading session")
 
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
@@ -1117,11 +1138,16 @@ async def set_pending_thread(
         die=current_die,
         result=result,
         selection_method="manual",
+        issue_id=thread_issue_id,
+        issue_number=thread_issue_number,
     )
     db.add(event)
 
     current_session.pending_thread_id = thread_id_int
     current_session.pending_thread_updated_at = datetime.now(UTC)
+
+    if eligibility is not None:
+        current_session.pending_issue_id = thread_issue_id
 
     # A manual selection retargets the whole pending pair: a pending issue
     # pinned to a different thread is superseded, never carried over, so the
@@ -1364,13 +1390,19 @@ async def set_current_issue(
         InvalidRequestError: When the thread is not active or does not use
             issue tracking.
     """
-    thread = await _require_owned_thread(db, user_id, thread_id)
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    eligibility = await get_execution_eligibility(db, user_id)
 
     if thread.status != "active":
         raise InvalidRequestError(f"Thread {thread_id} is not active")
 
-    if not thread.uses_issue_tracking():
+    if eligibility is None and not thread.uses_issue_tracking():
         raise InvalidRequestError(f"Thread {thread_id} does not use issue tracking")
+
+    # Session creation/initialization may commit. Resolve it before changing
+    # Issue statuses so a later unavailable-selection rejection stays atomic.
+    current_session = await get_or_create(db, user_id=user_id)
+    await db.refresh(thread)
 
     target_number = issue_number.strip()
 
@@ -1415,14 +1447,20 @@ async def set_current_issue(
     thread_title = thread.title
     thread_format = normalize_format_value(thread.format)
 
-    current_session = await get_or_create(db, user_id=user_id)
     current_session.pending_thread_id = thread_id
     current_session.pending_issue_id = target_issue_id
     current_session.pending_thread_updated_at = now
 
     await require_session_pending_consistent(db, current_session)
 
-    await db.commit()
+    if eligibility is None:
+        await db.commit()
+    else:
+        await db.flush()
+        updated = await get_execution_eligibility(db, user_id)
+        if updated is None or updated.threads[thread_id].next_issue_id != target_issue_id:
+            raise InvalidRequestError("The corrected issue is not available in the reading order")
+        await set_pending_thread(db, user_id, thread_id)
 
     return SetCurrentIssueResponse(
         thread_id=thread_id,

@@ -42,7 +42,11 @@ test.describe('Issue #2153: Queue Read Now handoff', () => {
         response.url().includes('/set-pending') && response.request().method() === 'POST',
     )
     await threadItem.getByRole('button', { name: 'Read & Rate', exact: true }).click()
-    expect((await setPendingResponse).ok()).toBeTruthy()
+    const selectedResponse = await setPendingResponse
+    expect(selectedResponse.ok()).toBeTruthy()
+    // SAFETY: the successful RollResponse exposes issue_id; its numeric type is asserted below.
+    const selected = await selectedResponse.json() as { issue_id: number }
+    expect(selected.issue_id).toEqual(expect.any(Number))
 
     // The handoff must land on Roll in rating view for the chosen thread.
     await expect(page).toHaveURL(/\/$/)
@@ -51,6 +55,19 @@ test.describe('Issue #2153: Queue Read Now handoff', () => {
     await expect(heading).toContainText(title)
     await expect(heading).toContainText('#1')
     await expect(page.locator(SELECTORS.roll.mainDie)).toHaveCount(0)
+
+    await page.locator(SELECTORS.rate.ratingInput).fill('4')
+    const rateResponse = page.waitForResponse(
+      (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
+    )
+    await page.getByTestId('save-and-continue').click()
+    const rated = await rateResponse
+    expect(rated.ok(), await rated.text()).toBeTruthy()
+    // SAFETY: a successful rating returns roll_reconciliation; the exact issue is asserted below.
+    const result = await rated.json() as {
+      roll_reconciliation: { last_read: { issue_id: number } }
+    }
+    expect(result.roll_reconciliation.last_read.issue_id).toBe(selected.issue_id)
   })
 
   test('Read Now on a thread the server rejects stays on Queue with an actionable error', async ({
