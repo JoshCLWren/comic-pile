@@ -192,7 +192,7 @@ def test_select_keepers_keeps_live_alias_even_when_not_ready() -> None:
     keepers = select_keepers("dpl_live", [live, ready, older])
 
     assert "dpl_live" in keepers
-    assert keepers == {"dpl_live"}
+    assert keepers == {"dpl_live", "dpl_ready", "dpl_old"}
 
 
 def test_select_keepers_keeps_only_live_on_first_production_deploy() -> None:
@@ -388,3 +388,43 @@ def test_deployment_docs_describe_keep_one_live_alias_policy() -> None:
     assert "no rollback candidate" in docs
     assert "scripts/prune_vercel_deployments.py" in docs
     assert "--fail-soft" in docs
+
+
+@pytest.mark.parametrize("state", ["INITIALIZING", "QUEUED", "BUILDING", "DEPLOYING"])
+def test_prune_preserves_serving_ready_production_during_rollout(state: str) -> None:
+    """The incoming target can precede the actual public-alias handoff."""
+    client = FakeVercel(
+        {"id": "prj_expected", "name": "comic-pile", "targets": {"production": "dpl_incoming"}},
+        [_deployment("dpl_serving", created=100), _deployment("dpl_incoming", created=200, state=state)],
+    )
+    result = run_prune(client, project_id="prj_expected", project_name="comic-pile", dry_run=False, log=lambda _: None)
+    assert client.deleted == []
+    assert set(result.kept) == {"dpl_serving", "dpl_incoming"}
+
+
+def test_prune_refreshes_protection_when_rollout_starts_after_planning() -> None:
+    """A stale candidate list must not delete a newly serving production target."""
+    class RolloutVercel(FakeVercel):
+        project_reads = 0
+
+        def fetch_project(self) -> Mapping[str, object]:
+            self.project_reads += 1
+            if self.project_reads > 1:
+                self.project = {
+                    "id": "prj_expected", "name": "comic-pile",
+                    "targets": {"production": "dpl_incoming"},
+                }
+                self.deployments = [
+                    _deployment("dpl_serving", created=100),
+                    _deployment("dpl_incoming", created=300, state="BUILDING"),
+                ]
+            return self.project
+
+    client = RolloutVercel(
+        {"id": "prj_expected", "name": "comic-pile", "targets": {"production": "dpl_previous"}},
+        [_deployment("dpl_serving", created=100), _deployment("dpl_previous", created=200)],
+    )
+    result = run_prune(client, project_id="prj_expected", project_name="comic-pile", dry_run=False, log=lambda _: None)
+    assert client.deleted == []
+    assert "dpl_serving" in result.kept
+    assert result.live_id == "dpl_incoming"
