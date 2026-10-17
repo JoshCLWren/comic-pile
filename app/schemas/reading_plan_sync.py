@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -79,3 +80,49 @@ class SyncStatusResponse(BaseModel):
     total_sources: int
     enabled_sources: int
     sources: list[SyncStatusSource]
+
+
+class ScheduledUserFailure(BaseModel):
+    """One owner whose sync failed during a scheduled run."""
+
+    user_id: int
+    error: str
+
+
+class ScheduledSyncReport(BaseModel):
+    """Aggregate, secret-free metrics for one scheduled release-sync run."""
+
+    status: Literal["completed", "already_running"]
+    as_of: datetime
+    users_total: int
+    users_processed: int
+    users_failed: int
+    users_deferred: int
+    truncated: bool
+    duration_ms: int
+    total_sources: int
+    enabled_sources: int
+    checked_sources: int
+    successful_sources: int
+    failed_sources: int
+    issues_checked: int
+    created_issues: int
+    reused_issues: int
+    future_skips: int
+    unknown_date_skips: int
+    conflicts: int
+    issue_failures: int
+    excluded_sources: int
+    skipped_sources: int
+    excluded_issues: int
+    failures: list[SourceSyncFailure]
+    user_failures: list[ScheduledUserFailure]
+
+
+class ScheduledSyncResponse(BaseModel):
+    """Response of one machine-triggered scheduled release-sync run."""
+
+    success: bool
+    status: Literal["completed", "already_running"]
+    message: str
+    result: ScheduledSyncReport

@@ -25,11 +25,14 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
@@ -45,6 +48,17 @@ logger = logging.getLogger(__name__)
 COMICVINE_PROVIDER = "comicvine"
 
 _UNKNOWN_VOLUME_ID = -1
+
+#: Transaction-scoped advisory-lock key for scheduled (Vercel Cron) runs.
+#: A fixed global key keeps overlapping cron invocations from double-adopting
+#: issues even when Vercel delivers two requests to independent instances.
+RELEASE_SYNC_CRON_LOCK_KEY = 1_065_200_001
+
+#: Default wall-clock budget for one scheduled run. The serverless function must
+#: answer within its platform limit, so the runner stops starting new owners at
+#: this boundary and reports the remainder as deferred for the next daily run.
+DEFAULT_CRON_MAX_DURATION_SECONDS = 50.0
+
 
 def build_comicvine_client() -> ComicVineClient:
     """Build a ComicVine client from the environment configuration.
@@ -210,6 +224,265 @@ class SyncReport:
     def success(self) -> bool:
         """Report whether the run completed without any source or issue failure."""
         return self.failed_sources == 0 and self.issue_failures == 0
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledUserFailure:
+    """One owner whose sync could not be completed during a scheduled run."""
+
+    user_id: int
+    error: str
+
+
+@dataclass(slots=True)
+class ScheduledSyncReport:
+    """Structured result of one scheduled (Vercel Cron) release-sync run.
+
+    ``status`` is machine-readable. ``already_running`` is a successful no-op:
+    another invocation holds the durable advisory lock, so this request did no
+    work and must not be treated as an error by the caller.
+    """
+
+    status: Literal["completed", "already_running"]
+    as_of: datetime
+    users_total: int = 0
+    users_processed: int = 0
+    users_failed: int = 0
+    users_deferred: int = 0
+    truncated: bool = False
+    duration_ms: int = 0
+    total_sources: int = 0
+    enabled_sources: int = 0
+    checked_sources: int = 0
+    successful_sources: int = 0
+    failed_sources: int = 0
+    issues_checked: int = 0
+    created_issues: int = 0
+    reused_issues: int = 0
+    future_skips: int = 0
+    unknown_date_skips: int = 0
+    conflicts: int = 0
+    issue_failures: int = 0
+    excluded_sources: int = 0
+    skipped_sources: int = 0
+    excluded_issues: int = 0
+    failures: list[SourceFailure] = field(default_factory=list)
+    user_failures: list[ScheduledUserFailure] = field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        """Report whether the scheduled run completed without failures.
+
+        An ``already_running`` no-op is successful: the overlapping invocation
+        is already doing the work. A truncated run is not successful because
+        some owners were not evaluated.
+        """
+        if self.status == "already_running":
+            return True
+        return (
+            not self.truncated
+            and self.users_failed == 0
+            and self.failed_sources == 0
+            and self.issue_failures == 0
+        )
+
+
+def _elapsed_ms(started_at: float) -> int:
+    """Return whole milliseconds elapsed since a ``time.monotonic`` reading.
+
+    Args:
+        started_at: Monotonic start timestamp.
+
+    Returns:
+        Elapsed milliseconds, never negative.
+    """
+    return max(0, int((time.monotonic() - started_at) * 1000))
+
+
+def _merge_user_report(report: ScheduledSyncReport, user_report: SyncReport) -> None:
+    """Fold one owner's sync report into the scheduled run counters.
+
+    Args:
+        report: Mutable scheduled-run report.
+        user_report: Per-owner report from :func:`sync_released_issues`.
+    """
+    report.total_sources += user_report.total_sources
+    report.enabled_sources += user_report.enabled_sources
+    report.checked_sources += user_report.checked_sources
+    report.successful_sources += user_report.successful_sources
+    report.failed_sources += user_report.failed_sources
+    report.issues_checked += user_report.issues_checked
+    report.created_issues += user_report.created_issues
+    report.reused_issues += user_report.reused_issues
+    report.future_skips += user_report.future_skips
+    report.unknown_date_skips += user_report.unknown_date_skips
+    report.conflicts += user_report.conflicts
+    report.issue_failures += user_report.issue_failures
+    report.excluded_sources += user_report.excluded_sources
+    report.skipped_sources += user_report.skipped_sources
+    report.excluded_issues += user_report.excluded_issues
+    report.failures.extend(user_report.failures)
+
+
+async def run_scheduled_release_sync(
+    db: AsyncSession,
+    *,
+    as_of: datetime | None = None,
+    refresh: bool = True,
+    client: ComicVineClient | None = None,
+    client_factory: Callable[[], ComicVineClient] | None = None,
+    now: Callable[[], datetime] | None = None,
+    max_duration_seconds: float = DEFAULT_CRON_MAX_DURATION_SECONDS,
+) -> ScheduledSyncReport:
+    """Run release-source sync for every owner with enabled sources.
+
+    This is the scheduled (Vercel Cron) entry point. It owns no provider or
+    adoption logic: each owner is delegated to :func:`sync_released_issues`,
+    which already enforces per-owner collection exclusions, confirmed-volume
+    identity checks, deterministic release gating, and per-source failure
+    isolation.
+
+    Concurrency is coordinated with a transaction-scoped PostgreSQL advisory
+    lock so independent serverless instances cannot run the same scheduled sync
+    at once. When the lock is already held, the second invocation returns an
+    ``already_running`` no-op without touching provider or reader data.
+
+    One owner's unexpected failure is rolled back to its own savepoint and
+    recorded, so it cannot roll back work already completed for earlier owners.
+
+    Args:
+        db: Database session. The caller owns the transaction; this function
+            flushes writes but never commits.
+        as_of: Explicit UTC release boundary. Defaults to the current instant.
+        refresh: Force live provider requests instead of the provider cache.
+        client: Pre-built provider client shared across owners. Tests inject a
+            fake here.
+        client_factory: Builds the provider client when ``client`` is omitted.
+        now: Supplies the default boundary and ``last_synced_at`` instants so
+            tests stay deterministic.
+        max_duration_seconds: Wall-clock budget for starting new owners. A
+            non-positive value disables the budget.
+
+    Returns:
+        A :class:`ScheduledSyncReport` with machine-readable status and
+        aggregate counters.
+    """
+    started_at = time.monotonic()
+    clock = now or (lambda: datetime.now(UTC))
+    boundary = _as_aware_utc(as_of) if as_of is not None else clock()
+    report = ScheduledSyncReport(status="completed", as_of=boundary)
+
+    lock_acquired = bool(
+        await db.scalar(
+            text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
+            {"lock_key": RELEASE_SYNC_CRON_LOCK_KEY},
+        )
+    )
+    if not lock_acquired:
+        report.status = "already_running"
+        report.duration_ms = _elapsed_ms(started_at)
+        logger.info("release_sync_cron_already_running duration_ms=%s", report.duration_ms)
+        return report
+
+    user_ids = await repo.list_enabled_user_ids(db)
+    report.users_total = len(user_ids)
+
+    resolved_client = client
+    if resolved_client is None and user_ids:
+        factory = client_factory if client_factory is not None else build_comicvine_client
+        try:
+            resolved_client = factory()
+        except ValueError as error:
+            message = str(error)
+            logger.warning("release_sync_cron_client_unavailable error=%s", message)
+            report.users_failed = len(user_ids)
+            report.user_failures = [
+                ScheduledUserFailure(user_id=user_id, error=message)
+                for user_id in user_ids
+            ]
+            report.duration_ms = _elapsed_ms(started_at)
+            logger.info(
+                "release_sync_cron_completed status=%s users_total=%s users_processed=%s "
+                "users_failed=%s users_deferred=%s truncated=%s duration_ms=%s",
+                report.status,
+                report.users_total,
+                report.users_processed,
+                report.users_failed,
+                report.users_deferred,
+                report.truncated,
+                report.duration_ms,
+            )
+            return report
+
+    deadline = (
+        started_at + max_duration_seconds if max_duration_seconds > 0 else None
+    )
+
+    for index, user_id in enumerate(user_ids):
+        if deadline is not None and time.monotonic() >= deadline:
+            report.truncated = True
+            report.users_deferred = len(user_ids) - index
+            logger.warning(
+                "release_sync_cron_time_budget_exhausted deferred=%s duration_ms=%s",
+                report.users_deferred,
+                _elapsed_ms(started_at),
+            )
+            break
+        try:
+            async with db.begin_nested():
+                user_report = await sync_released_issues(
+                    db,
+                    user_id=user_id,
+                    as_of=boundary,
+                    refresh=refresh,
+                    client=resolved_client,
+                    now=clock,
+                )
+        except Exception as error:  # one owner must not abort the scheduled run
+            logger.warning(
+                "release_sync_cron_user_failed user_id=%s error=%s",
+                user_id,
+                error,
+            )
+            report.users_failed += 1
+            report.user_failures.append(
+                ScheduledUserFailure(
+                    user_id=user_id,
+                    error=f"User sync failed: {error}",
+                )
+            )
+            continue
+
+        report.users_processed += 1
+        _merge_user_report(report, user_report)
+
+    report.duration_ms = _elapsed_ms(started_at)
+    logger.info(
+        "release_sync_cron_completed status=%s users_total=%s users_processed=%s "
+        "users_failed=%s users_deferred=%s truncated=%s sources_checked=%s "
+        "sources_successful=%s sources_failed=%s created=%s reused=%s "
+        "future_skips=%s unknown_date_skips=%s conflicts=%s issue_failures=%s "
+        "excluded_sources=%s excluded_issues=%s duration_ms=%s",
+        report.status,
+        report.users_total,
+        report.users_processed,
+        report.users_failed,
+        report.users_deferred,
+        report.truncated,
+        report.checked_sources,
+        report.successful_sources,
+        report.failed_sources,
+        report.created_issues,
+        report.reused_issues,
+        report.future_skips,
+        report.unknown_date_skips,
+        report.conflicts,
+        report.issue_failures,
+        report.excluded_sources,
+        report.excluded_issues,
+        report.duration_ms,
+    )
+    return report
 
 
 def _issue_identity(row: dict[str, object]) -> str | None:
