@@ -1,7 +1,7 @@
 """Add durable thread creation idempotency receipts.
 
 Revision ID: c36640000001
-Revises: c36630000001
+Revises: c36690000001
 Create Date: 2026-10-16 00:00:00.000000
 
 Double-clicking Create Series sent two identical POSTs that each created a
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c36640000001"
-down_revision: str | Sequence[str] | None = "c36630000001"
+down_revision: str | Sequence[str] | None = "c36690000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

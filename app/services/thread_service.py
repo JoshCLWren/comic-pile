@@ -16,6 +16,11 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.reading_eligibility_service import (
+    get_execution_eligibility,
+    project_thread_responses,
+)
+
 from app.models import Event, Issue, Thread
 from app.models.thread import normalize_format_value
 from app.repositories import (
@@ -45,6 +50,10 @@ from app.services.errors import (
     InvalidRequestError,
     NotFoundError,
 )
+from app.services.ownership_guard import (
+    require_frontier_in_thread,
+    require_session_pending_consistent,
+)
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
@@ -55,7 +64,7 @@ from app.services.queue_pagination import (
     encode_queue_cursor,
     normalize_queue_search,
 )
-from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
+from app.services.thread_issue_stats import load_issue_stats
 from comic_pile.reading_session import get_current_die, get_or_create
 from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
 
@@ -160,8 +169,7 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
     Returns:
         One ThreadResponse per input thread, in input order.
     """
-    issue_map = await load_next_issue_numbers(threads, db)
-    remaining_map = await load_unread_counts(threads, db)
+    remaining_map, issue_map = await load_issue_stats(threads, db)
     return [
         await thread_to_response(
             thread,
@@ -268,11 +276,21 @@ async def list_stale_thread_responses(
     Returns:
         Responses for stale threads ordered by oldest activity first.
     """
+    from app.services.snooze_service import derive_cross_session_excluded_thread_ids
+
+    reading_session = await reading_session_repository.fetch_active_reading_session(db, user_id)
+    current_snoozed = reading_session.snoozed_thread_ids if reading_session is not None else []
+    derived = await derive_cross_session_excluded_thread_ids(db, user_id)
+    snoozed_ids = sorted(set(snoozed_ids or []) | set(current_snoozed or []) | derived)
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
+    eligibility = await get_execution_eligibility(db, user_id)
+    if eligibility is not None and reading_session is not None:
+        snoozed_ids = sorted(set(snoozed_ids) | set(reading_session.skipped_thread_ids or []))
+    eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
     threads = await thread_repository.fetch_stale_threads(
-        db, user_id, cutoff_date, snoozed_ids=snoozed_ids, page_size=page_size
+        db, user_id, cutoff_date, snoozed_ids=snoozed_ids, page_size=page_size, **eligibility_args
     )
-    return await threads_to_responses(threads, db)
+    return project_thread_responses(await threads_to_responses(threads, db), eligibility)
 
 
 async def list_queue_threads(
@@ -305,6 +323,8 @@ async def list_queue_threads(
     Raises:
         InvalidRequestError: When the page token is stale or malformed.
     """
+    eligibility = await get_execution_eligibility(db, user_id)
+    eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
     validated_sort: QueueSort = cast(QueueSort, sort)
     normalized_search = normalize_queue_search(search)
 
@@ -315,7 +335,12 @@ async def list_queue_threads(
     cursor = None
     if page_token:
         try:
-            cursor = decode_queue_cursor(page_token, sort=validated_sort, search=search)
+            cursor = decode_queue_cursor(
+                page_token,
+                sort=validated_sort,
+                search=search,
+                execution="option_e" if eligibility is not None else "legacy",
+            )
         except ValueError as exc:
             raise InvalidRequestError(str(exc)) from exc
 
@@ -326,6 +351,7 @@ async def list_queue_threads(
         sort=validated_sort,
         cursor=cursor,
         limit=page_size + 1,
+        **eligibility_args,
     )
 
     has_more = len(threads) > page_size
@@ -339,6 +365,8 @@ async def list_queue_threads(
     # read, and the one bounded tag read added by issue #3425.
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
+
+    thread_responses = project_thread_responses(thread_responses, eligibility)
 
     # One bounded tag read for the whole page (issue #3425) so Queue rows show
     # tags without a per-row query.
@@ -358,8 +386,9 @@ async def list_queue_threads(
         last = threads_to_return[-1]
         page_cursor = QueueCursor(
             sort=validated_sort,
+            execution="option_e" if eligibility is not None else "legacy",
             search=normalized_search,
-            values=build_cursor_values_from_row(validated_sort, last),
+            values=build_cursor_values_from_row(validated_sort, last, eligibility),
         )
         next_token = encode_queue_cursor(page_cursor)
 
@@ -802,11 +831,11 @@ async def update_thread(
     await db.commit()
     await db.refresh(thread)
 
-    # Pre-fetch statistics using the same batched maps as threads_to_responses,
-    # to avoid per-thread DB round-trips on the update path (issue #3442).
+    # Pre-fetch statistics with the same combined single-query loader as
+    # threads_to_responses, to avoid per-thread DB round-trips on the update
+    # path (issue #3442) and the second sequential stats query (issue #3463).
     if thread.uses_issue_tracking():
-        issues_remaining_map = await load_unread_counts([thread], db)
-        issue_number_map = await load_next_issue_numbers([thread], db)
+        issues_remaining_map, issue_number_map = await load_issue_stats([thread], db)
     else:
         issues_remaining_map = None
         issue_number_map = None
@@ -1084,6 +1113,16 @@ async def set_pending_thread(
     current_session.pending_thread_id = thread_id_int
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
+    # A manual selection retargets the whole pending pair: a pending issue
+    # pinned to a different thread is superseded, never carried over, so the
+    # pair always references one thread (issue #3225).
+    if current_session.pending_issue_id is not None:
+        stale_issue = await issue_repository.get_issue(db, current_session.pending_issue_id)
+        if stale_issue is None or stale_issue.thread_id != thread_id_int:
+            current_session.pending_issue_id = None
+
+    await require_session_pending_consistent(db, current_session)
+
     if thread_id_int in snoozed_ids:
         snoozed_ids.remove(thread_id_int)
         current_session.snoozed_thread_ids = snoozed_ids
@@ -1346,6 +1385,10 @@ async def set_current_issue(
                 issue.read_at = None
 
     thread.total_issues = len(all_issues)
+    # Defense in depth: the target was resolved inside this thread, and the
+    # guard plus fk_threads_frontier_same_thread reject a frontier pointing
+    # at any other thread — even one owned by the same reader (issue #3225).
+    await require_frontier_in_thread(db, thread_id, target_issue.id)
     thread.next_unread_issue_id = target_issue.id
     thread.reading_progress = "in_progress"
     thread.issues_remaining = await thread.get_issues_remaining(db)
@@ -1366,6 +1409,8 @@ async def set_current_issue(
     current_session.pending_thread_id = thread_id
     current_session.pending_issue_id = target_issue_id
     current_session.pending_thread_updated_at = now
+
+    await require_session_pending_consistent(db, current_session)
 
     await db.commit()
 

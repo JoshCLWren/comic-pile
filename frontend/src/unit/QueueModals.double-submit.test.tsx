@@ -8,6 +8,8 @@ import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE } from '../pages/QueuePage/types'
 import { useQueueModals } from '../pages/QueuePage/useQueueModals'
 import { createThreadsApi } from '../services/api-threads'
+import type { ThreadCreatePayload } from '../types'
+import { createTransportDouble } from './transportDouble'
 
 vi.mock('../components/Modal', () => ({
   default: ({
@@ -136,7 +138,7 @@ describe('Create Series double-submit guard (#3466)', () => {
     window.alert = vi.fn()
     let resolveCreate!: (value: { id: number }) => void
     const submitCreate = vi.fn(
-      () =>
+      (_payload: ThreadCreatePayload) =>
         new Promise<{ id: number }>((resolve) => {
           resolveCreate = resolve
         }),
@@ -155,8 +157,14 @@ describe('Create Series double-submit guard (#3466)', () => {
           onReactivated: vi.fn(async () => undefined),
           refetchSession: vi.fn(async () => undefined),
           submitCreate,
-          submitEdit: vi.fn(async () => ({ id: 1 }) as never),
-          submitReactivate: vi.fn(async () => ({ id: 1 }) as never),
+          // These write paths are not exercised by this test; typed stubs keep
+          // the hook signature satisfied without weakening the return type.
+          submitEdit: vi.fn(async () => {
+            throw new Error('submitEdit is not exercised by this test')
+          }),
+          submitReactivate: vi.fn(async () => {
+            throw new Error('submitReactivate is not exercised by this test')
+          }),
           isPendingCreate: false,
           isPendingEdit: false,
           showRollNudge: false,
@@ -178,7 +186,9 @@ describe('Create Series double-submit guard (#3466)', () => {
       })
     })
 
-    const fakeEvent = () => ({ preventDefault: vi.fn() }) as unknown as FormEvent
+    // SAFETY: handleCreateSubmit only calls event.preventDefault(); the stub
+    // satisfies the single member the handler reads.
+    const fakeEvent = () => ({ preventDefault: vi.fn() }) as never
     let first!: Promise<void>
     let second!: Promise<void>
     act(() => {
@@ -186,7 +196,7 @@ describe('Create Series double-submit guard (#3466)', () => {
       second = result.current.handleCreateSubmit(fakeEvent())
     })
     await waitFor(() => expect(submitCreate).toHaveBeenCalledTimes(1))
-    const key = (submitCreate.mock.calls[0][0] as { idempotency_key?: string }).idempotency_key
+    const key = submitCreate.mock.calls[0][0].idempotency_key
     expect(key).toBeTruthy()
 
     act(() => {
@@ -200,23 +210,19 @@ describe('Create Series double-submit guard (#3466)', () => {
   })
 
   it('sends the idempotency key as both body field and Idempotency-Key header', async () => {
-    const post = vi.fn(async () => ({ id: 1 }))
-    const client = {
-      get: vi.fn(),
-      delete: vi.fn(),
-      post,
-      put: vi.fn(),
-      patch: vi.fn(),
-    }
-    const api = createThreadsApi(client)
+    const transport = createTransportDouble()
+    const api = createThreadsApi(transport)
     await api.create({
       title: 'Saga',
       format: 'Comic',
       issues_remaining: 3,
       idempotency_key: 'key-3466-frontend',
     })
-    expect(post).toHaveBeenCalledTimes(1)
-    expect(post.mock.calls[0][1]).toMatchObject({ idempotency_key: 'key-3466-frontend' })
-    expect(post.mock.calls[0][2]).toMatchObject({ headers: { 'Idempotency-Key': 'key-3466-frontend' } })
+    expect(transport.post).toHaveBeenCalledTimes(1)
+    expect(transport.post).toHaveBeenCalledWith(
+      '/v1/threads/',
+      expect.objectContaining({ idempotency_key: 'key-3466-frontend' }),
+      expect.objectContaining({ headers: { 'Idempotency-Key': 'key-3466-frontend' } }),
+    )
   })
 })
