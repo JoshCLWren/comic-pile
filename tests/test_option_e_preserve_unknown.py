@@ -5,6 +5,7 @@ The planner must never assign invented reader authorship or remove a blocker.
 from __future__ import annotations
 
 import pytest
+from typing import Literal
 
 from app.services.reading_list_conversion_plan import (
     ConversionEvidence,
@@ -25,8 +26,8 @@ from scripts.plan_option_e_conversion import parse_intent
 
 def _fixture(
     *,
-    raw_origin: str | None = None,
-    raw_classification: str | None = None,
+    raw_origin: Literal["reader", "converted"] | None = None,
+    raw_classification: Literal["A", "B", "C", "D"] | None = None,
     raw_provenance: str | None = None,
     include_raw: bool = True,
 ):
@@ -109,7 +110,7 @@ def test_no_review_decision_still_refuses_unknown_history() -> None:
     ],
 )
 def test_preserve_unknown_rejects_known_or_missing_raw_evidence(
-    origin: str | None, classification: str | None, provenance: str | None, include_raw: bool
+    origin: Literal["reader", "converted"] | None, classification: Literal["A", "B", "C", "D"] | None, provenance: str | None, include_raw: bool
 ) -> None:
     snapshot, evidence = _fixture(
         raw_origin=origin, raw_classification=classification,
@@ -127,7 +128,7 @@ def test_preserve_unknown_rejects_known_or_missing_raw_evidence(
     [("A", None), (None, "invented"), ("C", "generated")],
 )
 def test_preserve_unknown_rejects_invented_metadata(
-    classification: str | None, provenance: str | None
+    classification: Literal["A", "B", "C", "D"] | None, provenance: str | None
 ) -> None:
     snapshot, evidence = _fixture()
     manifest = _plan(
