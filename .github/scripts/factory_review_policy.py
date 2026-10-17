@@ -56,6 +56,14 @@ AGENT_MODEL_REVIEW_RE = re.compile(
     r"verdict-(?P<verdict>approve) -->$"
 )
 CURSOR_AGENT_ID_RE = re.compile(r"\bbc-(?P<id>[0-9a-f]{8,})\b", re.IGNORECASE)
+MODEL_TRAILER_RE = re.compile(r"(?m)^Model:[ \t]*(\S+)[ \t]*$")
+# The single push identity every workflow step and numbered-worker wrapper
+# shares. A head whose commit is attributed here was advanced by trusted
+# automation rather than a foreign account.
+TRUSTED_AUTOMATION_LOGINS = frozenset({"github-actions[bot]"})
+# Documented fallback when an owner-authored head carries no ``Model:``
+# trailer: attribute the head to the human, never to a guessed model.
+HUMAN_AUTHOR_MODEL = "human"
 
 
 def classify_ci_reconciliation(
@@ -284,9 +292,11 @@ def head_contributor_provenance(
     only the workers recorded against ``head`` would let an earlier repairer
     approve a later head that still carries its own commits, which is the #2846
     defect one repair cycle later. ``provenance_complete`` reports whether a
-    controller-authored marker exists for this exact head; when one does not,
-    review independence must fail closed instead of assuming the apparent
-    reviewer never touched the head.
+    controller-authored contributor marker exists for this exact head; when one
+    does not, review independence must fail closed instead of assuming the
+    apparent reviewer never touched the head. A caller that also holds a
+    controller-authored exact-head author attestation composes that in; see
+    :func:`factory-review-controller.exact_head_provenance`.
     """
     exact = current_head_contributors(comments, pr=pr, head=head)
     contributors = recorded_pr_contributors(comments, pr=pr)
@@ -678,3 +688,84 @@ def head_has_cross_model_review(
             continue
         return True
     return False
+
+
+def model_trailer_models(message: str | None) -> set[str]:
+    """Return the distinct ``Model:`` trailer values in one commit message.
+
+    A commit may legitimately carry zero or one trailer. More than one distinct
+    value is ambiguous authorship and must fail closed rather than pick one.
+
+    Args:
+        message: Raw commit message text.
+
+    Returns:
+        Distinct trailer values, empty when none are present.
+
+    """
+    if not message:
+        return set()
+    return set(MODEL_TRAILER_RE.findall(message))
+
+
+def interactive_agent_token(owner_login: str) -> str:
+    """Return the marker agent token for one owner-attested interactive head.
+
+    Args:
+        owner_login: Repository owner login that opened the reconciled PR.
+
+    Returns:
+        Marker-safe agent token shared by every owner-attested head.
+
+    """
+    return marker_model_token(f"interactive-{owner_login}")
+
+
+def owner_attested_head_identity(
+    *,
+    pr_author_login: str | None,
+    owner_login: str,
+    commit_author_login: str | None,
+    commit_committer_login: str | None,
+    commit_message: str | None,
+    trusted_logins: Iterable[str] = TRUSTED_AUTOMATION_LOGINS,
+) -> tuple[str, str] | None:
+    """Attribute a wrapper-less head from owner PR authorship and commit evidence.
+
+    This is the explicit reconciliation rule for heads no numbered wrapper
+    recorded: a merge or rebase the owner pushed from a local worktree, or a
+    head advanced by trusted repository automation. Trust is anchored on the
+    pull request's verified GitHub author, which a worker cannot change, and the
+    head's own commit evidence:
+
+    - the PR author must be the repository owner;
+    - every commit identity GitHub reports must be the owner or trusted
+      automation, so a foreign account never inherits owner attribution;
+    - the author model is the head's single ``Model:`` trailer, or ``human``
+      when the trailer is absent (the documented fallback);
+    - conflicting, ambiguous, or forged identities fail closed with ``None``.
+
+    Args:
+        pr_author_login: Verified GitHub author of the pull request.
+        owner_login: Repository owner login.
+        commit_author_login: GitHub login attributed to the head commit author.
+        commit_committer_login: GitHub login attributed to the head committer.
+        commit_message: Full head commit message, which may carry a trailer.
+        trusted_logins: Push identities trusted for owner-authored heads.
+
+    Returns:
+        ``(model, agent)`` for the exact head, or ``None`` when provenance
+        cannot be established without fabrication.
+
+    """
+    if not pr_author_login or str(pr_author_login) != owner_login:
+        return None
+    permitted = {owner_login, *trusted_logins}
+    for identity in (commit_author_login, commit_committer_login):
+        if identity and identity not in permitted:
+            return None
+    models = model_trailer_models(commit_message)
+    if len(models) > 1:
+        return None
+    model = next(iter(models)) if models else HUMAN_AUTHOR_MODEL
+    return normalize_model_family(model), interactive_agent_token(owner_login)

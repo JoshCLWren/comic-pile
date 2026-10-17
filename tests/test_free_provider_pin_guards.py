@@ -192,15 +192,16 @@ def test_discovered_nvidia_410_retires_kimi_worker_77(validate) -> None:
 
 
 def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
-    """Workers 79-82 are Oct 11 OpenCode smokes that returned model text (PONG)."""
+    """Worker 79 retired with discovery; workers 80-82 keep their Oct 11 pins."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     by_worker = {row["worker"]: row for row in rows}
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["79"]["source"] == "opencode-free"
-    assert by_worker["79"]["model"] == "step-5-preview-free"
-    assert by_worker["79"]["minute"] == "30"
-    assert validate.opencode_model_is_free(by_worker["79"]["model"])
+    assert "79" not in by_worker
+    assert 79 in lock["retired_workers"]
+    assert "step-5-preview-free" in lock["retired_models"]
+    assert "step-5-preview-free" not in {row["model"] for row in rows}
     assert by_worker["80"]["source"] == "nvidia"
     assert by_worker["80"]["model"] == "z-ai/glm-5.3-flash"
     assert by_worker["80"]["minute"] == "40"

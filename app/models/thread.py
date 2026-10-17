@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     JSON,
@@ -60,7 +61,12 @@ class Thread(Base):
 
     __tablename__ = "threads"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # autoincrement=True keeps threads.id an implicit SERIAL/sequence under
+    # Base.metadata.create_all now that id also participates in the composite
+    # fk_threads_frontier_same_thread constraint: SQLAlchemy otherwise treats a
+    # primary key column with a foreign key as non-autoincrementing and omits
+    # it from INSERT, breaking every thread insert on schema-created databases.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     format: Mapped[str] = mapped_column(String(50), nullable=False)
     issues_remaining: Mapped[int] = mapped_column(Integer, default=0)
@@ -125,6 +131,25 @@ class Thread(Base):
             postgresql_where=text("status = 'completed'"),
         ),
         Index("ix_thread_catalog_series", "catalog_series_id"),
+        # Reader-ownership frontier enforcement (issue #3225): a thread's
+        # next_unread_issue_id must reference an issue of that exact thread —
+        # never another thread's issue, even one owned by the same reader.
+        # DEFERRABLE INITIALLY DEFERRED so same-transaction frontier
+        # recomputation (move pointer, then delete the old issue) commits
+        # atomically. NULL pointers pass. Cross-user edges stay
+        # application-enforced (see app/services/ownership_guard.py) because
+        # issues carry no user_id and tag targets are polymorphic.
+        # use_alter=True: issues already depends on threads, so the
+        # constraint is added after both tables exist.
+        ForeignKeyConstraint(
+            ["id", "next_unread_issue_id"],
+            ["issues.thread_id", "issues.id"],
+            name="fk_threads_frontier_same_thread",
+            ondelete="NO ACTION",
+            use_alter=True,
+            deferrable=True,
+            initially="DEFERRED",
+        ),
     )
 
     user: Mapped[User] = relationship("User", back_populates="threads", lazy="raise")

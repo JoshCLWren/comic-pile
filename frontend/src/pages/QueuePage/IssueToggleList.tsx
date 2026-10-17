@@ -56,6 +56,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId: number
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
+  onLoad?: () => void
   /** Injectable issue API; defaults to the production issuesApi. */
   issuesApi?: IssueToggleListApi
   /** Injectable dependency API; defaults to the production issueDependenciesApi. */
@@ -70,12 +71,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId,
   onOpenDependencies,
   onIssueChanged,
+  onLoad,
   issuesApi: issuesService = issuesApi,
   dependenciesApi = issueDependenciesApi,
   deferred = false,
 }, ref) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [addRange, setAddRange] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
@@ -309,9 +312,18 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     return true
   }, [enqueueIssueMutation, focusMoveControl, issues])
 
+  // Held in a ref so loadIssues keeps a stable identity: the load effect keys
+  // off loadIssues, so depending on onLoad directly would re-trigger a fetch
+  // whenever a caller passed an unmemoized callback.
+  const onLoadRef = useRef(onLoad)
+  useEffect(() => {
+    onLoadRef.current = onLoad
+  }, [onLoad])
+
   const loadIssues = useCallback(async () => {
     const loadGeneration = ++loadGenerationRef.current
     setIsLoading(true)
+    setLoadError(null)
 
     try {
       const nextIssues = await fetchAllIssues()
@@ -328,11 +340,15 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       }
 
       setDependencies(nextDependencies)
-    } catch {
-      // Non-critical
+    } catch (err: unknown) {
+      if (loadGeneration !== loadGenerationRef.current) {
+        return
+      }
+      setLoadError(getApiErrorDetail(err))
     } finally {
       if (loadGeneration === loadGenerationRef.current) {
         setIsLoading(false)
+        onLoadRef.current?.()
       }
     }
   }, [fetchAllIssues, fetchDependencies, syncOptimisticIssues])
@@ -465,7 +481,26 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     }
   }
 
-if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
+ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
+
+  if (loadError) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+        <p className="text-xs text-red-400">Could not load issues: {loadError}</p>
+        <button
+          type="button"
+          onClick={() => {
+            void loadIssues()
+          }}
+          className="min-h-[36px] md:min-h-[44px] rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+          data-testid="issue-load-retry"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   const visibleIssues = getVisibleIssues()
   const hasHiddenIssues = issues.length > 5 && !isExpanded && !isReorderMode
@@ -506,6 +541,9 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
         <p className="text-xs text-stone-500 italic">
           Showing {visibleIssues.length} of {issues.length} issues around your current position
         </p>
+      )}
+      {issues.length === 0 && (
+        <p className="text-xs text-stone-500">No issues yet. Add the first range below.</p>
       )}
       {isReorderMode ? (
         <div className="space-y-1 max-h-64 overflow-auto" data-testid="issue-reorder-list">

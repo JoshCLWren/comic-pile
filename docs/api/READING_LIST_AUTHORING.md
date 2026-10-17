@@ -58,12 +58,17 @@ old-client saves. These authoring fields do not activate Option E in Roll or Que
 compile list adjacency into Dependencies. Production conversion and activation remain separate,
 owner-approved operations under #3676.
 
-## Frontend rollout dependency
+## Frontend authoring flow
 
-#3668 owns the 409 preview/confirmation UI, strict-mode warning display, and actionable 422 cycle
-feedback in the existing list builder. Gate/mode authoring controls must not be exposed to readers
-until that flow is implemented and verified. #3676 production conversion/activation must also wait
-for that authoring UX; deploying this API alone does not enable reader-visible gate controls.
+The existing list builder exposes strict/loose modes, per-entry waits and list-local skips,
+409 preview/confirmation, strict-mode coverage warnings, and actionable 422 cycle feedback (#3668).
+Issue search returns canonical library issues. After searching, ArrowUp/ArrowDown move between
+result buttons, Enter adds the focused issue, and Escape returns to search. Enter in the search
+field with results already visible moves focus to the first result without adding an issue or
+resubmitting. Added entries remain unsaved until Save; changing the query hides stale results.
+
+These editor controls do not activate Option E execution. Production conversion and activation
+still require the separately reviewed, owner-approved operation under #3676.
 
 CI runs `pnpm --filter frontend run check:api-types` with explicit `ENVIRONMENT=test` to enforce
 schema/client freshness, including the environment-gated `/api/v1/debug/log` route. This setting

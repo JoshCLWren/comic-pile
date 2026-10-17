@@ -66,10 +66,10 @@ async def _make_issue(async_db: AsyncSession, *, thread_id: int, number: str) ->
 @pytest.mark.asyncio
 async def test_extends_plan_with_new_issue(async_db: AsyncSession) -> None:
     """A newly adopted issue becomes a plan member."""
-    _, plan_id, thread_id, source_id = await _setup(async_db, username="ext1")
+    user_id, plan_id, thread_id, source_id = await _setup(async_db, username="ext1")
     new_issue = await _make_issue(async_db, thread_id=thread_id, number="2")
     result = await extend_plans_with_issue(
-        async_db, issue_id=new_issue.id, source_id=source_id,
+        async_db, issue_id=new_issue.id, source_id=source_id, user_id=user_id,
         store_date=datetime(2024, 1, 15, tzinfo=UTC),
     )
     assert plan_id in result.plans_extended
@@ -88,15 +88,15 @@ async def test_extends_plan_with_new_issue(async_db: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_idempotent_on_retry(async_db: AsyncSession) -> None:
     """Re-running does not duplicate membership."""
-    _, plan_id, thread_id, source_id = await _setup(async_db, username="ext2")
+    user_id, plan_id, thread_id, source_id = await _setup(async_db, username="ext2")
     new_issue = await _make_issue(async_db, thread_id=thread_id, number="2")
     first = await extend_plans_with_issue(
-        async_db, issue_id=new_issue.id, source_id=source_id,
+        async_db, issue_id=new_issue.id, source_id=source_id, user_id=user_id,
         store_date=datetime(2024, 1, 15, tzinfo=UTC),
     )
     assert plan_id in first.plans_extended
     second = await extend_plans_with_issue(
-        async_db, issue_id=new_issue.id, source_id=source_id,
+        async_db, issue_id=new_issue.id, source_id=source_id, user_id=user_id,
         store_date=datetime(2024, 1, 15, tzinfo=UTC),
     )
     assert plan_id in second.plans_skipped_duplicate

@@ -15,11 +15,11 @@ AUTH_MODULES = (
     REPOSITORY_ROOT / "app" / "auth.py",
     REPOSITORY_ROOT / "app" / "api" / "auth.py",
     REPOSITORY_ROOT / "app" / "services" / "password_reset_service.py",
-    REPOSITORY_ROOT / "services" / "password_reset_mailer.py",
-    REPOSITORY_ROOT / "repositories" / "user_repository.py",
-    REPOSITORY_ROOT / "repositories" / "revoked_token_repository.py",
-    REPOSITORY_ROOT / "repositories" / "password_reset_token_repository.py",
-    REPOSITORY_ROOT / "repositories" / "failed_login_repository.py",
+    REPOSITORY_ROOT / "app" / "services" / "password_reset_mailer.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "user_repository.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "revoked_token_repository.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "password_reset_token_repository.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "failed_login_repository.py",
 )
 
 READING_SESSION_REPOSITORY_PATTERNS = [
@@ -56,6 +56,12 @@ READING_SESSION_MODEL_PATTERNS = [
     "ReadingSession",
     "SessionModel",
 ]
+
+AUTH_FORBIDDEN_PATTERNS = (
+    READING_SESSION_MODEL_PATTERNS
+    + READING_SESSION_REPOSITORY_PATTERNS
+    + READING_SESSION_SERVICE_PATTERNS
+)
 
 READING_SESSION_REPOSITORY_MODULE = (
     REPOSITORY_ROOT / "app" / "repositories" / "reading_session_repository.py"
@@ -101,6 +107,27 @@ def _scan_module_for_patterns(module_path: Path, patterns: list[str]) -> list[st
     return matches
 
 
+def _scan_auth_modules(modules: tuple[Path, ...] = AUTH_MODULES) -> list[str]:
+    """Report every forbidden reading-domain import or call across auth modules.
+
+    A guarded module that does not exist is a hard failure, never a silent skip.
+    Issue #3772 shipped five ``AUTH_MODULES`` entries without the ``app/`` prefix;
+    the guard's ``if module_path.exists()`` skip hid the typos and left the
+    password-reset mailer plus all four auth-state repositories unguarded.
+
+    Args:
+        modules: Auth modules to scan. Defaults to the guarded ``AUTH_MODULES``.
+
+    Returns:
+        Human-readable findings, each prefixed with ``path:lineno``.
+    """
+    findings: list[str] = []
+    for module_path in modules:
+        assert module_path.exists(), f"guarded auth module does not exist: {module_path}"
+        findings.extend(_scan_module_for_patterns(module_path, AUTH_FORBIDDEN_PATTERNS))
+    return findings
+
+
 def test_auth_code_does_not_touch_reading_session_domain() -> None:
     """Auth and password-reset modules must not reach into the reading domain.
 
@@ -112,23 +139,25 @@ def test_auth_code_does_not_touch_reading_session_domain() -> None:
     cross-domain interaction belongs in a service that owns both sides, never
     inside an auth module.
     """
-    findings: list[str] = []
-    for module_path in AUTH_MODULES:
-        if module_path.exists():
-            findings.extend(_scan_module_for_patterns(module_path, READING_SESSION_MODEL_PATTERNS))
-    for module_path in AUTH_MODULES:
-        if module_path.exists():
-            findings.extend(
-                _scan_module_for_patterns(
-                    module_path,
-                    READING_SESSION_REPOSITORY_PATTERNS + READING_SESSION_SERVICE_PATTERNS,
-                )
-            )
-
+    findings = _scan_auth_modules()
     assert not findings, (
         "Auth code must not import or call reading-session repository/service/model "
         "helpers. Revoke credentials with auth-domain state instead (issue #2998).\n"
         + "\n".join(findings)
+    )
+
+
+def test_every_guarded_auth_module_exists() -> None:
+    """Each guarded auth module must resolve to a real file.
+
+    Regression for #3772: five ``AUTH_MODULES`` entries pointed at
+    ``services/...`` and ``repositories/...`` instead of ``app/services/...``
+    and ``app/repositories/...``. The guard silently skipped them, so this test
+    pins the eight intended modules as scannable files.
+    """
+    missing = [str(module_path) for module_path in AUTH_MODULES if not module_path.exists()]
+    assert not missing, (
+        "AUTH_MODULES entries must resolve to existing files (issue #3772): " + ", ".join(missing)
     )
 
 
@@ -245,3 +274,33 @@ def test_reading_session_repository_documents_its_auth_boundary() -> None:
     assert "authentication state" in content.lower(), (
         "reading_session_repository.py must document that it does not touch authentication state"
     )
+
+
+def test_guard_detects_violation_in_previously_unscanned_module(tmp_path: Path) -> None:
+    """A planted reading-session import in a previously skipped module is flagged.
+
+    Regression for #3772. Before the path fix the guard skipped five auth-state
+    modules, so a violation planted in one of them went unnoticed. This test
+    proves both halves of that repair: the previously skipped module is a
+    guarded entry that exists, and a reading-session import planted in it is
+    reported by the same scan routine the guard runs.
+
+    The planted copy lives in ``tmp_path`` so a failed or interrupted run can
+    never leave a tracked application module modified in the working tree.
+    """
+    previously_skipped = REPOSITORY_ROOT / "app" / "services" / "password_reset_mailer.py"
+    assert previously_skipped in AUTH_MODULES, (
+        f"{previously_skipped} must be a guarded auth module (issue #3772)"
+    )
+    assert previously_skipped.exists(), (
+        f"{previously_skipped} must resolve to an existing file (issue #3772)"
+    )
+
+    planted = tmp_path / previously_skipped.name
+    planted.write_bytes(
+        previously_skipped.read_bytes()
+        + b"\nfrom app.models.reading_session import ReadingSession\n"
+    )
+
+    findings = _scan_auth_modules((planted,))
+    assert findings, "guard must report the planted reading-session import"

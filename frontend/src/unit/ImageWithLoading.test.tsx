@@ -5,7 +5,7 @@ import ImageWithLoading from '../components/ImageWithLoading'
 describe('ImageWithLoading', () => {
   it('shows loading spinner initially', () => {
     const { getByRole, queryByText } = render(
-      <ImageWithLoading src="https://example.com/image.jpg" />
+      <ImageWithLoading src="https://example.com/image.jpg" alt="" />
     )
 
     // Should show loading spinner (role="status")
@@ -23,6 +23,7 @@ describe('ImageWithLoading', () => {
     const { getByRole, container } = render(
       <ImageWithLoading
         src="https://example.com/image.jpg"
+        alt=""
         className="w-10 h-14 shrink-0"
       />
     )
@@ -74,7 +75,7 @@ describe('ImageWithLoading', () => {
   it('handles image error', async () => {
     const onErrorMock = vi.fn()
     const { getByRole } = render(
-      <ImageWithLoading src="https://example.com/image.jpg" onError={onErrorMock} />
+      <ImageWithLoading src="https://example.com/image.jpg" alt="" onError={onErrorMock} />
     )
 
     // Should show loading spinner initially
@@ -97,6 +98,7 @@ describe('ImageWithLoading', () => {
     const { getByRole } = render(
       <ImageWithLoading
         src="https://example.com/image.jpg"
+        alt=""
         placeholderClassName="animate-pulse bg-white/10"
       />
     )
@@ -111,7 +113,7 @@ describe('ImageWithLoading', () => {
   it('invokes onLoad with the loaded image element', () => {
     const onLoadMock = vi.fn<(img: HTMLImageElement) => void>()
     const { getByRole } = render(
-      <ImageWithLoading src="https://example.com/image.jpg" onLoad={onLoadMock} />
+      <ImageWithLoading src="https://example.com/image.jpg" alt="" onLoad={onLoadMock} />
     )
 
     expect(getByRole('status')).toBeInTheDocument()
@@ -132,5 +134,93 @@ describe('ImageWithLoading', () => {
     expect(loadedImg.naturalHeight).toBe(400)
     // Spinner is gone once loaded
     // Removed noopWrite check
+  })
+})
+
+describe('ImageWithLoading accessibility (issue #3069)', () => {
+  it('requires an explicit alt decision and reflects meaningful alt text', () => {
+    const { getByAltText } = render(
+      <ImageWithLoading src="https://example.com/cover.jpg" alt="Cover art for Saga vol. 1" />
+    )
+    expect(getByAltText('Cover art for Saga vol. 1')).toBeInTheDocument()
+  })
+
+  it('treats alt="" as a deliberate decorative/empty-alt decision', () => {
+    const { getByAltText } = render(
+      <ImageWithLoading src="https://example.com/decorative.png" alt="" />
+    )
+    const img = getByAltText('')
+    expect(img).toBeInTheDocument()
+    expect(img).toHaveAttribute('alt', '')
+  })
+
+  it('reserves intrinsic dimensions via width/height to prevent layout shift', () => {
+    const { container } = render(
+      <ImageWithLoading
+        src="https://example.com/cover.jpg"
+        alt="Cover art"
+        width={720}
+        height={1080}
+      />
+    )
+    const img = container.querySelector('img')
+    expect(img).toHaveAttribute('width', '720')
+    expect(img).toHaveAttribute('height', '1080')
+  })
+
+  it('defaults to lazy loading so below-the-fold images are deferred', () => {
+    const { container } = render(
+      <ImageWithLoading src="https://example.com/cover.jpg" alt="" />
+    )
+    expect(container.querySelector('img')).toHaveAttribute('loading', 'lazy')
+  })
+
+  it('allows eager loading for the hero/LCP image', () => {
+    const { container } = render(
+      <ImageWithLoading
+        src="https://example.com/hero.jpg"
+        alt="Hero image"
+        loading="eager"
+      />
+    )
+    expect(container.querySelector('img')).toHaveAttribute('loading', 'eager')
+  })
+
+  it('passes responsive srcset and sizes through unchanged', () => {
+    const { container } = render(
+      <ImageWithLoading
+        src="https://example.com/cover.jpg"
+        alt="Cover art"
+        srcSet="https://example.com/cover-240.jpg 240w, https://example.com/cover-720.jpg 720w"
+        sizes="(min-width: 1024px) 30vw, 90vw"
+      />
+    )
+    const img = container.querySelector('img')
+    expect(img).toHaveAttribute('srcset', 'https://example.com/cover-240.jpg 240w, https://example.com/cover-720.jpg 720w')
+    expect(img).toHaveAttribute('sizes', '(min-width: 1024px) 30vw, 90vw')
+  })
+
+  it('renders WebP/AVIF source variants inside a picture element', () => {
+    const { container } = render(
+      <ImageWithLoading
+        src="https://example.com/cover.jpg"
+        alt="Cover art"
+        sources={[
+          { srcSet: 'https://example.com/cover.avif', type: 'image/avif' },
+          { srcSet: 'https://example.com/cover.webp', type: 'image/webp' },
+        ]}
+      />
+    )
+    const picture = container.querySelector('picture')
+    expect(picture).not.toBeNull()
+    const sources = picture!.querySelectorAll('source')
+    expect(sources).toHaveLength(2)
+    expect(sources[0]).toHaveAttribute('type', 'image/avif')
+    expect(sources[0]).toHaveAttribute('srcset', 'https://example.com/cover.avif')
+    expect(sources[1]).toHaveAttribute('type', 'image/webp')
+    expect(sources[1]).toHaveAttribute('srcset', 'https://example.com/cover.webp')
+    const img = picture!.querySelector('img')
+    expect(img).toHaveAttribute('alt', 'Cover art')
+    expect(img).toHaveAttribute('src', 'https://example.com/cover.jpg')
   })
 })

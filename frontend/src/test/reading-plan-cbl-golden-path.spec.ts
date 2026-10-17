@@ -71,7 +71,7 @@ async function assertRollEligibility(
 }
 
 test.describe('Reading Plan CBL golden path', () => {
-  test('index → create strict plan → CBL → commit → Roll eligibility', async ({
+  test('index → CBL adoption preserves explicit prerequisite → Roll eligibility', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -91,6 +91,13 @@ test.describe('Reading Plan CBL golden path', () => {
     })
     const earlierIssueId = await getFirstIssueId(page, earlier.id)
     const laterIssueId = await getFirstIssueId(page, later.id)
+    // The transitional plan runtime preserves explicit requirements. Ordinary
+    // list adjacency becomes authoritative only in the guarded Option E cutover.
+    const prerequisite = await page.request.post('/api/v1/dependencies/', {
+      headers,
+      data: { source_type: 'issue', source_id: earlierIssueId, target_type: 'issue', target_id: laterIssueId },
+    })
+    expect(prerequisite.ok(), await prerequisite.text()).toBeTruthy()
     const fixtureSuffix = `${earlier.id}-${Date.now()}`
     const sourceName = `Golden Path Browser Source ${fixtureSuffix}`
     const sourcePath = `Fixtures/Golden Path Browser ${fixtureSuffix}.cbl`

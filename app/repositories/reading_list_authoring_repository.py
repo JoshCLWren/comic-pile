@@ -126,7 +126,11 @@ async def load_requirements(db: AsyncSession, user_id: int) -> list[Dependency]:
                 .where(
                     source_thread.user_id == user_id,
                     target_thread.user_id == user_id,
-                    or_(Dependency.note.is_(None), Dependency.note.not_like("cbl-order:%")),
+                    or_(
+                        Dependency.origin.is_not(None),
+                        Dependency.note.is_(None),
+                        Dependency.note.not_like("cbl-order:%"),
+                    ),
                 )
             )
         ).all()

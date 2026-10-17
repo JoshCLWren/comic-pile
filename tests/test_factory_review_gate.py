@@ -2067,71 +2067,360 @@ def test_controller_writes_review_model_marker_on_approve(
     assert ["issue", "comment", "1390", "--repo", module.REPO, "--body", expected] in commands
 
 
-def test_interactive_author_marker_uses_verified_exact_head_commit(
+@pytest.mark.parametrize(
+    ("case", "pr_author", "labels", "commit_author", "commit_committer", "message", "expected"),
+    [
+        (
+            "local-agent-head",
+            "JoshCLWren",
+            ["factory"],
+            None,
+            None,
+            "Fix behavior\n\nModel: opencode/mimo-v2.6-flash-free",
+            ("opencode-mimo-v2.6-flash-free", "interactive-JoshCLWren"),
+        ),
+        (
+            "numbered-factory-branch",
+            "JoshCLWren",
+            ["factory"],
+            "github-actions[bot]",
+            "github-actions[bot]",
+            "Merge branch 'main' into factory/58-3463-catalog-free",
+            ("human", "interactive-JoshCLWren"),
+        ),
+        (
+            "owner-commit",
+            "JoshCLWren",
+            ["factory"],
+            "JoshCLWren",
+            None,
+            "Fix bug",
+            ("human", "interactive-JoshCLWren"),
+        ),
+        (
+            "fork-author",
+            "intruder",
+            ["factory"],
+            "JoshCLWren",
+            None,
+            "Fix bug\n\nModel: cursor-grok-4.6",
+            None,
+        ),
+        (
+            "foreign-commit",
+            "JoshCLWren",
+            ["factory"],
+            "opencode-free-model-factory-51[bot]",
+            None,
+            "Fix bug\n\nModel: cursor-grok-4.6",
+            None,
+        ),
+        (
+            "not-enrolled",
+            "JoshCLWren",
+            ["unrelated"],
+            None,
+            None,
+            "Fix bug\n\nModel: cursor-grok-4.6",
+            None,
+        ),
+        (
+            "ambiguous-trailers",
+            "JoshCLWren",
+            ["factory"],
+            None,
+            None,
+            "Fix bug\n\nModel: cursor-grok-4.6\nModel: gpt-6",
+            None,
+        ),
+    ],
+)
+def test_attest_exact_head_author_attests_hand_and_local_heads(
     monkeypatch: MonkeyPatch,
+    case: str,
+    pr_author: str,
+    labels: list[str],
+    commit_author: str | None,
+    commit_committer: str | None,
+    message: str,
+    expected: tuple[str, str] | None,
 ) -> None:
-    """An interactive model attribution is controller-recorded, not PR text."""
+    """A hand-made or local-agent head attests automatically, exactly like a robot head."""
     module = load_review_controller()
     payload = {
-        "state": "OPEN", "headRefName": "local/refactor",
-        "body": "Closes #2380.\nModel: forged-from-pr-body",
+        "state": "OPEN",
+        "headRefName": "factory/58-3463-catalog-free",
+        "body": "Closes #3463",
+        "author": {"login": pr_author},
+        "labels": [{"name": name} for name in labels],
+    }
+    sent: list[list[str]] = []
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda _args: {
+            "sha": REVIEWED_HEAD,
+            "author": None if commit_author is None else {"login": commit_author},
+            "committer": None if commit_committer is None else {"login": commit_committer},
+            "commit": {"message": message},
+        },
+    )
+    monkeypatch.setattr(module, "run_gh", lambda args: sent.append(args))
+    result = module.attest_exact_head_author(
+        pr_number=1390, head=REVIEWED_HEAD, pr=payload
+    )
+    assert result == expected, case
+    if expected is None:
+        assert sent == []
+    else:
+        assert sent and sent[-1][-1] == agent_model_author_marker(
+            pr=1390, head=REVIEWED_HEAD, model=expected[0], agent=expected[1]
+        )
+
+
+def test_attest_exact_head_author_repairs_from_worker_record(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A partial wrapper record is repaired from the named worker, not the trailer."""
+    module = load_review_controller()
+    payload = {
+        "state": "OPEN",
+        "headRefName": "factory/58-3463-catalog-free",
         "author": {"login": "JoshCLWren"},
         "labels": [{"name": "factory"}],
     }
     sent: list[list[str]] = []
-    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
     monkeypatch.setattr(
-        module, "gh_json",
-        lambda _args: {
-            "sha": REVIEWED_HEAD,
-            "author": {"login": "JoshCLWren"},
-            "committer": None,
-            "commit": {"message": "Fix behavior\n\nModel: opencode/mimo-v2.6-flash-free"},
-        },
+        module,
+        "model_comment_bodies",
+        lambda _pr: [head_contributor_marker(pr=1390, head=REVIEWED_HEAD, worker="58", epoch=1)],
     )
+    monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(module, "roster_model_for_worker", lambda worker: {"58": "z-ai/glm-4.7-flash"}.get(worker))
     monkeypatch.setattr(
-        module, "run_gh",
-        lambda args: sent.append(args),
+        module,
+        "gh_json",
+        lambda _args: pytest.fail("worker repair must not read commit evidence"),
     )
-    marker = module.persist_interactive_author_model_marker(
+    monkeypatch.setattr(module, "run_gh", lambda args: sent.append(args))
+    assert module.attest_exact_head_author(
         pr_number=1390, head=REVIEWED_HEAD, pr=payload
+    ) == ("z-ai-glm-4.7-flash", "58")
+    assert sent[-1][-1] == agent_model_author_marker(
+        pr=1390, head=REVIEWED_HEAD, model="z-ai-glm-4.7-flash", agent="58"
     )
-    assert marker == agent_model_author_marker(
-        pr=1390, head=REVIEWED_HEAD, model="opencode/mimo-v2.6-flash-free",
-        agent="interactive-JoshCLWren",
-    )
-    assert sent and sent[0][-1] == marker
 
 
-@pytest.mark.parametrize("unsafe", ["fork-author", "unattributed-commit", "stale-head"])
-def test_interactive_author_attribution_fails_closed(
-    monkeypatch: MonkeyPatch, unsafe: str
+def test_attest_exact_head_author_ignores_owner_stream_contributor_marker(
+    monkeypatch: MonkeyPatch,
 ) -> None:
-    """No fabricated model provenance for untrusted PR authors or head changes."""
+    """A contributor marker on the owner-writable stream must never name the author.
+
+    A spoofed marker must not be laundered into a controller-bot author marker
+    naming that worker; the head may still be attested from owner evidence, and
+    then only as the interactive owner identity.
+    """
     module = load_review_controller()
     payload = {
-        "headRefName": "local/refactor",
-        "body": "Closes #2380",
-        "author": {"login": "intruder" if unsafe == "fork-author" else "JoshCLWren"},
+        "state": "OPEN",
+        "headRefName": "factory/58-3463-catalog-free",
+        "author": {"login": "JoshCLWren"},
         "labels": [{"name": "factory"}],
     }
+    spoofed = head_contributor_marker(pr=1390, head=REVIEWED_HEAD, worker="58", epoch=1)
+    sent: list[list[str]] = []
     monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: [spoofed])
     monkeypatch.setattr(
-        module, "gh_json",
+        module,
+        "roster_model_for_worker",
+        lambda worker: pytest.fail(f"spoofed record must not resolve {worker}"),
+    )
+    monkeypatch.setattr(
+        module,
+        "gh_json",
         lambda _args: {
-            "sha": MOVED_HEAD if unsafe == "stale-head" else REVIEWED_HEAD,
-            "author": {"login": "intruder" if unsafe == "unattributed-commit" else "JoshCLWren"},
+            "sha": REVIEWED_HEAD,
+            "author": None,
             "committer": None,
-            "commit": {"message": "Fix bug\n\nModel: cursor-grok-4.6"},
+            "commit": {"message": "Fix\n\nModel: gpt-6"},
         },
     )
-    monkeypatch.setattr(
-        module, "run_gh",
-        lambda *_a: pytest.fail("untrusted attribution must not be persisted"),
-    )
-    assert module.persist_interactive_author_model_marker(
+    monkeypatch.setattr(module, "run_gh", lambda args: sent.append(args))
+    assert module.attest_exact_head_author(
         pr_number=1390, head=REVIEWED_HEAD, pr=payload
-    ) is None
+    ) == ("gpt-6", "interactive-JoshCLWren")
+    assert sent[-1][-1] == agent_model_author_marker(
+        pr=1390, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren"
+    )
+
+
+def test_attest_exact_head_author_fails_closed_on_conflicting_workers(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Two recorded contributors for one head is ambiguous and must not attest."""
+    module = load_review_controller()
+    payload = {
+        "state": "OPEN",
+        "headRefName": "factory/58-3463-catalog-free",
+        "author": {"login": "JoshCLWren"},
+        "labels": [{"name": "factory"}],
+    }
+    monkeypatch.setattr(
+        module,
+        "model_comment_bodies",
+        lambda _pr: [
+            head_contributor_marker(pr=1390, head=REVIEWED_HEAD, worker="58", epoch=1),
+            head_contributor_marker(pr=1390, head=REVIEWED_HEAD, worker="46", epoch=2),
+        ],
+    )
+    monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: [])
+    monkeypatch.setattr(
+        module, "gh_json", lambda _args: pytest.fail("ambiguous records must fail closed")
+    )
+    monkeypatch.setattr(
+        module, "run_gh", lambda *_a: pytest.fail("ambiguous records must not attest")
+    )
+    assert (
+        module.attest_exact_head_author(pr_number=1390, head=REVIEWED_HEAD, pr=payload)
+        is None
+    )
+
+
+def test_author_attestation_counts_as_complete_provenance() -> None:
+    """One independent approval authorizes an attested head, like a wrapper head."""
+    module = load_review_controller()
+    author = agent_model_author_marker(
+        pr=1390, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren"
+    )
+    _, provenance_complete = module.exact_head_provenance(
+        reviewer_comments=[],
+        model_comments=[author],
+        pr_number=1390,
+        head=REVIEWED_HEAD,
+        producer=None,
+    )
+    assert provenance_complete is True
+    assert head_has_authorized_approval(
+        contributors=set(),
+        approvers={"21"},
+        provenance_complete=provenance_complete,
+    )
+
+
+def test_handmade_head_is_promotable_by_one_independent_review(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A hand-made head attests during review, then a single approval promotes it.
+
+    This exercises the real ordering and the real cross-model gate: the review
+    writes the author attestation, then the cross-model review marker, then the
+    exact-head gate, then promotion.
+    """
+    module = load_review_controller()
+    store: list[dict[str, Any]] = []
+    transitions: list[dict[str, Any]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run_gh(args: list[str], **_kwargs: object) -> Result:
+        if args[:2] == ["issue", "comment"]:
+            store.append(
+                {
+                    "body": args[args.index("--body") + 1],
+                    "user": {"login": "github-actions[bot]"},
+                    "author_association": "NONE",
+                }
+            )
+        return Result()
+
+    payload = {
+        "state": "OPEN",
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "headRefOid": REVIEWED_HEAD,
+        "headRefName": "local/hand-made-change",
+        "body": "Closes #2380",
+        "author": {"login": "JoshCLWren"},
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:17"},
+            {"name": "factory:review"},
+        ],
+    }
+    monkeypatch.setattr(module, "pr_json", lambda _pr: payload)
+    monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
+    monkeypatch.setattr(module, "issue_comment_records", lambda _pr: store)
+    monkeypatch.setattr(
+        module, "review_excerpt", lambda _path, **_kw: "git diff HEAD~1\nsemantic findings"
+    )
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda _args: {
+            "sha": REVIEWED_HEAD,
+            "author": None,
+            "committer": None,
+            "commit": {"message": "Hand-made fix\n\nModel: gpt-6"},
+        },
+    )
+    monkeypatch.setattr(module, "run_gh", fake_run_gh)
+    monkeypatch.setattr(module, "roster_model_for_worker", lambda _worker: "roster-model-17")
+    monkeypatch.setattr(
+        module,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "pass", "reason": "green"},
+    )
+    monkeypatch.setattr(
+        module,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    result = module.handle_review(
+        worker="17",
+        pr_number=1390,
+        reviewed_head=REVIEWED_HEAD,
+        verdict="approve",
+        review_log=None,
+    )
+
+    assert result["status"] == "ready"
+    assert transitions == [
+        {
+            "pr_number": 1390,
+            "branch": "local/hand-made-change",
+            "worker": "17",
+            "pr_stage": "factory:ready",
+        }
+    ]
+    bodies = [record["body"] for record in store]
+    assert agent_model_author_marker(
+        pr=1390, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren"
+    ) in bodies
+    assert any(body.startswith("<!-- comic-pile-agent-model-review-v1:") for body in bodies)
+    assert head_has_cross_model_review(bodies, pr=1390, head=REVIEWED_HEAD) is True
+
+
+def test_exact_head_provenance_ignores_untrusted_streams() -> None:
+    """An author marker only counts on the controller-bot stream, never on the owner stream."""
+    module = load_review_controller()
+    author = agent_model_author_marker(
+        pr=1390, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren"
+    )
+    _, provenance_complete = module.exact_head_provenance(
+        reviewer_comments=[author],
+        model_comments=[],
+        pr_number=1390,
+        head=REVIEWED_HEAD,
+        producer=None,
+    )
+    assert provenance_complete is False
 
 
 def test_interactive_handoff_uses_explicit_body_issue_without_factory_branch(
@@ -2197,3 +2486,236 @@ def test_roster_model_lookup_ignores_untrusted_pr_checkout(
     monkeypatch.chdir(untrusted)
     monkeypatch.setattr(controller, "__file__", str(trusted / "factory-review-controller.py"))
     assert controller.roster_model_for_worker("54") == "glm-4.5-flash"
+
+
+def test_model_trailer_models_reports_distinct_trailers() -> None:
+    """Only the head's own Model trailer values count, one distinct value is safe."""
+    assert _review_policy.model_trailer_models(None) == set()
+    assert _review_policy.model_trailer_models("") == set()
+    assert _review_policy.model_trailer_models("Fix bug\n\nBody text") == set()
+    assert _review_policy.model_trailer_models("Fix bug\n\nModel: gpt-6\n") == {"gpt-6"}
+    assert _review_policy.model_trailer_models(
+        "Fix bug\n\nModel: gpt-6\n\nModel: gpt-6\n"
+    ) == {"gpt-6"}
+    assert _review_policy.model_trailer_models(
+        "Fix bug\n\nModel: gpt-6\n\nModel: grok-4.6\n"
+    ) == {"gpt-6", "grok-4.6"}
+
+
+@pytest.mark.parametrize(
+    ("case", "commit_author", "commit_committer", "message", "expected"),
+    [
+        ("owner-local-merge", None, None, "Merge main\n\nModel: gpt-6", ("gpt-6", "interactive-JoshCLWren")),
+        (
+            "trusted-automation",
+            "github-actions[bot]",
+            "github-actions[bot]",
+            "Sync roster",
+            ("human", "interactive-JoshCLWren"),
+        ),
+        ("owner-commit", "JoshCLWren", "JoshCLWren", "Fix", ("human", "interactive-JoshCLWren")),
+        ("foreign-commit", "opencode-free-model-factory-51[bot]", None, "Fix", None),
+        ("mixed-foreign", "JoshCLWren", "intruder", "Fix", None),
+        ("ambiguous-trailers", None, None, "Merge\n\nModel: gpt-6\nModel: grok-4.6", None),
+    ],
+)
+def test_owner_attested_head_identity_is_fail_closed(
+    case: str,
+    commit_author: str | None,
+    commit_committer: str | None,
+    message: str,
+    expected: tuple[str, str] | None,
+) -> None:
+    """Owner PRs attest only from trusted commit evidence, never a guessed model."""
+    result = _review_policy.owner_attested_head_identity(
+        pr_author_login="JoshCLWren",
+        owner_login="JoshCLWren",
+        commit_author_login=commit_author,
+        commit_committer_login=commit_committer,
+        commit_message=message,
+    )
+    assert result == expected, case
+    assert (
+        _review_policy.owner_attested_head_identity(
+            pr_author_login="intruder",
+            owner_login="JoshCLWren",
+            commit_author_login=commit_author,
+            commit_committer_login=commit_committer,
+            commit_message=message,
+        )
+        is None
+    ), case
+
+
+def _reconcile_pr(*, author: str = "JoshCLWren", branch: str = "factory/54-3437-z-ai") -> dict[str, Any]:
+    return {
+        "state": "OPEN",
+        "headRefOid": REVIEWED_HEAD,
+        "headRefName": branch,
+        "body": "Closes #3437",
+        "author": {"login": author},
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:blocked"},
+            {"name": "factory:unowned"},
+        ],
+    }
+
+
+def reconcile_harness(
+    monkeypatch: MonkeyPatch,
+    module: ModuleType,
+    *,
+    pr: dict[str, Any],
+    commit: dict[str, Any],
+    comments: Sequence[str] = (),
+    contributor_comments: Sequence[str] = (),
+) -> tuple[list[list[str]], list[tuple[int, str, str]]]:
+    """Wire the explicit reconciliation command against recorded evidence."""
+    sent: list[list[str]] = []
+    transitions: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(module, "pr_json", lambda _pr: pr)
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: list(comments))
+    monkeypatch.setattr(
+        module, "review_comment_bodies", lambda _pr: list(contributor_comments)
+    )
+    monkeypatch.setattr(module, "gh_json", lambda _args: commit)
+    monkeypatch.setattr(module, "run_gh", lambda args: sent.append(args))
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage: transitions.append((number, owner, stage)),
+    )
+    return sent, transitions
+
+
+def test_reconcile_provenance_attests_wrapperless_factory_head(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """An owner-pushed merge head is attested and returned to review."""
+    module = load_review_controller()
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(),
+        commit={
+            "sha": REVIEWED_HEAD,
+            "author": None,
+            "committer": None,
+            "commit": {
+                "message": "Merge main into issue creation performance fix\n\nModel: gpt-6"
+            },
+        },
+    )
+    result = module.reconcile_provenance(3747, REVIEWED_HEAD)
+    assert result == {
+        "pr": 3747,
+        "status": "attested",
+        "head": REVIEWED_HEAD,
+        "model": "gpt-6",
+        "agent": "interactive-JoshCLWren",
+    }
+    assert agent_model_author_marker(
+        pr=3747, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren"
+    ) in [command[-1] for command in sent]
+    assert transitions == [(3747, "factory:unowned", "factory:review")]
+
+
+def test_reconcile_provenance_is_idempotent_for_attested_head(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """An already-attested head is released to review without a second marker."""
+    module = load_review_controller()
+    existing = agent_model_author_marker(
+        pr=3747, head=REVIEWED_HEAD, model="gpt-6", agent="interactive-JoshCLWren"
+    )
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(),
+        commit={"sha": REVIEWED_HEAD, "commit": {"message": "Merge main\n\nModel: gpt-6"}},
+        comments=[existing],
+    )
+    result = module.reconcile_provenance(3747, REVIEWED_HEAD)
+    assert result == {"pr": 3747, "status": "already-attested", "head": REVIEWED_HEAD}
+    assert sent == []
+    assert transitions == [(3747, "factory:unowned", "factory:review")]
+
+
+def test_reconcile_provenance_fails_closed_without_mutation(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Untrusted authors, moved heads, and foreign commits never get attested."""
+    module = load_review_controller()
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(author="intruder"),
+        commit={"sha": REVIEWED_HEAD, "commit": {"message": "Fix\n\nModel: gpt-6"}},
+    )
+    result = module.reconcile_provenance(3747, REVIEWED_HEAD)
+    assert result["status"] == "unattested"
+    assert sent == []
+    assert transitions == []
+
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(),
+        commit={"sha": REVIEWED_HEAD, "commit": {"message": "Fix\n\nModel: gpt-6"}},
+    )
+    assert module.reconcile_provenance(3747, MOVED_HEAD)["status"] == "stale-head"
+    assert sent == []
+    assert transitions == []
+
+    sent, transitions = reconcile_harness(
+        monkeypatch,
+        module,
+        pr=_reconcile_pr(),
+        commit={
+            "sha": REVIEWED_HEAD,
+            "author": {"login": "opencode-free-model-factory-51[bot]"},
+            "committer": None,
+            "commit": {"message": "Merge branch 'main'"},
+        },
+    )
+    assert module.reconcile_provenance(3747, None)["status"] == "unattested"
+    assert sent == []
+    assert transitions == []
+
+
+def test_attestation_is_idempotent_and_never_rewrites_a_recorded_head(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """An already-attested head is left alone, whichever writer recorded it."""
+    module = load_review_controller()
+    existing = agent_model_author_marker(
+        pr=1390, head=REVIEWED_HEAD, model="z-ai/glm-4.7-flash", agent="58"
+    )
+    payload = {
+        "state": "OPEN",
+        "headRefName": "factory/58-3463-catalog-free",
+        "author": {"login": "JoshCLWren"},
+        "labels": [{"name": "factory"}],
+    }
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [existing])
+    monkeypatch.setattr(
+        module, "gh_json", lambda _args: pytest.fail("attested heads must not re-read evidence")
+    )
+    monkeypatch.setattr(
+        module, "run_gh", lambda *_a: pytest.fail("attested heads must not be re-recorded")
+    )
+    assert (
+        module.attest_exact_head_author(pr_number=1390, head=REVIEWED_HEAD, pr=payload)
+        is None
+    )
+
+
+def test_provenance_reconcile_workflow_runs_trusted_main() -> None:
+    """The reconciliation entry point is an explicit, maintainer-run workflow."""
+    workflow = (WORKFLOWS / "factory-provenance-reconcile.yml").read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in workflow
+    assert "reconcile-provenance" in workflow
+    assert "factory-review-controller.py" in workflow
+    assert "ref: main" in workflow
+    assert "pull-requests: write" in workflow

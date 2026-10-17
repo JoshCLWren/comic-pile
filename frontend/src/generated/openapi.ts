@@ -3021,6 +3021,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/prerequisites/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Prerequisites
+         * @description Read stable endpoints and their unmodified provenance.
+         */
+        get: operations["list_prerequisites_api_v1_prerequisites__get"];
+        put?: never;
+        /**
+         * Create Prerequisite
+         * @description Create one explicit reader prerequisite after combined cycle validation.
+         */
+        post: operations["create_prerequisite_api_v1_prerequisites__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prerequisites/{prerequisite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Prerequisite
+         * @description Remove a reader requirement without changing read state or list intent.
+         */
+        delete: operations["delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Prerequisite Note
+         * @description Edit the note of a new reader-authored requirement.
+         */
+        patch: operations["update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch"];
+        trace?: never;
+    };
     "/api/v1/queue/shuffle/": {
         parameters: {
             query?: never;
@@ -6134,6 +6182,15 @@ export interface components {
             cbl_entry_id: number;
             /** Cbl Position */
             cbl_position: number;
+            /**
+             * Collection Excluded
+             * @default false
+             */
+            collection_excluded: boolean;
+            /** Collection Exclusion Ids */
+            collection_exclusion_ids?: number[];
+            /** Collection Exclusion Reason */
+            collection_exclusion_reason?: string | null;
             /** Comicvine Issue Id */
             comicvine_issue_id: string | null;
             /** Comicvine Series Id */
@@ -6236,6 +6293,15 @@ export interface components {
             cbl_entry_id: number;
             /** Cbl Position */
             cbl_position: number;
+            /**
+             * Collection Excluded
+             * @default false
+             */
+            collection_excluded: boolean;
+            /** Collection Exclusion Ids */
+            collection_exclusion_ids?: number[];
+            /** Collection Exclusion Reason */
+            collection_exclusion_reason?: string | null;
             /** Comicvine Issue Id */
             comicvine_issue_id: string | null;
             /** Comicvine Series Id */
@@ -10383,6 +10449,51 @@ export interface components {
             new_position: number;
         };
         /**
+         * PrerequisiteCreate
+         * @description Create one stable pair; provenance is server-controlled.
+         */
+        PrerequisiteCreate: {
+            /** Note */
+            note?: string | null;
+            /** Source Issue Id */
+            source_issue_id: number;
+            /** Target Issue Id */
+            target_issue_id: number;
+        };
+        /**
+         * PrerequisiteNoteUpdate
+         * @description Edit reader prose without changing endpoints or classification.
+         */
+        PrerequisiteNoteUpdate: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * PrerequisiteResponse
+         * @description Expose historical uncertainty without claiming approval.
+         */
+        PrerequisiteResponse: {
+            /** Classification */
+            classification: ("A" | "B" | "C" | "D") | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /** Origin */
+            origin: ("reader" | "converted") | null;
+            /** Provenance */
+            provenance: string | null;
+            /** Source Issue Id */
+            source_issue_id: number;
+            /** Target Issue Id */
+            target_issue_id: number;
+        };
+        /**
          * ProgressScope
          * @description Progress scope for reader context.
          * @enum {string}
@@ -12741,6 +12852,16 @@ export interface components {
             created_issues: number;
             /** Enabled Sources */
             enabled_sources: number;
+            /**
+             * Excluded Issues
+             * @default 0
+             */
+            excluded_issues: number;
+            /**
+             * Excluded Sources
+             * @default 0
+             */
+            excluded_sources: number;
             /** Failed Sources */
             failed_sources: number;
             /** Failures */
@@ -12753,6 +12874,11 @@ export interface components {
             issues_checked: number;
             /** Reused Issues */
             reused_issues: number;
+            /**
+             * Skipped Sources
+             * @default 0
+             */
+            skipped_sources: number;
             /** Successful Sources */
             successful_sources: number;
             /** Total Sources */
@@ -17662,6 +17788,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PerformanceMetricComparison"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_prerequisites_api_v1_prerequisites__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrerequisiteResponse"][];
+                };
+            };
+        };
+    };
+    create_prerequisite_api_v1_prerequisites__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrerequisiteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrerequisiteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prerequisite_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prerequisite_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrerequisiteNoteUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrerequisiteResponse"];
                 };
             };
             /** @description Validation Error */

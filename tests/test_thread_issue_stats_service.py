@@ -11,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread
 from app.models.user import User
-from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
+from app.services.thread_issue_stats import (
+    load_issue_stats,
+    load_next_issue_numbers,
+    load_unread_counts,
+)
 
 
 async def _make_thread(
@@ -163,3 +167,96 @@ async def test_load_next_issue_numbers_unmigrated_empty(
 async def test_load_next_issue_numbers_empty_list(async_db: AsyncSession) -> None:
     """Empty input returns an empty map without touching the database."""
     assert await load_next_issue_numbers([], async_db) == {}
+
+
+@pytest.mark.asyncio
+async def test_load_issue_stats_migrated_matches_both_loaders(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """The combined loader returns exactly what the two single loaders return."""
+    thread = await _make_thread(
+        async_db,
+        user_id=default_user.id,
+        title="Migrated",
+        queue_position=1,
+        migrated=True,
+        stored_remaining=99,
+    )
+    await async_db.commit()
+
+    counts, numbers = await load_issue_stats([thread], async_db)
+    assert counts == {thread.id: 2}
+    assert numbers == {thread.next_unread_issue_id: "1"}
+    assert counts == await load_unread_counts([thread], async_db)
+    assert numbers == await load_next_issue_numbers([thread], async_db)
+
+
+@pytest.mark.asyncio
+async def test_load_issue_stats_mixed_omits_legacy(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Legacy threads stay absent from both maps so callers keep stored counters."""
+    migrated = await _make_thread(
+        async_db,
+        user_id=default_user.id,
+        title="Migrated",
+        queue_position=1,
+        migrated=True,
+        stored_remaining=99,
+    )
+    unmigrated = await _make_thread(
+        async_db,
+        user_id=default_user.id,
+        title="Legacy",
+        queue_position=2,
+        migrated=False,
+        stored_remaining=42,
+    )
+    await async_db.commit()
+
+    counts, numbers = await load_issue_stats([migrated, unmigrated], async_db)
+    assert counts == {migrated.id: 2}
+    assert unmigrated.id not in counts
+    assert numbers == {migrated.next_unread_issue_id: "1"}
+
+
+@pytest.mark.asyncio
+async def test_load_issue_stats_resolves_stale_read_pointer(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """A pointer at an already-read issue still resolves its number (issue #3463).
+
+    The legacy ``load_next_issue_numbers`` fetched pointers by primary key
+    regardless of status; the combined loader must preserve that so a stale
+    ``next_unread_issue_id`` renders the same number as before.
+    """
+    thread = await _make_thread(
+        async_db,
+        user_id=default_user.id,
+        title="Migrated",
+        queue_position=1,
+        migrated=True,
+        stored_remaining=99,
+    )
+    await async_db.flush()
+    read_issue = Issue(
+        thread_id=thread.id,
+        issue_number="99",
+        position=6,
+        status="read",
+    )
+    async_db.add(read_issue)
+    await async_db.flush()
+    thread.next_unread_issue_id = read_issue.id
+    await async_db.commit()
+
+    counts, numbers = await load_issue_stats([thread], async_db)
+    assert counts == {thread.id: 2}
+    assert numbers[read_issue.id] == "99"
+    assert numbers == await load_next_issue_numbers([thread], async_db)
+
+
+@pytest.mark.asyncio
+async def test_load_issue_stats_empty_list(async_db: AsyncSession) -> None:
+    """Empty input returns empty maps without touching the database."""
+    assert await load_issue_stats([], async_db) == ({}, {})

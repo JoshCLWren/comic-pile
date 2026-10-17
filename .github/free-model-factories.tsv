@@ -28,7 +28,6 @@
 74	opencode-free	deepseek-v4.1-flash-free	20	dispatcher	OpenCode Deepseek V4.1 Flash Free
 75	opencode-free	nemotron-3.5-super-vl-free	25	dispatcher	OpenCode Nemotron 3.5 Super Vl Free
 78	nvidia	z-ai/glm-5.3	0	dispatcher	NVIDIA GLM 5.3
-79	opencode-free	step-5-preview-free	30	dispatcher	OpenCode Step 5 Preview Free
 80	nvidia	z-ai/glm-5.3-flash	40	dispatcher	NVIDIA GLM 5.3 Flash
 81	nvidia	deepseek-ai/deepseek-v4.1-flash	50	dispatcher	NVIDIA DeepSeek V4.1 Flash
 82	z-ai	glm-4.7-flash	55	dispatcher	Z.AI GLM 4.7 Flash

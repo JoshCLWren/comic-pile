@@ -70,6 +70,7 @@ from app.services.canonical_constraint_compiler import (
     rule_edge_pairs,
 )
 from app.services.list_chain_guard import is_retired_list_chain_pair
+from app.services.ownership_guard import require_plan_issue_refs_owned
 from app.services.reading_plan_normalization import (
     issue_ids_from_plan_json,
     rebuild_plan_membership,
@@ -275,6 +276,14 @@ async def validate_node_ownership(
         HTTPException: 422 ``dangling_plan_reference`` when any referenced node
             is not owned by ``user_id``.
     """
+    # Issue references are bulk-checked through the central ownership guard
+    # (issue #3225): ownership resolves join-through-thread, and shared
+    # catalog links never authorize membership.
+    await require_plan_issue_refs_owned(
+        db,
+        user_id=user_id,
+        refs={node.ref_id: node.id for node in nodes if node.node_type == "issue"},
+    )
     for node in nodes:
         if node.node_type == "thread":
             owned = (
@@ -287,6 +296,8 @@ async def validate_node_ownership(
                     status_code=422,
                     detail={"code": "dangling_plan_reference", "node_id": node.id},
                 )
+            continue
+        if node.node_type == "issue":
             continue
         try:
             await ensure_owned_continuity_node(

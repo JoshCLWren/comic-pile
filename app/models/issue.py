@@ -45,6 +45,15 @@ class Issue(Base):
             deferrable=True,
             initially="DEFERRED",
         ),
+        # Composite identity backing fk_threads_frontier_same_thread (#3225):
+        # lets threads(id, next_unread_issue_id) reference
+        # issues(thread_id, id) so a frontier can never point at another
+        # thread's issue. The constraint must exist in model metadata as well
+        # as in migration p322500000001_frontier_same_thread_fk.py, because
+        # Base.metadata.create_all (application startup and the test suite)
+        # never runs Alembic: without it the use_alter foreign key on threads
+        # fails with "there is no unique constraint matching given keys".
+        UniqueConstraint("thread_id", "id", name="uq_issues_thread_id_id"),
         Index("ix_issue_thread_id", "thread_id"),
         Index("ix_issue_thread_is_read", "thread_id", "status"),
         Index("ix_issue_thread_position", "thread_id", "position"),

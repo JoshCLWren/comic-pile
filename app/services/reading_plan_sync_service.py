@@ -34,6 +34,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.repositories import reading_plan_release_source_repository as repo
+from app.repositories import issue_repository, thread_repository
+from app.repositories.reading_list_authoring_repository import lock_reader
+from app.services.release_exclusion_service import comicvine_volume_id, load_release_exclusions
 from app.services.provider_issue_adoption import adopt_comicvine_issue
 from comic_pile.comicvine_provider import ComicVineClient
 
@@ -176,6 +179,9 @@ class SourceSyncResult:
     unknown_date_skips: int = 0
     conflicts: int = 0
     issue_failures: int = 0
+    excluded: bool = False
+    skipped: bool = False
+    excluded_issues: int = 0
     error: str | None = None
 
 
@@ -195,6 +201,9 @@ class SyncReport:
     unknown_date_skips: int = 0
     conflicts: int = 0
     issue_failures: int = 0
+    excluded_sources: int = 0
+    skipped_sources: int = 0
+    excluded_issues: int = 0
     failures: list[SourceFailure] = field(default_factory=list)
 
     @property
@@ -371,7 +380,7 @@ async def sync_released_issues(
                     error=f"Source sync failed: {error}",
                 )
             _accumulate(report, result)
-            if result.success:
+            if result.success and not result.skipped:
                 synced_source_ids.append(result.source_id)
 
     synced_at = clock()
@@ -388,7 +397,7 @@ async def sync_released_issues(
     logger.info(
         "reading_plan_sync_completed user_id=%s checked=%s successful=%s failed=%s "
         "created=%s reused=%s future_skips=%s unknown_date_skips=%s conflicts=%s "
-        "issue_failures=%s",
+        "issue_failures=%s excluded_sources=%s excluded_issues=%s skipped_sources=%s",
         user_id,
         report.checked_sources,
         report.successful_sources,
@@ -399,6 +408,9 @@ async def sync_released_issues(
         report.unknown_date_skips,
         report.conflicts,
         report.issue_failures,
+        report.excluded_sources,
+        report.excluded_issues,
+        report.skipped_sources,
     )
     return report
 
@@ -417,7 +429,7 @@ def _volume_id(source: ReadingPlanReleaseSource) -> int:
     """
     raw = str(source.external_identity.external_id).strip()
     try:
-        return int(raw)
+        return comicvine_volume_id(raw)
     except ValueError as error:
         raise ValueError(
             f"Release source {source.id} has a non-numeric ComicVine volume id: {raw!r}"
@@ -459,6 +471,9 @@ def _accumulate(report: SyncReport, result: SourceSyncResult) -> None:
         )
         return
 
+    report.excluded_sources += int(result.excluded)
+    report.skipped_sources += int(result.skipped)
+    report.excluded_issues += result.excluded_issues
     report.successful_sources += 1
     report.issues_checked += result.issues_checked
     report.created_issues += result.issues_created
@@ -491,8 +506,25 @@ async def _sync_source(
     Returns:
         A :class:`SourceSyncResult` describing the source outcome.
     """
-    thread = source.thread
+    owner_id = source.reading_plan.user_id
+    source_id, plan_id, thread_id = source.id, source.plan_id, source.thread_id
+    await lock_reader(db, owner_id)
+    # Lock Thread before subscription rows so Thread deletion and its cascading
+    # source deletion cannot deadlock or resurrect a stale target.
+    thread = await thread_repository.lock_thread(db, thread_id)
+    current = await repo.get_current_for_sync(db, source_id=source_id, user_id=owner_id)
+    if thread is None or current is None or not current.enabled:
+        return SourceSyncResult(source_id, plan_id, thread_id, volume_id, success=True, skipped=True)
+    source = current
     plan = source.reading_plan
+    if (_volume_id(source) != volume_id or source.thread_id != thread_id
+        or source.plan_id != plan_id):
+        return SourceSyncResult(source_id, plan_id, thread_id, volume_id, success=False,
+                                error="Release source changed during provider fetch; retry")
+    exclusions = await load_release_exclusions(db, owner_id)
+    if exclusions.excludes_source(thread_id, volume_id):
+        return SourceSyncResult(source_id, plan_id, thread_id, volume_id, success=True,
+                                skipped=True, excluded=True)
 
     if thread is None or thread.user_id != plan.user_id:
         return SourceSyncResult(
@@ -531,6 +563,7 @@ async def _sync_source(
     unknown_date_skips = 0
     conflicts = 0
     issue_failures = 0
+    excluded_issues = 0
 
     for row in roster:
         issues_checked += 1
@@ -561,6 +594,16 @@ async def _sync_source(
             )
             continue
 
+        existing = await issue_repository.find_owned_issue_by_confirmed_identity(
+            db, owner_id, provider=COMICVINE_PROVIDER, external_id=issue_id,
+        )
+        if existing is None:
+            existing = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
+        if existing is not None and (
+            existing.id in exclusions.issue_ids or existing.thread_id in exclusions.thread_ids
+        ):
+            excluded_issues += 1
+            continue
         try:
             adoption = await adopt_comicvine_issue(
                 db,
@@ -571,6 +614,7 @@ async def _sync_source(
                 external_url=_external_url(row, issue_id),
                 metadata=_issue_metadata(row),
                 comicvine_client=client,
+                thread=thread,
             )
         except Exception as error:  # one issue must not abort the source
             issue_failures += 1
@@ -600,6 +644,7 @@ async def _sync_source(
                     db,
                     issue_id=adoption.issue_id,
                     source_id=source.id,
+                    user_id=owner_id,
                     store_date=store_date,
                 )
             except Exception as error:
@@ -623,6 +668,7 @@ async def _sync_source(
         unknown_date_skips=unknown_date_skips,
         conflicts=conflicts,
         issue_failures=issue_failures,
+        excluded_issues=excluded_issues,
     )
 
 

@@ -201,6 +201,42 @@ They must not regain independent Roll authority.
 
 The useful reader-facing presentation from the existing Crossover UI may be reused for Reading Plans. That does not require preserving Crossover as a separate execution concept.
 
+### 11. Reader ownership is one authority, enforced at every write boundary
+
+A reader owns `Thread` rows through `threads.user_id`. Everything else resolves
+ownership join-through-thread: an `Issue`, its `ReadingPlanIssue` membership,
+its `ReadingSession` pending pointer, and any polymorphic target it backs are
+owned exactly when the parent thread is owned. There is deliberately no second
+`user_id` on `issues`, `dependencies`, or graph edges: duplicating it would fork
+the single thread→user authority and let the copies diverge.
+
+Catalog identity (`catalog_issues`, `catalog_series`, `catalog_issue_id`,
+`catalog_series_id`) is shared reference data, never authorization evidence. Two
+readers may point at one catalog row while their personal Issues, notes,
+ratings, tags, events, and read state stay strictly per-reader, so no ownership
+predicate may consult a catalog column.
+
+Enforcement is split by what the schema can actually express:
+
+- **Database-enforced.** `fk_threads_frontier_same_thread` makes
+  `threads(id, next_unread_issue_id)` reference `issues(thread_id, id)` (backed
+  by `uq_issues_thread_id_id`), `DEFERRABLE INITIALLY DEFERRED` so a
+  same-transaction frontier recomputation commits atomically. A frontier may
+  never name another thread's issue, including one owned by the same reader.
+- **Application-enforced.** Dependency endpoints, plan membership, session
+  pending pointers, and tag assignments. `issues`/`dependencies` carry no owner
+  column to key a composite foreign key on, and `tag_assignments(target_type,
+  target_id)` is polymorphic across three unrelated tables, so no single foreign
+  key target exists for either shape. These paths route through the centralized
+  guards in `app/services/ownership_guard.py` and must reject rather than
+  reconcile: existing drift is reported read-only by
+  `scripts/check_ownership_consistency.py` (counts and row IDs only, never
+  titles, notes, ratings, or payloads) and is never auto-repaired or silently
+  remapped.
+
+This is an ownership-integrity boundary only. It adds no Row Level Security, no
+auth-session model, and no new runtime graph authority.
+
 ## Runtime invariant
 
 The canonical runtime question is deliberately boring:

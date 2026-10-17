@@ -6,7 +6,7 @@ blocked-state refresh. Query construction and persistence live in
 lives in routers.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +50,62 @@ def _normalize_name(name: str) -> str:
     if not normalized:
         raise InvalidRequestError("Group name must not be blank")
     return normalized
+
+
+def _member_target_ids(
+    memberships: Sequence[DependencyGroupMembership],
+) -> tuple[set[int], set[int]]:
+    """Collect the thread and issue identifiers a membership set references.
+
+    Args:
+        memberships: The persisted memberships whose targets should be resolved.
+
+    Returns:
+        A ``(thread_ids, issue_ids)`` pair of referenced target identifiers.
+    """
+    thread_ids = {member.thread_id for member in memberships if member.thread_id is not None}
+    issue_ids = {member.issue_id for member in memberships if member.issue_id is not None}
+    return thread_ids, issue_ids
+
+
+def _build_member_responses(
+    memberships: Sequence[DependencyGroupMembership],
+    thread_titles: Mapping[int, str],
+    issue_metadata: Mapping[int, tuple[str | None, str | None]],
+) -> list[DependencyGroupMemberResponse]:
+    """Describe memberships from already-resolved comic metadata.
+
+    Pure mapping step so every caller shares one enrichment contract whether it
+    resolved metadata for a single group or for every group at once. Targets
+    that no longer resolve keep ``None`` metadata so clients can render a
+    readable fallback instead of raw database IDs.
+
+    Args:
+        memberships: The memberships to describe, in response order.
+        thread_titles: Mapping of thread ID to thread title.
+        issue_metadata: Mapping of issue ID to ``(issue number, series title)``.
+
+    Returns:
+        Member payloads in input order with series titles and issue numbers.
+    """
+    responses: list[DependencyGroupMemberResponse] = []
+    for member in memberships:
+        if member.thread_id is not None:
+            series_title = thread_titles.get(member.thread_id)
+            issue_number = None
+        else:
+            issue_number, series_title = issue_metadata.get(member.issue_id) or (None, None)
+        responses.append(
+            DependencyGroupMemberResponse(
+                id=member.id,
+                thread_id=member.thread_id,
+                issue_id=member.issue_id,
+                series_title=series_title,
+                issue_number=issue_number,
+                sequence_order=member.sequence_order,
+            )
+        )
+    return responses
 
 
 class DependencyGroupService:
@@ -97,12 +153,9 @@ class DependencyGroupService:
 
         Returns:
             Member payloads in input order with series titles and issue
-            numbers. Targets that no longer resolve keep ``None`` metadata so
-            clients can render a readable fallback instead of raw database
-            IDs.
+            numbers.
         """
-        thread_ids = {member.thread_id for member in memberships if member.thread_id is not None}
-        issue_ids = {member.issue_id for member in memberships if member.issue_id is not None}
+        thread_ids, issue_ids = _member_target_ids(memberships)
 
         thread_titles: dict[int, str] = {}
         if thread_ids:
@@ -112,27 +165,7 @@ class DependencyGroupService:
         if issue_ids:
             issue_metadata = await groups_repo.issue_series_metadata_by_id(self._db, issue_ids)
 
-        responses: list[DependencyGroupMemberResponse] = []
-        for member in memberships:
-            if member.thread_id is not None:
-                series_title = thread_titles.get(member.thread_id)
-                issue_number = None
-            else:
-                issue_number, series_title = issue_metadata.get(member.issue_id) or (
-                    None,
-                    None,
-                )
-            responses.append(
-                DependencyGroupMemberResponse(
-                    id=member.id,
-                    thread_id=member.thread_id,
-                    issue_id=member.issue_id,
-                    series_title=series_title,
-                    issue_number=issue_number,
-                    sequence_order=member.sequence_order,
-                )
-            )
-        return responses
+        return _build_member_responses(memberships, thread_titles, issue_metadata)
 
     async def _group_response(
         self,
@@ -258,7 +291,37 @@ class DependencyGroupService:
             The user's groups with memberships resolved to comic metadata.
         """
         groups = await groups_repo.list_groups_for_user(self._db, user_id)
-        return [await self._group_response(group) for group in groups]
+        # Resolve metadata for every group in one pass. Reusing the eagerly
+        # loaded memberships avoids the per-group membership requery, and one
+        # thread-titles query plus one issue-metadata query keeps the route's
+        # query count flat instead of growing with the number of groups.
+        # ``selectinload`` does not guarantee membership order, so sort by id to
+        # preserve the order ``list_memberships`` established per group.
+        ordered_memberships: list[list[DependencyGroupMembership]] = [
+            sorted(group.memberships or [], key=lambda member: member.id) for group in groups
+        ]
+        all_memberships = [member for memberships in ordered_memberships for member in memberships]
+        thread_ids, issue_ids = _member_target_ids(all_memberships)
+
+        thread_titles: dict[int, str] = {}
+        if thread_ids:
+            thread_titles = await groups_repo.thread_titles_by_id(self._db, thread_ids)
+
+        issue_metadata: dict[int, tuple[str | None, str | None]] = {}
+        if issue_ids:
+            issue_metadata = await groups_repo.issue_series_metadata_by_id(self._db, issue_ids)
+
+        return [
+            DependencyGroupResponse(
+                id=group.id,
+                name=group.name,
+                created_at=group.created_at,
+                memberships=_build_member_responses(
+                    memberships, thread_titles, issue_metadata
+                ),
+            )
+            for group, memberships in zip(groups, ordered_memberships, strict=True)
+        ]
 
     async def create_group(
         self,
