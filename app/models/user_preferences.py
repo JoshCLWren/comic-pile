@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import DEFAULT_THEME
@@ -24,6 +24,8 @@ class UserPreferences(Base):
     """Per-user UI preferences (e.g., the selected visual theme).
 
     The ``user_id`` is unique so each user owns exactly one preferences row.
+    The unique constraint's backing index provides the user_id lookup
+    coverage; a separate ordinary index was redundant (issue #3219).
     """
 
     __tablename__ = "user_preferences"
@@ -51,5 +53,3 @@ class UserPreferences(Base):
     user: Mapped[User] = relationship(
         "User", back_populates="preferences", uselist=False, lazy="raise"
     )
-
-    __table_args__ = (Index("ix_user_preferences_user_id", "user_id"),)
