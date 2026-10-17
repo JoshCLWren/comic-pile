@@ -273,6 +273,9 @@ async def create_issues(
                                 comicvine_issue_id=comicvine_issue_id,
                                 issue_number=issue_number_str,
                                 comicvine_client=comicvine_client,
+                                thread=thread,
+                                issue=issue,
+                                recalculate_tracking=False,
                             )
                             if adoption_result.outcome == "created":
                                 logger.info("Auto-mapped issue %d to ComicVine issue %s", issue.id, comicvine_issue_id)
