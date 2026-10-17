@@ -1,11 +1,11 @@
 """Queue management functions."""
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime, timedelta
 import logging
 import random
-from typing import NamedTuple
-from sqlalchemy import and_, func, select, text
+from typing import Any, NamedTuple
+from sqlalchemy import and_, func, select, text, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -57,7 +57,7 @@ def _sync_cached_queue_positions(db: AsyncSession, positions: dict[int, int]) ->
             set_committed_value(obj, "queue_position", positions[obj.id])
 
 
-def _split_position_rows(rows) -> tuple[dict[int, int], QueuePositionChanges]:
+def _split_position_rows(rows: Sequence[Any]) -> tuple[dict[int, int], QueuePositionChanges]:
     """Split queue UPDATE rows into new positions and changed old positions."""
     positions: dict[int, int] = {}
     changes: QueuePositionChanges = {}
@@ -223,12 +223,12 @@ async def move_to_position(
 
     await _acquire_queue_lock(user_id, db)
 
-    result = await db.execute(
+    row_result = await db.execute(
         select(Thread.id, Thread.queue_position, Thread.status)
         .where(Thread.id == thread_id)
         .where(Thread.user_id == user_id)
     )
-    row = result.one_or_none()
+    row = row_result.one_or_none()
 
     if not row:
         logger.error("Thread %d not found for user %d", thread_id, user_id)
@@ -258,7 +258,7 @@ async def move_to_position(
         thread_count = 0  # Not needed for validation
         old_seq = 0  # Only used for logging
     else:
-        result = await db.execute(
+        stats_result = await db.execute(
             text(
                 """
                 SELECT
@@ -279,7 +279,7 @@ async def move_to_position(
                 "queue_position": queue_position,
             },
         )
-        thread_count, old_seq = result.one()
+        thread_count, old_seq = stats_result.one()
         logger.debug("Active thread count: %d", thread_count)
 
         if new_position < 1:
@@ -296,23 +296,23 @@ async def move_to_position(
         new_position,
     )
 
-    result = await db.execute(
+    move_result = await db.execute(
         _MOVE_POSITION_SQL,
         {"uid": user_id, "tid": thread_id, "new_pos": new_position},
     )
-    positions, changes = _split_position_rows(result.fetchall())
+    positions, changes = _split_position_rows(move_result.fetchall())
     _sync_cached_queue_positions(db, positions)
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("Final queue state after operation:")
-        result = await db.execute(
+        final_result = await db.execute(
             select(Thread)
             .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
             .where(Thread.queue_position >= 1)
             .order_by(Thread.queue_position, Thread.id)
         )
-        final_queue = result.scalars().all()
+        final_queue = final_result.scalars().all()
 
         for thread in final_queue:
             logger.debug(
@@ -533,7 +533,7 @@ async def get_roll_pool_rows(
     unread_counts = (
         select(Issue.thread_id.label("thread_id"), func.count(Issue.id).label("unread_count"))
         .where(Issue.status == "unread")
-        .where(Issue.id.not_in(eligibility.excluded_issue_ids) if eligibility else True)
+        .where(Issue.id.not_in(eligibility.excluded_issue_ids) if eligibility else true())
         .group_by(Issue.thread_id)
         .subquery()
     )
@@ -566,7 +566,11 @@ async def get_roll_pool_rows(
         (
             row[0],
             eligibility.unread_counts.get(row[0].id, 0) if eligibility is not None else row[1],
-            eligibility.issue_numbers.get(eligibility.threads[row[0].id].next_issue_id)
+            (
+                eligibility.issue_numbers.get(nid)
+                if (nid := eligibility.threads[row[0].id].next_issue_id) is not None
+                else None
+            )
             if eligibility is not None
             else row[2],
         )
