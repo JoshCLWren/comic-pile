@@ -14,6 +14,23 @@ uv run python -m scripts.report_reading_eligibility \
 
 The CLI uses a PostgreSQL-enforced read-only, repeatable-read transaction with
 autoflush disabled. It never loads the URL from application settings. Normal
+For the **app-wide Option E cutover** (#3676), inspect every reader in one
+repeatable-read snapshot and save the fingerprinted acceptance evidence:
+
+```bash
+uv run python -m scripts.report_reading_eligibility \\
+  --database-url "$READING_SHADOW_DATABASE_URL" --all-readers > reading-all-readers.json
+```
+
+The all-reader result contains separate owner-scoped reports (including readers with
+no lists), aggregate reader-validity and eligible/blocked divergence counts, and a
+SHA-256 `source_fingerprint` of the complete read-only report. A valid graph is a
+necessary condition, not proof that every offered comic matches current intent;
+review known crossover, annual, strict-list and event-hold examples before
+production enablement. Historical/converted dependency rows are audit evidence,
+not automatic canonical blockers; the shadow comparison still records their
+legacy effect.
+
 Roll requests are unaffected; `shadow_reading_eligibility` is also available to
 an explicit diagnostic caller alongside the current runtime.
 
