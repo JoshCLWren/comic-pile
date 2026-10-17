@@ -24,6 +24,24 @@ jobs:
         mode: [anonymous, authenticated]
     steps:
       - uses: actions/checkout@v7
+      - name: Identify already-configured OpenCode secret names
+        if: matrix.mode == 'authenticated'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo '::warning::Unable to inspect repository secret metadata; PR_REBASE_TOKEN unavailable'
+            exit 0
+          fi
+          names_file="$RUNNER_TEMP/available-opencode-secret-names"
+          if gh api "repos/${GITHUB_REPOSITORY}/actions/secrets?per_page=100" --jq '.secrets[].name' > "$names_file" 2>/dev/null; then
+            echo 'Configured OpenCode-related repository secret names:'
+            grep -Ei 'opencode|zen|console' "$names_file" || echo '(none with OpenCode/Zen/Console in the name)'
+          else
+            echo '::warning::Existing GitHub credential cannot enumerate repository secret names'
+          fi
       - name: Install latest OpenCode 2
         run: bash .github/scripts/install-opencode-v2.sh
       - name: Call exact OpenCode Free DeepSeek model and shell tool
