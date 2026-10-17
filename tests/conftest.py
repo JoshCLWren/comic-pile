@@ -183,12 +183,18 @@ def _default_test_username() -> str:
 
 
 async def _sync_id_sequence(db: SQLAlchemyAsyncSession, table_name: str) -> None:
-    """Advance a table's id sequence to the current max id after explicit inserts."""
+    """Advance an id sequence without rewinding values consumed before rollback.
+
+    PostgreSQL sequence updates are not transactional. A fixture can temporarily
+    truncate a table and later restore its rows by rollback, so its visible max
+    must never lower the sequence below values already allocated.
+    """
     await db.execute(
         text(
             "SELECT setval("
             f"pg_get_serial_sequence('{table_name}', 'id'), "
-            f"COALESCE((SELECT MAX(id) FROM {table_name}), 1), true)"
+            f"GREATEST(COALESCE((SELECT MAX(id) FROM {table_name}), 1), "
+            f"COALESCE(pg_sequence_last_value(pg_get_serial_sequence('{table_name}', 'id')::regclass), 1)), true)"
         )
     )
 
@@ -445,21 +451,7 @@ async def async_db(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSessi
             expire_on_commit=False,
             join_transaction_mode="create_savepoint",
         )
-        # Ensure the users.id sequence is in sync with the current max id to avoid
-        # UniqueViolationError when tests insert new users within a rolled-back
-        # per-test transaction. This keeps autoincrement aligned per-test.
-        try:
-            from sqlalchemy import text as _text
-
-            await session.execute(
-                _text(
-                    "SELECT setval(pg_get_serial_sequence('users','id'), COALESCE((SELECT MAX(id) FROM users), 1), true)"
-                )
-            )
-            await session.flush()
-        except Exception:
-            # If anything goes wrong, fall back gracefully and let tests proceed.
-            pass
+        await _sync_id_sequence(session, "users")
         try:
             yield session
         finally:
