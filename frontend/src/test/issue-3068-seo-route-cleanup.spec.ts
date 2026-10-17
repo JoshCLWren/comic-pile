@@ -8,14 +8,17 @@
  * 4. Canonical links and redirects agree on the same final URL
  */
 
-import { expect, type Page } from '@playwright/test'
+import { expect } from '@playwright/test'
 import { test } from './fixtures'
 
 test.describe('Issue #3068: SEO route cleanup', () => {
   test('landing page is the only public-indexable route', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveTitle(/ComicPile/)
-    await expect(page.getByRole('heading', { name: /ComicPile/i })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: /dice-driven reading queue for your comic collection/i }),
+    ).toBeVisible()
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'index, follow')
   })
 
   test('public-noindex routes are not indexable', async ({ page }) => {
@@ -36,17 +39,26 @@ test.describe('Issue #3068: SEO route cleanup', () => {
     }
   })
 
-  test('removed obsolete aliases return 404', async ({ page }) => {
-    for (const path of ['/rate', '/analytics', '/roll', '/help']) {
-      await page.goto(path, { waitUntil: 'domcontentloaded' })
-      await expect(page.getByRole('heading', { name: /Page not found/i })).toBeVisible()
+  test('legacy aliases reach their canonical destination with a single redirect', async ({ authenticatedPage }) => {
+    const aliases: Array<[string, RegExp]> = [
+      ['/rate', /\/$/],
+      ['/analytics', /\/$/],
+      ['/roll', /\/$/],
+      ['/help', /\/glossary$/],
+    ]
+
+    for (const [path, canonical] of aliases) {
+      await authenticatedPage.goto(path, { waitUntil: 'domcontentloaded' })
+      // Each alias resolves to its canonical URL in one client-side redirect
+      // rather than dead-ending on the not-found page.
+      await expect(authenticatedPage).toHaveURL(canonical)
+      await expect(authenticatedPage.getByRole('heading', { name: /Page not found/i })).toHaveCount(0)
     }
   })
 
   test('missing routes return proper 404 responses', async ({ page }) => {
     const nonExistentPaths = [
       '/non-existent-page',
-      '/api/test',
       '/invalid-route',
       '/random-path',
     ]

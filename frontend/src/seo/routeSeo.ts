@@ -50,6 +50,8 @@ export const ROUTE_SEO_TABLE: readonly RouteSeoEntry[] = [
   { pattern: '/forgot-password', visibility: 'public-noindex', canonicalPath: null, title: `Forgot password — ${APP_TITLE}`, description: UTILITY_DESCRIPTION },
   { pattern: '/reset-password', visibility: 'public-noindex', canonicalPath: null, title: `Reset password — ${APP_TITLE}`, description: UTILITY_DESCRIPTION },
   { pattern: '/demo', visibility: 'public-noindex', canonicalPath: null, title: `Try the demo — ${APP_TITLE}`, description: UTILITY_DESCRIPTION },
+  // Compatibility redirect routes: crawlers follow the redirect, so the
+  // redirect source itself stays non-indexable with no canonical of its own.
   { pattern: '/rate', visibility: 'public-noindex', canonicalPath: null, title: APP_TITLE, description: APP_DESCRIPTION },
   { pattern: '/analytics', visibility: 'public-noindex', canonicalPath: null, title: APP_TITLE, description: APP_DESCRIPTION },
   { pattern: '/roll', visibility: 'public-noindex', canonicalPath: null, title: `Roll the dice — ${APP_TITLE}`, description: APP_DESCRIPTION },
