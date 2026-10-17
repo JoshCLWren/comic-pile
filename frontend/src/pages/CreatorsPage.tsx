@@ -279,12 +279,6 @@ export default function CreatorsPage() {
     loadMore,
     refetch,
   } = useCreatorsList({ search: activeSearch || undefined, sort, minRatings: minRatings || undefined })
-  const {
-    data: teamChemistry,
-    isError: teamChemistryError,
-    refetch: refetchTeamChemistry,
-  } = useCreatorTeamChemistry()
-
   const hasItems = items.length > 0
 
   // Discovery hooks
@@ -652,22 +646,7 @@ export default function CreatorsPage() {
         </section>
       )}
 
-      {teamChemistry && <CreatorTeamChemistrySection data={teamChemistry} />}
-      {teamChemistryError && (
-        <p role="alert" className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          Could not load team chemistry. Your creators and ratings are unchanged.
-          <button
-            type="button"
-            onClick={() => {
-              void refetchTeamChemistry()
-            }}
-            className="ml-2 underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-            style={{ color: 'var(--theme-text-primary)' }}
-          >
-            Try again
-          </button>
-        </p>
-      )}
+
     </div>
   )
 }
