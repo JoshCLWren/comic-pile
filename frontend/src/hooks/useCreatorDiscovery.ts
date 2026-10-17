@@ -37,7 +37,8 @@ export function useDiscovery(
     queryKey: queryKeys.creators.discovery.detail(params.mode, params.limit, params.offset),
     queryFn: () => creatorsApi.getDiscovery(params),
     enabled: enabled && !!params.mode,
-    initialData: { 
+    // SAFETY: this literal placeholder satisfies the DiscoveryResponse contract and is replaced as soon as the bounded discovery query resolves.
+    initialData: {
       mode: params.mode,
       title: '',
       description: '',
@@ -45,6 +46,6 @@ export function useDiscovery(
       total: 0,
       limit: params.limit || 20,
       offset: params.offset || 0,
-    } as DiscoveryResponse, // SAFETY: literal initial data satisfies DiscoveryResponse shape
+    } as DiscoveryResponse,
   })
 }

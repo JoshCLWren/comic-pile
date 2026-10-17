@@ -5,8 +5,11 @@ import { useDiscoveryModes, useDiscovery } from '../hooks/useCreatorDiscovery'
 import type { CreatorListSort } from '../hooks/useCreatorsList'
 import type { DiscoveryMode } from '../services/api-creators'
 import { useDebounce } from '../hooks/useDebounce'
+import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { creatorRoutePath, parseCreatorKey } from '../utils/creatorKey'
-import type { CreatorListItem } from '../services/api-creators'
+import { isNumber } from '../utils/runtimeChecks'
+import type { CreatorListItem, DiscoveryResultItem } from '../services/api-creators'
+import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 
 /** Quiet period before a typed name search becomes a new bounded query. */
 const SEARCH_DEBOUNCE_MS = 300
@@ -81,7 +84,7 @@ function DiscoveryResultRow({
   selectionCount,
   maxSelection,
 }: {
-  item: any
+  item: DiscoveryResultItem
   isSelected: boolean
   onToggle: () => void
   selectionCount: number
@@ -96,8 +99,8 @@ function DiscoveryResultRow({
   const canSelect = !isSelected && selectionCount < maxSelection
 
   // Format qualifying metrics for display
-  const formatQualifyingMetric = (key: string, value: unknown) => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
+  const formatQualifyingMetric = (key: string, value: number | string) => {
+    if (isNumber(value)) {
       if (key.includes('rate') || key.includes('score') || key.includes('percentage')) {
         return `${value}%`
       }
@@ -106,7 +109,7 @@ function DiscoveryResultRow({
       }
       return value.toFixed(1)
     }
-    return value?.toString() || ''
+    return String(value)
   }
 
   const metricsDisplay = Object.entries(item.qualifying_metrics).map(([key, value]) => {
@@ -276,11 +279,7 @@ export default function CreatorsPage() {
     hasMore,
     loadMore,
     refetch,
-  } = useCreatorsList({ 
-    search: activeSearch || undefined, 
-    sort, 
-    minRatings: minRatings || undefined,
-  })
+  } = useCreatorsList({ search: activeSearch || undefined, sort, minRatings: minRatings || undefined })
 
   // Discovery hooks
   const { isLoading: isLoadingDiscoveryModes } = useDiscoveryModes()
@@ -290,13 +289,19 @@ export default function CreatorsPage() {
     isError: isDiscoveryError,
     refetch: refetchDiscovery,
   } = useDiscovery(
-    { 
+    {
       mode: discoveryMode || 'consistently_loved',
       limit: 20,
       offset: 0,
     },
     !!discoveryMode,
   )
+
+  const {
+    data: teamChemistry,
+    isError: teamChemistryError,
+    refetch: refetchTeamChemistry,
+  } = useCreatorTeamChemistry()
 
   const hasItems = items.length > 0
   const ratingsPartial = coverage != null && !coverage.ratings_complete
@@ -647,6 +652,23 @@ export default function CreatorsPage() {
             </button>
           )}
         </section>
+      )}
+
+      {teamChemistry && <CreatorTeamChemistrySection data={teamChemistry} />}
+      {teamChemistryError && (
+        <p role="alert" className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+          Could not load team chemistry. Your creators and ratings are unchanged.
+          <button
+            type="button"
+            onClick={() => {
+              void refetchTeamChemistry()
+            }}
+            className="ml-2 underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            style={{ color: 'var(--theme-text-primary)' }}
+          >
+            Try again
+          </button>
+        </p>
       )}
     </div>
   )
