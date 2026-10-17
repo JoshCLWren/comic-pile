@@ -561,9 +561,15 @@ async def rate_thread(
             all_issues = sorted(created_issues_list, key=lambda i: i.position)
         else:
             all_issues = await issues_ordered(db, thread.id)
-            # Counter migration may mutate already-existing issue rows; capture
-            # their pre-action state so undo can restore exactly those records.
-            issue_changes.extend(_issue_preimage(issue) for issue in all_issues)
+            # Only capture preimages for the issues this action actually mutates
+            # (bounded by the mutation, not the full thread collection — #3226).
+            changed_issues: list[Issue] = []
+            for issue in all_issues:
+                if issue.position < current_issue.position and issue.status != "read":
+                    changed_issues.append(issue)
+                elif issue.position == current_issue.position:
+                    changed_issues.append(issue)
+            issue_changes.extend(_issue_preimage(issue) for issue in changed_issues)
         for issue in all_issues:
             if issue.position < current_issue.position and issue.status != "read":
                 issue.status = "read"
