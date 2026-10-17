@@ -10,6 +10,8 @@ on:
     secrets:
       OPENCODE_API_KEY:
         required: false
+      OPENCODE_ZEN_API_KEY:
+        required: false
       NVIDIA_API_KEY:
         required: false
       OPENROUTER_API_KEY:
@@ -110,7 +112,7 @@ jobs:
         shell: bash
         env:
           REQUESTED_WORKER: ${{ inputs.worker }}
-          OPENCODE_API_KEY: ${{ (inputs.worker == '88' || inputs.worker == '90') && secrets.OPENCODE_API_KEY || '' }}
+          EXISTING_OPENCODE_KEY: ${{ (inputs.worker == '88' || inputs.worker == '90') && (secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY) || '' }}
         run: |
           set -Eeuo pipefail
           row="$(awk -F '\t' -v worker="$REQUESTED_WORKER" '$1 == worker {print; exit}' .github/free-model-factories.tsv)"
@@ -197,9 +199,9 @@ jobs:
               ;;
           esac
 
-          if [[ "$deepseek_mode" == authenticated && -z "${OPENCODE_API_KEY:-}" ]]; then
+          if [[ "$deepseek_mode" == authenticated && -z "${EXISTING_OPENCODE_KEY:-}" ]]; then
             configured=false
-            reason='missing-OPENCODE_API_KEY'
+            reason='missing-OpenCode-credential'
           fi
 
           {
@@ -259,7 +261,7 @@ jobs:
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.deepseek_mode == 'authenticated'
         shell: bash
         env:
-          EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}
         run: |
           set -Eeuo pipefail
           [[ -n "${EXISTING_OPENCODE_KEY:-}" ]] || { echo "::error::Existing OpenCode API key unavailable"; exit 1; }
