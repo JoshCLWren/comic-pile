@@ -1162,6 +1162,8 @@ def _project_snapshot(
         if state is None or state.action == "preserve_unknown":
             prerequisites.append(row)
             continue
+        if state.origin is None:
+            raise ValueError("A changed prerequisite must have a known origin")
         prerequisites.append(
             ReadingPrerequisite(
                 row.prerequisite_id,
