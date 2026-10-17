@@ -45,6 +45,6 @@ export function useDiscovery(
       total: 0,
       limit: params.limit || 20,
       offset: params.offset || 0,
-    } as DiscoveryResponse,
+    } as DiscoveryResponse, // SAFETY: literal initial data satisfies DiscoveryResponse shape
   })
 }

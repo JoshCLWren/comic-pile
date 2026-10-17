@@ -95,8 +95,8 @@ function DiscoveryResultRow({
   const canSelect = !isSelected && selectionCount < maxSelection
 
   // Format qualifying metrics for display
-  const formatQualifyingMetric = (key: string, value: any) => {
-    if (typeof value === 'number') {
+  const formatQualifyingMetric = (key: string, value: unknown) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
       if (key.includes('rate') || key.includes('score') || key.includes('percentage')) {
         return `${value}%`
       }
