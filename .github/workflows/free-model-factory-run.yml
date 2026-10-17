@@ -130,11 +130,7 @@ jobs:
               # Live catalogs, not a TSV model assignment or OmniRoute,
               # determine the eligible free model for this durable worker.
               catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
-              args=(opencode)
-              help_text="$(opencode models --help 2>&1)"
-              if grep -q -- '--refresh' <<< "$help_text"; then args+=(--refresh); fi
-              if grep -q -- '--verbose' <<< "$help_text"; then args+=(--verbose); fi
-              opencode models "${args[@]}" > "$catalog"
+              bash scripts/opencode-model-catalog.sh opencode verbose refresh > "$catalog"
               result="$(python3 .github/scripts/factory_live_opencode.py \
                 --catalog "$catalog" --worker "$WORKER" \
                 --rotation "${GITHUB_RUN_NUMBER:-0}")"
@@ -304,7 +300,7 @@ jobs:
           catalog_failures=()
 
           opencode_catalog="$RUNNER_TEMP/factory-opencode-catalog"
-          if opencode models opencode --refresh > "$opencode_catalog"; then
+          if bash scripts/opencode-model-catalog.sh opencode plain refresh > "$opencode_catalog"; then
             if opencode_discovery="$(discover_provider opencode-free "$opencode_catalog")" \
               && jq -e '.status and (.candidates | type == "array")' >/dev/null <<< "$opencode_discovery"; then
               if [[ "$(jq -r '.status' <<< "$opencode_discovery")" != invalid ]]; then
