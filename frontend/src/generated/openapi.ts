@@ -12231,6 +12231,11 @@ export interface components {
              */
             default_selected: boolean;
             /**
+             * External Id
+             * @description Provider-specific identifier
+             */
+            external_id?: string | null;
+            /**
              * Issue Id
              * @description Internal issue ID
              */
@@ -12245,6 +12250,11 @@ export interface components {
              * @description Whether this issue would be mapped in the proposed scope
              */
             proposed_mapping: boolean;
+            /**
+             * Provider
+             * @description External provider name
+             */
+            provider?: string | null;
             /**
              * Reason
              * @description Explanation for the classification

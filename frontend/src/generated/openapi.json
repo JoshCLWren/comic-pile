@@ -14282,6 +14282,18 @@
             "title": "Default Selected",
             "type": "boolean"
           },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider-specific identifier",
+            "title": "External Id"
+          },
           "issue_id": {
             "description": "Internal issue ID",
             "title": "Issue Id",
@@ -14296,6 +14308,18 @@
             "description": "Whether this issue would be mapped in the proposed scope",
             "title": "Proposed Mapping",
             "type": "boolean"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "External provider name",
+            "title": "Provider"
           },
           "reason": {
             "anyOf": [
