@@ -6,10 +6,8 @@ queries to multiply counts and produce incorrect percentiles.
 """
 
 from datetime import datetime, UTC, timedelta
-from typing import Any
 
 import pytest
-from sqlalchemy import text
 
 from app.models.performance_metric import PerformanceMetric
 from app.repositories import performance_metric_repository
@@ -157,7 +155,7 @@ async def test_get_performance_metrics_summary_by_cold_counts(
 
 @pytest.mark.asyncio
 async def test_get_performance_metrics_summary_by_cold_stats(
-    db, sample_performance_metrics: list[PerformanceMetrics]
+    db, sample_performance_metrics: list[PerformanceMetric]
 ) -> None:
     """Test that cold/warm statistics are calculated correctly."""
     result = await performance_metric_repository.get_performance_metrics_summary(db)

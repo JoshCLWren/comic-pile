@@ -104,6 +104,7 @@ async def get_performance_metrics_summary(
     db: AsyncSession,
     *,
     metric_type: str | None = None,
+    cold: bool | None = None,
     deployment_id: str | None = None,
     start_time: datetime | None = None,
     end_time: datetime | None = None,
@@ -113,6 +114,7 @@ async def get_performance_metrics_summary(
     Args:
         db: Database session.
         metric_type: Optional filter by metric type.
+        cold: Optional filter by cold/warm classification.
         deployment_id: Optional filter by deployment/commit identifier.
         start_time: Optional start time filter.
         end_time: Optional end time filter.
@@ -124,6 +126,8 @@ async def get_performance_metrics_summary(
     count_conditions = []
     if metric_type is not None:
         count_conditions.append(PerformanceMetric.metric_type == metric_type)
+    if cold is not None:
+        count_conditions.append(PerformanceMetric.cold == cold)
     if deployment_id is not None:
         count_conditions.append(PerformanceMetric.deployment_id == deployment_id)
     if start_time is not None:
