@@ -13,7 +13,7 @@ from app.schemas.collection_exclusion import (
     CollectionExclusionResponse,
 )
 from app.services import collection_exclusion_service as service
-from app.services.errors import NotFoundError
+from app.services.errors import InvalidRequestError, NotFoundError
 
 router = APIRouter(prefix="/collection-exclusions", tags=["collection-exclusions"])
 
@@ -41,6 +41,8 @@ async def create_exclusion(
         )
     except NotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except InvalidRequestError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     return CollectionExclusionResponse.model_validate(row)
 
 
@@ -57,4 +59,6 @@ async def delete_exclusion(
         )
     except NotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except InvalidRequestError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)

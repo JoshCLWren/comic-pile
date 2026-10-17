@@ -32,6 +32,9 @@ from app.models import (
     ThreadExternalSeriesMapping,
 )
 
+from app.repositories.reading_eligibility_queries import candidate_predicate, frontier_expression
+from app.services.reading_eligibility_service import ReadingEligibilitySnapshot
+
 SeriesIdentity = aliased(ExternalIdentity)
 
 
@@ -78,7 +81,9 @@ class LastReadRow(TypedDict):
     read_at: datetime | None
 
 
-def _route_labels_subquery(user_id: int) -> ColumnElement[object]:
+def _route_labels_subquery(
+    user_id: int, eligibility: ReadingEligibilitySnapshot | None = None
+) -> ColumnElement[object]:
     """Aggregate owned route names touching a thread or its next issue."""
     from sqlalchemy.dialects.postgresql import ARRAY
     from sqlalchemy import cast
@@ -90,7 +95,7 @@ def _route_labels_subquery(user_id: int) -> ColumnElement[object]:
         .where(
             or_(
                 DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+                DependencyGroupMembership.issue_id == frontier_expression(eligibility),
             ),
             DependencyGroup.user_id == user_id,
         )
@@ -106,6 +111,7 @@ async def fetch_rollable_candidates(
     user_id: int,
     die_size: int,
     excluded_thread_ids: list[int],
+    eligibility: ReadingEligibilitySnapshot | None = None,
 ) -> list[RollableCandidateRow]:
     """Fetch rollable candidate threads with identity and route context.
 
@@ -120,6 +126,7 @@ async def fetch_rollable_candidates(
         user_id: Owner of the threads.
         die_size: Current die size; caps the candidate pool.
         excluded_thread_ids: Snoozed/skipped thread ids to exclude.
+        eligibility: Validated live result, or None for legacy execution.
 
     Returns:
         Flat candidate rows ordered by queue position.
@@ -136,6 +143,16 @@ async def fetch_rollable_candidates(
         .correlate(Thread)
         .scalar_subquery()
     )
+    candidate_ids = (
+        select(Thread.id)
+        .where(Thread.user_id == user_id, Thread.status == "active", Thread.queue_position >= 1)
+        .where(candidate_predicate(eligibility))
+        .order_by(Thread.queue_position, Thread.id)
+        .limit(die_size)
+    )
+    if excluded_thread_ids:
+        candidate_ids = candidate_ids.where(Thread.id.not_in(excluded_thread_ids))
+    bounded = candidate_ids.cte("bounded_roll_thread_ids")
     query = (
         select(
             Thread.id,
@@ -145,7 +162,7 @@ async def fetch_rollable_candidates(
             Issue.id,
             Issue.issue_number,
             Issue.status,
-            _route_labels_subquery(user_id).label("route_labels"),
+            _route_labels_subquery(user_id, eligibility).label("route_labels"),
             IssueExternalIdentityMapping.status,
             IssueExternalIdentityMapping.confidence,
             ExternalIdentity.external_id,
@@ -156,7 +173,7 @@ async def fetch_rollable_candidates(
             func.coalesce(thread_read_count, 0).label("thread_read_count"),
             func.coalesce(thread_total_count, 0).label("thread_total_count"),
         )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .outerjoin(Issue, Issue.id == frontier_expression(eligibility))
         .outerjoin(
             IssueExternalIdentityMapping,
             and_(
@@ -190,13 +207,14 @@ async def fetch_rollable_candidates(
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
-        .where(Thread.is_blocked.is_(False))
+        .where(candidate_predicate(eligibility))
         .order_by(Thread.queue_position, Thread.id)
     )
     if excluded_thread_ids:
         query = query.where(Thread.id.not_in(excluded_thread_ids))
-    # Apply the die cap after exclusions so the pool stays bounded and stable.
-    query = query.limit(die_size    )
+    # Bound Threads before joining multiple identity rows, so identity fan-out
+    # cannot consume a second Thread's place in the die pool.
+    query = query.where(Thread.id.in_(select(bounded.c.id)))
     result = await db.execute(query)
     rows: list[RollableCandidateRow] = []
     for row in result.all():

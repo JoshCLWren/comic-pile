@@ -41,12 +41,18 @@ def test_frontier_exclusions_activity_and_queue_membership() -> None:
     snapshot = ReadingSnapshot(
         1,
         threads=(
-            ReadingThread(1), ReadingThread(2, "paused"), ReadingThread(3, "completed"),
-            ReadingThread(4), ReadingThread(5),
+            ReadingThread(1),
+            ReadingThread(2, "paused"),
+            ReadingThread(3, "completed"),
+            ReadingThread(4),
+            ReadingThread(5),
         ),
         issues=(
-            ReadingIssue(10, 1, 1), ReadingIssue(11, 1, 2), ReadingIssue(20, 2, 1),
-            ReadingIssue(30, 3, 1), ReadingIssue(50, 5, 1),
+            ReadingIssue(10, 1, 1),
+            ReadingIssue(11, 1, 2),
+            ReadingIssue(20, 2, 1),
+            ReadingIssue(30, 3, 1),
+            ReadingIssue(50, 5, 1),
         ),
         excluded_issue_ids=frozenset({10}),
     )
@@ -91,11 +97,20 @@ async def test_loader_ignores_stale_cache_and_keeps_other_readers_out(
     async_db.add_all([owner, other])
     await async_db.flush()
     thread = Thread(
-        user_id=owner.id, title="Owned", format="Comic", status="active",
-        queue_position=1, is_blocked=True, issues_remaining=0,
+        user_id=owner.id,
+        title="Owned",
+        format="Comic",
+        status="active",
+        queue_position=1,
+        is_blocked=True,
+        issues_remaining=0,
     )
     foreign = Thread(
-        user_id=other.id, title="Foreign", format="Comic", status="active", queue_position=1,
+        user_id=other.id,
+        title="Foreign",
+        format="Comic",
+        status="active",
+        queue_position=1,
     )
     async_db.add_all([thread, foreign])
     await async_db.flush()

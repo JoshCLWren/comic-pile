@@ -14,6 +14,11 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.reading_eligibility_service import (
+    get_execution_eligibility,
+    project_thread_responses,
+)
+
 from app.models import Event, Issue, Thread
 from app.models.thread import normalize_format_value
 from app.repositories import (
@@ -263,11 +268,21 @@ async def list_stale_thread_responses(
     Returns:
         Responses for stale threads ordered by oldest activity first.
     """
+    from app.services.snooze_service import derive_cross_session_excluded_thread_ids
+
+    reading_session = await reading_session_repository.fetch_active_reading_session(db, user_id)
+    current_snoozed = reading_session.snoozed_thread_ids if reading_session is not None else []
+    derived = await derive_cross_session_excluded_thread_ids(db, user_id)
+    snoozed_ids = sorted(set(snoozed_ids or []) | set(current_snoozed or []) | derived)
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
+    eligibility = await get_execution_eligibility(db, user_id)
+    if eligibility is not None and reading_session is not None:
+        snoozed_ids = sorted(set(snoozed_ids) | set(reading_session.skipped_thread_ids or []))
+    eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
     threads = await thread_repository.fetch_stale_threads(
-        db, user_id, cutoff_date, snoozed_ids=snoozed_ids, page_size=page_size
+        db, user_id, cutoff_date, snoozed_ids=snoozed_ids, page_size=page_size, **eligibility_args
     )
-    return await threads_to_responses(threads, db)
+    return project_thread_responses(await threads_to_responses(threads, db), eligibility)
 
 
 async def list_queue_threads(
@@ -300,6 +315,8 @@ async def list_queue_threads(
     Raises:
         InvalidRequestError: When the page token is stale or malformed.
     """
+    eligibility = await get_execution_eligibility(db, user_id)
+    eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
     validated_sort: QueueSort = cast(QueueSort, sort)
     normalized_search = normalize_queue_search(search)
 
@@ -310,7 +327,12 @@ async def list_queue_threads(
     cursor = None
     if page_token:
         try:
-            cursor = decode_queue_cursor(page_token, sort=validated_sort, search=search)
+            cursor = decode_queue_cursor(
+                page_token,
+                sort=validated_sort,
+                search=search,
+                execution="option_e" if eligibility is not None else "legacy",
+            )
         except ValueError as exc:
             raise InvalidRequestError(str(exc)) from exc
 
@@ -321,6 +343,7 @@ async def list_queue_threads(
         sort=validated_sort,
         cursor=cursor,
         limit=page_size + 1,
+        **eligibility_args,
     )
 
     has_more = len(threads) > page_size
@@ -334,6 +357,8 @@ async def list_queue_threads(
     # read, and the one bounded tag read added by issue #3425.
     tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
     mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
+
+    thread_responses = project_thread_responses(thread_responses, eligibility)
 
     # One bounded tag read for the whole page (issue #3425) so Queue rows show
     # tags without a per-row query.
@@ -353,8 +378,9 @@ async def list_queue_threads(
         last = threads_to_return[-1]
         page_cursor = QueueCursor(
             sort=validated_sort,
+            execution="option_e" if eligibility is not None else "legacy",
             search=normalized_search,
-            values=build_cursor_values_from_row(validated_sort, last),
+            values=build_cursor_values_from_row(validated_sort, last, eligibility),
         )
         next_token = encode_queue_cursor(page_cursor)
 

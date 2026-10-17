@@ -9963,6 +9963,148 @@
         "title": "PositionRequest",
         "type": "object"
       },
+      "PrerequisiteCreate": {
+        "additionalProperties": false,
+        "description": "Create one stable pair; provenance is server-controlled.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source_issue_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Source Issue Id",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Target Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "title": "PrerequisiteCreate",
+        "type": "object"
+      },
+      "PrerequisiteNoteUpdate": {
+        "additionalProperties": false,
+        "description": "Edit reader prose without changing endpoints or classification.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "PrerequisiteNoteUpdate",
+        "type": "object"
+      },
+      "PrerequisiteResponse": {
+        "description": "Expose historical uncertainty without claiming approval.",
+        "properties": {
+          "classification": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reader",
+                  "converted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance"
+          },
+          "source_issue_id": {
+            "title": "Source Issue Id",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "title": "Target Issue Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "source_issue_id",
+          "target_issue_id",
+          "created_at",
+          "note",
+          "origin",
+          "classification",
+          "provenance"
+        ],
+        "title": "PrerequisiteResponse",
+        "type": "object"
+      },
       "ProgressScope": {
         "description": "Progress scope for reader context.",
         "enum": [
@@ -24591,6 +24733,187 @@
         "tags": [
           "performance-metrics",
           "performance-metrics"
+        ]
+      }
+    },
+    "/api/v1/prerequisites/": {
+      "get": {
+        "description": "Read stable endpoints and their unmodified provenance.",
+        "operationId": "list_prerequisites_api_v1_prerequisites__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrerequisiteResponse"
+                  },
+                  "title": "Response List Prerequisites Api V1 Prerequisites  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Prerequisites",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "prerequisites"
+        ]
+      },
+      "post": {
+        "description": "Create one explicit reader prerequisite after combined cycle validation.",
+        "operationId": "create_prerequisite_api_v1_prerequisites__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrerequisiteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrerequisiteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Prerequisite",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "prerequisites"
+        ]
+      }
+    },
+    "/api/v1/prerequisites/{prerequisite_id}": {
+      "delete": {
+        "description": "Remove a reader requirement without changing read state or list intent.",
+        "operationId": "delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prerequisite_id",
+            "required": true,
+            "schema": {
+              "title": "Prerequisite Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Prerequisite",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "prerequisites"
+        ]
+      },
+      "patch": {
+        "description": "Edit the note of a new reader-authored requirement.",
+        "operationId": "update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prerequisite_id",
+            "required": true,
+            "schema": {
+              "title": "Prerequisite Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrerequisiteNoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrerequisiteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Prerequisite Note",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "prerequisites"
         ]
       }
     },

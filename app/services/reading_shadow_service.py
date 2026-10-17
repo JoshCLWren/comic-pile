@@ -93,6 +93,7 @@ def compare_reading_eligibility(
         row.target_issue_id
         for row in inputs.prerequisites
         if row.source_issue_id in unread and row.target_issue_id in by_id
+        and row.prerequisite_id not in inputs.legacy_note_ignored_prerequisite_ids
     }
     rows: list[dict[str, object]] = []
     for stored in sorted(inputs.stored, key=lambda row: row.thread_id):

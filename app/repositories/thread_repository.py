@@ -11,6 +11,9 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.services.reading_eligibility_service import ReadingEligibilitySnapshot
+from app.repositories.reading_eligibility_queries import candidate_predicate
+
 from app.models import Issue, Thread
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.services.queue_pagination import QueueCursor, QueueSort, build_cursor_filter, build_sort_order
@@ -120,6 +123,7 @@ async def fetch_stale_threads(
     cutoff_date: datetime,
     snoozed_ids: list[int] | None = None,
     page_size: int | None = None,
+    eligibility: ReadingEligibilitySnapshot | None = None,
 ) -> list[Thread]:
     """Fetch active, unblocked threads whose last activity predates a cutoff.
 
@@ -131,6 +135,8 @@ async def fetch_stale_threads(
             excluded from the stale result.
         page_size: Optional maximum number of results to return.
 
+        eligibility: Shared live result, or None for legacy execution.
+
     Returns:
         Stale threads ordered oldest activity first (nulls first), capped to
         ``page_size`` when provided.
@@ -139,7 +145,7 @@ async def fetch_stale_threads(
         select(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(False))
+        .where(candidate_predicate(eligibility))
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )
@@ -183,6 +189,7 @@ async def fetch_queue_page(
     sort: QueueSort,
     cursor: QueueCursor | None,
     limit: int,
+    eligibility: ReadingEligibilitySnapshot | None = None,
 ) -> list[Thread]:
     """Fetch one deterministic page of a user's ACTIVE threads for the queue list.
 
@@ -193,6 +200,8 @@ async def fetch_queue_page(
         sort: Validated sort order key with deterministic tie-breakers.
         cursor: Decoded continuation cursor, or None for the first page.
         limit: Maximum number of threads to return.
+
+        eligibility: Shared live result, or None for legacy execution.
 
     Returns:
         Active threads in canonical page order, at most ``limit`` rows.
@@ -206,12 +215,12 @@ async def fetch_queue_page(
         query = query.where(Thread.title.ilike(f"%{search}%"))
 
     # Apply deterministic sort order with tie-breakers
-    for col in build_sort_order(sort):
+    for col in build_sort_order(sort, eligibility):
         query = query.order_by(col)
 
     # Apply opaque cursor-based pagination
     if cursor is not None:
-        query = query.where(build_cursor_filter(cursor))
+        query = query.where(build_cursor_filter(cursor, eligibility))
 
     query = query.limit(limit)
     result = await db.execute(query)
