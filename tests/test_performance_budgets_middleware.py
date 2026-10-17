@@ -16,7 +16,6 @@ from app.middleware.request_logging import (
 )
 from app.performance_budgets import (
     REQUEST_WARNING_MS,
-    StartupBudgetError,
     get_performance_budget_manager,
 )
 from app.startup_diagnostics import StartupSnapshot, startup_event_snapshot
@@ -249,13 +248,13 @@ class TestPerformanceBudgetAppIntegration:
 
 
 class TestStartupHardBudgetEnforcement:
-    """Test that crossing the total startup budget fails production startup."""
+    """Test that crossing the total startup budget records telemetry without aborting."""
 
-    def test_production_startup_fails_when_hard_budget_crossed(
+    def test_production_startup_serves_when_hard_budget_crossed(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """A production process past 2.5 s fails initialization instead of serving."""
+        """A production process past 2.5 s wall clock serves requests and records telemetry."""
         from app.config import clear_settings_cache
         from app.performance_budgets import STARTUP_TIMEOUT_MS
 
@@ -274,12 +273,14 @@ class TestStartupHardBudgetEnforcement:
 
         app = create_app(serve_frontend=False, defer_router_imports=True)
         try:
-            with pytest.raises(StartupBudgetError) as exc_info, TestClient(app):
-                pass
+            with TestClient(app) as client:
+                assert client.get("/api/ping").status_code == 200
 
-            assert exc_info.value.operation == "startup.readiness"
-            assert exc_info.value.timeout_ms == STARTUP_TIMEOUT_MS
-            assert exc_info.value.elapsed_ms == observed_ms
+            violations = get_performance_budget_manager().get_startup_violations()
+            assert len(violations) == 1
+            assert violations[0].operation == "startup.readiness"
+            assert violations[0].elapsed_ms == observed_ms
+            assert violations[0].context["deadline_ms"] == STARTUP_TIMEOUT_MS
             assert get_performance_budget_manager().violation_counts_by_operation() == {
                 "startup.readiness": 1
             }
