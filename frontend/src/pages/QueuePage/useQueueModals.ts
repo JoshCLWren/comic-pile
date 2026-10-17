@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import type { Thread, ThreadListItem, ThreadCreatePayload } from '../../types'
@@ -119,6 +119,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [issueParseWarnings, setIssueParseWarnings] = useState<string[]>([])
   const [issueParseBreakdown, setIssueParseBreakdown] = useState<ParsedIssueRangeDetail['breakdown']>([])
   const [isIssuesLoading, setIsIssuesLoading] = useState(false)
+
+  const creatingRef = useRef(false)
 
   const showRollNudge = params.showRollNudge
 
@@ -309,6 +311,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const handleCreateSubmit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault()
+      if (creatingRef.current) return
+      creatingRef.current = true
       try {
         const { parseIssueRange } = await import('../../utils/issueParser')
         const hasIssueRange = Boolean(createForm.issues && createForm.issues.trim())
@@ -360,6 +364,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
       } catch (error: unknown) {
         console.error('Failed to create thread:', error)
         window.alert(`Failed to create series: ${getApiErrorDetail(error)}`)
+      } finally {
+        creatingRef.current = false
       }
     },
     [createForm, closeCreateModal, onCreated, submitCreate],
