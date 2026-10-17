@@ -517,6 +517,39 @@ class TestQueueThreadBootstrapPreview:
         assert rows_by_id[issues[0].id]["default_selected"] is False
         assert rows_by_id[issues[1].id]["classification"] == "safe_exact_match"
 
+    @pytest.mark.asyncio
+    async def test_confirmed_identity_is_not_reported_as_missing_library_inventory(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
+    ) -> None:
+        """The provider issue a confirmed identity claims is never provider inventory.
+
+        Re-opening the dialog after a partial confirmation must not claim that the volume
+        holds an issue "not in your library" when that exact provider issue is already the
+        confirmed identity of an owned issue in the thread.
+        """
+        user = sample_data["user"]
+        _, issues = await _create_thread_with_issues(
+            async_db,
+            user_id=user.id,
+            title="Confirmed Inventory",
+            issue_numbers=["1", "2"],
+        )
+        await _confirm_issue(async_db, issues[0], external_id="500001")
+        roster = [_roster_row(500001, "1"), _roster_row(500002, "2"), _roster_row(500003, "3")]
+
+        with _patch_comicvine(roster):
+            response = await auth_client.post(PREVIEW_URL, json=_bootstrap_payload(issues[0].id))
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # The confirmed identity's own provider issue is matched, not missing inventory.
+        provider_only = [row for row in data["rows"] if row.get("thread_id") is None]
+        assert [row["external_id"] for row in provider_only] == ["500003"]
+        assert data["counts"]["already_confirmed"] == 1
+        assert data["counts"]["safe_exact_match"] == 1
+        assert data["counts"]["unresolved"] == 1
+
 
 class TestQueueThreadBootstrapCommit:
     """The commit surface must confirm exactly the approved bootstrap rows."""

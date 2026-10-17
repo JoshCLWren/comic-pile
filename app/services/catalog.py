@@ -1153,8 +1153,9 @@ def _classify_queue_thread_bootstrap_rows(
     exactly one issue in the thread *and* exactly one issue in the selected provider volume's
     real roster. Confirmed identities are preserved (agreement is idempotent, disagreement is
     reported as a conflict), special and ambiguous numbers stay out of the safe offer, and
-    provider issues that no owned issue claims are reported as provider inventory. No fuzzy
-    matching is ever performed.
+    provider issues that no owned issue claims are reported as provider inventory. A provider
+    issue that a confirmed identity already claims is matched, so it is never reported as
+    inventory that is "not in your library". No fuzzy matching is ever performed.
 
     Args:
         thread_issues: De-duplicated owned thread rows, in thread order.
@@ -1182,6 +1183,14 @@ def _classify_queue_thread_bootstrap_rows(
 
     rows: list[dict[str, object]] = []
     consumed_external_ids: set[str] = set()
+    # A confirmed identity claims its provider issue: that roster row is already in the
+    # caller's library, so it must never be reported as unmatched provider inventory, even
+    # when the volume disagrees about which number the owned issue carries.
+    confirmed_external_ids = {
+        str(issue.get("external_id"))
+        for issue in thread_issues
+        if issue.get("current_mapping_status") == "confirmed" and issue.get("external_id")
+    }
 
     for issue in thread_issues:
         raw_number = _issue_number_text(issue.get("issue_number"))
@@ -1224,7 +1233,11 @@ def _classify_queue_thread_bootstrap_rows(
         rows.append(row)
 
     for roster in roster_rows:
-        if str(roster.get("external_id")) in consumed_external_ids:
+        roster_external_id = str(roster.get("external_id"))
+        if (
+            roster_external_id in consumed_external_ids
+            or roster_external_id in confirmed_external_ids
+        ):
             continue
         row = dict(roster)
         row["_roster_only"] = True

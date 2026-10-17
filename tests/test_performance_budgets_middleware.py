@@ -211,21 +211,25 @@ class TestPerformanceBudgetAppIntegration:
     
     def test_metrics_endpoint_performance(self):
         """Test that the metrics endpoint performance is tracked."""
-        response = self.client.get("/api/metrics")
-        
+        with patch(
+            "app.middleware.request_logging.time.perf_counter",
+            side_effect=_measured_request_duration(0.01),
+        ):
+            response = self.client.get("/api/metrics")
+
         assert response.status_code == 200
         data = response.json()
-        
+
         # Should contain performance information
         assert "startup_time" in data
         assert "startup_duration" in data
-        
+
         # Metrics endpoint should be fast
         budget_manager = get_performance_budget_manager()
-        # Note: metrics endpoint might trigger warnings in CI due to timing
-        # but the important thing is that it doesn't crash
+        # The measured duration is pinned so CI wall-clock jitter cannot turn this
+        # request into a false performance-budget violation.
         assert len(budget_manager.get_request_violations()) == 0
-    
+
     def test_error_response_performance_tracking(self):
         """Test that error responses also have performance tracking."""
         @self.app.get("/error-test")
@@ -233,13 +237,18 @@ class TestPerformanceBudgetAppIntegration:
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Not found")
 
-        response = self.client.get("/error-test")
+        with patch(
+            "app.middleware.request_logging.time.perf_counter",
+            side_effect=_measured_request_duration(0.01),
+        ):
+            response = self.client.get("/error-test")
 
         assert response.status_code == 404
 
         # Error responses should still be tracked for performance
         budget_manager = get_performance_budget_manager()
-        # Should not have performance violations for a 404
+        # Should not have performance violations for a 404; the measured duration is
+        # pinned so a loaded CI runner cannot report a false violation.
         assert len(budget_manager.get_request_violations()) == 0
 
     def test_non_production_startup_degrades_instead_of_failing(self):
