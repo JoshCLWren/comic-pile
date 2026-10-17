@@ -82,16 +82,16 @@ describe('CreatorTeamChemistrySection', () => {
     renderSection({ data: makeResponse() })
 
     const writer = screen.getByRole('link', { name: 'Writer One' })
-    expect(writer).toHaveAttribute('href', '/creator/creator:1')
+    expect(writer).toHaveAttribute('href', '/creators/creator%3A1')
     const artist = screen.getByRole('link', { name: 'Artist Two' })
-    expect(artist).toHaveAttribute('href', '/creator/creator:2')
+    expect(artist).toHaveAttribute('href', '/creators/creator%3A2')
   })
 
   it('carries explainable sample and baseline context for every member', () => {
     renderSection({ data: makeResponse() })
 
     expect(screen.getByText('3 shared rated issues'))
-    expect(screen.getByText('6 rated in your library'))
+    expect(screen.getAllByText('6 rated in your library')).toHaveLength(2)
     expect(screen.getAllByLabelText(/baseline average rating 3\.5 out of 5/).length).toBe(2)
     expect(screen.getAllByLabelText(/together this pair averages 4\.33 out of 5/).length).toBe(2)
     expect(screen.getAllByText('+0.5 vs baseline').length).toBe(2)
