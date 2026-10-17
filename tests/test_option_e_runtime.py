@@ -322,7 +322,7 @@ async def test_old_dependencies_do_not_override_canonical_reading_intent(
     rows = shadow["threads"]
     assert isinstance(rows, list)
     assert all(isinstance(row, dict) for row in rows)
-    by_thread = {row["thread_id"]: row for row in rows}
+    by_thread = {row["thread_id"]: row for row in rows if isinstance(row, dict)}
     assert by_thread[legacy.id]["legacy_derived_frontier_blocked"] is True
     assert by_thread[legacy.id]["proposed_eligible"] is True
     assert by_thread[compiled.id]["proposed_eligible"] is True
