@@ -13,6 +13,10 @@ from fastapi import HTTPException
 
 from app.models import Dependency, Issue, Thread
 from app.repositories import dependency_repository, issue_repository
+from app.services.reading_eligibility_service import (
+    get_execution_eligibility,
+    project_blocking_explanation,
+)
 from app.services.ownership_guard import require_dependency_endpoints_owned
 from app.schemas.dependency import (
     BlockingDependency,
@@ -242,19 +246,8 @@ async def get_thread_blocking_info(
     if not thread:
         return None
 
-    # Blocking status is derived from the canonical blocking-explanation query
-    # itself, so no separate blocked-ID query is needed.
-    explanations_map = await get_blocking_explanations_batch([thread_id], user_id, db)
-    dependencies = explanations_map.get(thread_id, [])
-
-    if not dependencies:
-        return BlockingExplanation(is_blocked=False, blocking_reasons=[], blocking_dependencies=[])
-
-    return BlockingExplanation(
-        is_blocked=True,
-        blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],
-        blocking_dependencies=[_to_blocking_dependency_schema(dep) for dep in dependencies],
-    )
+    explanations = await get_blocking_details([thread_id], user_id, db)
+    return explanations[thread_id]
 
 
 async def get_threads_blocking_info(
@@ -279,6 +272,28 @@ async def get_threads_blocking_info(
     )
     if thread_count != len(thread_ids):
         return None
+
+    return await get_blocking_details(thread_ids, user_id, db)
+
+
+async def get_blocking_details(
+    thread_ids: list[int], user_id: int, db: AsyncSession,
+) -> dict[int, BlockingExplanation]:
+    """Project owner-scoped restrictions without repeating a library ownership read.
+
+    Args:
+        thread_ids: Candidate IDs from a reader-owned library query. Public batch
+            endpoints validate existence/ownership separately for their 404 contract.
+        user_id: Authenticated reader. Both execution loaders filter by this owner,
+            so foreign IDs can never reveal another reader's issues or list labels.
+        db: Current request transaction.
+
+    Returns:
+        Live restrictions, or legacy dependencies while execution is disabled.
+    """
+    eligibility = await get_execution_eligibility(db, user_id)
+    if eligibility is not None:
+        return {tid: project_blocking_explanation(eligibility, tid) for tid in thread_ids}
 
     # Blocking status is derived from the canonical blocking-explanation query
     # itself, so no separate blocked-ID query is needed.

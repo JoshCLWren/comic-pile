@@ -131,3 +131,73 @@ test.describe('Reading Plan reader surface', () => {
     }
   })
 })
+
+// The ordinary lane proves disabled-mode safety; an enabled local fixture also proves strict execution.
+test('Option E explains strict Julix blockers consistently and supports direct list reading', async ({ authenticatedPage: page }) => {
+  const headers = await authHeaders(page)
+  const first = await createThread(page, { title: 'Julix Dead Remembered', format: 'Comics', issues_remaining: 1, total_issues: 1 })
+  const later = await createThread(page, { title: 'Julix King of Fear', format: 'Comics', issues_remaining: 1, total_issues: 1 })
+  const firstIssue = await firstIssueId(page, headers, first.id)
+  const laterIssue = await firstIssueId(page, headers, later.id)
+  const createdList = await page.request.post('/api/v1/custom-cbls', { headers, data: { name: 'Julix strict acceptance', mode: 'strict', issue_ids: [firstIssue, laterIssue] } })
+  expect(createdList.ok(), await createdList.text()).toBeTruthy()
+  // SAFETY: successful list creation returns a numeric id; this test reads only that id.
+  const list = await createdList.json() as { id: number }
+  const reader = await page.request.get(`/api/v1/custom-cbls/${list.id}/reader`, { headers })
+  expect(reader.ok(), await reader.text()).toBeTruthy()
+  // SAFETY: the owned reader endpoint returns execution_mode; no other response fields are read.
+  const projection = await reader.json() as { execution_mode: string }
+  expect(projection.execution_mode).toBe(process.env.OPTION_E_EXPECTED_MODE ?? 'legacy')
+  const enabled = projection.execution_mode === 'option_e'
+  const dependency = await page.request.post('/api/v1/dependencies/', { headers, data: { source_type: 'issue', source_id: firstIssue, target_type: 'issue', target_id: laterIssue } })
+  expect(dependency.ok(), await dependency.text()).toBeTruthy()
+  const createPlan = await page.request.post('/api/v1/continuity-plans/', { headers, data: { name: 'Reader entry point', lanes: [{ id: 'main', name: 'Main', order: 0 }], nodes: [] } })
+  expect(createPlan.ok(), await createPlan.text()).toBeTruthy()
+  // SAFETY: successful plan creation returns a numeric id; this test reads only that id.
+  const plan = await createPlan.json() as { id: number }
+  const reason = enabled ? 'Strict order in Julix strict acceptance: waiting on Julix Dead Remembered #1' : 'Blocked by Julix Dead Remembered: #1'
+
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(`/thread/${later.id}`)
+    await expect(page.getByRole('region', { name: 'Next issue availability' })).toContainText(reason)
+    await expect(page.getByText('Nothing blocks this series', { exact: true })).toHaveCount(0)
+    await page.goto('/')
+    await page.getByRole('button', { name: /series waiting for earlier issues/ }).click()
+    await expect(page.getByText(reason, { exact: true }).first()).toBeVisible()
+    await page.goto('/queue')
+    const card = page.getByTestId('queue-thread-item').filter({ hasText: 'Julix King of Fear' })
+    await expect(card).toContainText(reason)
+    await expect(card.getByRole('button', { name: 'Read & Rate' })).toBeDisabled()
+    await page.goto(`/continuity-plans/${plan.id}/edit`)
+    await page.getByRole('button', { name: 'Create or edit custom CBL', exact: true }).click()
+    await page.getByRole('combobox', { name: 'Custom CBL', exact: true }).selectOption(String(list.id))
+    await page.getByRole('button', { name: 'Read this list', exact: true }).click()
+    const listReader = page.getByRole('region', { name: 'Read Julix strict acceptance', exact: true })
+    if (enabled) {
+      await expect(listReader).toContainText(reason)
+      await expect(listReader.getByRole('button', { name: 'Mark read', exact: true })).toHaveCount(1)
+    } else {
+      await expect(listReader).toContainText('Reading List execution is not active yet')
+      await expect(listReader.getByRole('button', { name: 'Mark read', exact: true })).toHaveCount(0)
+    }
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    const theme = width === 390 ? 'classic' : width === 768 ? 'ink-gold' : 'command-center'
+    await page.evaluate((name) => document.documentElement.setAttribute('data-theme', name), theme)
+    await listReader.screenshot({ path: `test-results/option-e-reader-${width}-${theme}.png` })
+  }
+  if (!enabled) {
+    const marked = await page.request.post(`/api/v1/issues/${firstIssue}:markRead`, { headers })
+    expect(marked.ok(), await marked.text()).toBeTruthy()
+    await page.goto(`/thread/${later.id}`)
+    await expect(page.getByRole('region', { name: 'Next issue availability' })).toContainText('Next unread: #1')
+    return
+  }
+  const listReader = page.getByRole('region', { name: 'Read Julix strict acceptance', exact: true })
+  await listReader.getByRole('button', { name: 'Mark read', exact: true }).click()
+  await expect(listReader.getByRole('button', { name: 'Mark unread', exact: true })).toHaveCount(1)
+  await expect(listReader).not.toContainText(reason)
+  await expect(listReader.getByRole('button', { name: 'Mark read', exact: true })).toHaveCount(1)
+  await page.goto(`/thread/${later.id}`)
+  await expect(page.getByRole('region', { name: 'Next issue availability' })).toContainText('Next unread: #1')
+})

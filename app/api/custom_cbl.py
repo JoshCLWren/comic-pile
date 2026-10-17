@@ -18,6 +18,8 @@ from app.schemas.custom_cbl import (
     CustomCBLResponse,
     CustomCBLWrite,
 )
+from app.schemas.reading_list_reader import ReadingListReaderResponse
+from app.services.reading_list_reader import get_reading_list_reader
 from app.services.custom_cbl import (
     apply_custom_cbl_for_user,
     create_custom_cbl_for_user,
@@ -169,3 +171,13 @@ async def apply_custom_cbl(
         lane_id=payload.lane_id,
         expected_updated_at=payload.expected_updated_at,
     )
+
+
+@router.get("/{list_id}/reader")
+async def read_custom_cbl(
+    list_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ReadingListReaderResponse:
+    """Explain the complete current list using the same authority as Roll."""
+    return await get_reading_list_reader(db, user_id=current_user.id, list_id=list_id)

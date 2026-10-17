@@ -170,3 +170,12 @@ export function useMigrateThread(api?: DependencyMigrationApi) {
     },
   });
 }
+
+/** Load the live next-issue explanation, including list restrictions. */
+export function useThreadBlockingInfo(threadId: number | null) {
+  return useQuery({
+    queryKey: queryKeys.dependencies.blockingBatch(threadId == null ? [] : [threadId]),
+    queryFn: () => dependenciesApi.getBatchBlockingInfo([threadId!]),
+    enabled: threadId != null,
+  })
+}

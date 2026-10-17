@@ -271,6 +271,8 @@ export const queryKeys = {
     ] as const,
   },
   customCBLs: {
+    readers: () => ['customCBLs', 'reader'] as const,
+    reader: (id: number) => ['customCBLs', 'reader', id] as const,
     all: ['customCBLs'] as const,
     list: () => ['customCBLs', 'list'] as const,
     detail: (listId: number) => ['customCBLs', 'detail', listId] as const,

@@ -1,10 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 
 const navigate = vi.fn()
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...await importOriginal<typeof import('react-router-dom')>(),
   useNavigate: () => navigate,
 }))
 
@@ -13,7 +15,7 @@ describe('ThreadPool bootstrap edge branches', () => {
     const onThreadClick = vi.fn()
 
     render(
-      <ThreadPool
+      <MemoryRouter><ThreadPool
         pool={[{ id: 1, title: 'Saga', format: 'Comic' }]}
         blockedThreads={[{ id: 2, title: 'Monstress', format: 'Comic' }]}
         blockingDependencyMap={{}}
@@ -39,7 +41,7 @@ describe('ThreadPool bootstrap edge branches', () => {
         unsnoozeIsPending={false}
         unskipIsPending={false}
         shuffleIsPending={false}
-      />,
+      /></MemoryRouter>,
     )
 
     const thread = screen.getByRole('button', { name: /Die face 1: Saga/i })
@@ -47,7 +49,8 @@ describe('ThreadPool bootstrap edge branches', () => {
     fireEvent.keyDown(thread, { key: 'Enter' })
     expect(onThreadClick).toHaveBeenCalledWith({ id: 1, title: 'Saga', format: 'Comic' })
 
-    expect(screen.getByText('Monstress')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Monstress' })).toHaveAttribute('href', '/thread/2')
+    expect(screen.getByText('Reading requirements are unavailable. Open the series to retry.')).toBeVisible()
     expect(screen.queryByText('Read the prerequisite first')).not.toBeInTheDocument()
   })
 })

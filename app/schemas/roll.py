@@ -119,6 +119,7 @@ class RollBootstrapThread(BaseModel):
     format: str
     issue_id: int | None = None
     issue_number: str | None = None
+    blocking_reasons: list[str] = Field(default_factory=list)
     route_labels: list[str] = Field(default_factory=list)
     last_activity_at: str | None = None
     tags: list[TagResponse] = Field(default_factory=list)

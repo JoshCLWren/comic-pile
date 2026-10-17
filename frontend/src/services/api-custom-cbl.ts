@@ -1,3 +1,5 @@
+import type { components } from '../generated/openapi'
+export type ReadingListReader = components['schemas']['ReadingListReaderResponse']
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
 
@@ -96,6 +98,7 @@ export interface CustomCBLApplyResult extends ContinuityPlan {
  */
 export function createCustomCBLApi(client: HttpClient) {
   return {
+    getReader: (listId: number) => client.get<ReadingListReader>(`/v1/custom-cbls/${listId}/reader`),
     list: () => client.get<CustomCBLListItem[]>('/v1/custom-cbls'),
     get: (listId: number) => client.get<CustomCBL>(`/v1/custom-cbls/${listId}`),
     create: (payload: CustomCBLWrite) => client.post<CustomCBL>('/v1/custom-cbls', payload),

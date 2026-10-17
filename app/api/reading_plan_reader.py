@@ -27,8 +27,8 @@ async def get_continuity_plan_reader(
 ) -> ReadingPlanReaderResponse:
     """Return progress, available now, blocked next, and ordered lanes.
 
-    Blocking uses canonical issue-level Dependencies only. The payload is the
-    primary reader view for a Reading Plan and does not change Roll eligibility.
+    Availability uses the same guarded authority as Roll. Disabled readers retain
+    legacy dependencies; inspecting a plan never activates list execution.
     """
     return await get_reading_plan_reader(
         db, user_id=current_user.id, plan_id=plan_id

@@ -1334,8 +1334,8 @@ export interface paths {
          * Get Continuity Plan Reader
          * @description Return progress, available now, blocked next, and ordered lanes.
          *
-         *     Blocking uses canonical issue-level Dependencies only. The payload is the
-         *     primary reader view for a Reading Plan and does not change Roll eligibility.
+         *     Availability uses the same guarded authority as Roll. Disabled readers retain
+         *     legacy dependencies; inspecting a plan never activates list execution.
          */
         get: operations["get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get"];
         put?: never;
@@ -1980,6 +1980,26 @@ export interface paths {
          * @description Export one custom list as a portable .cbl XML document.
          */
         get: operations["export_custom_cbl_api_v1_custom_cbls__list_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-cbls/{list_id}/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Custom Cbl
+         * @description Explain the complete current list using the same authority as Roll.
+         */
+        get: operations["read_custom_cbl_api_v1_custom_cbls__list_id__reader_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6115,9 +6135,11 @@ export interface components {
         };
         /**
          * BlockingDependency
-         * @description A single dependency blocking a thread, described in reader language.
+         * @description One unread Issue required by a list or explicit prerequisite.
          */
         BlockingDependency: {
+            /** Issue Id */
+            issue_id?: number | null;
             /** Issue Number */
             issue_number: string;
             /** Label */
@@ -11215,6 +11237,72 @@ export interface components {
             issue_name: string;
         };
         /**
+         * ReadingListReaderEntry
+         * @description One current list member with the execution authority's decision.
+         */
+        ReadingListReaderEntry: {
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "read" | "available" | "blocked" | "later" | "excluded" | "inactive" | "legacy";
+            /** Checkpoint Target Issue Ids */
+            checkpoint_target_issue_ids?: number[];
+            explanation?: components["schemas"]["BlockingExplanation"] | null;
+            /**
+             * Gate
+             * @default none
+             * @enum {string}
+             */
+            gate: "none" | "hold" | "after_previous";
+            /** Id */
+            id: number;
+            /**
+             * Is Checkpoint
+             * @default false
+             */
+            is_checkpoint: boolean;
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Position */
+            position: number;
+            /** Series Name */
+            series_name: string;
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * ReadingListReaderResponse
+         * @description Full current list order; never reconstructed from plan membership.
+         */
+        ReadingListReaderResponse: {
+            /** Entries */
+            entries?: components["schemas"]["ReadingListReaderEntry"][];
+            /**
+             * Execution Mode
+             * @enum {string}
+             */
+            execution_mode: "legacy" | "option_e";
+            /** List Id */
+            list_id: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "strict" | "loose";
+            /** Name */
+            name: string;
+        };
+        /**
          * ReadingModeResponse
          * @description Current reading-mode state for the active session.
          */
@@ -11435,7 +11523,7 @@ export interface components {
         };
         /**
          * ReadingPlanBlocker
-         * @description One unread canonical Dependency source holding a plan issue back.
+         * @description One unread Issue required by the current execution authority.
          */
         ReadingPlanBlocker: {
             /** Explanation */
@@ -11536,7 +11624,7 @@ export interface components {
              * Availability
              * @enum {string}
              */
-            availability: "read" | "available" | "blocked" | "later";
+            availability: "read" | "available" | "blocked" | "later" | "excluded" | "inactive";
             /** Blockers */
             blockers?: components["schemas"]["ReadingPlanBlocker"][];
             /** Display Position */
@@ -11592,6 +11680,12 @@ export interface components {
             available_now: components["schemas"]["ReadingPlanReaderIssue"][];
             /** Blocked Next */
             blocked_next: components["schemas"]["ReadingPlanReaderIssue"][];
+            /**
+             * Execution Mode
+             * @default legacy
+             * @enum {string}
+             */
+            execution_mode: "legacy" | "option_e";
             /** Lanes */
             lanes: components["schemas"]["ReadingPlanReaderLane"][];
             /** Name */
@@ -12003,6 +12097,8 @@ export interface components {
          * @description Lightweight thread summary for the roll bootstrap pool.
          */
         RollBootstrapThread: {
+            /** Blocking Reasons */
+            blocking_reasons?: string[];
             /** Format */
             format: string;
             /** Id */
@@ -16722,6 +16818,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_custom_cbl_api_v1_custom_cbls__list_id__reader_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingListReaderResponse"];
                 };
             };
             /** @description Validation Error */

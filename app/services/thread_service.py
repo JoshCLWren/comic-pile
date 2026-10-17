@@ -709,7 +709,9 @@ async def get_thread_detail(db: AsyncSession, user_id: int, thread_id: int) -> T
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
     tr = await thread_to_response(thread, db)
-    return ThreadDetail(**tr.model_dump())
+    eligibility = await get_execution_eligibility(db, user_id)
+    projected = project_thread_responses([tr], eligibility)[0]
+    return ThreadDetail(**projected.model_dump())
 
 
 async def update_thread(

@@ -40,7 +40,9 @@ from app.services.reading_effort import (
     build_recommendation_context,
     compute_effort_estimate,
 )
-from app.services.reading_eligibility_service import get_execution_eligibility
+from app.services.reading_eligibility_service import (
+    get_execution_eligibility, project_blocking_explanation,
+)
 from app.services.bandwidth_selection import select_bandwidth_weighted
 from app.services.snooze_service import (
     derive_effective_roll_excluded_thread_ids,
@@ -345,6 +347,11 @@ class RollService:
             self._db, user_id, summary_limit, **eligibility_args
         )
         blocked_threads = [_summary_thread(row) for row in blocked_rows]
+        if eligibility is not None:
+            for thread in blocked_threads:
+                thread.blocking_reasons = project_blocking_explanation(
+                    eligibility, thread.id,
+                ).blocking_reasons
         blocked_count = blocked_rows[0].blocked_total if blocked_rows else 0
 
         stale_cutoff = datetime.now(UTC) - timedelta(days=7)

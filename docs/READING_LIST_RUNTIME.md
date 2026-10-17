@@ -92,3 +92,27 @@ cleanup, read-state change or migration. Ordinary reader commands still persist
 their explicitly requested ratings and reads. Data rollback and receipt validation belong to
 the separately approved conversion/activation procedure. Runtime deployment is
 not evidence that production parity or the ADR's trust milestone has passed.
+
+## Reader explanations
+
+The single and batched `getBlockingInfo` endpoints and Thread detail now project
+that same guarded result. Every named list restriction and prerequisite is kept;
+`blocking_dependencies[].issue_id` supplies an exact link to the required issue.
+Roll's waiting summaries also include the canonical `blocking_reasons`, including
+empty-frontier explanations that have no prerequisite Issue to link.
+
+`GET /api/v1/custom-cbls/{list_id}/reader` returns the complete current authored
+membership, rather than the historical Reading Plan copy. Each entry distinguishes
+read, available, blocked, later in natural series order, collection-excluded and
+inactive states. List-local skips remain explicit metadata and do not hide global
+availability. With execution disabled, unread entries are labeled `legacy`; opening
+the reader never activates stored strict modes or gates. Ownership is checked
+before loading eligibility. These reads do not repair pointers or mutate progress.
+
+The custom CBL editor's **Read this list** control opens this current-list reader.
+Available issues can be marked read directly, and read issues can be marked unread.
+These explicit writes use the existing Issue APIs; all affected reader, Roll, Queue
+and explanation caches refresh because one global read can release another series.
+Issue tags reuse the Thread's direct/inherited tag display and source navigation.
+The transitional Reading Plan reader uses the same authority for its represented
+issues, while retaining its historical membership until separately approved retirement.
