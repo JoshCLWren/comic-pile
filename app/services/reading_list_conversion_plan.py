@@ -39,7 +39,7 @@ Gate = Literal["none", "hold", "after_previous"]
 Mode = Literal["strict", "loose"]
 Classification = Literal["A", "B", "C", "D"]
 DiscrepancyKind = Literal["list_only", "plan_only", "order_conflict", "duplicate_placement"]
-PrerequisiteAction = Literal["keep_reader", "convert"]
+PrerequisiteAction = Literal["keep_reader", "convert", "preserve_unknown"]
 
 SCHEMA_VERSION = 1
 
@@ -208,10 +208,10 @@ class PrerequisiteProposal:
     source_issue_id: int
     target_issue_id: int
     action: PrerequisiteAction
-    before_origin: Literal["reader", "converted"]
+    before_origin: Literal["reader", "converted"] | None
     before_classification: Classification | None
     before_provenance: tuple[str, ...]
-    origin: Literal["reader", "converted"]
+    origin: Literal["reader", "converted"] | None
     classification: Classification | None
     provenance: tuple[str, ...]
     changed: bool
@@ -797,6 +797,42 @@ def build_manifest(
             continue
         raw = raw_by_id.get(row.prerequisite_id)
         decided.add(row.prerequisite_id)
+        if decision.action == "preserve_unknown":
+            # A reviewed no-op: do not claim authorship for legacy NULL provenance.
+            # The existing prerequisite remains enforced, without a database write.
+            if (
+                raw is None
+                or raw.origin is not None
+                or raw.classification not in (None, "D")
+                or decision.classification is not None
+                or decision.provenance is not None
+            ):
+                refusals.append(
+                    ManifestRefusal(
+                        "invalid_preserve_unknown",
+                        f"dependency:{row.prerequisite_id}",
+                        "Only unknown-origin history can be preserved unchanged; "
+                        "omit classification and provenance",
+                    )
+                )
+                continue
+            raw_provenance = (raw.provenance,) if raw.provenance else ()
+            proposal = PrerequisiteProposal(
+                row.prerequisite_id,
+                row.source_issue_id,
+                row.target_issue_id,
+                decision.action,
+                raw.origin,
+                raw.classification,
+                raw_provenance,
+                raw.origin,
+                raw.classification,
+                raw_provenance,
+                False,
+            )
+            states[row.prerequisite_id] = proposal
+            prerequisite_proposals.append(proposal)
+            continue
         before_origin: Literal["reader", "converted"] = (
             raw.origin if raw is not None and raw.origin is not None else row.origin
         )
@@ -1123,7 +1159,7 @@ def _project_snapshot(
     prerequisites: list[ReadingPrerequisite] = []
     for row in snapshot.prerequisites:
         state = states.get(row.prerequisite_id)
-        if state is None:
+        if state is None or state.action == "preserve_unknown":
             prerequisites.append(row)
             continue
         prerequisites.append(
