@@ -76,6 +76,28 @@ function makePage(overrides: Partial<CreatorDetailResponse> = {}): CreatorDetail
     upcoming_issues: [],
     next_cursor: null,
     rating_distribution: null,
+    // One series with a single rated issue: below the insights minimum sample,
+    // so the API withholds series conclusions but still reports the individual
+    // extremes (issue #3092).
+    insights: {
+      has_sufficient_data: false,
+      min_sample_threshold: 3,
+      highest_rated_series: null,
+      lowest_rated_series: null,
+      most_rated_series: null,
+      highest_rated_issue: {
+        issue_id: 11,
+        thread_id: 1,
+        thread_title: 'Series A',
+        rating: 5,
+      },
+      lowest_rated_issue: {
+        issue_id: 11,
+        thread_id: 1,
+        thread_title: 'Series A',
+        rating: 5,
+      },
+    },
     ...overrides,
   }
 }
