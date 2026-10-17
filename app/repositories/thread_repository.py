@@ -359,6 +359,26 @@ async def fetch_excluded_page(
     return list(result.scalars().all())
 
 
+async def fetch_excluded_thread_ids(db: AsyncSession, user_id: int) -> list[int]:
+    """Fetch all IDs of threads marked as 'excluded' for a user.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+
+    Returns:
+        List of excluded thread IDs.
+    """
+    result = await db.execute(
+        select(Thread.id).where(
+            Thread.user_id == user_id,
+            Thread.status == "excluded"
+        )
+    )
+    return list(result.scalars().all())
+
+
+
 async def fetch_completed_threads(db: AsyncSession, user_id: int) -> list[Thread]:
     """Fetch a user's completed threads, newest created first.
 

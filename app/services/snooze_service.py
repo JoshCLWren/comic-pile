@@ -28,7 +28,7 @@ from app.repositories.snooze_repository import (
     fetch_snooze_backoff_rows,
     fetch_user_session_started_ats,
 )
-from app.repositories.thread_repository import threads_by_ids
+from app.repositories.thread_repository import threads_by_ids, fetch_excluded_thread_ids
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo
 from app.services.session_response import (
@@ -182,6 +182,15 @@ async def derive_effective_roll_excluded_thread_ids(
             continue
         seen.add(thread_id)
         excluded_ids.append(thread_id)
+
+    # Durable 'excluded' status threads are also excluded from the roll pool.
+    # This ensures that 'Remove from Queue' is non-destructive but effectively hides the series.
+    excluded_status_ids = await fetch_excluded_thread_ids(db, user_id)
+    for tid in sorted(excluded_status_ids):
+        if tid not in seen:
+            seen.add(tid)
+            excluded_ids.append(tid)
+
     return excluded_ids
 
 
