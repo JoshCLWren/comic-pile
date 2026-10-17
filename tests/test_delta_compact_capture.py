@@ -13,8 +13,16 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Snapshot, Thread, User
-from app.models import ReadingSession
+from app.models import (
+    CatalogIssue,
+    Event,
+    ExternalIdentity,
+    Issue,
+    ReadingSession,
+    Snapshot,
+    Thread,
+    User,
+)
 from app.services.snapshot_contract import (
     ISSUE_CHANGES_KEY,
     SNAPSHOT_VERSION,
@@ -156,3 +164,101 @@ async def test_one_issue_rating_on_large_thread_is_bounded(
         select(func.count()).select_from(Issue).where(Issue.thread_id == thread.id)
     )
     assert remaining == LARGE_THREAD_ISSUE_COUNT
+
+
+@pytest.mark.asyncio
+async def test_rating_undo_preserves_catalog_link(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A catalog-linked issue keeps its catalog link through rate + undo (#3226).
+
+    Acceptance criterion #4: creation/deletion undo preserves IDs, ownership and
+    any catalog links; catalog data is never deleted by personal undo.
+    """
+    ext_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id="catalog-1",
+        metadata_json={"name": "Cataloged Issue"},
+    )
+    catalog_issue = CatalogIssue(canonical_external_identity_id=ext_identity.id)
+    async_db.add_all([ext_identity, catalog_issue])
+    await async_db.flush()
+
+    session = ReadingSession(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    thread = Thread(
+        title="Cataloged Series",
+        format="comic",
+        issues_remaining=3,
+        total_issues=3,
+        reading_progress="in_progress",
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+    )
+    async_db.add_all([session, thread])
+    await async_db.commit()
+    await async_db.refresh(session)
+    await async_db.refresh(thread)
+
+    issues = [
+        Issue(
+            thread_id=thread.id,
+            issue_number="1",
+            position=1,
+            status="unread",
+            catalog_issue_id=catalog_issue.id,
+        ),
+        Issue(thread_id=thread.id, issue_number="2", position=2, status="unread"),
+        Issue(thread_id=thread.id, issue_number="3", position=3, status="unread"),
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+    await async_db.refresh(issues[0])
+
+    rated_issue_id = issues[0].id
+    thread.next_unread_issue_id = rated_issue_id
+    async_db.add(
+        Event(
+            type="roll",
+            session_id=session.id,
+            selected_thread_id=thread.id,
+            issue_id=rated_issue_id,
+            die=6,
+            result=1,
+        )
+    )
+    await async_db.commit()
+
+    rate_response = await auth_client.post(
+        "/api/v1/rate/",
+        json={"rating": 5.0, "issues_read": 1},
+    )
+    assert rate_response.status_code == 200
+
+    snapshot = await _latest_snapshot(async_db, session.id)
+    state = snapshot.thread_states[str(thread.id)]
+
+    # The compact delta records the catalog link in the issue preimage.
+    assert ISSUE_CHANGES_KEY in state
+    assert state[ISSUE_CHANGES_KEY][0]["catalog_issue_id"] == catalog_issue.id
+
+    await async_db.refresh(issues[0])
+    assert issues[0].status == "read"
+
+    undo_response = await auth_client.post(
+        f"/api/v1/undo/{session.id}/undo/{snapshot.id}",
+    )
+    assert undo_response.status_code == 200
+
+    await async_db.refresh(issues[0])
+    assert issues[0].status == "unread"
+    assert issues[0].read_at is None
+    # The catalog link survives personal undo.
+    assert issues[0].catalog_issue_id == catalog_issue.id

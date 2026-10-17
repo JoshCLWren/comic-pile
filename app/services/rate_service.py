@@ -189,6 +189,7 @@ def _issue_preimage(issue: Issue) -> dict:
         "status": issue.status,
         "read_at": issue.read_at.isoformat() if issue.read_at else None,
         "position": issue.position,
+        "catalog_issue_id": issue.catalog_issue_id,
     }
 
 

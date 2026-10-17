@@ -502,6 +502,7 @@ class UndoSnapshotRepository:
             status=issue_state["status"],
             read_at=self._deserialize_datetime(issue_state.get("read_at")),
             position=issue_state.get("position", fallback_position),
+            catalog_issue_id=issue_state.get("catalog_issue_id"),
         )
         
         self.db.add(issue)
@@ -522,6 +523,11 @@ class UndoSnapshotRepository:
         issue.status = issue_state["status"]
         issue.read_at = self._deserialize_datetime(issue_state.get("read_at"))
         issue.position = issue_state.get("position", fallback_position)
+        # Restore the catalog link only when the snapshot recorded one. Legacy
+        # full snapshots never captured catalog_issue_id, so an absent key must
+        # not clear an existing link (issue #3226).
+        if "catalog_issue_id" in issue_state:
+            issue.catalog_issue_id = issue_state["catalog_issue_id"]
 
     async def create_undo_event(
         self, session_id: int, snapshot: Snapshot
