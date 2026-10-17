@@ -15,7 +15,10 @@ def test_deepseek_special_lane_pins() -> None:
     assert set(rows) == {87, 88, 89, 90}
     assert {87, 89} == {n for n, row in rows.items() if "Anonymous" in row[5]}
     assert {88, 90} == {n for n, row in rows.items() if "Authenticated" in row[5]}
-    assert all(row[1:3] == ["opencode-free", "deepseek-v4.1-flash-free"] for row in rows.values())
+    for n in (87, 89):
+        assert rows[n][1:3] == ["opencode-free", "deepseek-v4.1-flash-free"]
+    for n in (88, 90):
+        assert rows[n][1:3] == ["nvidia", "deepseek-ai/deepseek-v4.1-flash"]
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert set(rows).issubset(set(lock["expected_workers"]))
 
@@ -24,8 +27,11 @@ def test_special_pins_bypass_dynamic_rotation_and_are_strict() -> None:
     run = Path(".github/workflows/free-model-factory-run.yml").read_text()
     assert "87|89) deepseek_mode=anonymous" in run
     assert "88|90) deepseek_mode=authenticated" in run
-    assert "missing-OPENCODE_ZEN_API_KEY" in run
-    assert "OPENCODE_API_KEY=%s" in run
+    assert '"$source" == nvidia && "$model" == deepseek-ai/deepseek-v4.1-flash' in run
+    assert '"$source" == opencode-free && "$model" == deepseek-v4.1-flash-free' in run
+    assert 'missing-NVIDIA_API_KEY' in run
+    assert 'NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}' in run
+    assert 'OPENCODE_ZEN_API_KEY' not in run
     assert "rotation disabled" in run
     assert "Pinned free DeepSeek absent from OpenCode catalog" in run
     assert "DEEPSEEK_LANE_TOOL_OK" in run

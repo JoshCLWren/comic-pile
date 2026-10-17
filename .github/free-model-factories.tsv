@@ -34,6 +34,6 @@
 83	opencode-free	cat-jam-free	45	dispatcher	OpenCode Cat Jam Free
 86	nvidia	meta/muse-glimmer-30b	0	dispatcher	NVIDIA Muse Glimmer 30B
 87	opencode-free	deepseek-v4.1-flash-free	30	dispatcher	DeepSeek V4.1 Free Anonymous A
-88	opencode-free	deepseek-v4.1-flash-free	35	dispatcher	DeepSeek V4.1 Free Authenticated A
+88	nvidia	deepseek-ai/deepseek-v4.1-flash	35	dispatcher	NVIDIA DeepSeek V4.1 Authenticated A
 89	opencode-free	deepseek-v4.1-flash-free	45	dispatcher	DeepSeek V4.1 Free Anonymous B
-90	opencode-free	deepseek-v4.1-flash-free	0	dispatcher	DeepSeek V4.1 Free Authenticated B
+90	nvidia	deepseek-ai/deepseek-v4.1-flash	0	dispatcher	NVIDIA DeepSeek V4.1 Authenticated B
