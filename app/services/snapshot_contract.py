@@ -5,6 +5,13 @@ SNAPSHOT_VERSION = 2
 QUEUE_CHANGES_KEY = "_queue_changes"
 BLOCKED_CHANGES_KEY = "_blocked_changes"
 USES_ISSUE_TRACKING_KEY = "uses_issue_tracking"
+# Compact per-action delta keys (issue #3226). A v2 rating delta stores only
+# the records that actually changed on this action instead of repeating the
+# rated thread's full issue collection.
+ISSUE_CHANGES_KEY = "issue_changes"
+THREAD_CHANGES_KEY = "thread_changes"
+CREATED_ISSUES_KEY = "created_issues"
+DELETED_ISSUES_KEY = "deleted_issues"
 
 # Queryable snapshot classification (issue #3218). Writers and the additive
 # backfill migration derive these from the real payload contract so the latest
