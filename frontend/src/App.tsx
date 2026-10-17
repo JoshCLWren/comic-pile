@@ -552,9 +552,6 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ForgotPasswordPage /></PublicLayout></PublicRoute>} />
         <Route path="/reset-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ResetPasswordPage /></PublicLayout></PublicRoute>} />
         <Route path="/demo" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><DemoRollPage /></PublicLayout></PublicRoute>} />
-        <Route path="/rate" element={<Navigate to="/" replace />} />
-        <Route path="/analytics" element={<Navigate to="/" replace />} />
-        <Route path="/roll" element={<Navigate to="/" replace />} />
         <Route path="/" element={<RootRoute onBugReportSubmit={submit} />} />
         <Route path="/queue" element={
           <ProtectedRoute>
@@ -706,7 +703,6 @@ function AppRoutes() {
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
         } />
-        <Route path="/help" element={<Navigate to="/glossary" replace />} />
         <Route path="/identity-inbox" element={
           <ProtectedRoute>
             <ServiceUnavailableWrapper>
