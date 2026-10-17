@@ -23,7 +23,6 @@ from app.schemas.creator_discovery import (
     DiscoveryResultItem,
     DiscoveryModesResponse,
 )
-from app.schemas.creator_summary import CreatorSummaryCoverage
 from app.services.creator_summary import HEADLINE_ROLES
 
 
