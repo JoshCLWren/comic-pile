@@ -52,6 +52,7 @@ class ShadowReadingInputs:
     list_labels: tuple[tuple[int, str], ...] = ()
     thread_labels: tuple[tuple[int, str], ...] = ()
     legacy_note_ignored_prerequisite_ids: frozenset[int] = frozenset()
+    legacy_enforced_targets: frozenset[int] | None = None
 
 
 async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInputs:
@@ -112,7 +113,8 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             by_list.setdefault(entry.list_id, []).append(
                 ReadingListEntry(entry.issue_id, entry.gate, entry.skipped)
             )
-        for row in dependencies:
+        explicit = [row for row in dependencies if row.origin == "reader"]
+        for row in explicit:
             if row.source_issue_id not in issue_ids or row.target_issue_id not in issue_ids:
                 unresolved.append(UnresolvedReadingReference("prerequisite", row.id))
         titles = {row.id: row.title for row in threads}
@@ -138,7 +140,7 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
                         else ("historical classification unknown",)
                     ),
                 )
-                for row in dependencies
+                for row in explicit
             ),
             excluded_issue_ids=excluded,
             stored=tuple(
@@ -148,7 +150,7 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
                 for row in sorted(threads, key=lambda row: row.id)
             ),
             unresolved=tuple(sorted(unresolved, key=lambda row: (row.kind, row.object_id))),
-            inert_dependency_count=inert_count,
+            inert_dependency_count=inert_count + len(dependencies) - len(explicit),
             issue_numbers=tuple((row.id, row.issue_number) for row in issues),
             issue_labels=tuple(
                 (row.id, f"{titles[row.thread_id]} #{row.issue_number}") for row in issues
@@ -157,5 +159,11 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             thread_labels=tuple(titles.items()),
             legacy_note_ignored_prerequisite_ids=frozenset(
                 row.id for row in dependencies if (row.note or "").startswith("cbl-order:")
+            ),
+            legacy_enforced_targets=frozenset(
+                row.target_issue_id for row in dependencies
+                if row.source_issue_id in issue_ids
+                and next((issue.status for issue in issues if issue.id == row.source_issue_id), "read") != "read"
+                and row.target_issue_id in issue_ids
             ),
         )
