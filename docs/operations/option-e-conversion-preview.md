@@ -49,7 +49,9 @@ Gate updates are partial; omitted gates and existing skips remain. Acknowledging
 plan-only entry preserves the current list; it does not adopt or discard Issues.
 Resolve list membership separately through reviewed authoring before planning if
 that is not the desired result. No timestamps, titles, annual labels or public
-sources choose a winner. Multi-lane and unpaired plan evidence fail closed.
+sources choose a winner. Multi-lane paired-plan evidence fails closed. Unpaired legacy plan IDs remain
+fingerprinted audit evidence in the manifest counts; they do not block current
+Reading List or natural-series execution, including readers without lists (#3676).
 External-volume exclusions additionally require a provider, external volume ID and
 exact `resolved_issue_ids`; the CLI checks those against current confirmed identity
 mappings. Thread and Issue targets must belong to the reader.

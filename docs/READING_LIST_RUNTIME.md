@@ -95,6 +95,10 @@ not evidence that production parity or the ADR's trust milestone has passed.
 
 ## Reader explanations
 
+Thread connection panels show only explicit reader prerequisites in enabled mode;
+untyped and converted legacy edges remain stored audit data and are not labeled
+as current blockers. Disabling the switch restores the legacy connection view.
+
 The single and batched `getBlockingInfo` endpoints and Thread detail now project
 that same guarded result. Every named list restriction and prerequisite is kept;
 `blocking_dependencies[].issue_id` supplies an exact link to the required issue.

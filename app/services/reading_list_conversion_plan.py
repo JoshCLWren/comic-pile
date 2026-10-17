@@ -548,6 +548,7 @@ def build_manifest(
         "list_entries": sum(len(row.entries) for row in snapshot.lists),
         "prerequisites": len(snapshot.prerequisites),
         "excluded_issues": len(snapshot.excluded_issue_ids),
+        "unpaired_legacy_plan_ids": list(evidence.unpaired_plan_ids),
     }
     before_result: dict[int, ThreadEligibility] | None
     try:
@@ -581,14 +582,6 @@ def build_manifest(
             tuple(refusals),
         )
 
-    for plan_id in evidence.unpaired_plan_ids:
-        refusals.append(
-            ManifestRefusal(
-                "source_mismatch",
-                f"plan:{plan_id}",
-                "Legacy plan has no durable owned list pairing",
-            )
-        )
     if intent.schema_version != SCHEMA_VERSION:
         refusals.append(
             ManifestRefusal("schema_version", "intent", "Unsupported intent schema version")

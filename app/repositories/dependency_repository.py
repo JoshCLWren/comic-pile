@@ -80,13 +80,14 @@ async def get_issue_dependencies(db: AsyncSession, issue_id: int) -> tuple[list[
 
 
 async def get_thread_connected_dependencies(
-    db: AsyncSession, thread_id: int
+    db: AsyncSession, thread_id: int, *, reader_only: bool = False
 ) -> tuple[list[Dependency], list[Dependency]]:
     """Get dependencies connected to a specific thread.
 
     Args:
         db: Database session.
         thread_id: Thread ID to find connected dependencies for.
+        reader_only: Restrict canonical connection displays to explicit reader intent.
 
     Returns:
         Tuple of (blocking_dependencies, blocked_by_dependencies).
@@ -94,16 +95,21 @@ async def get_thread_connected_dependencies(
     source_issue = Issue.__table__.alias("source_issue")
     target_issue = Issue.__table__.alias("target_issue")
 
-    blocking_result = await db.execute(
+    blocking_statement = (
         select(Dependency)
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .where(source_issue.c.thread_id == thread_id)
     )
-    blocked_by_result = await db.execute(
+    blocked_by_statement = (
         select(Dependency)
         .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
         .where(target_issue.c.thread_id == thread_id)
     )
+    if reader_only:
+        blocking_statement = blocking_statement.where(Dependency.origin == "reader")
+        blocked_by_statement = blocked_by_statement.where(Dependency.origin == "reader")
+    blocking_result = await db.execute(blocking_statement)
+    blocked_by_result = await db.execute(blocked_by_statement)
 
     blocking_deps = list(blocking_result.scalars().all())
     blocked_by_deps = list(blocked_by_result.scalars().all())

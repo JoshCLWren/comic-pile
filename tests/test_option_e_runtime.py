@@ -835,3 +835,40 @@ async def test_list_reader_distinguishes_exclusions_inactive_and_empty_lists(
     empty_response = await auth_client.get(f"/api/v1/custom-cbls/{empty_id}/reader")
     assert empty_response.json()["entries"] == []
     assert (await auth_client.get(f"/api/v1/custom-cbls/{foreign_id}/reader")).status_code == 404
+
+
+async def test_thread_connection_panel_uses_only_reader_prerequisites_when_enabled(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Historical edges cannot contradict the live Thread availability explanation."""
+    user = await get_or_create_user_async(async_db)
+    historical, old = await _series(async_db, user.id, "Historical", 1)
+    generated, compiled = await _series(async_db, user.id, "Generated", 2)
+    deliberate, explicit = await _series(async_db, user.id, "Reader", 3)
+    target, target_issues = await _series(async_db, user.id, "Target", 4)
+    async_db.add_all([
+        Dependency(source_issue_id=old[0].id, target_issue_id=target_issues[0].id),
+        Dependency(source_issue_id=compiled[0].id, target_issue_id=target_issues[0].id,
+                   origin="converted", classification="C", provenance="Old compiler"),
+        Dependency(source_issue_id=explicit[0].id, target_issue_id=target_issues[0].id,
+                   origin="reader"),
+    ])
+    historical_id, generated_id, reader_id, target_id = (
+        historical.id, generated.id, deliberate.id, target.id,
+    )
+    await async_db.commit()
+    response = await auth_client.get(f"/api/v1/threads/{target_id}/connected")
+    assert response.status_code == 200
+    assert {row["thread_id"] for row in response.json()["connected_threads"]} == {reader_id}
+    outgoing = await auth_client.get(f"/api/v1/threads/{generated_id}/connected")
+    assert outgoing.status_code == 200
+    assert outgoing.json()["connected_threads"] == []
+
+    monkeypatch.setenv("OPTION_E_ENABLED", "false")
+    get_reading_execution_settings.cache_clear()
+    legacy = await auth_client.get(f"/api/v1/threads/{target_id}/connected")
+    assert legacy.status_code == 200
+    assert {row["thread_id"] for row in legacy.json()["connected_threads"]} == {
+        historical_id, generated_id, reader_id,
+    }
