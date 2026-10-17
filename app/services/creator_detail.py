@@ -32,7 +32,6 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.creator_detail import (
-    load_latest_rating_timestamps,
     load_recent_creator_issue_rows,
     load_upcoming_creator_issue_rows,
 )
@@ -314,10 +313,6 @@ async def get_creator_detail(
         | {row[0] for row in read_unrated_rows}
         | {row[0] for row in upcoming_rows}
     )
-    latest_rating_timestamps = await load_latest_rating_timestamps(
-        db,
-        issue_ids=fetched_issue_ids,
-    )
 
     rated_issues = [
         _build_issue_row(
@@ -329,7 +324,7 @@ async def get_creator_detail(
             thread_title=thread_title,
             status=status,
             effective_rating=inputs.effective_ratings.get(issue_id),
-            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            rating_timestamp=inputs.effective_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),
         )
         for issue_id, issue_number, thread_id, thread_title, status in rated_rows
@@ -345,7 +340,7 @@ async def get_creator_detail(
             thread_title=thread_title,
             status=status,
             effective_rating=inputs.effective_ratings.get(issue_id),
-            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            rating_timestamp=inputs.effective_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),
         )
         for issue_id, issue_number, thread_id, thread_title, status in read_unrated_rows
@@ -361,7 +356,7 @@ async def get_creator_detail(
             thread_title=thread_title,
             status=status,
             effective_rating=inputs.effective_ratings.get(issue_id),
-            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            rating_timestamp=inputs.effective_rating_timestamps.get(issue_id),
             sort_key=f"{queue_position:07d}:{issue_position:07d}:{issue_id}",
         )
         for issue_id, issue_number, thread_id, thread_title, status, queue_position, issue_position
@@ -464,10 +459,7 @@ async def get_creator_series_issues(
         limit=limit,
         offset=page_offset,
     )
-    latest_rating_timestamps = await load_latest_rating_timestamps(
-        db,
-        issue_ids=sorted({row[0] for row in rows}),
-    )
+    
     group = build_series_group(aggregate)
     issues = [
         _build_issue_row(
@@ -479,7 +471,7 @@ async def get_creator_series_issues(
             thread_title=thread_title,
             status=status,
             effective_rating=inputs.effective_ratings.get(issue_id),
-            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            rating_timestamp=inputs.effective_rating_timestamps.get(issue_id),
             sort_key=str(issue_id),
         )
         for issue_id, issue_number, row_thread_id, thread_title, status in rows

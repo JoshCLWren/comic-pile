@@ -25,7 +25,6 @@ from app.schemas.creator_comparison import (
 )
 from app.repositories.creator_detail import (
     load_all_creator_issue_rows,
-    load_latest_rating_timestamps,
 )
 from app.repositories.creator_summary import load_creator_summary_inputs
 from app.services.creator_detail import resolve_creator_issues
@@ -65,9 +64,7 @@ async def _load_creator_issue_dicts(
     rows = await load_all_creator_issue_rows(
         db, user_id=user_id, creator_issue_ids=creator_issue_ids
     )
-    timestamps = await load_latest_rating_timestamps(
-        db, issue_ids=[issue_id for issue_id, _, _, _, _ in rows]
-    )
+    
     causes = await classify_issue_ids(
         db,
         user_id,
@@ -95,7 +92,7 @@ async def _load_creator_issue_dicts(
             if credit.external_id == creator_id
             for role in credit.roles
         )
-        timestamp = timestamps.get(issue_id)
+        timestamp = inputs.effective_rating_timestamps.get(issue_id)
         cause = causes.get(issue_id)
         issue_dicts.append(
             {
