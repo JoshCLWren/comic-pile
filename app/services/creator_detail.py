@@ -28,6 +28,7 @@ N+1 fan-out and no provider request.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Final
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,8 +39,11 @@ from app.repositories.creator_detail import (
 from app.repositories.creator_summary import CreatorSummaryInputs, load_creator_summary_inputs
 from app.schemas.creator_detail import (
     CreatorDetailResponse,
+    CreatorInsightIssue,
+    CreatorInsights,
     CreatorIssueRow,
     CreatorRoleStat,
+    CreatorSeriesGroup,
     CreatorSeriesIssueListResponse,
 )
 from app.schemas.creator_summary import (
@@ -48,6 +52,7 @@ from app.schemas.creator_summary import (
 )
 from app.services.creator_rating_stats import compute_rating_distribution
 from app.services.creator_series import (
+    SeriesAggregate,
     aggregate_creator_series_groups,
     build_series_group,
     build_series_key,
@@ -56,6 +61,103 @@ from app.services.creator_series import (
     select_series_group,
 )
 from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
+
+
+#: Minimum attributed rated issues a series must have before creator insights
+#: will name it the strongest/weakest/most-rated series (issue #3092). The
+#: threshold keeps a single 5-star issue from outranking a consistently loved
+#: longer run.
+MIN_INSIGHTS_SERIES_SAMPLE: Final = 3
+
+
+def _build_insight_issue(
+    inputs: CreatorSummaryInputs,
+    *,
+    issue_id: int,
+    rating: float,
+) -> CreatorInsightIssue | None:
+    """Build one individual-issue insight with its stable thread context.
+
+    Args:
+        inputs: User-scoped creator summary inputs.
+        issue_id: Local ComicPile issue id.
+        rating: Latest effective rating for the issue.
+
+    Returns:
+        The insight issue, or ``None`` when the issue has no known series
+        identity in the user's library.
+    """
+    series = inputs.owned_issue_series.get(issue_id)
+    if series is None:
+        return None
+    return CreatorInsightIssue(
+        issue_id=issue_id,
+        thread_id=series.thread_id,
+        thread_title=series.thread_title,
+        rating=rating,
+    )
+
+
+def compute_creator_insights(
+    inputs: CreatorSummaryInputs,
+    *,
+    creator_issue_ids: frozenset[int],
+    series_aggregates: list[SeriesAggregate],
+) -> CreatorInsights:
+    """Compute creator insights for strongest and weakest work.
+
+    Args:
+        inputs: User-scoped creator summary inputs.
+        creator_issue_ids: Owned issue ids attributed to the creator.
+        series_aggregates: Deterministically ordered series aggregates.
+
+    Returns:
+        Creator insights with strongest/weakest work analysis.
+    """
+    qualified_series = [
+        aggregate for aggregate in series_aggregates if aggregate.rated_issue_count >= MIN_INSIGHTS_SERIES_SAMPLE
+    ]
+
+    highest_rated_series: CreatorSeriesGroup | None = None
+    lowest_rated_series: CreatorSeriesGroup | None = None
+    if qualified_series:
+        lowest_rated_series = build_series_group(
+            min(qualified_series, key=lambda a: (a.average_rating or 0.0, a.thread_id))
+        )
+        highest_rated_series = build_series_group(
+            min(qualified_series, key=lambda a: (-(a.average_rating or 0.0), a.thread_id))
+        )
+
+    most_rated_series = build_series_group(qualified_series[0]) if qualified_series else None
+
+    # Find highest/lowest rated individual issues with stable tie-breaks.
+    rated_candidates = sorted(
+        (
+            (issue_id, inputs.effective_ratings[issue_id])
+            for issue_id in creator_issue_ids
+            if issue_id in inputs.effective_ratings
+            and issue_id in inputs.owned_issue_series
+        ),
+        key=lambda item: (item[1], item[0]),
+    )
+
+    highest_rated_issue: CreatorInsightIssue | None = None
+    lowest_rated_issue: CreatorInsightIssue | None = None
+    if rated_candidates:
+        lowest = rated_candidates[0]
+        highest = max(rated_candidates, key=lambda item: (item[1], -item[0]))
+        lowest_rated_issue = _build_insight_issue(inputs, issue_id=lowest[0], rating=lowest[1])
+        highest_rated_issue = _build_insight_issue(inputs, issue_id=highest[0], rating=highest[1])
+
+    return CreatorInsights(
+        has_sufficient_data=bool(qualified_series),
+        min_sample_threshold=MIN_INSIGHTS_SERIES_SAMPLE,
+        highest_rated_series=highest_rated_series,
+        lowest_rated_series=lowest_rated_series,
+        most_rated_series=most_rated_series,
+        highest_rated_issue=highest_rated_issue,
+        lowest_rated_issue=lowest_rated_issue,
+    )
 
 
 def resolve_creator_issues(
@@ -370,6 +472,13 @@ async def get_creator_detail(
         for aggregate in series_aggregates[page_offset : page_offset + limit]
     ]
 
+    # 6. Creator insights for strongest and weakest work
+    insights = compute_creator_insights(
+        inputs,
+        creator_issue_ids=creator_id_set,
+        series_aggregates=series_aggregates,
+    )
+
     has_next_page = (
         len(rated_ids) > page_offset + len(rated_rows)
         or len(read_unrated_ids) > page_offset + len(read_unrated_rows)
@@ -390,6 +499,7 @@ async def get_creator_detail(
         upcoming_issues=upcoming_issues,
         next_cursor=next_cursor,
         rating_distribution=rating_distribution,
+        insights=insights,
     )
 
 

@@ -77,6 +77,23 @@ export interface CreatorSeriesGroup {
   sort_key: string
 }
 
+export interface CreatorInsightIssue {
+  issue_id: number
+  thread_id: number
+  thread_title: string
+  rating: number
+}
+
+export interface CreatorInsights {
+  has_sufficient_data: boolean
+  min_sample_threshold: number
+  highest_rated_series: CreatorSeriesGroup | null
+  lowest_rated_series: CreatorSeriesGroup | null
+  most_rated_series: CreatorSeriesGroup | null
+  highest_rated_issue: CreatorInsightIssue | null
+  lowest_rated_issue: CreatorInsightIssue | null
+}
+
 /** Full personal creator detail payload (issue #2037). */
 export interface CreatorDetailResponse {
   summary: CreatorSummaryItem
@@ -90,6 +107,7 @@ export interface CreatorDetailResponse {
   upcoming_issues: CreatorIssueRow[]
   next_cursor: string | null
   rating_distribution: CreatorRatingDistribution | null
+  insights: CreatorInsights
 }
 
 export interface CreatorDetailPageParams {

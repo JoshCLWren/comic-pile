@@ -217,6 +217,94 @@ class CreatorSeriesIssueListResponse(BaseModel):
     )
 
 
+class CreatorInsightIssue(BaseModel):
+    """One individual rated issue surfaced by creator insights (issue #3092).
+
+    Individual issue extremes are deliberately not aggregate series
+    conclusions: a single 5-star issue may be shown, but it is always carried
+    with its stable thread context so the UI can label it as an individual
+    issue and drill into the supporting thread instead of implying the
+    creator's "best work".
+    """
+
+    model_config = {"frozen": True}
+
+    issue_id: int = Field(..., description="Local ComicPile issue id.")
+    thread_id: int = Field(
+        ...,
+        description="Local ComicPile thread (series/run) id containing the issue.",
+    )
+    thread_title: str = Field(
+        ...,
+        description="Current local thread title. Display only; never a grouping identity.",
+    )
+    rating: float = Field(
+        ...,
+        description="Latest effective personal rating for this individual issue.",
+    )
+
+
+class CreatorInsights(BaseModel):
+    """Strongest and weakest work analysis for one creator detail page (#3092).
+
+    Series strongest/weakest/most-rated labels require a minimum rated-issue
+    sample (``min_sample_threshold``) so a single high-rated issue cannot
+    automatically outweigh a consistently loved longer run. Every selection is
+    deterministic: series averages tie-break by the stable thread id and
+    individual issue extremes tie-break by the stable issue id, so a tie never
+    resolves by input order.
+
+    Individual issue extremes live in ``highest_rated_issue`` and
+    ``lowest_rated_issue`` and are never presented as aggregate series
+    conclusions. When no series meets the minimum sample,
+    ``has_sufficient_data`` is false, the series fields stay null, and the
+    ordinary creator data is still returned.
+    """
+
+    model_config = {"frozen": True}
+
+    has_sufficient_data: bool = Field(
+        ...,
+        description="True when at least one series meets the minimum rated-issue "
+        "sample threshold, so strongest/weakest series conclusions are meaningful. "
+        "False means the series comparison is intentionally withheld, not that the "
+        "creator has no data.",
+    )
+    min_sample_threshold: int = Field(
+        ...,
+        ge=1,
+        description="Minimum rated issues a series needs before it can be named the "
+        "strongest, weakest, or most-rated series.",
+    )
+    highest_rated_series: CreatorSeriesGroup | None = Field(
+        default=None,
+        description="Qualified series with the highest personal average, or null when "
+        "no series meets the minimum sample.",
+    )
+    lowest_rated_series: CreatorSeriesGroup | None = Field(
+        default=None,
+        description="Qualified series with the lowest personal average, or null when "
+        "no series meets the minimum sample.",
+    )
+    most_rated_series: CreatorSeriesGroup | None = Field(
+        default=None,
+        description="Qualified series with the largest rated sample, or null when "
+        "no series meets the minimum sample.",
+    )
+    highest_rated_issue: CreatorInsightIssue | None = Field(
+        default=None,
+        description="Single highest-rated individual issue, shown separately from "
+        "aggregate series conclusions. Null when the creator has no attributable "
+        "rated issues.",
+    )
+    lowest_rated_issue: CreatorInsightIssue | None = Field(
+        default=None,
+        description="Single lowest-rated individual issue, shown separately from "
+        "aggregate series conclusions. Null when the creator has no attributable "
+        "rated issues.",
+    )
+
+
 class CreatorDetailResponse(BaseModel):
     """Full detail response for a single creator identity."""
 
@@ -266,4 +354,10 @@ class CreatorDetailResponse(BaseModel):
         default=None,
         description="Headline-eligible rating distribution (half-star buckets, median, "
         "range, mean, sample count). ``null`` when the creator has no eligible ratings.",
+    )
+    insights: CreatorInsights = Field(
+        ...,
+        description="Strongest and weakest work analysis for this creator. Always "
+        "present: ``has_sufficient_data`` is false when no series meets the "
+        "minimum sample, and the ordinary creator data is still returned.",
     )
