@@ -141,8 +141,11 @@ test('Option E explains strict Julix blockers consistently and supports direct l
   const laterIssue = await firstIssueId(page, headers, later.id)
   const createdList = await page.request.post('/api/v1/custom-cbls', { headers, data: { name: 'Julix strict acceptance', mode: 'strict', issue_ids: [firstIssue, laterIssue] } })
   expect(createdList.ok(), await createdList.text()).toBeTruthy()
+  // SAFETY: successful list creation returns a numeric id; this test reads only that id.
   const list = await createdList.json() as { id: number }
   const reader = await page.request.get(`/api/v1/custom-cbls/${list.id}/reader`, { headers })
+  expect(reader.ok(), await reader.text()).toBeTruthy()
+  // SAFETY: the owned reader endpoint returns execution_mode; no other response fields are read.
   const projection = await reader.json() as { execution_mode: string }
   expect(projection.execution_mode).toBe(process.env.OPTION_E_EXPECTED_MODE ?? 'legacy')
   const enabled = projection.execution_mode === 'option_e'
@@ -150,6 +153,7 @@ test('Option E explains strict Julix blockers consistently and supports direct l
   expect(dependency.ok(), await dependency.text()).toBeTruthy()
   const createPlan = await page.request.post('/api/v1/continuity-plans/', { headers, data: { name: 'Reader entry point', lanes: [{ id: 'main', name: 'Main', order: 0 }], nodes: [] } })
   expect(createPlan.ok(), await createPlan.text()).toBeTruthy()
+  // SAFETY: successful plan creation returns a numeric id; this test reads only that id.
   const plan = await createPlan.json() as { id: number }
   const reason = enabled ? 'Strict order in Julix strict acceptance: waiting on Julix Dead Remembered #1' : 'Blocked by Julix Dead Remembered: #1'
 

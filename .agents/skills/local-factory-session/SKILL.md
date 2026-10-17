@@ -62,7 +62,11 @@ issue/PR in, so review fleet machinery can recognize and pick up the work.
 
 - Python anywhere in the change: `bash scripts/check-python-ci-lint.sh` (whole-repo
   `ruff check .` + `ty check --error-on-warning`). Path-filtered runs are not valid.
-- Frontend: `cd frontend && pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build`.
+- Frontend: run `pnpm run lint:anti-slop` from the repository root. From `frontend/`,
+  run `pnpm run lint`, `pnpm run typecheck`, `pnpm run build`, and targeted Vitest files.
+  Restore missing or stale worktree dependencies with `pnpm install --frozen-lockfile`
+  before checking. Full suites and aggregate coverage run in CI, following the
+  repository's targeted-local-test policy.
 - Browser behavior: run the focused Playwright coverage; for work touching the e2e regression
   lane use the `e2e-chromium-regression` skill (P0 scope must be green).
 
@@ -88,6 +92,28 @@ issue/PR in, so review fleet machinery can recognize and pick up the work.
 
 4. Every push to the PR head requires the same `factory:review` state to stay truthful
    (a push invalidates `factory:ci` / `factory:ready`).
+
+## CI completion after every push
+
+Opening a PR or handing it to the review fleet does not finish the implementation
+turn. Keep monitoring CI for the exact pushed head until the required checks finish.
+Use `gh pr checks <pr> --watch --interval 30`, keep progress updates flowing, and
+re-read the head SHA before reporting the result. A later push invalidates the prior
+CI result; monitor the new head instead. Confirm the CI workflow itself has
+completed; green early bootstrap checks do not establish full CI success.
+
+If a check fails, read its job log, reproduce the failing cases locally with targeted
+tests, repair the cause, rerun the applicable local gates, commit and push. Repeat
+until the required checks pass. Do not weaken tests, coverage, or lint rules. A skipped
+coverage job caused by an upstream failure is not a passing coverage gate. While
+repairing, claim the next-action lease; release it to review pickup after pushing as
+specified above, and continue monitoring without reserving review ownership.
+
+If an external condition prevents completion (for example unavailable credentials or
+a service outage), record the exact blocker and current head in the durable resume
+packet and tell the user which checks remain unresolved. Do not end ordinary work
+with only "CI pending" or claim completion after local checks alone. CI success does
+not grant merge authorization or replace exact-head review requirements.
 
 ## Stale-expiration is real
 

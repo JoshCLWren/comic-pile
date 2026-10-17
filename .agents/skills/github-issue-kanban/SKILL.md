@@ -48,7 +48,10 @@ Before editing code:
 Issue work is expected to produce a pull request. After local verification, commit the
 implementation, push the branch, and open a ready-for-review PR linked to the issue. Do not
 leave completed issue work only in the local working tree. Use a draft PR only when the user
-explicitly requests one.
+explicitly requests one. After pushing, follow the **CI completion after every push**
+section in [local-factory-session](../local-factory-session/SKILL.md): monitor the exact
+head through required CI, repair failures locally, and report the actual result. A PR
+link with "CI pending" is not an ordinary completion boundary.
 
 For any Python change, local verification must include the exact CI pair
 `ruff check .` **and** `ty check --error-on-warning` against the whole repo
