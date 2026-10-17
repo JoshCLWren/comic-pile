@@ -319,12 +319,18 @@ async def test_old_dependencies_do_not_override_canonical_reading_intent(
     from app.repositories.reading_shadow_repository import load_shadow_inputs
     from app.services.reading_shadow_service import compare_reading_eligibility
     shadow = compare_reading_eligibility(await load_shadow_inputs(async_db, user.id))
-    by_thread = {row["thread_id"]: row for row in shadow["threads"]}
+    rows = shadow["threads"]
+    assert isinstance(rows, list)
+    assert all(isinstance(row, dict) for row in rows)
+    by_thread = {row["thread_id"]: row for row in rows}
     assert by_thread[legacy.id]["legacy_derived_frontier_blocked"] is True
     assert by_thread[legacy.id]["proposed_eligible"] is True
     assert by_thread[compiled.id]["proposed_eligible"] is True
     assert by_thread[deliberate.id]["proposed_eligible"] is False
-    assert shadow["summary"]["inert_dependencies"] >= 2
+    summary = shadow["summary"]
+    assert isinstance(summary, dict)
+    inert_count = summary["inert_dependencies"]
+    assert isinstance(inert_count, int) and inert_count >= 2
 
 
 async def test_v2_identity_fanout_does_not_shrink_thread_die_pool(
