@@ -120,6 +120,7 @@ export interface SessionThread {
   last_rolled_result?: number | null;
   issues_read?: number | null;
   last_rating?: number | null;
+  tags?: components['schemas']['TagResponse'][];
 }
 
 export type SnoozeCorrectionReason =

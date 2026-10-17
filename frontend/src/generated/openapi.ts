@@ -5932,6 +5932,8 @@ export interface components {
             queue_position: number;
             /** Reading Progress */
             reading_progress?: string | null;
+            /** Tags */
+            tags?: components["schemas"]["TagResponse"][];
             /** Title */
             title: string;
             /** Total Issues */

@@ -13,6 +13,7 @@ from app.models import Event, Issue, ReadingSession, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.repositories import reading_session_repository, thread_repository
 from app.schemas import ActiveThreadInfo, SessionResponse
+from app.services.tag_inheritance_service import TagInheritanceService
 from app.schemas.session import (
     EventDetail,
     SnoozeCorrectionInfo,
@@ -174,6 +175,9 @@ async def get_session_with_thread_safe(
         if pending_thread:
             issues_remaining = await pending_thread.get_issues_remaining(db)
             issue_id, issue_number = await _fetch_thread_issue_metadata(pending_thread, db)
+            tags = await TagInheritanceService(db).get_threads_direct_tags(
+                session.user_id, [pending_thread.id]
+            )
             return session, ActiveThreadInfo(
                 id=pending_thread.id,
                 title=pending_thread.title,
@@ -187,6 +191,7 @@ async def get_session_with_thread_safe(
                 issue_number=issue_number,
                 next_issue_id=issue_id,
                 next_issue_number=issue_number,
+                tags=tags.get(pending_thread.id, []),
             )
         return session, None
 
@@ -195,6 +200,9 @@ async def get_session_with_thread_safe(
         if thread and thread.user_id == session.user_id:
             issues_remaining = await thread.get_issues_remaining(db)
             issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
+            tags = await TagInheritanceService(db).get_threads_direct_tags(
+                session.user_id, [thread.id]
+            )
             return session, ActiveThreadInfo(
                 id=thread.id,
                 title=thread.title,
@@ -208,6 +216,7 @@ async def get_session_with_thread_safe(
                 issue_number=issue_number,
                 next_issue_id=issue_id,
                 next_issue_number=issue_number,
+                tags=tags.get(thread.id, []),
             )
 
     return session, None
@@ -223,6 +232,9 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
     Returns:
         ActiveThreadInfo if found, None otherwise.
     """
+    session = await db.get(ReadingSession, session_id)
+    user_id = session.user_id if session else None
+
     event_result = await db.execute(
         select(Event)
         .where(Event.session_id == session_id)
@@ -236,11 +248,15 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
         return None
 
     thread = await db.get(Thread, event.selected_thread_id)
-    if not thread:
+    if not thread or (user_id and thread.user_id != user_id):
         return None
 
     issues_remaining = await thread.get_issues_remaining(db)
     issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
+    tags = []
+    if user_id:
+        tags_map = await TagInheritanceService(db).get_threads_direct_tags(user_id, [thread.id])
+        tags = tags_map.get(thread.id, [])
     return ActiveThreadInfo(
         id=thread.id,
         title=thread.title,
@@ -254,6 +270,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
         issue_number=issue_number,
         next_issue_id=issue_id,
         next_issue_number=issue_number,
+        tags=tags,
     )
 
 
