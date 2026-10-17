@@ -134,6 +134,10 @@ test.describe('Issue #3068: SEO route cleanup', () => {
     const disallowedPaths = [
       '/login',
       '/register',
+      '/rate',
+      '/analytics',
+      '/roll',
+      '/help',
       '/queue',
       '/thread/',
       '/creators',
