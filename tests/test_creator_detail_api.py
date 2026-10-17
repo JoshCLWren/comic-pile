@@ -815,3 +815,91 @@ async def test_rated_collection_matches_headline_when_roles_are_mixed(
     assert rated[0]["issue_id"] == issues[0].id
     assert rated[0]["effective_rating"] == pytest.approx(4.0)
     assert body["next_cursor"] is None
+
+
+@pytest.mark.asyncio
+async def test_creator_insights_respects_min_sample_and_separates_individual_extremes(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Creator insights honor the minimum series sample and label individual extremes separately."""
+    # Series A: single issue rated 5.0 (below threshold)
+    _thread_a, issues_a = await _make_thread(
+        async_db, default_user, title="Series A", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues_a[0], creators=[{"id": 500, "name": "Insight Ira", "role": "writer"}]
+    )
+    await _rate(async_db, issues_a[0], rating=5.0, timestamp=D1)
+
+    # Series B: three issues rated 4.0, 4.5, 4.0 (avg 4.17) — qualifies
+    _thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Series B", issue_count=3, queue_position=2, read_through=3
+    )
+    for issue in issues_b:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 500, "name": "Insight Ira", "role": "writer"}]
+        )
+    await _rate(async_db, issues_b[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues_b[1], rating=4.5, timestamp=D2)
+    await _rate(async_db, issues_b[2], rating=4.0, timestamp=D3)
+
+    response = await auth_client.get("/api/v1/creators/creator:500")
+    assert response.status_code == 200
+    body = response.json()
+
+    insights = body["insights"]
+    assert insights is not None
+    assert insights["min_sample_threshold"] == 3
+    assert insights["has_sufficient_data"] is True
+
+    # The single 5-star issue is the individual highest, not the series highest.
+    assert insights["highest_rated_series"] is not None
+    assert insights["highest_rated_series"]["thread_id"] == _thread_b.id
+    assert insights["highest_rated_issue"] is not None
+    assert insights["highest_rated_issue"]["issue_id"] == issues_a[0].id
+    assert insights["highest_rated_issue"]["thread_id"] == _thread_a.id
+    assert insights["highest_rated_issue"]["rating"] == pytest.approx(5.0)
+
+
+@pytest.mark.asyncio
+async def test_creator_insights_without_qualified_series_still_reports_extremes(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """When no series qualifies, insights still exposes individual extremes and marks insufficient data."""
+    _thread_a, issues_a = await _make_thread(
+        async_db, default_user, title="Short A", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues_a[0], creators=[{"id": 501, "name": "Insight Ina", "role": "writer"}]
+    )
+    await _rate(async_db, issues_a[0], rating=5.0, timestamp=D1)
+
+    _thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Short B", issue_count=2, queue_position=2, read_through=2
+    )
+    for issue in issues_b:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 501, "name": "Insight Ina", "role": "writer"}]
+        )
+    await _rate(async_db, issues_b[0], rating=2.0, timestamp=D1)
+    await _rate(async_db, issues_b[1], rating=2.5, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/creator:501")
+    assert response.status_code == 200
+    body = response.json()
+
+    insights = body["insights"]
+    assert insights is not None
+    assert insights["has_sufficient_data"] is False
+    assert insights["highest_rated_series"] is None
+    assert insights["lowest_rated_series"] is None
+    assert insights["most_rated_series"] is None
+    assert insights["min_sample_threshold"] == 3
+    assert insights["highest_rated_issue"] is not None
+    assert insights["highest_rated_issue"]["rating"] == pytest.approx(5.0)
+    assert insights["lowest_rated_issue"] is not None
+    assert insights["lowest_rated_issue"]["rating"] == pytest.approx(2.0)
