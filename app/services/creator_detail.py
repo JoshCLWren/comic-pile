@@ -308,11 +308,6 @@ async def get_creator_detail(
         offset=page_offset,
     )
 
-    fetched_issue_ids = sorted(
-        {row[0] for row in rated_rows}
-        | {row[0] for row in read_unrated_rows}
-        | {row[0] for row in upcoming_rows}
-    )
 
     rated_issues = [
         _build_issue_row(
