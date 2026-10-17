@@ -165,5 +165,6 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
                 row.target_issue_id for row in dependencies
                 if issue_status.get(row.source_issue_id, "read") != "read"
                 and row.target_issue_id in issue_ids
+                and not (row.note or "").startswith("cbl-order:")
             ),
         )
