@@ -692,3 +692,26 @@ def test_notes_are_not_provenance_and_do_not_create_false_changes(action: str) -
         assert manifest.receipts[0].before["provenance"] is None
     else:
         assert manifest.receipts == ()
+
+
+@pytest.mark.parametrize("has_list", [False, True])
+def test_unpaired_legacy_plans_are_audit_only(has_list: bool) -> None:
+    """Stale plans cannot prevent current owned lists or natural series execution."""
+    snapshot = _snapshot(
+        threads=[ReadingThread(1)],
+        issues=_issues(1, 2),
+        lists=[ReadingList(5, "strict", (ReadingListEntry(1000), ReadingListEntry(1001)))]
+        if has_list else [],
+    )
+    evidence = ConversionEvidence(unpaired_plan_ids=(71, 72))
+    intent = ConversionIntent(
+        source_fingerprint=snapshot_fingerprint(snapshot, evidence),
+        lists=(ListDecision(5, "strict"),) if has_list else (),
+    )
+    manifest = build_manifest(snapshot, evidence, intent)
+    assert manifest.valid
+    assert manifest.counts["unpaired_legacy_plan_ids"] == [71, 72]
+    assert manifest.eligibility_before == manifest.eligibility_after
+    assert manifest.receipts == ()
+    changed_evidence = ConversionEvidence(unpaired_plan_ids=(71,))
+    assert snapshot_fingerprint(snapshot, changed_evidence) != intent.source_fingerprint
