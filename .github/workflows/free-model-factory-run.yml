@@ -126,38 +126,53 @@ jobs:
               branch_suffix='nvidia'
               if [[ -n "${NVIDIA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-NVIDIA_API_KEY'; fi
               ;;
-            opencode-free)
-              # Live catalogs, not a TSV model assignment or OmniRoute,
-              # determine the eligible free model for this durable worker.
-              catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
-              bash scripts/opencode-model-catalog.sh opencode verbose refresh > "$catalog"
-              result="$(python3 .github/scripts/factory_live_opencode.py \
-                --catalog "$catalog" --worker "$WORKER" \
-                --rotation "${GITHUB_RUN_NUMBER:-0}")"
-              model="$(jq -er '.model' <<< "$result")"
-              runtime_model="$(jq -er '.runtime_model' <<< "$result")"
-              {
-                echo "source=opencode-free"
-                echo "model=$model"
-                echo "runtime_model=$runtime_model"
-                echo "display=OpenCode Free · $model"
-                echo "branch_suffix=opencode-free"
-                echo "reason=selected-from-live-free-catalog"
-              } >> "$GITHUB_OUTPUT"
-              echo "Factory $WORKER selected $runtime_model from $(jq -r '.candidate_count' <<< "$result") free OpenCode models"
-              exit 0
+            opencode-free|openrouter-free)
+              runtime_model="${source%-free}/${model}"
+              branch_suffix='catalog-free'
+              configured=true
+              reason='catalog-backed-free-code-slot'
               ;;
-            openrouter-free)
-              if [[ ! "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
-                {
-                  echo "source=$SOURCE"
-                  echo "model=$LANE_MODEL"
-                  echo "runtime_model=$LANE_RUNTIME_MODEL"
-                  echo "display=$LANE_DISPLAY"
-                  echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                  echo "reason=selected-by-runtime-evidence"
-                } >> "$GITHUB_OUTPUT"
-                exit 0
+            kilo-auto)
+              runtime_model="kilo/${model}"
+              branch_suffix='kilo-auto'
+              configured=true
+              reason='configured-anonymous-free'
+              ;;
+            z-ai|ollama-cloud|mistral)
+              if [[ "$model" == "${source}/"* ]]; then
+                runtime_model="$model"
+              else
+                runtime_model="${source}/${model}"
+              fi
+              branch_suffix="$source"
+              if [[ "$source" == "z-ai" ]]; then
+                if [[ -n "${Z_AI_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-Z_AI_API_KEY'; fi
+              elif [[ "$source" == "ollama-cloud" ]]; then
+                if [[ -n "${OLLAMA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OLLAMA_API_KEY'; fi
+              else
+                if [[ -n "${MISTRAL_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-MISTRAL_API_KEY'; fi
+              fi
+              ;;
+            vercel-ai-gateway)
+              runtime_model="vercel-ai-gateway/${model}"
+              branch_suffix='vercel-ai-gateway'
+              if [[ -n "${AI_GATEWAY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-AI_GATEWAY_API_KEY'; fi
+              ;;
+            omniroute-free)
+              # INCIDENT: OmniRoute stays dark unless FACTORY_OMNIROUTE_ENABLED is on.
+              runtime_model="omniroute/${model}"
+              branch_suffix='omniroute'
+              if [[ "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
+                if [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
+                  configured=true
+                  reason='configured-omniroute'
+                else
+                  configured=false
+                  reason='missing-omniroute-credentials'
+                fi
+              else
+                configured=false
+                reason='omniroute-disabled-incident'
               fi
               ;;
             *)
@@ -266,10 +281,28 @@ jobs:
               } >> "$GITHUB_OUTPUT"
               exit 0
               ;;
-            opencode-free|openrouter-free)
-              # INCIDENT: with OmniRoute dark, catalog health fails closed on
-              # unknown/cooling evidence and starves restored free-code lanes.
-              # Keep the lane pin and prove executability via smoke/session.
+            opencode-free)
+              # Models are selected at execution, after OpenCode 2 installation.
+              catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
+              bash scripts/opencode-model-catalog.sh opencode verbose refresh > "$catalog"
+              result="$(python3 .github/scripts/factory_live_opencode.py \
+                --catalog "$catalog" --worker "$WORKER" \
+                --rotation "${GITHUB_RUN_NUMBER:-0}")"
+              model="$(jq -er '.model' <<< "$result")"
+              runtime_model="$(jq -er '.runtime_model' <<< "$result")"
+              {
+                echo "source=opencode-free"
+                echo "model=$model"
+                echo "runtime_model=$runtime_model"
+                echo "display=OpenCode Free · $model"
+                echo "branch_suffix=opencode-free"
+                echo "reason=selected-from-live-free-catalog"
+              } >> "$GITHUB_OUTPUT"
+              echo "Factory $WORKER selected $runtime_model from $(jq -r '.candidate_count' <<< "$result") free OpenCode models"
+              exit 0
+              ;;
+            openrouter-free)
+              # Keep OpenRouter's known-free route while OmniRoute is disabled.
               if [[ ! "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
                 {
                   echo "source=$SOURCE"
