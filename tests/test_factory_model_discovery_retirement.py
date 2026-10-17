@@ -76,6 +76,27 @@ def test_committed_lock_matches_live_roster() -> None:
     assert {40, 43, 44}.issubset(set(lock["retired_workers"]))
 
 
+
+def test_dynamic_free_workers_are_never_retired_or_duplicated() -> None:
+    """Catalog churn changes runtime models, not durable OpenCode factory IDs."""
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "catalog-miss.json")
+    rows = [
+        _row("39", "opencode-free", "big-pickle"),
+        _row("41", "opencode-free", "old-expired-free"),
+        _row("46", "kilo-auto", "kilo-auto/free"),
+    ]
+    plan = RETIRE.plan_retirement(
+        rows,
+        catalogs,
+        dynamic_opencode_free=True,
+        add_unused_free=True,
+    )
+    assert plan.retirements == ()
+    assert plan.additions == ()
+    assert {item.worker for item in plan.kept} == {"39", "41", "46"}
+    assert any(item.model == "nemotron-3-ultra-free" for item in plan.unused_free)
+
+
 def test_catalog_miss_retires_opencode_pin() -> None:
     """A pin missing from ``opencode models opencode`` is retired."""
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "catalog-miss.json")
