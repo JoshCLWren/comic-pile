@@ -50,6 +50,7 @@ from app.schemas.creator_summary import (
 )
 from app.services.creator_rating_stats import compute_rating_distribution
 from app.services.creator_series import (
+    SeriesAggregate,
     aggregate_creator_series_groups,
     build_series_group,
     build_series_key,
@@ -65,65 +66,69 @@ def compute_creator_insights(
     *,
     creator_id: int,
     creator_issue_ids: frozenset[int],
-    series_aggregates: list,
+    series_aggregates: list[SeriesAggregate],
 ) -> CreatorInsights:
     """Compute creator insights for strongest and weakest work.
-    
+
     Args:
         inputs: User-scoped creator summary inputs.
         creator_id: Stable external provider person id for the creator.
         creator_issue_ids: Owned issue ids attributed to the creator.
         series_aggregates: Deterministically ordered series aggregates.
-        
+
     Returns:
         Creator insights with strongest/weakest work analysis.
     """
     # Minimum sample threshold to avoid single-issue outliers
-    MIN_SAMPLE_THRESHOLD = 3
-    
+    min_sample_threshold = 3
+
     # Filter series that meet the minimum threshold
     qualified_series = [
-        agg for agg in series_aggregates 
-        if agg.rated_issue_count >= MIN_SAMPLE_THRESHOLD
+        agg for agg in series_aggregates
+        if agg.rated_issue_count >= min_sample_threshold
     ]
-    
-    # Find highest/lowest rated series (using average rating)
+
+    # Find highest/lowest rated series (using average rating).
+    # Sort by average rating descending, then thread_id ascending so ties are
+    # deterministic rather than depending on input order.
     highest_rated_series = None
     lowest_rated_series = None
-    
+
     if qualified_series:
-        # Sort by average rating (descending for highest, ascending for lowest)
         sorted_by_rating = sorted(
             qualified_series,
-            key=lambda agg: agg.average_rating or 0.0,
-            reverse=True
+            key=lambda agg: (-(agg.average_rating or 0.0), agg.thread_id),
         )
-        highest_rated_series = sorted_by_rating[0] if sorted_by_rating else None
-        lowest_rated_series = sorted_by_rating[-1] if sorted_by_rating else None
-    
-    # Find most-rated series (by issue count)
-    most_rated_series = qualified_series[0] if qualified_series else None
-    
-    # Find highest/lowest rated individual issues
+        highest_rated_series = build_series_group(sorted_by_rating[0])
+        lowest_rated_series = build_series_group(sorted_by_rating[-1])
+
+    # Find most-rated series (by issue count) among qualified series.
+    # series_aggregates is already ordered most-rated first, so the first
+    # qualified entry is the most-rated qualified series.
+    most_rated_series = None
+    if qualified_series:
+        most_rated_series = build_series_group(qualified_series[0])
+
+    # Find highest/lowest rated individual issues.
+    # creator_issue_ids is a frozenset with non-deterministic iteration order,
+    # so sort by rating descending then issue_id ascending for deterministic ties.
     rated_issues = [
-        (issue_id, rating) 
-        for issue_id in creator_issue_ids 
+        (issue_id, inputs.effective_ratings[issue_id])
+        for issue_id in creator_issue_ids
         if issue_id in inputs.effective_ratings
     ]
-    
+
     highest_rated_issue = None
     lowest_rated_issue = None
-    
+
     if rated_issues:
-        # Sort by rating (descending for highest, ascending for lowest)
         sorted_by_rating = sorted(
             rated_issues,
-            key=lambda x: x[1],
-            reverse=True
+            key=lambda x: (-x[1], x[0]),
         )
-        highest_rated_issue = sorted_by_rating[0] if sorted_by_rating else None
-        lowest_rated_issue = sorted_by_rating[-1] if sorted_by_rating else None
-    
+        highest_rated_issue = sorted_by_rating[0]
+        lowest_rated_issue = sorted_by_rating[-1]
+
     return CreatorInsights(
         has_sufficient_data=len(qualified_series) >= 1,
         highest_rated_series=highest_rated_series,
@@ -131,7 +136,7 @@ def compute_creator_insights(
         most_rated_series=most_rated_series,
         highest_rated_issue=highest_rated_issue,
         lowest_rated_issue=lowest_rated_issue,
-        min_sample_threshold=MIN_SAMPLE_THRESHOLD,
+        min_sample_threshold=min_sample_threshold,
     )
 
 

@@ -267,3 +267,54 @@ class CreatorDetailResponse(BaseModel):
         description="Headline-eligible rating distribution (half-star buckets, median, "
         "range, mean, sample count). ``null`` when the creator has no eligible ratings.",
     )
+    insights: CreatorInsights | None = Field(
+        default=None,
+        description="Strongest and weakest work analysis for this creator. "
+        "``null`` when there is not enough data for a meaningful series comparison.",
+    )
+
+
+class CreatorInsights(BaseModel):
+    """Strongest and weakest work analysis for one creator detail page.
+
+    Series strongest/weakest labels require a minimum sample threshold so a
+    single high-rated issue cannot automatically outweigh a consistently loved
+    run. Individual issue extremes are shown separately and are not presented
+    as aggregate series conclusions.
+    """
+
+    model_config = {"frozen": True}
+
+    has_sufficient_data: bool = Field(
+        ...,
+        description="True when at least one series meets the minimum sample "
+        "threshold for a meaningful strongest/weakest series comparison.",
+    )
+    highest_rated_series: CreatorSeriesGroup | None = Field(
+        default=None,
+        description="Highest-rated series meeting the minimum sample threshold.",
+    )
+    lowest_rated_series: CreatorSeriesGroup | None = Field(
+        default=None,
+        description="Lowest-rated series meeting the minimum sample threshold.",
+    )
+    most_rated_series: CreatorSeriesGroup | None = Field(
+        default=None,
+        description="Most-rated series meeting the minimum sample threshold.",
+    )
+    highest_rated_issue: tuple[int, float] | None = Field(
+        default=None,
+        description="Individually highest-rated issue as (issue_id, rating). "
+        "Shown separately from aggregate series conclusions.",
+    )
+    lowest_rated_issue: tuple[int, float] | None = Field(
+        default=None,
+        description="Individually lowest-rated issue as (issue_id, rating). "
+        "Shown separately from aggregate series conclusions.",
+    )
+    min_sample_threshold: int = Field(
+        ...,
+        ge=0,
+        description="Minimum rated issues a series needs to qualify for "
+        "strongest/weakest series selection.",
+    )
