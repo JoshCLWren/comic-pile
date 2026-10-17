@@ -680,6 +680,7 @@ async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
 @pytest.mark.asyncio
 async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
     async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A Step 23B plan absorbs residual exact edges without losing its full order."""
     user = await get_or_create_user_async(async_db)
@@ -715,6 +716,28 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
     await async_db.flush()
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
+
+    # Isolate the dry run from the frozen Step 14 production index: test-created
+    # dependency IDs can collide with production IDs classified needs_review,
+    # which would spuriously fail the safe-to-migrate dry run.
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: (
+            {
+                dependencies[0].id: "reading_plan_order",
+                dependencies[1].id: "reading_plan_order",
+            },
+            {},
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
 
     spec = ExplicitReaderOrderSpec(
         user_id=user.id,
@@ -825,6 +848,22 @@ async def test_batch_apply_refuses_token_mismatch(
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
 
+    # Isolate the dry run from the frozen Step 14 production index: test-created
+    # dependency IDs can collide with production IDs classified needs_review,
+    # which would spuriously fail the safe-to-migrate dry run.
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: ({reader_order.id: "reading_plan_order"}, {}),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
+
     spec = ExplicitReaderOrderSpec(
         user_id=user.id,
         dependency_group_ids=(group.id,),
@@ -926,6 +965,22 @@ async def test_batch_apply_refuses_reader_fact_drift_before_mutation(
     await async_db.flush()
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
+
+    # Isolate the dry run from the frozen Step 14 production index: test-created
+    # dependency IDs can collide with production IDs classified needs_review,
+    # which would spuriously fail the safe-to-migrate dry run.
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: ({reader_order.id: "reading_plan_order"}, {}),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
 
     spec = ExplicitReaderOrderSpec(
         user_id=user.id,
@@ -1030,6 +1085,22 @@ async def test_batch_apply_refuses_group_membership_drift_before_mutation(
     await async_db.flush()
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
+
+    # Isolate the dry run from the frozen Step 14 production index: test-created
+    # dependency IDs can collide with production IDs classified needs_review,
+    # which would spuriously fail the safe-to-migrate dry run.
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: ({reader_order.id: "reading_plan_order"}, {}),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
 
     spec = ExplicitReaderOrderSpec(
         user_id=user.id,
