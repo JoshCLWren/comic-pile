@@ -317,6 +317,10 @@ class UndoSnapshotService:
             thread.total_issues = state.get("total_issues")
             thread.next_unread_issue_id = state.get("next_unread_issue_id")
             thread.reading_progress = state.get("reading_progress")
+            thread.issues_remaining = state.get(
+                "issues_remaining",
+                thread.issues_remaining,
+            )
             return
 
         has_tracking_marker = USES_ISSUE_TRACKING_KEY in state
