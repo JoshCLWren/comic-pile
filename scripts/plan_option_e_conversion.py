@@ -196,10 +196,17 @@ def parse_intent(payload: Mapping[str, object]) -> ConversionIntent:
     prerequisites: list[PrerequisiteDecision] = []
     for row in _rows(payload.get("prerequisites")):
         action = row.get("action")
-        if action not in ("keep_reader", "convert"):
+        if action not in ("keep_reader", "convert", "preserve_unknown"):
             raise ValueError(
                 f"Prerequisite {row.get('dependency_id')} has no reviewed "
-                "keep_reader/convert action"
+                "keep_reader/convert/preserve_unknown action"
+            )
+        if action == "preserve_unknown" and (
+            row.get("classification") is not None or row.get("provenance") is not None
+        ):
+            raise ValueError(
+                "preserve_unknown keeps raw provenance unchanged; "
+                "do not provide classification or provenance"
             )
         classification = row.get("classification")
         if classification is not None and classification not in CLASSIFICATION_VALUES:
