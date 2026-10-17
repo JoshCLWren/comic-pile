@@ -44,6 +44,7 @@ from app.schemas.creator_detail import (
     CreatorInsights,
     CreatorIssueRow,
     CreatorRoleStat,
+    CreatorSeriesGroup,
     CreatorSeriesIssueListResponse,
 )
 from app.schemas.creator_summary import (
