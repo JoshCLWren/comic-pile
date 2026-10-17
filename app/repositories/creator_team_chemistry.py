@@ -60,9 +60,12 @@ class CreatorTeamChemistryRepository:
         creator_baselines: dict[str, _CreatorBaseline] = {}
         for issue_id in rated_issues:
             issue = await self.db.get(Issue, issue_id)
-            if not issue or not issue.rating:
+            if not issue:
                 continue
-            rating = float(issue.rating)
+            thread = await self.db.get(Thread, issue.thread_id)
+            if not thread or thread.last_rating is None:
+                continue
+            rating = float(thread.last_rating)
             for credit in credits_by_issue.get(issue_id, []):
                 if not hasattr(credit, "creator_id") or not hasattr(credit, "role"):
                     continue
@@ -117,7 +120,7 @@ class CreatorTeamChemistryRepository:
             select(Issue.id)
             .join(Thread, Thread.id == Issue.thread_id)
             .where(Thread.user_id == user_id)
-            .where(Issue.rating.isnot(None))
+            .where(Thread.last_rating.isnot(None))
         )
         return [int(row) for row in result.scalars().all()]
 
