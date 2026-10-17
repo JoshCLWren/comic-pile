@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          opencode models opencode --refresh | tee "$RUNNER_TEMP/opencode-models.txt"
+          bash scripts/opencode-model-catalog.sh opencode plain refresh | tee "$RUNNER_TEMP/opencode-models.txt"
           grep -Fx 'opencode/deepseek-v4.1-flash-free' "$RUNNER_TEMP/opencode-models.txt"
       - name: Invoke exact free model anonymously
         if: steps.pin.outputs.active == 'true'
