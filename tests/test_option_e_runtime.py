@@ -22,7 +22,6 @@ def option_e(monkeypatch: pytest.MonkeyPatch, default_user: User) -> Iterator[No
     """Enable only the test process with an explicitly non-production reference."""
     monkeypatch.setenv("OPTION_E_ENABLED", "true")
     monkeypatch.setenv("OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval")
-    monkeypatch.setenv("OPTION_E_READER_IDS", f"[{default_user.id}]")
     get_reading_execution_settings.cache_clear()
     try:
         yield
@@ -291,6 +290,49 @@ def test_activation_requires_a_separate_approval_reference(monkeypatch: pytest.M
         ReadingExecutionSettings(enabled=True, approved_preview=" ")
 
 
+async def test_old_dependencies_do_not_override_canonical_reading_intent(
+    option_e: None,
+    async_db: AsyncSession,
+) -> None:
+    """Legacy and compiled edges remain audit data, not hidden reading-order rules."""
+    user = await get_or_create_user_async(async_db)
+    first, a = await _series(async_db, user.id, "Historical source", 1)
+    legacy, b = await _series(async_db, user.id, "Old checkpoint", 2)
+    compiled, c = await _series(async_db, user.id, "Generated copy", 3)
+    deliberate, d = await _series(async_db, user.id, "Explicit exception", 4)
+    async_db.add_all([
+        Dependency(source_issue_id=a[0].id, target_issue_id=b[0].id,
+                   note="Old reading plan checkpoint"),
+        Dependency(source_issue_id=a[0].id, target_issue_id=c[0].id,
+                   origin="converted", classification="C",
+                   provenance="legacy continuity-rule expansion"),
+        Dependency(source_issue_id=a[0].id, target_issue_id=d[0].id,
+                   origin="reader", classification="A",
+                   provenance="Explicit reader requirement"),
+    ])
+    await async_db.flush()
+    live = await get_execution_eligibility(async_db, user.id)
+    assert live is not None
+    assert live.candidate_ids() == {first.id, legacy.id, compiled.id}
+    assert not live.threads[deliberate.id].eligible
+    assert live.threads[deliberate.id].blockers[0].origin == "reader"
+    from app.repositories.reading_shadow_repository import load_shadow_inputs
+    from app.services.reading_shadow_service import compare_reading_eligibility
+    shadow = compare_reading_eligibility(await load_shadow_inputs(async_db, user.id))
+    rows = shadow["threads"]
+    assert isinstance(rows, list)
+    assert all(isinstance(row, dict) for row in rows)
+    by_thread = {row["thread_id"]: row for row in rows if isinstance(row, dict)}
+    assert by_thread[legacy.id]["legacy_derived_frontier_blocked"] is True
+    assert by_thread[legacy.id]["proposed_eligible"] is True
+    assert by_thread[compiled.id]["proposed_eligible"] is True
+    assert by_thread[deliberate.id]["proposed_eligible"] is False
+    summary = shadow["summary"]
+    assert isinstance(summary, dict)
+    inert_count = summary["inert_dependencies"]
+    assert isinstance(inert_count, int) and inert_count >= 2
+
+
 async def test_v2_identity_fanout_does_not_shrink_thread_die_pool(
     option_e: None,
     async_db: AsyncSession,
@@ -373,15 +415,30 @@ def test_queue_cursor_cannot_cross_execution_modes() -> None:
         decode_queue_cursor(token, sort="position", search="", execution="option_e")
 
 
-async def test_activation_does_not_enable_unapproved_readers(
+async def test_activation_is_app_wide_with_reader_data_isolation(
     option_e: None,
     async_db: AsyncSession,
 ) -> None:
-    """One reader's approval cannot change another reader's execution authority."""
-    other = User(username="not_approved_for_option_e", password_hash="unused")
+    """Every reader uses the canonical engine, but only their owned constraints."""
+    first = await get_or_create_user_async(async_db)
+    other = User(username="other_canonical_reader", password_hash="unused")
     async_db.add(other)
     await async_db.flush()
-    assert await get_execution_eligibility(async_db, other.id) is None
+    one, one_issues = await _series(async_db, first.id, "First reader", 1)
+    two, two_issues = await _series(async_db, other.id, "Second reader", 2)
+    own_list = CustomCBLList(user_id=first.id, name="Private strict", mode="strict")
+    async_db.add(own_list)
+    await async_db.flush()
+    async_db.add(CustomCBLEntry(list_id=own_list.id, issue_id=one_issues[1].id, position=1))
+    await async_db.flush()
+    first_result = await get_execution_eligibility(async_db, first.id)
+    other_result = await get_execution_eligibility(async_db, other.id)
+    assert first_result is not None and other_result is not None
+    assert one.id in first_result.candidate_ids()
+    assert two.id in other_result.candidate_ids()
+    assert two.id not in first_result.threads
+    assert one.id not in other_result.threads
+    assert two_issues[0].id == other_result.threads[two.id].next_issue_id
 
 
 async def test_empty_and_fully_excluded_queues_have_valid_live_sort_sql(

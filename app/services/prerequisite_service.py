@@ -21,9 +21,11 @@ class HistoricalPrerequisiteError(ValueError):
 
 
 async def list_owned(db: AsyncSession, user_id: int) -> list[PrerequisiteResponse]:
-    """Read provenance without classifying or modifying historical rows."""
+    """Expose only the prerequisites that actually govern canonical execution."""
     return [
-        PrerequisiteResponse.model_validate(row) for row in await repository.list_owned(db, user_id)
+        PrerequisiteResponse.model_validate(row)
+        for row in await repository.list_owned(db, user_id)
+        if row.origin == "reader"
     ]
 
 
@@ -39,7 +41,18 @@ async def create(db: AsyncSession, user_id: int, data: PrerequisiteCreate) -> Pr
             data.source_issue_id,
             data.target_issue_id,
         ):
-            # Duplicate requests cannot relabel or rewrite historical intent.
+            if row.origin != "reader":
+                # A new explicit authoring request can adopt a historical pair.
+                # Its archived existence alone did not activate it.
+                snapshot, _ = await load_authoring_snapshot(db, user_id)
+                candidate = ReadingPrerequisite(-1, data.source_issue_id, data.target_issue_id)
+                validate_reading_constraints(
+                    replace(snapshot, prerequisites=(*snapshot.prerequisites, candidate))
+                )
+                await repository.promote_reader(db, row, data.note)
+                response = PrerequisiteResponse.model_validate(row)
+                await db.commit()
+                return response
             return PrerequisiteResponse.model_validate(row)
     snapshot, _ = await load_authoring_snapshot(db, user_id)
     candidate = ReadingPrerequisite(-1, data.source_issue_id, data.target_issue_id)

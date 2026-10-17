@@ -157,7 +157,7 @@ async def get_execution_eligibility(
         None for legacy execution, otherwise the transaction's immutable result.
     """
     settings = get_reading_execution_settings()
-    if not settings.enabled or user_id not in settings.reader_ids:
+    if not settings.enabled:
         return None
     key = f"option_e_eligibility:{user_id}"
     # Match ordinary SELECT autoflush before evaluating pending reader writes.
@@ -212,8 +212,6 @@ def describe_blocker_origin(snapshot: ReadingEligibilitySnapshot, blocker: Block
         Reader-facing origin for Queue summaries and Roll recovery.
     """
     if blocker.kind == "prerequisite":
-        if "historical classification unknown" in blocker.provenance:
-            return "Existing prerequisite (origin not yet classified)"
         return "Reader prerequisite" if blocker.origin == "reader" else "Converted prerequisite"
     kind = {
         "strict_order": "Strict order",
