@@ -240,14 +240,13 @@ export default function CreatorDetailPage() {
             {' '}Counts shown are lower bounds, not exhaustive totals.
           </p>
         )}
-
       </section>
 
       {summary.ratings_count > 0 && (
         <section aria-labelledby="creator-rating-history-heading" className="mt-6">
           <SectionHeading id="creator-rating-history-heading">Rating history</SectionHeading>
           <div className="mt-2">
-            <RatingHistoryChart ratedIssues={ratedIssues} />
+            <RatingHistoryChart ratedIssues={ratedIssues} totalRatings={summary.ratings_count} />
           </div>
           {ratingsPartial && (
             <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
