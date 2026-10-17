@@ -50,3 +50,16 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/deepseek-free-smoke.log"
           grep -q 'DEEPSEEK_FREE_ENDPOINT_OK' "$RUNNER_TEMP/deepseek-free-smoke.log"
           test -z "$(git status --porcelain)"
+
+      - name: Verify Big Pickle through OpenCode 2
+        if: steps.pin.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fx 'opencode/big-pickle' "$RUNNER_TEMP/opencode-models.txt"
+          timeout --signal=TERM --kill-after=10s 180s \
+            opencode run --standalone -m opencode/big-pickle --agent build \
+            'Reply with exactly BIG_PICKLE_FREE_ENDPOINT_OK. Do not edit files, run commands, or use tools.' \
+            2>&1 | tee "$RUNNER_TEMP/big-pickle-free-smoke.log"
+          grep -q 'BIG_PICKLE_FREE_ENDPOINT_OK' "$RUNNER_TEMP/big-pickle-free-smoke.log"
+          test -z "$(git status --porcelain)"
