@@ -140,7 +140,11 @@ async def load_requirements(db: AsyncSession, user_id: int) -> list[Dependency]:
 
 
 async def load_excluded_issue_ids(
-    db: AsyncSession, user_id: int, issues: Sequence[Issue]
+    db: AsyncSession,
+    user_id: int,
+    issues: Sequence[Issue],
+    *,
+    proposed_exclusions: Sequence[CollectionExclusion] | None = None,
 ) -> frozenset[int]:
     """Resolve owner exclusions by stable Issue, Thread and confirmed volume identity.
 
@@ -148,16 +152,22 @@ async def load_excluded_issue_ids(
         db: Current authoring transaction.
         user_id: Reader whose collection exclusions are resolved.
         issues: Already-loaded owned Issue rows.
+        proposed_exclusions: Explicit hypothetical targets for read-only planning.
+            None loads the owner's durable exclusions.
 
     Returns:
         Owned Issue IDs matched by durable collection exclusions.
     """
-    exclusions = list(
-        (
-            await db.scalars(
-                select(CollectionExclusion).where(CollectionExclusion.user_id == user_id)
-            )
-        ).all()
+    exclusions = (
+        list(proposed_exclusions)
+        if proposed_exclusions is not None
+        else list(
+            (
+                await db.scalars(
+                    select(CollectionExclusion).where(CollectionExclusion.user_id == user_id)
+                )
+            ).all()
+        )
     )
     issue_ids = {row.issue_id for row in exclusions if row.issue_id is not None}
     thread_ids = {row.thread_id for row in exclusions if row.thread_id is not None}
