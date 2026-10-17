@@ -442,9 +442,30 @@ async def rate_thread(
             raise HTTPException(status_code=409, detail="The pending issue is excluded from this reading session")
         live_source_event_id, live_issue = offered[0].id, offered[1]
         canonical_issues = await issues_ordered(db, thread_id)
+    # Capture compact thread pre-state for v2 delta (only changed fields)
     pre_thread_state = await _capture_thread_pre_state(
         thread, db, issues=canonical_issues, force_issue_tracking=eligibility is not None,
+        compact=True,
     )
+    # Capture preimages of issues that will change on this action (bounded)
+    issue_changes: list[dict] = []
+    if canonical_issues:
+        for issue in canonical_issues:
+            # Only capture preimages for issues likely to mutate (status/read_at change)
+            # This keeps the payload bounded to actually-changed records.
+            if issue.status != "read":
+                issue_changes.append(_issue_preimage(issue))
+    if live_issue is not None and live_issue not in (canonical_issues or []):
+        issue_changes.append(_issue_preimage(live_issue))
+    # Dedup by id
+    seen_ids = set()
+    deduped_issue_changes = []
+    for ch in issue_changes:
+        if ch["id"] not in seen_ids:
+            seen_ids.add(ch["id"])
+            deduped_issue_changes.append(ch)
+    issue_changes = deduped_issue_changes
+    created_issues: list[Issue] = []
     current_die = await get_current_die_for_session(current_session, db)
     pre_session_state = {
         "start_die": current_session.start_die,
@@ -487,7 +508,7 @@ async def rate_thread(
         current_issue = await find_in_thread_by_number(
             db, thread.id, issue_number
         )
-        created_issues: list[Issue] = []
+        created_issues = []
 
         if not current_issue:
             try:
@@ -750,6 +771,9 @@ async def rate_thread(
         queue_position_changes=queue_position_changes,
         blocked_changes=blocked_changes,
         pre_session_state=pre_session_state,
+        issue_changes=issue_changes,
+        created_issues=[_issue_preimage(i) for i in created_issues] if created_issues else None,
+        deleted_issues=None,
     )
     response_eligibility = await get_execution_eligibility(db, user_id)
     await db.commit()
