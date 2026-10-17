@@ -1,4 +1,4 @@
-name: DeepSeek V4.1 OpenCode Free versus NVIDIA authenticated comparison
+name: DeepSeek OpenCode Free anonymous versus existing-key comparison
 
 on:
   pull_request:
@@ -26,31 +26,33 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install latest OpenCode 2
         run: bash .github/scripts/install-opencode-v2.sh
-      - name: Call exact DeepSeek model and shell tool through each provider
+      - name: Call exact OpenCode Free DeepSeek model and shell tool
         shell: bash
         env:
-          # Reuse the existing NVIDIA factory secret in the authenticated lane only.
-          NVIDIA_API_KEY: ${{ matrix.mode == 'authenticated' && secrets.NVIDIA_API_KEY || '' }}
+          # Existing OpenCode factory credential. Never passed to anonymous invocation.
+          EXISTING_OPENCODE_KEY: ${{ matrix.mode == 'authenticated' && (secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY) || '' }}
           MODE: ${{ matrix.mode }}
         run: |
           set -Eeuo pipefail
+          model=opencode/deepseek-v4.1-flash-free
           if [[ "$MODE" == authenticated ]]; then
-            # NVIDIA credentials are already used by existing factory workers.
-            model=nvidia/deepseek-ai/deepseek-v4.1-flash
-            if [[ -z "${NVIDIA_API_KEY:-}" ]]; then
-              echo '::error::Existing NVIDIA_API_KEY is missing on the runner'
-              exit 1
-            fi
-          else
-            model=opencode/deepseek-v4.1-flash-free
-            unset OPENCODE_API_KEY OPENCODE_ZEN_API_KEY NVIDIA_API_KEY || true
-            catalog="$RUNNER_TEMP/deepseek-models.txt"
-            bash scripts/opencode-model-catalog.sh opencode plain refresh > "$catalog"
-            if ! grep -Fx "$model" "$catalog" >/dev/null; then
-              echo "### DeepSeek $MODE: MODEL ABSENT" >> "$GITHUB_STEP_SUMMARY"
-              echo 'No fallback was invoked.' >> "$GITHUB_STEP_SUMMARY"
+            if [[ -z "${EXISTING_OPENCODE_KEY:-}" ]]; then
+              echo "### DeepSeek authenticated: NOT CONFIGURED" >> "$GITHUB_STEP_SUMMARY"
+              echo 'Existing OpenCode credential unavailable in this GitHub Actions context; no authenticated request was made.' >> "$GITHUB_STEP_SUMMARY"
+              echo '::warning::Existing OpenCode credential unavailable; authenticated mode untested'
               exit 0
             fi
+            echo "::add-mask::$EXISTING_OPENCODE_KEY"
+            export OPENCODE_API_KEY="$EXISTING_OPENCODE_KEY"
+          else
+            unset OPENCODE_API_KEY OPENCODE_ZEN_API_KEY NVIDIA_API_KEY || true
+          fi
+          catalog="$RUNNER_TEMP/deepseek-models.txt"
+          bash scripts/opencode-model-catalog.sh opencode plain refresh > "$catalog"
+          if ! grep -Fx "$model" "$catalog" >/dev/null; then
+            echo "### DeepSeek $MODE: MODEL ABSENT" >> "$GITHUB_STEP_SUMMARY"
+            echo 'No fallback was invoked.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           set +e
           timeout 180s opencode run --standalone -m "$model" --agent build \

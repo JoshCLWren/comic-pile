@@ -8,6 +8,10 @@ on:
         required: true
         type: string
     secrets:
+      OPENCODE_API_KEY:
+        required: false
+      OPENCODE_ZEN_API_KEY:
+        required: false
       NVIDIA_API_KEY:
         required: false
       OPENROUTER_API_KEY:
@@ -108,6 +112,7 @@ jobs:
         shell: bash
         env:
           REQUESTED_WORKER: ${{ inputs.worker }}
+          EXISTING_OPENCODE_KEY: ${{ (inputs.worker == '88' || inputs.worker == '90') && (secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY) || '' }}
         run: |
           set -Eeuo pipefail
           row="$(awk -F '\t' -v worker="$REQUESTED_WORKER" '$1 == worker {print; exit}' .github/free-model-factories.tsv)"
@@ -121,14 +126,9 @@ jobs:
             88|90) deepseek_mode=authenticated ;;
             *) deepseek_mode=normal ;;
           esac
-          if [[ "$deepseek_mode" == anonymous ]]; then
+          if [[ "$deepseek_mode" != normal ]]; then
             [[ "$source" == opencode-free && "$model" == deepseek-v4.1-flash-free ]] || {
-              echo "::error::Anonymous DeepSeek worker $worker must use exact OpenCode Free model"
-              exit 1
-            }
-          elif [[ "$deepseek_mode" == authenticated ]]; then
-            [[ "$source" == nvidia && "$model" == deepseek-ai/deepseek-v4.1-flash ]] || {
-              echo "::error::Authenticated DeepSeek worker $worker must use exact NVIDIA model"
+              echo "::error::DeepSeek experiment worker $worker must use exact OpenCode Free model"
               exit 1
             }
           fi
@@ -199,6 +199,11 @@ jobs:
               ;;
           esac
 
+          if [[ "$deepseek_mode" == authenticated && -z "${EXISTING_OPENCODE_KEY:-}" ]]; then
+            configured=false
+            reason='missing-OpenCode-credential'
+          fi
+
           {
             echo "deepseek_mode=$deepseek_mode"
             echo "worker=$worker"
@@ -251,6 +256,18 @@ jobs:
       - name: Install current OpenCode 2
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
         run: bash .github/scripts/install-opencode-v2.sh
+
+      - name: Configure authenticated DeepSeek OpenCode credential
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.deepseek_mode == 'authenticated'
+        shell: bash
+        env:
+          EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${EXISTING_OPENCODE_KEY:-}" ]] || { echo "::error::Existing OpenCode API key unavailable"; exit 1; }
+          echo "::add-mask::$EXISTING_OPENCODE_KEY"
+          printf 'OPENCODE_API_KEY=%s\n' "$EXISTING_OPENCODE_KEY" >> "$GITHUB_ENV"
+          echo 'Authenticated DeepSeek uses existing OpenCode credential and exact free model'
 
       - name: Install pinned Kilo CLI release
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
