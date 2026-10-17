@@ -14,7 +14,7 @@ import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 import httpx
 from filelock import FileLock
@@ -154,7 +154,7 @@ class PersistentResourceThrottleTracker:
             state = self._read()
             previous = state.get(resource, {})
             attempts = (
-                int(previous.get("headerless_attempts", 0))
+                int(cast(int, previous.get("headerless_attempts", 0)))
                 if headerless_attempts is None
                 else max(0, headerless_attempts)
             )
@@ -176,7 +176,7 @@ class PersistentResourceThrottleTracker:
         with self._lock:
             state = self._read()
             previous = state.get(resource, {})
-            attempts = int(previous.get("headerless_attempts", 0))
+            attempts = int(cast(int, previous.get("headerless_attempts", 0)))
             if retry_after is None:
                 attempts += 1
                 exponent = min(max(attempts - 1, 0), 20)
@@ -193,7 +193,7 @@ class PersistentResourceThrottleTracker:
                 "recorded_at": float(self._clock()),
             }
             self._write(state)
-            return delay
+            return float(delay)
 
     def reset(self, resource: str, *, observed_at: float | None = None) -> None:
         """Clear the cooldown for a resource after a successful request.
@@ -219,7 +219,7 @@ class PersistentResourceThrottleTracker:
         entry = state.get(resource)
         if entry is None:
             return None
-        cooldown_until = float(entry.get("cooldown_until", 0))
+        cooldown_until = float(cast(float, entry.get("cooldown_until", 0)))
         retry_after = entry.get("retry_after")
         if isinstance(retry_after, (int, float)):
             retry_after = float(retry_after)
