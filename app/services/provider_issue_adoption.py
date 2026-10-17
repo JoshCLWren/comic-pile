@@ -132,6 +132,8 @@ async def adopt_comicvine_issue(
     metadata: dict[str, object] | None = None,
     comicvine_client: ComicVineClient | None = None,
     thread: Thread | None = None,
+    issue: Issue | None = None,
+    recalculate_tracking: bool = True,
 ) -> ProviderIssueAdoptionResult:
     """Adopt one ComicVine issue into an owned thread, idempotently.
 
@@ -140,20 +142,29 @@ async def adopt_comicvine_issue(
         user_id: Owner of the target thread (authorization).
         thread_id: Target thread; must be owned by ``user_id``.
         comicvine_issue_id: Stable ComicVine issue ID from the confirmed volume.
-        issue_number: ComicVine's issue number, preserved verbatim.
-        external_url: Optional ComicVine site URL for the identity.
-        metadata: Optional trusted provider facts stored on first identity
-            creation; never overwrites richer hydrated metadata on retry.
-        comicvine_client: Optional configured ComicVine client. When present,
-            provider metadata is hydrated through the existing hydration
-            boundary after the local state is safely established. A hydration
-            failure is recorded on the result and never rolls back the local
-            adoption, so a retry reuses the Issue instead of duplicating it.
-        thread: Optional already-loaded target thread. Ownership is still
-            verified against ``user_id`` and ``thread_id``, but the extra
-            ownership lookup and row lock are skipped, so the caller must hold
-            the thread row lock itself. Batch series import uses this because it
-            locks the thread once for the whole roster instead of per issue.
+    issue_number: ComicVine's issue number, preserved verbatim.
+    external_url: Optional ComicVine site URL for the identity.
+    metadata: Optional trusted provider facts stored on first identity
+        creation; never overwrites richer hydrated metadata on retry.
+    comicvine_client: Optional configured ComicVine client. When present,
+        provider metadata is hydrated through the existing hydration
+        boundary after the local state is safely established. A hydration
+        failure is recorded on the result and never rolls back the local
+        adoption, so a retry reuses the Issue instead of duplicating it.
+    thread: Optional already-loaded target thread. Ownership is still
+        verified against ``user_id`` and ``thread_id``, but the extra
+        ownership lookup and row lock are skipped, so the caller must hold
+        the thread row lock itself. Batch series import uses this because it
+        locks the thread once for the whole roster instead of per issue.
+    issue: Optional already-loaded target issue. When provided, the
+        in-thread number lookup is skipped and the issue is reused as-is
+        (``outcome="reused"``). Callers that create issues before adoption
+        (e.g. issue creation) should pass the newly created issue to avoid
+        a redundant per-issue SELECT.
+    recalculate_tracking: When False, skips the per-issue thread
+        issue-tracking recalculation. Callers that recalculate tracking
+        once for the whole batch (e.g. issue creation) should pass False
+        to avoid redundant per-issue tracking writes.
 
     Returns:
         A :class:`ProviderIssueAdoptionResult` distinguishing ``created``,
@@ -209,10 +220,13 @@ async def adopt_comicvine_issue(
             metadata_json=None if identity_exists else (metadata or {}),
         )
 
-        issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
         if issue is None:
-            issue = await create_issue_in_natural_order(db, thread_id, issue_number)
-            outcome = "created"
+            issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
+            if issue is None:
+                issue = await create_issue_in_natural_order(db, thread_id, issue_number)
+                outcome: AdoptionOutcome = "created"
+            else:
+                outcome = "reused"
         else:
             outcome = "reused"
 
@@ -236,7 +250,7 @@ async def adopt_comicvine_issue(
                 conflict_detail=str(exc),
             )
 
-        if outcome == "created":
+        if outcome == "created" and recalculate_tracking:
             await _recalculate_thread_tracking(db, thread, user_id)
 
     hydration: HydrationOutcome = "not_attempted"

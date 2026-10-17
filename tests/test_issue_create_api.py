@@ -1,11 +1,14 @@
 """Tests for Issue Create API endpoints."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from httpx import AsyncClient
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import event, func, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Thread, User
+from app.services.provider_issue_adoption import ProviderIssueAdoptionResult
 from tests.conftest import get_or_create_user_async
 
 async def test_create_issues_from_simple_range(
@@ -1035,3 +1038,222 @@ async def test_create_issues_auto_maps_to_comicvine(
     assert thread.total_issues == 4
     assert thread.issues_remaining == 2  # Issues #3 and #4 are unread
     assert thread.reading_progress == "in_progress"
+
+
+@contextmanager
+def _captured_statements(db_engine: AsyncEngine) -> Iterator[list[str]]:
+    """Yield a list that records all SQL statements executed on the engine."""
+    statements: list[str] = []
+
+    def _capture(conn, cursor, statement, parameters, context, executemany) -> None:
+        statements.append(str(statement))
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+    try:
+        yield statements
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
+
+
+async def _make_thread_with_comicvine_mapping(
+    async_db: AsyncSession,
+    *,
+    user_id: int,
+    title: str = "Starman",
+    volume_id: str = "12345",
+    existing_numbers: list[str] | None = None,
+) -> Thread:
+    """Create a thread with a confirmed ComicVine series mapping and optional issues."""
+    from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
+
+    thread = Thread(
+        title=title,
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user_id,
+        total_issues=3,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    series_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="series",
+        external_id=volume_id,
+        metadata_json={"name": title, "count_of_issues": 100},
+    )
+    async_db.add(series_identity)
+    await async_db.flush()
+
+    mapping = ThreadExternalSeriesMapping(
+        thread_id=thread.id,
+        external_identity_id=series_identity.id,
+        status="confirmed",
+        evidence_source="user_series_confirmation",
+        confidence=1.0,
+    )
+    async_db.add(mapping)
+
+    if existing_numbers:
+        issues = [
+            Issue(thread_id=thread.id, issue_number=num, position=idx + 1, status="read")
+            for idx, num in enumerate(existing_numbers)
+        ]
+        async_db.add_all(issues)
+        await async_db.flush()
+        thread.next_unread_issue_id = None
+        await async_db.flush()
+
+    await async_db.commit()
+    return thread
+
+
+def _mock_comicvine_client(mocker, volume_issues: list[dict]) -> None:
+    """Mock the ComicVine client for volume listing and issue hydration."""
+    mocker.patch.dict("os.environ", {"COMICVINE_API_KEY": "test-key"})
+    from comic_pile.comicvine_provider import ComicVineResponse
+
+    mock_client = mocker.AsyncMock()
+    mock_client.fetch_volume_issues.return_value = volume_issues
+    mock_client.fetch_issue.return_value = ComicVineResponse(
+        payload={
+            "results": {
+                "id": 99999,
+                "issue_number": "1",
+                "name": "Issue 1",
+                "site_detail_url": "https://example.com/issue/99999/",
+                "date_last_updated": "2026-01-01T00:00:00",
+            }
+        },
+        from_cache=False,
+        cache_key="fake",
+    )
+    mocker.patch("app.services.issue.ComicVineClient", return_value=mock_client)
+    mocker.patch("app.comicvine_hydration.ComicVineClient", return_value=mock_client)
+
+
+async def test_create_issues_auto_maps_multiple_to_comicvine(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    mocker,
+) -> None:
+    """POST /threads/{thread_id}/issues auto-maps multiple new issues to ComicVine."""
+    from app.models.external_identity import IssueExternalIdentityMapping
+
+    user = await get_or_create_user_async(async_db)
+    thread = await _make_thread_with_comicvine_mapping(
+        async_db, user_id=user.id, existing_numbers=["1", "2", "3"]
+    )
+
+    _mock_comicvine_client(
+        mocker,
+        [
+            {"id": 1001, "issue_number": 1, "name": "Issue 1"},
+            {"id": 1002, "issue_number": 2, "name": "Issue 2"},
+            {"id": 1003, "issue_number": 3, "name": "Issue 3"},
+            {"id": 1004, "issue_number": 4, "name": "Issue 4"},
+            {"id": 1005, "issue_number": 5, "name": "Issue 5"},
+        ],
+    )
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues",
+        json={"issue_range": "4-5"},
+    )
+    assert response.status_code == 201
+
+    data = response.json()
+    assert [issue["issue_number"] for issue in data["issues"]] == ["4", "5"]
+    assert data["total_count"] == 5
+
+    # Both new issues have confirmed ComicVine mappings
+    result = await async_db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
+        .where(Issue.thread_id == thread.id)
+        .where(Issue.issue_number.in_(["4", "5"]))
+        .where(IssueExternalIdentityMapping.status == "confirmed"),
+    )
+    mappings = result.scalars().all()
+    assert len(mappings) == 2
+
+    # Thread tracking state reflects all 5 issues, 2 unread
+    await async_db.refresh(thread)
+    assert thread.total_issues == 5
+    assert thread.issues_remaining == 2
+    assert thread.reading_progress == "in_progress"
+    assert thread.next_unread_issue_id is not None
+
+    new_issue_4 = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).where(Issue.issue_number == "4")
+    )
+    issue_4 = new_issue_4.scalar_one()
+    assert issue_4.position == 4
+    assert issue_4.status == "unread"
+
+
+async def test_create_issues_comicvine_adoption_query_count(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    mocker,
+) -> None:
+    """POST /threads/{thread_id}/issues uses a bounded number of DB queries with ComicVine adoption.
+
+    Regression guard for issue #3437: creating issues with ComicVine auto-mapping
+    must not issue a query per issue for thread lookups or per-issue tracking
+    recalculation.
+    """
+    from app.models.external_identity import IssueExternalIdentityMapping
+
+    user = await get_or_create_user_async(async_db)
+    thread = await _make_thread_with_comicvine_mapping(
+        async_db, user_id=user.id, existing_numbers=["1", "2", "3"]
+    )
+
+    _mock_comicvine_client(
+        mocker,
+        [
+            {"id": 1001, "issue_number": 1, "name": "Issue 1"},
+            {"id": 1002, "issue_number": 2, "name": "Issue 2"},
+            {"id": 1003, "issue_number": 3, "name": "Issue 3"},
+            {"id": 1004, "issue_number": 4, "name": "Issue 4"},
+            {"id": 1005, "issue_number": 5, "name": "Issue 5"},
+        ],
+    )
+
+    with _captured_statements(db_engine) as statements:
+        response = await auth_client.post(
+            f"/api/v1/threads/{thread.id}/issues",
+            json={"issue_range": "4-5"},
+        )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert [issue["issue_number"] for issue in data["issues"]] == ["4", "5"]
+
+    total_statements = len(statements)
+    select_statements = [
+        s for s in statements if s.lstrip().upper().startswith("SELECT")
+    ]
+
+    # The adoption path must not issue a thread ownership lookup, an in-thread
+    # number lookup, or a per-issue tracking recalculation per new issue.
+    # Bounded well below the pre-optimization count (18+ queries observed in prod).
+    assert total_statements <= 45, f"Too many statements ({total_statements}): {statements}"
+    assert len(select_statements) <= 25, f"Too many SELECTs ({len(select_statements)})"
+
+    # Confirm both mappings were actually written
+    result = await async_db.execute(
+        select(IssueExternalIdentityMapping)
+        .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
+        .where(Issue.thread_id == thread.id)
+        .where(Issue.issue_number.in_(["4", "5"]))
+        .where(IssueExternalIdentityMapping.status == "confirmed"),
+    )
+    mappings = result.scalars().all()
+    assert len(mappings) == 2
