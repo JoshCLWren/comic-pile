@@ -188,6 +188,8 @@ async def test_cross_owner_historical_edge_cannot_block_a_readers_frontier(
     assert inputs.prerequisites == ()
     assert not inputs.unresolved
     rows = compare_reading_eligibility(inputs)["threads"]
+    assert isinstance(rows, list)
+    assert all(isinstance(row, dict) for row in rows)
     assert any(row["thread_id"] == own_thread.id and row["proposed_eligible"] for row in rows)
 
 
@@ -244,13 +246,20 @@ async def test_all_reader_preflight_is_read_only_and_owner_isolated(
     result = await report_reading_eligibility.report_all(get_test_database_url())
     assert result["scope"] == "all_readers"
     assert result["read_only"] is True
-    reports = {r["user_id"]: r for r in result["reports"]}
+    payload = result["reports"]
+    assert isinstance(payload, list)
+    assert all(isinstance(row, dict) for row in payload)
+    reports = {r["user_id"]: r for r in payload}
     assert first.id in reports and second.id in reports
     assert reports[first.id]["valid"] is True
     assert reports[second.id]["valid"] is True
-    assert one.id in {row["thread_id"] for row in reports[first.id]["threads"]}
-    assert two.id not in {row["thread_id"] for row in reports[first.id]["threads"]}
-    assert two.id in {row["thread_id"] for row in reports[second.id]["threads"]}
+    first_rows = reports[first.id]["threads"]
+    second_rows = reports[second.id]["threads"]
+    assert isinstance(first_rows, list) and isinstance(second_rows, list)
+    assert all(isinstance(row, dict) for row in (*first_rows, *second_rows))
+    assert one.id in {row["thread_id"] for row in first_rows}
+    assert two.id not in {row["thread_id"] for row in first_rows}
+    assert two.id in {row["thread_id"] for row in second_rows}
     assert result["readers_valid"] == result["readers_checked"]
     assert len(result["source_fingerprint"]) == 64
     assert any("SET TRANSACTION READ ONLY" in statement for statement in statements)
