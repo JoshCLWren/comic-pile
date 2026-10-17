@@ -105,6 +105,7 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             or 0
         )
         issue_ids = {issue.id for issue in issues}
+        issue_status = {issue.id: issue.status for issue in issues}
         unresolved: list[UnresolvedReadingReference] = []
         by_list: dict[int, list[ReadingListEntry]] = {}
         for entry in entries:
@@ -162,8 +163,7 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             ),
             legacy_enforced_targets=frozenset(
                 row.target_issue_id for row in dependencies
-                if row.source_issue_id in issue_ids
-                and next((issue.status for issue in issues if issue.id == row.source_issue_id), "read") != "read"
+                if issue_status.get(row.source_issue_id, "read") != "read"
                 and row.target_issue_id in issue_ids
             ),
         )
