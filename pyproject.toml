@@ -179,7 +179,7 @@ strict = true
 explicit_package_bases = true
 show_error_codes = true
 warn_unused_configs = true
-files = ["app", "comic_pile", "api", "tests", "scripts/mypy_baseline.py"]
+files = []  # Empty list, will be overridden by mypy_baseline.py
 
 [[tool.mypy.overrides]]
 module = "pytest"

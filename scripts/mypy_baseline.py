@@ -6,7 +6,6 @@ import argparse
 import json
 import subprocess
 import sys
-import tomllib
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -160,15 +159,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["check", "inventory"])
     args = parser.parse_args()
-    config = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["mypy"]
-    surface = {
-        p.relative_to(ROOT).as_posix()
-        for entry in config["files"]
-        for p in ([ROOT / entry] if (ROOT / entry).is_file() else (ROOT / entry).rglob("*.py"))
-    }
+    
+    # Load clean files from mypy-clean.json
+    clean_manifest = json.loads(MANIFEST.read_text())
+    surface = set(clean_manifest)
     clean = load_clean(surface)
     completed = subprocess.run(
-        [sys.executable, "-m", "mypy", "--config-file", "pyproject.toml", "--output", "json"],
+        [sys.executable, "-m", "mypy", "--config-file", "pyproject.toml", "--output", "json"] + clean,
         cwd=ROOT, capture_output=True, text=True, check=False,
     )
     if completed.returncode not in (0, 1) or completed.stderr:
