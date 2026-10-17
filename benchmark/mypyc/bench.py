@@ -38,7 +38,8 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass
-from typing import Any, Callable
+from typing import Any, TypeVar, cast
+from collections.abc import Callable
 
 # ---------------------------------------------------------------------------
 # Candidate modules (strict-clean, stdlib-only) from issue #3258.
@@ -102,12 +103,12 @@ def _build_efforts() -> list[tuple[int, float | None]]:
     return efforts
 
 
-def _build_signals(CandidateSignals: Any) -> list[Any]:
+def _build_signals(candidate_signals: Any) -> list[Any]:
     rng = _rng()
     signals: list[Any] = []
     for index in range(SIGNAL_COUNT):
         signals.append(
-            CandidateSignals(
+            cast(Any, candidate_signals)(
                 thread_id=2000 + index,
                 effort_minutes=rng.choice([None, 5.0, 14.0, 22.0]),
                 last_rating=rng.choice([None, 3.0, 4.0, 5.0]),
@@ -130,22 +131,22 @@ def _build_weights(pool_size: int) -> list[float]:
 
 
 def _build_familiar_inputs(
-    CandidateFamiliarKeys: Any,
-    CreatorCreditKey: Any,
-    TasteSignal: Any,
+    candidate_familiar_keys: object,
+    creator_credit_key: object,
+    taste_signal: object,
 ) -> tuple[dict[int, Any], list[Any]]:
-    rng = _rng()
+    _rng()  # Initialize random seed but don't store the result
     candidates: dict[int, Any] = {}
     for index in range(FAMILIAR_CANDIDATE_COUNT):
         credits = (
             (
-                CreatorCreditKey(key="stan lee", roles=frozenset({"writer"})),
-                CreatorCreditKey(key="jack kirby", roles=frozenset({"artist"})),
+                creator_credit_key(key="stan lee", roles=frozenset({"writer"})),
+                creator_credit_key(key="jack kirby", roles=frozenset({"artist"})),
             )
             if index % 2 == 0
             else ()
         )
-        candidates[index] = CandidateFamiliarKeys(
+        candidates[index] = candidate_familiar_keys(
             creator_roles=credits,
             characters=frozenset({"spider-man", "x-men"})
             if index % 3 == 0
@@ -155,22 +156,22 @@ def _build_familiar_inputs(
             eras=frozenset({"1960s"}) if index % 6 == 0 else frozenset(),
         )
     signals = [
-        TasteSignal(kind="creator_role", key="stan lee", verdict="confirmed"),
-        TasteSignal(kind="character", key="spider-man", verdict="confirmed"),
-        TasteSignal(kind="team", key="avengers", verdict="sometimes"),
-        TasteSignal(kind="publisher", key="marvel", verdict="confirmed"),
-        TasteSignal(kind="era", key="1960s", verdict="confirmed"),
-        TasteSignal(kind="creator_role", key="jack kirby", verdict="rejected"),
+        taste_signal(kind="creator_role", key="stan lee", verdict="confirmed"),
+        taste_signal(kind="character", key="spider-man", verdict="confirmed"),
+        taste_signal(kind="team", key="avengers", verdict="sometimes"),
+        taste_signal(kind="publisher", key="marvel", verdict="confirmed"),
+        taste_signal(kind="era", key="1960s", verdict="confirmed"),
+        taste_signal(kind="creator_role", key="jack kirby", verdict="rejected"),
     ] * (FAMILIAR_SIGNAL_COUNT // 6 + 1)
     return candidates, signals[:FAMILIAR_SIGNAL_COUNT]
 
 
-def _build_observations(EffortObservation: Any) -> list[Any]:
+def _build_observations(effort_observation: object) -> list[Any]:
     rng = _rng()
     observations: list[Any] = []
     for index in range(OBSERVATION_COUNT):
         observations.append(
-            EffortObservation(
+            effort_observation(
                 thread_id=3000 + (index % 50),
                 issue_id=4000 + (index % 200),
                 duration_seconds=rng.uniform(300.0, 2400.0),
@@ -193,7 +194,6 @@ def _import_candidates(root: str) -> dict[str, Any]:
 
 def _workloads(mods: dict[str, Any]) -> list[tuple[str, str, Callable[[Any], None]]]:
     """Return (module, label, callable) triples running one representative call each."""
-    rec_weights_mod = mods["comic_pile.recommendation_weights"]
     rec_weighting_mod = mods["comic_pile.recommendation_weighting"]
     rec_selection_mod = mods["comic_pile.recommendation_selection"]
     familiar_mod = mods["comic_pile.familiar_weighting"]
@@ -208,39 +208,39 @@ def _workloads(mods: dict[str, Any]) -> list[tuple[str, str, Callable[[Any], Non
     )
     observations = _build_observations(effort_mod.EffortObservation)
     rng = _rng()
-    DEFAULT_MIN_TRUSTED_SAMPLE_COUNT = effort_mod.DEFAULT_MIN_TRUSTED_SAMPLE_COUNT
+    default_min_trusted_sample_count = effort_mod.DEFAULT_MIN_TRUSTED_SAMPLE_COUNT
 
-    def rec_weights(mod: Any) -> None:
+    def rec_weights(mod) -> None:
         mod.build_candidate_weights(efforts, "light")
         mod.build_candidate_weights(efforts, "balanced")
         mod.build_candidate_weights(efforts, "deep")
 
-    def rec_weighting(mod: Any) -> None:
+    def rec_weighting(mod) -> None:
         mod.weight_pool("light", "momentum", signals)
         mod.weight_pool("balanced", "balanced", signals)
         mod.weight_pool("deep", "explore", signals)
 
-    def rec_selection(mod: Any) -> None:
-        Bandwidth = rec_selection_mod.Bandwidth
-        Intent = rec_selection_mod.Intent
+    def rec_selection(mod) -> None:
+        bandwidth = rec_selection_mod.Bandwidth
+        intent = rec_selection_mod.Intent
         for pool_size in POOL_SIZES:
             weights = _build_weights(pool_size)
             mod.select_from_pool(pool_size, rng=rng)
             mod.select_from_pool(
                 pool_size,
-                bandwidth=Bandwidth.LIGHT,
-                intent=Intent.MOMENTUM,
+                bandwidth=bandwidth.LIGHT,
+                intent=intent.MOMENTUM,
                 weights=weights,
                 rng=rng,
             )
-            mod.select_from_pool(pool_size, intent=Intent.RANDOM, rng=rng)
+            mod.select_from_pool(pool_size, intent=intent.RANDOM, rng=rng)
 
-    def familiar(mod: Any) -> None:
+    def familiar(mod) -> None:
         mod.compute_familiar_factors(candidates, familiar_signals)
 
-    def effort(mod: Any) -> None:
+    def effort(mod) -> None:
         mod.aggregate_efforts(
-            observations, min_trusted_sample_count=DEFAULT_MIN_TRUSTED_SAMPLE_COUNT
+            observations, min_trusted_sample_count=default_min_trusted_sample_count
         )
 
     return [
@@ -444,6 +444,7 @@ def _aggregate(values: list[float]) -> dict[str, float | None]:
 
 
 def main() -> int:
+    """Run the benchmark and print JSON results."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root",
