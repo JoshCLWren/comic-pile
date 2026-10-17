@@ -42,25 +42,25 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
   }, [ratedIssues])
 
   // Calculate rolling average (minimum 5 observations)
-  const rollingAverageData = useMemo(() => {
-    if (ratingData.length < 5) return []
-    
+  const rollingAverage = useMemo(() => {
+    if (ratingData.length < 5) return { points: [], windowSize: 5 }
+
     const windowSize = Math.min(5, Math.floor(ratingData.length * 0.3))
     const averages: RollingAveragePoint[] = []
-    
+
     for (let i = windowSize - 1; i < ratingData.length; i++) {
       const window = ratingData.slice(i - windowSize + 1, i + 1)
       const sum = window.reduce((acc, point) => acc + point.rating, 0)
       const avg = sum / window.length
-      
+
       averages.push({
         timestamp: ratingData[i].timestamp,
         rating: avg,
         count: window.length,
       })
     }
-    
-    return averages
+
+    return { points: averages, windowSize }
   }, [ratingData])
 
   // Chart dimensions and margins
@@ -212,9 +212,9 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
         ))}
 
         {/* Rolling average line */}
-        {rollingAverageData.length > 0 && (
+        {rollingAverage.points.length > 0 && (
           <path
-            d={`M ${rollingAverageData
+            d={`M ${rollingAverage.points
               .map((point) => `${xScale(point.timestamp.getTime())},${yScale(point.rating)}`)
               .join(' L ')}`}
             fill="none"
@@ -301,10 +301,10 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--theme-personal-accent)' }} />
             <span>Individual rating</span>
           </div>
-          {rollingAverageData.length > 0 && (
+          {rollingAverage.points.length > 0 && (
             <div className="flex items-center gap-1">
               <div className="w-3 h-0.5" style={{ backgroundColor: 'var(--theme-comic-accent)' }} />
-              <span>Rolling average (5 issues)</span>
+              <span>Rolling average ({rollingAverage.windowSize} issues)</span>
             </div>
           )}
         </div>

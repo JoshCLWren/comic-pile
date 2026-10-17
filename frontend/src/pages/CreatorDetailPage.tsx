@@ -240,7 +240,8 @@ export default function CreatorDetailPage() {
             {' '}Counts shown are lower bounds, not exhaustive totals.
           </p>
         )}
-       </section>
+
+      </section>
 
       {summary.ratings_count > 0 && (
         <section aria-labelledby="creator-rating-history-heading" className="mt-6">
