@@ -12266,6 +12266,12 @@ export interface components {
              * @description Provider-specific series identifier
              */
             provider_series_external_id: string;
+            /**
+             * Scope Mode
+             * @description Preview scope mode: 'confirmed_origin' (generic, requires confirmed origin evidence for sibling scope) or 'queue_thread_bootstrap' (queue repair may propose the anchor's whole owned thread, including its first issue)
+             * @default confirmed_origin
+             */
+            scope_mode: string;
         };
         /**
          * SeriesMappingPreviewResponse
@@ -12320,6 +12326,11 @@ export interface components {
              */
             default_selected: boolean;
             /**
+             * External Id
+             * @description Provider-specific identifier
+             */
+            external_id?: string | null;
+            /**
              * Issue Id
              * @description Internal issue ID
              */
@@ -12334,6 +12345,11 @@ export interface components {
              * @description Whether this issue would be mapped in the proposed scope
              */
             proposed_mapping: boolean;
+            /**
+             * Provider
+             * @description External provider name
+             */
+            provider?: string | null;
             /**
              * Reason
              * @description Explanation for the classification

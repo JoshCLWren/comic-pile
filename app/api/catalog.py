@@ -444,6 +444,7 @@ async def preview_series_mapping(
         origin_issue_id=request.origin_issue_id,
         provider=request.provider,
         provider_series_external_id=request.provider_series_external_id,
+        scope_mode=request.scope_mode,
     )
     
     # Convert the service response to the schema response format

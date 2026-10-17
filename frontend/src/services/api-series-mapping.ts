@@ -72,7 +72,16 @@ export interface SeriesMappingPreviewRequest {
   origin_issue_id: number
   provider: string
   provider_series_external_id: string
+  /**
+   * Preview scope mode. `confirmed_origin` (default) is the generic contract that needs
+   * confirmed origin evidence before offering sibling issues. `queue_thread_bootstrap` is the
+   * Queue repair mode that may propose the anchor's whole owned thread, including its first
+   * issue, against a matching provider volume.
+   */
+  scope_mode?: SeriesMappingScopeMode
 }
+
+export type SeriesMappingScopeMode = 'confirmed_origin' | 'queue_thread_bootstrap'
 
 export interface SeriesMappingCommitRequest {
   preview_token: string

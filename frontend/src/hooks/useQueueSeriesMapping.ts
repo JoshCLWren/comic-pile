@@ -63,6 +63,9 @@ export function useQueueSeriesMappingPreview(
         origin_issue_id: originIssueId!,
         provider: provider!,
         provider_series_external_id: providerSeriesExternalId!,
+        // The Queue surface repairs a thread that may have no confirmed mapping yet, so it
+        // requests the explicit bootstrap scope mode rather than the generic preview contract.
+        scope_mode: 'queue_thread_bootstrap',
       }),
     enabled: enabled && scopeReady,
   })

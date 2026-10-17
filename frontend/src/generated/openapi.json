@@ -14322,6 +14322,12 @@
             "minLength": 1,
             "title": "Provider Series External Id",
             "type": "string"
+          },
+          "scope_mode": {
+            "default": "confirmed_origin",
+            "description": "Preview scope mode: 'confirmed_origin' (generic, requires confirmed origin evidence for sibling scope) or 'queue_thread_bootstrap' (queue repair may propose the anchor's whole owned thread, including its first issue)",
+            "title": "Scope Mode",
+            "type": "string"
           }
         },
         "required": [
@@ -14425,6 +14431,18 @@
             "title": "Default Selected",
             "type": "boolean"
           },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider-specific identifier",
+            "title": "External Id"
+          },
           "issue_id": {
             "description": "Internal issue ID",
             "title": "Issue Id",
@@ -14439,6 +14457,18 @@
             "description": "Whether this issue would be mapped in the proposed scope",
             "title": "Proposed Mapping",
             "type": "boolean"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "External provider name",
+            "title": "Provider"
           },
           "reason": {
             "anyOf": [

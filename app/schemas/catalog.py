@@ -165,6 +165,14 @@ class SeriesMappingPreviewRequest(BaseModel):
     origin_issue_id: int = Field(..., ge=1, description="The anchor issue ID for the mapping preview")
     provider: str = Field(..., min_length=1, description="External provider name (e.g., comicvine)")
     provider_series_external_id: str = Field(..., min_length=1, description="Provider-specific series identifier")
+    scope_mode: str = Field(
+        default="confirmed_origin",
+        description=(
+            "Preview scope mode: 'confirmed_origin' (generic, requires confirmed origin "
+            "evidence for sibling scope) or 'queue_thread_bootstrap' (queue repair may "
+            "propose the anchor's whole owned thread, including its first issue)"
+        ),
+    )
 
     @field_validator("provider")
     @classmethod
@@ -174,6 +182,15 @@ class SeriesMappingPreviewRequest(BaseModel):
         if provider not in supported_providers:
             raise ValueError(f"unsupported provider: {provider}")
         return provider
+
+    @field_validator("scope_mode")
+    @classmethod
+    def validate_scope_mode(cls, scope_mode: str) -> str:
+        """Validate that the preview scope mode is one this server implements."""
+        supported_modes = {"confirmed_origin", "queue_thread_bootstrap"}
+        if scope_mode not in supported_modes:
+            raise ValueError(f"unsupported scope_mode: {scope_mode}")
+        return scope_mode
 
 
 class SeriesMappingPreviewScope(BaseModel):
@@ -208,6 +225,8 @@ class SeriesMappingPreviewRow(BaseModel):
     thread_id: int | None = Field(default=None, description="Thread ID if the issue belongs to a thread")
     thread_title: str | None = Field(default=None, description="Thread title if applicable")
     current_mapping_status: str | None = Field(default=None, description="Current mapping status if any")
+    provider: str | None = Field(default=None, description="External provider name")
+    external_id: str | None = Field(default=None, description="Provider-specific identifier")
     proposed_mapping: bool = Field(..., description="Whether this issue would be mapped in the proposed scope")
     default_selected: bool = Field(..., description="Whether this is a default selected row (only for safe_exact_match)")
     reason: str | None = Field(default=None, description="Explanation for the classification")
