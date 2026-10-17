@@ -8,7 +8,6 @@ from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Thread, User
-from app.services.provider_issue_adoption import ProviderIssueAdoptionResult
 from tests.conftest import get_or_create_user_async
 
 async def test_create_issues_from_simple_range(

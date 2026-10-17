@@ -39,7 +39,7 @@ from app.external_identities import (
     link_issue_external_identity,
     upsert_external_identity,
 )
-from app.models import Event, Thread
+from app.models import Event, Issue, Thread
 from app.models.external_identity import ExternalIdentity
 from app.repositories import issue_repository
 from app.services.issue_insertion import create_issue_in_natural_order
@@ -142,29 +142,29 @@ async def adopt_comicvine_issue(
         user_id: Owner of the target thread (authorization).
         thread_id: Target thread; must be owned by ``user_id``.
         comicvine_issue_id: Stable ComicVine issue ID from the confirmed volume.
-    issue_number: ComicVine's issue number, preserved verbatim.
-    external_url: Optional ComicVine site URL for the identity.
-    metadata: Optional trusted provider facts stored on first identity
-        creation; never overwrites richer hydrated metadata on retry.
-    comicvine_client: Optional configured ComicVine client. When present,
-        provider metadata is hydrated through the existing hydration
-        boundary after the local state is safely established. A hydration
-        failure is recorded on the result and never rolls back the local
-        adoption, so a retry reuses the Issue instead of duplicating it.
-    thread: Optional already-loaded target thread. Ownership is still
-        verified against ``user_id`` and ``thread_id``, but the extra
-        ownership lookup and row lock are skipped, so the caller must hold
-        the thread row lock itself. Batch series import uses this because it
-        locks the thread once for the whole roster instead of per issue.
-    issue: Optional already-loaded target issue. When provided, the
-        in-thread number lookup is skipped and the issue is reused as-is
-        (``outcome="reused"``). Callers that create issues before adoption
-        (e.g. issue creation) should pass the newly created issue to avoid
-        a redundant per-issue SELECT.
-    recalculate_tracking: When False, skips the per-issue thread
-        issue-tracking recalculation. Callers that recalculate tracking
-        once for the whole batch (e.g. issue creation) should pass False
-        to avoid redundant per-issue tracking writes.
+        issue_number: ComicVine's issue number, preserved verbatim.
+        external_url: Optional ComicVine site URL for the identity.
+        metadata: Optional trusted provider facts stored on first identity
+            creation; never overwrites richer hydrated metadata on retry.
+        comicvine_client: Optional configured ComicVine client. When present,
+            provider metadata is hydrated through the existing hydration
+            boundary after the local state is safely established. A hydration
+            failure is recorded on the result and never rolls back the local
+            adoption, so a retry reuses the Issue instead of duplicating it.
+        thread: Optional already-loaded target thread. Ownership is still
+            verified against ``user_id`` and ``thread_id``, but the extra
+            ownership lookup and row lock are skipped, so the caller must hold
+            the thread row lock itself. Batch series import uses this because it
+            locks the thread once for the whole roster instead of per issue.
+        issue: Optional already-loaded target issue. When provided, the
+            in-thread number lookup is skipped and the issue is reused as-is
+            (``outcome="reused"``). Callers that create issues before adoption
+            (e.g. issue creation) should pass the newly created issue to avoid
+            a redundant per-issue SELECT.
+        recalculate_tracking: When False, skips the per-issue thread
+            issue-tracking recalculation. Callers that recalculate tracking
+            once for the whole batch (e.g. issue creation) should pass False
+            to avoid redundant per-issue tracking writes.
 
     Returns:
         A :class:`ProviderIssueAdoptionResult` distinguishing ``created``,
