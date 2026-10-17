@@ -22,6 +22,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -490,21 +491,129 @@ def test_recorded_decision_is_not_a_production_runtime_switch() -> None:
     assert offenders == [], f"issue #3258 forbids production changes, but found {offenders}"
 
 
-def _is_new_in_head(path: str) -> bool:
-    """Return whether ``path`` was added or modified relative to ``main``.
+def _base_ref(cwd: Path = REPO_ROOT) -> str | None:
+    """Return the merge-base of ``HEAD`` with the default branch, or ``None``.
 
-    Files that already shipped before this branch are not this evaluation's
-    doing. When the base ref is unavailable, fall back to "changed in the
-    working tree", which is the conservative answer.
+    Args:
+        cwd: Repository directory to inspect.
+
+    Returns:
+        The merge-base commit SHA when a ``main``-ish ref is available (a full
+        checkout), otherwise ``None`` (a shallow CI clone that fetched only the
+        merge commit).
     """
+    for ref in ("origin/main", "main"):
+        try:
+            completed = subprocess.run(
+                ["git", "merge-base", "HEAD", ref],
+                capture_output=True,
+                check=True,
+                text=True,
+                cwd=cwd,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            continue
+        base = completed.stdout.strip()
+        if base:
+            return base
+    return None
+
+
+@lru_cache(maxsize=8)
+def _changed_paths(cwd: str) -> frozenset[str] | None:
+    """Return the repository-relative paths this branch changed.
+
+    Args:
+        cwd: Repository directory to diff, as a string cache key.
+
+    Returns:
+        Changed paths, or ``None`` when git cannot compute the diff.
+    """
+    base = _base_ref(Path(cwd))
+    command = ["git", "diff", "--name-only"]
+    command += [base, "HEAD"] if base is not None else ["HEAD"]
     try:
         completed = subprocess.run(
-            ["git", "diff", "--name-only", "HEAD", "--", path],
+            command,
             capture_output=True,
             check=True,
             text=True,
-            cwd=REPO_ROOT,
+            cwd=cwd,
         )
     except (OSError, subprocess.CalledProcessError):
+        return None
+    return frozenset(completed.stdout.split())
+
+
+def _is_new_in_head(path: str, cwd: Path = REPO_ROOT) -> bool:
+    """Return whether ``path`` was added or modified on this branch.
+
+    Files that already shipped before this branch are not this evaluation's
+    doing, so the check asks which paths the branch changed relative to its
+    merge-base with the default branch. A shallow CI clone may only contain the
+    merge commit; there the base ref is unavailable and the check falls back to
+    "changed in the working tree".
+
+    Args:
+        path: Repository-relative file or directory prefix.
+        cwd: Repository directory to diff.
+
+    Returns:
+        Whether the path, or anything under it, changed on this branch.
+    """
+    changed = _changed_paths(str(cwd))
+    if changed is None:
         return True
-    return path in completed.stdout.split()
+    return any(item == path or item.startswith(path) for item in changed)
+
+
+def _init_test_repo(repo: Path, *args: str) -> None:
+    """Run one git command in ``repo`` under a fixed test identity.
+
+    Args:
+        repo: Repository directory.
+        args: Git arguments.
+    """
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
+        capture_output=True,
+        check=True,
+        cwd=repo,
+        text=True,
+    )
+
+
+def test_production_switch_guard_diffs_the_branch_not_the_working_tree(tmp_path: Path) -> None:
+    """The guard must compare the branch to its base, not the tree to HEAD.
+
+    The original helper ran ``git diff --name-only HEAD -- <path>``, which only
+    reports uncommitted working-tree changes: on the clean checkout that CI and
+    a committed branch both have, it returned nothing regardless of what the
+    branch touched, so the guard was vacuous. It also compared the diff output
+    by exact string, so a directory prefix such as ``app/`` never matched a
+    changed file. This pins the corrected branch-relative, prefix-aware
+    behaviour against a synthetic repository.
+    """
+    repo = tmp_path
+    _init_test_repo(repo, "init", "-b", "main")
+    (repo / "app").mkdir()
+    (repo / "app" / "runtime.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "benchmark").mkdir()
+    (repo / "benchmark" / "harness.py").write_text("y = 1\n", encoding="utf-8")
+    _init_test_repo(repo, "add", ".")
+    _init_test_repo(repo, "commit", "-m", "base")
+    _init_test_repo(repo, "checkout", "-b", "feature")
+    (repo / "benchmark" / "harness.py").write_text("y = 2\n", encoding="utf-8")
+    _init_test_repo(repo, "commit", "-am", "branch change")
+
+    assert _is_new_in_head("benchmark/", cwd=repo) is True
+    assert _is_new_in_head("app/", cwd=repo) is False
