@@ -10,7 +10,7 @@ from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_auth_settings
-from app.constants import MIN_PASSWORD_LENGTH
+from app.constants import MAX_BCRYPT_PASSWORD_BYTES, MIN_PASSWORD_LENGTH
 from app.database import get_db
 from app.models.user import User
 from app.repositories.revoked_token_repository import (
@@ -43,7 +43,7 @@ security = HTTPBearer()
 
 
 def validate_password_length(password: str) -> None:
-    """Enforce the advertised minimum password length.
+    """Enforce minimum characters and the bcrypt UTF-8 byte limit.
 
     Every path that sets a password calls this before hashing so the server
     enforces the same minimum the browser advertises. Schema ``min_length``
@@ -58,12 +58,19 @@ def validate_password_length(password: str) -> None:
 
     Raises:
         HTTPException: 422 when the password is shorter than
-            :data:`app.constants.MIN_PASSWORD_LENGTH`.
+            :data:`app.constants.MIN_PASSWORD_LENGTH`, or the UTF-8 encoding
+            exceeds :data:`app.constants.MAX_BCRYPT_PASSWORD_BYTES`.
     """
     if len(password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
+        )
+
+    if len(password.encode("utf-8")) > MAX_BCRYPT_PASSWORD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Password must be at most {MAX_BCRYPT_PASSWORD_BYTES} UTF-8 bytes.",
         )
 
 
@@ -89,7 +96,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches hash, False otherwise.
     """
-    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+    encoded = plain_password.encode("utf-8")
+    if len(encoded) > MAX_BCRYPT_PASSWORD_BYTES:
+        return False
+    return bcrypt.checkpw(encoded, hashed_password.encode())
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
