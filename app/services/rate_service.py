@@ -22,7 +22,9 @@ from app.repositories.issue_repository import (
     issues_for_threads,
     issues_ordered,
 )
-from app.repositories.rate_repository import fetch_source_roll_event
+from app.repositories.rate_repository import fetch_owned_roll_issue, fetch_source_roll_event
+from app.services.reading_eligibility_service import get_execution_eligibility, project_thread_responses
+from app.schemas.thread import ThreadResponse
 from app.repositories.reading_session_repository import (
     fetch_active_reading_session,
     get_reading_session,
@@ -69,6 +71,7 @@ async def _capture_thread_pre_state(
     thread: Thread,
     db: AsyncSession,
     issues: list[Issue] | None = None,
+    *, force_issue_tracking: bool = False,
 ) -> dict:
     """Extract a thread's full pre-rating state as a plain dictionary.
 
@@ -79,10 +82,12 @@ async def _capture_thread_pre_state(
             order. When None (and the thread uses issue tracking), the issues
             are loaded with one query.
 
+        force_issue_tracking: Capture canonical Issue state despite stale legacy metadata.
+
     Returns:
         Serializable pre-rating thread state.
     """
-    uses_issue_tracking = thread.uses_issue_tracking()
+    uses_issue_tracking = force_issue_tracking or thread.uses_issue_tracking()
     state: dict = {
         "title": thread.title,
         "format": normalize_format_value(thread.format),
@@ -331,7 +336,36 @@ async def rate_thread(
             )
 
     thread_id = thread.id
-    pre_thread_state = await _capture_thread_pre_state(thread, db)
+    eligibility = await get_execution_eligibility(db, user_id)
+    live_issue: Issue | None = None
+    live_source_event_id: int | None = None
+    canonical_issues: list[Issue] | None = None
+    if eligibility is not None:
+        state = eligibility.threads.get(thread_id)
+        offered = await fetch_owned_roll_issue(
+            db, user_id=user_id, reading_session_id=current_session_id, thread_id=thread_id,
+        )
+        if (
+            thread_id not in eligibility.candidate_ids()
+            or state is None
+            or offered is None
+            or offered[1].id != state.next_issue_id
+        ):
+            raise HTTPException(status_code=409, detail="The pending issue is stale or unavailable. Cancel it and roll again.")
+        if rate_data.issue_number is not None and rate_data.issue_number != offered[1].issue_number:
+            raise HTTPException(status_code=409, detail="The rated issue does not match the pending offer")
+        excluded = await derive_effective_roll_excluded_thread_ids(
+            db, user_id,
+            session_snoozed_ids=current_session.snoozed_thread_ids,
+            session_skipped_ids=current_session.skipped_thread_ids,
+        )
+        if thread_id in excluded:
+            raise HTTPException(status_code=409, detail="The pending issue is excluded from this reading session")
+        live_source_event_id, live_issue = offered[0].id, offered[1]
+        canonical_issues = await issues_ordered(db, thread_id)
+    pre_thread_state = await _capture_thread_pre_state(
+        thread, db, issues=canonical_issues, force_issue_tracking=eligibility is not None,
+    )
     current_die = await get_current_die_for_session(current_session, db)
     pre_session_state = {
         "start_die": current_session.start_die,
@@ -352,23 +386,24 @@ async def rate_thread(
         **capture_ephemeral_bandwidth(current_session),
     }
 
-    # Validate thread has issues remaining. For issue-tracked threads, rely on
-    # the thread's denormalized counter and next_unread_issue_id instead of a
-    # fresh COUNT query.
-    if thread.uses_issue_tracking():
-        if thread.issues_remaining <= 0 or thread.next_unread_issue_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Thread {thread_id} has no issues remaining",
-            )
-    else:
-        if thread.issues_remaining <= 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Thread {thread_id} has no issues remaining",
-            )
+    if eligibility is None:
+        # Validate thread has issues remaining. For issue-tracked threads, rely on
+        # the thread's denormalized counter and next_unread_issue_id instead of a
+        # fresh COUNT query.
+        if thread.uses_issue_tracking():
+            if thread.issues_remaining <= 0 or thread.next_unread_issue_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Thread {thread_id} has no issues remaining",
+                )
+        else:
+            if thread.issues_remaining <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Thread {thread_id} has no issues remaining",
+                )
 
-    if not thread.uses_issue_tracking() and rate_data.issue_number is not None:
+    if eligibility is None and not thread.uses_issue_tracking() and rate_data.issue_number is not None:
         issue_number = rate_data.issue_number
         current_issue = await find_in_thread_by_number(
             db, thread.id, issue_number
@@ -450,7 +485,24 @@ async def rate_thread(
     rated_issue_number: str | None = None
     next_issue: Issue | None = None
 
-    if thread.uses_issue_tracking():
+    if live_issue is not None:
+        live_issue.status = "read"
+        live_issue.read_at = datetime.now(UTC)
+        rated_issue_id, rated_issue_number = live_issue.id, live_issue.issue_number
+        issues_read = 1
+        await db.flush()
+        after_read = await get_execution_eligibility(db, user_id)
+        if after_read is None:
+            raise HTTPException(status_code=503, detail="Reading execution changed; retry the rating")
+        next_state = after_read.threads.get(thread_id)
+        next_id = next_state.next_issue_id if next_state is not None else None
+        next_issue = await get_issue(db, next_id) if next_id is not None else None
+        thread.next_unread_issue_id = next_id
+        thread.issues_remaining = after_read.unread_counts.get(thread_id, 0)
+        thread.total_issues = len(canonical_issues or [])
+        thread.reading_progress = "in_progress" if next_id is not None else "completed"
+        thread_issues_remaining = thread.issues_remaining
+    elif thread.uses_issue_tracking():
         if thread.next_unread_issue_id:
             result = await db.execute(
                 select(Issue)
@@ -509,8 +561,9 @@ async def rate_thread(
         else step_up(current_die)
     )
 
-    source_roll_event_id = await _find_source_roll_event(
-        db, current_session_id, thread_id
+    source_roll_event_id = (
+        live_source_event_id if eligibility is not None
+        else await _find_source_roll_event(db, current_session_id, thread_id)
     )
 
     event = Event(
@@ -619,6 +672,7 @@ async def rate_thread(
         blocked_changes=blocked_changes,
         pre_session_state=pre_session_state,
     )
+    response_eligibility = await get_execution_eligibility(db, user_id)
     await db.commit()
 
     # Create base ThreadResponse data
@@ -643,6 +697,11 @@ async def rate_thread(
         "blocking_reasons": [],
     }
     
+    if response_eligibility is not None:
+        thread_response_data = project_thread_responses(
+            [ThreadResponse.model_validate(thread_response_data)], response_eligibility,
+        )[0].model_dump()
+
     # Roll reconciliation describes the issue just read (not the next
     # unread one), so it stays present even when the thread completes.
     roll_reconciliation = None

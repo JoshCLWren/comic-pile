@@ -13,6 +13,8 @@ from sqlalchemy import ColumnElement, and_, or_
 from sqlalchemy.sql.elements import ColumnElement as SQLColumnElement
 
 from app.models.thread import Thread
+from app.repositories.reading_eligibility_queries import blocked_predicate
+from app.services.reading_eligibility_service import ReadingEligibilitySnapshot
 
 QueueSort = Literal["position", "title", "created"]
 
@@ -24,6 +26,7 @@ class QueueCursor:
     sort: QueueSort
     search: str
     values: tuple[str, ...]
+    execution: Literal["legacy", "option_e"] = "legacy"
 
 
 def normalize_queue_search(search: str | None) -> str:
@@ -52,6 +55,8 @@ def encode_queue_cursor(cursor: QueueCursor) -> str:
         "search": normalize_queue_search(cursor.search),
         "values": list(cursor.values),
     }
+    if cursor.execution != "legacy":
+        payload["execution"] = cursor.execution
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
@@ -61,6 +66,7 @@ def decode_queue_cursor(
     *,
     sort: QueueSort,
     search: str | None,
+    execution: Literal["legacy", "option_e"] = "legacy",
 ) -> QueueCursor:
     """Decode and validate that a Queue cursor matches current query inputs.
 
@@ -68,6 +74,7 @@ def decode_queue_cursor(
         token: URL-safe opaque Queue cursor text.
         sort: Sort order requested for the current Queue page.
         search: Optional search text requested for the current Queue page.
+        execution: Current eligibility authority; activation invalidates older cursors.
 
     Returns:
         Validated Queue cursor bound to the current search and sort contract.
@@ -82,6 +89,7 @@ def decode_queue_cursor(
         cursor_sort = payload["sort"]
         cursor_search = payload["search"]
         raw_values = payload["values"]
+        cursor_execution = payload.get("execution", "legacy")
     except (
         binascii.Error,
         KeyError,
@@ -91,6 +99,9 @@ def decode_queue_cursor(
         json.JSONDecodeError,
     ) as exc:
         raise ValueError("Invalid Queue page token") from exc
+
+    if cursor_execution != execution:
+        raise ValueError("Queue ordering changed; reload the Queue")
 
     if not isinstance(cursor_sort, str) or cursor_sort not in {
         "position",
@@ -117,13 +128,16 @@ def decode_queue_cursor(
         raise ValueError("Queue page token does not match current search or sort")
 
     return QueueCursor(
+        execution=execution,
         sort=cursor_sort,
         search=cursor_search,
         values=tuple(raw_values),
     )
 
 
-def build_sort_order(sort: QueueSort) -> list[SQLColumnElement[Any]]:
+def build_sort_order(
+    sort: QueueSort, eligibility: ReadingEligibilitySnapshot | None = None
+) -> list[SQLColumnElement[Any]]:
     """Return the SQLAlchemy ORDER BY columns for the given sort mode.
 
     Every sort uses ``Thread.id`` as a deterministic tie-breaker so that
@@ -132,6 +146,8 @@ def build_sort_order(sort: QueueSort) -> list[SQLColumnElement[Any]]:
 
     Args:
         sort: One of ``"position"``, ``"title"``, or ``"created"``.
+
+        eligibility: Shared live result, or None for legacy execution.
 
     Returns:
         List of SQLAlchemy column elements suitable for ``.order_by()``.
@@ -142,7 +158,7 @@ def build_sort_order(sort: QueueSort) -> list[SQLColumnElement[Any]]:
         # the keyset cursor order identical to the order the client displays,
         # so a later page can never insert a row ahead of an earlier page.
         return [
-            Thread.is_blocked.asc(),
+            (Thread.is_blocked if eligibility is None else blocked_predicate(eligibility)).asc(),
             Thread.queue_position.asc(),
             Thread.id.asc(),
         ]
@@ -152,7 +168,9 @@ def build_sort_order(sort: QueueSort) -> list[SQLColumnElement[Any]]:
     return [Thread.created_at.desc(), Thread.id.desc()]
 
 
-def build_cursor_filter(cursor: QueueCursor) -> ColumnElement[bool]:
+def build_cursor_filter(
+    cursor: QueueCursor, eligibility: ReadingEligibilitySnapshot | None = None
+) -> ColumnElement[bool]:
     """Build a WHERE clause that skips past the cursor row.
 
     The filter implements keyset pagination: keep every row that sorts
@@ -164,6 +182,8 @@ def build_cursor_filter(cursor: QueueCursor) -> ColumnElement[bool]:
     Args:
         cursor: A validated cursor whose ``values`` tuple matches the
             current sort contract.
+
+        eligibility: Shared live result, or None for legacy execution.
 
     Returns:
         A SQLAlchemy boolean expression for use in ``.where()``.
@@ -177,12 +197,17 @@ def build_cursor_filter(cursor: QueueCursor) -> ColumnElement[bool]:
             (Thread.queue_position == cursor_position) & (Thread.id > cursor_id),
         )
         if cursor_blocked:
-            return and_(Thread.is_blocked.is_(True), after_position)
+            return and_(blocked_predicate(eligibility), after_position)
         # Unblocked cursor: every blocked row sorts after it, and unblocked
         # rows must sort after the cursor row by (position, id).
         return or_(
-            and_(Thread.is_blocked.is_(False), after_position),
-            Thread.is_blocked.is_(True),
+            and_(
+                Thread.is_blocked.is_(False)
+                if eligibility is None
+                else ~blocked_predicate(eligibility),
+                after_position,
+            ),
+            blocked_predicate(eligibility),
         )
 
     if cursor.sort == "title":
@@ -202,18 +227,27 @@ def build_cursor_filter(cursor: QueueCursor) -> ColumnElement[bool]:
     )
 
 
-def build_cursor_values_from_row(sort: QueueSort, thread: Thread) -> tuple[str, ...]:
+def build_cursor_values_from_row(
+    sort: QueueSort, thread: Thread, eligibility: ReadingEligibilitySnapshot | None = None
+) -> tuple[str, ...]:
     """Extract the cursor values from the last row of a page.
 
     Args:
         sort: The sort mode used for the query.
         thread: The last ``Thread`` row returned for the current page.
 
+        eligibility: Shared live result, or None for legacy execution.
+
     Returns:
         A tuple of string-encoded sort-key and id values.
     """
     if sort == "position":
-        blocked_flag = "1" if thread.is_blocked else "0"
+        blocked = (
+            thread.is_blocked
+            if eligibility is None
+            else thread.id not in eligibility.candidate_ids()
+        )
+        blocked_flag = "1" if blocked else "0"
         return (blocked_flag, str(thread.queue_position), str(thread.id))
     if sort == "title":
         return (thread.title, str(thread.id))

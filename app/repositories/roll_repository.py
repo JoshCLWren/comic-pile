@@ -13,6 +13,13 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.reading_eligibility_queries import (
+    candidate_predicate,
+    blocked_predicate,
+    frontier_expression,
+)
+from app.services.reading_eligibility_service import ReadingEligibilitySnapshot
+
 from app.models import (
     DependencyGroup,
     DependencyGroupMembership,
@@ -250,6 +257,8 @@ async def fetch_bootstrap_pool_rows(
     user_id: int,
     die_size: int,
     excluded_ids: Sequence[int],
+    *,
+    eligibility: ReadingEligibilitySnapshot | None = None,
 ) -> list[Row[int, str, str, int | None, str, Sequence[str]]]:
     """Return the bounded roll-pool rows with their route labels.
 
@@ -263,9 +272,12 @@ async def fetch_bootstrap_pool_rows(
         die_size: Current die size bounding the pool.
         excluded_ids: Thread IDs excluded from the pool in any scope.
 
+        eligibility: Validated live result, or None for legacy execution.
+
     Returns:
         Rows of (id, title, format, issue_id, issue_number, route_labels).
     """
+    frontier = frontier_expression(eligibility)
     route_labels_subq = (
         select(
             func.array_agg(func.distinct(DependencyGroup.name)),
@@ -275,7 +287,7 @@ async def fetch_bootstrap_pool_rows(
         .where(
             or_(
                 DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+                DependencyGroupMembership.issue_id == frontier,
             ),
             DependencyGroup.user_id == user_id,
         )
@@ -289,15 +301,15 @@ async def fetch_bootstrap_pool_rows(
             Thread.id,
             Thread.title,
             Thread.format,
-            Thread.next_unread_issue_id.label("issue_id"),
+            frontier.label("issue_id"),
             Issue.issue_number,
             route_labels_subq.label("route_labels"),
         )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .outerjoin(Issue, Issue.id == frontier)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
-        .where(Thread.is_blocked.is_(False))
+        .where(candidate_predicate(eligibility))
         .order_by(Thread.queue_position)
         .limit(die_size)
     )
@@ -312,7 +324,7 @@ async def fetch_bootstrap_excluded_thread_rows(
     db: AsyncSession,
     user_id: int,
     thread_ids: Sequence[int],
-) -> list[Row[int, str, str]]:
+) -> list[Row[int, str, str, datetime | None]]:
     """Return id/title/format for every snoozed and skipped series at once.
 
     Issue #3375: snoozed and skipped summaries are two answers to the same
@@ -330,7 +342,7 @@ async def fetch_bootstrap_excluded_thread_rows(
         return []
 
     result = await db.execute(
-        select(Thread.id, Thread.title, Thread.format)
+        select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
         .where(Thread.user_id == user_id)
         .where(Thread.id.in_(thread_ids))
     )
@@ -341,7 +353,9 @@ async def fetch_bootstrap_blocked_rows(
     db: AsyncSession,
     user_id: int,
     limit: int,
-) -> list[Row[int, str, str, int]]:
+    *,
+    eligibility: ReadingEligibilitySnapshot | None = None,
+) -> list[Row[int, str, str, int, datetime | None]]:
     """Return the blocked summary rows plus the unbounded blocked total.
 
     Issue #3375: the blocked count and the blocked rows are the same filtered
@@ -354,6 +368,8 @@ async def fetch_bootstrap_blocked_rows(
         user_id: Owner of the threads.
         limit: Maximum number of blocked rows to return.
 
+        eligibility: Validated live result, or None for legacy execution.
+
     Returns:
         Rows of (id, title, format, blocked_total).
     """
@@ -363,10 +379,11 @@ async def fetch_bootstrap_blocked_rows(
             Thread.title,
             Thread.format,
             func.count().over().label("blocked_total"),
+            Thread.last_activity_at,
         )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(True))
+        .where(blocked_predicate(eligibility))
         .order_by(Thread.queue_position)
         .limit(limit)
     )
@@ -378,6 +395,8 @@ async def fetch_bootstrap_stale_rows(
     user_id: int,
     stale_cutoff: datetime,
     excluded_ids: Sequence[int],
+    *,
+    eligibility: ReadingEligibilitySnapshot | None = None,
 ) -> list[Row[int, str, str, datetime | None, int]]:
     """Return every stale candidate row plus the unbounded stale total.
 
@@ -390,6 +409,8 @@ async def fetch_bootstrap_stale_rows(
         user_id: Owner of the threads.
         stale_cutoff: Activity strictly older than this instant is stale.
         excluded_ids: Thread IDs excluded from staleness in any scope.
+
+        eligibility: Validated live result, or None for legacy execution.
 
     Returns:
         Rows of (id, title, format, last_activity_at, stale_total).
@@ -405,7 +426,7 @@ async def fetch_bootstrap_stale_rows(
         )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(False))
+        .where(candidate_predicate(eligibility))
         .where(effective_activity < stale_cutoff)
     )
     if excluded_ids:
@@ -418,6 +439,8 @@ async def fetch_bootstrap_stale_rows(
 async def fetch_bootstrap_library_rows(
     db: AsyncSession,
     user_id: int,
+    *,
+    eligibility: ReadingEligibilitySnapshot | None = None,
 ) -> list[Row[int, str, str, int, bool, str]]:
     """Return active and completed series for exclusion transparency.
 
@@ -428,6 +451,8 @@ async def fetch_bootstrap_library_rows(
         db: Database session.
         user_id: Owner of the threads.
 
+        eligibility: Validated live result, or None for legacy execution.
+
     Returns:
         Rows of (id, title, format, queue_position, is_blocked, status).
     """
@@ -437,7 +462,9 @@ async def fetch_bootstrap_library_rows(
             Thread.title,
             Thread.format,
             Thread.queue_position,
-            Thread.is_blocked,
+            (Thread.is_blocked if eligibility is None else blocked_predicate(eligibility)).label(
+                "is_blocked"
+            ),
             Thread.status,
         )
         .where(Thread.user_id == user_id)

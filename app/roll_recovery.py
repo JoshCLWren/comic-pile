@@ -13,6 +13,11 @@ from app.schemas.roll import (
     RollRecoveryPrerequisite,
 )
 
+from app.services.reading_eligibility_service import get_execution_eligibility
+from app.services.reading_recovery_service import build_reading_recovery
+from app.repositories.roll_repository import fetch_active_session
+from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +27,7 @@ async def build_roll_recovery(
     user_id: int,
     pending_thread_id: int | None,
     pending_thread_title: str | None,
+    excluded_thread_ids: frozenset[int] | None = None,
 ) -> RollRecoveryInfo | None:
     """Return recovery guidance when the preserved pending roll is blocked.
 
@@ -37,12 +43,32 @@ async def build_roll_recovery(
         user_id: Authenticated owner of the pending thread.
         pending_thread_id: Preserved pending thread identifier.
         pending_thread_title: Preserved pending thread title, when available.
+        excluded_thread_ids: Already-derived session/backoff exclusions, when available.
 
     Returns:
         Recovery guidance for a blocked pending roll, or ``None``.
     """
     if pending_thread_id is None:
         return None
+
+    eligibility = await get_execution_eligibility(db, user_id)
+    if eligibility is not None:
+        if excluded_thread_ids is None:
+            session = await fetch_active_session(db, user_id)
+            excluded_thread_ids = frozenset(
+                await derive_effective_roll_excluded_thread_ids(
+                    db,
+                    user_id,
+                    session_snoozed_ids=session.snoozed_thread_ids if session is not None else [],
+                    session_skipped_ids=session.skipped_thread_ids if session is not None else [],
+                )
+            )
+        return build_reading_recovery(
+            eligibility,
+            pending_thread_id=pending_thread_id,
+            pending_thread_title=pending_thread_title,
+            excluded_thread_ids=excluded_thread_ids,
+        )
 
     try:
         traversal = await resolve_continuity_chains(
