@@ -281,7 +281,12 @@ async def snapshot_thread_states(
         # the per-thread state, and the top-level thread-id scan never mistakes
         # a change key for a thread id.
         rated_state = dict(rated_thread_pre_state)
-        if issue_changes:
+        if issue_changes is not None:
+            # Always emit the compact issue-change list for a v2 rating delta,
+            # even when empty. Restore keys off this marker to apply only the
+            # recorded changes; omitting it would let a compact payload fall
+            # through to the legacy full-collection path, which would delete
+            # issues the delta never recorded (issue #3226).
             rated_state[ISSUE_CHANGES_KEY] = issue_changes
         if created_issues:
             rated_state[CREATED_ISSUES_KEY] = created_issues
@@ -454,24 +459,11 @@ async def rate_thread(
         thread, db, issues=canonical_issues, force_issue_tracking=eligibility is not None,
         compact=True,
     )
-    # Capture preimages of issues that will change on this action (bounded)
+    # Preimages of only the issues this action actually mutates. The payload
+    # stays bounded by the action's own changes: the rated thread's unchanged
+    # issues are never serialized (issue #3226). Each capture happens right
+    # before the mutation so the recorded preimage is the true pre-action state.
     issue_changes: list[dict] = []
-    if canonical_issues:
-        for issue in canonical_issues:
-            # Only capture preimages for issues likely to mutate (status/read_at change)
-            # This keeps the payload bounded to actually-changed records.
-            if issue.status != "read":
-                issue_changes.append(_issue_preimage(issue))
-    if live_issue is not None and live_issue not in (canonical_issues or []):
-        issue_changes.append(_issue_preimage(live_issue))
-    # Dedup by id
-    seen_ids = set()
-    deduped_issue_changes = []
-    for ch in issue_changes:
-        if ch["id"] not in seen_ids:
-            seen_ids.add(ch["id"])
-            deduped_issue_changes.append(ch)
-    issue_changes = deduped_issue_changes
     created_issues_list: list[Issue] = []
     current_die = await get_current_die_for_session(current_session, db)
     pre_session_state = {
@@ -515,7 +507,6 @@ async def rate_thread(
         current_issue = await find_in_thread_by_number(
             db, thread.id, issue_number
         )
-        created_issues_list = []
 
         if not current_issue:
             try:
@@ -569,6 +560,9 @@ async def rate_thread(
             all_issues = sorted(created_issues_list, key=lambda i: i.position)
         else:
             all_issues = await issues_ordered(db, thread.id)
+            # Counter migration may mutate already-existing issue rows; capture
+            # their pre-action state so undo can restore exactly those records.
+            issue_changes.extend(_issue_preimage(issue) for issue in all_issues)
         for issue in all_issues:
             if issue.position < current_issue.position and issue.status != "read":
                 issue.status = "read"
@@ -593,6 +587,7 @@ async def rate_thread(
     next_issue: Issue | None = None
 
     if live_issue is not None:
+        issue_changes.append(_issue_preimage(live_issue))
         live_issue.status = "read"
         live_issue.read_at = datetime.now(UTC)
         rated_issue_id, rated_issue_number = live_issue.id, live_issue.issue_number
@@ -621,6 +616,7 @@ async def rate_thread(
             if issues:
                 issue = issues[0]
                 if issue.id == thread.next_unread_issue_id:
+                    issue_changes.append(_issue_preimage(issue))
                     issue.status = "read"
                     issue.read_at = datetime.now(UTC)
                     rated_issue_id = issue.id
