@@ -88,7 +88,7 @@ async def _tag_and_assign(
 ) -> None:
     """Create one private tag for ``user`` and assign it to ``thread``."""
     created = await TagService(db).create_tag(user, name, color="blue", scope="private")
-    await TagService(db).assign_tag(user, created.id, "Thread", thread.id)
+    await TagService(db).assign_tag(user, created.tag.id, "Thread", thread.id)
 
 
 @pytest.mark.asyncio
