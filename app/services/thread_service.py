@@ -548,8 +548,28 @@ async def create_thread_with_retry(
     initial_delay = 0.1
     retries = 0
 
+    # Idempotency window for duplicate submissions (double-click protection)
+    duplicate_window = timedelta(seconds=5)
+
     while retries < max_retries:
         try:
+            # Check for recent duplicate to prevent double-click duplicates
+            recent_cutoff = datetime.now(UTC) - duplicate_window
+            from sqlalchemy import func, select
+            duplicate_stmt = (
+                select(Thread)
+                .where(Thread.user_id == user_id)
+                .where(func.lower(Thread.title) == thread_data.title.lower())
+                .where(Thread.format == normalize_format_value(thread_data.format))
+                .where(Thread.issues_remaining == thread_data.issues_remaining)
+                .where(Thread.created_at >= recent_cutoff)
+            )
+            duplicate_result = await db.execute(duplicate_stmt)
+            existing = duplicate_result.scalar_one_or_none()
+            if existing:
+                # Return existing thread to keep creation idempotent
+                return await thread_to_response(existing, db)
+
             max_position = await thread_repository.max_queue_position(db, user_id)
             format_value = normalize_format_value(thread_data.format)
 
