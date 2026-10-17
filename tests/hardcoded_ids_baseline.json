@@ -1,0 +1,132 @@
+{
+  "app": {
+    "app/services/bprd_production_migration.py": [
+      "user_id=1"
+    ],
+    "app/services/explicit_reader_order_migration.py": [
+      "user_id=1"
+    ],
+    "app/services/source_backed_reader_order_migration.py": [
+      "user_id=1"
+    ],
+    "app/services/ultimate_universe_production_migration.py": [
+      "user_id=1"
+    ]
+  },
+  "tests": {
+    "tests/test_api_endpoints.py": [
+      "user_id=1"
+    ],
+    "tests/test_backfill_read_comicvine_resolution.py": [
+      "user_id=1"
+    ],
+    "tests/test_backfill_read_comicvine_script.py": [
+      "user_id=1"
+    ],
+    "tests/test_cbl_plan_adoption.py": [
+      "user_id=1",
+      "user_id=7"
+    ],
+    "tests/test_cbl_targeted_plan_adoption.py": [
+      "user_id=7"
+    ],
+    "tests/test_collection_exclusions.py": [
+      "user_id=1"
+    ],
+    "tests/test_comicvine_fallback.py": [
+      "user_id=1"
+    ],
+    "tests/test_comicvine_hydrator.py": [
+      "user_id=1"
+    ],
+    "tests/test_comicvine_issue_read_performance.py": [
+      "user_id=1"
+    ],
+    "tests/test_continuity_plan_read_only_invariant_3347.py": [
+      "user_id=42"
+    ],
+    "tests/test_custom_cbl_plan_reconciliation.py": [
+      "user_id=9"
+    ],
+    "tests/test_deadlock.py": [
+      "user_id=1"
+    ],
+    "tests/test_dependency_provenance_census.py": [
+      "user_id=1"
+    ],
+    "tests/test_legacy_reading_order_production_migration.py": [
+      "User(id=1)",
+      "user_id=1"
+    ],
+    "tests/test_momentum.py": [
+      "user_id=1"
+    ],
+    "tests/test_prompt_eligibility.py": [
+      "user_id=1"
+    ],
+    "tests/test_queue_api.py": [
+      "User(id=123)"
+    ],
+    "tests/test_rate_api.py": [
+      "user_id=1"
+    ],
+    "tests/test_read_frontier_service.py": [
+      "user_id=2"
+    ],
+    "tests/test_reading_list_evaluator.py": [
+      "user_id=1"
+    ],
+    "tests/test_reading_shadow.py": [
+      "user_id=1"
+    ],
+    "tests/test_recommendation_diagnostics.py": [
+      "user_id=1"
+    ],
+    "tests/test_roll_bootstrap_exclusions.py": [
+      "user_id=1"
+    ],
+    "tests/test_roll_bootstrap_ownership.py": [
+      "user_id=1"
+    ],
+    "tests/test_roll_recovery.py": [
+      "user_id=1"
+    ],
+    "tests/test_screen_response_contracts.py": [
+      "user_id=1"
+    ],
+    "tests/test_session_bandwidth_inference.py": [
+      "User(id=1)",
+      "User(id=2)",
+      "User(id=3)",
+      "User(id=4)",
+      "User(id=5)",
+      "User(id=6)"
+    ],
+    "tests/test_session_core.py": [
+      "user_id=1"
+    ],
+    "tests/test_tag_inheritance.py": [
+      "User(id=2)",
+      "User(id=3)",
+      "User(id=4)"
+    ],
+    "tests/test_tags.py": [
+      "User(id=2)",
+      "User(id=3)"
+    ],
+    "tests/test_taste_acceptance.py": [
+      "user_id=1"
+    ],
+    "tests/test_taste_discovery_api.py": [
+      "user_id=1"
+    ],
+    "tests/test_test_helpers.py": [
+      "user_id=1",
+      "user_id=7",
+      "user_id=99"
+    ],
+    "tests/test_thread_api.py": [
+      "User(id=999)"
+    ]
+  }
+}

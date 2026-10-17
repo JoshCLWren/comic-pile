@@ -273,7 +273,7 @@ async def db_engine(
 
 
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
-    """Ensure default user exists in database (user_id=1 for API compatibility).
+    """Ensure default user exists in database (dynamic id, no hardcoded coupling).
 
     This function is idempotent and safe for concurrent execution from multiple
     pytest-xdist workers. If multiple workers attempt to create the user simultaneously,
@@ -285,7 +285,7 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     user = result.scalar_one_or_none()
 
     if not user:
-        user = User(id=1, username=username, created_at=datetime.now(UTC))
+        user = User(username=username, created_at=datetime.now(UTC))
         db.add(user)
         try:
             await db.commit()
@@ -295,8 +295,9 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
             result = await db.execute(select(User).where(User.username == username))
             user = result.scalar_one_or_none()
             if not user:
-                result = await db.execute(select(User).where(User.id == 1))
-                user = result.scalar_one()
+                raise RuntimeError(
+                    "Default test user missing after rollback in _ensure_default_user_async"
+                ) from None
 
     await _sync_id_sequence(db, "users")
     return user
@@ -575,7 +576,7 @@ async def sample_data(
     user = await async_db.execute(select(User).where(User.username == username))
     user = user.scalar_one_or_none()
     if not user:
-        user = User(username=username, id=1, created_at=now)
+        user = User(username=username, created_at=now)
         async_db.add(user)
         await async_db.flush()
         await async_db.refresh(user)
@@ -583,7 +584,6 @@ async def sample_data(
 
     threads = [
         Thread(
-            id=1,
             title="Superman",
             format="Comic",
             issues_remaining=10,
@@ -593,7 +593,6 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
-            id=2,
             title="Batman",
             format="Comic",
             issues_remaining=5,
@@ -605,7 +604,6 @@ async def sample_data(
             reading_progress="in_progress",
         ),
         Thread(
-            id=3,
             title="Wonder Woman",
             format="Comic",
             issues_remaining=0,
@@ -615,7 +613,6 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
-            id=4,
             title="Flash",
             format="Comic",
             issues_remaining=15,
@@ -625,7 +622,6 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
-            id=5,
             title="Aquaman",
             format="Comic",
             issues_remaining=8,
@@ -645,7 +641,6 @@ async def sample_data(
 
     for i in range(1, 11):
         issue = Issue(
-            id=i,
             thread_id=threads[1].id,
             issue_number=str(i),
             position=i,
@@ -663,13 +658,11 @@ async def sample_data(
 
     sessions = [
         ReadingSession(
-            id=1,
             start_die=6,
             user_id=user.id,
             started_at=now,
         ),
         ReadingSession(
-            id=2,
             start_die=8,
             user_id=user.id,
             started_at=now,
@@ -685,7 +678,6 @@ async def sample_data(
 
     events = [
         Event(
-            id=1,
             type="roll",
             die=6,
             result=4,
@@ -696,7 +688,6 @@ async def sample_data(
             timestamp=now,
         ),
         Event(
-            id=2,
             type="rate",
             rating=4.5,
             issues_read=1,
@@ -759,9 +750,9 @@ async def auth_client(
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
-            # app/api/admin.py still hardcodes user_id=1 for import/export paths,
-            # so the authenticated test user must match that contract for now.
-            user = User(id=1, username=test_username, created_at=datetime.now(UTC))
+            # Admin endpoints now use current_user.id (no hardcoded user_id=1).
+            # The authenticated test user is created dynamically.
+            user = User(username=test_username, created_at=datetime.now(UTC))
             async_db.add(user)
             try:
                 await async_db.commit()
@@ -771,8 +762,9 @@ async def auth_client(
                 result = await async_db.execute(select(User).where(User.username == test_username))
                 user = result.scalar_one_or_none()
                 if not user:
-                    result = await async_db.execute(select(User).where(User.id == 1))
-                    user = result.scalar_one()
+                    raise RuntimeError(
+                        "Authenticated test user missing after rollback in auth_client"
+                    ) from None
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})

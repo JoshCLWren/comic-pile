@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Thread, User
 
+
 @pytest.mark.asyncio
 async def test_import_valid_csv(
-    client: AsyncClient, default_user: User, async_db: AsyncSession, enable_internal_ops: None
+    auth_client: AsyncClient, default_user: User, async_db: AsyncSession, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ succeeds with valid data."""
     _ = default_user
@@ -24,7 +25,7 @@ Wonder Woman,Trade Paperback,3"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -50,7 +51,7 @@ Wonder Woman,Trade Paperback,3"""
 
 @pytest.mark.asyncio
 async def test_import_invalid_format_missing_columns(
-    client: AsyncClient, enable_internal_ops: None
+    auth_client: AsyncClient, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ returns error for missing required columns."""
     _ = enable_internal_ops
@@ -60,7 +61,7 @@ Batman,Trade"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -71,7 +72,7 @@ Batman,Trade"""
 
 @pytest.mark.asyncio
 async def test_import_invalid_format_missing_title(
-    client: AsyncClient, default_user: User, enable_internal_ops: None
+    auth_client: AsyncClient, default_user: User, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ returns error for missing title."""
     _ = default_user
@@ -82,7 +83,7 @@ Batman,Comic,5"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -93,7 +94,7 @@ Batman,Comic,5"""
 
 @pytest.mark.asyncio
 async def test_import_invalid_format_missing_format(
-    client: AsyncClient, default_user: User, enable_internal_ops: None
+    auth_client: AsyncClient, default_user: User, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ returns error for missing format."""
     _ = default_user
@@ -104,7 +105,7 @@ Batman,Comic,5"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -115,7 +116,7 @@ Batman,Comic,5"""
 
 @pytest.mark.asyncio
 async def test_import_invalid_data_not_a_number(
-    client: AsyncClient, default_user: User, enable_internal_ops: None
+    auth_client: AsyncClient, default_user: User, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ returns error for non-integer issues_remaining."""
     _ = default_user
@@ -126,7 +127,7 @@ Batman,Comic,5"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -137,7 +138,7 @@ Batman,Comic,5"""
 
 @pytest.mark.asyncio
 async def test_import_invalid_data_negative_issues(
-    client: AsyncClient, default_user: User, enable_internal_ops: None
+    auth_client: AsyncClient, default_user: User, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ returns error for negative issues_remaining."""
     _ = default_user
@@ -148,7 +149,7 @@ Batman,Comic,5"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -159,7 +160,7 @@ Batman,Comic,5"""
 
 @pytest.mark.asyncio
 async def test_import_zero_issues_remaining(
-    client: AsyncClient, default_user: User, async_db: AsyncSession, enable_internal_ops: None
+    auth_client: AsyncClient, default_user: User, async_db: AsyncSession, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ allows zero issues_remaining."""
     _ = default_user
@@ -169,7 +170,7 @@ Superman,Comic,0"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -184,7 +185,7 @@ Superman,Comic,0"""
 
 @pytest.mark.asyncio
 async def test_import_empty_file(
-    client: AsyncClient, default_user: User, enable_internal_ops: None
+    auth_client: AsyncClient, default_user: User, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ handles empty CSV gracefully."""
     _ = default_user
@@ -193,7 +194,7 @@ async def test_import_empty_file(
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -203,7 +204,7 @@ async def test_import_empty_file(
 
 @pytest.mark.asyncio
 async def test_import_non_csv_file(
-    client: AsyncClient, default_user: User, enable_internal_ops: None
+    auth_client: AsyncClient, default_user: User, enable_internal_ops: None
 ) -> None:
     """Test POST /admin/import/csv/ returns error for non-CSV file."""
     _ = default_user
@@ -212,18 +213,18 @@ async def test_import_non_csv_file(
     txt_file = io.BytesIO(txt_content.encode())
     files = {"file": ("test.txt", txt_file, "text/plain")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await auth_client.post("/api/admin/import/csv/", files=files)
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_export_csv(
-    client: AsyncClient, sample_data: dict, enable_internal_ops: None
+    auth_client: AsyncClient, sample_data: dict, enable_internal_ops: None
 ) -> None:
     """Test GET /admin/export/csv/ returns valid CSV."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/csv/")
+    response = await auth_client.get("/api/admin/export/csv/")
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
 
@@ -238,12 +239,12 @@ async def test_export_csv(
 
 @pytest.mark.asyncio
 async def test_export_csv_only_active(
-    client: AsyncClient, sample_data: dict, enable_internal_ops: None
+    auth_client: AsyncClient, sample_data: dict, enable_internal_ops: None
 ) -> None:
     """Test GET /admin/export/csv/ only exports active threads."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/csv/")
+    response = await auth_client.get("/api/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.text
@@ -255,10 +256,10 @@ async def test_export_csv_only_active(
 
 
 @pytest.mark.asyncio
-async def test_export_csv_empty(client: AsyncClient, enable_internal_ops: None) -> None:
+async def test_export_csv_empty(auth_client: AsyncClient, enable_internal_ops: None) -> None:
     """Test GET /admin/export/csv/ returns empty CSV when no threads."""
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/csv/")
+    response = await auth_client.get("/api/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.text
