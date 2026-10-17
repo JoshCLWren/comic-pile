@@ -1,7 +1,7 @@
 """Drop redundant indexes already covered by uniqueness constraints.
 
 Revision ID: d321900000001
-Revises: c366900000001
+Revises: c36690000001
 
 Issue #3219: each ordinary index below sits on exactly the same keys as a
 unique constraint's remaining backing index, so every lookup, range scan and
@@ -31,7 +31,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d321900000001"
-down_revision: str | Sequence[str] | None = "c366900000001"
+down_revision: str | Sequence[str] | None = "c36690000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

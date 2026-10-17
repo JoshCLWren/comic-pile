@@ -79,17 +79,22 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
         f"Plan did not reference either ix_issue_thread_position or uq_issue_thread_position after sequential scans were disabled. Found indexes: {index_names}"
     )
 
-    # Also verify the index actually exists
+    # Also verify the backing index for (thread_id, position) actually exists.
+    # After #3219, the ordinary ix_issue_thread_position index is dropped and the
+    # unique constraint uq_issue_thread_position provides the same B-tree index,
+    # so both names satisfy the lookup/order coverage requirement.
     index_check = text("""
-        SELECT 1 FROM pg_indexes 
-        WHERE tablename = 'issues' 
-        AND indexname = 'ix_issue_thread_position'
+        SELECT 1 FROM pg_indexes
+        WHERE tablename = 'issues'
+        AND indexname IN ('ix_issue_thread_position', 'uq_issue_thread_position')
     """)
 
     index_result = await async_db_committed.execute(index_check)
     index_exists = index_result.scalar()
 
-    assert index_exists is not None, "Index ix_issue_thread_position does not exist in database"
+    assert index_exists is not None, (
+        "Neither ix_issue_thread_position nor uq_issue_thread_position exists in database"
+    )
 
 
 @pytest.mark.asyncio
