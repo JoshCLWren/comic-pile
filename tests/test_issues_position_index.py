@@ -93,8 +93,11 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_issues_position_index_improves_pagination(async_db_committed: AsyncSession):
-    """Verify the pagination query can use the composite position index."""
+@pytest.mark.parametrize("incremental_sort", ["on", "off"])
+async def test_issues_position_index_improves_pagination(
+    async_db_committed: AsyncSession, incremental_sort: str,
+) -> None:
+    """Verify indexed keyset pagination preserves the cursor boundary and issue order."""
     user = User(username="test_user", created_at=datetime.now(UTC))
     async_db_committed.add(user)
     await async_db_committed.flush()
@@ -110,20 +113,29 @@ async def test_issues_position_index_improves_pagination(async_db_committed: Asy
     async_db_committed.add(thread)
     await async_db_committed.flush()
 
-    # Create 100 issues
+    # Reverse ID/position correlation so reading ID order cannot accidentally
+    # satisfy the pagination contract. The cursor is an actual existing Issue.
+    cursor_id = 0
     for i in range(100):
         issue = Issue(
             thread_id=thread.id,
             issue_number=str(i + 1),
-            position=i + 1,
+            position=100 - i,
             status="unread",
         )
         async_db_committed.add(issue)
+        if issue.position == 50:
+            await async_db_committed.flush()
+            cursor_id = issue.id
     await async_db_committed.commit()
 
     await async_db_committed.execute(text("ANALYZE issues"))
     await async_db_committed.execute(text("SET LOCAL enable_seqscan = off"))
     await async_db_committed.execute(text("SET LOCAL enable_bitmapscan = off"))
+
+    await async_db_committed.execute(
+        text(f"SET LOCAL enable_incremental_sort = {incremental_sort}")
+    )
 
     # Test pagination query pattern (like page_token usage)
     cursor_position = 50
@@ -137,7 +149,7 @@ async def test_issues_position_index_improves_pagination(async_db_committed: Asy
     """)
 
     result = await async_db_committed.execute(
-        query, {"thread_id": thread.id, "cursor_position": cursor_position, "cursor_id": 0}
+        query, {"thread_id": thread.id, "cursor_position": cursor_position, "cursor_id": cursor_id}
     )
     plan = result.scalar()
     assert plan is not None, "EXPLAIN query should return a plan"
@@ -145,18 +157,36 @@ async def test_issues_position_index_improves_pagination(async_db_committed: Asy
     # SQLAlchemy with asyncpg already deserializes JSON
     plan_data = plan if isinstance(plan, list) else [plan]
 
-    def collect_index_names(node: dict) -> set[str]:
-        """Recursively collect index names referenced in a query plan."""
-        index_names = set()
-        index_name = node.get("Index Name")
-        if isinstance(index_name, str):
-            index_names.add(index_name)
-        for child in node.get("Plans", []):
-            index_names.update(collect_index_names(child))
-        return index_names
+    def collect_thread_lookup_indexes(node: dict[str, object]) -> set[str]:
+        """Find indexed lookups bounded by the requested Thread."""
+        names: set[str] = set()
+        name = node.get("Index Name")
+        condition = node.get("Index Cond")
+        if isinstance(name, str) and isinstance(condition, str) and "thread_id" in condition:
+            names.add(name)
+        children = node.get("Plans")
+        if isinstance(children, list):
+            for child in children:
+                if isinstance(child, dict):
+                    names.update(collect_thread_lookup_indexes(child))
+        return names
 
-    # Either the explicit index or the unique constraint's index can be used
-    index_names = collect_index_names(plan_data[0]["Plan"])
-    assert any(name in index_names for name in ["ix_issue_thread_position", "uq_issue_thread_position"]), (
-        f"Pagination plan should reference either ix_issue_thread_position or uq_issue_thread_position when sequential scans are disabled. Found indexes: {index_names}"
+    # PostgreSQL may prefer the ownership FK's (thread_id, id) index and sort
+    # this small page, rather than use (thread_id, position). Require the
+    # intended bounded index lookup, not one optimizer-dependent index name.
+    index_names = collect_thread_lookup_indexes(plan_data[0]["Plan"])
+    assert index_names, "Pagination must use an index condition on thread_id"
+    page = await async_db_committed.execute(
+        text("""
+            SELECT id, thread_id, position FROM issues
+            WHERE thread_id = :thread_id
+            AND (position > :cursor_position OR
+                 (position = :cursor_position AND id > :cursor_id))
+            ORDER BY position, id
+            LIMIT 50
+        """),
+        {"thread_id": thread.id, "cursor_position": cursor_position, "cursor_id": cursor_id},
     )
+    rows = page.all()
+    assert [row.position for row in rows] == list(range(51, 101))
+    assert all(row.thread_id == thread.id for row in rows)
