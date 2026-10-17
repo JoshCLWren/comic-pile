@@ -1378,10 +1378,9 @@ async def import_comicvine_series(
     # counting it would publish a reading commitment ComicPile never created.
     tracking_state = apply_thread_issue_tracking_state(thread, thread_issues)
     if tracking_state.next_unread_issue_id is None:
-        thread.status = "completed"
+        thread.apply_derived_status("completed")
     else:
-        if thread.status != "excluded":
-            thread.status = "active"
+        thread.apply_derived_status("active")
 
     await db.flush()
 

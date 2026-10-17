@@ -183,10 +183,12 @@ async def derive_effective_roll_excluded_thread_ids(
         seen.add(thread_id)
         excluded_ids.append(thread_id)
 
-    # Durable 'excluded' status threads are also excluded from the roll pool.
-    # This ensures that 'Remove from Queue' is non-destructive but effectively hides the series.
+    # A durable "Remove from Queue" exclusion (#3807) is reader-owned, not
+    # session-owned: it keeps the series out of the roll pool across sessions
+    # until it is explicitly restored. The rows still exist, so nothing about
+    # reading history, ratings, or mappings is lost by excluding the id here.
     excluded_status_ids = await fetch_excluded_thread_ids(db, user_id)
-    for tid in sorted(excluded_status_ids):
+    for tid in excluded_status_ids:
         if tid not in seen:
             seen.add(tid)
             excluded_ids.append(tid)

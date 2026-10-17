@@ -27,6 +27,7 @@ import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import type { IssueListResponse, ThreadListItem } from '../types'
 
 vi.mock('../hooks/useThread', () => ({
+  useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useCreateThread: vi.fn(),
   useUpdateThread: vi.fn(),
   useDeleteThread: vi.fn(),
@@ -34,6 +35,8 @@ vi.mock('../hooks/useThread', () => ({
 }))
 
 vi.mock('../hooks/useQueue', () => ({
+  useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
+  useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),

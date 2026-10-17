@@ -20,7 +20,7 @@ from app.services.reading_eligibility_service import (
 )
 
 from app.models import Event, Issue, Thread
-from app.models.thread import normalize_format_value
+from app.models.thread import EXCLUDED_STATUS, normalize_format_value
 from app.repositories import (
     continuity_repository,
     issue_repository,
@@ -42,6 +42,7 @@ from app.schemas import (
 )
 from app.schemas.tags import TagResponse, TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership_guard import (
     require_frontier_in_thread,
     require_session_pending_consistent,
@@ -498,11 +499,18 @@ async def list_excluded_threads(
 ) -> QueueThreadListResponse:
     """List EXCLUDED threads with deterministic cursor-based pagination.
 
+    These are the series a reader removed from the active queue without
+    deleting them (#3807). The rows, their issues, ratings, mappings, and
+    reading-plan memberships are all intact, so this is the discoverable
+    library view they are restored from.
+
     Args:
         db: Database session.
         user_id: Owner of the threads.
         search: Optional case-insensitive title search filter.
-        sort: Validated sort order – ``title`` or ``created``.
+        sort: Validated sort order – ``position``, ``title``, or ``created``.
+            ``position`` has no meaning off the active queue and is read as
+            ``created``.
         page_size: Number of threads to return per page (max 200).
         page_token: Opaque cursor token for pagination continuation.
 
@@ -735,12 +743,11 @@ async def update_thread(
     if thread_data.issues_remaining is not None:
         if not thread.uses_issue_tracking():
             thread.issues_remaining = thread_data.issues_remaining
-            if thread.status != "excluded":
-                if thread.issues_remaining == 0:
-                    thread.status = "completed"
+            if thread.issues_remaining == 0:
+                if thread.apply_derived_status("completed"):
                     thread.queue_position = 0
-                else:
-                    thread.status = "active"
+            else:
+                thread.apply_derived_status("active")
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
     if thread_data.manual_creator_credits is not None:
@@ -885,9 +892,11 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
 async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> ThreadResponse:
     """Remove a thread from the active queue without deleting its data.
 
-    The thread's status is changed to 'excluded' and its queue position is
-    cleared. Reading history, issues, ratings, mappings and plan memberships
-    are preserved.
+    The thread's status is changed to :data:`~app.models.thread.EXCLUDED_STATUS`
+    and its queue position is cleared. Reading history, issues, ratings,
+    mappings, and reading-plan memberships are preserved untouched, and the
+    derived-status paths (reading, rating, CBL sync, reconciliation) keep the
+    series excluded until it is explicitly restored.
 
     Args:
         db: Database session.
@@ -902,13 +911,13 @@ async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
         InvalidRequestError: When the thread is not active.
     """
     thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
-    if thread.status == "excluded":
-        # Idempotent
+    if thread.is_excluded():
+        # Idempotent: removing an already-excluded series is a no-op, not an error.
         return await thread_to_response(thread, db)
     if thread.status != "active":
         raise InvalidRequestError(f"Thread {thread_id} is not active and cannot be excluded")
 
-    thread.status = "excluded"
+    thread.status = EXCLUDED_STATUS
     thread.queue_position = 0
     await db.commit()
     await db.refresh(thread)
@@ -916,10 +925,15 @@ async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
 
 
 async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> ThreadResponse:
-    """Restore an excluded thread back to the active queue.
+    """Restore an excluded thread back to the queue without recreating it.
 
-    The thread's status is set to 'active' and it is appended to the end of
-    the user's queue. All historic data is retained.
+    The same Thread and Issue rows, issue numbers/positions, read state and
+    timestamps, ratings and events, ComicVine mappings, and reading-plan
+    memberships are reused verbatim; only the lifecycle status and queue
+    position change. A series with no unread issue left is restored to the
+    finished shelf instead of the active queue, because an ``active`` thread
+    with an empty reading frontier would violate the completion invariant that
+    Roll and the queue eligibility predicates rely on.
 
     Args:
         db: Database session.
@@ -934,12 +948,24 @@ async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
         InvalidRequestError: When the thread is not excluded.
     """
     thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
-    if thread.status != "excluded":
+    if not thread.is_excluded():
         raise InvalidRequestError(f"Thread {thread_id} is not excluded")
-    # Assign new queue position at end
-    max_position = await thread_repository.max_queue_position(db, user_id)
-    thread.status = "active"
-    thread.queue_position = max_position + 1
+
+    if thread.uses_issue_tracking():
+        tracked_issues = await issue_repository.get_issues_by_thread(db, thread.id)
+        issues_remaining = apply_thread_issue_tracking_state(thread, tracked_issues).issues_remaining
+    else:
+        issues_remaining = thread.issues_remaining
+
+    if issues_remaining > 0:
+        # Append behind every thread the reader already has positioned.
+        max_position = await thread_repository.max_queue_position(db, user_id)
+        thread.status = "active"
+        thread.queue_position = max_position + 1
+    else:
+        thread.status = "completed"
+        thread.queue_position = 0
+
     await db.commit()
     await db.refresh(thread)
     return await thread_to_response(thread, db)

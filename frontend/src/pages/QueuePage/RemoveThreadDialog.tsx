@@ -30,8 +30,18 @@ export default function RemoveThreadDialog({
       {thread && (
         <div className="space-y-4">
           <p className="text-sm text-[var(--theme-text-muted)]">
-            Are you sure you want to remove{' '}
-            <span className="font-bold text-[var(--theme-text-primary)]">{thread.title}</span> from the queue? It will no longer appear in the active queue or rolls, but all reading history, ratings, and mappings will be preserved. You can restore it later.
+            Remove{' '}
+            <span className="font-bold text-[var(--theme-text-primary)]">{thread.title}</span> from
+            the queue? It will no longer appear in the active queue or rolls.
+          </p>
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            This keeps everything: unread and read issues, ratings, notes, tags, and
+            ComicVine mappings are untouched. You can restore it later from
+            &ldquo;Removed from Queue&rdquo; on this page.
+          </p>
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            To delete the series and its history permanently, cancel and choose{' '}
+            <span className="font-bold text-[var(--theme-danger)]">Delete Series</span> instead.
           </p>
           {error && (
             <p

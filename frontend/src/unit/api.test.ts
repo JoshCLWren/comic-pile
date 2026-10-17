@@ -94,6 +94,26 @@ it('calls the finished-series endpoint with expected paths', async () => {
   })
 })
 
+it('calls the excluded-library endpoint with expected paths', async () => {
+  await threadsApi.listExcluded()
+  await threadsApi.listExcluded('saga', 'created', 'page-2', 25)
+
+  expect(get).toHaveBeenCalledWith('/v1/threads/excluded/threads', {
+    params: undefined,
+  })
+  expect(get).toHaveBeenCalledWith('/v1/threads/excluded/threads', {
+    params: { search: 'saga', sort: 'created', page_size: 25, page_token: 'page-2' },
+  })
+})
+
+it('keeps queue removal and restore on their own non-destructive endpoints', async () => {
+  await threadsApi.exclude(5)
+  await threadsApi.restore(5)
+
+  expect(post).toHaveBeenCalledWith('/v1/threads/5/exclude')
+  expect(post).toHaveBeenCalledWith('/v1/threads/5/restore')
+})
+
 it('calls queue endpoints with expected paths', async () => {
   await queueApi.moveToPosition(3, 2)
   await queueApi.moveToFront(4)

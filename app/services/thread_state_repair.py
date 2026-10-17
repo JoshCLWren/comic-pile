@@ -37,12 +37,11 @@ async def _recalculate_thread_state(thread: Thread, issues: list[Issue]) -> bool
         earliest = min(unread, key=lambda issue: (issue.position, issue.id))
         thread.next_unread_issue_id = earliest.id
         thread.reading_progress = "not_started" if unread_count == total else "in_progress"
-        if thread.status != "excluded":
-            thread.status = "active"
+        thread.apply_derived_status("active")
     else:
         thread.next_unread_issue_id = None
         thread.reading_progress = "completed"
-        thread.status = "completed"
+        thread.apply_derived_status("completed")
 
     return was_completed and thread.status == "active"
 
@@ -103,7 +102,7 @@ async def reconcile_contradictory_completed_threads(
                 thread.issues_remaining = 0
                 thread.next_unread_issue_id = None
                 thread.reading_progress = "completed"
-                thread.status = "completed"
+                thread.apply_derived_status("completed")
                 repaired += 1
                 repaired_ids.append(thread.id)
                 affected_user_ids.add(thread.user_id)

@@ -16,6 +16,7 @@ from app.repositories.reading_eligibility_queries import candidate_predicate
 
 from app.models import Issue, Thread
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.thread import EXCLUDED_STATUS
 from app.services.queue_pagination import QueueCursor, QueueSort, build_cursor_filter, build_sort_order
 
 
@@ -342,7 +343,7 @@ async def fetch_excluded_page(
     """
     query = select(Thread).where(
         Thread.user_id == user_id,
-        Thread.status == "excluded"
+        Thread.status == EXCLUDED_STATUS,
     )
 
     if search:
@@ -360,23 +361,22 @@ async def fetch_excluded_page(
 
 
 async def fetch_excluded_thread_ids(db: AsyncSession, user_id: int) -> list[int]:
-    """Fetch all IDs of threads marked as 'excluded' for a user.
+    """Fetch the IDs of every thread this reader excluded from the queue.
 
     Args:
         db: Database session.
         user_id: Owner of the threads.
 
     Returns:
-        List of excluded thread IDs.
+        Ascending thread IDs whose durable queue exclusion is still in effect.
     """
     result = await db.execute(
         select(Thread.id).where(
             Thread.user_id == user_id,
-            Thread.status == "excluded"
+            Thread.status == EXCLUDED_STATUS,
         )
     )
-    return list(result.scalars().all())
-
+    return sorted(result.scalars().all())
 
 
 async def fetch_completed_threads(db: AsyncSession, user_id: int) -> list[Thread]:

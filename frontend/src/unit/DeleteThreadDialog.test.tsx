@@ -79,15 +79,37 @@ describe('DeleteThreadDialog', () => {
     )
     expect(screen.getByRole('heading', { name: 'Delete Series' })).toBeInTheDocument()
     const confirmText = screen.getByText((content) =>
-      content.includes('Are you sure you want to delete'),
+      content.includes('Permanently delete'),
     )
-    expect(confirmText).toHaveTextContent('Are you sure you want to delete Saga')
+    expect(confirmText).toHaveTextContent('Permanently delete Saga')
 
     await user.click(screen.getByRole('button', { name: /delete series/i }))
     expect(onConfirm).toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onCancel).toHaveBeenCalled()
+  })
+
+  it('warns about the destructive effects and points at the reversible action', () => {
+    render(
+      <DeleteThreadDialog
+        thread={makeThread()}
+        isPending={false}
+        error={null}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    )
+    expect(
+      screen.getByText(/cannot be undone/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/issues and reading history/i)).toBeInTheDocument()
+    expect(screen.getByText(/ratings and events/i)).toBeInTheDocument()
+    expect(screen.getByText(/ComicVine mapping links/i)).toBeInTheDocument()
+    expect(screen.getByText(/Reading-plan membership/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/choose\s*Remove from Queue\s*instead/i),
+    ).toBeInTheDocument()
   })
 
   it('labels the destructive confirm action with the pending state', () => {
