@@ -150,6 +150,27 @@ def test_no_new_hardcoded_ids() -> None:
     )
 
 
+def test_baseline_has_no_stale_entries() -> None:
+    """The baseline may only shrink: no tolerated literal may go unused."""
+    baseline = load_baseline()
+    current = current_hardcoded_ids()
+
+    stale: dict[str, dict[str, list[str]]] = {}
+    for scope, per_scope in baseline.items():
+        live_scopes = current.get(scope, {})
+        for module, literals in per_scope.items():
+            live = set(live_scopes.get(module, []))
+            unused = [literal for literal in literals if literal not in live]
+            if unused:
+                stale.setdefault(scope, {})[module] = unused
+
+    assert not stale, (
+        "tests/hardcoded_ids_baseline.json tolerates literals that no longer "
+        "occur. Delete the stale entries so the baseline only ever shrinks: "
+        f"{stale}"
+    )
+
+
 def test_scanner_detects_hardcoded_ids() -> None:
     """The scanner flags hardcoded ids in synthetic test and app code."""
     test_source = (

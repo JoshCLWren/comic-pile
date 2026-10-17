@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ReadingSession, Thread
+from app.models import Event, ReadingSession, Thread, User
 
 
 async def _ensure_thread(db: AsyncSession, *, user_id: int, thread_id: int) -> None:
@@ -94,13 +94,13 @@ async def test_diagnostics_empty_data(auth_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_diagnostics_legacy_coverage_labeled(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Legacy events without selection_method are labeled, not silently mixed."""
     now = datetime.now(UTC)
     await _seed_session(
         async_db,
-        user_id=1,
+        user_id=default_user.id,
         started_at=now - timedelta(hours=1),
         events=[
             {
@@ -135,13 +135,13 @@ async def test_diagnostics_legacy_coverage_labeled(
 
 @pytest.mark.asyncio
 async def test_diagnostics_full_representative_session(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """A representative session exercises every documented metric."""
     now = datetime.now(UTC)
     await _seed_session(
         async_db,
-        user_id=1,
+        user_id=default_user.id,
         started_at=now - timedelta(hours=4),
         events=[
             {
@@ -180,7 +180,7 @@ async def test_diagnostics_full_representative_session(
     )
     await _seed_session(
         async_db,
-        user_id=1,
+        user_id=default_user.id,
         started_at=now - timedelta(hours=2),
         events=[
             {
@@ -235,7 +235,7 @@ async def test_diagnostics_full_representative_session(
 
 @pytest.mark.asyncio
 async def test_diagnostics_groups_preserve_class_when_context_records_control_mode(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Recorded control_mode must not collapse the control/intent class labels.
 
@@ -248,7 +248,7 @@ async def test_diagnostics_groups_preserve_class_when_context_records_control_mo
     now = datetime.now(UTC)
     await _seed_session(
         async_db,
-        user_id=1,
+        user_id=default_user.id,
         started_at=now - timedelta(hours=2),
         events=[
             {
@@ -273,7 +273,7 @@ async def test_diagnostics_groups_preserve_class_when_context_records_control_mo
     )
     await _seed_session(
         async_db,
-        user_id=1,
+        user_id=default_user.id,
         started_at=now - timedelta(hours=1),
         events=[
             {
@@ -315,7 +315,7 @@ async def test_diagnostics_groups_preserve_class_when_context_records_control_mo
 
 @pytest.mark.asyncio
 async def test_diagnostics_forced_legacy_group_distinct_from_pre_instrumentation(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Forced-legacy draws keep a distinguishable group from old legacy rows.
 
@@ -327,7 +327,7 @@ async def test_diagnostics_forced_legacy_group_distinct_from_pre_instrumentation
     now = datetime.now(UTC)
     await _seed_session(
         async_db,
-        user_id=1,
+        user_id=default_user.id,
         started_at=now - timedelta(hours=2),
         events=[
             {
@@ -348,7 +348,7 @@ async def test_diagnostics_forced_legacy_group_distinct_from_pre_instrumentation
     )
     await _seed_session(
         async_db,
-        user_id=1,
+        user_id=default_user.id,
         started_at=now - timedelta(hours=1),
         events=[
             {
@@ -386,7 +386,7 @@ async def test_diagnostics_forced_legacy_group_distinct_from_pre_instrumentation
 
 @pytest.mark.asyncio
 async def test_diagnostics_user_scoped(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Diagnostics never include events owned by a different user."""
     now = datetime.now(UTC)

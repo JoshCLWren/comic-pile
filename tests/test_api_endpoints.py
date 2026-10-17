@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ReadingSession, Thread
+from app.models import ReadingSession, Thread, User
 
 
 @pytest.mark.asyncio
@@ -337,7 +337,7 @@ async def test_update_thread_active_status(
 
 @pytest.mark.asyncio
 async def test_update_thread_performance_issue_tracking(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that update_thread correctly handles issue-tracking threads.
 
@@ -357,7 +357,7 @@ async def test_update_thread_performance_issue_tracking(
         issues_remaining=3,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=default_user.id,
         total_issues=5,
         reading_progress="in_progress",
         last_activity_at=now,
@@ -440,11 +440,10 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
     _ = sample_data
     from datetime import UTC, datetime
 
-    from app.models import Event, ReadingSession, Snapshot, Thread, User
+    from app.models import Event, ReadingSession, Snapshot, Thread
 
     now = datetime.now(UTC)
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one()
+    user = sample_data["user"]
     user_id = user.id  # Extract before commit
 
     thread = Thread(
@@ -794,14 +793,13 @@ async def test_get_sessions_pagination(auth_client: AsyncClient, sample_data: di
 @pytest.mark.asyncio
 async def test_get_session(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/{id} returns single session."""
-    _ = sample_data
     response = await auth_client.get("/api/v1/sessions/1")
     assert response.status_code == 200
 
     session = response.json()
     assert session["id"] == 1
     assert session["start_die"] == 6
-    assert session["user_id"] == 1
+    assert session["user_id"] == sample_data["user"].id
     assert "ladder_path" in session
 
 

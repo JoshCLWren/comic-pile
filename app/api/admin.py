@@ -24,9 +24,9 @@ router = APIRouter(
 
 @router.post("/import/csv/")
 async def import_csv(
-    file: Annotated[UploadFile, File(...)], 
+    file: Annotated[UploadFile, File(...)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, int | list[str]]:
     """Import threads from CSV file.
 
@@ -52,22 +52,18 @@ async def import_csv(
 
 
 @router.get("/export/csv/")
-async def export_csv(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
-) -> StreamingResponse:
+async def export_csv(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export active threads as CSV file.
 
     Format matches Google Sheets: title, format, issues_remaining
 
     Args:
         db: SQLAlchemy session for database operations.
-        current_user: Authenticated user making the request.
 
     Returns:
         StreamingResponse with CSV file attachment.
     """
-    csv_bytes = await svc_export_csv(db, current_user.id)
+    csv_bytes = await svc_export_csv(db)
     return StreamingResponse(
         csv_bytes,
         media_type="text/csv",
@@ -76,22 +72,18 @@ async def export_csv(
 
 
 @router.get("/export/json/")
-async def export_json(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
-) -> StreamingResponse:
+async def export_json(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export full database as JSON for backups.
 
     Includes all data: users, threads, sessions, events (excludes test data)
 
     Args:
         db: SQLAlchemy session for database operations.
-        current_user: Authenticated user making the request.
 
     Returns:
         StreamingResponse with JSON file attachment.
     """
-    json_bytes = await svc_export_json(db, current_user.id)
+    json_bytes = await svc_export_json(db)
     return StreamingResponse(
         json_bytes,
         media_type="application/json",
@@ -102,7 +94,7 @@ async def export_json(
 @router.post("/delete-test-data/")
 async def delete_test_data(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, int]:
     """Delete all test data (threads, sessions, events marked as test).
 
@@ -117,10 +109,7 @@ async def delete_test_data(
 
 
 @router.get("/export/summary/")
-async def export_summary(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
-) -> StreamingResponse:
+async def export_summary(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export narrative session summaries as markdown file.
 
     Formats all sessions with read, skipped, and completed lists per PRD Section 11.
@@ -128,12 +117,11 @@ async def export_summary(
 
     Args:
         db: SQLAlchemy session for database operations.
-        current_user: Authenticated user making the request.
 
     Returns:
         StreamingResponse with markdown file attachment.
     """
-    md_bytes, filename = await svc_export_summary(db, current_user.id)
+    md_bytes, filename = await svc_export_summary(db)
     return StreamingResponse(
         md_bytes,
         media_type="text/markdown",

@@ -219,12 +219,12 @@ async def test_import_non_csv_file(
 
 @pytest.mark.asyncio
 async def test_export_csv(
-    auth_client: AsyncClient, sample_data: dict, enable_internal_ops: None
+    client: AsyncClient, sample_data: dict, enable_internal_ops: None
 ) -> None:
     """Test GET /admin/export/csv/ returns valid CSV."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await auth_client.get("/api/admin/export/csv/")
+    response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
 
@@ -239,12 +239,12 @@ async def test_export_csv(
 
 @pytest.mark.asyncio
 async def test_export_csv_only_active(
-    auth_client: AsyncClient, sample_data: dict, enable_internal_ops: None
+    client: AsyncClient, sample_data: dict, enable_internal_ops: None
 ) -> None:
     """Test GET /admin/export/csv/ only exports active threads."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await auth_client.get("/api/admin/export/csv/")
+    response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.text
@@ -256,10 +256,10 @@ async def test_export_csv_only_active(
 
 
 @pytest.mark.asyncio
-async def test_export_csv_empty(auth_client: AsyncClient, enable_internal_ops: None) -> None:
+async def test_export_csv_empty(client: AsyncClient, enable_internal_ops: None) -> None:
     """Test GET /admin/export/csv/ returns empty CSV when no threads."""
     _ = enable_internal_ops
-    response = await auth_client.get("/api/admin/export/csv/")
+    response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.text

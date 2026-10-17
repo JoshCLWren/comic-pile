@@ -941,7 +941,7 @@ async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
 
     # Create a session
     session = ReadingSession(
-        user_id=1,
+        user_id=sample_data["user"].id,
         start_die=20,
         manual_die=None,
         snoozed_thread_ids=[threads[0].id],

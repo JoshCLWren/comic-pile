@@ -551,10 +551,11 @@ async def _create_async_db_override(
 @pytest_asyncio.fixture(scope="function")
 async def sample_data(
     async_db: SQLAlchemyAsyncSession,
+    default_user: User,
 ) -> dict[str, Thread | ReadingSession | Event | User | list | object]:
     """Create sample threads, sessions for async testing."""
     from sqlalchemy import delete
-    from app.models import Issue, Snapshot, Event, Thread, ReadingSession, User
+    from app.models import Issue, Snapshot, Event, Thread, ReadingSession
 
     batman_issues = []
 
@@ -562,28 +563,22 @@ async def sample_data(
     await async_db.execute(delete(Event))
     await async_db.execute(delete(Thread))
     await async_db.execute(delete(ReadingSession))
-    await async_db.execute(delete(User))
-
-    await async_db.execute(delete(Snapshot))
-    await async_db.execute(delete(Event))
-    await async_db.execute(delete(Thread))
-    await async_db.execute(delete(ReadingSession))
-    await async_db.execute(delete(User))
     await async_db.flush()
 
     now = datetime.now(UTC)
-    username = _default_test_username()
-    user = await async_db.execute(select(User).where(User.username == username))
-    user = user.scalar_one_or_none()
-    if not user:
-        user = User(username=username, created_at=now)
-        async_db.add(user)
-        await async_db.flush()
-        await async_db.refresh(user)
-        await _sync_id_sequence(async_db, "users")
+    # Reuse the default test user instead of recreating it. The user row is
+    # never deleted here: tests that also request ``default_user`` must see the
+    # same user id that owns the sample threads, and the per-test
+    # ``async_db`` rollback already isolates it from other tests.
+    user = default_user
 
+    # Thread, Issue, ReadingSession, and Event primary keys stay explicit here:
+    # a large part of the suite asserts against these exact ids, so they are
+    # semantically required rather than incidental. Only the test User id is
+    # database-generated (see ``_ensure_default_user_async``).
     threads = [
         Thread(
+            id=1,
             title="Superman",
             format="Comic",
             issues_remaining=10,
@@ -593,6 +588,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=2,
             title="Batman",
             format="Comic",
             issues_remaining=5,
@@ -604,6 +600,7 @@ async def sample_data(
             reading_progress="in_progress",
         ),
         Thread(
+            id=3,
             title="Wonder Woman",
             format="Comic",
             issues_remaining=0,
@@ -613,6 +610,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=4,
             title="Flash",
             format="Comic",
             issues_remaining=15,
@@ -622,6 +620,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=5,
             title="Aquaman",
             format="Comic",
             issues_remaining=8,
@@ -641,6 +640,7 @@ async def sample_data(
 
     for i in range(1, 11):
         issue = Issue(
+            id=i,
             thread_id=threads[1].id,
             issue_number=str(i),
             position=i,
@@ -658,11 +658,13 @@ async def sample_data(
 
     sessions = [
         ReadingSession(
+            id=1,
             start_die=6,
             user_id=user.id,
             started_at=now,
         ),
         ReadingSession(
+            id=2,
             start_die=8,
             user_id=user.id,
             started_at=now,
@@ -678,6 +680,7 @@ async def sample_data(
 
     events = [
         Event(
+            id=1,
             type="roll",
             die=6,
             result=4,
@@ -688,6 +691,7 @@ async def sample_data(
             timestamp=now,
         ),
         Event(
+            id=2,
             type="rate",
             rating=4.5,
             issues_read=1,

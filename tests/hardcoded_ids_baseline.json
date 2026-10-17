@@ -14,9 +14,6 @@
     ]
   },
   "tests": {
-    "tests/test_api_endpoints.py": [
-      "user_id=1"
-    ],
     "tests/test_backfill_read_comicvine_resolution.py": [
       "user_id=1"
     ],
@@ -29,9 +26,6 @@
     ],
     "tests/test_cbl_targeted_plan_adoption.py": [
       "user_id=7"
-    ],
-    "tests/test_collection_exclusions.py": [
-      "user_id=1"
     ],
     "tests/test_comicvine_fallback.py": [
       "user_id=1"
@@ -67,9 +61,6 @@
     "tests/test_queue_api.py": [
       "User(id=123)"
     ],
-    "tests/test_rate_api.py": [
-      "user_id=1"
-    ],
     "tests/test_read_frontier_service.py": [
       "user_id=2"
     ],
@@ -77,9 +68,6 @@
       "user_id=1"
     ],
     "tests/test_reading_shadow.py": [
-      "user_id=1"
-    ],
-    "tests/test_recommendation_diagnostics.py": [
       "user_id=1"
     ],
     "tests/test_roll_bootstrap_exclusions.py": [
@@ -115,9 +103,6 @@
       "User(id=3)"
     ],
     "tests/test_taste_acceptance.py": [
-      "user_id=1"
-    ],
-    "tests/test_taste_discovery_api.py": [
       "user_id=1"
     ],
     "tests/test_test_helpers.py": [

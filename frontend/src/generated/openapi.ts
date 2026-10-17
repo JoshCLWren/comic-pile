@@ -72,6 +72,7 @@ export interface paths {
          *
          *     Args:
          *         db: SQLAlchemy session for database operations.
+         *         current_user: Authenticated user making the request.
          *
          *     Returns:
          *         Dictionary with counts of deleted threads, sessions, and events.
@@ -191,6 +192,7 @@ export interface paths {
          *     Args:
          *         file: CSV file to import.
          *         db: SQLAlchemy session for database operations.
+         *         current_user: Authenticated user importing the threads.
          *
          *     Returns:
          *         Dictionary with "imported" count and "errors" list.

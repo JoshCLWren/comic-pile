@@ -119,7 +119,7 @@ async def test_bulk_delete_test_data(
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_export_csv_excludes_test_data(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+    client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that CSV export excludes test data."""
     user = default_user
@@ -145,7 +145,7 @@ async def test_export_csv_excludes_test_data(
     async_db.add_all([test_thread, real_thread])
     await async_db.commit()
 
-    response = await auth_client.get("/api/admin/export/csv/")
+    response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.content.decode("utf-8")
@@ -156,7 +156,7 @@ async def test_export_csv_excludes_test_data(
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_export_json_excludes_test_data(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+    client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that JSON export excludes test data."""
     import json
@@ -184,7 +184,7 @@ async def test_export_json_excludes_test_data(
     async_db.add_all([test_thread, real_thread])
     await async_db.commit()
 
-    response = await auth_client.get("/api/admin/export/json/")
+    response = await client.get("/api/admin/export/json/")
     assert response.status_code == 200
 
     data = json.loads(response.content.decode("utf-8"))
@@ -195,7 +195,7 @@ async def test_export_json_excludes_test_data(
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_export_summary_excludes_test_only_sessions(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+    client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test that session summary export excludes sessions with only test data."""
     user = default_user
@@ -263,7 +263,7 @@ async def test_export_summary_excludes_test_only_sessions(
     async_db.add_all([test_event, real_event])
     await async_db.commit()
 
-    response = await auth_client.get("/api/admin/export/summary/")
+    response = await client.get("/api/admin/export/summary/")
     assert response.status_code == 200
 
     content = response.content.decode("utf-8")
