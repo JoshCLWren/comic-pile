@@ -494,6 +494,12 @@ async def test_excluded_series_stays_out_of_the_roll_pool(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Roll eligibility honors a durable removal, not only a session snooze."""
+    # Capture the owner id up front. expire_all() below drops every loaded
+    # attribute off the session, and reading default_user.id afterwards would
+    # trigger a synchronous lazy reload inside the greenlet that owns the
+    # event loop (MissingGreenlet). The id is a stable fixture value, not
+    # derived state.
+    user_id = default_user.id
     ids = await _seed_series(async_db, default_user)
 
     exclude_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/exclude")
@@ -501,7 +507,7 @@ async def test_excluded_series_stays_out_of_the_roll_pool(
 
     async_db.expire_all()
     assert ids.thread_id in await derive_effective_roll_excluded_thread_ids(
-        async_db, default_user.id
+        async_db, user_id
     )
 
     restore_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/restore")
@@ -509,7 +515,7 @@ async def test_excluded_series_stays_out_of_the_roll_pool(
 
     async_db.expire_all()
     assert ids.thread_id not in await derive_effective_roll_excluded_thread_ids(
-        async_db, default_user.id
+        async_db, user_id
     )
 
 
