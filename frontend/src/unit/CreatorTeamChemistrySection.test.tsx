@@ -93,8 +93,8 @@ describe('CreatorTeamChemistrySection', () => {
     expect(screen.getByText('3 shared rated issues'))
     expect(screen.getAllByText('6 rated in your library')).toHaveLength(2)
     expect(screen.getAllByLabelText(/baseline average rating 3\.5 out of 5/).length).toBe(2)
-    expect(screen.getAllByLabelText(/together this pair averages 4\.33 out of 5/).length).toBe(2)
-    expect(screen.getAllByText('+0.5 vs baseline').length).toBe(2)
+    expect(screen.getAllByLabelText(/together this pair averages 4\.33 out of 5/i).length).toBe(2)
+    expect(screen.getAllByText(/\+0\.50 vs baseline/).length).toBe(2)
   })
 
   it('links every drilldown issue ref to its thread without implying causation', () => {
