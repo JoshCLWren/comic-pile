@@ -322,7 +322,7 @@ async def test_series_and_stable_prerequisite_cycles_reject_atomically(
     )
     assert rejected.status_code == 422, rejected.text
     assert "prerequisite" in rejected.json()["detail"]["message"]
-    assert "Explicit reader prerequisite" in rejected.json()["detail"]["message"]
+    assert "(reader)" in rejected.json()["detail"]["message"]
     requirement_edge = next(
         edge
         for edge in rejected.json()["detail"]["path"]
