@@ -378,6 +378,73 @@ async def get_creator_series_issues_endpoint(
         ) from None
 
 
+@router.get("/discovery/modes", response_model=DiscoveryModesResponse)
+async def get_discovery_modes_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> DiscoveryModesResponse:
+    """Return list of available creator discovery modes.
+    
+    This endpoint provides metadata about all available discovery modes that
+    surface useful patterns in the user's creator ratings.
+    
+    Args:
+        current_user: Authenticated user whose library is analyzed.
+        
+    Returns:
+        List of available discovery modes with descriptions.
+    """
+    return await get_discovery_modes()
+
+
+@router.get("/discovery", response_model=DiscoveryResponse)
+async def get_discovery_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    mode: DiscoveryMode = Query(
+        ...,
+        description="Discovery mode to use (see /discovery/modes for options)",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+        description="Page size (bounded, max 50)",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Page offset",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> DiscoveryResponse:
+    """Return creator discovery results for the specified mode.
+    
+    Discovery views surface useful patterns in the user's creator ratings that
+    they may not think to search for manually, while keeping every result
+    deterministic and explainable. Each mode uses explicit calculations with
+    clear minimum sample requirements to ensure statistical validity.
+    
+    Args:
+        current_user: Authenticated user whose library is analyzed.
+        mode: Discovery mode to use.
+        limit: Page size (bounded, max 50).
+        offset: Page offset.
+        db: Async database session.
+        
+    Returns:
+        Discovery results for the specified mode with qualifying metrics.
+        
+    Raises:
+        HTTPException: When the mode parameter is invalid.
+    """
+    return await get_discovery(
+        db=db,
+        user_id=current_user.id,
+        mode=mode,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/{creator_key}", response_model=CreatorDetailResponse)
 async def get_creator_detail_endpoint(
     creator_key: str,
@@ -639,73 +706,6 @@ async def get_creator_series_drilldown_endpoint(
             detail="Series drilldown returned an unexpected shape",
         )
     return drilldown
-
-
-@router.get("/discovery/modes", response_model=DiscoveryModesResponse)
-async def get_discovery_modes_endpoint(
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> DiscoveryModesResponse:
-    """Return list of available creator discovery modes.
-    
-    This endpoint provides metadata about all available discovery modes that
-    surface useful patterns in the user's creator ratings.
-    
-    Args:
-        current_user: Authenticated user whose library is analyzed.
-        
-    Returns:
-        List of available discovery modes with descriptions.
-    """
-    return await get_discovery_modes()
-
-
-@router.get("/discovery", response_model=DiscoveryResponse)
-async def get_discovery_endpoint(
-    current_user: Annotated[User, Depends(get_current_user)],
-    mode: DiscoveryMode = Query(
-        ...,
-        description="Discovery mode to use (see /discovery/modes for options)",
-    ),
-    limit: int = Query(
-        default=20,
-        ge=1,
-        le=50,
-        description="Page size (bounded, max 50)",
-    ),
-    offset: int = Query(
-        default=0,
-        ge=0,
-        description="Page offset",
-    ),
-    db: AsyncSession = Depends(get_db),
-) -> DiscoveryResponse:
-    """Return creator discovery results for the specified mode.
-    
-    Discovery views surface useful patterns in the user's creator ratings that
-    they may not think to search for manually, while keeping every result
-    deterministic and explainable. Each mode uses explicit calculations with
-    clear minimum sample requirements to ensure statistical validity.
-    
-    Args:
-        current_user: Authenticated user whose library is analyzed.
-        mode: Discovery mode to use.
-        limit: Page size (bounded, max 50).
-        offset: Page offset.
-        db: Async database session.
-        
-    Returns:
-        Discovery results for the specified mode with qualifying metrics.
-        
-    Raises:
-        HTTPException: When the mode parameter is invalid.
-    """
-    return await get_discovery(
-        db=db,
-        user_id=current_user.id,
-        mode=mode,
-        limit=limit,
-        offset=offset,
-    )
 
 
 __all__ = [

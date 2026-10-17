@@ -278,12 +278,10 @@ export default function CreatorsPage() {
     search: activeSearch || undefined, 
     sort, 
     minRatings: minRatings || undefined,
-    // Disable when discovery mode is active
-    enabled: !discoveryMode,
   })
 
   // Discovery hooks
-  const { data: discoveryModes, isLoading: isLoadingDiscoveryModes } = useDiscoveryModes()
+  const { isLoading: isLoadingDiscoveryModes } = useDiscoveryModes()
   const {
     data: discovery,
     isPending: isDiscoveryPending,
@@ -299,7 +297,6 @@ export default function CreatorsPage() {
   )
 
   const hasItems = items.length > 0
-  const hasDiscoveryResults = discovery && discovery.items.length > 0
   const ratingsPartial = coverage != null && !coverage.ratings_complete
   const showFirstLoadError = isError && !hasItems
   const showMoreError = isError && hasItems
@@ -515,7 +512,56 @@ export default function CreatorsPage() {
         </section>
       )}
 
-      {showFirstLoadError ? (
+      {discoveryMode ? (
+        isDiscoveryPending ? (
+          <div aria-label="Loading discovery" className="mt-6 space-y-2">
+            {[0, 1, 2, 3].map((row) => (
+              <div key={row} className="h-14 animate-pulse rounded-xl" style={{ backgroundColor: 'var(--theme-bg-panel)' }} />
+            ))}
+          </div>
+        ) : isDiscoveryError ? (
+          <div role="alert" className="mt-6 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-danger)' }}>
+            <p className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
+              Could not load discovery results
+            </p>
+            <p className="mt-1 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+              Your data is unchanged. Please try again.
+            </p>
+            <button
+              type="button"
+              onClick={() => { void refetchDiscovery() }}
+              className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <section aria-labelledby="discovery-results-heading" className="mt-6">
+            <h2 id="discovery-results-heading" className="text-base font-bold md:text-lg" style={{ color: 'var(--theme-text-primary)' }}>
+              {discovery?.title ?? 'Discovery'}
+            </h2>
+            {discovery && discovery.items.length > 0 ? (
+              <ul className="mt-2 space-y-2">
+                {discovery.items.map((item) => (
+                  <DiscoveryResultRow
+                    key={item.canonical_creator_key}
+                    item={item}
+                    isSelected={selectedKeys.has(item.canonical_creator_key)}
+                    onToggle={() => handleToggleSelection(item.canonical_creator_key)}
+                    selectionCount={selectionCount}
+                    maxSelection={MAX_COMPARISON_SELECTION}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+                No creators match this discovery view yet.
+              </p>
+            )}
+          </section>
+        )
+      ) : showFirstLoadError ? (
         <div role="alert" className="mt-6 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-danger)' }}>
           <p className="text-sm font-bold" style={{ color: 'var(--theme-text-primary)' }}>
             Could not load your creators

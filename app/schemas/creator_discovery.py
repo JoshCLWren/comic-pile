@@ -7,13 +7,12 @@ explainable.
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Literal
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class DiscoveryMode(str, Enum):
+class DiscoveryMode(StrEnum):
     """Supported creator discovery modes."""
     
     CONSISTENTLY_LOVED = "consistently_loved"

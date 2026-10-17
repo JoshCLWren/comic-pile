@@ -40,6 +40,7 @@ def _keys(items):
 
 
 def test_consistently_loved_requires_min_sample_and_consistency():
+    """Test consistently loved requires min sample and consistency."""
     calc = DiscoveryCalculator(
         _inputs(
             {
@@ -88,6 +89,7 @@ def test_consistently_loved_requires_min_sample_and_consistency():
 
 
 def test_consistently_loved_excludes_below_min_sample():
+    """Test consistently loved excludes below min sample."""
     calc = DiscoveryCalculator(
         _inputs(
             {1: [(1, HEADLINE, "One")], 2: [(1, HEADLINE, "One")]},
@@ -99,6 +101,7 @@ def test_consistently_loved_excludes_below_min_sample():
 
 
 def test_polarizing_requires_min_sample_and_range():
+    """Test polarizing requires min sample and range."""
     calc = DiscoveryCalculator(
         _inputs(
             {
@@ -142,6 +145,7 @@ def test_polarizing_requires_min_sample_and_range():
 
 
 def test_most_read_sorted_by_sample_then_average():
+    """Test most read sorted by sample then average."""
     calc = DiscoveryCalculator(
         _inputs(
             {
@@ -163,6 +167,7 @@ def test_most_read_sorted_by_sample_then_average():
 
 
 def test_highest_top_rating_rate_threshold():
+    """Test highest top rating rate threshold."""
     calc = DiscoveryCalculator(
         _inputs(
             {
@@ -185,6 +190,7 @@ def test_highest_top_rating_rate_threshold():
 
 
 def test_great_average_small_sample_bounds():
+    """Test great average small sample bounds."""
     calc = DiscoveryCalculator(
         _inputs(
             {
@@ -211,6 +217,7 @@ def test_great_average_small_sample_bounds():
 
 
 def test_loved_with_unread_requires_avg_and_unread():
+    """Test loved with unread requires avg and unread."""
     calc = DiscoveryCalculator(
         _inputs(
             {
@@ -242,6 +249,7 @@ def test_loved_with_unread_requires_avg_and_unread():
 
 
 def test_loved_with_unread_partial_coverage_counts_read_unrated():
+    """Test loved with unread partial coverage counts read unrated."""
     calc = DiscoveryCalculator(
         _inputs(
             {
@@ -249,7 +257,7 @@ def test_loved_with_unread_partial_coverage_counts_read_unrated():
                 2: [(1, HEADLINE, "Partial One")],
                 3: [(1, HEADLINE, "Partial One")],
             },
-            {1: 5.0, 2: 4.0},
+            {1: 5.0},
             {1: "read", 2: "read", 3: "unread"},
         )
     )
@@ -262,6 +270,7 @@ def test_loved_with_unread_partial_coverage_counts_read_unrated():
 
 
 def test_ties_break_deterministically_by_secondary_metric():
+    """Test ties break deterministically by secondary metric."""
     calc = DiscoveryCalculator(
         _inputs(
             {
@@ -288,7 +297,7 @@ def test_ties_break_deterministically_by_secondary_metric():
                 9: 4.0,
                 10: 4.0,
             },
-            {i: "read" for i in range(1, 11)},
+            dict.fromkeys(range(1, 11), "read"),
         )
     )
     items = calc.discover_consistently_loved()
@@ -298,6 +307,7 @@ def test_ties_break_deterministically_by_secondary_metric():
 
 
 def test_empty_inputs_yield_no_results():
+    """Test empty inputs yield no results."""
     calc = DiscoveryCalculator(
         CreatorSummaryInputs(
             owned_issues={},
@@ -316,6 +326,7 @@ def test_empty_inputs_yield_no_results():
 
 
 def test_non_headline_credits_do_not_contribute_ratings():
+    """Test non headline credits do not contribute ratings."""
     calc = DiscoveryCalculator(
         _inputs(
             {

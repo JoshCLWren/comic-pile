@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.creator_summary import load_creator_summary_inputs
+from app.repositories.creator_summary import (
+    CreatorSummaryInputs,
+    load_creator_summary_inputs,
+)
 from app.schemas.creator_discovery import (
     DiscoveryMode,
     DiscoveryResponse,
@@ -29,7 +31,7 @@ from app.services.creator_summary import HEADLINE_ROLES
 class DiscoveryCalculator:
     """Handles discovery metric calculations for different modes."""
 
-    def __init__(self, inputs: Any):
+    def __init__(self, inputs: CreatorSummaryInputs):
         """Initialize with creator summary inputs."""
         self.inputs = inputs
 
@@ -77,7 +79,7 @@ class DiscoveryCalculator:
         """
         results = []
         
-        for creator_id, issue_ids in self._get_creator_issues().items():
+        for creator_id, _issue_ids in self._get_creator_issues().items():
             ratings = self._get_creator_ratings(creator_id)
             if len(ratings) < min_sample:
                 continue
@@ -102,8 +104,8 @@ class DiscoveryCalculator:
         
         # Sort by average rating desc, then by consistency score desc
         results.sort(key=lambda x: (
-            -x.average_rating or 0.0,
-            -x.qualifying_metrics.get("consistency_score", 0.0)
+            -(x.average_rating or 0.0),
+            -float(x.qualifying_metrics.get("consistency_score", 0.0) or 0.0)
         ))
         return results
 
@@ -121,7 +123,7 @@ class DiscoveryCalculator:
         """
         results = []
         
-        for creator_id, issue_ids in self._get_creator_issues().items():
+        for creator_id, _issue_ids in self._get_creator_issues().items():
             ratings = self._get_creator_ratings(creator_id)
             if len(ratings) < min_sample:
                 continue
@@ -144,8 +146,8 @@ class DiscoveryCalculator:
         
         # Sort by polarization score desc, then by rating range desc
         results.sort(key=lambda x: (
-            -x.qualifying_metrics.get("polarization_score", 0.0),
-            -x.qualifying_metrics.get("rating_range", 0.0)
+            -float(x.qualifying_metrics.get("polarization_score", 0.0) or 0.0),
+            -float(x.qualifying_metrics.get("rating_range", 0.0) or 0.0)
         ))
         return results
 
@@ -160,7 +162,7 @@ class DiscoveryCalculator:
         """
         results = []
         
-        for creator_id, issue_ids in self._get_creator_issues().items():
+        for creator_id, _issue_ids in self._get_creator_issues().items():
             ratings = self._get_creator_ratings(creator_id)
             if len(ratings) < min_sample:
                 continue
@@ -175,8 +177,8 @@ class DiscoveryCalculator:
         
         # Sort by sample size desc, then by average rating desc
         results.sort(key=lambda x: (
-            -x.qualifying_metrics.get("sample_size", 0),
-            -x.average_rating or 0.0
+            -float(x.qualifying_metrics.get("sample_size", 0) or 0),
+            -(x.average_rating or 0.0)
         ))
         return results
 
@@ -194,7 +196,7 @@ class DiscoveryCalculator:
         """
         results = []
         
-        for creator_id, issue_ids in self._get_creator_issues().items():
+        for creator_id, _issue_ids in self._get_creator_issues().items():
             ratings = self._get_creator_ratings(creator_id)
             if len(ratings) < min_sample:
                 continue
@@ -215,8 +217,8 @@ class DiscoveryCalculator:
         
         # Sort by top rate desc, then by sample size desc
         results.sort(key=lambda x: (
-            -x.qualifying_metrics.get("top_rating_rate", 0.0),
-            -x.qualifying_metrics.get("sample_size", 0)
+            -float(x.qualifying_metrics.get("top_rating_rate", 0.0) or 0.0),
+            -float(x.qualifying_metrics.get("sample_size", 0) or 0)
         ))
         return results
 
@@ -235,7 +237,7 @@ class DiscoveryCalculator:
         """
         results = []
         
-        for creator_id, issue_ids in self._get_creator_issues().items():
+        for creator_id, _issue_ids in self._get_creator_issues().items():
             ratings = self._get_creator_ratings(creator_id)
             if len(ratings) < min_sample or len(ratings) > max_sample:
                 continue
@@ -255,8 +257,8 @@ class DiscoveryCalculator:
         
         # Sort by average rating desc, then by potential score desc
         results.sort(key=lambda x: (
-            -x.average_rating or 0.0,
-            -x.qualifying_metrics.get("potential_score", 0.0)
+            -(x.average_rating or 0.0),
+            -float(x.qualifying_metrics.get("potential_score", 0.0) or 0.0)
         ))
         return results
 
@@ -308,8 +310,8 @@ class DiscoveryCalculator:
         
         # Sort by average rating desc, then by unread count desc
         results.sort(key=lambda x: (
-            -x.average_rating or 0.0,
-            -x.qualifying_metrics.get("unread_count", 0)
+            -(x.average_rating or 0.0),
+            -float(x.qualifying_metrics.get("unread_count", 0) or 0)
         ))
         return results
 
@@ -323,7 +325,7 @@ class DiscoveryCalculator:
                 
         return creator_issues
 
-    def _build_result_item(self, creator_id: int, qualifying_metrics: dict[str, Any]) -> DiscoveryResultItem:
+    def _build_result_item(self, creator_id: int, qualifying_metrics: dict[str, float | int | str]) -> DiscoveryResultItem:
         """Build a discovery result item for a creator."""
         # Get creator basic info
         issue_ids = self._get_creator_issues()[creator_id]
@@ -333,7 +335,7 @@ class DiscoveryCalculator:
         display_name = ""
         normalized_roles = set()
         
-        for issue_id, credits in self.inputs.issue_creator_credits.items():
+        for _issue_id, credits in self.inputs.issue_creator_credits.items():
             for credit in credits:
                 if credit.external_id == creator_id:
                     display_name = credit.display_name
