@@ -198,6 +198,7 @@ def parse_intent(payload: Mapping[str, object]) -> ConversionIntent:
         prerequisites=tuple(prerequisites),
         exclusions=exclusions,
         frontier_repairs=repairs,
+        schema_version=_as_int(payload.get("schema_version", 1), "schema_version"),
     )
 
 

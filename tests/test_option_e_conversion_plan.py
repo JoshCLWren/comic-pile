@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from app.services.reading_list_conversion_plan import (
     ConversionEvidence,
     ConversionIntent,
@@ -616,3 +618,33 @@ def test_frontier_repair_accounts_for_proposed_exclusion() -> None:
     )
     assert manifest.valid
     assert manifest.frontier_repairs[0].derived_issue_id == 1001
+
+
+@pytest.mark.parametrize(("list_count", "plan_count"), [(105, 76), (466, 464), (57, 58)])
+def test_full_census_sized_discrepancies(list_count: int, plan_count: int) -> None:
+    """Production census shapes surface every missing member in either direction."""
+    issues = _issues(1, max(list_count, plan_count))
+    snapshot = _snapshot(
+        threads=[ReadingThread(1)],
+        issues=issues,
+        lists=[
+            ReadingList(
+                5, "loose", tuple(ReadingListEntry(row.issue_id) for row in issues[:list_count])
+            )
+        ],
+    )
+    evidence = ConversionEvidence(
+        projects=(ProjectEvidence(5, tuple(row.issue_id for row in issues[:plan_count])),)
+    )
+    manifest = build_manifest(
+        snapshot,
+        evidence,
+        ConversionIntent(
+            snapshot_fingerprint(snapshot, evidence), lists=(ListDecision(5, "loose"),)
+        ),
+    )
+    assert not manifest.valid
+    assert len(manifest.lists[0].discrepancies) == abs(list_count - plan_count)
+    assert {row.kind for row in manifest.lists[0].discrepancies} == {
+        "list_only" if list_count > plan_count else "plan_only"
+    }
