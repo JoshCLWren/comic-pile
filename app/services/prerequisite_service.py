@@ -21,9 +21,11 @@ class HistoricalPrerequisiteError(ValueError):
 
 
 async def list_owned(db: AsyncSession, user_id: int) -> list[PrerequisiteResponse]:
-    """Read provenance without classifying or modifying historical rows."""
+    """Expose only the prerequisites that actually govern canonical execution."""
     return [
-        PrerequisiteResponse.model_validate(row) for row in await repository.list_owned(db, user_id)
+        PrerequisiteResponse.model_validate(row)
+        for row in await repository.list_owned(db, user_id)
+        if row.origin == "reader"
     ]
 
 
