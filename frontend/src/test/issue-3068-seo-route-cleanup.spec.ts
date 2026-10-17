@@ -25,10 +25,6 @@ test.describe('Issue #3068: SEO route cleanup', () => {
       '/forgot-password',
       '/reset-password',
       '/demo',
-      '/rate',
-      '/analytics',
-      '/roll',
-      '/help',
     ]
 
     for (const path of publicNoindexPaths) {
@@ -40,24 +36,11 @@ test.describe('Issue #3068: SEO route cleanup', () => {
     }
   })
 
-  test('redirect routes are collapsed to at most one redirect', async ({ page }) => {
-    // These routes should redirect immediately to their canonical destinations
-    // No known public URL should require more than one redirect
-
-    // /rate and /analytics redirect to /
-    await page.goto('/rate', { waitUntil: 'domcontentloaded' })
-    await expect(page).toHaveURL(/\/$/, { ignoreCase: true })
-
-    await page.goto('/analytics', { waitUntil: 'domcontentloaded' })
-    await expect(page).toHaveURL(/\/$/, { ignoreCase: true })
-
-    // /roll redirects to /
-    await page.goto('/roll', { waitUntil: 'domcontentloaded' })
-    await expect(page).toHaveURL(/\/$/, { ignoreCase: true })
-
-    // /help redirects to /glossary
-    await page.goto('/help', { waitUntil: 'domcontentloaded' })
-    await expect(page).toHaveURL(/\/glossary$/, { ignoreCase: true })
+  test('removed obsolete aliases return 404', async ({ page }) => {
+    for (const path of ['/rate', '/analytics', '/roll', '/help']) {
+      await page.goto(path, { waitUntil: 'domcontentloaded' })
+      await expect(page.getByRole('heading', { name: /not found/i })).toBeVisible()
+    }
   })
 
   test('missing routes return proper 404 responses', async ({ page }) => {
@@ -98,10 +81,6 @@ test.describe('Issue #3068: SEO route cleanup', () => {
       '/forgot-password',
       '/reset-password',
       '/demo',
-      '/rate',
-      '/analytics',
-      '/roll',
-      '/help',
     ]
 
     for (const path of utilityPaths) {
