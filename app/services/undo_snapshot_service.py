@@ -13,7 +13,6 @@ from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
 from app.schemas import ActiveThreadInfo
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
-    CREATED_ISSUES_KEY,
     DELETED_ISSUES_KEY,
     ISSUE_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
@@ -317,6 +316,7 @@ class UndoSnapshotService:
             await self.db.flush()
             thread.total_issues = state.get("total_issues")
             thread.next_unread_issue_id = state.get("next_unread_issue_id")
+            thread.reading_progress = state.get("reading_progress")
             return
 
         has_tracking_marker = USES_ISSUE_TRACKING_KEY in state
