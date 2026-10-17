@@ -1,15 +1,30 @@
 """Tests for performance metric summary query fixes.
 
-This module tests the fix for issue #3233 which addresses a Cartesian product
-bug in get_performance_metrics_summary(). The bug caused filtered aggregate
-queries to multiply counts and produce incorrect percentiles.
+This module tests the fix for issue #3233, which addresses a Cartesian
+product bug in ``get_performance_metrics_summary()``. The old queries
+aggregated a filtered ``select(PerformanceMetric)`` subquery while still
+reading columns from the entity, so SQLAlchemy emitted
+``FROM (subquery), performance_metrics``: every matching row was paired with
+every row in the table, multiplying counts and inflating min/max/percentiles.
+
+Coverage combines three layers:
+
+* exact filtered values (counts, min/max/median/p95) against a populated fixture,
+* multiplication resistance: filtering to one row stays at one row no matter how
+  many unrelated rows exist,
+* compiled-SQL and ``EXPLAIN`` evidence that both aggregate statements read a
+  single ``performance_metrics`` source with no join.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, UTC, timedelta
-
-from typing import cast
+from typing import Any, cast
 
 import pytest
+from sqlalchemy import Select, Table, event, text
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.performance_metric import PerformanceMetric
 from app.repositories import performance_metric_repository
@@ -33,10 +48,54 @@ def _summary_parts(
     )
 
 
+@contextmanager
+def _captured_statements(db: AsyncSession) -> Iterator[list[Select[Any]]]:
+    """Collect the SELECT statements the session executes inside the block.
+
+    Args:
+        db: Session whose engine emits the statements.
+
+    Yields:
+        List that receives every executed ``Select`` in execution order.
+    """
+    captured: list[Select[Any]] = []
+
+    def _record(conn, clauseelement, multiparams, params) -> None:
+        if isinstance(clauseelement, Select):
+            captured.append(clauseelement)
+
+    engine = db.get_bind().engine
+    event.listen(engine, "before_execute", _record)
+    try:
+        yield captured
+    finally:
+        event.remove(engine, "before_execute", _record)
+
+
+async def _explain(db: AsyncSession, statement: Select[Any]) -> str:
+    """Return the PostgreSQL plan text for one captured statement.
+
+    Args:
+        db: Session used to run ``EXPLAIN``.
+        statement: Statement captured from the session.
+
+    Returns:
+        Newline-joined ``EXPLAIN`` output rows.
+    """
+    literal_sql = str(
+        statement.compile(
+            dialect=postgresql.dialect(paramstyle="numeric"),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+    result = await db.execute(text(f"EXPLAIN {literal_sql}"))
+    return "\n".join(str(row[0]) for row in result)
+
+
 @pytest.fixture
 async def sample_performance_metrics(db) -> list[PerformanceMetric]:
     """Create a diverse set of performance metrics for testing.
-    
+
     Returns:
         List of created PerformanceMetric instances.
     """
@@ -132,7 +191,7 @@ async def sample_performance_metrics(db) -> list[PerformanceMetric]:
             timestamp=now - timedelta(days=2),
         ),
     ]
-    
+
     db.add_all(metrics)
     await db.commit()
     return metrics
@@ -208,7 +267,7 @@ async def test_filter_by_metric_type(
     result = await performance_metric_repository.get_performance_metrics_summary(
         db, metric_type="initial_response"
     )
-    
+
     # Should only count initial_response metrics (6 total: 3 cold + 3 warm)
     assert result["count"] == 6
 
@@ -259,7 +318,7 @@ async def test_filter_by_metric_type_and_deployment_id(
     result = await performance_metric_repository.get_performance_metrics_summary(
         db, metric_type="initial_response", deployment_id="deploy-1"
     )
-    
+
     # Should only count initial_response + deploy-1 (4 total: 2 cold + 2 warm)
     assert result["count"] == 4
 
@@ -290,11 +349,11 @@ async def test_filter_by_timestamp_range(
     now = datetime.now(UTC)
     start_time = now - timedelta(hours=1)  # Last hour
     end_time = now  # Now
-    
+
     result = await performance_metric_repository.get_performance_metrics_summary(
         db, start_time=start_time, end_time=end_time
     )
-    
+
     # Should only count metrics from the last hour
     # Based on our fixture, this should be 6 metrics
     assert result["count"] == 6
@@ -305,12 +364,12 @@ async def test_filter_to_single_row_isolation(
     db, sample_performance_metrics: list[PerformanceMetric]
 ) -> None:
     """Test that filtering to one specific row returns count 1 without multiplication.
-    
+
     This is the critical test for the Cartesian product bug fix.
     """
     # Find a specific metric to filter to
     specific_metric = sample_performance_metrics[0]
-    
+
     result = await performance_metric_repository.get_performance_metrics_summary(
         db,
         metric_type=specific_metric.metric_type,
@@ -319,7 +378,7 @@ async def test_filter_to_single_row_isolation(
         start_time=specific_metric.timestamp,
         end_time=specific_metric.timestamp,
     )
-    
+
     # Should return exactly 1 for this specific filter
     assert result["count"] == 1
 
@@ -345,7 +404,7 @@ async def test_empty_filter_results(
     result = await performance_metric_repository.get_performance_metrics_summary(
         db, metric_type="nonexistent_metric"
     )
-    
+
     # Should return 0 count
     assert result["count"] == 0
 
@@ -383,12 +442,14 @@ async def test_service_contract_preservation(
 
 @pytest.mark.asyncio
 async def test_sql_no_cartesian_product_evidence(db) -> None:
-    """Test that generated SQL does not produce Cartesian products.
-    
-    This test verifies that our fix prevents the Cartesian product by
-    checking the generated SQL structure.
+    """Prove both aggregate statements read one filtered table source.
+
+    The regression shipped ``FROM (subquery), performance_metrics``. This test
+    asserts the structural evidence (single non-derived FROM target, single
+    ``FROM`` keyword, no join), the planner evidence (no repeated source alias
+    and no nested loop crossing two sources), and the functional result for a
+    filter that matches exactly one row.
     """
-    # Create a simple test case
     now = datetime.now(UTC)
     metric = PerformanceMetric(
         metric_type="test_metric",
@@ -399,16 +460,37 @@ async def test_sql_no_cartesian_product_evidence(db) -> None:
     )
     db.add(metric)
     await db.commit()
-    
-    # Get the query by capturing SQL (this is a bit of a hack but works for testing)
-    # We'll use a simple filter that should only match one record
-    result = await performance_metric_repository.get_performance_metrics_summary(
-        db,
-        metric_type="test_metric",
-        deployment_id="test-deploy",
-        cold=True,
-    )
-    
+
+    with _captured_statements(db) as captured:
+        result = await performance_metric_repository.get_performance_metrics_summary(
+            db,
+            metric_type="test_metric",
+            deployment_id="test-deploy",
+            cold=True,
+        )
+
+    # One count statement and one percentile statement, nothing else.
+    assert len(captured) == 2
+
+    for statement in captured:
+        sources = list(statement.get_final_froms())
+        assert len(sources) == 1, f"expected one FROM source, got {sources}"
+        assert isinstance(sources[0], Table)
+        assert sources[0].name == "performance_metrics"
+
+        sql = str(statement.compile(dialect=postgresql.dialect(paramstyle="numeric")))
+        assert sql.upper().count("FROM ") == 1, sql
+        assert "JOIN" not in sql.upper(), sql
+        assert "AS ANON_" not in sql.upper(), sql
+
+        plan = await _explain(db, statement)
+        # PostgreSQL only aliases a repeated source ("performance_metrics_1") and
+        # only crosses two sources through a nested loop, so either marker proves a
+        # second table joined the aggregate.
+        assert plan.upper().count("ON PERFORMANCE_METRICS") >= 1, plan
+        assert "PERFORMANCE_METRICS_1" not in plan.upper(), plan
+        assert "NESTED LOOP" not in plan.upper(), plan
+
     # Verify the results are correct for our single record
     assert result["count"] == 1
 
@@ -423,12 +505,68 @@ async def test_sql_no_cartesian_product_evidence(db) -> None:
 
 
 @pytest.mark.asyncio
+async def test_unrelated_rows_do_not_change_filtered_summary(
+    db, sample_performance_metrics: list[PerformanceMetric]
+) -> None:
+    """Adding unrelated rows cannot change an already-filtered summary.
+
+    Under the Cartesian product every summary scaled with the total table size,
+    so a narrow filter returned ``matching_rows * total_rows``. This asserts the
+    filtered summary is stable while the table grows well past the match.
+    """
+    filters = {
+        "metric_type": "initial_response",
+        "deployment_id": "deploy-2",
+        "start_time": datetime.now(UTC) - timedelta(days=2),
+        "end_time": datetime.now(UTC),
+    }
+
+    before = await performance_metric_repository.get_performance_metrics_summary(
+        db, **filters
+    )
+
+    now = datetime.now(UTC)
+    noise = [
+        PerformanceMetric(
+            metric_type=f"noise_metric_{index}",
+            cold=index % 2 == 0,
+            response_time_ms=float(900 + index),
+            deployment_id="deploy-noise",
+            timestamp=now - timedelta(minutes=index),
+        )
+        for index in range(25)
+    ]
+    db.add_all(noise)
+    await db.commit()
+
+    after = await performance_metric_repository.get_performance_metrics_summary(
+        db, **filters
+    )
+
+    assert after == before
+
+    table_total = await performance_metric_repository.get_performance_metrics_summary(db)
+    assert cast(int, table_total["count"]) > cast(int, before["count"])
+
+    by_cold, by_cold_stats = _summary_parts(after)
+    # The fixture has exactly two deploy-2 initial_response rows: 200.0 cold and
+    # 80.0 warm.
+    assert sum(by_cold.values()) == cast(int, before["count"]) == 2
+    assert by_cold[True] == 1
+    assert by_cold[False] == 1
+    assert by_cold_stats[True]["min"] == 200.0
+    assert by_cold_stats[True]["max"] == 200.0
+    assert by_cold_stats[False]["min"] == 80.0
+    assert by_cold_stats[False]["max"] == 80.0
+
+
+@pytest.mark.asyncio
 async def test_combined_filters_boundary_conditions(
     db, sample_performance_metrics: list[PerformanceMetric]
 ) -> None:
     """Test various combinations of filters and boundary conditions."""
     now = datetime.now(UTC)
-    
+
     # Test with only start_time (no end_time)
     result = await performance_metric_repository.get_performance_metrics_summary(
         db, start_time=now - timedelta(hours=1)
@@ -440,13 +578,13 @@ async def test_combined_filters_boundary_conditions(
         db, end_time=now
     )
     assert cast(int, result["count"]) > 0  # Should have all metrics
-    
+
     # Test with cold filter only
     result = await performance_metric_repository.get_performance_metrics_summary(
         db, cold=True
     )
     assert result["count"] == 6  # Should have 6 cold metrics
-    
+
     # Test with warm filter only
     result = await performance_metric_repository.get_performance_metrics_summary(
         db, cold=False
