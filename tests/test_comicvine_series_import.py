@@ -30,6 +30,11 @@ SERIES_URL = "/api/v1/comicvine/series:import"
 VOLUME_ID = 40500
 
 
+def _status_url(volume_id: int = VOLUME_ID) -> str:
+    """Return the import-status URL for one provider volume."""
+    return f"/api/v1/comicvine/series/{volume_id}/import-status"
+
+
 def _volume_response(name: str = "Stormwatch") -> ComicVineResponse:
     """Build a minimal decoded provider volume payload."""
     return ComicVineResponse(
@@ -644,3 +649,141 @@ async def test_one_failed_roster_row_does_not_abandon_the_rest_of_the_series(
     assert thread.total_issues == 3
     assert thread.issues_remaining == 3
     assert len(await _confirmed_mappings(async_db, thread.id)) == 3
+
+
+@pytest.mark.asyncio
+async def test_series_import_status_reports_nothing_before_any_import(
+    auth_client: AsyncClient,
+) -> None:
+    """A volume the user never imported is reported as not imported (#3445)."""
+    response = await auth_client.get(_status_url())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "comicvine_volume_id": VOLUME_ID,
+        "imported": False,
+        "thread_id": None,
+        "series_name": None,
+        "issue_count": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_series_import_status_reports_the_committed_import(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A client that lost the import response can recover the server's committed state."""
+    _install_client(monkeypatch, _StubClient(_issue_rows(1101, 1102, 1103)))
+
+    created = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
+    assert created.status_code == 201
+    created_body = created.json()
+
+    response = await auth_client.get(_status_url())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "comicvine_volume_id": VOLUME_ID,
+        "imported": True,
+        "thread_id": created_body["thread_id"],
+        "series_name": "Stormwatch",
+        "issue_count": 3,
+    }
+
+
+@pytest.mark.asyncio
+async def test_series_import_status_survives_a_retry_without_duplicating(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The recovered thread is the same one a retry reuses, so recovery cannot duplicate."""
+    _install_client(monkeypatch, _StubClient(_issue_rows(1201, 1202)))
+
+    first = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
+    assert first.status_code == 201
+    first_body = first.json()
+
+    before_retry = await auth_client.get(_status_url())
+    retry = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
+    assert retry.status_code == 201
+    assert retry.json()["thread_created"] is False
+    after_retry = await auth_client.get(_status_url())
+
+    assert before_retry.json()["thread_id"] == first_body["thread_id"]
+    assert after_retry.json()["thread_id"] == first_body["thread_id"]
+    assert after_retry.json() == before_retry.json()
+
+    owned_threads = (
+        (
+            await async_db.execute(
+                select(Thread)
+                .join(
+                    ThreadExternalSeriesMapping,
+                    ThreadExternalSeriesMapping.thread_id == Thread.id,
+                )
+                .join(
+                    ExternalIdentity,
+                    ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+                )
+                .where(
+                    Thread.title == "Stormwatch",
+                    ExternalIdentity.external_id == str(VOLUME_ID),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [thread.id for thread in owned_threads] == [first_body["thread_id"]]
+
+
+@pytest.mark.asyncio
+async def test_series_import_status_never_reports_another_users_queue(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Another user's import for the same volume is invisible, not leaked (#3445)."""
+    other_user = User(username="series_status_other_user")
+    async_db.add(other_user)
+    await async_db.flush()
+    other_thread = Thread(
+        user_id=other_user.id,
+        title="Someone Else's Stormwatch",
+        format="Comic",
+        issues_remaining=4,
+        total_issues=4,
+        queue_position=1,
+        status="active",
+    )
+    async_db.add(other_thread)
+    await async_db.flush()
+    series_identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="series",
+        external_id=str(VOLUME_ID),
+        external_url=f"https://comicvine.gamespot.com/volume/4050-{VOLUME_ID}/",
+        metadata_json={},
+    )
+    async_db.add(series_identity)
+    await async_db.flush()
+    async_db.add(
+        ThreadExternalSeriesMapping(
+            thread_id=other_thread.id,
+            external_identity_id=series_identity.id,
+            status="confirmed",
+            confidence=1.0,
+            evidence_source="comicvine_series_import",
+        )
+    )
+    await async_db.flush()
+
+    response = await auth_client.get(_status_url())
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["imported"] is False
+    assert body["thread_id"] is None
+    assert body["series_name"] is None
+    assert body["issue_count"] is None

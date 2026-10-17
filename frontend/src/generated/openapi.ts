@@ -1089,6 +1089,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Series Import Status
+         * @description Report whether this user already imported one ComicVine volume.
+         *
+         *     A client whose ``series:import`` response was lost asks this endpoint
+         *     before reporting failure, so a slow import that actually committed is
+         *     recovered instead of being reported as an error or retried into a
+         *     duplicate series. The answer is scoped to the calling user's threads.
+         *
+         *     Args:
+         *         comicvine_volume_id: ComicVine volume ID the client submitted.
+         *         current_user: Authenticated caller.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         SeriesImportStatusResponse with the owned thread when the volume is
+         *         already imported for this user.
+         */
+        get: operations["api_series_import_status_api_v1_comicvine_series__comicvine_volume_id__import_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/comicvine/series/{comicvine_volume_id}/issues": {
         parameters: {
             query?: never;
@@ -12484,6 +12518,39 @@ export interface components {
             series_name: string;
         };
         /**
+         * SeriesImportStatusResponse
+         * @description Server truth about one ComicVine volume's presence in the caller's queue.
+         *
+         *     A client that loses the ``series:import`` response (timeout, dropped
+         *     connection, gateway timeout) re-checks this endpoint before reporting
+         *     failure, so the answer must reflect committed server state for the
+         *     calling user only and must never leak another user's queue.
+         */
+        SeriesImportStatusResponse: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id: number;
+            /**
+             * Imported
+             * @description True when the calling user already owns a thread confirmed against this ComicVine volume.
+             */
+            imported: boolean;
+            /**
+             * Issue Count
+             * @description Issues the existing thread tracks, or null when not imported. The client reports this server count after a recovered import.
+             */
+            issue_count?: number | null;
+            /**
+             * Series Name
+             * @description Title of the existing thread, or null when not imported.
+             */
+            series_name?: string | null;
+            /**
+             * Thread Id
+             * @description Existing thread ID, or null when the volume is not imported.
+             */
+            thread_id?: number | null;
+        };
+        /**
          * SeriesMappingCommitRequest
          * @description Schema for committing user-approved series mappings.
          */
@@ -15474,6 +15541,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComicVineSeriesSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_series_import_status_api_v1_comicvine_series__comicvine_volume_id__import_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
                 };
             };
             /** @description Validation Error */

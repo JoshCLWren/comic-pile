@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api-comicvine'
 import type {
+  ComicVineSeriesImportStatus,
   ComicVineSeriesResult,
   ComicVineSeriesSearchResponse,
   ComicVineImportSeriesPayload,
@@ -12,6 +13,7 @@ import { optimizedImageUrl, optimizedImageSrcSet } from '../services/imageDelive
 import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterQueueMutation } from '../query/cacheEffects'
+import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
 
 interface AddSeriesFromComicVineDialogProps {
   isOpen: boolean
@@ -77,6 +79,53 @@ function paginationFromResponse(response: {
   }
 }
 
+/** A completed import, whether the client heard the response or recovered it. */
+interface ImportOutcome {
+  threadId: number
+  seriesName: string
+  /** Issues now tracked by the series, or null when the server did not say. */
+  issuesAdopted: number | null
+  /** False when the add reused an existing series instead of creating one. */
+  threadCreated: boolean
+}
+
+/**
+ * Describe a completed import.
+ *
+ * A recovered import learned its issue count from the status endpoint, which
+ * reports the server's tracked count rather than how many rows this particular
+ * request adopted, so a null count drops the parenthetical instead of
+ * inventing "0 issues".
+ */
+function importSuccessMessage({ seriesName, issuesAdopted, threadCreated }: ImportOutcome): string {
+  if (issuesAdopted === null) {
+    return `Added "${seriesName}" to ComicPile`
+  }
+  return threadCreated
+    ? `Added "${seriesName}" to ComicPile (${issuesAdopted} issues)`
+    : `Added ${issuesAdopted} more issues to "${seriesName}"`
+}
+
+/**
+ * Ask the server whether one ComicVine volume actually reached the queue.
+ *
+ * Returns null both when the volume is not imported and when the check itself
+ * fails: either way the client cannot prove the import failed.
+ */
+async function readCommittedImport(volumeId: number): Promise<ComicVineSeriesImportStatus | null> {
+  try {
+    const status = await comicVineApi.getSeriesImportStatus(volumeId)
+    return status?.imported ? status : null
+  } catch {
+    return null
+  }
+}
+
+/** True for a failure the server never answered, so its outcome is unknown. */
+function hasUnknownOutcome(error: unknown): boolean {
+  return error instanceof Error && getApiErrorStatus(error) === null
+}
+
 export default function AddSeriesFromComicVineDialog({
   isOpen,
   onClose,
@@ -92,6 +141,7 @@ export default function AddSeriesFromComicVineDialog({
   const [isSearching, setIsSearching] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [unknownOutcome, setUnknownOutcome] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [alreadyReadCount, setAlreadyReadCount] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -116,6 +166,7 @@ export default function AddSeriesFromComicVineDialog({
       setSelectedSeries(null)
       setPagination(EMPTY_PAGINATION)
       setError(null)
+      setUnknownOutcome(null)
       setHasSearched(false)
       setAlreadyReadCount(0)
     }
@@ -192,32 +243,65 @@ export default function AddSeriesFromComicVineDialog({
     setStep('confirm')
   }, [])
 
+  const finishAdd = useCallback(
+    async (outcome: ImportOutcome) => {
+      showToast(importSuccessMessage(outcome), 'success')
+      await invalidateAfterQueueMutation(queryClient)
+      onAdded(outcome.threadId)
+      onClose()
+    },
+    [onAdded, onClose, showToast],
+  )
+
   const handleAdd = useCallback(async () => {
     if (!selectedSeries) return
+    const volumeId = selectedSeries.comicvine_volume_id
+    const seriesName = selectedSeries.name
     setIsAdding(true)
     setError(null)
+    setUnknownOutcome(null)
     try {
       const payload: ComicVineImportSeriesPayload = {
-        comicvine_volume_id: selectedSeries.comicvine_volume_id,
+        comicvine_volume_id: volumeId,
         already_read_count: alreadyReadCount,
       }
       const result = await comicVineApi.importSeries(payload)
-      showToast(
-        result.thread_created
-          ? `Added "${result.series_name}" to ComicPile (${result.issues_adopted} issues)`
-          : `Added ${result.issues_adopted} more issues to "${result.series_name}"`,
-        'success',
-      )
-      await invalidateAfterQueueMutation(queryClient)
-      onAdded(result.thread_id)
-      onClose()
+      await finishAdd({
+        threadId: result.thread_id,
+        seriesName: result.series_name,
+        issuesAdopted: result.issues_adopted,
+        threadCreated: result.thread_created,
+      })
     } catch (err: unknown) {
-      const detail = err instanceof Error ? err.message : 'Failed to add series from ComicVine'
-      setError(detail)
+      // An import that outlives the client budget keeps running server-side and
+      // commits after the client gives up, so a request the server never
+      // answered proves nothing (#3445). Ask the server what actually happened
+      // before reporting an error the user would answer with a duplicate retry.
+      if (hasUnknownOutcome(err)) {
+        const committed = await readCommittedImport(volumeId)
+        if (committed?.thread_id != null) {
+          await finishAdd({
+            threadId: committed.thread_id,
+            seriesName: committed.series_name ?? seriesName,
+            issuesAdopted: committed.issue_count,
+            threadCreated: true,
+          })
+          return
+        }
+        // Nothing is committed yet, but the import may still be in flight, so
+        // refresh the queue to show the real state and say the outcome is
+        // unknown rather than claiming a failure that invites a retry.
+        await invalidateAfterQueueMutation(queryClient)
+        setUnknownOutcome(
+          `We couldn't confirm whether "${seriesName}" was added — the connection dropped before ComicVine finished importing. Your queue has been refreshed; check it before adding again.`,
+        )
+        return
+      }
+      setError(err instanceof Error ? getApiErrorDetail(err) : 'Failed to add series from ComicVine')
     } finally {
       setIsAdding(false)
     }
-  }, [selectedSeries, alreadyReadCount, onAdded, onClose, showToast])
+  }, [alreadyReadCount, finishAdd, selectedSeries])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -239,9 +323,16 @@ export default function AddSeriesFromComicVineDialog({
       size="large"
     >
       <div className="space-y-4">
-        {error && (
-          <div className="p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300" role="alert">
-            {error}
+        {(error || unknownOutcome) && (
+          <div
+            role="alert"
+            className={
+              unknownOutcome
+                ? 'p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200'
+                : 'p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300'
+            }
+          >
+            {unknownOutcome ?? error}
           </div>
         )}
 

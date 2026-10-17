@@ -45,6 +45,7 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionRequest,
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
+    SeriesImportStatusResponse,
 )
 from app.services.comicvine_url import looks_like_url, parse_comicvine_url
 from app.services.issue_tracking import apply_thread_issue_tracking_state
@@ -1433,4 +1434,52 @@ async def import_comicvine_series(
         position=response_position,
         total_items=response_total_items,
         thread_created=created_new_thread,
+    )
+
+
+async def get_series_import_status(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    comicvine_volume_id: int,
+) -> SeriesImportStatusResponse:
+    """Report whether this user already owns a thread for one ComicVine volume.
+
+    Importing a long series can outlive the client's request budget, so a
+    timeout does not prove the import failed (#3445). The client re-checks this
+    status before telling the user their add failed, which also keeps a retry
+    from becoming a duplicate: the server reports the series it already created
+    so the client can refresh the queue instead of importing it again.
+
+    Only the calling user's threads are inspected, so the answer can never leak
+    another user's queue.
+
+    Args:
+        db: Async database session.
+        user_id: Authenticated caller whose threads are eligible.
+        comicvine_volume_id: ComicVine volume ID the client submitted.
+
+    Returns:
+        SeriesImportStatusResponse describing the owned thread for that volume,
+        or a not-imported response when the user owns none.
+    """
+    snapshot = await catalog_repository.find_owned_thread_snapshot_for_provider_series(
+        db,
+        user_id=user_id,
+        provider=COMICVINE_PROVIDER,
+        series_external_id=str(comicvine_volume_id),
+    )
+    if snapshot is None:
+        return SeriesImportStatusResponse(
+            comicvine_volume_id=comicvine_volume_id,
+            imported=False,
+        )
+
+    thread_id, series_name, issue_count = snapshot
+    return SeriesImportStatusResponse(
+        comicvine_volume_id=comicvine_volume_id,
+        imported=True,
+        thread_id=thread_id,
+        series_name=series_name,
+        issue_count=issue_count,
     )

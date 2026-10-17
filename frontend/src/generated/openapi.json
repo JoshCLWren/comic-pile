@@ -14521,6 +14521,62 @@
         "title": "SeriesDecision",
         "type": "object"
       },
+      "SeriesImportStatusResponse": {
+        "description": "Server truth about one ComicVine volume's presence in the caller's queue.\n\nA client that loses the ``series:import`` response (timeout, dropped\nconnection, gateway timeout) re-checks this endpoint before reporting\nfailure, so the answer must reflect committed server state for the\ncalling user only and must never leak another user's queue.",
+        "properties": {
+          "comicvine_volume_id": {
+            "title": "Comicvine Volume Id",
+            "type": "integer"
+          },
+          "imported": {
+            "description": "True when the calling user already owns a thread confirmed against this ComicVine volume.",
+            "title": "Imported",
+            "type": "boolean"
+          },
+          "issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issues the existing thread tracks, or null when not imported. The client reports this server count after a recovered import.",
+            "title": "Issue Count"
+          },
+          "series_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Title of the existing thread, or null when not imported.",
+            "title": "Series Name"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Existing thread ID, or null when the volume is not imported.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "imported"
+        ],
+        "title": "SeriesImportStatusResponse",
+        "type": "object"
+      },
       "SeriesMappingCommitRequest": {
         "description": "Schema for committing user-approved series mappings.",
         "properties": {
@@ -20442,6 +20498,55 @@
           }
         ],
         "summary": "Api Search Comicvine Series",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
+    "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
+      "get": {
+        "description": "Report whether this user already imported one ComicVine volume.\n\nA client whose ``series:import`` response was lost asks this endpoint\nbefore reporting failure, so a slow import that actually committed is\nrecovered instead of being reported as an error or retried into a\nduplicate series. The answer is scoped to the calling user's threads.\n\nArgs:\n    comicvine_volume_id: ComicVine volume ID the client submitted.\n    current_user: Authenticated caller.\n    db: Async database session.\n\nReturns:\n    SeriesImportStatusResponse with the owned thread when the volume is\n    already imported for this user.",
+        "operationId": "api_series_import_status_api_v1_comicvine_series__comicvine_volume_id__import_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comicvine_volume_id",
+            "required": true,
+            "schema": {
+              "title": "Comicvine Volume Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesImportStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Series Import Status",
         "tags": [
           "comicvine-resolution",
           "comicvine-resolution"
