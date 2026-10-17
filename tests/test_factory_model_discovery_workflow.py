@@ -62,21 +62,16 @@ def test_discovery_and_runner_use_unpinned_opencode_v2() -> None:
         assert "OPENCODE_LINUX_X64_SHA256:" not in workflow
 
 
-def test_discovery_adds_unused_free_by_default() -> None:
-    """Scheduled discovery pins unused free OpenCode models; adds are not opt-in."""
+def test_discovery_keeps_dynamic_opencode_workers_without_roster_churn() -> None:
+    """New free models run immediately without generated roster PRs."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    assert "add_unused_free" in workflow
-    assert "default: true" in workflow
+    assert "--dynamic-opencode-free" in workflow
     assert "--no-add-unused-free" in workflow
-    assert "steps.plan.outputs.add" in workflow
-    assert ".github/free-model-factories.tsv" in workflow
-    assert "they are not auto-added" not in workflow
-    assert "Unused free models are listed for operators" not in workflow
-    assert "Added to the TSV" in workflow
-    assert "Surplus `big-pickle`" in workflow
-    assert "Unused `big-pickle` is never grown as a first pin." in workflow
-    assert "ADD_UNUSED_FREE" in workflow
+    assert "steps.plan.outputs.retire" in workflow
+    assert "steps.plan.outputs.add" not in workflow
+    assert "ADD_UNUSED_FREE" not in workflow
+    assert "factory/model-retirement" in workflow
+    assert "PR_REBASE_TOKEN is required" in workflow
 
 
 def test_discovery_consumes_nvidia_410_markers_from_issue_1093() -> None:
