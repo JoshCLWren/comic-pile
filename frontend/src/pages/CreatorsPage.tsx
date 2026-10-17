@@ -653,6 +653,7 @@ export default function CreatorsPage() {
           )}
         </section>
       )}
+
       {teamChemistry && <CreatorTeamChemistrySection data={teamChemistry} />}
       {teamChemistryError && (
         <p role="alert" className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
