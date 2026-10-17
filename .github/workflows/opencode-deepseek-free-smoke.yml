@@ -51,6 +51,18 @@ jobs:
           grep -q 'DEEPSEEK_FREE_ENDPOINT_OK' "$RUNNER_TEMP/deepseek-free-smoke.log"
           test -z "$(git status --porcelain)"
 
+      - name: Verify noninteractive OpenCode 2 tool invocation
+        if: steps.pin.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          timeout --signal=TERM --kill-after=10s 180s \
+            opencode run --standalone -m opencode/deepseek-v4.1-flash-free --agent build \
+            'Use the shell tool to run exactly: printf OPENCODE_V2_TOOL_OK. Then report completion. Do not modify files.' \
+            2>&1 | tee "$RUNNER_TEMP/opencode-v2-tool-smoke.log"
+          grep -q 'OPENCODE_V2_TOOL_OK' "$RUNNER_TEMP/opencode-v2-tool-smoke.log"
+          test -z "$(git status --porcelain)"
+
       - name: Verify Big Pickle through OpenCode 2
         if: steps.pin.outputs.active == 'true'
         shell: bash
