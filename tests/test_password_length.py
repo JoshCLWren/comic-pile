@@ -17,15 +17,10 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import hash_password, validate_password_length, verify_password
-from app.constants import MIN_PASSWORD_LENGTH
+from app.constants import MAX_BCRYPT_PASSWORD_BYTES, MIN_PASSWORD_LENGTH
 from app.repositories.user_repository import create_user, get_user_by_username
 from app.schemas.auth import ResetPasswordRequest, UserLoginRequest, UserRegisterRequest
 from app.services.password_reset_service import complete_reset, request_forgot_password
-
-# bcrypt refuses to hash anything longer than 72 bytes, so 72 characters is the
-# real upper bound a caller can send today. Keep the boundary test honest about
-# that instead of asserting success for a password the hasher will reject.
-MAX_BCRYPT_PASSWORD_BYTES = 72
 
 OLD_PASSWORD = "old-password-long-enough"
 RESET_EMAIL = "pwpolicy@example.com"
@@ -249,3 +244,53 @@ async def test_reset_service_rejects_short_password_regardless_of_token(
 
     assert excinfo.value.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     assert "Invalid" not in str(excinfo.value.detail)
+
+
+@pytest.mark.parametrize("password", ["x" * 73, "é" * 37])
+async def test_register_rejects_overlong_utf8_password(
+    auth_client: AsyncClient, password: str,
+) -> None:
+    """Oversized ASCII and multibyte input receives validation, never a 500."""
+    response = await auth_client.post("/api/v1/auth/register", json=_register_payload(password))
+    assert response.status_code == 422
+    assert "72 UTF-8 bytes" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("password", ["x" * 73, "é" * 37])
+def test_verify_rejects_overlong_password_without_truncation(password: str) -> None:
+    """Login cannot pass oversized input to bcrypt or silently accept a prefix."""
+    stored = hash_password("x" * MAX_BCRYPT_PASSWORD_BYTES)
+    assert verify_password(password, stored) is False
+
+
+def test_multibyte_password_at_exact_byte_boundary_is_supported() -> None:
+    """The cap counts UTF-8 bytes rather than rejecting valid non-ASCII input."""
+    password = "é" * 36
+    validate_password_length(password)
+    assert verify_password(password, hash_password(password))
+
+
+async def test_reset_overlong_password_preserves_credentials_and_token(
+    async_db: AsyncSession,
+) -> None:
+    """A refused overlong reset leaves the reader's token usable and hash intact."""
+    token = await _seed_user_with_reset_token(async_db)
+    with pytest.raises(HTTPException) as error:
+        await complete_reset(async_db, token, "é" * 37)
+    assert error.value.status_code == 422
+    user = await get_user_by_username(async_db, "pwpolicy-reset")
+    assert user is not None
+    assert verify_password(OLD_PASSWORD, user.password_hash)
+    assert await complete_reset(async_db, token, "compliant-replacement-password")
+
+
+@pytest.mark.parametrize("password", ["x" * 73, "é" * 37])
+async def test_login_overlong_password_returns_invalid_credentials(
+    auth_client: AsyncClient, async_db: AsyncSession, password: str,
+) -> None:
+    """An existing account receives a normal 401 instead of a bcrypt exception."""
+    await _seed_user_with_reset_token(async_db)
+    response = await auth_client.post(
+        "/api/v1/auth/login", json={"username": "pwpolicy-reset", "password": password},
+    )
+    assert response.status_code == 401

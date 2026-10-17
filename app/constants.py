@@ -104,6 +104,7 @@ DEADLOCK_INITIAL_DELAY = 0.1
 
 # Password requirements
 MIN_PASSWORD_LENGTH = 6
+MAX_BCRYPT_PASSWORD_BYTES = 72
 
 
 # ---------------------------------------------------------------------------
