@@ -25,6 +25,9 @@ from app.services.reading_list_evaluator import (
 from scripts.plan_option_e_conversion import parse_intent
 
 
+READER_ID = 1  # Pure in-memory fixture, not a database primary-key assertion.
+
+
 def _fixture(
     *,
     raw_origin: Literal["reader", "converted"] | None = None,
@@ -35,7 +38,7 @@ def _fixture(
     # The executor uses a canonical typed snapshot; the evidence also retains
     # the untouched raw database columns for historical rows.
     snapshot = ReadingSnapshot(
-        user_id=1,
+        user_id=READER_ID,
         threads=(ReadingThread(1), ReadingThread(2)),
         issues=(ReadingIssue(10, 1, 1), ReadingIssue(20, 2, 1)),
         prerequisites=(ReadingPrerequisite(7, 10, 20, "converted", ("legacy",)),),
