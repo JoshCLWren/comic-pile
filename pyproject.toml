@@ -64,6 +64,7 @@ dev = [
     "jsonschema>=4.0.0",
     "pyyaml>=6.0.0",
     "pytest-mock>=3.16.0",
+    "mypy==2.4.0",
 ]
 
 # Database migration + operator tooling (alembic + its sync psycopg driver).
@@ -170,6 +171,27 @@ invalid-argument-type = "ignore"
 invalid-assignment = "ignore"
 unused-ignore-comment = "ignore"
 
+# Target profile for the complete application/test surface. The Phase 0 gate
+# ratchets only the explicit clean-module manifest; it never hides diagnostics.
+[tool.mypy]
+python_version = "3.14"
+strict = true
+explicit_package_bases = true
+show_error_codes = true
+warn_unused_configs = true
+files = ["app", "comic_pile", "api", "tests", "scripts/mypy_baseline.py"]
+
+[[tool.mypy.overrides]]
+module = "pytest"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["sqlalchemy", "sqlalchemy.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.test_mypy_baseline"
+disallow_untyped_decorators = false
 [tool.env]
 # Default environment variables for local development
 # Override these in .env file or shell for different configurations

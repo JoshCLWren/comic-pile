@@ -4,7 +4,7 @@ from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 import logging
 import random
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
@@ -57,7 +57,7 @@ def _sync_cached_queue_positions(db: AsyncSession, positions: dict[int, int]) ->
             set_committed_value(obj, "queue_position", positions[obj.id])
 
 
-def _split_position_rows(rows) -> tuple[dict[int, int], QueuePositionChanges]:
+def _split_position_rows(rows: list[Any]) -> tuple[dict[int, int], QueuePositionChanges]:
     """Split queue UPDATE rows into new positions and changed old positions."""
     positions: dict[int, int] = {}
     changes: QueuePositionChanges = {}
@@ -566,7 +566,11 @@ async def get_roll_pool_rows(
         (
             row[0],
             eligibility.unread_counts.get(row[0].id, 0) if eligibility is not None else row[1],
-            eligibility.issue_numbers.get(eligibility.threads[row[0].id].next_issue_id)
+            (
+                eligibility.issue_numbers.get(nid)
+                if (nid := eligibility.threads[row[0].id].next_issue_id) is not None
+                else None
+            )
             if eligibility is not None
             else row[2],
         )

@@ -316,7 +316,7 @@ async def get_dependency_order_conflicts(
     thread_id: int,
     user_id: int,
     db: AsyncSession,
-) -> list[dict]:
+) -> list[dict[str, object]]:
     """Return structured conflicts where dependency order disagrees with issue position order.
 
     Args:
@@ -353,7 +353,7 @@ async def get_dependency_order_conflicts(
         .order_by(source_issue.c.position, target_issue.c.position, Dependency.id)
     )
 
-    conflicts: list[dict] = []
+    conflicts: list[dict[str, object]] = []
     for row in result.all():
         conflicts.append(
             {
