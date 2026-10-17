@@ -135,7 +135,6 @@ async def get_session_with_thread_safe(
         if pending_thread:
             issues_remaining = await pending_thread.get_issues_remaining(db)
             issue_id, issue_number = await _fetch_thread_issue_metadata(pending_thread, db)
-    
             tags = await TagInheritanceService(db).get_threads_direct_tags(
                 session.user_id, [pending_thread.id]
             )
@@ -152,7 +151,7 @@ async def get_session_with_thread_safe(
                 issue_number=issue_number,
                 next_issue_id=issue_id,
                 next_issue_number=issue_number,
-                tags=tags
+                tags=tags.get(pending_thread.id, []),
             )
         return session, None
 
@@ -161,7 +160,6 @@ async def get_session_with_thread_safe(
         if thread and thread.user_id == session.user_id:
             issues_remaining = await thread.get_issues_remaining(db)
             issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
-    
             tags = await TagInheritanceService(db).get_threads_direct_tags(
                 session.user_id, [thread.id]
             )
@@ -178,7 +176,7 @@ async def get_session_with_thread_safe(
                 issue_number=issue_number,
                 next_issue_id=issue_id,
                 next_issue_number=issue_number,
-                tags=tags
+                tags=tags.get(thread.id, []),
             )
 
     # When a thread is just completed by rating and no pending thread is set,
@@ -246,7 +244,10 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
     issues_remaining = await thread.get_issues_remaining(db)
     issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
 
-    tags = await TagInheritanceService(db).get_threads_direct_tags(user_id, [thread.id])
+    tags = []
+    if user_id:
+        tags_map = await TagInheritanceService(db).get_threads_direct_tags(user_id, [thread.id])
+        tags = tags_map.get(thread.id, [])
     return ActiveThreadInfo(
         id=thread.id,
         title=thread.title,
