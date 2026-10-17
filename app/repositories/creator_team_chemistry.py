@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,10 +13,18 @@ from app.models import Issue, Thread
 ELIGIBLE_ROLES: set[str] = {"writer", "artist", "penciler", "inker", "colorist", "letterer"}
 
 
+class _CreatorBaseline(TypedDict):
+    creator_key: str
+    rated_issue_count: int
+    ratings: list[float]
+    average_rating: float | None
+
+
 class CreatorTeamChemistryRepository:
     """Repository for analyzing recurring creator-team chemistry."""
 
     def __init__(self, db: AsyncSession):
+        """Create a repository bound to the given async database session."""
         self.db = db
 
     async def get_creator_team_chemistry(
@@ -48,7 +57,7 @@ class CreatorTeamChemistryRepository:
             credits_by_issue[issue_id] = []
 
         # Baselines per creator (key = f"{creator_id}:{role}")
-        creator_baselines: dict[str, dict[str, object]] = {}
+        creator_baselines: dict[str, _CreatorBaseline] = {}
         for issue_id in rated_issues:
             issue = await self.db.get(Issue, issue_id)
             if not issue or not issue.rating:
@@ -66,6 +75,7 @@ class CreatorTeamChemistryRepository:
                         "creator_key": creator_key,
                         "rated_issue_count": 0,
                         "ratings": [],
+                        "average_rating": None,
                     }
                 data = creator_baselines[creator_key]
                 data["rated_issue_count"] += 1
@@ -146,7 +156,7 @@ class CreatorTeamChemistryRepository:
     def _rank_pairs(
         self,
         shared_pairs: set[tuple[str, str]],
-        creator_baselines: dict[str, dict[str, object]],
+        creator_baselines: dict[str, _CreatorBaseline],
         rated_issues: list[int],
         credits_by_issue: dict[int, list[object]],
     ) -> list[tuple[tuple[str, str], set[int]]]:
@@ -161,11 +171,6 @@ class CreatorTeamChemistryRepository:
                 continue
             # Shared average = average of ratings on shared issues (derived from issue ratings)
             shared_issues = self._shared_issues_for_pair(pair, rated_issues, credits_by_issue)
-            shared_ratings = []
-            for sid in shared_issues:
-                # Re-fetch rating from issue (already bounded by library size)
-                # We skip re-query per pair here for performance; use baselines as proxy
-                pass
             # Use simple average of baselines as ranking proxy (matches descriptive spec)
             shared_average = (avg_a + avg_b) / 2.0
             ranked.append((pair, shared_average, shared_issues))
@@ -195,7 +200,7 @@ class CreatorTeamChemistryRepository:
     def _pair_to_dict(
         self,
         pair: tuple[str, str],
-        creator_baselines: dict[str, dict[str, object]],
+        creator_baselines: dict[str, _CreatorBaseline],
         shared_issues: set[int],
         max_issue_refs: int,
     ) -> dict[str, object]:

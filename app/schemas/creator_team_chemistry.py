@@ -8,6 +8,8 @@ from app.constants import MIN_SHARED_TEAM_SAMPLE
 
 
 class CreatorTeamBaseline(BaseModel):
+    """Baseline metrics for a single canonical creator."""
+
     model_config = {"frozen": True}
 
     creator_key: str = Field(..., description="Stable canonical creator key.")
@@ -19,6 +21,8 @@ class CreatorTeamBaseline(BaseModel):
 
 
 class CreatorTeamPair(BaseModel):
+    """A ranked creator pair with shared chemistry metrics."""
+
     model_config = {"frozen": True}
 
     pair_key: str = Field(..., description="Stable unordered pair key.")
@@ -50,6 +54,8 @@ class CreatorTeamPair(BaseModel):
 
 
 class CreatorTeamChemistryResponse(BaseModel):
+    """Response payload for the creator team chemistry endpoint."""
+
     model_config = {"frozen": True}
 
     pairs: list[CreatorTeamPair] = Field(
