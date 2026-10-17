@@ -8,8 +8,8 @@ sibling repositories; HTTP status mapping lives in routers.
 import asyncio
 import logging
 import os
-from typing import cast
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -533,13 +533,18 @@ async def create_thread_with_retry(
 ) -> ThreadResponse:
     """Create a new thread at the end of the user's queue with deadlock retry.
 
+    Duplicate create submissions with an identical fingerprint (owner, title,
+    format, remaining issue count) inside a short window merge into the thread
+    created by the first submit instead of inserting a second copy (#3466).
+
     Args:
         db: Database session.
         user_id: Owner of the new thread.
         thread_data: Thread creation data.
 
     Returns:
-        ThreadResponse with created thread details.
+        ThreadResponse with the created thread, or with the recently created
+        duplicate that a repeat submission merged into.
 
     Raises:
         RuntimeError: If creation keeps deadlocking past the retry budget.
@@ -553,21 +558,18 @@ async def create_thread_with_retry(
 
     while retries < max_retries:
         try:
-            # Check for recent duplicate to prevent double-click duplicates
-            recent_cutoff = datetime.now(UTC) - duplicate_window
-            from sqlalchemy import func, select
-            duplicate_stmt = (
-                select(Thread)
-                .where(Thread.user_id == user_id)
-                .where(func.lower(Thread.title) == thread_data.title.lower())
-                .where(Thread.format == normalize_format_value(thread_data.format))
-                .where(Thread.issues_remaining == thread_data.issues_remaining)
-                .where(Thread.created_at >= recent_cutoff)
+            # Merge duplicate submissions (#3466): a double-clicked "Create
+            # Series" sends the same payload twice; return the thread created
+            # by the first submit instead of inserting an identical duplicate.
+            existing = await thread_repository.find_recent_duplicate(
+                db,
+                user_id=user_id,
+                title=thread_data.title,
+                format_value=normalize_format_value(thread_data.format),
+                issues_remaining=thread_data.issues_remaining,
+                since=datetime.now(UTC) - duplicate_window,
             )
-            duplicate_result = await db.execute(duplicate_stmt)
-            existing = duplicate_result.scalar_one_or_none()
-            if existing:
-                # Return existing thread to keep creation idempotent
+            if existing is not None:
                 return await thread_to_response(existing, db)
 
             max_position = await thread_repository.max_queue_position(db, user_id)

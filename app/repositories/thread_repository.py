@@ -117,6 +117,47 @@ async def max_queue_position(db: AsyncSession, user_id: int) -> int:
     return result.scalar() or 0
 
 
+async def find_recent_duplicate(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    title: str,
+    format_value: str,
+    issues_remaining: int,
+    since: datetime,
+) -> Thread | None:
+    """Find the most recent thread matching a create-submission fingerprint.
+
+    Backs the create endpoint's idempotency window for #3466: a double-clicked
+    "Create Series" submits the same payload twice, and the second submit must
+    merge into the thread created by the first instead of inserting a duplicate.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the candidate thread.
+        title: Series title, compared case-insensitively.
+        format_value: Normalized format value to match exactly.
+        issues_remaining: Remaining issue count to match exactly.
+        since: Only threads created at or after this instant are considered.
+
+    Returns:
+        The most recently created matching thread, or None when no duplicate
+        exists inside the window.
+    """
+    stmt = (
+        select(Thread)
+        .where(Thread.user_id == user_id)
+        .where(func.lower(Thread.title) == title.lower())
+        .where(Thread.format == format_value)
+        .where(Thread.issues_remaining == issues_remaining)
+        .where(Thread.created_at >= since)
+        .order_by(Thread.created_at.desc(), Thread.id.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
 async def fetch_stale_threads(
     db: AsyncSession,
     user_id: int,
