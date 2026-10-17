@@ -39,6 +39,7 @@ export interface CreatorDetailState {
   coverage: CreatorDetailResponse['coverage'] | null
   roleStats: CreatorDetailResponse['role_stats']
   ratingDistribution: CreatorDetailResponse['rating_distribution']
+  insights: CreatorDetailResponse['insights'] | null
   seriesGroups: CreatorSeriesGroup[]
   seriesGroupsTotal: number
   seriesGroupsComplete: boolean
@@ -92,6 +93,7 @@ export function useCreatorDetail(
     coverage: firstPage?.coverage ?? null,
     roleStats: firstPage?.role_stats ?? [],
     ratingDistribution: firstPage?.rating_distribution ?? null,
+    insights: firstPage?.insights ?? null,
     seriesGroups: firstPage?.series_groups ?? [],
     seriesGroupsTotal: firstPage?.series_groups_total ?? 0,
     seriesGroupsComplete: firstPage?.series_groups_complete ?? true,

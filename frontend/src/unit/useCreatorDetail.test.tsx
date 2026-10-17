@@ -122,6 +122,9 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
     expect(result.current.seriesGroupsTotal).toBe(1)
     expect(result.current.seriesGroupsComplete).toBe(true)
     expect(result.current.hasMore).toBe(false)
+    // Creator insights always come from the first page (issue #3092).
+    expect(result.current.insights?.min_sample_threshold).toBe(3)
+    expect(result.current.insights?.has_sufficient_data).toBe(false)
   })
 
   it('does not fetch for a missing creator key', async () => {

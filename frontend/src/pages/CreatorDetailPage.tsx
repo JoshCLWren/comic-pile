@@ -3,7 +3,11 @@ import type { ReactNode } from 'react'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
-import type { CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
+import type {
+  CreatorInsightIssue,
+  CreatorIssueRow,
+  CreatorSeriesGroup,
+} from '../services/api-creators'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 function formatRatingDate(value: string | null): string | null {
@@ -78,6 +82,52 @@ function SeriesGroupRow({ group }: { group: CreatorSeriesGroup }) {
   )
 }
 
+function InsightSeriesCard({ label, group }: { label: string; group: CreatorSeriesGroup }) {
+  return (
+    <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <Link
+        to={`/thread/${group.thread_id}`}
+        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+      >
+        <span className="block text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+          {label}
+        </span>
+        <span className="mt-1 block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+          {group.thread_title}
+        </span>
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          <span>{group.rated_issue_count} {group.rated_issue_count === 1 ? 'issue' : 'issues'}</span>
+          {group.average_rating != null && (
+            <RatingValue value={group.average_rating} label={`Average ${group.average_rating} out of 5`} />
+          )}
+        </span>
+      </Link>
+    </li>
+  )
+}
+
+function InsightIssueCard({ label, issue }: { label: string; issue: CreatorInsightIssue }) {
+  return (
+    <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <Link
+        to={`/thread/${issue.thread_id}`}
+        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+      >
+        <span className="block text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-text-dim)' }}>
+          {label}
+        </span>
+        <span className="mt-1 block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+          {issue.thread_title}
+        </span>
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+          <span>Single issue</span>
+          <RatingValue value={issue.rating} label={`Rated ${issue.rating} out of 5`} />
+        </span>
+      </Link>
+    </li>
+  )
+}
+
 function SectionHeading({ id, children }: { id: string; children: ReactNode }) {
   return (
     <h2 id={id} className="text-base font-bold md:text-lg" style={{ color: 'var(--theme-text-primary)' }}>
@@ -95,6 +145,7 @@ export default function CreatorDetailPage() {
     coverage,
     roleStats,
     ratingDistribution,
+    insights,
     seriesGroups,
     seriesGroupsTotal,
     seriesGroupsComplete,
@@ -185,6 +236,49 @@ export default function CreatorDetailPage() {
   const ratingsPartial = !coverage.ratings_complete
   const upcomingPartial = !coverage.upcoming_complete
   const readUnratedPartial = !coverage.read_unrated_complete
+
+  // Strongest/weakest work summaries (issue #3092). Series conclusions need the
+  // backend's minimum rated sample; individual issue extremes are always shown
+  // separately and never presented as aggregate series conclusions.
+  const strongestSeries = insights?.highest_rated_series ?? null
+  const weakestSeries = insights?.lowest_rated_series ?? null
+  const mostRatedSeries = insights?.most_rated_series ?? null
+  const highestIssue = insights?.highest_rated_issue ?? null
+  const lowestIssue = insights?.lowest_rated_issue ?? null
+
+  const seriesInsightCards: { key: string; label: string; group: CreatorSeriesGroup }[] = []
+  if (strongestSeries) {
+    const strongestIsWeakest = weakestSeries?.thread_id === strongestSeries.thread_id
+    const strongestIsMostRated = mostRatedSeries?.thread_id === strongestSeries.thread_id
+    const label =
+      strongestIsWeakest && strongestIsMostRated
+        ? 'Strongest, weakest & most rated series'
+        : strongestIsWeakest
+          ? 'Strongest & weakest series'
+          : 'Strongest series'
+    seriesInsightCards.push({ key: `strongest-${strongestSeries.thread_id}`, label, group: strongestSeries })
+  }
+  if (weakestSeries && weakestSeries.thread_id !== strongestSeries?.thread_id) {
+    seriesInsightCards.push({ key: `weakest-${weakestSeries.thread_id}`, label: 'Weakest series', group: weakestSeries })
+  }
+  if (
+    mostRatedSeries
+    && mostRatedSeries.thread_id !== strongestSeries?.thread_id
+    && mostRatedSeries.thread_id !== weakestSeries?.thread_id
+  ) {
+    seriesInsightCards.push({
+      key: `most-rated-${mostRatedSeries.thread_id}`,
+      label: 'Most rated series',
+      group: mostRatedSeries,
+    })
+  }
+
+  const sameExtremeIssue = highestIssue != null && lowestIssue != null && highestIssue.issue_id === lowestIssue.issue_id
+  const hasInsightsContent = Boolean(
+    seriesInsightCards.length > 0 || highestIssue != null || lowestIssue != null,
+  )
+  const insightsPartial =
+    ratingsPartial || seriesInsightCards.some((card) => !card.group.metadata_complete)
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
@@ -287,6 +381,54 @@ export default function CreatorDetailPage() {
           </div>
         </section>
       ) : null}
+
+      {hasInsightsContent && (
+        <section aria-labelledby="creator-insights-heading" className="mt-6">
+          <SectionHeading id="creator-insights-heading">Strongest and weakest work</SectionHeading>
+          <div className="mt-2 rounded-2xl border p-4 md:p-6" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
+            {insights != null && !insights.has_sufficient_data && (
+              <p className="text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
+                Not enough rated series yet to name a strongest or weakest run — series comparisons need at least {insights.min_sample_threshold} rated issues.
+              </p>
+            )}
+            {seriesInsightCards.length > 0 && (
+              <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {seriesInsightCards.map((card) => (
+                  <InsightSeriesCard key={card.key} label={card.label} group={card.group} />
+                ))}
+              </ul>
+            )}
+            {(highestIssue != null || lowestIssue != null) && (
+              <>
+                <p className="mt-3 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+                  Individual issue extremes are single ratings, not series conclusions.
+                </p>
+                <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {highestIssue != null && (
+                    <InsightIssueCard
+                      key={`highest-${highestIssue.issue_id}`}
+                      label={sameExtremeIssue ? 'Highest & lowest rated issue' : 'Highest-rated issue'}
+                      issue={highestIssue}
+                    />
+                  )}
+                  {lowestIssue != null && !sameExtremeIssue && (
+                    <InsightIssueCard
+                      key={`lowest-${lowestIssue.issue_id}`}
+                      label="Lowest-rated issue"
+                      issue={lowestIssue}
+                    />
+                  )}
+                </ul>
+              </>
+            )}
+            {insightsPartial && (
+              <p className="mt-3 text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
+                Counts shown are lower bounds, not exhaustive totals.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
       {roleStats.length > 0 && (
         <section aria-labelledby="creator-roles-heading" className="mt-6">

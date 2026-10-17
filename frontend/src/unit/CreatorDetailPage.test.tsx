@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorDetailPage from '../pages/CreatorDetailPage'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import type { CreatorDetailState } from '../hooks/useCreatorDetail'
+import type { CreatorSeriesGroup } from '../services/api-creators'
 
 vi.mock('../hooks/useCreatorDetail', () => ({
   useCreatorDetail: vi.fn(),
@@ -38,6 +39,15 @@ function baseState(overrides: Partial<CreatorDetailState> = {}): CreatorDetailSt
       { role: 'cover', issue_count: 1, rated_issue_count: 0, average_rating: null },
     ],
     ratingDistribution: null,
+    insights: {
+      has_sufficient_data: false,
+      min_sample_threshold: 3,
+      highest_rated_series: null,
+      lowest_rated_series: null,
+      most_rated_series: null,
+      highest_rated_issue: null,
+      lowest_rated_issue: null,
+    },
     seriesGroups: [
       {
         series_key: 'thread:1',
@@ -367,5 +377,157 @@ describe('CreatorDetailPage rating distribution', () => {
     renderAt('creator:7')
 
     expect(screen.getAllByRole('note').map((n) => n.textContent).join(' ')).toContain('Distribution reflects only')
+  })
+})
+
+function qualifiedSeries(overrides: Partial<CreatorSeriesGroup> = {}): CreatorSeriesGroup {
+  return {
+    series_key: 'thread:1',
+    thread_id: 1,
+    thread_title: 'Series A',
+    rated_issue_count: 3,
+    average_rating: 4.5,
+    lowest_rating: 4,
+    highest_rating: 5,
+    roles: ['writer'],
+    unread_issue_count: 0,
+    read_unrated_issue_count: 0,
+    metadata_complete: true,
+    sort_key: '0002:Series A:thread:1',
+    ...overrides,
+  }
+}
+
+describe('CreatorDetailPage strongest and weakest work', () => {
+  it('surfaces strongest, weakest, and most-rated series plus individual extremes', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          has_sufficient_data: true,
+          min_sample_threshold: 3,
+          highest_rated_series: qualifiedSeries(),
+          lowest_rated_series: qualifiedSeries({
+            series_key: 'thread:2',
+            thread_id: 2,
+            thread_title: 'Series B',
+            average_rating: 2,
+          }),
+          most_rated_series: qualifiedSeries({
+            series_key: 'thread:3',
+            thread_id: 3,
+            thread_title: 'Series C',
+            rated_issue_count: 5,
+          }),
+          highest_rated_issue: { issue_id: 11, thread_id: 1, thread_title: 'Series A', rating: 5 },
+          lowest_rated_issue: { issue_id: 12, thread_id: 2, thread_title: 'Series B', rating: 1.5 },
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByRole('heading', { name: 'Strongest and weakest work' })).toBeInTheDocument()
+    expect(screen.getByText('Strongest series')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Series A.*3 issues/ }).getAttribute('href')).toBe('/thread/1')
+    expect(screen.getByText('Weakest series')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Series B.*3 issues/ }).getAttribute('href')).toBe('/thread/2')
+    expect(screen.getByText('Most rated series')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Series C.*5 issues/ }).getAttribute('href')).toBe('/thread/3')
+
+    // Individual extremes are explicitly separated from series conclusions.
+    expect(screen.getByText(/single ratings, not series conclusions/)).toBeInTheDocument()
+    expect(screen.getByText('Highest-rated issue')).toBeInTheDocument()
+    expect(screen.getByText('Lowest-rated issue')).toBeInTheDocument()
+  })
+
+  it('explains insufficient series data while still showing individual extremes', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          has_sufficient_data: false,
+          min_sample_threshold: 3,
+          highest_rated_series: null,
+          lowest_rated_series: null,
+          most_rated_series: null,
+          highest_rated_issue: { issue_id: 11, thread_id: 1, thread_title: 'Series A', rating: 5 },
+          lowest_rated_issue: { issue_id: 12, thread_id: 2, thread_title: 'Series B', rating: 1.5 },
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByText(/Not enough rated series yet/)).toBeInTheDocument()
+    expect(screen.queryByText('Strongest series')).not.toBeInTheDocument()
+    expect(screen.queryByText('Most rated series')).not.toBeInTheDocument()
+    expect(screen.getByText('Highest-rated issue')).toBeInTheDocument()
+    expect(screen.getByText('Lowest-rated issue')).toBeInTheDocument()
+  })
+
+  it('deduplicates a series that is strongest, weakest, and most rated at once', () => {
+    const only = qualifiedSeries({ rated_issue_count: 4 })
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          has_sufficient_data: true,
+          min_sample_threshold: 3,
+          highest_rated_series: only,
+          lowest_rated_series: only,
+          most_rated_series: only,
+          highest_rated_issue: null,
+          lowest_rated_issue: null,
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByText('Strongest, weakest & most rated series')).toBeInTheDocument()
+    expect(screen.queryByText('Strongest series')).not.toBeInTheDocument()
+    expect(screen.queryByText('Most rated series')).not.toBeInTheDocument()
+  })
+
+  it('labels a single rated issue as both highest and lowest', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        insights: {
+          has_sufficient_data: false,
+          min_sample_threshold: 3,
+          highest_rated_series: null,
+          lowest_rated_series: null,
+          most_rated_series: null,
+          highest_rated_issue: { issue_id: 11, thread_id: 1, thread_title: 'Series A', rating: 5 },
+          lowest_rated_issue: { issue_id: 11, thread_id: 1, thread_title: 'Series A', rating: 5 },
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByText('Highest & lowest rated issue')).toBeInTheDocument()
+    expect(screen.queryByText('Highest-rated issue')).not.toBeInTheDocument()
+  })
+
+  it('marks partial creator metadata as a lower bound in the insights panel', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        coverage: { ...baseState().coverage!, ratings_complete: false },
+        insights: {
+          has_sufficient_data: true,
+          min_sample_threshold: 3,
+          highest_rated_series: qualifiedSeries(),
+          lowest_rated_series: qualifiedSeries({ series_key: 'thread:2', thread_id: 2, average_rating: 2 }),
+          most_rated_series: qualifiedSeries({ series_key: 'thread:3', thread_id: 3, rated_issue_count: 5 }),
+          highest_rated_issue: null,
+          lowest_rated_issue: null,
+        },
+      }),
+    )
+    renderAt('creator:7')
+
+    // The summary panel and the insights panel each disclose the lower bound.
+    expect(screen.getAllByText(/lower bounds, not exhaustive totals/).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('omits the insights section entirely when there is nothing to surface', () => {
+    renderAt('creator:7')
+
+    expect(screen.queryByRole('heading', { name: 'Strongest and weakest work' })).not.toBeInTheDocument()
   })
 })
