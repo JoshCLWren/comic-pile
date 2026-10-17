@@ -172,7 +172,7 @@ async def test_cycle_includes_strict_list_and_read_issues(
 
 
 async def test_converted_provenance_is_read_only(auth_client, async_db, prerequisite_issues):
-    """Converted unknown evidence stays visible and cannot be silently approved."""
+    """Archived converted evidence is not displayed as an active prerequisite."""
     source, target, _ = prerequisite_issues
     row = Dependency(
         source_issue_id=source.id,
@@ -184,9 +184,10 @@ async def test_converted_provenance_is_read_only(auth_client, async_db, prerequi
     )
     async_db.add(row)
     await async_db.commit()
-    result = (await auth_client.get("/api/v1/prerequisites/")).json()[0]
-    assert result["classification"] == "D"
-    assert result["provenance"] == "archive dependency 44; intent unknown"
+    assert (await auth_client.get("/api/v1/prerequisites/")).json() == []
+    await async_db.refresh(row)
+    assert row.classification == "D"
+    assert row.provenance == "archive dependency 44; intent unknown"
     response = await auth_client.delete(f"/api/v1/prerequisites/{row.id}")
     assert response.status_code == 409
     forged = await auth_client.post(
