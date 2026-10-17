@@ -88,7 +88,8 @@ function DiscoveryResultRow({
   maxSelection: number
 }) {
   const key = item.canonical_creator_key
-  const detailPath = parseCreatorKey(key) != null ? creatorRoutePath(key) : null
+  const parsedKey = parseCreatorKey(key)
+  const detailPath = parsedKey ? creatorRoutePath(key) : null
   const roles = item.normalized_roles.join(', ')
   const ratingsCount = item.ratings_count
   const average = item.average_rating
@@ -191,7 +192,8 @@ function CreatorRow({
   maxSelection: number
 }) {
   const key = item.canonical_creator_key
-  const detailPath = parseCreatorKey(key) != null ? creatorRoutePath(key) : null
+  const parsedKey = parseCreatorKey(key)
+  const detailPath = parsedKey ? creatorRoutePath(key) : null
   const roles = item.normalized_roles.join(', ')
   const ratingsCount = item.ratings_count
   const average = item.average_rating
