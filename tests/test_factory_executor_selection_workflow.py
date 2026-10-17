@@ -20,7 +20,9 @@ def test_multi_provider_entry_is_restored_while_omniroute_stays_dark() -> None:
     selector = _dispatch_selector(workflow)
 
     assert "nvidia)" in workflow
-    assert "opencode-free|openrouter-free)" in workflow
+    assert "opencode-free)" in workflow
+    assert "openrouter-free)" in workflow
+    assert "factory_live_opencode.py" in selector
     assert "kilo-auto)" in workflow
     assert "z-ai|ollama-cloud|mistral)" in workflow
     assert "vercel-ai-gateway)" in workflow
@@ -67,7 +69,7 @@ def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
     assert "Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}" in workflow
     assert "OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}" in workflow
     assert "MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}" in workflow
-    assert 'npm: "@ai-sdk/openai-compatible"' in workflow
+    assert 'package: "@opencode/ai/providers/openai-compatible"' in workflow
 
 
 def test_runtime_provider_probes_remain_authoritative() -> None:

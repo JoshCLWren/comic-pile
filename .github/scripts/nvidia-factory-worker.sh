@@ -225,7 +225,7 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
   prompt="You are OpenCode NVIDIA Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Model: ${MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Josh directly requires product-first V22 behavior: user-reported product bugs outrank unrelated CI/E2E/test plumbing, and a run is a work session rather than a one-ticket punch. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
-  timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run -m "$MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile NVIDIA Factory ${WORKER}" "$prompt" 2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
+  timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" opencode run --standalone -m "$MODEL" --agent build "$prompt" 2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
   status=${PIPESTATUS[0]}
   return "$status"
 }

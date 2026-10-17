@@ -48,8 +48,6 @@ concurrency:
 
 env:
   FACTORY_BUDGET_SECONDS: '1200'
-  OPENCODE_VERSION: '1.18.32'
-  OPENCODE_LINUX_X64_SHA256: '3046e0404fdc60fb80307e7a47824ba07477364178a4d09baa8548496dd6d43b'
   KILO_VERSION: '7.4.22'
   KILO_LINUX_X64_BASELINE_SHA256: 'bf817ad53bc95b16abe92e7a2389cc9f509c62c3510c23ecc58e151a4455cb41'
 
@@ -231,22 +229,9 @@ jobs:
         run: |
           echo "${DISPLAY} lane is installed but inactive: ${REASON}"
 
-      - name: Install pinned OpenCode release
+      - name: Install current OpenCode 2
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          archive="$RUNNER_TEMP/opencode-linux-x64.tar.gz"
-          bin_dir="$RUNNER_TEMP/opencode-bin"
-          curl -fsSL \
-            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" \
-            -o "$archive"
-          printf '%s  %s\n' "$OPENCODE_LINUX_X64_SHA256" "$archive" | sha256sum --check -
-          mkdir -p "$bin_dir"
-          tar -xzf "$archive" -C "$bin_dir"
-          test -x "$bin_dir/opencode"
-          echo "$bin_dir" >> "$GITHUB_PATH"
-          "$bin_dir/opencode" --version
+        run: bash .github/scripts/install-opencode-v2.sh
 
       - name: Install pinned Kilo CLI release
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
@@ -296,10 +281,28 @@ jobs:
               } >> "$GITHUB_OUTPUT"
               exit 0
               ;;
-            opencode-free|openrouter-free)
-              # INCIDENT: with OmniRoute dark, catalog health fails closed on
-              # unknown/cooling evidence and starves restored free-code lanes.
-              # Keep the lane pin and prove executability via smoke/session.
+            opencode-free)
+              # Models are selected at execution, after OpenCode 2 installation.
+              catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
+              bash scripts/opencode-model-catalog.sh opencode verbose refresh > "$catalog"
+              result="$(python3 .github/scripts/factory_live_opencode.py \
+                --catalog "$catalog" --worker "$WORKER" \
+                --rotation "${GITHUB_RUN_NUMBER:-0}")"
+              model="$(jq -er '.model' <<< "$result")"
+              runtime_model="$(jq -er '.runtime_model' <<< "$result")"
+              {
+                echo "source=opencode-free"
+                echo "model=$model"
+                echo "runtime_model=$runtime_model"
+                echo "display=OpenCode Free · $model"
+                echo "branch_suffix=opencode-free"
+                echo "reason=selected-from-live-free-catalog"
+              } >> "$GITHUB_OUTPUT"
+              echo "Factory $WORKER selected $runtime_model from $(jq -r '.candidate_count' <<< "$result") free OpenCode models"
+              exit 0
+              ;;
+            openrouter-free)
+              # Keep OpenRouter's known-free route while OmniRoute is disabled.
               if [[ ! "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
                 {
                   echo "source=$SOURCE"
@@ -330,7 +333,7 @@ jobs:
           catalog_failures=()
 
           opencode_catalog="$RUNNER_TEMP/factory-opencode-catalog"
-          if opencode models opencode --refresh > "$opencode_catalog"; then
+          if bash scripts/opencode-model-catalog.sh opencode plain refresh > "$opencode_catalog"; then
             if opencode_discovery="$(discover_provider opencode-free "$opencode_catalog")" \
               && jq -e '.status and (.candidates | type == "array")' >/dev/null <<< "$opencode_discovery"; then
               if [[ "$(jq -r '.status' <<< "$opencode_discovery")" != invalid ]]; then
@@ -502,6 +505,7 @@ jobs:
           [[ -n "${OMNIROUTE_BASE_URL:-}" ]] || { echo 'OMNIROUTE_BASE_URL missing for selected OmniRoute capacity' >&2; exit 1; }
 
           mkdir -p "$HOME/.config/opencode"
+          temp_config="$(mktemp)"
           jq -n \
             --arg model "$MODEL" \
             --arg key "$OMNIROUTE_API_KEY" \
@@ -510,23 +514,25 @@ jobs:
             --arg job "$GITHUB_JOB" \
             --arg workflow "$GITHUB_WORKFLOW" \
             '{
-              provider: {
+              providers: {
                 omniroute: {
-                  npm: "@ai-sdk/openai-compatible",
                   name: "OmniRoute free capacity",
-                  options: {
-                    baseURL: $base_url,
-                    apiKey: $key,
-                    headers: {
-                      "X-GitHub-Run-ID": $run_id,
-                      "X-GitHub-Job": $job,
-                      "X-GitHub-Workflow": $workflow
-                    }
+                  package: "@opencode/ai/providers/openai-compatible",
+                  env: ["OMNIROUTE_API_KEY"],
+                  settings: {baseURL: $base_url},
+                  headers: {
+                    "X-GitHub-Run-ID": $run_id,
+                    "X-GitHub-Job": $job,
+                    "X-GitHub-Workflow": $workflow
                   },
                   models: {($model): {name: $model}}
                 }
               }
-            }' > "$HOME/.config/opencode/opencode.json"
+            }' > "$temp_config"
+          # Retain the installer's noninteractive permission and safety policy.
+          jq -s '.[0] * .[1]' "$HOME/.config/opencode/opencode.json" "$temp_config" > "$temp_config.merged"
+          mv "$temp_config.merged" "$HOME/.config/opencode/opencode.json"
+          rm -f "$temp_config"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Configure OpenAI-compatible factory provider
@@ -549,24 +555,28 @@ jobs:
               key="${Z_AI_API_KEY:-}"
               base_url='https://api.z.ai/api/paas/v4'
               provider_id='z-ai'
+              env_name='Z_AI_API_KEY'
               provider_name='Z.AI free capacity'
               ;;
             ollama-cloud)
               key="${OLLAMA_API_KEY:-}"
               base_url='https://ollama.com/v1'
               provider_id='ollama-cloud'
+              env_name='OLLAMA_API_KEY'
               provider_name='Ollama Cloud free capacity'
               ;;
             vercel-ai-gateway)
               key="${AI_GATEWAY_API_KEY:-}"
               base_url='https://ai-gateway.vercel.sh/v1'
               provider_id='vercel-ai-gateway'
+              env_name='AI_GATEWAY_API_KEY'
               provider_name='Vercel AI Gateway free capacity'
               ;;
             mistral)
               key="${MISTRAL_API_KEY:-}"
               base_url='https://api.mistral.ai/v1'
               provider_id='mistral'
+              env_name='MISTRAL_API_KEY'
               provider_name='Mistral Codestral'
               ;;
             *)
@@ -581,25 +591,28 @@ jobs:
             model="${model#"$prefix"}"
           fi
           mkdir -p "$HOME/.config/opencode"
+          temp_config="$(mktemp)"
           jq -n \
             --arg provider "$provider_id" \
             --arg name "$provider_name" \
             --arg model "$model" \
-            --arg key "$key" \
+            --arg envname "$env_name" \
             --arg base_url "$base_url" \
             '{
-              provider: {
+              providers: {
                 ($provider): {
-                  npm: "@ai-sdk/openai-compatible",
                   name: $name,
-                  options: {
-                    baseURL: $base_url,
-                    apiKey: $key
-                  },
+                  package: "@opencode/ai/providers/openai-compatible",
+                  env: [$envname],
+                  settings: {baseURL: $base_url},
                   models: {($model): {name: $model}}
                 }
               }
-            }' > "$HOME/.config/opencode/opencode.json"
+            }' > "$temp_config"
+          # Retain the installer's noninteractive permission and safety policy.
+          jq -s '.[0] * .[1]' "$HOME/.config/opencode/opencode.json" "$temp_config" > "$temp_config.merged"
+          mv "$temp_config.merged" "$HOME/.config/opencode/opencode.json"
+          rm -f "$temp_config"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Require Pixel Canary to remain zero-price
@@ -731,8 +744,7 @@ jobs:
           [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
           set +e
           timeout --signal=TERM --kill-after=10s 180s \
-            opencode run -m "$RUNTIME_MODEL" --agent build --dir "$GITHUB_WORKSPACE" \
-            --title 'ComicPile fixed-model smoke' \
+            opencode run --standalone -m "$RUNTIME_MODEL" --agent build \
             'Reply with exactly FIXED_MODEL_OPENCODE_OK. Do not edit files, run commands, or use tools.' \
             2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
           status=${PIPESTATUS[0]}
@@ -768,8 +780,7 @@ jobs:
           [[ -z "$before" ]] || { echo 'Tool smoke requires clean worktree' >&2; exit 1; }
           set +e
           timeout --signal=TERM --kill-after=10s 180s \
-            opencode run -m "$RUNTIME_MODEL" --agent build --dir "$GITHUB_WORKSPACE" \
-            --title 'ComicPile Pixel Canary tool smoke' \
+            opencode run --standalone -m "$RUNTIME_MODEL" --agent build \
             'Use the shell tool exactly once to run: printf PIXEL_CANARY_TOOL_OK. Then reply with exactly PIXEL_CANARY_AGENT_OK. Do not edit files.' \
             2>&1 | tee "$RUNNER_TEMP/pixel-canary-tool-smoke.log"
           status=${PIPESTATUS[0]}
