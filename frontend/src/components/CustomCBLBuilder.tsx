@@ -1,3 +1,4 @@
+import { ReadingListReader } from './ReadingListReader'
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
@@ -151,6 +152,7 @@ export default function CustomCBLBuilder({
   const queryClient = useQueryClient()
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
+  const [readerOpen, setReaderOpen] = useState(false)
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loadedListId, setLoadedListId] = useState<number | null>(null)
@@ -553,6 +555,8 @@ export default function CustomCBLBuilder({
               {entries.length === 0 && <p className="text-sm text-[var(--theme-text-muted)]">This custom CBL is empty. Search for issues above to build it.</p>}
               <p className="text-xs text-[var(--theme-text-muted)]">Skipping an issue here ignores it only in this list. It stays in your collection and other lists. Use your collection exclusions to remove a comic everywhere.</p>
 
+              <button type="button" onClick={() => setReaderOpen((value) => !value)} aria-expanded={readerOpen} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-semibold text-[var(--theme-text-primary)]">{readerOpen ? 'Close list reader' : 'Read this list'}</button>
+              {readerOpen && selectedId && <ReadingListReader key={selectedId} listId={selectedId} />}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 <button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>

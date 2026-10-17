@@ -272,8 +272,19 @@
         "type": "object"
       },
       "BlockingDependency": {
-        "description": "A single dependency blocking a thread, described in reader language.",
+        "description": "One unread Issue required by a list or explicit prerequisite.",
         "properties": {
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
           "issue_number": {
             "title": "Issue Number",
             "type": "string"
@@ -11495,6 +11506,145 @@
         "title": "ReadingListPredecessorChange",
         "type": "object"
       },
+      "ReadingListReaderEntry": {
+        "description": "One current list member with the execution authority's decision.",
+        "properties": {
+          "availability": {
+            "enum": [
+              "read",
+              "available",
+              "blocked",
+              "later",
+              "excluded",
+              "inactive",
+              "legacy"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "checkpoint_target_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Checkpoint Target Issue Ids",
+            "type": "array"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BlockingExplanation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gate": {
+            "default": "none",
+            "enum": [
+              "none",
+              "hold",
+              "after_previous"
+            ],
+            "title": "Gate",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "default": false,
+            "title": "Is Checkpoint",
+            "type": "boolean"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status",
+          "availability"
+        ],
+        "title": "ReadingListReaderEntry",
+        "type": "object"
+      },
+      "ReadingListReaderResponse": {
+        "description": "Full current list order; never reconstructed from plan membership.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingListReaderEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "execution_mode": {
+            "enum": [
+              "legacy",
+              "option_e"
+            ],
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "list_id": {
+            "title": "List Id",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "strict",
+              "loose"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "name",
+          "mode",
+          "execution_mode"
+        ],
+        "title": "ReadingListReaderResponse",
+        "type": "object"
+      },
       "ReadingModeResponse": {
         "description": "Current reading-mode state for the active session.",
         "properties": {
@@ -11997,7 +12147,7 @@
         "type": "object"
       },
       "ReadingPlanBlocker": {
-        "description": "One unread canonical Dependency source holding a plan issue back.",
+        "description": "One unread Issue required by the current execution authority.",
         "properties": {
           "explanation": {
             "title": "Explanation",
@@ -12240,7 +12390,9 @@
               "read",
               "available",
               "blocked",
-              "later"
+              "later",
+              "excluded",
+              "inactive"
             ],
             "title": "Availability",
             "type": "string"
@@ -12392,6 +12544,15 @@
             },
             "title": "Blocked Next",
             "type": "array"
+          },
+          "execution_mode": {
+            "default": "legacy",
+            "enum": [
+              "legacy",
+              "option_e"
+            ],
+            "title": "Execution Mode",
+            "type": "string"
           },
           "lanes": {
             "items": {
@@ -13353,6 +13514,13 @@
       "RollBootstrapThread": {
         "description": "Lightweight thread summary for the roll bootstrap pool.",
         "properties": {
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking Reasons",
+            "type": "array"
+          },
           "format": {
             "title": "Format",
             "type": "string"
@@ -20978,7 +21146,7 @@
     },
     "/api/v1/continuity-plans/{plan_id}/reader": {
       "get": {
-        "description": "Return progress, available now, blocked next, and ordered lanes.\n\nBlocking uses canonical issue-level Dependencies only. The payload is the\nprimary reader view for a Reading Plan and does not change Roll eligibility.",
+        "description": "Return progress, available now, blocked next, and ordered lanes.\n\nAvailability uses the same guarded authority as Roll. Disabled readers retain\nlegacy dependencies; inspecting a plan never activates list execution.",
         "operationId": "get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get",
         "parameters": [
           {
@@ -22684,6 +22852,56 @@
           }
         ],
         "summary": "Export Custom Cbl",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "custom-cbls"
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/reader": {
+      "get": {
+        "description": "Explain the complete current list using the same authority as Roll.",
+        "operationId": "read_custom_cbl_api_v1_custom_cbls__list_id__reader_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingListReaderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Custom Cbl",
         "tags": [
           "dependencies",
           "dependencies",

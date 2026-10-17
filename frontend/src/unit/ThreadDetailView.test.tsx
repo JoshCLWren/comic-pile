@@ -41,6 +41,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
   return {
     ...actual,
     dependenciesApi: {
+      getBatchBlockingInfo: vi.fn().mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } }),
       getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
       getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
     },
@@ -431,7 +432,7 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  await waitFor(() => expect(screen.getByText('Nothing blocks this series')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('No incoming explicit prerequisites')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 

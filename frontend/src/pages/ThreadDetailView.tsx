@@ -1,3 +1,5 @@
+import { EligibilityExplanation } from '../components/EligibilityExplanation'
+import { useThreadBlockingInfo } from '../hooks/useDependencies'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from 'react-router-dom'
@@ -45,6 +47,7 @@ export default function ThreadDetailView() {
   const threadId =
     Number.isInteger(parsedThreadId) && parsedThreadId > 0 ? parsedThreadId : null
 
+  const blockingInfo = useThreadBlockingInfo(threadId)
   const { data: thread, error: threadError, refetch } = useThread(threadId)
   const {
     connectedThreads,
@@ -59,7 +62,9 @@ export default function ThreadDetailView() {
 
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const [issuesExpanded, setIssuesExpanded] = useState(false)
+  const requestedIssueId = Number(new URLSearchParams(location.search).get('issue'))
+  const focusedIssueRef = useRef<number | null>(null)
+  const [issuesExpanded, setIssuesExpanded] = useState(requestedIssueId > 0)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
   // Tag editing (issue #3032): one editor serves the thread and any single
   // issue, while bulk-select mode enables multi-select bulk add/remove.
@@ -90,13 +95,26 @@ export default function ThreadDetailView() {
   useEffect(() => {
     if (activeThreadIdRef.current !== threadId) {
       activeThreadIdRef.current = threadId
-      setIssuesExpanded(false)
+      setIssuesExpanded(requestedIssueId > 0)
+      focusedIssueRef.current = null
       setBulkSelectMode(false)
       setSelectedIssueIds(new Set())
       setBulkNotice(null)
       setTagEditorIssue(null)
     }
-  }, [threadId])
+  }, [threadId, requestedIssueId])
+
+  useEffect(() => {
+    if (!issuesExpanded || requestedIssueId <= 0 || focusedIssueRef.current === requestedIssueId) return
+    const row = document.getElementById(`issue-${requestedIssueId}`)
+    if (row) {
+      row.scrollIntoView?.({ block: 'center' })
+      row.focus({ preventScroll: true })
+      focusedIssueRef.current = requestedIssueId
+    } else if (issuesQuery.hasNextPage && !issuesQuery.isFetching && !issuesQuery.isFetchNextPageError) {
+      void issuesQuery.fetchNextPage()
+    }
+  }, [issuesExpanded, requestedIssueId, issuesQuery])
 
   function handleToggleBulkSelect() {
     setBulkSelectMode((previous) => {
@@ -269,6 +287,18 @@ export default function ThreadDetailView() {
       </header>
 
       <div className="space-y-4 md:space-y-6">
+        <section className="surface-panel rounded-xl p-3 md:p-4" aria-label="Next issue availability">
+          {blockingInfo.isError ? (
+            <div role="alert"><p>Unable to load reading requirements.</p><button type="button" onClick={() => void blockingInfo.refetch()}>Retry requirements</button></div>
+          ) : blockingInfo.isPending ? <p>Loading reading requirements…</p> : (
+            <EligibilityExplanation
+              isBlocked={blockingInfo.data?.threads[thread.id]?.is_blocked ?? thread.is_blocked}
+              reasons={blockingInfo.data?.threads[thread.id]?.blocking_reasons ?? thread.blocking_reasons}
+              dependencies={blockingInfo.data?.threads[thread.id]?.blocking_dependencies}
+              emptyLabel={thread.status === 'completed' ? 'Every issue is read' : thread.status !== 'active' ? 'Series is inactive' : thread.next_unread_issue_number ? `Next unread: #${thread.next_unread_issue_number}` : thread.total_issues == null && thread.issues_remaining > 0 ? 'Available now' : 'No available unread issue'}
+            />
+          )}
+        </section>
         {progressPercentage && (
           <div className="surface-panel p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
@@ -307,7 +337,7 @@ export default function ThreadDetailView() {
             <p className="text-xs text-stone-500">Loading dependencies...</p>
           )}
           {!connectedError && !connectedPending && connectedThreads.length === 0 && (
-            <p className="text-xs text-stone-500">No series dependencies</p>
+            <p className="text-xs text-stone-500">No explicit series prerequisites</p>
           )}
           {!connectedError && !connectedPending && connectedThreads.length > 0 && (
             <div className="space-y-3">
@@ -350,7 +380,7 @@ export default function ThreadDetailView() {
 
                     <div className="space-y-1">
                       <h3 className="text-base font-bold text-stone-400">Blocked by</h3>
-                      {blockedBy.length === 0 && <p className="text-xs text-stone-500">Nothing blocks this series</p>}
+                      {blockedBy.length === 0 && <p className="text-xs text-stone-500">No incoming explicit prerequisites</p>}
                       {blockedBy.map((t) => (
                         <Link
                           key={`${t.dependency_id}-blocked-by`}
@@ -490,6 +520,8 @@ export default function ThreadDetailView() {
                       return (
                         <div
                           key={issue.id}
+                          id={`issue-${issue.id}`}
+                          tabIndex={-1}
                           className={`space-y-1.5 p-2 rounded-lg border ${
                             issue.status === 'read'
                               ? 'bg-green-500/10 border-green-500/20'

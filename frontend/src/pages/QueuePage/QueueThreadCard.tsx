@@ -1,3 +1,4 @@
+import { EligibilityExplanation } from '../../components/EligibilityExplanation'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import Tooltip from '../../components/Tooltip'
@@ -82,8 +83,6 @@ export default function QueueThreadCard({
   // both mean the thread has no known issue total.
   const isMigrated = thread.total_issues != null
   const blockerLabels = blockingDependencies.map((dependency) => dependency.label)
-  const firstBlocker = blockingDependencies[0] ?? null
-  const extraBlockerCount = Math.max(blockingDependencies.length - 1, 0)
 
   const isInteractiveTarget = (target: EventTarget | null, card: HTMLDivElement) => {
     const interactive = target instanceof Element
@@ -208,40 +207,9 @@ export default function QueueThreadCard({
               data-testid="queue-thread-blocked-detail"
               className="mt-2 w-full rounded-lg border border-[var(--theme-continuity-accent)]/20 bg-[var(--theme-continuity-accent)]/10 px-3 py-2 text-left text-xs text-[var(--theme-text-muted)]"
             >
-              {firstBlocker ? (
-                <Link
-                  to={`/thread/${firstBlocker.thread_id}`}
-                  className="font-bold text-[var(--theme-continuity-accent)] underline decoration-[var(--theme-continuity-accent)]/40 hover:text-[var(--theme-text-primary)]"
-                  aria-label={`Open ${firstBlocker.thread_title}`}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <span aria-hidden="true">🔒 </span>{firstBlocker.label}
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  className="font-bold text-[var(--theme-continuity-accent)] transition-colors hover:text-[var(--theme-text-primary)]"
-                  onClick={onDependencies}
-                  aria-label={`View dependencies for ${thread.title}`}
-                >
-                  <span aria-hidden="true">🔒 </span>Blocked by a prerequisite
-                </button>
-              )}
-              {extraBlockerCount > 0 && (
-                <button
-                  type="button"
-                  className="ml-1 text-[var(--theme-text-dim)] transition-colors hover:text-[var(--theme-continuity-accent)]"
-                  onClick={onDependencies}
-                  aria-label={`View all dependencies for ${thread.title}`}
-                >
-                  +{extraBlockerCount} more
-                </button>
-              )}
-              <p className="mt-1.5 text-[var(--theme-text-dim)]">
-                Secondary actions are in the menu. Read & Rate unlocks once the
-                blocker{extraBlockerCount > 0 ? 's' : ''} above{' '}
-                {extraBlockerCount > 0 ? 'are' : 'is'} cleared.
-              </p>
+              <EligibilityExplanation isBlocked reasons={thread.blocking_reasons} dependencies={blockingDependencies} />
+              <button type="button" onClick={onDependencies} aria-label={`View dependencies for ${thread.title}`} className="min-h-11 text-sm font-semibold text-[var(--theme-continuity-accent)]">Manage prerequisites</button>
+              <p className="mt-1 text-[var(--theme-text-dim)]">Secondary actions are in the menu. Read &amp; Rate unlocks once the blocker{blockingDependencies.length > 1 ? 's' : ''} above {blockingDependencies.length > 1 ? 'are' : 'is'} cleared.</p>
             </div>
           )}
         </div>

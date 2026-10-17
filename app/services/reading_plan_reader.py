@@ -1,8 +1,8 @@
 """Build the reader-facing Reading Plan progress and availability view.
 
-Availability uses canonical issue-level Dependencies as the blocking
-authority. Historical ``cbl-order:`` materialization notes are ignored.
-Plan adjacency and ContinuityRule rows are never consulted.
+Availability uses the guarded live evaluator when enabled. Disabled readers keep
+the transitional issue-level Dependency authority. Neither mode compiles list
+adjacency or treats ContinuityRule rows as execution authority.
 """
 
 from __future__ import annotations
@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from comic_pile.dependencies import build_blocking_explanation
 from app.repositories import continuity_repository, reading_plan_repository
+from app.services.reading_eligibility_service import (
+    get_execution_eligibility, project_blocking_explanation,
+)
 from app.services.reading_plan_normalization import get_plan_progress
 from app.repositories.reading_plan_repository import (
     CanonicalIncomingBlocker,
@@ -202,9 +205,10 @@ async def get_reading_plan_reader(
     identities = await reading_plan_repository.list_plan_issue_identities(
         db, plan_id=plan_id_value
     )
-    incoming_rows = await reading_plan_repository.list_canonical_incoming_blockers(
+    eligibility = await get_execution_eligibility(db, user_id)
+    incoming_rows = (await reading_plan_repository.list_canonical_incoming_blockers(
         db, user_id=user_id, issue_ids=[row.issue_id for row in identities]
-    )
+    )) if eligibility is None else []
     incoming: dict[int, list[CanonicalIncomingBlocker]] = defaultdict(list)
     for row in incoming_rows:
         incoming[row.target_issue_id].append(row)
@@ -219,6 +223,30 @@ async def get_reading_plan_reader(
         if placement.plan_source_id in source_paths_by_id
     ]
     reader_issues = [_to_reader_issue(identity, incoming, placements) for identity in identities]
+    if eligibility is not None:
+        for issue in reader_issues:
+            issue.blockers = []
+            if issue.status == "read":
+                issue.availability = "read"
+                continue
+            state = eligibility.threads.get(issue.thread_id)
+            if issue.issue_id in eligibility.excluded_issue_ids:
+                issue.availability = "excluded"
+            elif state is None:
+                issue.availability = "inactive"
+            elif state.next_issue_id != issue.issue_id:
+                issue.availability = "later"
+            else:
+                issue.availability = "available" if state.eligible else "blocked"
+                explanation = project_blocking_explanation(eligibility, issue.thread_id)
+                issue.blockers = [ReadingPlanBlocker(
+                    issue_id=dependency.issue_id,
+                    thread_id=dependency.thread_id,
+                    thread_title=dependency.thread_title,
+                    issue_number=dependency.issue_number,
+                    explanation=dependency.label,
+                ) for dependency in explanation.blocking_dependencies
+                    if dependency.issue_id is not None]
     available_now = [issue for issue in reader_issues if issue.availability == "available"]
     blocked_next = [issue for issue in reader_issues if issue.availability == "blocked"]
     issues_by_lane: dict[str, list[ReadingPlanReaderIssue]] = defaultdict(list)
@@ -232,6 +260,7 @@ async def get_reading_plan_reader(
             seen_lane_ids.add(lane_id)
     total_issues, read_issues = await get_plan_progress(db, plan_id=plan_id_value)
     return ReadingPlanReaderResponse(
+        execution_mode="option_e" if eligibility is not None else "legacy",
         plan_id=plan_id_value,
         name=plan_name,
         ordering_mode=ordering_mode,

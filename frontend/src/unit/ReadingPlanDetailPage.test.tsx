@@ -23,6 +23,7 @@ vi.mock('../services/api-continuity-plans', async () => {
 
 vi.mock('../services/api-tags', () => ({
   tagsApi: {
+    threadIssuesEffective: vi.fn().mockResolvedValue({ thread_id: 1, issues: [] }),
     effectiveForPlan: vi.fn(),
     unassign: vi.fn(),
   },

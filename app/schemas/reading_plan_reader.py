@@ -11,11 +11,11 @@ from app.schemas.reading_plan_membership import (
     ReadingPlanSourceSnapshot,
 )
 
-ReadingPlanIssueAvailability = Literal["read", "available", "blocked", "later"]
+ReadingPlanIssueAvailability = Literal["read", "available", "blocked", "later", "excluded", "inactive"]
 
 
 class ReadingPlanBlocker(BaseModel):
-    """One unread canonical Dependency source holding a plan issue back."""
+    """One unread Issue required by the current execution authority."""
 
     issue_id: int
     thread_id: int
@@ -56,6 +56,7 @@ class ReadingPlanReaderLane(BaseModel):
 class ReadingPlanReaderResponse(BaseModel):
     """Primary reader view for one Reading Plan."""
 
+    execution_mode: Literal["legacy", "option_e"] = "legacy"
     plan_id: int
     name: str
     ordering_mode: str

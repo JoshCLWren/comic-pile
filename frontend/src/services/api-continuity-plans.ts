@@ -83,7 +83,7 @@ export interface ContinuityPlanListItem {
   updated_at: string
 }
 
-export type ReadingPlanIssueAvailability = 'read' | 'available' | 'blocked' | 'later'
+export type ReadingPlanIssueAvailability = 'read' | 'available' | 'blocked' | 'later' | 'excluded' | 'inactive'
 
 export interface ReadingPlanBlocker {
   issue_id: number
@@ -132,6 +132,7 @@ export interface ReadingPlanSourceSnapshot {
 }
 
 export interface ReadingPlanReaderView {
+  execution_mode?: 'legacy' | 'option_e'
   plan_id: number
   name: string
   ordering_mode: ContinuityPlanOrderingMode

@@ -1,3 +1,4 @@
+import { EligibilityExplanation } from '../../../components/EligibilityExplanation'
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
@@ -239,20 +240,8 @@ export function ThreadPool({
                 >
                   <span className="text-sm">🔒</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-stone-400 truncate">{thread.title}</p>
-                    {blockingDependencyMap[thread.id]?.length > 0 && (
-                        <p className="text-[10px] text-stone-500 truncate">
-                          <Link
-                            to={`/thread/${blockingDependencyMap[thread.id][0].thread_id}`}
-                            className="inline-flex min-h-6 items-center hover:text-stone-300 underline decoration-stone-600"
-                            aria-label={`Open ${blockingDependencyMap[thread.id][0].thread_title}`}
-                          >
-                            {blockingDependencyMap[thread.id][0].label}
-                          </Link>
-                          {blockingDependencyMap[thread.id].length > 1 &&
-                            ` +${blockingDependencyMap[thread.id].length - 1} more`}
-                        </p>
-                    )}
+                    <Link to={`/thread/${thread.id}`} className="text-sm text-[var(--theme-text-muted)] underline">{thread.title}</Link>
+                    <EligibilityExplanation isBlocked reasons={thread.blocking_reasons} dependencies={blockingDependencyMap[thread.id]} />
                   </div>
                 </div>
               ))}

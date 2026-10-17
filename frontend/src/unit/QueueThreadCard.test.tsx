@@ -240,9 +240,7 @@ describe('QueueThreadCard', () => {
     const blockerLink = screen.getByRole('link', { name: 'Open Prequel Thread' })
     expect(blockerLink).toHaveAttribute('href', '/thread/42')
     expect(blockerLink).toHaveTextContent('Needs Prequel Thread: #3')
-    expect(screen.getByRole('button', { name: /View all dependencies for Test Thread/ })).toHaveTextContent(
-      '+1 more',
-    )
+    expect(screen.getByRole('link', { name: 'Open Other Blocker' })).toHaveTextContent('Needs Other Blocker: #1')
   })
 
   it('does not render blocked explanation when thread is not blocked', () => {

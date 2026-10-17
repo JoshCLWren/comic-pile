@@ -399,6 +399,10 @@ describe('targeted cache effects', () => {
 
       await applyUpdatedCustomCBL(client, customCBL)
 
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.readers() })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.all })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
+
       expect(setQueryData).toHaveBeenCalledWith(queryKeys.customCBLs.detail(customCBL.id), customCBL)
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.list(), exact: true })
     })
