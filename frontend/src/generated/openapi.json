@@ -28823,6 +28823,107 @@
         ]
       }
     },
+    "/api/v1/threads/excluded/threads": {
+      "get": {
+        "description": "List excluded threads with deterministic cursor-based pagination.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order – ``title`` or ``created``.\n    page_size: Threads per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Paginated excluded threads plus ``next_page_token`` when more pages exist.\n\nRaises:\n    HTTPException: If the sort value is unsupported or the page token is stale/malformed.",
+        "operationId": "list_excluded_threads_api_v1_threads_excluded_threads_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Sort order: title or created",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "created",
+              "description": "Sort order: title or created",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of threads to return per page (default 50, max 200)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Number of threads to return per page (default 50, max 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor token for pagination continuation",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination continuation",
+              "title": "Page Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueThreadListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Excluded Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/groups:batch": {
       "post": {
         "description": "List crossover groups for several owned threads in one request.",
@@ -29285,6 +29386,55 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/exclude": {
+      "post": {
+        "description": "Remove a thread from the active queue without deleting data.\n\nRaises:\n    HTTPException: 404 when not found; 400 when thread is not active.",
+        "operationId": "exclude_thread_api_v1_threads__thread_id__exclude_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Exclude Thread",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/{thread_id}/issue-dependencies": {
       "get": {
         "description": "Return dependency edges for every issue in one thread using bulk queries.\n\nThis endpoint replaces the frontend's previous one-request-per-issue pattern.\nEmpty dependency payloads are included so clients can distinguish a complete\nresponse from missing data without issuing fallback requests.",
@@ -29701,6 +29851,55 @@
         "tags": [
           "reading-orders",
           "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/restore": {
+      "post": {
+        "description": "Restore an excluded thread back to the active queue.\n\nRaises:\n    HTTPException: 404 when not found; 400 when thread is not excluded.",
+        "operationId": "restore_thread_api_v1_threads__thread_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Thread",
+        "tags": [
+          "threads",
+          "threads"
         ]
       }
     },

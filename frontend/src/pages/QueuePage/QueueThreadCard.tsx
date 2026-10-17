@@ -46,6 +46,7 @@ interface QueueThreadCardProps {
   onEdit: () => void
   onDependencies: () => void
   onDelete: () => void
+  onRemoveFromQueue?: () => void
 }
 
 export default function QueueThreadCard({
@@ -75,6 +76,7 @@ export default function QueueThreadCard({
   onEdit,
   onDependencies,
   onDelete,
+  onRemoveFromQueue,
 }: QueueThreadCardProps) {
   // `total_issues` is optional in the generated list item; absent and null
   // both mean the thread has no known issue total.
@@ -260,6 +262,7 @@ export default function QueueThreadCard({
           onEdit={() => onEdit()}
           onDependencies={() => onDependencies()}
           onDelete={() => onDelete()}
+          onRemoveFromQueue={onRemoveFromQueue}
           snoozeIcon={snoozeIcon}
           snoozeLabel={snoozeLabel}
           snoozeDisabled={snoozeDisabled}

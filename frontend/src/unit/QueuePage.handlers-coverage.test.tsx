@@ -11,8 +11,8 @@ import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 
-vi.mock('../hooks/useThread', () => ({ useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
-vi.mock('../hooks/useQueue', () => ({ useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
+vi.mock('../hooks/useThread', () => ({ useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
+vi.mock('../hooks/useQueue', () => ({ useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })), useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: vi.fn() } }))

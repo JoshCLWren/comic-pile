@@ -661,7 +661,7 @@ async def _ensure_missing_issue_created(
 
         tracked_issues = await issue_repository.get_issues_by_thread(db, thread.id)
         apply_thread_issue_tracking_state(thread, tracked_issues)
-        thread.status = "active"
+        thread.apply_derived_status("active")
 
         if comicvine_id is not None:
             await _confirm_comicvine_issue_mapping(db, issue, comicvine_id)

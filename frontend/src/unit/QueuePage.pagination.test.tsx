@@ -7,12 +7,15 @@ import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/us
 import { useSession } from '../hooks/useSession'
 
 vi.mock('../hooks/useThread', () => ({
+  useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useCreateThread: vi.fn(),
   useUpdateThread: vi.fn(),
   useReactivateThread: vi.fn(),
 }))
 
 vi.mock('../hooks/useQueue', () => ({
+  useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
+  useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useMoveToPosition: vi.fn(),
   useQueueThreads: vi.fn(),
   useShuffleQueue: vi.fn(),

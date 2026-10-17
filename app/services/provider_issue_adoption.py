@@ -105,7 +105,7 @@ async def _recalculate_thread_tracking(
     tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
 
     if tracking_state.next_unread_issue_id is None:
-        thread.status = "completed"
+        thread.apply_derived_status("completed")
     elif was_unmigrated or not had_next_unread_issue:
         if not was_unmigrated and thread.status == "completed":
             await db.execute(
@@ -115,7 +115,7 @@ async def _recalculate_thread_tracking(
                 .values(queue_position=Thread.queue_position + 1)
             )
             thread.queue_position = 1
-        thread.status = "active"
+        thread.apply_derived_status("active")
 
     db.add(Event(type="issues_created", timestamp=datetime.now(UTC), thread_id=thread.id))
     await refresh_user_blocked_status(user_id, db)

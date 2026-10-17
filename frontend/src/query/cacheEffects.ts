@@ -197,18 +197,23 @@ export async function invalidateAfterQueueMovement(
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
     }),
+    // Exclude/restore move a series across the active-queue boundary without
+    // deleting it (#3807), so the excluded library view is a fourth surface
+    // that changes membership. Reset it the same way the Queue list resets:
+    // a cached page still lists a series on the wrong side of the boundary.
+    client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
   ])
 }
 
 /**
  * Invalidate all Queue-affecting queries after a mutation that changes queue
  * ordering or membership (create, delete, reposition, shuffle, snooze,
- * unsnooze, reactivate). TanStack Query refetches invalidated queries
- * automatically — callers must not also call `refetch()`.
+ * unsnooze, reactivate, exclude, restore). TanStack Query refetches invalidated
+ * queries automatically — callers must not also call `refetch()`.
  *
  * This is intentionally an alias of `invalidateAfterQueueMovement` — both
- * operations refresh the same three retained resources (queue pages, current
- * session, roll bootstrap) and must stay in sync.
+ * operations refresh the same four retained resources (queue pages, current
+ * session, roll bootstrap, excluded library pages) and must stay in sync.
  */
 export async function invalidateAfterQueueMutation(
   client: QueryClient,

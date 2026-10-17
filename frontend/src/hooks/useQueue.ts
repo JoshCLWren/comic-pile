@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { useInfiniteCollection } from '../pagination'
-import { invalidateAfterQueueMovement } from '../query/cacheEffects'
+import { invalidateAfterQueueMovement, invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { queueApi } from '../services/api-queue'
@@ -16,8 +16,16 @@ import type { QueueSort } from '../query/queryKeys'
  * every subsequent page, so later pages never need an explicit page_size. */
 export const QUEUE_PAGE_SIZE = 50
 
+/** Bounded page size for the excluded library view. Excluded series are a
+ * curated shelf a reader opens deliberately, not a list they scroll, so one
+ * bounded newest-first page is the whole contract. */
+export const EXCLUDED_PAGE_SIZE = 50
+
 /** Queue API surface the movement mutations depend on. */
 export type QueueApi = Pick<typeof queueApi, 'moveToPosition' | 'moveToFront' | 'moveToBack' | 'shuffle'>
+
+/** Thread API surface the restore mutation depends on. */
+export type RestoreThreadApi = Pick<typeof threadsApi, 'restore'>
 
 /** Cache reconciliation run after a queue movement mutation succeeds. */
 export type QueueInvalidateFn = (client: QueryClient) => Promise<void>
@@ -27,6 +35,14 @@ export interface QueueMutationDeps {
   /** Injectable queue API subset; defaults to the real service. */
   api?: QueueApi
   /** Injectable cache reconciliation; defaults to `invalidateAfterQueueMovement`. */
+  invalidate?: QueueInvalidateFn
+}
+
+/** Optional injected dependencies for the restore mutation. */
+export interface RestoreThreadDeps {
+  /** Injectable threads API subset; defaults to the real service. */
+  api?: RestoreThreadApi
+  /** Injectable cache reconciliation; defaults to `invalidateAfterQueueMutation`. */
   invalidate?: QueueInvalidateFn
 }
 
@@ -207,6 +223,57 @@ export function useMoveToFront(deps: QueueMutationDeps = {}) {
     },
     onError: (error) => {
       console.error('Failed to move thread to front:', getApiErrorDetail(error))
+    },
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
+}
+
+/**
+ * Bounded, non-paginated read of the reader's excluded library (#3807).
+ *
+ * "Remove from Queue" is non-destructive, so every excluded series still owns
+ * its issues, read state, ratings, and mappings. This is the discoverable view
+ * of that shelf and the only place a restore can be triggered from, which is
+ * why it loads on its own key instead of being filtered out of the active
+ * Queue response.
+ *
+ * @param enabled - Only fetch while the Queue screen is mounted.
+ * @param threadsList - Injectable lazy thread-list loader (defaults to the real service).
+ */
+export function useExcludedThreads(
+  enabled: boolean,
+  threadsList: Pick<typeof threadsApi, 'listExcluded'> = threadsApi,
+) {
+  const query = useQuery({
+    queryKey: queryKeys.excluded.list({ sort: 'created', pageSize: EXCLUDED_PAGE_SIZE }),
+    queryFn: async () => (await threadsList.listExcluded(undefined, 'created', null, EXCLUDED_PAGE_SIZE)).threads,
+    enabled,
+    retry: false,
+  })
+
+  return { threads: query.data ?? [], isPending: query.isPending, isError: query.isError }
+}
+
+/**
+ * Restores an excluded series to the queue and reconciles queue-owned read
+ * models.
+ *
+ * @param deps - Optional injected threads API and cache-invalidation seam.
+ */
+export function useRestoreThread(deps: RestoreThreadDeps = {}) {
+  const { api = threadsApi, invalidate = invalidateAfterQueueMutation } = deps
+  const mutation = useMutation({
+    mutationFn: async (id: number) => {
+      await api.restore(id)
+      await invalidate(queryClient)
+    },
+    onError: (error) => {
+      console.error('Failed to restore thread to queue:', getApiErrorDetail(error))
     },
   })
 

@@ -28,7 +28,7 @@ from app.repositories.snooze_repository import (
     fetch_snooze_backoff_rows,
     fetch_user_session_started_ats,
 )
-from app.repositories.thread_repository import threads_by_ids
+from app.repositories.thread_repository import threads_by_ids, fetch_excluded_thread_ids
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo
 from app.services.session_response import (
@@ -182,6 +182,17 @@ async def derive_effective_roll_excluded_thread_ids(
             continue
         seen.add(thread_id)
         excluded_ids.append(thread_id)
+
+    # A durable "Remove from Queue" exclusion (#3807) is reader-owned, not
+    # session-owned: it keeps the series out of the roll pool across sessions
+    # until it is explicitly restored. The rows still exist, so nothing about
+    # reading history, ratings, or mappings is lost by excluding the id here.
+    excluded_status_ids = await fetch_excluded_thread_ids(db, user_id)
+    for tid in excluded_status_ids:
+        if tid not in seen:
+            seen.add(tid)
+            excluded_ids.append(tid)
+
     return excluded_ids
 
 

@@ -34,6 +34,13 @@ _FORMAT_NORMALIZATION: dict[str, str] = {
     "digital": "Digital",
 }
 
+#: Lifecycle status for a series a reader removed from the active queue
+#: without deleting it (issue #3807). Exclusion is a durable reader decision:
+#: it is owned only by the explicit exclude/restore transitions and is
+#: preserved by every recomputed status through
+#: :meth:`Thread.apply_derived_status`.
+EXCLUDED_STATUS: str = "excluded"
+
 
 def normalize_format_value(format_value: str) -> str:
     """Normalize a raw format string to the canonical vocabulary.
@@ -180,6 +187,38 @@ class Thread(Base):
         """
         return self.total_issues is not None
 
+    def is_excluded(self) -> bool:
+        """Report whether this thread is excluded from the active queue.
+
+        Returns:
+            True while the reader's non-destructive "Remove from Queue"
+            decision (#3807) is still in effect.
+        """
+        return self.status == EXCLUDED_STATUS
+
+    def apply_derived_status(self, status: str) -> bool:
+        """Write a recomputed lifecycle status unless the thread is excluded.
+
+        Reading, rating, correction, CBL sync, and provider reconciliation all
+        recompute ``active``/``completed`` from issue state. Those writes must
+        not silently end a durable queue exclusion (#3807): an excluded series
+        stays excluded, and keeps its unread issues, until the reader restores
+        it explicitly. Only the exclude/restore transitions assign
+        :data:`EXCLUDED_STATUS` or leave it directly.
+
+        Args:
+            status: Recomputed lifecycle status, normally ``active`` or
+                ``completed``.
+
+        Returns:
+            True when the status was written, False when the exclusion
+            preserved the existing value.
+        """
+        if self.is_excluded():
+            return False
+        self.status = status
+        return True
+
     def normalize_format(self) -> str:
         """Normalize this thread's stored format value to canonical form.
 
@@ -298,7 +337,7 @@ class Thread(Base):
         else:
             self.reading_progress = "completed"
             self.next_unread_issue_id = None
-            self.status = "completed"
+            self.apply_derived_status("completed")
             self.queue_position = 0
 
         self.issues_remaining = total_issues - last_issue_read

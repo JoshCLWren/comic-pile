@@ -16,6 +16,13 @@ export interface CompletedPageKeyOptions {
   pageSize: number
 }
 
+export interface ExcludedPageKeyOptions {
+  search?: string
+  sort: QueueSort
+  pageToken?: string | null
+  pageSize: number
+}
+
 export interface SessionPageKeyOptions {
   pageToken?: string | null
   pageSize: number
@@ -75,6 +82,29 @@ export const queryKeys = {
     page: ({ search, sort, pageToken, pageSize }: QueuePageKeyOptions) =>
       [
         'queue',
+        'pages',
+        {
+          search: normalizedSearch(search),
+          sort,
+          pageToken: pageToken ?? null,
+          pageSize,
+        },
+      ] as const,
+  },
+  /**
+   * Series the reader removed from the active queue without deleting (#3807).
+   * The rows are untouched, so this list is the discoverable library view they
+   * are restored from; it therefore has to be refreshed whenever queue
+   * membership changes, and it never participates in the active Queue loader.
+   */
+  excluded: {
+    all: ['excluded'] as const,
+    pages: () => ['excluded', 'pages'] as const,
+    list: ({ search, sort, pageSize }: { search?: string; sort: QueueSort; pageSize: number }) =>
+      ['excluded', 'pages', { search: normalizedSearch(search), sort, pageSize }] as const,
+    page: ({ search, sort, pageToken, pageSize }: ExcludedPageKeyOptions) =>
+      [
+        'excluded',
         'pages',
         {
           search: normalizedSearch(search),

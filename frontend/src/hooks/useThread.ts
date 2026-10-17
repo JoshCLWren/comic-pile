@@ -84,6 +84,27 @@ export function useDeleteThread() {
   };
 }
 
+/**
+ * Removes a series from the active queue without deleting it (#3807).
+ *
+ * The mutation owns the write, so the queue and excluded-library cache effects
+ * live with it instead of in the caller's dialog handler.
+ */
+export function useExcludeThread() {
+  const mutation = useMutation({
+    mutationFn: (id: number) => threadsApi.exclude(id),
+    onSuccess: async () => {
+      await invalidateAfterQueueMutation(queryClient);
+    },
+  });
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  };
+}
+
 export function useReactivateThread() {
   const mutation = useMutation({
     mutationFn: (data: ReactivateThreadPayload) => threadsApi.reactivate(data),
