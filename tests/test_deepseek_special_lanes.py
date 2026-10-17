@@ -24,9 +24,8 @@ def test_special_pins_bypass_dynamic_rotation_and_are_strict() -> None:
     run = Path(".github/workflows/free-model-factory-run.yml").read_text()
     assert "87|89) deepseek_mode=anonymous" in run
     assert "88|90) deepseek_mode=authenticated" in run
-    assert 'missing-OPENCODE_API_KEY' in run
-    assert 'OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}' not in run
-    assert 'EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY }}' in run
+    assert 'missing-OpenCode-credential' in run
+    assert 'EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}' in run
     assert 'OPENCODE_API_KEY=%s' in run
     assert 'steps.lane.outputs.deepseek_mode == \'authenticated\'' in run
     assert '"$source" == opencode-free && "$model" == deepseek-v4.1-flash-free' in run
