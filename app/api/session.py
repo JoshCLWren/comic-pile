@@ -135,7 +135,7 @@ async def get_session_with_thread_safe(
         if pending_thread:
             issues_remaining = await pending_thread.get_issues_remaining(db)
             issue_id, issue_number = await _fetch_thread_issue_metadata(pending_thread, db)
-            tags = []
+    
             tags = await TagInheritanceService(db).get_threads_direct_tags(
                 session.user_id, [pending_thread.id]
             )
@@ -161,7 +161,7 @@ async def get_session_with_thread_safe(
         if thread and thread.user_id == session.user_id:
             issues_remaining = await thread.get_issues_remaining(db)
             issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
-            tags = []
+    
             tags = await TagInheritanceService(db).get_threads_direct_tags(
                 session.user_id, [thread.id]
             )
@@ -245,7 +245,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
 
     issues_remaining = await thread.get_issues_remaining(db)
     issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
-        tags = []
+
     tags = await TagInheritanceService(db).get_threads_direct_tags(user_id, [thread.id])
     return ActiveThreadInfo(
         id=thread.id,
