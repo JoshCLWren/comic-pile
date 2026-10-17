@@ -4,8 +4,9 @@ The planner must never assign invented reader authorship or remove a blocker.
 """
 from __future__ import annotations
 
-import pytest
 from typing import Literal
+
+import pytest
 
 from app.services.reading_list_conversion_plan import (
     ConversionEvidence,
