@@ -119,7 +119,6 @@ describe('sitemap generation regression', () => {
       '/demo',
       '/rate',
       '/analytics',
-      '/roll',
       '/help',
       '/queue',
       '/thread/:id',

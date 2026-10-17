@@ -39,7 +39,7 @@ test.describe('Issue #3068: SEO route cleanup', () => {
   test('removed obsolete aliases return 404', async ({ page }) => {
     for (const path of ['/rate', '/analytics', '/roll', '/help']) {
       await page.goto(path, { waitUntil: 'domcontentloaded' })
-      await expect(page.getByRole('heading', { name: /not found/i })).toBeVisible()
+      await expect(page.getByRole('heading', { name: /Page not found/i })).toBeVisible()
     }
   })
 
