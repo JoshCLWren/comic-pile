@@ -13,7 +13,10 @@ Safety
 * Deletes use ``DELETE /v13/deployments/{dpl_...}`` only.
 * The project name or project id is never a delete target.
 * ``vercel remove <project>`` is never invoked (with or without ``--safe``).
-* In-progress deployments are left untouched.
+* In-progress deployments are left untouched. READY production deployments
+  are retained while a production rollout is unsettled; the incoming target
+  can be BUILDING while the previous READY deployment still serves traffic.
+* Refresh project/deployment protection immediately before every delete.
 * Deletion runs in batches of at most 200 (Vercel CLI bulk-delete limit)
   with backoff on ``429`` / ``5xx``.
 
@@ -319,12 +322,15 @@ def select_keepers(live_id: str, deployments: Sequence[Deployment]) -> set[str]:
         deployments: All known deployments.
 
     Returns:
-        The live production alias and in-progress ids. Previous READY
-        production is not kept (keep-N=1).
+        The production target and in-progress ids. Retain READY production
+        during unsettled rollouts; otherwise keep only the live target.
     """
     keepers = {live_id}
+    settled = any(item.uid == live_id and item.is_ready for item in deployments) and not any(
+        item.is_production and item.is_in_progress for item in deployments
+    )
     for item in deployments:
-        if item.is_in_progress:
+        if item.is_in_progress or (not settled and item.is_production and item.is_ready):
             keepers.add(item.uid)
     return keepers
 
@@ -680,6 +686,13 @@ def run_prune(
     for batch_index, batch in enumerate(batches, start=1):
         emit(f"Deleting batch {batch_index}/{len(batches)} ({len(batch)} deployment(s)).")
         for item in batch:
+            # A rollout can begin after candidate selection. Project targets
+            # can already name its BUILDING deployment while the previous
+            # READY deployment still serves the public alias.
+            current_project = client.fetch_project()
+            verify_project(current_project, project_id=project_id, project_name=project_name)
+            live_id = production_alias_id(current_project)
+            keepers.update(select_keepers(live_id, client.fetch_deployments()))
             if item.uid in keepers or item.uid == live_id:
                 emit(f"Refusing to delete keeper {item.uid}")
                 continue
