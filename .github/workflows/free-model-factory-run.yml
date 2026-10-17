@@ -505,6 +505,7 @@ jobs:
           [[ -n "${OMNIROUTE_BASE_URL:-}" ]] || { echo 'OMNIROUTE_BASE_URL missing for selected OmniRoute capacity' >&2; exit 1; }
 
           mkdir -p "$HOME/.config/opencode"
+          temp_config="$(mktemp)"
           jq -n \
             --arg model "$MODEL" \
             --arg key "$OMNIROUTE_API_KEY" \
@@ -527,7 +528,11 @@ jobs:
                   models: {($model): {name: $model}}
                 }
               }
-            }' > "$HOME/.config/opencode/opencode.json"
+            }' > "$temp_config"
+          # Retain the installer's noninteractive permission and safety policy.
+          jq -s '.[0] * .[1]' "$HOME/.config/opencode/opencode.json" "$temp_config" > "$temp_config.merged"
+          mv "$temp_config.merged" "$HOME/.config/opencode/opencode.json"
+          rm -f "$temp_config"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Configure OpenAI-compatible factory provider
@@ -586,6 +591,7 @@ jobs:
             model="${model#"$prefix"}"
           fi
           mkdir -p "$HOME/.config/opencode"
+          temp_config="$(mktemp)"
           jq -n \
             --arg provider "$provider_id" \
             --arg name "$provider_name" \
@@ -602,7 +608,11 @@ jobs:
                   models: {($model): {name: $model}}
                 }
               }
-            }' > "$HOME/.config/opencode/opencode.json"
+            }' > "$temp_config"
+          # Retain the installer's noninteractive permission and safety policy.
+          jq -s '.[0] * .[1]' "$HOME/.config/opencode/opencode.json" "$temp_config" > "$temp_config.merged"
+          mv "$temp_config.merged" "$HOME/.config/opencode/opencode.json"
+          rm -f "$temp_config"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Require Pixel Canary to remain zero-price
