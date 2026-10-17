@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
+from app.config import get_reading_execution_settings
 from app.models import Dependency, Issue, Thread
 from app.repositories import dependency_repository, issue_repository
 from app.services.reading_eligibility_service import (
@@ -482,7 +483,7 @@ async def get_thread_connected_threads(
         return None
 
     blocking_deps, blocked_by_deps = await dependency_repository.get_thread_connected_dependencies(
-        db, thread_id
+        db, thread_id, reader_only=get_reading_execution_settings().enabled
     )
     all_deps = blocking_deps + blocked_by_deps
     if not all_deps:
