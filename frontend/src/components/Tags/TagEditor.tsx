@@ -16,6 +16,7 @@ import {
   TAG_COLOR_HEX,
   TAG_COLOR_NAMES,
   tagColorName,
+  type InheritanceSource,
   type NearMatch,
   type Tag,
   type TagTargetType,
@@ -41,15 +42,28 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Human-readable source list for inherited-tag explanations (issue #3426):
+ * "The Ultimates", or "The Ultimates and Mignolaverse".
+ */
+function formatSourceNames(sources: InheritanceSource[]): string {
+  const names = [...new Set(sources.map((source) => source.display_name))]
+  if (names.length === 0) return 'inheritance'
+  if (names.length === 1) return names[0]
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+/**
  * Inline tag editing for one target (issue #3032).
  *
  * Covers searching/selecting usable tags, inline private-tag creation on the
  * fixed 32-color palette (red by default), direct add/remove, near-global-name
  * guidance, and usage-backed delete confirmation. Inherited tags render
  * read-only with source navigation; editing happens only where the assignment
- * is direct. Global definitions and assignments stay admin-only: non-admins
- * see global tags but every global mutation is refused by the API and
- * surfaced here as an explanatory error.
+ * is direct. Tags already effective through inheritance are annotated in the
+ * picker — never offered as a plain add — and every assign path refuses a
+ * direct duplicate of an inherited tag (issue #3426). Global definitions and
+ * assignments stay admin-only: non-admins see global tags but every global
+ * mutation is refused by the API and surfaced here as an explanatory error.
  */
 export function TagEditor({
   targetType,
@@ -97,7 +111,30 @@ export function TagEditor({
   if (!isOpen) return null
 
   const directIds = new Set((effective.data?.direct_tags ?? []).map((tag) => tag.id))
+  // Tags already effective through inheritance (issue #3426), keyed by tag id
+  // so the picker annotates them instead of offering a duplicate add, and so
+  // every assign path can refuse a direct assignment that would double-tag.
+  const inheritedById = new Map(
+    (effective.data?.effective_tags ?? [])
+      .filter((entry) => !entry.direct)
+      .map((entry) => [entry.tag.id, entry.sources]),
+  )
+  const targetNoun =
+    targetType === 'ContinuityPlan' ? 'reading plan' : targetType.toLowerCase()
+  /**
+   * Explanation for a tag this item already carries via inheritance, or null
+   * when the tag is not inherited here. Used by every assign entry point so
+   * no path silently creates a direct duplicate of an inherited tag.
+   */
+  function explainIfInherited(tag: { id: number; name: string }): string | null {
+    const sources = inheritedById.get(tag.id)
+    if (!sources) return null
+    return `“${tag.name}” already tags this ${targetNoun} via ${formatSourceNames(sources)}.`
+  }
   const payload = { target_type: targetType, target_id: targetId } as const
+  const inheritedDuplicate = exactDuplicate
+    ? inheritedById.get(exactDuplicate.id)
+    : undefined
 
   const clearFeedback = () => {
     setNotice(null)
@@ -106,6 +143,11 @@ export function TagEditor({
 
   async function handleAssign(tag: Tag) {
     clearFeedback()
+    const inherited = explainIfInherited(tag)
+    if (inherited) {
+      setNotice(inherited)
+      return
+    }
     try {
       await assign.mutateAsync({ id: tag.id, data: payload })
       setNotice(`Added “${tag.name}”.`)
@@ -122,6 +164,11 @@ export function TagEditor({
    */
   async function handleUseExisting(tag: Tag) {
     clearFeedback()
+    const inherited = explainIfInherited(tag)
+    if (inherited) {
+      setNotice(inherited)
+      return
+    }
     try {
       await assign.mutateAsync({ id: tag.id, data: payload })
       setNotice(`Used existing tag “${tag.name}”.`)
@@ -140,6 +187,11 @@ export function TagEditor({
 
   async function handleAssignGlobal(match: NearMatch) {
     clearFeedback()
+    const inherited = explainIfInherited(match)
+    if (inherited) {
+      setNotice(inherited)
+      return
+    }
     try {
       await assign.mutateAsync({ id: match.id, data: payload })
       setNotice(`Used global tag “${match.name}”.`)
@@ -187,6 +239,16 @@ export function TagEditor({
         include_near_matches: !forcePrivate,
       })
       if (result.redirected_to_global) {
+        const sources = inheritedById.get(result.tag.id)
+        if (sources) {
+          setNotice(
+            `“${name}” matches global tag “${result.tag.name}” — ` +
+              `already tags this ${targetNoun} via ${formatSourceNames(sources)}.`,
+          )
+          setNewName('')
+          setPendingNearMatches(null)
+          return
+        }
         try {
           await assign.mutateAsync({ id: result.tag.id, data: payload })
           setNotice(`“${name}” matches global tag “${result.tag.name}” — used it.`)
@@ -327,6 +389,7 @@ export function TagEditor({
               <ul className="flex max-w-full flex-wrap gap-1.5">
                 {(usable.data?.tags ?? []).map((tag) => {
                   const already = directIds.has(tag.id)
+                  const inheritedFrom = inheritedById.get(tag.id)
                   return (
                     <li key={tag.id} className="min-w-0 max-w-full">
                       <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--theme-border)] px-2.5 py-1 text-xs text-[var(--theme-text-muted)]">
@@ -346,6 +409,16 @@ export function TagEditor({
                         {already ? (
                           <span className="shrink-0 text-[11px] text-[var(--theme-text-dim)]">
                             Added
+                          </span>
+                        ) : inheritedFrom ? (
+                          // Already effective through inheritance (issue #3426):
+                          // annotated, and not offered as a plain Add so the
+                          // viewer cannot silently double-tag with it.
+                          <span
+                            className="shrink-0 text-[11px] text-[var(--theme-text-dim)]"
+                            title={`Inherited from ${formatSourceNames(inheritedFrom)}`}
+                          >
+                            Inherited
                           </span>
                         ) : (
                           <button
@@ -420,19 +493,31 @@ export function TagEditor({
                 className="rounded-lg border border-[var(--theme-border)] p-3"
               >
                 <p className="text-sm text-[var(--theme-text-primary)]">
-                  A tag named “{exactDuplicate.name}” already exists. Use it instead of
-                  creating a duplicate.
+                  {inheritedDuplicate ? (
+                    <>
+                      “{exactDuplicate.name}” already tags this {targetNoun} via{' '}
+                      {formatSourceNames(inheritedDuplicate)} — creating it again
+                      would tag this {targetNoun} twice.
+                    </>
+                  ) : (
+                    <>
+                      A tag named “{exactDuplicate.name}” already exists. Use it instead of
+                      creating a duplicate.
+                    </>
+                  )}
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleUseExisting(exactDuplicate)}
-                    disabled={assign.isPending}
-                    className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
-                  >
-                    Use “{exactDuplicate.name}”
-                  </button>
-                </div>
+                {!inheritedDuplicate && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleUseExisting(exactDuplicate)}
+                      disabled={assign.isPending}
+                      className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+                    >
+                      Use “{exactDuplicate.name}”
+                    </button>
+                  </div>
+                )}
               </div>
             ) : pendingNearMatches && pendingNearMatches.length > 0 ? (
               <div

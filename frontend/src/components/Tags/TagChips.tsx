@@ -258,7 +258,13 @@ export function TagChips({
 
   const selfKey = `${data.target_type}:${data.target_id}`
   const byTagId = new Map(data.effective_tags.map((entry) => [entry.tag.id, entry]))
-  const inherited = data.effective_tags.filter((entry) => !entry.direct)
+  // Never show the same tag twice (issue #3426): an inherited entry whose tag
+  // already renders as a direct chip is folded into that chip's source list
+  // instead of rendering a second dashed chip beside it.
+  const directTagIds = new Set(data.direct_tags.map((tag) => tag.id))
+  const inherited = data.effective_tags.filter(
+    (entry) => !entry.direct && !directTagIds.has(entry.tag.id),
+  )
 
   return (
     <section aria-label={label} className="min-w-0">
