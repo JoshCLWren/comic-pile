@@ -27,20 +27,10 @@ jobs:
             echo 'active=false' >> "$GITHUB_OUTPUT"
             echo 'Promotional free model was retired; live smoke is no longer applicable.'
           fi
-      - name: Install factory-pinned OpenCode
+      - name: Install current OpenCode 2
         if: steps.pin.outputs.active == 'true'
-        shell: bash
-        env:
-          OPENCODE_VERSION: '1.18.32'
-          OPENCODE_LINUX_X64_SHA256: '3046e0404fdc60fb80307e7a47824ba07477364178a4d09baa8548496dd6d43b'
-        run: |
-          set -Eeuo pipefail
-          archive="$RUNNER_TEMP/opencode-linux-x64.tar.gz"
-          curl -fsSL --retry 3 "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" -o "$archive"
-          printf '%s  %s\n' "$OPENCODE_LINUX_X64_SHA256" "$archive" | sha256sum --check -
-          mkdir -p "$RUNNER_TEMP/opencode-bin"
-          tar -xzf "$archive" -C "$RUNNER_TEMP/opencode-bin"
-          echo "$RUNNER_TEMP/opencode-bin" >> "$GITHUB_PATH"
+        run: bash .github/scripts/install-opencode-v2.sh
+
       - name: Verify exact free model is discoverable
         if: steps.pin.outputs.active == 'true'
         shell: bash
@@ -55,8 +45,7 @@ jobs:
           set -Eeuo pipefail
           # Match the production opencode-free lane, which supplies no paid-provider credentials.
           timeout --signal=TERM --kill-after=10s 180s \
-            opencode run -m opencode/deepseek-v4.1-flash-free --agent build \
-            --dir "$GITHUB_WORKSPACE" --title 'DeepSeek free endpoint acceptance smoke' \
+            opencode run --standalone -m opencode/deepseek-v4.1-flash-free --agent build \
             'Reply with exactly DEEPSEEK_FREE_ENDPOINT_OK. Do not edit files, run commands, or use tools.' \
             2>&1 | tee "$RUNNER_TEMP/deepseek-free-smoke.log"
           grep -q 'DEEPSEEK_FREE_ENDPOINT_OK' "$RUNNER_TEMP/deepseek-free-smoke.log"
