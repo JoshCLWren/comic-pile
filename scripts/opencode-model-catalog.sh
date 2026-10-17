@@ -30,6 +30,14 @@ command -v "$binary" >/dev/null 2>&1 || {
   exit 1
 }
 
+# OpenCode 2 exposes an unfiltered model list and has no V1 --refresh or
+# --verbose flags. Keep the provider argument for callers; the shared Python
+# parser filters the returned provider/model selectors.
+if "$binary" --version 2>/dev/null | grep -Eq '(^|[[:space:]])v?2[.]'; then
+  exec "$binary" models --standalone
+fi
+
+# Legacy OpenCode 1 compatibility for local factory tools.
 args=(models "$provider")
 if [[ "$refresh" == "refresh" ]]; then
   args+=(--refresh)
@@ -37,5 +45,4 @@ fi
 if [[ "$mode" == "verbose" ]]; then
   args+=(--verbose)
 fi
-
 exec "$binary" "${args[@]}"
