@@ -6,7 +6,7 @@ npm install --global --prefix "$root" @opencode/cli@latest
 binary="$root/bin/opencode"
 test -x "$binary"
 version="$("$binary" --version)"
-if [[ ! "$version" =~ ^2\. ]]; then
+if [[ ! "$version" =~ (^|[[:space:]])v?2\. ]]; then
   echo "OpenCode 2 required; received version '$version'" >&2
   exit 1
 fi
