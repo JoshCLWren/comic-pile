@@ -29,7 +29,8 @@ jobs:
       - name: Call exact DeepSeek Free model and shell tool
         shell: bash
         env:
-          ZEN_SECRET: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+          # Only the authenticated job receives the key; anonymous tool calls cannot inspect it.
+          ZEN_SECRET: ${{ matrix.mode == 'authenticated' && secrets.OPENCODE_ZEN_API_KEY || '' }}
           MODE: ${{ matrix.mode }}
         run: |
           set -Eeuo pipefail
