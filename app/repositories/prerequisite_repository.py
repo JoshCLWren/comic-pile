@@ -42,6 +42,16 @@ async def add_reader(
     return row
 
 
+async def promote_reader(db: AsyncSession, row: Dependency, note: str | None) -> None:
+    """Activate an existing archived edge only on an explicit reader POST."""
+    row.origin = "reader"
+    row.classification = "A"
+    row.provenance = "Reader-authored through explicit prerequisite API"
+    if note is not None:
+        row.note = note
+    await db.flush()
+
+
 async def remove(db: AsyncSession, row: Dependency) -> None:
     """Remove one already-authorized reader requirement."""
     await db.delete(row)
