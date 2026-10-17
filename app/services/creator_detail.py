@@ -308,7 +308,6 @@ async def get_creator_detail(
         offset=page_offset,
     )
 
-
     rated_issues = [
         _build_issue_row(
             inputs,
@@ -454,7 +453,7 @@ async def get_creator_series_issues(
         limit=limit,
         offset=page_offset,
     )
-    
+
     group = build_series_group(aggregate)
     issues = [
         _build_issue_row(

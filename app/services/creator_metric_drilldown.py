@@ -64,7 +64,7 @@ async def _load_creator_issue_dicts(
     rows = await load_all_creator_issue_rows(
         db, user_id=user_id, creator_issue_ids=creator_issue_ids
     )
-    
+
     causes = await classify_issue_ids(
         db,
         user_id,

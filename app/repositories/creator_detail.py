@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.issue import Issue
 from app.models.thread import Thread
 
-
 #: Row shape for recent-first collections:
 #: ``(issue_id, issue_number, thread_id, thread_title, status)``.
 RecentCreatorIssueRow = tuple[int, str, int, str, str]
