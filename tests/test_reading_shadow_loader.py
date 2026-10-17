@@ -227,6 +227,37 @@ async def test_report_transaction_is_read_only_and_leaves_state_unchanged(
         await report_reading_eligibility.report(get_test_database_url(), user.id)
 
 
+async def test_all_reader_preflight_is_read_only_and_owner_isolated(
+    async_db_committed: AsyncSession,
+    statements: list[str],
+) -> None:
+    """One production-shaped report evaluates every owner in the same read snapshot."""
+    db = async_db_committed
+    first = await _owner(db, "all_reader_one")
+    second = await _owner(db, "all_reader_two")
+    one, one_issues = await _series(db, first, "Private one", 1)
+    two, two_issues = await _series(db, second, "Private two", 1)
+    db.add(Dependency(source_issue_id=one_issues[0].id,
+                      target_issue_id=one_issues[0].id, note="Legacy self cycle"))
+    await db.commit()
+    statements.clear()
+    result = await report_reading_eligibility.report_all(get_test_database_url())
+    assert result["scope"] == "all_readers"
+    assert result["read_only"] is True
+    reports = {r["user_id"]: r for r in result["reports"]}
+    assert first.id in reports and second.id in reports
+    assert reports[first.id]["valid"] is True
+    assert reports[second.id]["valid"] is True
+    assert one.id in {row["thread_id"] for row in reports[first.id]["threads"]}
+    assert two.id not in {row["thread_id"] for row in reports[first.id]["threads"]}
+    assert two.id in {row["thread_id"] for row in reports[second.id]["threads"]}
+    assert result["readers_valid"] == result["readers_checked"]
+    assert len(result["source_fingerprint"]) == 64
+    assert any("SET TRANSACTION READ ONLY" in statement for statement in statements)
+    assert not any(statement.lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE"))
+                   for statement in statements)
+
+
 async def test_cli_requires_explicit_async_postgres_url() -> None:
     """Diagnostic tooling never falls back to a live URL from application settings."""
     with pytest.raises(ValueError, match="explicit"):
