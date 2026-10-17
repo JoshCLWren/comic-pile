@@ -63,6 +63,7 @@ def _plan(snapshot, evidence, decision: PrerequisiteDecision | None):
 
 @pytest.mark.parametrize("classification", [None, "D"])
 def test_reviewed_unknown_preserves_every_raw_field_and_blocker(classification: str | None) -> None:
+    """Reviewed no-ops retain exact historical metadata and blocker semantics."""
     snapshot, evidence = _fixture(raw_classification=classification, raw_provenance="old label")
     manifest = _plan(snapshot, evidence, PrerequisiteDecision(7, "preserve_unknown"))
 
@@ -91,6 +92,7 @@ def test_reviewed_unknown_preserves_every_raw_field_and_blocker(classification: 
 
 
 def test_no_review_decision_still_refuses_unknown_history() -> None:
+    """Unknown history requires an explicit fingerprint-bound decision."""
     snapshot, evidence = _fixture()
     manifest = _plan(snapshot, evidence, None)
     assert not manifest.valid
@@ -113,6 +115,7 @@ def test_no_review_decision_still_refuses_unknown_history() -> None:
 def test_preserve_unknown_rejects_known_or_missing_raw_evidence(
     origin: Literal["reader", "converted"] | None, classification: Literal["A", "B", "C", "D"] | None, provenance: str | None, include_raw: bool
 ) -> None:
+    """Already classified rows and missing raw evidence cannot be preserved as unknown."""
     snapshot, evidence = _fixture(
         raw_origin=origin, raw_classification=classification,
         raw_provenance=provenance, include_raw=include_raw
@@ -131,6 +134,7 @@ def test_preserve_unknown_rejects_known_or_missing_raw_evidence(
 def test_preserve_unknown_rejects_invented_metadata(
     classification: Literal["A", "B", "C", "D"] | None, provenance: str | None
 ) -> None:
+    """Preservation may not add a fabricated classification or provenance."""
     snapshot, evidence = _fixture()
     manifest = _plan(
         snapshot, evidence, PrerequisiteDecision(7, "preserve_unknown", classification, provenance)
@@ -149,6 +153,7 @@ def test_preserve_unknown_rejects_invented_metadata(
 
 
 def test_parser_accepts_preservation_without_metadata() -> None:
+    """The reviewed intent parser accepts a metadata-free preservation decision."""
     intent = parse_intent({
         "source_fingerprint": "reviewed",
         "prerequisites": [{"dependency_id": 7, "action": "preserve_unknown"}],
@@ -157,6 +162,7 @@ def test_parser_accepts_preservation_without_metadata() -> None:
 
 
 def test_stale_fingerprint_cannot_approve_preservation() -> None:
+    """An out-of-date intent cannot authorize any preservation decision."""
     snapshot, evidence = _fixture()
     manifest = build_manifest(
         snapshot, evidence,
