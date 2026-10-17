@@ -50,11 +50,12 @@ export const ROUTE_SEO_TABLE: readonly RouteSeoEntry[] = [
   { pattern: '/forgot-password', visibility: 'public-noindex', canonicalPath: null, title: `Forgot password — ${APP_TITLE}`, description: UTILITY_DESCRIPTION },
   { pattern: '/reset-password', visibility: 'public-noindex', canonicalPath: null, title: `Reset password — ${APP_TITLE}`, description: UTILITY_DESCRIPTION },
   { pattern: '/demo', visibility: 'public-noindex', canonicalPath: null, title: `Try the demo — ${APP_TITLE}`, description: UTILITY_DESCRIPTION },
-  // Retired redirect routes: crawlers follow the redirect, so the redirect
-  // source itself stays non-indexable with no canonical of its own.
+  // Compatibility redirect routes: crawlers follow the redirect, so the
+  // redirect source itself stays non-indexable with no canonical of its own.
   { pattern: '/rate', visibility: 'public-noindex', canonicalPath: null, title: APP_TITLE, description: APP_DESCRIPTION },
   { pattern: '/analytics', visibility: 'public-noindex', canonicalPath: null, title: APP_TITLE, description: APP_DESCRIPTION },
-  { pattern: '/help', visibility: 'public-noindex', canonicalPath: null, title: APP_TITLE, description: APP_DESCRIPTION },
+  { pattern: '/roll', visibility: 'public-noindex', canonicalPath: null, title: `Roll the dice — ${APP_TITLE}`, description: APP_DESCRIPTION },
+  { pattern: '/help', visibility: 'public-noindex', canonicalPath: null, title: `Help — ${APP_TITLE}`, description: UTILITY_DESCRIPTION },
   { pattern: '/queue', visibility: 'private', canonicalPath: null, title: `Queue — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/thread/:id', visibility: 'private', canonicalPath: null, title: `Thread — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/creators', visibility: 'private', canonicalPath: null, title: `Creators — ${APP_TITLE}`, description: APP_DESCRIPTION },

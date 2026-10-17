@@ -23,6 +23,7 @@ Disallow: /reset-password
 Disallow: /demo
 Disallow: /rate
 Disallow: /analytics
+Disallow: /roll
 Disallow: /help
 Disallow: /queue
 Disallow: /thread/
