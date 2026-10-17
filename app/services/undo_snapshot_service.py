@@ -13,6 +13,7 @@ from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
 from app.schemas import ActiveThreadInfo
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
+    CREATED_ISSUES_KEY,
     DELETED_ISSUES_KEY,
     ISSUE_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
@@ -290,13 +291,28 @@ class UndoSnapshotService:
         """Restore issue state in place so surviving associations remain intact."""
         # Compact delta path (#3226): apply only changed-issue preimages.
         if ISSUE_CHANGES_KEY in state:
-            snapshot_changes = state.get(ISSUE_CHANGES_KEY) or []
+            # Drop the thread's issue pointer before surgery so no flush can
+            # write a next_unread reference at a row about to be removed.
+            thread.next_unread_issue_id = None
+            await self.db.flush()
+
             if pre_loaded_issues is not None:
                 existing_issues = pre_loaded_issues
             else:
                 existing_issues = await self.repository.get_issues_by_thread(thread.id)
             existing_by_id = {issue.id: issue for issue in existing_issues}
-            for ch in snapshot_changes:
+
+            # Recreate issues this action deleted so their preimages return.
+            for deleted in state.get(DELETED_ISSUES_KEY) or []:
+                deleted_id = int(deleted["id"])
+                if deleted_id not in existing_by_id:
+                    recreated = await self.repository.create_issue_from_state(
+                        deleted_id, thread.id, deleted, deleted.get("position", 1)
+                    )
+                    existing_by_id[deleted_id] = recreated
+
+            # Restore the pre-action state of each issue that changed.
+            for ch in state.get(ISSUE_CHANGES_KEY) or []:
                 issue_id = int(ch["id"])
                 issue = existing_by_id.get(issue_id)
                 if issue is None:
@@ -307,12 +323,15 @@ class UndoSnapshotService:
                     await self.repository.update_issue_from_state(
                         issue, ch, ch.get("position") or issue.position
                     )
-            # Delete preimages for deleted issues
-            deleted = state.get(DELETED_ISSUES_KEY) or []
-            if deleted:
+
+            # Delete issues this action created (e.g. implicit migration) so the
+            # thread returns to its pre-action record set.
+            created = state.get(CREATED_ISSUES_KEY) or []
+            if created:
                 await self.repository.delete_issues_by_ids(
-                    [int(d["id"]) for d in deleted]
+                    [int(c["id"]) for c in created]
                 )
+
             await self.db.flush()
             thread.total_issues = state.get("total_issues")
             thread.next_unread_issue_id = state.get("next_unread_issue_id")

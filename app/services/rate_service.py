@@ -275,9 +275,22 @@ async def snapshot_thread_states(
                 "rated_thread_id is required when rated_thread_pre_state is set"
             )
 
+        # Compact per-action records are nested under the rated thread so the
+        # payload's top level keeps only thread-id keys plus the reserved
+        # underscore-prefixed change maps (issue #3226). Undo applies them via
+        # the per-thread state, and the top-level thread-id scan never mistakes
+        # a change key for a thread id.
+        rated_state = dict(rated_thread_pre_state)
+        if issue_changes:
+            rated_state[ISSUE_CHANGES_KEY] = issue_changes
+        if created_issues:
+            rated_state[CREATED_ISSUES_KEY] = created_issues
+        if deleted_issues:
+            rated_state[DELETED_ISSUES_KEY] = deleted_issues
+
         thread_states: dict = {
             SNAPSHOT_VERSION_KEY: SNAPSHOT_VERSION,
-            str(rated_thread_id): rated_thread_pre_state,
+            str(rated_thread_id): rated_state,
         }
         if queue_position_changes:
             thread_states[QUEUE_CHANGES_KEY] = {
@@ -289,12 +302,6 @@ async def snapshot_thread_states(
                 str(thread_id): old_value
                 for thread_id, old_value in blocked_changes.items()
             }
-        if issue_changes:
-            thread_states[ISSUE_CHANGES_KEY] = issue_changes
-        if created_issues:
-            thread_states[CREATED_ISSUES_KEY] = created_issues
-        if deleted_issues:
-            thread_states[DELETED_ISSUES_KEY] = deleted_issues
 
         delta_kind, delta_version = classify_snapshot(
             thread_states, description="After rating", event_id=event_id
