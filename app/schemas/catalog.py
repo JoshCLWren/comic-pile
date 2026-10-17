@@ -225,6 +225,8 @@ class SeriesMappingPreviewRow(BaseModel):
     thread_id: int | None = Field(default=None, description="Thread ID if the issue belongs to a thread")
     thread_title: str | None = Field(default=None, description="Thread title if applicable")
     current_mapping_status: str | None = Field(default=None, description="Current mapping status if any")
+    provider: str | None = Field(default=None, description="External provider name")
+    external_id: str | None = Field(default=None, description="Provider-specific identifier")
     proposed_mapping: bool = Field(..., description="Whether this issue would be mapped in the proposed scope")
     default_selected: bool = Field(..., description="Whether this is a default selected row (only for safe_exact_match)")
     reason: str | None = Field(default=None, description="Explanation for the classification")
