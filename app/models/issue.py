@@ -56,7 +56,9 @@ class Issue(Base):
         UniqueConstraint("thread_id", "id", name="uq_issues_thread_id_id"),
         Index("ix_issue_thread_id", "thread_id"),
         Index("ix_issue_thread_is_read", "thread_id", "status"),
-        Index("ix_issue_thread_position", "thread_id", "position"),
+        # (thread_id, position) lookup/order coverage is provided by the
+        # uq_issue_thread_position backing index (issue #3219); a separate
+        # ordinary index on the same keys was redundant.
         Index("ix_issue_catalog_issue", "catalog_issue_id"),
     )
 

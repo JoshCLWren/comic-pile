@@ -71,7 +71,8 @@ class RecommendationContext(Base):
     balanced_neutrality: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     __table_args__ = (
-        Index("ix_recommendation_contexts_event_id", "event_id"),
+        # event_id lookup coverage is provided by the unique constraint
+        # backing index (issue #3219); a separate ordinary index was redundant.
         Index("ix_recommendation_contexts_created_at", "created_at"),
         Index("ix_recommendation_contexts_intent", "intent"),
     )
