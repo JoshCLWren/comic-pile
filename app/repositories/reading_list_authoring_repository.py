@@ -104,14 +104,14 @@ async def load_entries(db: AsyncSession, user_id: int) -> list[CustomCBLEntry]:
 
 
 async def load_requirements(db: AsyncSession, user_id: int) -> list[Dependency]:
-    """Keep enforced historical requirements without classifying or rewriting them.
+    """Load only deliberate reader prerequisites for canonical execution.
 
     Args:
         db: Current authoring transaction.
         user_id: Reader who owns both requirement endpoints.
 
     Returns:
-        Existing enforced dependency models, excluding inert cbl-order rows.
+        Reader-authored prerequisites; historical compilations are not execution inputs.
     """
     source = aliased(Issue)
     target = aliased(Issue)
@@ -128,11 +128,7 @@ async def load_requirements(db: AsyncSession, user_id: int) -> list[Dependency]:
                 .where(
                     source_thread.user_id == user_id,
                     target_thread.user_id == user_id,
-                    or_(
-                        Dependency.origin.is_not(None),
-                        Dependency.note.is_(None),
-                        Dependency.note.not_like("cbl-order:%"),
-                    ),
+                    Dependency.origin == "reader",
                 )
             )
         ).all()
