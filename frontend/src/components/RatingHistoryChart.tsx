@@ -26,41 +26,44 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
   const [hoveredPoint, setHoveredPoint] = useState<RatingDataPoint | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
-  // Process rating data for visualization
+  // Deduplicate edited ratings — keep latest observation per issue
   const ratingData = useMemo(() => {
-    return ratedIssues
+    const byIssue = new Map<number, RatingDataPoint>()
+    ratedIssues
       .filter(issue => issue.effective_rating !== null && issue.rating_timestamp !== null)
-      .map(issue => ({
-        issueId: issue.issue_id,
-        rating: issue.effective_rating!,
-        timestamp: new Date(issue.rating_timestamp!),
-        threadId: issue.thread_id,
-        threadTitle: issue.thread_title,
-        issueNumber: issue.issue_number,
-      }))
-      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+      .forEach(issue => {
+        const point: RatingDataPoint = {
+          issueId: issue.issue_id,
+          rating: issue.effective_rating!,
+          timestamp: new Date(issue.rating_timestamp!),
+          threadId: issue.thread_id,
+          threadTitle: issue.thread_title,
+          issueNumber: issue.issue_number,
+        }
+        const existing = byIssue.get(point.issueId)
+        if (!existing || point.timestamp.getTime() > existing.timestamp.getTime()) {
+          byIssue.set(point.issueId, point)
+        }
+      })
+    return Array.from(byIssue.values()).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
   }, [ratedIssues])
 
-  // Calculate rolling average (minimum 5 observations)
+  // Calculate rolling average (fixed 5-observation window; documented minimum)
   const rollingAverage = useMemo(() => {
-    if (ratingData.length < 5) return { points: [], windowSize: 5 }
-
-    const windowSize = Math.min(5, Math.floor(ratingData.length * 0.3))
+    const windowSize = 5
+    if (ratingData.length < windowSize) return { points: [], windowSize, sufficient: false }
     const averages: RollingAveragePoint[] = []
-
     for (let i = windowSize - 1; i < ratingData.length; i++) {
       const window = ratingData.slice(i - windowSize + 1, i + 1)
       const sum = window.reduce((acc, point) => acc + point.rating, 0)
       const avg = sum / window.length
-
       averages.push({
         timestamp: ratingData[i].timestamp,
         rating: avg,
         count: window.length,
       })
     }
-
-    return { points: averages, windowSize }
+    return { points: averages, windowSize, sufficient: true }
   }, [ratingData])
 
   // Chart dimensions and margins
@@ -124,7 +127,7 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
     for (let rating = Math.ceil(minY * 2) / 2; rating <= maxY; rating += 0.5) {
       ticks.push({
         value: rating,
-        label: rating.toFixed(1),
+        label: Math.round(rating).toString(),
       })
     }
     
@@ -146,6 +149,9 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
       <svg
         ref={svgRef}
         className="w-full"
+        role="img"
+        aria-label="Rating history chart"
+        aria-hidden="false"
         viewBox={`0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`}
         style={{ height: height + margin.top + margin.bottom }}
       >
@@ -233,7 +239,13 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
             key={point.issueId}
             onMouseEnter={() => setHoveredPoint(point)}
             onMouseLeave={() => setHoveredPoint(null)}
-            className="cursor-pointer"
+            onFocus={() => setHoveredPoint(point)}
+            onBlur={() => setHoveredPoint(null)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHoveredPoint(point); } }}
+            tabIndex={0}
+            role="button"
+            aria-label={`${point.rating} stars for ${point.threadTitle} #${point.issueNumber} on ${point.timestamp.toLocaleDateString()}`}
+            className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--theme-comic-accent)] rounded-full"
           >
             <circle
               cx={xScale(point.timestamp.getTime())}
@@ -274,7 +286,7 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
                      color: 'var(--theme-text-primary)',
                    }}>
                 <div style={{ color: 'var(--theme-personal-accent)' }}>
-                  {hoveredPoint.rating.toFixed(1)}★
+                  {hoveredPoint.rating}★
                 </div>
                 <div className="mt-1" style={{ color: 'var(--theme-text-muted)' }}>
                   {hoveredPoint.timestamp.toLocaleDateString()}
@@ -293,6 +305,29 @@ export function RatingHistoryChart({ ratedIssues, className = '' }: RatingHistor
           </g>
         )}
       </svg>
+
+      {/* Accessible alternative for screen readers / keyboard users */}
+      <table className="sr-only" role="table" aria-label="Rating history data">
+        <thead>
+          <tr><th>Issue</th><th>Rating</th><th>Date</th><th>Thread</th></tr>
+        </thead>
+        <tbody>
+          {ratingData.map((point) => (
+            <tr key={point.issueId}>
+              <td>{point.issueNumber}</td>
+              <td>{point.rating}</td>
+              <td>{point.timestamp.toLocaleDateString()}</td>
+              <td>{point.threadTitle}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {!rollingAverage.sufficient && ratingData.length > 0 && (
+        <p className="text-xs mt-1" style={{ color: 'var(--theme-text-muted)' }}>
+          Rolling average requires at least 5 observations; current sample ({ratingData.length}) is too small for a trend.
+        </p>
+      )}
 
       {/* Legend */}
       <div className="mt-4 flex items-center justify-between text-xs" style={{ color: 'var(--theme-text-muted)' }}>
