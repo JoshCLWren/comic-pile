@@ -401,8 +401,8 @@ run_agent() {
   fi
 
   timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \
-    opencode run -m "$RUNTIME_MODEL" --agent build --auto --dir "$GITHUB_WORKSPACE" \
-    --title "ComicPile Factory ${WORKER} · ${DISPLAY}" "$prompt" \
+    opencode run --standalone -m "$RUNTIME_MODEL" --agent build \
+    "$prompt" \
     2>&1 | tee "/tmp/opencode-factory-${WORKER}.log"
   status=${PIPESTATUS[0]}
   return "$status"
