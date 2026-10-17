@@ -117,8 +117,48 @@ def _optional_str(value: object) -> str | None:
     return value
 
 
+def _check_intent_keys(payload: Mapping[str, object]) -> None:
+    """Reject unknown decision keys before constructing any reviewed intent."""
+
+    def check(row: Mapping[str, object], allowed: set[str], where: str) -> None:
+        if extra := set(row) - allowed:
+            raise ValueError(f"Unknown {where} keys: {sorted(extra)}")
+
+    check(
+        payload,
+        {
+            "source_fingerprint",
+            "schema_version",
+            "lists",
+            "prerequisites",
+            "exclusions",
+            "frontier_repairs",
+        },
+        "intent",
+    )
+    allowed_rows = {
+        "lists": {"list_id", "mode", "acknowledged_discrepancies", "skipped_issue_ids", "gates"},
+        "prerequisites": {"dependency_id", "action", "classification", "provenance"},
+        "exclusions": {
+            "provider",
+            "external_volume_id",
+            "thread_id",
+            "issue_id",
+            "resolved_issue_ids",
+        },
+        "frontier_repairs": {"thread_id", "derived_issue_id"},
+    }
+    for section, allowed in allowed_rows.items():
+        for row in _rows(payload.get(section)):
+            check(row, allowed, section)
+            if section == "lists":
+                for discrepancy in _rows(row.get("acknowledged_discrepancies")):
+                    check(discrepancy, {"issue_id", "kind"}, "acknowledged_discrepancies")
+
+
 def parse_intent(payload: Mapping[str, object]) -> ConversionIntent:
     """Parse a reviewed intent document without inventing defaults for decisions."""
+    _check_intent_keys(payload)
     fingerprint = payload.get("source_fingerprint")
     if not isinstance(fingerprint, str) or not fingerprint:
         raise ValueError("Reviewed intent requires a source_fingerprint")
@@ -250,7 +290,9 @@ async def load_project_evidence(
                 list_id=reading_list.list_id,
                 plan_membership_issue_ids=tuple(row.issue_id for row in memberships),
                 durable_source_link=bool(plan_ids),
-                plan_lane_count=len({row.lane_id for row in memberships}) or 1,
+                plan_lane_count=max(
+                    len(plan_ids), len({(row.plan_id, row.lane_id) for row in memberships}), 1
+                ),
                 foreign_source_list_ids=tuple(foreign),
                 entry_row_ids=tuple(sorted(entry_ids.get(reading_list.list_id, []))),
             )

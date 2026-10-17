@@ -648,3 +648,47 @@ def test_full_census_sized_discrepancies(list_count: int, plan_count: int) -> No
     assert {row.kind for row in manifest.lists[0].discrepancies} == {
         "list_only" if list_count > plan_count else "plan_only"
     }
+
+
+@pytest.mark.parametrize("action", ["keep_reader", "convert"])
+def test_notes_are_not_provenance_and_do_not_create_false_changes(action: str) -> None:
+    """Notes stay in reversible receipts and never become the provenance column."""
+    snapshot = _snapshot(
+        threads=[ReadingThread(1)],
+        issues=_issues(1, 2),
+        prerequisites=[
+            ReadingPrerequisite(7, 1000, 1001, "converted", ("reviewed", "reader note"))
+        ],
+    )
+    keep = action == "keep_reader"
+    evidence = ConversionEvidence(
+        stored_prerequisites=(
+            StoredPrerequisiteEvidence(
+                7,
+                None if keep else "converted",
+                None if keep else "A",
+                None if keep else "reviewed",
+                "reader note",
+            ),
+        )
+    )
+    decision = (
+        PrerequisiteDecision(7, "keep_reader")
+        if keep
+        else PrerequisiteDecision(7, "convert", "A", "reviewed")
+    )
+    manifest = build_manifest(
+        snapshot,
+        evidence,
+        ConversionIntent(snapshot_fingerprint(snapshot, evidence), prerequisites=(decision,)),
+    )
+    assert manifest.valid
+    proposal = manifest.prerequisites[0]
+    assert proposal.before_provenance == (() if keep else ("reviewed",))
+    assert proposal.provenance == (() if keep else ("reviewed",))
+    assert proposal.changed is keep
+    if keep:
+        assert manifest.receipts[0].before["note"] == "reader note"
+        assert manifest.receipts[0].before["provenance"] is None
+    else:
+        assert manifest.receipts == ()

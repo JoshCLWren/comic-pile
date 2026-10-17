@@ -802,9 +802,7 @@ def build_manifest(
         )
         before_classification = raw.classification if raw is not None else None
         before_provenance = (
-            tuple(value for value in (raw.provenance, raw.note) if value)
-            if raw is not None
-            else row.provenance
+            ((raw.provenance,) if raw.provenance else ()) if raw is not None else row.provenance
         )
         if decision.action == "convert":
             converted_text = (decision.provenance or "").strip()
