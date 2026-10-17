@@ -8,6 +8,8 @@ Endpoints:
   authenticated user's library statistics per canonical creator key.
 - ``GET /api/v1/creators/compare`` — bounded side-by-side comparison of 2-4
   canonical creators using shared personal analytics semantics (issue #3091).
+- ``GET /api/v1/creators/team-chemistry`` — bounded ranked recurring creator
+  teams credited together on shared rated issues (issue #3094).
 - ``GET /api/v1/creators/{creator_key}`` — bounded personal creator detail,
   including series/run-level aggregates (issues #2037, #3088).
 - ``GET /api/v1/creators/{creator_key}/series/{series_key}/issues`` — bounded
@@ -37,11 +39,13 @@ from app.schemas.creator_comparison import (
 from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
 from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
+from app.schemas.creator_team_chemistry import CreatorTeamChemistryResponse
 from app.services.creator_comparison import get_creator_comparison
 from app.services.creator_detail import get_creator_detail, get_creator_series_issues
 from app.services.creator_list import get_creator_list
 from app.services.creator_summary import get_creator_summaries
 from app.services.creator_metric_drilldown import get_creator_metric_drilldown
+from app.services.creator_team_chemistry import get_creator_team_chemistry
 
 router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
 
@@ -322,6 +326,37 @@ async def compare_creators_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
+
+
+@router.get("/team-chemistry", response_model=CreatorTeamChemistryResponse)
+async def get_creator_team_chemistry_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CreatorTeamChemistryResponse:
+    """Return ranked recurring creator-team pairs for the authenticated user.
+
+    A team is a pair of stable canonical creator identities credited together
+    on shared rated issues with eligible interior-storytelling roles. Pairs
+    below ``min_shared_team_sample`` shared rated issues are never ranked, the
+    returned issue drilldown sample is bounded, and every metric stays
+    descriptive personal-reading data: no causation or significance is
+    expressed or implied.
+
+    Only creator identities visible in the authenticated user's own confirmed
+    issue metadata are considered, so a creator key can never leak another
+    user's library state, and same-name creators remain distinct via their
+    canonical keys.
+
+    Args:
+        current_user: Authenticated user whose library is aggregated.
+        db: Async database session.
+
+    Returns:
+        Ranked bounded team pairs with shared sample, average, distribution,
+        baseline context, and navigable issue references, plus explicit
+        metadata-coverage state.
+    """
+    return await get_creator_team_chemistry(db, current_user.id)
 
 
 @router.get("/{creator_key}/series/{series_key}/issues", response_model=CreatorSeriesIssueListResponse)

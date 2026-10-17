@@ -682,6 +682,63 @@ export interface CreatorComparisonResponse {
 }
 
 /**
+ * Creator team-chemistry types (issue #3094)
+ *
+ * All metrics are descriptive personal-reading data; the API carries baseline
+ * context next to every shared average so the UI never implies causation or
+ * statistical significance.
+ */
+export interface CreatorTeamCoverage {
+  rated_issues_total: number
+  rated_issues_with_creator_metadata: number
+  ratings_complete: boolean
+}
+
+export interface CreatorTeamMember {
+  canonical_creator_key: string
+  display_name: string
+  roles: string[]
+  baseline_rated_count: number
+  baseline_average_rating: number | null
+  difference_from_baseline: number | null
+}
+
+export interface CreatorTeamIssueRef {
+  issue_id: number
+  thread_id: number
+  thread_title: string
+  issue_number: string
+  effective_rating: number | null
+  status: string
+}
+
+export interface CreatorTeamSeriesRef {
+  thread_id: number
+  thread_title: string
+  shared_issue_count: number
+}
+
+export interface CreatorTeamPair {
+  pair_key: string
+  creators: CreatorTeamMember[]
+  shared_rated_issue_count: number
+  shared_average_rating: number | null
+  shared_median_rating: number | null
+  shared_rating_distribution: Record<string, number>
+  shared_series: CreatorTeamSeriesRef[]
+  shared_issue_refs: CreatorTeamIssueRef[]
+  max_shared_issue_refs: number
+}
+
+export interface CreatorTeamChemistryResponse {
+  pairs: CreatorTeamPair[]
+  pairs_total: number
+  min_shared_team_sample: number
+  max_ranked_pairs: number
+  coverage: CreatorTeamCoverage | null
+}
+
+/**
  * Creator metric drilldown types (issue #3176)
  */
 export interface CreatorMetricCalculation {
