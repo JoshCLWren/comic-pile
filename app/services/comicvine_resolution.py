@@ -1380,7 +1380,8 @@ async def import_comicvine_series(
     if tracking_state.next_unread_issue_id is None:
         thread.status = "completed"
     else:
-        thread.status = "active"
+        if thread.status != "excluded":
+            thread.status = "active"
 
     await db.flush()
 

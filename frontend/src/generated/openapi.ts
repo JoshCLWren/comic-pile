@@ -5024,6 +5024,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/excluded/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Excluded Threads
+         * @description List excluded threads with deterministic cursor-based pagination.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         search: Optional case-insensitive title search filter.
+         *         sort: Sort order – ``title`` or ``created``.
+         *         page_size: Threads per page (default 50, max 200).
+         *         page_token: Opaque cursor token for pagination continuation.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         Paginated excluded threads plus ``next_page_token`` when more pages exist.
+         *
+         *     Raises:
+         *         HTTPException: If the sort value is unsupported or the page token is stale/malformed.
+         */
+        get: operations["list_excluded_threads_api_v1_threads_excluded_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/groups:batch": {
         parameters: {
             query?: never;
@@ -5193,6 +5228,29 @@ export interface paths {
         get: operations["check_thread_dependency_order_api_v1_threads__thread_id__dependency_order_check_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/exclude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exclude Thread
+         * @description Remove a thread from the active queue without deleting data.
+         *
+         *     Raises:
+         *         HTTPException: 404 when not found; 400 when thread is not active.
+         */
+        post: operations["exclude_thread_api_v1_threads__thread_id__exclude_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5390,6 +5448,29 @@ export interface paths {
         get: operations["get_thread_reading_orders_api_v1_threads__thread_id__reading_orders_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Thread
+         * @description Restore an excluded thread back to the active queue.
+         *
+         *     Raises:
+         *         HTTPException: 404 when not found; 400 when thread is not excluded.
+         */
+        post: operations["restore_thread_api_v1_threads__thread_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -20328,6 +20409,43 @@ export interface operations {
             };
         };
     };
+    list_excluded_threads_api_v1_threads_excluded_threads_get: {
+        parameters: {
+            query?: {
+                search?: string | null;
+                /** @description Sort order: title or created */
+                sort?: string;
+                /** @description Number of threads to return per page (default 50, max 200) */
+                page_size?: number;
+                /** @description Opaque cursor token for pagination continuation */
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueThreadListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_thread_groups_batch_api_v1_threads_groups_batch_post: {
         parameters: {
             query?: never;
@@ -20616,6 +20734,37 @@ export interface operations {
             };
         };
     };
+    exclude_thread_api_v1_threads__thread_id__exclude_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_thread_issue_dependencies_api_v1_threads__thread_id__issue_dependencies_get: {
         parameters: {
             query?: never;
@@ -20835,6 +20984,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_thread_api_v1_threads__thread_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
                 };
             };
             /** @description Validation Error */

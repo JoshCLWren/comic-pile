@@ -83,6 +83,12 @@ interface QueueThreadActionResult {
   requestDelete: (thread: ThreadListItem) => void
   confirmDelete: () => Promise<void> | void
   cancelDelete: () => void
+  pendingRemoveThread: ThreadListItem | null
+  removeError: string | null
+  isRemovePending: boolean
+  requestRemove: (thread: ThreadListItem) => void
+  confirmRemove: () => Promise<void> | void
+  cancelRemove: () => void
   isShuffleConfirmOpen: boolean
   requestShuffle: () => void
   confirmShuffle: () => Promise<void> | void
@@ -137,6 +143,7 @@ export function useQueueThreadActions(
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [pendingRemoveThread, setPendingRemoveThread] = useState<ThreadListItem | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
   const [isShuffleConfirmOpen, setIsShuffleConfirmOpen] = useState(false)
 
   const handleDragStart = useCallback(
@@ -215,6 +222,7 @@ export function useQueueThreadActions(
     const threadId = pendingRemoveThread.id
     const threadTitle = pendingRemoveThread.title
     setRemoveError(null)
+    setIsRemoving(true)
     try {
       await threadsApi.exclude(threadId)
       setPendingRemoveThread(null)
@@ -224,6 +232,8 @@ export function useQueueThreadActions(
       const detail = getApiErrorDetail(err)
       setRemoveError(detail)
       showToast(`Failed to remove series: ${detail}`, 'error')
+    } finally {
+      setIsRemoving(false)
     }
   }, [pendingRemoveThread, showToast])
 
@@ -366,6 +376,7 @@ export function useQueueThreadActions(
     cancelDelete,
     pendingRemoveThread,
     removeError,
+    isRemovePending: isRemoving,
     requestRemove,
     confirmRemove,
     cancelRemove,

@@ -17,6 +17,7 @@ import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
+import RemoveThreadDialog from './RemoveThreadDialog'
 import ShuffleQueueDialog from './ShuffleQueueDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueCrossovers } from './useQueueCrossovers'
@@ -334,6 +335,14 @@ export default function QueuePage() {
           error={actions.deleteError}
           onConfirm={() => void actions.confirmDelete()}
           onCancel={actions.cancelDelete}
+        />
+
+        <RemoveThreadDialog
+          thread={actions.pendingRemoveThread}
+          isPending={actions.isRemovePending}
+          error={actions.removeError}
+          onConfirm={() => void actions.confirmRemove()}
+          onCancel={actions.cancelRemove}
         />
 
         <ShuffleQueueDialog

@@ -371,7 +371,7 @@ async def delete_thread(
         raise _map_service_error(exc) from exc
 
 
-@router.post("/{thread_id}/exclude", response_model=ThreadResponse)
+@v1_router.post("/{thread_id}/exclude", response_model=ThreadResponse)
 async def exclude_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -388,7 +388,7 @@ async def exclude_thread(
         raise _map_service_error(exc) from exc
 
 
-@router.post("/{thread_id}/restore", response_model=ThreadResponse)
+@v1_router.post("/{thread_id}/restore", response_model=ThreadResponse)
 async def restore_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],

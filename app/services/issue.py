@@ -304,7 +304,8 @@ async def create_issues(
                 .values(queue_position=Thread.queue_position + 1)
             )
             thread.queue_position = 1
-        thread.status = "active"
+        if thread.status != "excluded":
+            thread.status = "active"
 
     event = Event(
         type="issues_created",

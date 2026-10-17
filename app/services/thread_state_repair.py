@@ -37,7 +37,8 @@ async def _recalculate_thread_state(thread: Thread, issues: list[Issue]) -> bool
         earliest = min(unread, key=lambda issue: (issue.position, issue.id))
         thread.next_unread_issue_id = earliest.id
         thread.reading_progress = "not_started" if unread_count == total else "in_progress"
-        thread.status = "active"
+        if thread.status != "excluded":
+            thread.status = "active"
     else:
         thread.next_unread_issue_id = None
         thread.reading_progress = "completed"

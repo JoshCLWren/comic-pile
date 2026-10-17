@@ -115,7 +115,8 @@ async def _recalculate_thread_tracking(
                 .values(queue_position=Thread.queue_position + 1)
             )
             thread.queue_position = 1
-        thread.status = "active"
+        if thread.status != "excluded":
+            thread.status = "active"
 
     db.add(Event(type="issues_created", timestamp=datetime.now(UTC), thread_id=thread.id))
     await refresh_user_blocked_status(user_id, db)

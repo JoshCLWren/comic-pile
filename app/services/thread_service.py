@@ -735,11 +735,12 @@ async def update_thread(
     if thread_data.issues_remaining is not None:
         if not thread.uses_issue_tracking():
             thread.issues_remaining = thread_data.issues_remaining
-            if thread.issues_remaining == 0:
-                thread.status = "completed"
-                thread.queue_position = 0
-            else:
-                thread.status = "active"
+            if thread.status != "excluded":
+                if thread.issues_remaining == 0:
+                    thread.status = "completed"
+                    thread.queue_position = 0
+                else:
+                    thread.status = "active"
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
     if thread_data.manual_creator_credits is not None:
@@ -901,11 +902,11 @@ async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> Thre
         InvalidRequestError: When the thread is not active.
     """
     thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
-    if thread.status != "active":
-        raise InvalidRequestError(f"Thread {thread_id} is not active and cannot be excluded")
     if thread.status == "excluded":
         # Idempotent
         return await thread_to_response(thread, db)
+    if thread.status != "active":
+        raise InvalidRequestError(f"Thread {thread_id} is not active and cannot be excluded")
 
     thread.status = "excluded"
     thread.queue_position = 0
