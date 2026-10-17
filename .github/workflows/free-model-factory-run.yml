@@ -8,6 +8,8 @@ on:
         required: true
         type: string
     secrets:
+      OPENCODE_ZEN_API_KEY:
+        required: false
       NVIDIA_API_KEY:
         required: false
       OPENROUTER_API_KEY:
@@ -108,12 +110,26 @@ jobs:
         shell: bash
         env:
           REQUESTED_WORKER: ${{ inputs.worker }}
+          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
         run: |
           set -Eeuo pipefail
           row="$(awk -F '\t' -v worker="$REQUESTED_WORKER" '$1 == worker {print; exit}' .github/free-model-factories.tsv)"
           [[ -n "$row" ]] || { echo "No fixed-model lane for worker ${REQUESTED_WORKER}" >&2; exit 1; }
           IFS=$'\t' read -r worker source model minute scheduler display <<< "$row"
           [[ "$worker" == "$REQUESTED_WORKER" ]]
+          # Deliberate comparison: two anonymous and two authenticated DeepSeek factories.
+          # Other OpenCode free lanes continue to use dynamic catalog selection.
+          case "$worker" in
+            87|89) deepseek_mode=anonymous ;;
+            88|90) deepseek_mode=authenticated ;;
+            *) deepseek_mode=normal ;;
+          esac
+          if [[ "$deepseek_mode" != normal ]]; then
+            [[ "$source" == opencode-free && "$model" == deepseek-v4.1-flash-free ]] || {
+              echo "::error::Special DeepSeek worker $worker has an unexpected model/provider"
+              exit 1
+            }
+          fi
 
           case "$source" in
             nvidia)
@@ -181,7 +197,12 @@ jobs:
               ;;
           esac
 
+          if [[ "$deepseek_mode" == authenticated && -z "${OPENCODE_ZEN_API_KEY:-}" ]]; then
+            configured=false
+            reason='missing-OPENCODE_ZEN_API_KEY'
+          fi
           {
+            echo "deepseek_mode=$deepseek_mode"
             echo "worker=$worker"
             echo "source=$source"
             echo "model=$model"
@@ -233,6 +254,27 @@ jobs:
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
         run: bash .github/scripts/install-opencode-v2.sh
 
+      - name: Configure pinned DeepSeek credential mode
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.deepseek_mode != 'normal'
+        shell: bash
+        env:
+          DEEPSEEK_MODE: ${{ steps.lane.outputs.deepseek_mode }}
+          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+        run: |
+          set -Eeuo pipefail
+          case "$DEEPSEEK_MODE" in
+            anonymous)
+              echo 'DeepSeek experiment: anonymous, no Zen key injected'
+              ;;
+            authenticated)
+              [[ -n "${OPENCODE_ZEN_API_KEY:-}" ]] || { echo '::error::Zen secret not configured'; exit 1; }
+              echo "::add-mask::$OPENCODE_ZEN_API_KEY"
+              printf 'OPENCODE_API_KEY=%s\n' "$OPENCODE_ZEN_API_KEY" >> "$GITHUB_ENV"
+              echo 'DeepSeek experiment: authenticated Zen key injected'
+              ;;
+            *) echo "::error::Unexpected DeepSeek mode $DEEPSEEK_MODE"; exit 1 ;;
+          esac
+
       - name: Install pinned Kilo CLI release
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
         shell: bash
@@ -261,6 +303,7 @@ jobs:
           SOURCE: ${{ steps.lane.outputs.source }}
           LANE_MODEL: ${{ steps.lane.outputs.model }}
           LANE_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
+          DEEPSEEK_MODE: ${{ steps.lane.outputs.deepseek_mode }}
           LANE_DISPLAY: ${{ steps.lane.outputs.display }}
           LANE_BRANCH_SUFFIX: ${{ steps.lane.outputs.branch_suffix }}
         run: |
@@ -282,6 +325,25 @@ jobs:
               exit 0
               ;;
             opencode-free)
+              if [[ "$DEEPSEEK_MODE" != normal ]]; then
+                catalog="$RUNNER_TEMP/deepseek-pinned-models.txt"
+                bash scripts/opencode-model-catalog.sh opencode plain refresh > "$catalog"
+                grep -Fx "$LANE_RUNTIME_MODEL" "$catalog" >/dev/null || {
+                  printf 'model_unavailable\tPinned free DeepSeek absent from OpenCode catalog\n' > "$discovery_outcome"
+                  echo "::error::Pinned free DeepSeek absent from OpenCode catalog"
+                  exit 1
+                }
+                {
+                  echo "source=opencode-free"
+                  echo "model=$LANE_MODEL"
+                  echo "runtime_model=$LANE_RUNTIME_MODEL"
+                  echo "display=DeepSeek V4.1 Flash Free ($DEEPSEEK_MODE)"
+                  echo "branch_suffix=opencode-free"
+                  echo "reason=deepseek-pinned-$DEEPSEEK_MODE"
+                } >> "$GITHUB_OUTPUT"
+                echo "Factory $WORKER pinned to $LANE_RUNTIME_MODEL ($DEEPSEEK_MODE); rotation disabled"
+                exit 0
+              fi
               # Models are selected at execution, after OpenCode 2 installation.
               catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
               bash scripts/opencode-model-catalog.sh opencode verbose refresh > "$catalog"
@@ -737,6 +799,7 @@ jobs:
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
         shell: bash
         env:
+          DEEPSEEK_MODE: ${{ steps.lane.outputs.deepseek_mode }}
           RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
         run: |
           set -Eeuo pipefail
@@ -749,6 +812,16 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
           status=${PIPESTATUS[0]}
           set -e
+          if [[ "$DEEPSEEK_MODE" != normal && "$status" -ne 0 ]]; then
+            if grep -Eiq 'FreeTierError|403|401|Forbidden|Unauthorized' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              printf 'provider_failure\tPinned DeepSeek rejected %s authentication (401/403)\n' "$DEEPSEEK_MODE" > "$RUNNER_TEMP/factory-discovery-outcome"
+            elif grep -Eiq '429|Too Many Requests|rate.?limit|FreeUsageLimitError' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              printf 'provider_failure\tPinned DeepSeek rate limited in %s mode\n' "$DEEPSEEK_MODE" > "$RUNNER_TEMP/factory-discovery-outcome"
+            else
+              printf 'provider_failure\tPinned DeepSeek failed in %s mode\n' "$DEEPSEEK_MODE" > "$RUNNER_TEMP/factory-discovery-outcome"
+            fi
+            exit "$status"
+          fi
           if (( status != 0 )); then
             if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
               echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
@@ -768,6 +841,25 @@ jobs:
             exit 1
           fi
           [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
+
+      - name: Prove pinned DeepSeek can invoke OpenCode shell tools
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.deepseek_mode != 'normal'
+        shell: bash
+        env:
+          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model }}
+        run: |
+          set -Eeuo pipefail
+          marker="$RUNNER_TEMP/deepseek-lane-tool-${{ steps.lane.outputs.worker }}.txt"
+          rm -f "$marker"
+          timeout --signal=TERM --kill-after=10s 180s \
+            opencode run --standalone -m "$RUNTIME_MODEL" --agent build \
+            "Use the shell tool to run exactly: printf DEEPSEEK_LANE_TOOL_OK > '$marker'. Then respond DONE. Do not edit repository files." \
+            2>&1 | tee "$RUNNER_TEMP/deepseek-lane-tool-smoke.log"
+          [[ "$(cat "$marker" 2>/dev/null)" == DEEPSEEK_LANE_TOOL_OK ]] || {
+            echo '::error::Pinned DeepSeek did not execute shell tool'
+            exit 1
+          }
+          [[ -z "$(git status --porcelain)" ]] || { echo '::error::DeepSeek tool probe modified repository'; exit 1; }
 
       - name: Prove Pixel Canary can use OpenCode tools
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
