@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 
 def test_deepseek_special_lane_pins() -> None:
+    """Verify all four workers retain their intended free model and auth grouping."""
     lines = Path(".github/free-model-factories.tsv").read_text().splitlines()
     rows = {}
     for line in lines:
@@ -19,6 +20,7 @@ def test_deepseek_special_lane_pins() -> None:
     assert set(rows).issubset(set(lock["expected_workers"]))
 
 def test_special_pins_bypass_dynamic_rotation_and_are_strict() -> None:
+    """Require exact-model selection, credential handling, and tool probing."""
     run = Path(".github/workflows/free-model-factory-run.yml").read_text()
     assert "87|89) deepseek_mode=anonymous" in run
     assert "88|90) deepseek_mode=authenticated" in run
