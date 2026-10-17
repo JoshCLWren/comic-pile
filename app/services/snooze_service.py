@@ -13,6 +13,8 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.reading_eligibility_service import get_execution_eligibility
+
 from app.models import Event, Thread
 from app.models.thread import normalize_format_value
 from app.repositories.rate_repository import fetch_source_roll_event
@@ -90,7 +92,9 @@ async def derive_cross_session_excluded_thread_ids(
     Returns:
         Set of thread IDs that must stay excluded until their backoff elapses.
     """
-    rows = await fetch_snooze_backoff_rows(db, user_id)
+    eligibility = await get_execution_eligibility(db, user_id)
+    eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
+    rows = await fetch_snooze_backoff_rows(db, user_id, **eligibility_args)
     excluded: set[int] = set()
     if not rows:
         return excluded

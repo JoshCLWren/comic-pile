@@ -16,6 +16,8 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 from app.models.user import User
 
+from app.services.collection_exclusion_guard import normalize_volume
+
 
 async def lock_reader(db: AsyncSession, user_id: int) -> None:
     """Serialize list writes across overlapping lists for the same reader.
@@ -160,9 +162,9 @@ async def load_excluded_issue_ids(
     issue_ids = {row.issue_id for row in exclusions if row.issue_id is not None}
     thread_ids = {row.thread_id for row in exclusions if row.thread_id is not None}
     volumes = {
-        (row.provider, row.external_volume_id)
+        normalize_volume(row.provider, row.external_volume_id)
         for row in exclusions
-        if row.external_volume_id is not None
+        if row.provider is not None and row.external_volume_id is not None
     }
     if volumes:
         identities = await db.execute(
@@ -179,7 +181,9 @@ async def load_excluded_issue_ids(
             .where(Thread.user_id == user_id, ThreadExternalSeriesMapping.status == "confirmed")
         )
         thread_ids.update(
-            tid for tid, provider, external_id in identities if (provider, external_id) in volumes
+            tid
+            for tid, provider, external_id in identities
+            if normalize_volume(provider, external_id) in volumes
         )
         canonical = await db.execute(
             select(Thread.id, ExternalIdentity.provider, ExternalIdentity.external_id)
@@ -191,7 +195,9 @@ async def load_excluded_issue_ids(
             .where(Thread.user_id == user_id)
         )
         thread_ids.update(
-            tid for tid, provider, external_id in canonical if (provider, external_id) in volumes
+            tid
+            for tid, provider, external_id in canonical
+            if normalize_volume(provider, external_id) in volumes
         )
         catalog_issues = await db.execute(
             select(Issue.id, ExternalIdentity.provider, ExternalIdentity.external_id)
@@ -207,7 +213,7 @@ async def load_excluded_issue_ids(
         issue_ids.update(
             issue_id
             for issue_id, provider, external_id in catalog_issues
-            if (provider, external_id) in volumes
+            if normalize_volume(provider, external_id) in volumes
         )
     return frozenset(
         issue.id for issue in issues if issue.id in issue_ids or issue.thread_id in thread_ids

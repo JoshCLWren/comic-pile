@@ -7,9 +7,9 @@ Configuration is validated at startup and provides type-safe access to settings.
 import os
 import secrets
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -652,6 +652,32 @@ def get_settings() -> Settings:
     return Settings()
 
 
+class ReadingExecutionSettings(BaseSettings):
+    """Explicit Option E activation, separate from deployment of its implementation."""
+
+    model_config = SettingsConfigDict(env_prefix="OPTION_E_", extra="ignore")
+    enabled: bool = False
+    approved_preview: str = ""
+    reader_ids: frozenset[int] = frozenset()
+
+    @model_validator(mode="after")
+    def require_approved_preview(self) -> Self:
+        """Refuse activation without an operator-supplied owner approval reference."""
+        if self.enabled and not self.approved_preview.strip():
+            raise ValueError(
+                "Option E requires a fresh owner-approved production preview reference"
+            )
+        if self.enabled and (not self.reader_ids or any(value < 1 for value in self.reader_ids)):
+            raise ValueError("Option E requires explicit approved reader IDs")
+        return self
+
+
+@lru_cache
+def get_reading_execution_settings() -> ReadingExecutionSettings:
+    """Return the explicitly configured execution mode; deployment defaults to legacy."""
+    return ReadingExecutionSettings()
+
+
 def clear_settings_cache() -> None:
     """Clear all cached settings (useful for testing)."""
     get_database_settings.cache_clear()
@@ -664,3 +690,4 @@ def clear_settings_cache() -> None:
     get_email_settings.cache_clear()
     get_image_delivery_settings.cache_clear()
     get_settings.cache_clear()
+    get_reading_execution_settings.cache_clear()

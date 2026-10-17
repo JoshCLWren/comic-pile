@@ -2,8 +2,7 @@
 
 import json
 import logging
-import random
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from typing import Annotated, Any
@@ -14,10 +13,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.config import get_recommendation_settings
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, ReadingSession, Snapshot, Thread
+from app.models import Event, ReadingSession, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
@@ -25,8 +23,6 @@ from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
     EffortEstimate,
-    build_recommendation_context,
-    compute_effort_estimate,
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.services.roll_service import RollService
@@ -68,7 +64,6 @@ from comic_pile.recommendation_selection import (
 from comic_pile.recommendation_version import (
     CONTROL_MODE_CONTEXTUAL,
     RECOMMENDATION_ALGORITHM_VERSION,
-    recommendation_algorithm_version,
 )
 from comic_pile.reading_session import get_current_die_for_session, get_or_create
 from comic_pile.dependencies import get_blocking_explanations_batch
@@ -678,208 +673,8 @@ async def override_roll(
     Raises:
         HTTPException: If thread not found.
     """
-    result = await db.execute(
-        select(Thread)
-        .where(Thread.id == request.thread_id)
-        .where(Thread.user_id == current_user.id)
-        .with_for_update()
-    )
-    override_thread = result.scalar_one_or_none()
-    if not override_thread:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {request.thread_id} not found",
-        )
-
-    if override_thread.is_blocked:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Thread {request.thread_id} is blocked and cannot be selected",
-        )
-
-    if override_thread.status != "active":
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Thread {request.thread_id} is {override_thread.status} and cannot be selected",
-        )
-
-    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
-    current_session_id = current_session.id
-    current_die = await get_current_die_for_session(current_session, db)
-
-    override_thread_id = override_thread.id
-    override_thread_title = override_thread.title
-    override_thread_format = normalize_format_value(override_thread.format)
-    override_thread_queue_position = override_thread.queue_position
-
-    override_thread_issues_remaining = await override_thread.get_issues_remaining(db)
-    override_thread_total_issues = override_thread.total_issues
-    override_thread_reading_progress = override_thread.reading_progress
-    override_thread_next_unread_issue_id = override_thread.next_unread_issue_id
-
-    override_thread_issue_id = None
-    override_thread_issue_number = None
-    if override_thread.uses_issue_tracking() and override_thread_next_unread_issue_id:
-        issue_result = await db.execute(
-            select(Issue).where(Issue.id == override_thread_next_unread_issue_id)
-        )
-        next_issue = issue_result.scalar_one_or_none()
-        if next_issue and next_issue.status == "unread":
-            override_thread_issue_id = next_issue.id
-            override_thread_issue_number = next_issue.issue_number
-
-    snoozed_ids = (
-        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
-    )
-
-    if override_thread_id in snoozed_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
-        )
-
-    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, current_user.id)
-    if override_thread_id in derived_snoozed_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Thread {override_thread_id} is on session-based snooze backoff and "
-                "cannot be overridden yet."
-            ),
-        )
-
-    # Decision-time context is purely observational: it records the estimate
-    # that existed when this roll happened and never changes the selection.
-    effort_estimate = await compute_effort_estimate(
-        db,
-        user_id=current_user.id,
-        thread_id=override_thread_id,
-        issue_id=override_thread_issue_id,
-    )
-    recommendation_settings = get_recommendation_settings()
-    control_mode = recommendation_settings.control_mode
-    algorithm_version = recommendation_algorithm_version(control_mode)
-    override_candidate_weights: list[dict[str, object]] = [
-        {
-            "candidate_id": override_thread_id,
-            "weight": 1.0,
-            "reasons": [],
-            "factors": [],
-        }
-    ]
-    recommendation_context = build_recommendation_context(
-        effort_estimate,
-        thread_id=override_thread_id,
-        issue_id=override_thread_issue_id,
-        issue_number=override_thread_issue_number,
-        candidate_weights=override_candidate_weights,
-        bandwidth="balanced",
-        bandwidth_source="manual_override",
-        bandwidth_confidence=1.0,
-        random_bypass=False,
-        balanced_neutrality=True,
-        selected_weight=1.0,
-        algorithm_version=algorithm_version,
-        control_mode=control_mode,
-    )
-
-    effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
-
-    event = Event(
-        type="roll",
-        session_id=current_session_id,
-        selected_thread_id=override_thread_id,
-        die=current_die,
-        result=0,
-        selection_method="override",
-        recommendation_reason_codes=[],
-        recommendation_context=recommendation_context,
-        issue_id=override_thread_issue_id,
-        issue_number=override_thread_issue_number,
-        rolling_recommendation_context=_build_rolling_recommendation_context(
-            die_size=current_die,
-            selected_queue_position=override_thread_queue_position,
-            bounded_candidate_ids=[override_thread_id],
-            selected_index=0,
-            selection_method="override",
-            session_timezone=current_session.timezone,
-            selected_thread_last_rating=override_thread.last_rating,
-            selected_thread_last_activity_at=override_thread.last_activity_at,
-            effort_estimate=effort_estimate_str,
-            algorithm_version=algorithm_version,
-            control_mode=control_mode,
-        ),
-    )
-    db.add(event)
-
-    context_data = RecommendationContextCreate(
-        schema_version=2,
-        intent="balanced",
-        intent_source="manual_override",
-        intent_confidence=1.0,
-        bandwidth="balanced",
-        bandwidth_source="manual_override",
-        bandwidth_confidence=1.0,
-        candidate_factors=None,
-        final_weight=1.0,
-        random_bypass=False,
-        balanced_neutrality=True,
-        effort_minutes=round(effort_estimate.minutes, 2) if effort_estimate.minutes is not None else None,
-        effort_band=effort_estimate.band,
-        effort_source=effort_estimate.source.value,
-        effort_confidence=round(effort_estimate.confidence, 3),
-        effort_sample_count=effort_estimate.sample_count,
-    )
-
-    await db.flush()
-
-    rec_context = RecommendationContext(
-        event_id=event.id,
-        schema_version=context_data.schema_version,
-        intent=context_data.intent,
-        intent_source=context_data.intent_source,
-        intent_confidence=context_data.intent_confidence,
-        bandwidth=context_data.bandwidth,
-        bandwidth_source=context_data.bandwidth_source,
-        bandwidth_confidence=context_data.bandwidth_confidence,
-        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
-        if context_data.candidate_factors else None,
-        final_weight=context_data.final_weight,
-        random_bypass=context_data.random_bypass,
-        balanced_neutrality=context_data.balanced_neutrality,
-        effort_minutes=context_data.effort_minutes,
-        effort_band=context_data.effort_band,
-        effort_source=context_data.effort_source,
-        effort_confidence=context_data.effort_confidence,
-        effort_sample_count=context_data.effort_sample_count,
-    )
-    db.add(rec_context)
-
-    current_session.pending_thread_id = override_thread_id
-    current_session.pending_thread_updated_at = datetime.now(UTC)
-
-    await db.commit()
-
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
-    return RollResponse(
-        thread_id=override_thread_id,
-        title=override_thread_title,
-        format=override_thread_format,
-        issues_remaining=override_thread_issues_remaining,
-        queue_position=override_thread_queue_position,
-        die_size=current_die,
-        result=0,
-        offset=offset,
-        snoozed_count=snoozed_count,
-        issue_id=override_thread_issue_id,
-        issue_number=override_thread_issue_number,
-        next_issue_id=override_thread_issue_id,
-        next_issue_number=override_thread_issue_number,
-        total_issues=override_thread_total_issues,
-        reading_progress=override_thread_reading_progress,
-        explanation=get_primary_explanation([]),
+    return await RollService(db).execute_override(
+        thread_id=request.thread_id, current_user=current_user
     )
 
 
@@ -1113,11 +908,17 @@ async def roll_bootstrap(
         if active_thread is not None and active_thread.id == pending_thread_id
         else None
     )
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
     roll_recovery = await build_roll_recovery(
         db,
         user_id=user_id,
         pending_thread_id=pending_thread_id,
         pending_thread_title=pending_thread_title,
+        excluded_thread_ids=frozenset(
+            set(current_session.snoozed_thread_ids or [])
+            | set(current_session.skipped_thread_ids or [])
+            | derived_snoozed_ids
+        ),
     )
 
     # Issue #3375: every thread-shaped section of this response is one
@@ -1125,7 +926,6 @@ async def roll_bootstrap(
     # longer scales with the size of the library.
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
-    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
 
     bootstrap_data = await RollService(db).load_bootstrap_thread_data(
         user_id=user_id,
@@ -1287,11 +1087,17 @@ async def roll_v2_bootstrap(
         if active_thread is not None and active_thread.id == pending_thread_id
         else None
     )
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
     roll_recovery = await build_roll_recovery(
         db,
         user_id=user_id,
         pending_thread_id=pending_thread_id,
         pending_thread_title=pending_thread_title,
+        excluded_thread_ids=frozenset(
+            set(current_session.snoozed_thread_ids or [])
+            | set(current_session.skipped_thread_ids or [])
+            | derived_snoozed_ids
+        ),
     )
 
     # Bounded v2 projection (issue #2717): rollable[] and session last-read
@@ -1299,7 +1105,6 @@ async def roll_v2_bootstrap(
     # Session/recovery/partition semantics above stay identical to #2716.
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
-    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
     effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
     excluded_thread_ids = sorted(set(effective_snoozed_ids) | set(skipped_ids))
     rollable, last_read, _omitted_thread_ids = await get_v2_rollable_projection(
@@ -1310,113 +1115,31 @@ async def roll_v2_bootstrap(
         session_id=current_session_id,
     )
 
-    # Get snoozed, skipped, blocked threads in v2 format
-    snoozed_threads: list[RollableThread] = []
-    if snoozed_ids:
-        snoozed_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(snoozed_ids))
-        )
-        for row in snoozed_result:
-            snoozed_threads.append(RollableThread(
-                id=row.id,
-                title=row.title,
-                format=normalize_format_value(row.format),
-                last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
-            ))
-
-    skipped_threads: list[RollableThread] = []
-    if skipped_ids:
-        skipped_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(skipped_ids))
-        )
-        for row in skipped_result:
-            skipped_threads.append(RollableThread(
-                id=row.id,
-                title=row.title,
-                format=normalize_format_value(row.format),
-                last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
-            ))
-
-    # Blocked summary keeps v1 semantics: the count covers every active
-    # blocked thread while the detail list stays bounded.
-    blocked_count_result = await db.execute(
-        select(func.count())
-        .select_from(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(True))
+    summary = await RollService(db).load_bootstrap_thread_data(
+        user_id=user_id,
+        die_size=die_size,
+        snoozed_ids=snoozed_ids,
+        skipped_ids=skipped_ids,
+        derived_snoozed_ids=derived_snoozed_ids,
+        summary_limit=RollV2BootstrapResponse.summary_limit,
+        include_pool=False,
     )
-    blocked_count = blocked_count_result.scalar() or 0
-
-    blocked_threads_result = await db.execute(
-        select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(True))
-        .order_by(Thread.queue_position)
-        .limit(20)
-    )
-    blocked_threads = [
-        RollableThread(
-            id=row.id,
-            title=row.title,
-            format=normalize_format_value(row.format),
-            last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
-        )
-        for row in blocked_threads_result
+    snoozed_threads = [
+        RollableThread.model_validate(row.model_dump()) for row in summary.snoozed_threads
     ]
-    snoozed_threads = snoozed_threads[:RollV2BootstrapResponse.summary_limit]
-    blocked_threads = blocked_threads[:RollV2BootstrapResponse.summary_limit]
-    skipped_threads = skipped_threads[:RollV2BootstrapResponse.summary_limit]
-
-    # Stale summary keeps v1 semantics: 7-day cutoff over coalesced
-    # activity, excluding blocked and snoozed threads.
-    stale_cutoff = datetime.now(UTC) - timedelta(days=7)
-    effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
-    stale_base = (
-        select(func.count())
-        .select_from(Thread)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(False))
-        .where(effective_activity < stale_cutoff)
+    skipped_threads = [
+        RollableThread.model_validate(row.model_dump()) for row in summary.skipped_threads
+    ]
+    blocked_threads = [
+        RollableThread.model_validate(row.model_dump()) for row in summary.blocked_threads
+    ]
+    blocked_count = summary.blocked_count
+    stale_thread_count = summary.stale_thread_count
+    stale_thread = (
+        RollableThread.model_validate(summary.stale_thread.model_dump())
+        if summary.stale_thread is not None
+        else None
     )
-    if effective_snoozed_ids:
-        stale_base = stale_base.where(Thread.id.not_in(effective_snoozed_ids))
-    stale_count_result = await db.execute(stale_base)
-    stale_thread_count = stale_count_result.scalar() or 0
-
-    stale_thread = None
-    if stale_thread_count > 0:
-        stale_ids_query = (
-            select(Thread.id)
-            .where(Thread.user_id == user_id)
-            .where(Thread.status == "active")
-            .where(Thread.is_blocked.is_(False))
-            .where(effective_activity < stale_cutoff)
-        )
-        if effective_snoozed_ids:
-            stale_ids_query = stale_ids_query.where(Thread.id.not_in(effective_snoozed_ids))
-        stale_ids_result = await db.execute(stale_ids_query)
-        stale_ids = [row[0] for row in stale_ids_result.all()]
-        if stale_ids:
-            chosen_id = random.choice(stale_ids)
-            stale_detail_result = await db.execute(
-                select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
-                .where(Thread.id == chosen_id)
-            )
-            stale_row = stale_detail_result.first()
-            if stale_row:
-                stale_thread = RollableThread(
-                    id=stale_row.id,
-                    title=stale_row.title,
-                    format=normalize_format_value(stale_row.format),
-                    last_activity_at=stale_row.last_activity_at.isoformat() if stale_row.last_activity_at else None,
-                )
 
     return RollV2BootstrapResponse(
         current_die=die_size,

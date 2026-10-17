@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models import Issue, Thread
+from app.repositories.reading_eligibility_queries import candidate_predicate, frontier_expression
+from app.services.reading_eligibility_service import get_execution_eligibility
 
 logger = logging.getLogger(__name__)
 
@@ -369,6 +371,7 @@ async def move_to_safe_position(
     """
     await _acquire_queue_lock(user_id, db)
 
+    eligibility = await get_execution_eligibility(db, user_id)
     excluded_ids = set(excluded_thread_ids or ())
     result = await db.execute(
         select(Thread.id, Thread.queue_position, Thread.is_blocked)
@@ -378,7 +381,12 @@ async def move_to_safe_position(
         .order_by(Thread.queue_position, Thread.id)
     )
     all_active = [ActiveQueueThread(*row) for row in result.all()]
-    rollable = [t for t in all_active if not t.is_blocked and t.id not in excluded_ids]
+    available = (
+        set(eligibility.candidate_ids())
+        if eligibility is not None
+        else {t.id for t in all_active if not t.is_blocked}
+    )
+    rollable = [t for t in all_active if t.id in available and t.id not in excluded_ids]
 
     target_rollable_index = next(
         (i for i, thread in enumerate(rollable) if thread.id == thread_id), -1
@@ -393,7 +401,7 @@ async def move_to_safe_position(
     for index, thread in enumerate(all_active):
         if thread.id == thread_id:
             continue
-        if not thread.is_blocked and thread.id not in excluded_ids:
+        if thread.id in available and thread.id not in excluded_ids:
             non_blocked_seen += 1
         if non_blocked_seen >= die_size:
             target_seq = index + 1
@@ -473,6 +481,7 @@ async def get_roll_pool(
     Returns:
         List of active threads ordered by queue position.
     """
+    eligibility = await get_execution_eligibility(db, user_id)
     query = (
         select(Thread)
         .where(Thread.user_id == user_id)
@@ -483,7 +492,7 @@ async def get_roll_pool(
     if snoozed_ids:
         query = query.where(Thread.id.not_in(snoozed_ids))
 
-    query = query.where(Thread.is_blocked.is_(False))
+    query = query.where(candidate_predicate(eligibility))
     query = query.order_by(Thread.queue_position)
 
     result = await db.execute(query)
@@ -519,9 +528,12 @@ async def get_roll_pool_rows(
     """
     # Index justification: unread_counts uses Issue.status + Issue.thread_id,
     # covered by existing index `ix_issue_thread_is_read` (`thread_id`, `status`).
+    eligibility = await get_execution_eligibility(db, user_id)
+    frontier = frontier_expression(eligibility)
     unread_counts = (
         select(Issue.thread_id.label("thread_id"), func.count(Issue.id).label("unread_count"))
         .where(Issue.status == "unread")
+        .where(Issue.id.not_in(eligibility.excluded_issue_ids) if eligibility else True)
         .group_by(Issue.thread_id)
         .subquery()
     )
@@ -534,12 +546,12 @@ async def get_roll_pool_rows(
         .outerjoin(unread_counts, unread_counts.c.thread_id == Thread.id)
         .outerjoin(
             Issue,
-            and_(Issue.id == Thread.next_unread_issue_id, Issue.status == "unread"),
+            and_(Issue.id == frontier, Issue.status == "unread"),
         )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
-        .where(Thread.is_blocked.is_(False))
+        .where(candidate_predicate(eligibility))
         .order_by(Thread.queue_position)
     )
 
@@ -550,7 +562,16 @@ async def get_roll_pool_rows(
         query = query.where(Thread.id.not_in(skipped_ids))
 
     result = await db.execute(query)
-    return [(row[0], row[1], row[2]) for row in result]
+    return [
+        (
+            row[0],
+            eligibility.unread_counts.get(row[0].id, 0) if eligibility is not None else row[1],
+            eligibility.issue_numbers.get(eligibility.threads[row[0].id].next_issue_id)
+            if eligibility is not None
+            else row[2],
+        )
+        for row in result
+    ]
 
 
 async def get_bounded_roll_pool_rows(
@@ -601,13 +622,14 @@ async def get_stale_threads(
         Active, unblocked threads whose last activity predates the cutoff,
         ordered oldest activity first (nulls first).
     """
+    eligibility = await get_execution_eligibility(db, user_id)
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
     query = (
         select(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(False))
+        .where(candidate_predicate(eligibility))
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )

@@ -47,6 +47,11 @@ class ShadowReadingInputs:
     stored: tuple[StoredThreadEligibility, ...]
     unresolved: tuple[UnresolvedReadingReference, ...]
     inert_dependency_count: int
+    issue_numbers: tuple[tuple[int, str], ...] = ()
+    issue_labels: tuple[tuple[int, str], ...] = ()
+    list_labels: tuple[tuple[int, str], ...] = ()
+    thread_labels: tuple[tuple[int, str], ...] = ()
+    legacy_note_ignored_prerequisite_ids: frozenset[int] = frozenset()
 
 
 async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInputs:
@@ -76,7 +81,11 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             .where(Thread.user_id == user_id)
         )
         touching = or_(Dependency.source_issue_id.in_(owned), Dependency.target_issue_id.in_(owned))
-        enforced = or_(Dependency.note.is_(None), Dependency.note.not_like("cbl-order:%"))
+        enforced = or_(
+            Dependency.origin.is_not(None),
+            Dependency.note.is_(None),
+            Dependency.note.not_like("cbl-order:%"),
+        )
         dependencies = list(
             (
                 await db.scalars(
@@ -88,7 +97,7 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             (
                 await db.scalar(
                     select(func.count(Dependency.id)).where(
-                        touching, Dependency.note.like("cbl-order:%")
+                        touching, Dependency.origin.is_(None), Dependency.note.like("cbl-order:%")
                     )
                 )
             )
@@ -106,6 +115,7 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
         for row in dependencies:
             if row.source_issue_id not in issue_ids or row.target_issue_id not in issue_ids:
                 unresolved.append(UnresolvedReadingReference("prerequisite", row.id))
+        titles = {row.id: row.title for row in threads}
         return ShadowReadingInputs(
             user_id=user_id,
             threads=tuple(ReadingThread(row.id, row.status) for row in threads),
@@ -121,8 +131,12 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
                     row.id,
                     row.source_issue_id,
                     row.target_issue_id,
-                    "converted",
-                    ("historical classification unknown",),
+                    row.origin or "converted",
+                    (
+                        (f"classification:{row.classification}", row.provenance or "")
+                        if row.origin is not None
+                        else ("historical classification unknown",)
+                    ),
                 )
                 for row in dependencies
             ),
@@ -135,4 +149,13 @@ async def load_shadow_inputs(db: AsyncSession, user_id: int) -> ShadowReadingInp
             ),
             unresolved=tuple(sorted(unresolved, key=lambda row: (row.kind, row.object_id))),
             inert_dependency_count=inert_count,
+            issue_numbers=tuple((row.id, row.issue_number) for row in issues),
+            issue_labels=tuple(
+                (row.id, f"{titles[row.thread_id]} #{row.issue_number}") for row in issues
+            ),
+            list_labels=tuple((row.id, row.name) for row in lists),
+            thread_labels=tuple(titles.items()),
+            legacy_note_ignored_prerequisite_ids=frozenset(
+                row.id for row in dependencies if (row.note or "").startswith("cbl-order:")
+            ),
         )

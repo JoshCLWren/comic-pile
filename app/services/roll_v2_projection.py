@@ -21,6 +21,8 @@ from urllib.parse import quote
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.reading_eligibility_service import get_execution_eligibility
+
 from app.models.thread import normalize_format_value
 from app.repositories import roll_v2_projection as projection_repo
 from app.schemas.roll_v2 import (
@@ -271,12 +273,21 @@ async def get_v2_rollable_projection(
         Tuple of (rollable items, session last-read or None, omitted thread
         ids that held no next unread issue).
     """
+    eligibility = await get_execution_eligibility(db, user_id)
+    eligibility_args = {"eligibility": eligibility} if eligibility is not None else {}
     candidate_rows = await projection_repo.fetch_rollable_candidates(
         db,
         user_id=user_id,
         die_size=die_size,
         excluded_thread_ids=excluded_thread_ids,
+        **eligibility_args,
     )
+    if eligibility is not None:
+        for row in candidate_rows:
+            frontier = eligibility.threads[row["thread_id"]].next_issue_id
+            row["issue_id"] = frontier
+            row["issue_number"] = eligibility.issue_numbers.get(frontier)
+            row["issue_status"] = "unread"
     groups: dict[int, _CandidateGroup] = {}
     order: list[int] = []
     for row in candidate_rows:

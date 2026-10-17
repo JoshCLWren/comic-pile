@@ -12,10 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, ReadingSession, Thread
 
+from app.repositories.reading_eligibility_queries import candidate_predicate
+from app.services.reading_eligibility_service import ReadingEligibilitySnapshot
+
 SnoozeBackoffRow = tuple[int, datetime | None, str | None, datetime | None, int]
 
 
-async def fetch_snooze_backoff_rows(db: AsyncSession, user_id: int) -> list[SnoozeBackoffRow]:
+async def fetch_snooze_backoff_rows(
+    db: AsyncSession, user_id: int, *, eligibility: ReadingEligibilitySnapshot | None = None
+) -> list[SnoozeBackoffRow]:
     """Return snooze evidence rows for a user's active, unblocked threads.
 
     Each row pairs an active thread with one of its ``snooze`` or ``unsnooze``
@@ -27,6 +32,7 @@ async def fetch_snooze_backoff_rows(db: AsyncSession, user_id: int) -> list[Snoo
     Args:
         db: Database session.
         user_id: Owner of the threads.
+        eligibility: Shared live eligibility, or None for legacy execution.
 
     Returns:
         Rows of ``(thread_id, last_activity_at, event_type, event_timestamp,
@@ -40,7 +46,7 @@ async def fetch_snooze_backoff_rows(db: AsyncSession, user_id: int) -> list[Snoo
         )
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
-        .where(Thread.is_blocked.is_(False))
+        .where(candidate_predicate(eligibility))
         .order_by(Thread.id, Event.timestamp, Event.id)
     )
     return [(row[0], row[1], row[2], row[3], row[4]) for row in result.all()]
@@ -62,4 +68,3 @@ async def fetch_user_session_started_ats(db: AsyncSession, user_id: int) -> list
         .order_by(ReadingSession.started_at)
     )
     return list(result.scalars().all())
-

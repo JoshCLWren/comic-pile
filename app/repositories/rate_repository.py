@@ -10,7 +10,14 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ExternalIdentity, Thread, ThreadExternalSeriesMapping
+from app.models import (
+    Event,
+    ExternalIdentity,
+    Issue,
+    ReadingSession,
+    Thread,
+    ThreadExternalSeriesMapping,
+)
 
 
 async def fetch_source_roll_event(
@@ -212,3 +219,42 @@ async def fetch_confirmed_series_identity_metadata(
         if isinstance(metadata_json, dict):
             documents.append(metadata_json)
     return metadata_by_thread
+
+
+async def fetch_owned_roll_issue(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    reading_session_id: int,
+    thread_id: int,
+) -> tuple[Event, Issue] | None:
+    """Lock the unread Issue identified by the latest offer, never an older fallback.
+
+    Args:
+        db: Current rating transaction.
+        user_id: Authenticated owner.
+        reading_session_id: Current reading-history session.
+        thread_id: Pending Thread owned by the reader.
+
+    Returns:
+        Exact originating roll and owned unread Issue, or None for a stale/unknown offer.
+    """
+    latest_id = await fetch_source_roll_event(db, reading_session_id, thread_id)
+    if latest_id is None:
+        return None
+    result = await db.execute(
+        select(Event, Issue)
+        .join(ReadingSession, ReadingSession.id == Event.session_id)
+        .join(Issue, Issue.id == Event.issue_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(
+            Event.id == latest_id,
+            ReadingSession.user_id == user_id,
+            Thread.user_id == user_id,
+            Issue.thread_id == thread_id,
+            Issue.status == "unread",
+        )
+        .with_for_update(of=Issue)
+    )
+    row = result.one_or_none()
+    return (row[0], row[1]) if row is not None else None
