@@ -190,7 +190,8 @@ async def test_cross_owner_historical_edge_cannot_block_a_readers_frontier(
     rows = compare_reading_eligibility(inputs)["threads"]
     assert isinstance(rows, list)
     assert all(isinstance(row, dict) for row in rows)
-    assert any(row["thread_id"] == own_thread.id and row["proposed_eligible"] for row in rows)
+    assert any(row["thread_id"] == own_thread.id and row["proposed_eligible"]
+               for row in rows if isinstance(row, dict))
 
 
 async def test_report_transaction_is_read_only_and_leaves_state_unchanged(
@@ -249,7 +250,7 @@ async def test_all_reader_preflight_is_read_only_and_owner_isolated(
     payload = result["reports"]
     assert isinstance(payload, list)
     assert all(isinstance(row, dict) for row in payload)
-    reports = {r["user_id"]: r for r in payload}
+    reports = {r["user_id"]: r for r in payload if isinstance(r, dict)}
     assert first.id in reports and second.id in reports
     assert reports[first.id]["valid"] is True
     assert reports[second.id]["valid"] is True
@@ -257,11 +258,12 @@ async def test_all_reader_preflight_is_read_only_and_owner_isolated(
     second_rows = reports[second.id]["threads"]
     assert isinstance(first_rows, list) and isinstance(second_rows, list)
     assert all(isinstance(row, dict) for row in (*first_rows, *second_rows))
-    assert one.id in {row["thread_id"] for row in first_rows}
-    assert two.id not in {row["thread_id"] for row in first_rows}
-    assert two.id in {row["thread_id"] for row in second_rows}
+    assert one.id in {row["thread_id"] for row in first_rows if isinstance(row, dict)}
+    assert two.id not in {row["thread_id"] for row in first_rows if isinstance(row, dict)}
+    assert two.id in {row["thread_id"] for row in second_rows if isinstance(row, dict)}
     assert result["readers_valid"] == result["readers_checked"]
-    assert len(result["source_fingerprint"]) == 64
+    fingerprint = result["source_fingerprint"]
+    assert isinstance(fingerprint, str) and len(fingerprint) == 64
     assert any("SET TRANSACTION READ ONLY" in statement for statement in statements)
     assert not any(statement.lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE"))
                    for statement in statements)
