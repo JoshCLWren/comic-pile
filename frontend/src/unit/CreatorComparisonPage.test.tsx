@@ -379,8 +379,8 @@ describe('CreatorComparisonPage', () => {
       baseHook({
         data: makeResponse({
           comparisons: {
-            mystery: makeItem({
-              canonical_creator_key: 'mystery',
+            'creator:mystery': makeItem({
+              canonical_creator_key: 'creator:mystery',
               display_name: 'Mystery Writer',
               normalized_roles: [],
               average_rating: null,
@@ -399,7 +399,7 @@ describe('CreatorComparisonPage', () => {
       }),
     )
 
-    renderAt('creator:7,mystery')
+    renderAt('creator:7,creator:mystery')
 
     expect(screen.getByRole('heading', { name: 'Mystery Writer' })).toBeInTheDocument()
     // "No ratings yet" appears in average, median, and distribution (3 places)
@@ -489,7 +489,7 @@ describe('CreatorComparisonPage', () => {
 
     expect(screen.getByText('Comparing 0 creators')).toBeInTheDocument()
     expect(
-      screen.getByText('None of the selected creators were found in your library.'),
+      screen.getByText('None of the selected creators were found in your library. None of the selected creators are available in your library — the comparison can only include creators with issues credited to them in your library.'),
     ).toBeInTheDocument()
   })
 
