@@ -353,3 +353,60 @@ test.describe('Issue #3091: creator comparison', () => {
     await expectNoHorizontalOverflow(page)
   })
 })
+
+/** Issue #3462: creator compare silently omits unresolved deep-link keys */
+const MIXED_KEYS = ['creator:7', 'creator:99999']
+
+test('3462 - valid 2-creator comparison renders', async ({ page }) => {
+  await installCreatorsList(page)
+  await installCreatorComparison(page, {
+    'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),
+    'creator:12': comparisonItem('creator:12', 'Steve McNiven'),
+  })
+  await page.goto('/creators/compare?keys=creator:7,creator:12')
+  await expect(page.getByText('Comparing 2 creators')).toBeVisible()
+  await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+  await expect(page.getByText('Steve McNiven')).toBeVisible()
+})
+
+test('3462 - one valid + one nonexistent shows mixed notice', async ({ page }) => {
+  await installCreatorsList(page)
+  await installCreatorComparison(page, {
+    'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),
+  })
+  await page.goto('/creators/compare?keys=creator:7,creator:99999')
+  await expect(page.getByText('Comparing 1 creator')).toBeVisible()
+  await expect(page.getByText('One or more requested creators could not be included')).toBeVisible()
+  await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
+})
+
+test('3462 - two nonexistent keys shows none-available message with back link', async ({ page }) => {
+  await installCreatorsList(page)
+  await installCreatorComparison(page, {})
+  await page.goto('/creators/compare?keys=creator:99999,creator:88888')
+  await expect(page.getByText('None of the selected creators are available in your library')).toBeVisible()
+  await expect(page.getByRole('link', { name: /Back to Creators/i })).toBeVisible()
+})
+
+test('3462 - bad syntax shows readable explanation', async ({ page }) => {
+  await page.goto('/creators/compare?keys=badkey,creator:7')
+  await expect(page.getByText('Invalid creator key format')).toBeVisible()
+  await expect(page.getByText('Back to Creators')).toBeVisible()
+})
+
+test('3462 - 5-key URL shows accepted-input explanation', async ({ page }) => {
+  await page.goto('/creators/compare?keys=creator:1,creator:2,creator:3,creator:4,creator:5')
+  await expect(page.getByText('Comparison accepts 2 to 4 creator keys')).toBeVisible()
+  await expect(page.getByText('Back to Creators')).toBeVisible()
+})
+
+test('3462 - reload retains valid keys', async ({ page }) => {
+  await installCreatorsList(page)
+  await installCreatorComparison(page, {
+    'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),
+    'creator:12': comparisonItem('creator:12', 'Steve McNiven'),
+  })
+  await page.goto('/creators/compare?keys=creator:7,creator:12')
+  await page.reload()
+  await expect(page.getByText('Comparing 2 creators')).toBeVisible()
+})

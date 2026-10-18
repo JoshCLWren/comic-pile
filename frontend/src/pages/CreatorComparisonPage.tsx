@@ -547,7 +547,18 @@ export default function CreatorComparisonPage() {
     setActiveModal({ isOpen: true, creatorKey, metricType, metricLabel, initialParams: params })
   }
 
-  if (keys.length < 2 || keys.length > 4) {
+  const invalidSyntax = keys.some((k: string) => parseCreatorKey(k) === null)
+  const duplicateKeys = keys.length !== new Set(keys).size
+  const inputInvalid = keys.length < 2 || keys.length > 4 || invalidSyntax || duplicateKeys
+
+  if (inputInvalid) {
+    const explanation = keys.length > 4
+      ? 'Comparison accepts 2 to 4 creator keys (format creator:<id>, separated by commas).'
+      : keys.length < 2
+        ? 'Comparison requires 2 to 4 creator keys (format creator:<id>, separated by commas).'
+        : invalidSyntax
+          ? 'Invalid creator key format: expected creator:<external-person-id> (stable ComicVine person id, no display names).'
+          : 'Duplicate creator keys are not allowed.'
     return (
       <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
         <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
@@ -555,8 +566,17 @@ export default function CreatorComparisonPage() {
           Creator Comparison
         </h1>
         <p className="mt-4 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          Select 2 to 4 creators from the <Link to="/creators" className="underline">Creators page</Link> to compare them.
+          {explanation}
         </p>
+        <div className="mt-2">
+          <Link
+            to="/creators"
+            className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            style={{ color: 'var(--theme-text-muted)' }}
+          >
+            Back to Creators
+          </Link>
+        </div>
       </div>
     )
   }
@@ -622,6 +642,10 @@ export default function CreatorComparisonPage() {
     (key) => data.comparisons[key]?.display_name ?? key
   )
 
+  const resolvedKeys = new Set(Object.keys(data.comparisons))
+  const missingRequestedCount = keys.filter((k: string) => !resolvedKeys.has(k)).length
+  const hasMixedResult = missingRequestedCount > 0 && comparisonItems.length > 0
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
       <Breadcrumbs items={[{ label: 'Creators', to: '/creators' }, { label: 'Compare' }]} />
@@ -633,6 +657,15 @@ export default function CreatorComparisonPage() {
           Comparing {comparisonItems.length} creator{comparisonItems.length === 1 ? '' : 's'}
         </p>
       </header>
+
+      {hasMixedResult && (
+        <div className="mt-4 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--theme-warning)', backgroundColor: 'var(--theme-warning)/10' }} role="alert">
+          <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
+            <strong>Note:</strong> One or more requested creators could not be included in this comparison.
+            The comparison reflects only the creators available in your library.
+          </p>
+        </div>
+      )}
 
       {affectedNames.length > 0 && (
         <div className="mt-4 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--theme-warning)', backgroundColor: 'var(--theme-warning)/10' }}>
@@ -675,9 +708,20 @@ export default function CreatorComparisonPage() {
       </div>
 
       {comparisonItems.length === 0 && (
-        <p className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-          None of the selected creators were found in your library.
-        </p>
+        <div className="mt-6">
+          <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+            None of the selected creators are available in your library. The comparison can only include creators with issues credited to them in your library.
+          </p>
+          <div className="mt-2">
+            <Link
+              to="/creators"
+              className="rounded-lg text-sm font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              style={{ color: 'var(--theme-text-muted)' }}
+            >
+              Back to Creators
+            </Link>
+          </div>
+        </div>
       )}
 
       <CreatorMetricDrilldownModal
