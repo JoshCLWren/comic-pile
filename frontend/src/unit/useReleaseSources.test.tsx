@@ -81,8 +81,8 @@ describe('useReleaseSources', () => {
     expect(mockList).not.toHaveBeenCalled()
   })
 
-  it('does not fetch when planId is undefined', () => {
-    const { result } = renderHook(() => useReleaseSources(undefined), { wrapper: createWrapper() })
+  it('does not fetch when planId is null', () => {
+    const { result } = renderHook(() => useReleaseSources(null), { wrapper: createWrapper() })
     expect(result.current.data).toBeUndefined()
     expect(mockList).not.toHaveBeenCalled()
   })
