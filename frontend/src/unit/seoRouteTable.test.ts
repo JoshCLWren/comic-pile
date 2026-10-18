@@ -44,7 +44,7 @@ describe('canonical route indexability table', () => {
   })
 
   test('retired redirect sources stay non-indexable', () => {
-    for (const path of ['/rate', '/analytics', '/help']) {
+    for (const path of ['/rate', '/analytics', '/help', '/threads/42']) {
       expect(matchRouteSeo(path).visibility).toBe('public-noindex')
     }
   })
@@ -68,6 +68,7 @@ describe('canonical route indexability table', () => {
       '/whats-new',
       '/glossary',
       '/identity-inbox',
+      '/cbl-sources',
     ]
     for (const path of privatePaths) {
       const entry = matchRouteSeo(path)
