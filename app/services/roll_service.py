@@ -35,6 +35,7 @@ from app.repositories.roll_repository import (
     update_session_pending_thread,
     update_session_skipped,
 )
+from app.services.queue_display import display_position
 from app.services.reading_effort import (
     EffortEstimate,
     build_recommendation_context,
@@ -710,7 +711,7 @@ class RollService:
         except Exception:
             return None
 
-    def build_roll_response(
+    async def build_roll_response(
         self,
         *,
         selected_thread: Thread | None = None,
@@ -740,7 +741,7 @@ class RollService:
             thread_id = selected_thread.id
             title = selected_thread.title
             format_ = normalize_format_value(selected_thread.format)
-            queue_position = selected_thread.queue_position
+            queue_position = await display_position(self._db, selected_thread)
             total_issues = selected_thread.total_issues
             reading_progress = selected_thread.reading_progress
         return RollResponse(
@@ -859,7 +860,7 @@ class RollService:
 
         selected_index: int = artifacts["selected_index"]
         unread_count: int = artifacts["unread_count"]
-        return self.build_roll_response(
+        return await self.build_roll_response(
             selected_thread=selected_thread,
             current_die=current_die,
             selected_index=selected_index,
@@ -940,7 +941,7 @@ class RollService:
 
         selected_index: int = artifacts["selected_index"]
         unread_count: int = artifacts["unread_count"]
-        return self.build_roll_response(
+        return await self.build_roll_response(
             selected_thread=selected_thread,
             current_die=current_die,
             selected_index=selected_index,
@@ -995,7 +996,7 @@ class RollService:
         override_thread_id = override_thread.id
         override_thread_title = override_thread.title
         override_thread_format = normalize_format_value(override_thread.format)
-        override_thread_queue_position = override_thread.queue_position
+        override_thread_queue_position = await display_position(self._db, override_thread)
 
         override_thread_issues_remaining = (
             await override_thread.get_issues_remaining(db)

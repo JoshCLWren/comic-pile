@@ -31,6 +31,7 @@ from app.schemas.session import (
     build_session_intent_state,
 )
 from app.services.ownership import get_owned_session_or_404
+from app.services.queue_display import display_position
 from app.services.session_response import build_ladder_path, build_session_event_details
 from app.services.summary_service import build_narrative_summary
 from app.services.reading_session_service import get_reading_session_service, ReadingSessionService
@@ -143,7 +144,7 @@ async def get_session_with_thread_safe(
                 title=pending_thread.title,
                 format=normalize_format_value(pending_thread.format),
                 issues_remaining=issues_remaining,
-                queue_position=pending_thread.queue_position,
+                queue_position=await display_position(db, pending_thread),
                 last_rolled_result=last_rolled_result,
                 total_issues=pending_thread.total_issues,
                 reading_progress=pending_thread.reading_progress,
@@ -168,7 +169,7 @@ async def get_session_with_thread_safe(
                 title=thread.title,
                 format=normalize_format_value(thread.format),
                 issues_remaining=issues_remaining,
-                queue_position=thread.queue_position,
+                queue_position=await display_position(db, thread),
                 last_rolled_result=last_rolled_result,
                 total_issues=thread.total_issues,
                 reading_progress=thread.reading_progress,
@@ -253,7 +254,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
         title=thread.title,
         format=normalize_format_value(thread.format),
         issues_remaining=issues_remaining,
-        queue_position=thread.queue_position,
+        queue_position=await display_position(db, thread),
         last_rolled_result=event.result,
         total_issues=thread.total_issues,
         reading_progress=thread.reading_progress,
@@ -573,7 +574,7 @@ async def list_sessions(
                         title=thread.title,
                         format=normalize_format_value(thread.format),
                         issues_remaining=issues_remaining,
-                        queue_position=thread.queue_position,
+                        queue_position=await display_position(db, thread),
                         last_rolled_result=safe_result,
                         total_issues=thread.total_issues,
                         reading_progress=thread.reading_progress,
@@ -616,7 +617,7 @@ async def list_sessions(
                         title=thread.title,
                         format=normalize_format_value(thread.format),
                         issues_remaining=issues_remaining,
-                        queue_position=thread.queue_position,
+                        queue_position=await display_position(db, thread),
                         last_rolled_result=safe_result,
                         total_issues=thread.total_issues,
                         reading_progress=thread.reading_progress,

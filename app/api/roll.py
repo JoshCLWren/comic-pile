@@ -25,6 +25,7 @@ from app.services.reading_effort import (
     EffortEstimate,
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
+from app.services.queue_display import display_position
 from app.services.roll_service import RollService
 from app.services.session_response import (
     build_ladder_path,
@@ -171,9 +172,10 @@ async def _select_pending_thread(
     )
 
 
-def _build_roll_response(
+async def _build_roll_response(
     *,
     artifacts: _SelectionArtifacts,
+    db: AsyncSession,
     current_die: int,
     snoozed_count: int,
 ) -> RollResponse:
@@ -184,7 +186,7 @@ def _build_roll_response(
         title=selected_thread.title,
         format=normalize_format_value(selected_thread.format),
         issues_remaining=artifacts.unread_count,
-        queue_position=selected_thread.queue_position,
+        queue_position=await display_position(db, selected_thread),
         die_size=current_die,
         result=artifacts.selected_index + 1,
         offset=snoozed_count,
@@ -378,7 +380,8 @@ async def roll_dice(
 
     await db.commit()
 
-    return _build_roll_response(
+    return await _build_roll_response(
+        db=db,
         artifacts=artifacts,
         current_die=current_die,
         snoozed_count=len(snoozed_ids),
@@ -493,7 +496,8 @@ async def skip_roll(
 
     await db.commit()
 
-    return _build_roll_response(
+    return await _build_roll_response(
+        db=db,
         artifacts=artifacts,
         current_die=current_die,
         snoozed_count=len(snoozed_ids),

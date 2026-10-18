@@ -1,11 +1,8 @@
-"""Regression tests for #3449: dense queue positions after queue mutations.
+"""Regression tests for #3449: consistent dense display positions.
 
-The Queue page renders each active series at its dense 1..N index, while the
-roll card ("#N in queue") and the thread page ("Position #N") render the stored
-``queue_position``. Those surfaces only agree when the stored positions stay a
-contiguous ``1..N`` sequence, so completing or deleting a series must close the
-gap it leaves and no displayed position may exceed the number of active
-series.
+Queue, Roll, thread detail, and restored sessions expose dense ordinals
+independently of stored ordering keys. Mutation coverage also preserves the
+current dense storage contract until sparse ordering lands.
 """
 
 from __future__ import annotations
@@ -13,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -278,3 +276,84 @@ async def test_exclude_and_restore_keeps_positions_dense(
 
     await thread_service.restore_thread(async_db, default_user.id, first.id)
     _assert_dense(await _active_positions(async_db, default_user.id))
+
+
+@pytest.mark.asyncio
+async def test_sparse_existing_positions_agree_across_api_surfaces(
+    async_db: AsyncSession, default_user: User, auth_client: AsyncClient
+) -> None:
+    """Normal reads fix existing gaps without requiring a mutation or rewriting keys."""
+    first = await _add_thread(async_db, default_user, title="A", position=4)
+    last = await _add_thread(async_db, default_user, title="B", position=621)
+    await async_db.commit()
+    expected = {first.id: 1, last.id: 2}
+
+    queue = await auth_client.get("/api/v1/threads/", params={"page_size": 1})
+    assert queue.status_code == 200, queue.text
+    page = queue.json()
+    assert page["threads"][0]["queue_position"] == 1
+    second_page = await auth_client.get(
+        "/api/v1/threads/", params={"page_size": 1, "page_token": page["next_page_token"]}
+    )
+    assert second_page.status_code == 200, second_page.text
+    assert second_page.json()["threads"][0]["queue_position"] == 2
+
+    for thread_id, position in expected.items():
+        detail = await auth_client.get(f"/api/v1/threads/{thread_id}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["queue_position"] == position
+
+    roll = await auth_client.post("/api/v1/roll/")
+    assert roll.status_code == 200, roll.text
+    assert roll.json()["queue_position"] == expected[roll.json()["thread_id"]]
+    restored = await auth_client.get("/api/v1/sessions/current/")
+    assert restored.status_code == 200, restored.text
+    active = restored.json()["active_thread"]
+    assert active["queue_position"] == expected[active["id"]]
+    assert await _active_positions(async_db, default_user.id) == [4, 621]
+
+
+@pytest.mark.asyncio
+async def test_dense_display_follows_blocked_last_order_and_is_reader_scoped(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Display order matches Queue grouping and never ranks another reader's rows."""
+    from app.services.queue_display import display_positions
+    from tests.conftest import get_or_create_user_async
+
+    blocked = await _add_thread(async_db, default_user, title="Blocked", position=4)
+    blocked.is_blocked = True
+    available = await _add_thread(async_db, default_user, title="Available", position=621)
+    other_user = await get_or_create_user_async(async_db, username="other_queue_owner")
+    await _add_thread(async_db, other_user, title="Other reader", position=1)
+    await async_db.flush()
+    assert await display_positions(async_db, default_user.id) == {available.id: 1, blocked.id: 2}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remove", ["delete", "complete"])
+async def test_display_positions_agree_after_queue_removal(
+    async_db: AsyncSession, default_user: User, auth_client: AsyncClient, remove: str
+) -> None:
+    """Completion and deletion update every surviving public ordinal."""
+    first = await _add_thread(async_db, default_user, title="First", position=4)
+    last = await _add_thread(async_db, default_user, title="Last", position=621)
+    await async_db.commit()
+    if remove == "delete":
+        await thread_service.delete_thread(async_db, default_user.id, first.id)
+    else:
+        await thread_service.update_thread(
+            async_db, default_user.id, first.id, ThreadUpdate(issues_remaining=0)
+        )
+    queue = await auth_client.get("/api/v1/threads/")
+    assert queue.status_code == 200, queue.text
+    assert [(row["id"], row["queue_position"]) for row in queue.json()["threads"]] == [
+        (last.id, 1)
+    ]
+    detail = await auth_client.get(f"/api/v1/threads/{last.id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["queue_position"] == 1
+    roll = await auth_client.post("/api/v1/roll/")
+    assert roll.status_code == 200, roll.text
+    assert roll.json()["thread_id"] == last.id
+    assert roll.json()["queue_position"] == 1

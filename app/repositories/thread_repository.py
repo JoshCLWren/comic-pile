@@ -268,6 +268,7 @@ async def fetch_queue_page(
     cursor: QueueCursor | None,
     limit: int,
     eligibility: ReadingEligibilitySnapshot | None = None,
+    position_map: dict[int, int] | None = None,
 ) -> list[Thread]:
     """Fetch one deterministic page of a user's ACTIVE threads for the queue list.
 
@@ -280,11 +281,20 @@ async def fetch_queue_page(
         limit: Maximum number of threads to return.
 
         eligibility: Shared live result, or None for legacy execution.
+        position_map: Optional output map populated with whole-Queue display ranks.
 
     Returns:
         Active threads in canonical page order, at most ``limit`` rows.
     """
-    query = select(Thread).where(
+    ranks = (
+        select(
+            Thread.id.label("thread_id"),
+            func.row_number().over(order_by=build_sort_order("position", eligibility)).label("position"),
+        )
+        .where(Thread.user_id == user_id, Thread.status == "active")
+        .subquery()
+    )
+    query = select(Thread, ranks.c.position).join(ranks, ranks.c.thread_id == Thread.id).where(
         Thread.user_id == user_id,
         Thread.status == "active"
     )
@@ -302,7 +312,10 @@ async def fetch_queue_page(
 
     query = query.limit(limit)
     result = await db.execute(query)
-    return list(result.scalars().all())
+    rows = result.all()
+    if position_map is not None:
+        position_map.update({thread.id: position for thread, position in rows})
+    return [thread for thread, _position in rows]
 
 
 async def fetch_completed_page(

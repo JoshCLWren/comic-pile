@@ -199,6 +199,12 @@ Reactivate a completed thread by adding more issues. Moves thread to position 1.
 
 Queue management for thread positioning.
 
+Public `queue_position` values are dense, one-based positions in the reader's complete default Queue order, with blocked threads last. Queue pages, thread
+details, Roll responses, and active session threads share this position; search,
+pagination, and temporary roll exclusions do not renumber it. Threads outside
+the active Queue report zero. Stored ordering keys may contain gaps and are not
+exposed as display positions.
+
 ### PUT /queue/threads/{thread_id}/position/
 
 Move thread to a specific position.

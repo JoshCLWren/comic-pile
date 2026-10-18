@@ -23,6 +23,7 @@ from app.repositories.issue_repository import (
     issues_ordered,
 )
 from app.repositories.rate_repository import fetch_owned_roll_issue, fetch_source_roll_event
+from app.services.queue_display import display_position
 from app.services.reading_eligibility_service import get_execution_eligibility, project_thread_responses
 from app.schemas.thread import ThreadResponse
 from app.repositories.reading_session_repository import (
@@ -746,7 +747,7 @@ async def rate_thread(
     resp_id = thread.id
     resp_title = thread.title
     resp_format = normalize_format_value(thread.format)
-    resp_queue_position = thread.queue_position
+    resp_queue_position = await display_position(db, thread)
     resp_status = thread.status
     resp_last_rating = thread.last_rating
     resp_last_activity_at = thread.last_activity_at

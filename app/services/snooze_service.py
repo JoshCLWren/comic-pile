@@ -13,6 +13,7 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.queue_display import display_position
 from app.services.reading_eligibility_service import get_execution_eligibility
 
 from app.models import Event, Thread
@@ -306,7 +307,7 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
                 title=active_thread.title,
                 format=normalize_format_value(active_thread.format),
                 issues_remaining=active_thread.issues_remaining,
-                queue_position=active_thread.queue_position,
+                queue_position=await display_position(db, active_thread),
                 last_rolled_result=roll_result,
             )
 
