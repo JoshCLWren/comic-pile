@@ -38,8 +38,9 @@ def _parse_until(value: object) -> datetime:
     return datetime.fromisoformat(value[:-1] + "+00:00")
 
 
-def load_pauses(path: Path = PAUSES_PATH) -> list[QuotaPause]:
+def load_pauses(path: Path | str = PAUSES_PATH) -> list[QuotaPause]:
     """Load and validate configured quota pauses; a missing file means none."""
+    path = Path(path)
     if not path.exists():
         return []
     data = json.loads(path.read_text(encoding="utf-8"))

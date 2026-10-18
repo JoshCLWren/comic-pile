@@ -43,7 +43,7 @@ def test_worker_emits_only_canonical_terminal_outcomes() -> None:
     text = _worker_text()
 
     assert (
-        'success|no_work|work_failure|provider_failure|provider_throttle|model_unavailable|model_retired_410|'
+        'success|no_work|work_failure|provider_failure|provider_throttle|provider_quota|model_unavailable|model_retired_410|'
         'model_policy_violation|environment_failure|control_plane_failure|unknown_failure'
     ) in text
     assert 'TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"' in text
