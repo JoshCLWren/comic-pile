@@ -107,6 +107,9 @@ describe('sitemap generation regression', () => {
   test('route table completeness - all known routes are classified', () => {
     // This test documents all known routes in the application.
     // If a new route is added to App.tsx, it must be added here too.
+    // `seoIndexabilityPolicy.test.ts` derives the route list straight from
+    // App.tsx so the two checks stay independent: this one names the expected
+    // set, that one proves App.tsx and the table never disagree.
     const knownPatterns = new Set(ROUTE_SEO_TABLE.map(e => e.pattern))
     
     // These are all the route patterns from App.tsx
@@ -123,10 +126,12 @@ describe('sitemap generation regression', () => {
       '/help',
       '/queue',
       '/thread/:id',
+      '/threads/:id',
+      '/creators',
+      '/creators/compare',
       '/creators/:creatorKey',
       '/history',
       '/sessions/:id',
-      '/creators',
       '/crossovers',
       '/crossovers/:group',
       '/continuity-plans',
@@ -134,6 +139,7 @@ describe('sitemap generation regression', () => {
       '/continuity-plans/events',
       '/continuity-plans/:id/edit',
       '/continuity-plans/:id',
+      '/cbl-sources',
       '/whats-new',
       '/glossary',
       '/identity-inbox',
