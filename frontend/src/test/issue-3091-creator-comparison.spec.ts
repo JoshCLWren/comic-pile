@@ -249,7 +249,7 @@ test.describe('Issue #3091: creator comparison', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await installCreatorsList(page)
     await installCreatorComparison(page, {
-      'creator:small': comparisonItem('creator:small', 'Few Ratings Creator', {
+      'creator:21': comparisonItem('creator:21', 'Few Ratings Creator', {
         average_rating: 5,
         median_rating: 5,
         ratings_count: 4,
@@ -257,7 +257,7 @@ test.describe('Issue #3091: creator comparison', () => {
         rating_distribution: { '5': 4 },
         insufficient_data: false,
       }),
-      'creator:large': comparisonItem('creator:large', 'Many Ratings Creator', {
+      'creator:22': comparisonItem('creator:22', 'Many Ratings Creator', {
         average_rating: 4.5,
         median_rating: 4,
         ratings_count: 100,
@@ -277,7 +277,7 @@ test.describe('Issue #3091: creator comparison', () => {
       }),
     })
 
-    await page.goto('/creators/compare?keys=creator:small,creator:large', {
+    await page.goto('/creators/compare?keys=creator:21,creator:22', {
       waitUntil: 'domcontentloaded',
     })
 
@@ -357,7 +357,8 @@ test.describe('Issue #3091: creator comparison', () => {
 /** Issue #3462: creator compare silently omits unresolved deep-link keys */
 const MIXED_KEYS = ['creator:7', 'creator:99999']
 
-test('3462 - valid 2-creator comparison renders', async ({ page }) => {
+test('3462 - valid 2-creator comparison renders', async ({ authenticatedPage }) => {
+  const page = authenticatedPage
   await installCreatorsList(page)
   await installCreatorComparison(page, {
     'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),
@@ -369,7 +370,8 @@ test('3462 - valid 2-creator comparison renders', async ({ page }) => {
   await expect(page.getByText('Steve McNiven')).toBeVisible()
 })
 
-test('3462 - one valid + one nonexistent shows mixed notice', async ({ page }) => {
+test('3462 - one valid + one nonexistent shows mixed notice', async ({ authenticatedPage }) => {
+  const page = authenticatedPage
   await installCreatorsList(page)
   await installCreatorComparison(page, {
     'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),
@@ -380,7 +382,8 @@ test('3462 - one valid + one nonexistent shows mixed notice', async ({ page }) =
   await expect(page.getByText('Brian K. Vaughan')).toBeVisible()
 })
 
-test('3462 - two nonexistent keys shows none-available message with back link', async ({ page }) => {
+test('3462 - two nonexistent keys shows none-available message with back link', async ({ authenticatedPage }) => {
+  const page = authenticatedPage
   await installCreatorsList(page)
   await installCreatorComparison(page, {})
   await page.goto('/creators/compare?keys=creator:99999,creator:88888')
@@ -388,19 +391,22 @@ test('3462 - two nonexistent keys shows none-available message with back link', 
   await expect(page.getByRole('link', { name: /Back to Creators/i })).toBeVisible()
 })
 
-test('3462 - bad syntax shows readable explanation', async ({ page }) => {
+test('3462 - bad syntax shows readable explanation', async ({ authenticatedPage }) => {
+  const page = authenticatedPage
   await page.goto('/creators/compare?keys=badkey,creator:7')
   await expect(page.getByText('Invalid creator key format')).toBeVisible()
   await expect(page.getByText('Back to Creators')).toBeVisible()
 })
 
-test('3462 - 5-key URL shows accepted-input explanation', async ({ page }) => {
+test('3462 - 5-key URL shows accepted-input explanation', async ({ authenticatedPage }) => {
+  const page = authenticatedPage
   await page.goto('/creators/compare?keys=creator:1,creator:2,creator:3,creator:4,creator:5')
   await expect(page.getByText('Comparison accepts 2 to 4 creator keys')).toBeVisible()
   await expect(page.getByText('Back to Creators')).toBeVisible()
 })
 
-test('3462 - reload retains valid keys', async ({ page }) => {
+test('3462 - reload retains valid keys', async ({ authenticatedPage }) => {
+  const page = authenticatedPage
   await installCreatorsList(page)
   await installCreatorComparison(page, {
     'creator:7': comparisonItem('creator:7', 'Brian K. Vaughan'),

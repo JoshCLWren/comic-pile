@@ -516,7 +516,11 @@ function ComparisonCard({ item }: { item: CreatorComparisonItem }) {
 export default function CreatorComparisonPage() {
   const [searchParams] = useSearchParams()
   const keysParam = searchParams.get('keys')
-  const keys = keysParam ? keysParam.split(',').filter(Boolean) : []
+  // Trim each key before any validation so the page's checks accept exactly
+  // what useCreatorComparison's normalizeKeys accepts (#3462): a deep link
+  // like ?keys=creator:7,%20creator:12 loads successfully instead of being
+  // rejected as malformed while the hook would have trimmed it.
+  const keys = keysParam ? keysParam.split(',').map((k: string) => k.trim()).filter(Boolean) : []
 
   const { data, isPending, isError, error } = useCreatorComparison(keys.length > 0 ? keys : null)
 
@@ -673,7 +677,14 @@ export default function CreatorComparisonPage() {
       </header>
 
       {hasMixedResult && (
-        <div className="mt-4 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--theme-warning)', backgroundColor: 'var(--theme-warning)/10' }} role="alert">
+        <div
+          className="mt-4 rounded-xl border px-4 py-3"
+          style={{
+            borderColor: 'var(--theme-warning)',
+            backgroundColor: 'color-mix(in srgb, var(--theme-warning) 10%, transparent)',
+          }}
+          role="alert"
+        >
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
             <strong>Note:</strong> One or more requested creators could not be included in this comparison.
             The comparison reflects only the creators available in your library.
@@ -682,7 +693,13 @@ export default function CreatorComparisonPage() {
       )}
 
       {affectedNames.length > 0 && (
-        <div className="mt-4 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--theme-warning)', backgroundColor: 'var(--theme-warning)/10' }}>
+        <div
+          className="mt-4 rounded-xl border px-4 py-3"
+          style={{
+            borderColor: 'var(--theme-warning)',
+            backgroundColor: 'color-mix(in srgb, var(--theme-warning) 10%, transparent)',
+          }}
+        >
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
             <strong>Note:</strong> Some creators have fewer than 3 rated issues, making their statistics less reliable.
             <span className="break-words ml-2">Affected: {affectedNames.join(', ')}</span>

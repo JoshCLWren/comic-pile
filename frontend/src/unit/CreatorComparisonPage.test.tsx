@@ -374,13 +374,13 @@ describe('CreatorComparisonPage', () => {
     expect(screen.getByText(/Affected: creator:404/)).toBeInTheDocument()
   })
 
-  it('renders unrated and keyless creators without manufacturing equivalence', () => {
+  it('renders unrated creators without manufacturing equivalence', () => {
     mockedHook.mockReturnValue(
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:mystery': makeItem({
-              canonical_creator_key: 'creator:mystery',
+            'creator:333': makeItem({
+              canonical_creator_key: 'creator:333',
               display_name: 'Mystery Writer',
               normalized_roles: [],
               average_rating: null,
@@ -399,9 +399,12 @@ describe('CreatorComparisonPage', () => {
       }),
     )
 
-    renderAt('creator:7,creator:mystery')
+    renderAt('creator:7,creator:333')
 
-    expect(screen.getByRole('heading', { name: 'Mystery Writer' })).toBeInTheDocument()
+    // A creator resolved under a canonical key links to its detail page; the
+    // card never manufactures a heading-level identity in its place.
+    const mysteryLink = screen.getByRole('link', { name: 'Mystery Writer' })
+    expect(mysteryLink).toHaveAttribute('href', '/creators/creator%3A333')
     // "No ratings yet" appears in average, median, and distribution (3 places)
     expect(screen.getAllByText('No ratings yet')).toHaveLength(3)
     expect(screen.getByText('N/A')).toBeInTheDocument()
@@ -491,6 +494,49 @@ describe('CreatorComparisonPage', () => {
     expect(
       screen.getByText('None of the selected creators were found in your library. None of the selected creators are available in your library — the comparison can only include creators with issues credited to them in your library.'),
     ).toBeInTheDocument()
+  })
+
+  it('accepts comma-separated keys with surrounding whitespace because the hook trims them (#3462)', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+            'creator:12': makeItem({ canonical_creator_key: 'creator:12', display_name: 'Steve McNiven' }),
+          },
+        }),
+      }),
+    )
+
+    // %20 decodes to a space after the comma; normalizeKeys trims it, so the
+    // page must not reject the same link as malformed.
+    renderAt('creator:7,%20creator:12')
+
+    expect(screen.getByText('Comparing 2 creators')).toBeInTheDocument()
+    expect(screen.queryByText(/Invalid creator key format/)).not.toBeInTheDocument()
+    expect(mockedHook).toHaveBeenCalledWith(['creator:7', 'creator:12'])
+  })
+
+  it('shows the mixed-result notice with a warning-tinted background the browser accepts (#3462)', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({ canonical_creator_key: 'creator:7', display_name: 'Brian K. Vaughan' }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:7,creator:99999')
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('One or more requested creators could not be included')
+    // `var(--theme-warning)/10` is invalid CSS that browsers silently drop;
+    // the notice must carry a real color-mix expression instead.
+    expect(alert.style.backgroundColor).toBe(
+      'color-mix(in srgb, var(--theme-warning) 10%, transparent)',
+    )
   })
 
   it('keeps role chips on one clipped line instead of breaking words mid-word (#3237)', () => {
@@ -707,14 +753,14 @@ renderAt('creator:100,creator:101')
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:sample': makeItem({
-              canonical_creator_key: 'creator:sample',
+            'creator:801': makeItem({
+              canonical_creator_key: 'creator:801',
               display_name: 'Sample Creator',
               ratings_count: 8,
               rating_distribution: { '4': 4, '5': 4 },
             }),
-            'creator:other': makeItem({
-              canonical_creator_key: 'creator:other',
+            'creator:802': makeItem({
+              canonical_creator_key: 'creator:802',
               display_name: 'Other Creator',
             }),
           },
@@ -722,7 +768,7 @@ renderAt('creator:100,creator:101')
       }),
     )
 
-    renderAt('creator:sample,creator:other')
+    renderAt('creator:801,creator:802')
 
     const distributions = screen.getAllByTestId('rating-distribution')
     expect(distributions).toHaveLength(2)
@@ -742,8 +788,8 @@ renderAt('creator:100,creator:101')
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:thin': makeItem({
-              canonical_creator_key: 'creator:thin',
+            'creator:803': makeItem({
+              canonical_creator_key: 'creator:803',
               display_name: 'Thin Sample Creator',
               average_rating: 3,
               median_rating: 3,
@@ -752,8 +798,8 @@ renderAt('creator:100,creator:101')
               top_rating_rate: 0,
               insufficient_data: true,
             }),
-            'creator:other': makeItem({
-              canonical_creator_key: 'creator:other',
+            'creator:804': makeItem({
+              canonical_creator_key: 'creator:804',
               display_name: 'Other Creator',
             }),
           },
@@ -761,7 +807,7 @@ renderAt('creator:100,creator:101')
       }),
     )
 
-    renderAt('creator:thin,creator:other')
+    renderAt('creator:803,creator:804')
 
     const distributions = screen.getAllByTestId('rating-distribution')
     const thinDistribution = distributions[0]
@@ -778,8 +824,8 @@ renderAt('creator:100,creator:101')
       baseHook({
         data: makeResponse({
           comparisons: {
-            'creator:low': makeItem({
-              canonical_creator_key: 'creator:low',
+            'creator:805': makeItem({
+              canonical_creator_key: 'creator:805',
               display_name: 'Low Ratings Creator',
               average_rating: 2.75,
               median_rating: 2.75,
@@ -787,8 +833,8 @@ renderAt('creator:100,creator:101')
               rating_distribution: { '5': 1, '0.5': 1 },
               top_rating_rate: 0.5,
             }),
-            'creator:other': makeItem({
-              canonical_creator_key: 'creator:other',
+            'creator:806': makeItem({
+              canonical_creator_key: 'creator:806',
               display_name: 'Other Creator',
             }),
           },
@@ -796,7 +842,7 @@ renderAt('creator:100,creator:101')
       }),
     )
 
-    renderAt('creator:low,creator:other')
+    renderAt('creator:805,creator:806')
 
     const distributions = screen.getAllByTestId('rating-distribution')
     const rows = within(distributions[0]).getAllByRole('listitem')
