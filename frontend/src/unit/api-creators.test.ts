@@ -66,6 +66,26 @@ const SUMMARIES_RESPONSE = {
   requested_keys: ['creator:1672'],
 }
 
+const DISCOVERY_MODES_RESPONSE = {
+  modes: [
+    {
+      mode: 'consistently_loved',
+      title: 'Most Consistently Loved',
+      description: 'High average with consistent ratings',
+    },
+  ],
+}
+
+const DISCOVERY_RESPONSE = {
+  mode: 'consistently_loved',
+  title: 'Most Consistently Loved',
+  description: 'High average with consistent ratings',
+  items: [],
+  total: 0,
+  limit: 20,
+  offset: 0,
+}
+
 describe('creatorsApi', () => {
   describe('getDetail', () => {
     it('requests creator detail with skipAuthRedirect: true', async () => {
@@ -134,6 +154,28 @@ describe('creatorsApi', () => {
         skipAuthRedirect: true,
       })
     })
+
+    it('forwards a positive offset and minimum sample', async () => {
+      client.get.mockResolvedValue(LIST_RESPONSE)
+
+      await creatorsApi.getList({ offset: 5, min_ratings: 3 })
+
+      expect(client.get).toHaveBeenCalledWith('/v1/creators', {
+        params: { offset: 5, min_ratings: 3 },
+        skipAuthRedirect: true,
+      })
+    })
+
+    it('drops a zero offset and zero minimum sample', async () => {
+      client.get.mockResolvedValue(LIST_RESPONSE)
+
+      await creatorsApi.getList({ offset: 0, min_ratings: 0 })
+
+      expect(client.get).toHaveBeenCalledWith('/v1/creators', {
+        params: {},
+        skipAuthRedirect: true,
+      })
+    })
   })
 
   describe('getSummaries', () => {
@@ -146,6 +188,57 @@ describe('creatorsApi', () => {
 
       expect(client.get).toHaveBeenCalledWith('/v1/creators/summaries', {
         params: { keys: 'creator:1672' },
+        skipAuthRedirect: true,
+      })
+    })
+  })
+
+  describe('getDiscoveryModes', () => {
+    it('requests discovery modes with skipAuthRedirect: true', async () => {
+      client.get.mockResolvedValue(DISCOVERY_MODES_RESPONSE)
+
+      await expect(creatorsApi.getDiscoveryModes()).resolves.toEqual(
+        DISCOVERY_MODES_RESPONSE,
+      )
+
+      expect(client.get).toHaveBeenCalledWith('/v1/creators/discovery/modes', {
+        skipAuthRedirect: true,
+      })
+    })
+  })
+
+  describe('getDiscovery', () => {
+    it('requests a mode with its limit and offset', async () => {
+      client.get.mockResolvedValue(DISCOVERY_RESPONSE)
+
+      await expect(
+        creatorsApi.getDiscovery({ mode: 'most_read', limit: 10, offset: 20 }),
+      ).resolves.toEqual(DISCOVERY_RESPONSE)
+
+      expect(client.get).toHaveBeenCalledWith('/v1/creators/discovery?mode=most_read', {
+        params: { limit: 10, offset: 20 },
+        skipAuthRedirect: true,
+      })
+    })
+
+    it('omits optional params that were not supplied', async () => {
+      client.get.mockResolvedValue(DISCOVERY_RESPONSE)
+
+      await creatorsApi.getDiscovery({ mode: 'polarizing' })
+
+      expect(client.get).toHaveBeenCalledWith('/v1/creators/discovery?mode=polarizing', {
+        params: {},
+        skipAuthRedirect: true,
+      })
+    })
+
+    it('omits a zero offset while keeping the limit', async () => {
+      client.get.mockResolvedValue(DISCOVERY_RESPONSE)
+
+      await creatorsApi.getDiscovery({ mode: 'loved_with_unread', limit: 5, offset: 0 })
+
+      expect(client.get).toHaveBeenCalledWith('/v1/creators/discovery?mode=loved_with_unread', {
+        params: { limit: 5 },
         skipAuthRedirect: true,
       })
     })

@@ -310,12 +310,8 @@ export default function CreatorsPage() {
   const selectionCount = selectedKeys.size
   const canCompare = selectionCount >= 2
 
-  // Clear discovery mode when switching to regular browsing
   const handleSearchChange = (value: string) => {
     setSearch(value)
-    if (value && discoveryMode) {
-      setDiscoveryMode(null)
-    }
   }
 
   const handleDiscoveryModeChange = (mode: DiscoveryMode | null) => {

@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorsPage from '../pages/CreatorsPage'
 import { useCreatorsList } from '../hooks/useCreatorsList'
 import type { CreatorListSelection, CreatorsListState } from '../hooks/useCreatorsList'
-import type { CreatorListItem } from '../services/api-creators'
+import { useDiscovery, useDiscoveryModes } from '../hooks/useCreatorDiscovery'
+import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
+import type { CreatorListItem, DiscoveryResultItem, DiscoveryResponse } from '../services/api-creators'
+import type { CreatorTeamChemistryResponse } from '../types'
 
 vi.mock('../hooks/useCreatorsList', () => ({
   useCreatorsList: vi.fn(),
@@ -14,7 +17,83 @@ vi.mock('../hooks/useDebounce', () => ({
   useDebounce: <T,>(value: T) => value,
 }))
 
+vi.mock('../hooks/useCreatorDiscovery', () => ({
+  useDiscoveryModes: vi.fn(),
+  useDiscovery: vi.fn(),
+}))
+
+vi.mock('../hooks/useCreatorTeamChemistry', () => ({
+  useCreatorTeamChemistry: vi.fn(),
+}))
+
 const mockedHook = vi.mocked(useCreatorsList)
+const mockedModes = vi.mocked(useDiscoveryModes)
+const mockedDiscovery = vi.mocked(useDiscovery)
+const mockedChemistry = vi.mocked(useCreatorTeamChemistry)
+
+/** Build a controlled `useDiscoveryModes` result; only `isLoading` drives the page. */
+function modesState(overrides: Partial<ReturnType<typeof useDiscoveryModes>> = {}) {
+  return { isLoading: false, ...overrides } as unknown as ReturnType<typeof useDiscoveryModes>
+}
+
+/** Build a controlled `useDiscovery` result for the discovery-mode render paths. */
+function discoveryState(overrides: Partial<ReturnType<typeof useDiscovery>> = {}) {
+  return {
+    data: undefined,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+    ...overrides,
+  } as unknown as ReturnType<typeof useDiscovery>
+}
+
+/** Build a controlled `useCreatorTeamChemistry` result. */
+function chemistryState(overrides: Partial<ReturnType<typeof useCreatorTeamChemistry>> = {}) {
+  return {
+    data: undefined,
+    isPending: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+    ...overrides,
+  } as unknown as ReturnType<typeof useCreatorTeamChemistry>
+}
+
+const EMPTY_CHEMISTRY: CreatorTeamChemistryResponse = {
+  pairs: [],
+  pairs_total: 0,
+  min_shared_team_sample: 2,
+  max_ranked_pairs: 10,
+  coverage: null,
+}
+
+function makeDiscovery(overrides: Partial<DiscoveryResponse> = {}): DiscoveryResponse {
+  return {
+    mode: 'consistently_loved',
+    title: 'Most Consistently Loved',
+    description: 'High average with consistent ratings',
+    items: [],
+    total: 0,
+    limit: 20,
+    offset: 0,
+    ...overrides,
+  }
+}
+
+function makeDiscoveryItem(
+  overrides: Partial<DiscoveryResultItem> & { canonical_creator_key: string },
+): DiscoveryResultItem {
+  return {
+    display_name: 'A Creator',
+    normalized_roles: ['writer'],
+    average_rating: 4.5,
+    ratings_count: 2,
+    qualifying_metrics: {},
+    read_unrated_count: 0,
+    upcoming_count: 0,
+    ...overrides,
+  }
+}
 
 const COMPLETE_COVERAGE = {
   rated_issues_total: 2,
@@ -75,6 +154,9 @@ function renderPage(extraRoutes?: { path: string; element: React.ReactNode }[]) 
 beforeEach(() => {
   vi.clearAllMocks()
   mockedHook.mockReturnValue(baseState())
+  mockedModes.mockReturnValue(modesState())
+  mockedDiscovery.mockReturnValue(discoveryState())
+  mockedChemistry.mockReturnValue(chemistryState())
 })
 
 describe('CreatorsPage', () => {
@@ -468,5 +550,223 @@ describe('CreatorsPage minimum-rated-sample control', () => {
     renderPage()
 
     expect(screen.getByText('small sample')).toBeTruthy()
+  })
+})
+
+describe('CreatorsPage discovery insights (issue #3093)', () => {
+  it('lists every curated discovery mode once the mode list is ready', () => {
+    renderPage()
+
+    for (const title of [
+      'Most Consistently Loved',
+      'Most Polarizing',
+      'Most Read',
+      'Highest Top Rating Rate',
+      'Great Average, Small Sample',
+      'Loved with Unread',
+    ]) {
+      expect(screen.getByRole('button', { name: title })).toBeInTheDocument()
+    }
+    expect(screen.queryByText('Loading insights...')).not.toBeInTheDocument()
+  })
+
+  it('shows a loading indicator instead of mode buttons while modes load', () => {
+    mockedModes.mockReturnValue(modesState({ isLoading: true }))
+
+    renderPage()
+
+    expect(screen.getByText('Loading insights...')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Most Polarizing' })).not.toBeInTheDocument()
+  })
+
+  it('opens a discovery view, hides browse controls, and lists supporting metrics', () => {
+    mockedDiscovery.mockReturnValue(
+      discoveryState({
+        data: makeDiscovery({
+          total: 2,
+          items: [
+            makeDiscoveryItem({
+              canonical_creator_key: 'creator:7',
+              display_name: 'Brian K. Vaughan',
+              normalized_roles: ['writer'],
+              average_rating: 4.5,
+              ratings_count: 7,
+              upcoming_count: 2,
+              qualifying_metrics: {
+                top_rating_rate: 30,
+                acceptance_score: 4.2,
+                hit_percentage: 50,
+                issue_count: 7,
+                spread_size: 3,
+                depth_sample: 9,
+                intensity: 3.25,
+                badge: 'top',
+              },
+            }),
+          ],
+        }),
+      }),
+    )
+
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Most Consistently Loved' }))
+
+    expect(screen.queryByLabelText('Search creators by name')).not.toBeInTheDocument()
+    expect(screen.getByText('Showing 1 of 2 creators')).toBeInTheDocument()
+
+    const link = screen.getByRole('link', { name: /Brian K\. Vaughan/ })
+    expect(link).toHaveAttribute('href', '/creators/creator%3A7')
+    expect(screen.getByText('7 rated issues')).toBeInTheDocument()
+    expect(screen.getByText('4.5★')).toBeInTheDocument()
+    expect(screen.getByText('2 unread')).toBeInTheDocument()
+
+    for (const metric of ['30%', '4.2%', '50%', '7', '3', '9', '3.3', 'top']) {
+      expect(screen.getByText(metric)).toBeInTheDocument()
+    }
+  })
+
+  it('explains when no creators qualify for a discovery view', () => {
+    mockedDiscovery.mockReturnValue(discoveryState({ data: makeDiscovery() }))
+
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Most Polarizing' }))
+
+    expect(screen.getByText('No creators match this discovery view yet.')).toBeInTheDocument()
+  })
+
+  it('labels the discovery section before the response arrives', () => {
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Most Read' }))
+
+    expect(screen.getByRole('heading', { name: 'Discovery' })).toBeInTheDocument()
+  })
+
+  it('shows placeholders while discovery results load', () => {
+    mockedDiscovery.mockReturnValue(discoveryState({ data: makeDiscovery(), isPending: true }))
+
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Highest Top Rating Rate' }))
+
+    expect(screen.getByLabelText('Loading discovery')).toBeInTheDocument()
+  })
+
+  it('shows a recoverable discovery error and retries', () => {
+    const refetch = vi.fn()
+    mockedDiscovery.mockReturnValue(
+      discoveryState({ data: makeDiscovery(), isError: true, refetch }),
+    )
+
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Great Average, Small Sample' }))
+
+    expect(screen.getByText('Could not load discovery results')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(refetch).toHaveBeenCalled()
+  })
+
+  it('returns to browsing from the discovery header without losing the search state', () => {
+    mockedDiscovery.mockReturnValue(discoveryState({ data: makeDiscovery() }))
+
+    renderPage()
+    const search = screen.getByLabelText('Search creators by name')
+    fireEvent.change(search, { target: { value: 'vaughan' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Loved with Unread' }))
+    expect(screen.queryByLabelText('Search creators by name')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to browse' }))
+    const restoredSearch = screen.getByLabelText('Search creators by name')
+    // SAFETY: the search control rendered by CreatorsPage is an HTMLInputElement.
+    expect((restoredSearch as HTMLInputElement).value).toBe('')
+  })
+
+  it('switches between discovery and browsing with the browse control', () => {
+    mockedDiscovery.mockReturnValue(discoveryState({ data: makeDiscovery() }))
+
+    renderPage()
+
+    // Already browsing: choosing Browse Creators is a harmless no-op.
+    fireEvent.click(screen.getByRole('button', { name: 'Browse Creators' }))
+    expect(screen.getByLabelText('Search creators by name')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Most Read' }))
+    expect(screen.queryByLabelText('Search creators by name')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browse Creators' }))
+    expect(screen.getByLabelText('Search creators by name')).toBeInTheDocument()
+  })
+
+  it('selects and deselects creators directly from a discovery view', () => {
+    mockedDiscovery.mockReturnValue(
+      discoveryState({
+        data: makeDiscovery({
+          total: 2,
+          items: [
+            makeDiscoveryItem({ canonical_creator_key: 'creator:1', display_name: 'A One' }),
+            makeDiscoveryItem({ canonical_creator_key: 'creator:2', display_name: 'B Two' }),
+          ],
+        }),
+      }),
+    )
+
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Most Consistently Loved' }))
+
+    fireEvent.click(screen.getByLabelText('Select A One for comparison'))
+    expect(screen.getByText('1 of 4 selected for comparison')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Select A One for comparison'))
+    expect(screen.queryByText(/selected for comparison/)).not.toBeInTheDocument()
+  })
+
+  it('renders an unlinked, unrated discovery row when the key is not canonical', () => {
+    mockedDiscovery.mockReturnValue(
+      discoveryState({
+        data: makeDiscovery({
+          items: [
+            makeDiscoveryItem({
+              canonical_creator_key: 'Alex Kim',
+              display_name: 'Alex Kim',
+              normalized_roles: [],
+              average_rating: null,
+              ratings_count: 1,
+              upcoming_count: 0,
+              qualifying_metrics: {},
+            }),
+          ],
+        }),
+      }),
+    )
+
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Most Consistently Loved' }))
+
+    expect(screen.getByText('Alex Kim')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByText('1 rated issue')).toBeInTheDocument()
+    expect(screen.getByText('unrated')).toBeInTheDocument()
+  })
+})
+
+describe('CreatorsPage team chemistry (issue #3094)', () => {
+  it('renders the team chemistry section when data is available', () => {
+    mockedChemistry.mockReturnValue(chemistryState({ data: EMPTY_CHEMISTRY }))
+
+    renderPage()
+
+    expect(screen.getByText(/No recurring creator teams yet/)).toBeInTheDocument()
+  })
+
+  it('offers a retry when team chemistry fails to load', () => {
+    const refetch = vi.fn()
+    mockedChemistry.mockReturnValue(
+      chemistryState({ isError: true, error: new Error('boom'), refetch }),
+    )
+
+    renderPage()
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load team chemistry')
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(refetch).toHaveBeenCalled()
   })
 })
