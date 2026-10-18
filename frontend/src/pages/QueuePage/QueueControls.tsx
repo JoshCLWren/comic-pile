@@ -105,7 +105,7 @@ function QueueControlsInner({
             type="button"
             onClick={onBulkMapSeries}
             disabled={bulkMapDisabled}
-            className="md:hidden h-9 px-3 rounded-lg bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-[var(--theme-bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="md:hidden h-9 px-3 rounded-lg bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-sm font-bold text-[var(--theme-text-primary)] whitespace-nowrap hover:bg-[var(--theme-bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="queue-bulk-map-mobile"
           >
             Map Series

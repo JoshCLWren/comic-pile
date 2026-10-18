@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal'
-import { comicVineApi } from '../services/api-comicvine'
+import { useComicVineSearch } from '../hooks/useComicVineSearch'
 import type { ComicVineSeriesResult } from '../services/api-comicvine'
 import {
   useQueueMappingOriginIssue,
@@ -34,7 +34,7 @@ interface QueueMapSeriesDialogProps {
 
 type DialogStep = 'search' | 'preview'
 
-const SEARCH_PAGE_SIZE = 10
+const SEARCH_PAGE_SIZE = 20
 
 function stripParenthesizedYears(title: string): string {
   return title.replace(/\((\d{4}(-\d{4})?)\)/g, '').trim()
@@ -104,17 +104,14 @@ export default function QueueMapSeriesDialog({
 }: QueueMapSeriesDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
   const [query, setQuery] = useState(threadTitle)
-  const [seriesResults, setSeriesResults] = useState<ComicVineSeriesResult[]>([])
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
-  const [hasMore, setHasMore] = useState(false)
-  const [nextOffset, setNextOffset] = useState<number | null>(null)
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
-  const [hasSearched, setHasSearched] = useState(false)
   const [uncheckedRowIds, setUncheckedRowIds] = useState<ReadonlySet<string>>(() => new Set())
-  const asyncRef = useRef(0)
-  const searchingRef = useRef(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  
+  const searchQuery = useComicVineSearch({
+    query,
+    pageSize: SEARCH_PAGE_SIZE,
+    enabled: isOpen && step === 'search',
+  })
 
   const originQuery = useQueueMappingOriginIssue(isOpen ? threadId : null, isOpen)
   const originIssueId = originQuery.data?.id ?? null
@@ -131,93 +128,35 @@ export default function QueueMapSeriesDialog({
   )
   const commit = useQueueSeriesMappingCommit()
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = null
-      }
-    }
-  }, [])
+  
 
-  const handleSearch = useCallback(async (searchQuery: string, offset = 0, append = false) => {
-    const trimmed = searchQuery.trim()
-    if (!trimmed) {
-      setSeriesResults([])
-      setHasMore(false)
-      setNextOffset(null)
-      setHasSearched(false)
-      return
-    }
-    const requestId = ++asyncRef.current
-    searchingRef.current = true
-    setIsSearching(true)
-    setSearchError(null)
-    try {
-      const response = await comicVineApi.searchSeries(trimmed, SEARCH_PAGE_SIZE, offset)
-      if (requestId !== asyncRef.current) return
-      setSeriesResults((previous) => {
-        if (!append) return response.results
-        const seen = new Set(previous.map((series) => series.comicvine_volume_id))
-        return [...previous, ...response.results.filter((series) => !seen.has(series.comicvine_volume_id))]
-      })
-      setHasMore(response.has_more)
-      setNextOffset(response.next_offset)
-      setHasSearched(true)
-    } catch {
-      if (requestId !== asyncRef.current) return
-      setSearchError('Failed to search ComicVine. Please try again.')
-      if (!append) setSeriesResults([])
-    } finally {
-      if (requestId === asyncRef.current) {
-        setIsSearching(false)
-        searchingRef.current = false
-      }
-    }
-  }, [])
+  
 
   useEffect(() => {
     if (isOpen) {
       const initial = stripParenthesizedYears(threadTitle)
       setStep('search')
       setQuery(initial)
-      setSeriesResults([])
       setSelectedSeries(null)
-      setHasMore(false)
-      setNextOffset(null)
-      setSearchError(null)
-      setHasSearched(false)
       setUncheckedRowIds(new Set())
       commit.reset()
-      if (initial) void handleSearch(initial)
     }
-    // Reset only on open transitions; the search callback is stable.
+    // Reset only on open transitions; the search query is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, threadId])
 
   const handleQueryChange = useCallback(
     (value: string) => {
       setQuery(value)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      if (!value.trim()) {
-        setHasSearched(false)
-        setSeriesResults([])
-        setHasMore(false)
-        setNextOffset(null)
-        return
-      }
-      debounceRef.current = setTimeout(() => {
-        asyncRef.current += 1
-        void handleSearch(value)
-      }, 350)
     },
-    [handleSearch],
+    [],
   )
 
   const handleLoadMore = useCallback(() => {
-    if (!hasMore || nextOffset == null || searchingRef.current) return
-    void handleSearch(query, nextOffset, true)
-  }, [handleSearch, hasMore, nextOffset, query])
+    if (searchQuery.hasNextPage && !searchQuery.isFetching) {
+      searchQuery.fetchNextPage()
+    }
+  }, [searchQuery.hasNextPage, searchQuery.isFetching, searchQuery.fetchNextPage])
 
   const handleSelectSeries = useCallback((series: ComicVineSeriesResult) => {
     setSelectedSeries(series)
@@ -324,8 +263,7 @@ export default function QueueMapSeriesDialog({
               onChange={(event) => handleQueryChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && query.trim()) {
-                  if (debounceRef.current) clearTimeout(debounceRef.current)
-                  void handleSearch(query)
+                  // Search is handled automatically by the query hook
                 }
               }}
               placeholder="Search ComicVine volumes"
@@ -333,12 +271,12 @@ export default function QueueMapSeriesDialog({
               data-testid="queue-map-series-search-input"
               className="w-full min-h-11 rounded-xl px-4 text-sm text-stone-100 bg-stone-800/50 border border-stone-700/50 placeholder:text-stone-500 focus:outline-none focus:border-amber-500/50"
             />
-            {searchError && (
+            {searchQuery.error && (
               <p
                 role="alert"
                 className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
               >
-                {searchError}
+                Failed to search ComicVine. Please try again.
               </p>
             )}
             {originQuery.isError && (
@@ -354,16 +292,16 @@ export default function QueueMapSeriesDialog({
                 This series has no tracked issues to map.
               </p>
             )}
-            {isSearching && seriesResults.length === 0 && (
+            {(searchQuery.isFetching && searchQuery.data?.pages.length === 0) && (
               <div className="flex justify-center py-6" aria-label="Searching">
                 <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
               </div>
             )}
-            {hasSearched && !isSearching && seriesResults.length === 0 && !searchError && (
+            {!searchQuery.isFetching && !searchQuery.isLoading && searchQuery.data?.pages.length === 0 && !searchQuery.error && (
               <p className="text-sm text-stone-400">No volumes matched that search.</p>
             )}
             <ul className="space-y-2 max-h-72 overflow-y-auto overscroll-contain">
-              {seriesResults.map((series) => {
+              {searchQuery.data?.pages.flatMap((page: any) => page.results).map((series: any) => {
                 const meta = seriesMetaText(series)
                 return (
                   <li key={series.comicvine_volume_id}>
@@ -382,15 +320,15 @@ export default function QueueMapSeriesDialog({
                 )
               })}
             </ul>
-            {hasMore && (
+            {searchQuery.hasNextPage && (
               <button
                 type="button"
                 onClick={handleLoadMore}
-                disabled={isSearching}
+                disabled={searchQuery.isFetching}
                 data-testid="queue-map-series-load-more"
                 className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition disabled:opacity-50"
               >
-                {isSearching ? 'Loading...' : 'Show more volumes'}
+                {searchQuery.isFetching ? 'Loading...' : 'Show more volumes'}
               </button>
             )}
             {onSkip && (

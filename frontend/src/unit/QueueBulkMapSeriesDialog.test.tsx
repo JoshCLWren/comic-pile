@@ -1,9 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
-import QueueMapSeriesDialog from '../../components/QueueMapSeriesDialog'
+import QueueBulkMapSeriesDialog from '../components/QueueBulkMapSeriesDialog'
+import QueueMapSeriesDialog from '../components/QueueMapSeriesDialog'
 
-vi.mock('../../components/QueueMapSeriesDialog')
+vi.mock('../../components/QueueMapSeriesDialog', () => ({
+  default: vi.fn(),
+}))
 
 const mockedSeriesDialog = vi.mocked(QueueMapSeriesDialog)
 
@@ -28,7 +30,7 @@ function renderBulkDialog(overrides: DialogOverrides = {}) {
 describe('QueueBulkMapSeriesDialog', () => {
   beforeEach(() => {
     mockedSeriesDialog.mockReset()
-    mockedSeriesDialog.mockImplementation((props) => (
+    mockedSeriesDialog.mockImplementation((props: any) => (
       <>
         {props.isOpen && (
           <div
