@@ -160,6 +160,14 @@ export default function ComicVineSearchDialog({
       setQuery(stripParenthesizedYears(threadTitle))
     }
     if (isOpen) {
+      // Resetting the dialog context abandons whatever request is in flight, so its late
+      // response cannot repaint a dialog that has already moved on to different state (#3448).
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+      }
+      asyncRef.current += 1
+      searchingRef.current = false
       setStep('search')
       setSeriesResults([])
       setSelectedSeries(null)
@@ -335,8 +343,13 @@ export default function ComicVineSearchDialog({
     (value: string) => {
       setQuery(value)
       if (debounceRef.current) clearTimeout(debounceRef.current)
+      // Every query change abandons the previous query immediately, before the debounce
+      // fires, so a late response can never repaint results the reader has already left
+      // behind. Clearing the field counts as a change: an in-flight search for the abandoned
+      // term must not repopulate results under an empty query (#3448).
+      asyncRef.current += 1
+      searchingRef.current = false
       if (!value.trim()) {
-        searchingRef.current = false
         setSeriesResults([])
         setPagination(EMPTY_PAGINATION)
         setSearchPhase('idle')
@@ -347,10 +360,6 @@ export default function ComicVineSearchDialog({
       setPagination(EMPTY_PAGINATION)
       setError(null)
       setSearchPhase('loading')
-      // Invalidate any in-flight request the moment the query changes, before the debounce
-      // fires, so a late response for the old query cannot repaint the screen under the new
-      // one (#3448).
-      asyncRef.current += 1
       debounceRef.current = setTimeout(() => {
         void handleSearch(value)
       }, 350)
@@ -605,6 +614,9 @@ export default function ComicVineSearchDialog({
                   setSelectedSeries(null)
                   setIssueCandidates([])
                   setIssuesPhase('idle')
+                  // The issue step is being left, so its failure must not follow the reader
+                  // back onto the search screen as an error with no retry (#3448).
+                  setError(null)
                   setSearchPhase(seriesResults.length > 0 ? 'ready' : 'idle')
                 }}
                 className="text-sm text-amber-500 hover:text-amber-400 font-bold"
