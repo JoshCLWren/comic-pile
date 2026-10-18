@@ -29,6 +29,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 from collections.abc import Sequence
 
 from fastapi import status
@@ -76,22 +77,53 @@ ERROR_CONFIRMED_MAPPING_CONFLICT = "confirmed_mapping_conflict"
 ERROR_IDEMPOTENCY_CONFLICT = "idempotency_conflict"
 ERROR_INVALID_APPROVED_ROW = "invalid_approved_row"
 
-HYDRATION_BUDGET_SECONDS = 5.0
-"""Total inline budget for post-commit metadata hydration in one request.
+HTTP_CLIENT_DEADLINE_SECONDS = 10.0
+"""Whole-request deadline enforced by the shared frontend Axios client.
 
-The shared Axios client in frontend/src/services/api.ts times out the entire request
-after 10000ms, and createSeriesMappingApi.commit does not override it. Pre-commit
-work (token verification, idempotency lookup, plan building, identity writes, and the
-DB commit) runs before this budget starts, so the hydration budget must leave headroom
-for that work plus transport overhead under the client deadline. Five seconds keeps the
-worst-case inline duration well below 10 seconds even when pre-commit work is slow.
-
-Identities are committed before hydration begins, so exceeding this budget only defers
-best-effort metadata refresh; it never rolls back a confirmed mapping (issue #3776). It
-bounds the worst case for N approved identities instead of N times the per-identity
-fallback timeout, which previously let a 16-sibling approval hold the response for
-roughly two minutes.
+``frontend/src/services/api.ts`` applies ``timeout: 10000`` to the entire commit request and
+the series-mapping commit call does not override it. Inline work that outlasts this deadline
+makes the client abort after the identities have already committed, which is the lost-response
+case #3776 reports.
 """
+
+REQUEST_OVERHEAD_RESERVE_SECONDS = 1.5
+"""Deadline headroom for pre-service work and response transport.
+
+Auth, routing, and request parsing run before :func:`commit_series_mapping` starts its own
+clock, and the response still has to travel back after the service returns. Reserving this much
+keeps the whole request under the client deadline even though the service only measures its own
+elapsed time.
+"""
+
+MAX_INLINE_HYDRATION_SECONDS = 3.0
+"""Upper bound on post-commit hydration inside the commit request.
+
+Identities are committed before hydration begins, so exceeding any budget only defers
+best-effort metadata refresh; it never rolls back a confirmed mapping (issue #3776). Identities
+left over are refreshed on the read path instead.
+"""
+
+HYDRATION_BUDGET_SECONDS = MAX_INLINE_HYDRATION_SECONDS
+"""Default inline hydration budget when the caller supplies no request-relative budget."""
+
+
+def inline_hydration_budget(elapsed_seconds: float) -> float:
+    """Return the hydration budget left in the commit request after ``elapsed_seconds``.
+
+    Preview revalidation and the identity writes happen before hydration starts, so the budget
+    has to shrink with the work already done. The result never exceeds
+    :data:`MAX_INLINE_HYDRATION_SECONDS` and never goes negative, so ``reserve + elapsed +
+    budget`` stays within :data:`HTTP_CLIENT_DEADLINE_SECONDS`.
+
+    Args:
+        elapsed_seconds: Seconds already spent inside :func:`commit_series_mapping`.
+
+    Returns:
+        Seconds available for inline hydration, clamped to ``[0, HYDRATION_BUDGET_SECONDS]``.
+    """
+    remaining = HTTP_CLIENT_DEADLINE_SECONDS - REQUEST_OVERHEAD_RESERVE_SECONDS - elapsed_seconds
+    return max(0.0, min(HYDRATION_BUDGET_SECONDS, remaining))
+
 
 
 class SeriesMappingCommitConflictError(Exception):
@@ -136,6 +168,7 @@ async def commit_series_mapping(
             confirmed-mapping conflict, idempotency conflict, invalid approved row). No identity
             write has been committed when this is raised.
     """
+    started = time.monotonic()
     normalized_key = idempotency_key.strip()
     if not normalized_key:
         raise SeriesMappingCommitConflictError(ERROR_IDEMPOTENCY_CONFLICT)
@@ -211,6 +244,7 @@ async def commit_series_mapping(
     await _hydrate_after_commit(
         user_id=user_id,
         identity_ids=hydration_targets,
+        budget_seconds=inline_hydration_budget(time.monotonic() - started),
     )
 
     return response
@@ -496,6 +530,7 @@ async def _hydrate_after_commit(
     *,
     user_id: int,
     identity_ids: Sequence[int],
+    budget_seconds: float | None = None,
 ) -> None:
     """Hand confirmed identities to existing metadata hydration after the commit.
 
@@ -508,15 +543,28 @@ async def _hydrate_after_commit(
     Args:
         user_id: Authenticated user ID (for logging only).
         identity_ids: External identity IDs to hydrate.
+        budget_seconds: Inline budget for this call. Defaults to
+            :data:`HYDRATION_BUDGET_SECONDS`; :func:`commit_series_mapping` passes the
+            request-relative budget from :func:`inline_hydration_budget` so the whole request
+            finishes under the client deadline. A non-positive budget skips hydration entirely.
     """
     if not identity_ids:
+        return
+
+    budget = HYDRATION_BUDGET_SECONDS if budget_seconds is None else budget_seconds
+    if budget <= 0:
+        logger.info(
+            "catalog_series_mapping_commit hydration_skipped_no_budget user_id=%s total=%s",
+            user_id,
+            len(identity_ids),
+        )
         return
 
     from app.services.comicvine_fallback import refresh_issue_metadata
 
     hydrated = 0
     try:
-        async with asyncio.timeout(HYDRATION_BUDGET_SECONDS):
+        async with asyncio.timeout(budget):
             for identity_id in identity_ids:
                 try:
                     await refresh_issue_metadata(identity_id)

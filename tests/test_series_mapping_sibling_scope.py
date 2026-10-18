@@ -10,6 +10,7 @@ commit surface confirms exactly those rows.
 from __future__ import annotations
 
 import asyncio
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -798,3 +799,106 @@ class TestHydrationBudget:
         )
 
         assert attempted == []
+
+
+class TestHydrationDeadlineRelationship:
+    """Inline hydration must keep the whole commit request under the client deadline (#3776)."""
+
+    def test_default_hydration_budget_leaves_room_under_the_client_deadline(self) -> None:
+        """Reserved overhead plus the default hydration budget fits the client deadline."""
+        assert (
+            catalog_series_commit.REQUEST_OVERHEAD_RESERVE_SECONDS
+            + catalog_series_commit.HYDRATION_BUDGET_SECONDS
+            <= catalog_series_commit.HTTP_CLIENT_DEADLINE_SECONDS
+        )
+
+    def test_inline_budget_shrinks_with_elapsed_pre_commit_work(self) -> None:
+        """The budget follows elapsed work and never lets the total exceed the deadline."""
+        deadline = catalog_series_commit.HTTP_CLIENT_DEADLINE_SECONDS
+        reserve = catalog_series_commit.REQUEST_OVERHEAD_RESERVE_SECONDS
+        cap = catalog_series_commit.HYDRATION_BUDGET_SECONDS
+        budget = catalog_series_commit.inline_hydration_budget
+
+        assert budget(0.0) == cap
+        assert budget((deadline - reserve) - cap / 2) == pytest.approx(cap / 2)
+        assert budget(deadline - reserve) == 0.0
+        assert budget(deadline) == 0.0
+        assert budget(deadline * 2) == 0.0
+        # Within the request window, reserved overhead plus elapsed work plus the remaining
+        # budget never exceeds the client deadline.
+        for elapsed in (0.0, 0.5, 2.0, 4.0, deadline - reserve):
+            assert reserve + elapsed + budget(elapsed) <= deadline + 1e-9
+
+    @pytest.mark.asyncio
+    async def test_commit_request_finishes_under_the_client_deadline(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
+    ) -> None:
+        """A slow hydrator cannot push the commit request past the frontend client deadline.
+
+        Issue #3776 review: the shared Axios client aborts the entire request after
+        ``HTTP_CLIENT_DEADLINE_SECONDS``, so hydration must leave room for the pre-commit work
+        and transport instead of spending its budget alongside them.
+        """
+        user = sample_data["user"]
+        _, issues = await _create_thread_with_issues(
+            async_db, user_id=user.id, title="Saga Deadline", issue_numbers=["1", "2"]
+        )
+        origin = issues[0]
+        await _confirm_origin_issue(async_db, origin)
+        roster = [
+            _roster_row(ORIGIN_COMICVINE_ISSUE_ID, "1"),
+            _roster_row(SIBLING_COMICVINE_ISSUE_IDS[2], "2"),
+        ]
+
+        with _patch_comicvine(roster):
+            preview = await auth_client.post(
+                PREVIEW_URL,
+                json={
+                    "origin_issue_id": origin.id,
+                    "provider": "comicvine",
+                    "provider_series_external_id": str(VOLUME_ID),
+                },
+            )
+        assert preview.status_code == 200
+        preview_data = preview.json()
+        approved = _approvable_row_ids(preview_data["rows"])
+        assert approved
+
+        async def slow_refresh(identity_id: int) -> None:
+            await asyncio.sleep(30)
+
+        with (
+            _patch_comicvine(roster),
+            patch(
+                "app.services.comicvine_fallback.refresh_issue_metadata",
+                new=slow_refresh,
+            ),
+        ):
+            started = time.monotonic()
+            commit = await auth_client.post(
+                COMMIT_URL,
+                json={
+                    "preview_token": preview_data["preview_token"],
+                    "idempotency_key": "issue-3776-deadline",
+                    "approved_row_ids": approved,
+                },
+            )
+            elapsed = time.monotonic() - started
+
+        assert commit.status_code == 200
+        assert sorted(commit.json()["confirmed_issue_ids"]) == sorted(
+            issue.id for issue in issues[1:]
+        )
+        assert elapsed < catalog_series_commit.HTTP_CLIENT_DEADLINE_SECONDS
+
+        confirmed = (
+            await async_db.execute(
+                select(IssueExternalIdentityMapping).where(
+                    IssueExternalIdentityMapping.issue_id.in_(
+                        [issue.id for issue in issues[1:]]
+                    ),
+                    IssueExternalIdentityMapping.status == "confirmed",
+                )
+            )
+        ).scalars().all()
+        assert len(confirmed) == len(issues) - 1
