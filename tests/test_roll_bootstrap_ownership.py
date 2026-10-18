@@ -145,6 +145,7 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
             "format": "ongoing",
             "issue_id": None,
             "issue_number": None,
+            "blocking_reasons": [],
             "route_labels": [],
             "last_activity_at": None,
             "tags": [],

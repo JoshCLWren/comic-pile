@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from typing import Literal
 
 import pytest
 from fastapi import HTTPException
@@ -23,17 +24,19 @@ from app.services.reading_plan_normalization import (
     ensure_plan_issue_uniqueness,
     rebuild_plan_membership,
 )
-from tests.conftest import get_or_create_user_async, get_test_database_url
+from tests.conftest import _sync_id_sequence, get_or_create_user_async, get_test_database_url
 
 
 def _lane() -> ContinuityPlanLane:
     return ContinuityPlanLane(id="main", name="Main", order=0)
 
 
-def _node(node_id: str, ref_id: int, position: int, node_type: str = "issue") -> ContinuityPlanNode:
+def _node(
+    node_id: str, ref_id: int, position: int, node_type: Literal["issue", "thread"] = "issue"
+) -> ContinuityPlanNode:
     return ContinuityPlanNode(
         id=node_id,
-        node_type=node_type,  # type: ignore[arg-type]
+        node_type=node_type,
         ref_id=ref_id,
         lane_id="main",
         position=position,
@@ -281,6 +284,7 @@ async def test_concurrent_duplicate_inserts_converge() -> None:
 
     setup_engine, setup = await fresh_session()
     try:
+        await _sync_id_sequence(setup, "users")
         username = f"raceuser_{uuid.uuid4().hex[:8]}"
         user = User(username=username, email=f"{username}@example.com", password_hash="x")
         setup.add(user)

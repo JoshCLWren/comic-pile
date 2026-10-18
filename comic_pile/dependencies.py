@@ -17,7 +17,7 @@ DependencyGroup ordering are not Roll authorities.
 
 from collections import defaultdict, deque
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import ColumnElement, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dependency import Dependency
@@ -25,7 +25,7 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 
 
-def _canonical_dependency_filter() -> object:
+def _canonical_dependency_filter() -> ColumnElement[bool]:
     """Return the SQL predicate selecting canonical (executable) Dependency rows."""
     return or_(Dependency.note.is_(None), Dependency.note.not_like("cbl-order:%"))
 
@@ -316,7 +316,7 @@ async def get_dependency_order_conflicts(
     thread_id: int,
     user_id: int,
     db: AsyncSession,
-) -> list[dict]:
+) -> list[dict[str, object]]:
     """Return structured conflicts where dependency order disagrees with issue position order.
 
     Args:
@@ -353,7 +353,7 @@ async def get_dependency_order_conflicts(
         .order_by(source_issue.c.position, target_issue.c.position, Dependency.id)
     )
 
-    conflicts: list[dict] = []
+    conflicts: list[dict[str, object]] = []
     for row in result.all():
         conflicts.append(
             {
@@ -399,7 +399,7 @@ async def refresh_user_blocked_status(
     """
     blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
 
-    candidate_filter = Thread.is_blocked.is_(True)
+    candidate_filter: ColumnElement[bool] = Thread.is_blocked.is_(True)
     if blocked_ids:
         candidate_filter = or_(candidate_filter, Thread.id.in_(blocked_ids))
 

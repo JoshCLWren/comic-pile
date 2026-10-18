@@ -66,7 +66,7 @@ from comic_pile.recommendation_version import (
     RECOMMENDATION_ALGORITHM_VERSION,
 )
 from comic_pile.reading_session import get_current_die_for_session, get_or_create
-from comic_pile.dependencies import get_blocking_explanations_batch
+from app.services.dependency_service import get_blocking_details
 
 router = APIRouter(tags=["roll"])
 v2_router = APIRouter(tags=["roll"])
@@ -970,12 +970,12 @@ async def roll_bootstrap(
     # row is excluded, so total - available always equals the union of
     # all exclusion reasons.
     if library.blocked_ids:
-        blocking_map = await get_blocking_explanations_batch(
+        blocking_map = await get_blocking_details(
             sorted(library.blocked_ids), user_id, db
         )
-        for tid, explanations in blocking_map.items():
-            if tid in excluded and explanations:
-                excluded[tid].detail = explanations[0].label
+        for tid, explanation in (blocking_map or {}).items():
+            if tid in excluded and explanation.blocking_reasons:
+                excluded[tid].detail = explanation.blocking_reasons[0]
 
     total_threads = library.total_threads
     available_threads = len(library.available_ids)

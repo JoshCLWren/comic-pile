@@ -8,8 +8,8 @@ sibling repositories; HTTP status mapping lives in routers.
 import asyncio
 import logging
 import os
-from typing import cast
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ from app.services.reading_eligibility_service import (
 )
 
 from app.models import Event, Issue, Thread
-from app.models.thread import normalize_format_value
+from app.models.thread import EXCLUDED_STATUS, normalize_format_value
 from app.repositories import (
     continuity_repository,
     issue_repository,
@@ -42,10 +42,12 @@ from app.schemas import (
 )
 from app.schemas.tags import TagResponse, TagTargetType
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership_guard import (
     require_frontier_in_thread,
     require_session_pending_consistent,
 )
+from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
@@ -487,6 +489,93 @@ async def list_completed_threads(
     )
 
 
+async def list_excluded_threads(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None,
+    sort: str,
+    page_size: int,
+    page_token: str | None,
+) -> QueueThreadListResponse:
+    """List EXCLUDED threads with deterministic cursor-based pagination.
+
+    These are the series a reader removed from the active queue without
+    deleting them (#3807). The rows, their issues, ratings, mappings, and
+    reading-plan memberships are all intact, so this is the discoverable
+    library view they are restored from.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        search: Optional case-insensitive title search filter.
+        sort: Validated sort order – ``position``, ``title``, or ``created``.
+            ``position`` has no meaning off the active queue and is read as
+            ``created``.
+        page_size: Number of threads to return per page (max 200).
+        page_token: Opaque cursor token for pagination continuation.
+
+    Returns:
+        QueueThreadListResponse with paginated EXCLUDED threads.
+
+    Raises:
+        InvalidRequestError: When the page token is stale or malformed.
+    """
+    validated_sort: QueueSort = cast(QueueSort, sort)
+    # Excluded threads do not have queue positions; normalize position to created.
+    effective_sort: QueueSort = "created" if validated_sort == "position" else validated_sort
+    normalized_search = normalize_queue_search(search)
+
+    cursor = None
+    if page_token:
+        try:
+            cursor = decode_queue_cursor(page_token, sort=effective_sort, search=search)
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
+    threads = await thread_repository.fetch_excluded_page(
+        db,
+        user_id,
+        search=normalized_search,
+        sort=effective_sort,
+        cursor=cursor,
+        limit=page_size + 1,
+    )
+
+    has_more = len(threads) > page_size
+    threads_to_return = threads[:page_size]
+
+    thread_responses = await threads_to_responses(threads_to_return, db)
+
+    tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
+    mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
+    tags_map = await TagInheritanceService(db).get_threads_direct_tags(
+        user_id, [tr.id for tr in thread_responses]
+    )
+
+    queue_items = [
+        to_queue_list_item(
+            tr, mapping_health_map.get(tr.id), tags_map.get(tr.id, [])
+        )
+        for tr in thread_responses
+    ]
+
+    next_token = None
+    if has_more and threads_to_return:
+        last = threads_to_return[-1]
+        page_cursor = QueueCursor(
+            sort=effective_sort,
+            search=normalized_search,
+            values=build_cursor_values_from_row(effective_sort, last),
+        )
+        next_token = encode_queue_cursor(page_cursor)
+
+    return QueueThreadListResponse(
+        threads=queue_items,
+        next_page_token=next_token,
+    )
+
+
 async def completed_threads_html(db: AsyncSession, user_id: int) -> str:
     """Render completed threads as option elements for the reactivation modal.
 
@@ -533,13 +622,18 @@ async def create_thread_with_retry(
 ) -> ThreadResponse:
     """Create a new thread at the end of the user's queue with deadlock retry.
 
+    Duplicate create submissions with an identical fingerprint (owner, title,
+    format, remaining issue count) inside a short window merge into the thread
+    created by the first submit instead of inserting a second copy (#3466).
+
     Args:
         db: Database session.
         user_id: Owner of the new thread.
         thread_data: Thread creation data.
 
     Returns:
-        ThreadResponse with created thread details.
+        ThreadResponse with the created thread, or with the recently created
+        duplicate that a repeat submission merged into.
 
     Raises:
         RuntimeError: If creation keeps deadlocking past the retry budget.
@@ -548,8 +642,25 @@ async def create_thread_with_retry(
     initial_delay = 0.1
     retries = 0
 
+    # Idempotency window for duplicate submissions (double-click protection)
+    duplicate_window = timedelta(seconds=5)
+
     while retries < max_retries:
         try:
+            # Merge duplicate submissions (#3466): a double-clicked "Create
+            # Series" sends the same payload twice; return the thread created
+            # by the first submit instead of inserting an identical duplicate.
+            existing = await thread_repository.find_recent_duplicate(
+                db,
+                user_id=user_id,
+                title=thread_data.title,
+                format_value=normalize_format_value(thread_data.format),
+                issues_remaining=thread_data.issues_remaining,
+                since=datetime.now(UTC) - duplicate_window,
+            )
+            if existing is not None:
+                return await thread_to_response(existing, db)
+
             max_position = await thread_repository.max_queue_position(db, user_id)
             format_value = normalize_format_value(thread_data.format)
 
@@ -599,7 +710,9 @@ async def get_thread_detail(db: AsyncSession, user_id: int, thread_id: int) -> T
     """
     thread = await _require_owned_thread(db, user_id, thread_id)
     tr = await thread_to_response(thread, db)
-    return ThreadDetail(**tr.model_dump())
+    eligibility = await get_execution_eligibility(db, user_id)
+    projected = project_thread_responses([tr], eligibility)[0]
+    return ThreadDetail(**projected.model_dump())
 
 
 async def update_thread(
@@ -634,10 +747,10 @@ async def update_thread(
         if not thread.uses_issue_tracking():
             thread.issues_remaining = thread_data.issues_remaining
             if thread.issues_remaining == 0:
-                thread.status = "completed"
-                thread.queue_position = 0
+                if thread.apply_derived_status("completed"):
+                    thread.queue_position = 0
             else:
-                thread.status = "active"
+                thread.apply_derived_status("active")
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
     if thread_data.manual_creator_credits is not None:
@@ -779,6 +892,88 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         raise InvalidRequestError(f"Cannot delete thread: {exc}") from exc
 
 
+async def exclude_thread(db: AsyncSession, user_id: int, thread_id: int) -> ThreadResponse:
+    """Remove a thread from the active queue without deleting its data.
+
+    The thread's status is changed to :data:`~app.models.thread.EXCLUDED_STATUS`
+    and its queue position is cleared. Reading history, issues, ratings,
+    mappings, and reading-plan memberships are preserved untouched, and the
+    derived-status paths (reading, rating, CBL sync, reconciliation) keep the
+    series excluded until it is explicitly restored.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread.
+
+    Returns:
+        ThreadResponse for the excluded thread.
+
+    Raises:
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread is not active.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    if thread.is_excluded():
+        # Idempotent: removing an already-excluded series is a no-op, not an error.
+        return await thread_to_response(thread, db)
+    if thread.status != "active":
+        raise InvalidRequestError(f"Thread {thread_id} is not active and cannot be excluded")
+
+    thread.status = EXCLUDED_STATUS
+    thread.queue_position = 0
+    await db.commit()
+    await db.refresh(thread)
+    return await thread_to_response(thread, db)
+
+
+async def restore_thread(db: AsyncSession, user_id: int, thread_id: int) -> ThreadResponse:
+    """Restore an excluded thread back to the queue without recreating it.
+
+    The same Thread and Issue rows, issue numbers/positions, read state and
+    timestamps, ratings and events, ComicVine mappings, and reading-plan
+    memberships are reused verbatim; only the lifecycle status and queue
+    position change. A series with no unread issue left is restored to the
+    finished shelf instead of the active queue, because an ``active`` thread
+    with an empty reading frontier would violate the completion invariant that
+    Roll and the queue eligibility predicates rely on.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread.
+
+    Returns:
+        ThreadResponse for the restored thread.
+
+    Raises:
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread is not excluded.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    if not thread.is_excluded():
+        raise InvalidRequestError(f"Thread {thread_id} is not excluded")
+
+    if thread.uses_issue_tracking():
+        tracked_issues = await issue_repository.get_issues_by_thread(db, thread.id)
+        issues_remaining = apply_thread_issue_tracking_state(thread, tracked_issues).issues_remaining
+    else:
+        issues_remaining = thread.issues_remaining
+
+    if issues_remaining > 0:
+        # Append behind every thread the reader already has positioned.
+        max_position = await thread_repository.max_queue_position(db, user_id)
+        thread.status = "active"
+        thread.queue_position = max_position + 1
+    else:
+        thread.status = "completed"
+        thread.queue_position = 0
+
+    await db.commit()
+    await db.refresh(thread)
+    return await thread_to_response(thread, db)
+
+
 async def reactivate_completed_thread(
     db: AsyncSession, user_id: int, request: ReactivateRequest
 ) -> ThreadResponse:
@@ -852,9 +1047,7 @@ async def reactivate_completed_thread(
     return await thread_to_response(thread, db)
 
 
-async def set_pending_thread(
-    db: AsyncSession, user_id: int, thread_id: int
-) -> RollResponse:
+async def set_pending_thread(db: AsyncSession, user_id: int, thread_id: int) -> RollResponse:
     """Set a thread as pending for rating (manual selection).
 
     Manual selection sets the pending pointer directly; no random roll is
@@ -873,12 +1066,16 @@ async def set_pending_thread(
         NotFoundError: When the thread does not exist for this user.
         InvalidRequestError: When the thread is not active, blocked, or has no issues left.
     """
-    thread = await _require_owned_thread(db, user_id, thread_id)
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    eligibility = await get_execution_eligibility(db, user_id)
 
     if thread.status != "active":
         raise InvalidRequestError(f"Thread {thread_id} is not active")
 
-    if thread.is_blocked:
+    if eligibility is not None and thread_id not in eligibility.candidate_ids():
+        raise InvalidRequestError(f"Thread {thread_id} has no available issue")
+
+    if eligibility is None and thread.is_blocked:
         dependencies = await get_blocking_explanations(thread_id, user_id, db)
         reason = ""
         if dependencies:
@@ -896,7 +1093,11 @@ async def set_pending_thread(
 
     thread_issue_id = None
     thread_issue_number = None
-    if thread.uses_issue_tracking() and thread_next_unread_issue_id:
+    if eligibility is not None:
+        thread_issue_id = eligibility.threads[thread_id].next_issue_id
+        thread_issue_number = eligibility.issue_numbers.get(thread_issue_id)
+        thread_issues = eligibility.unread_counts.get(thread_id, 0)
+    elif thread.uses_issue_tracking() and thread_next_unread_issue_id:
         next_issue = await issue_repository.get_issue(db, thread_next_unread_issue_id)
         if next_issue:
             thread_issue_id = next_issue.id
@@ -908,6 +1109,20 @@ async def set_pending_thread(
     current_session = await get_or_create(db, user_id=user_id)
     current_session_id = current_session.id
     current_die = await get_current_die(current_session_id, db)
+
+    if eligibility is not None:
+        # Read now explicitly clears a current-session snooze. Record that
+        # decision so durable backoff and rating see the same unsnooze.
+        if thread_id in (current_session.snoozed_thread_ids or []):
+            db.add(Event(type="unsnooze", session_id=current_session_id, thread_id=thread_id))
+            await db.flush()
+        excluded = await derive_effective_roll_excluded_thread_ids(
+            db,
+            user_id,
+            session_skipped_ids=current_session.skipped_thread_ids,
+        )
+        if thread_id in excluded:
+            raise InvalidRequestError(f"Thread {thread_id} is excluded from this reading session")
 
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
@@ -923,11 +1138,16 @@ async def set_pending_thread(
         die=current_die,
         result=result,
         selection_method="manual",
+        issue_id=thread_issue_id,
+        issue_number=thread_issue_number,
     )
     db.add(event)
 
     current_session.pending_thread_id = thread_id_int
     current_session.pending_thread_updated_at = datetime.now(UTC)
+
+    if eligibility is not None:
+        current_session.pending_issue_id = thread_issue_id
 
     # A manual selection retargets the whole pending pair: a pending issue
     # pinned to a different thread is superseded, never carried over, so the
@@ -1170,13 +1390,19 @@ async def set_current_issue(
         InvalidRequestError: When the thread is not active or does not use
             issue tracking.
     """
-    thread = await _require_owned_thread(db, user_id, thread_id)
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    eligibility = await get_execution_eligibility(db, user_id)
 
     if thread.status != "active":
         raise InvalidRequestError(f"Thread {thread_id} is not active")
 
-    if not thread.uses_issue_tracking():
+    if eligibility is None and not thread.uses_issue_tracking():
         raise InvalidRequestError(f"Thread {thread_id} does not use issue tracking")
+
+    # Session creation/initialization may commit. Resolve it before changing
+    # Issue statuses so a later unavailable-selection rejection stays atomic.
+    current_session = await get_or_create(db, user_id=user_id)
+    await db.refresh(thread)
 
     target_number = issue_number.strip()
 
@@ -1221,14 +1447,20 @@ async def set_current_issue(
     thread_title = thread.title
     thread_format = normalize_format_value(thread.format)
 
-    current_session = await get_or_create(db, user_id=user_id)
     current_session.pending_thread_id = thread_id
     current_session.pending_issue_id = target_issue_id
     current_session.pending_thread_updated_at = now
 
     await require_session_pending_consistent(db, current_session)
 
-    await db.commit()
+    if eligibility is None:
+        await db.commit()
+    else:
+        await db.flush()
+        updated = await get_execution_eligibility(db, user_id)
+        if updated is None or updated.threads[thread_id].next_issue_id != target_issue_id:
+            raise InvalidRequestError("The corrected issue is not available in the reading order")
+        await set_pending_thread(db, user_id, thread_id)
 
     return SetCurrentIssueResponse(
         thread_id=thread_id,

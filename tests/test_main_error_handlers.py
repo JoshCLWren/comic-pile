@@ -238,6 +238,71 @@ async def test_spa_routes_disable_html_caching(auth_client: AsyncClient) -> None
 
 
 @pytest.mark.asyncio
+async def test_http_exception_handler_preserves_caller_headers() -> None:
+    """Caller-supplied exception headers survive the JSON error handler.
+
+    A dependency such as ``require_cron_secret`` raises a 401 with a
+    ``WWW-Authenticate`` header; the global handler must not drop it while
+    replacing the body with JSON.
+    """
+    from app.config import clear_settings_cache
+    from app.main import create_app
+
+    original_env = os.getenv("ENVIRONMENT")
+
+    try:
+        os.environ["ENVIRONMENT"] = "test"
+        clear_settings_cache()
+
+        test_app = create_app(serve_frontend=False)
+        test_app.dependency_overrides[get_db] = _validation_only_db
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/v1/cron/release-sync")
+
+            assert response.status_code == 503
+            assert response.json()["detail"] == "Cron endpoint is not configured"
+    finally:
+        if original_env is None:
+            os.environ.pop("ENVIRONMENT", None)
+        else:
+            os.environ["ENVIRONMENT"] = original_env
+        clear_settings_cache()
+
+
+@pytest.mark.asyncio
+async def test_http_exception_handler_preserves_www_authenticate_header() -> None:
+    """A 401 raised with ``WWW-Authenticate`` keeps the header on the response."""
+    from app.config import clear_settings_cache
+    from app.main import create_app
+
+    original_env = os.getenv("ENVIRONMENT")
+
+    try:
+        os.environ["ENVIRONMENT"] = "test"
+        os.environ["CRON_SECRET"] = "test-cron-secret-value-0123456789"
+        clear_settings_cache()
+
+        test_app = create_app(serve_frontend=False)
+        test_app.dependency_overrides[get_db] = _validation_only_db
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/v1/cron/release-sync")
+
+            assert response.status_code == 401
+            assert response.headers["www-authenticate"] == "Bearer"
+    finally:
+        if original_env is None:
+            os.environ.pop("ENVIRONMENT", None)
+        else:
+            os.environ["ENVIRONMENT"] = original_env
+        os.environ.pop("CRON_SECRET", None)
+        clear_settings_cache()
+
+
+@pytest.mark.asyncio
 async def test_serve_react_spa_serves_index(auth_client: AsyncClient) -> None:
     """Test serve_react_spa returns React index.html for valid paths."""
     response = await auth_client.get("/rate")

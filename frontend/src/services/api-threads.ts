@@ -40,11 +40,25 @@ export function createThreadsApi(client: HttpClient) {
       })
       return response
     },
+    listExcluded: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+      const queryParams: Record<string, string | number> = {};
+      if (search) queryParams.search = search;
+      if (sort) queryParams.sort = sort;
+      if (pageSize) queryParams.page_size = pageSize;
+      if (pageToken) queryParams.page_token = pageToken;
+
+      const response = await client.get<ThreadListResponse>('/v1/threads/excluded/threads', {
+        params: Object.keys(queryParams).length ? queryParams : undefined,
+      })
+      return response
+    },
     get: (id: number) => client.get<Thread>(`/v1/threads/${id}`),
     create: (data: ThreadCreatePayload) => client.post<Thread, ThreadCreatePayload>('/v1/threads/', data),
     update: (id: number, data: ThreadUpdatePayload) =>
       client.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
     delete: (id: number) => client.delete<void>(`/v1/threads/${id}`),
+    exclude: (id: number) => client.post<Thread>(`/v1/threads/${id}/exclude`),
+    restore: (id: number) => client.post<Thread>(`/v1/threads/${id}/restore`),
     reactivate: (data: ReactivateThreadPayload) =>
       client.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
     listStale: (days = 30) => client.get<Thread[]>('/v1/threads/stale', { params: { days } }),

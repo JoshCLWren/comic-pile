@@ -159,6 +159,14 @@ class AppSettings(BaseSettings):
         description="Enable internal operations routes",
         json_schema_extra={"env": "ENABLE_INTERNAL_OPS_ROUTES"},
     )
+    cron_secret: str = Field(
+        default="",
+        description=(
+            "Bearer secret Vercel Cron sends as Authorization when it invokes "
+            "the scheduled release-sync endpoint (CRON_SECRET)"
+        ),
+        json_schema_extra={"env": "CRON_SECRET"},
+    )
     perf_alarm_github_issues_enabled: bool = Field(
         default=False,
         description="Opt in to automatic GitHub issue filing from performance telemetry",
@@ -205,6 +213,16 @@ class AppSettings(BaseSettings):
         if self.environment == "production" and "*" in origins:
             raise RuntimeError("Wildcard CORS not allowed in production")
         return origins
+
+    @property
+    def usable_cron_secret(self) -> str | None:
+        """Return the configured cron secret, or None when missing/placeholder.
+
+        Returns:
+            The stripped bearer secret, or ``None`` when the deployment has not
+            configured a usable ``CRON_SECRET``.
+        """
+        return _usable_secret(self.cron_secret or None)
 
     def validate_production_cors(self) -> None:
         """Validate that CORS is properly configured in production."""
@@ -658,7 +676,6 @@ class ReadingExecutionSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OPTION_E_", extra="ignore")
     enabled: bool = False
     approved_preview: str = ""
-    reader_ids: frozenset[int] = frozenset()
 
     @model_validator(mode="after")
     def require_approved_preview(self) -> Self:
@@ -667,8 +684,6 @@ class ReadingExecutionSettings(BaseSettings):
             raise ValueError(
                 "Option E requires a fresh owner-approved production preview reference"
             )
-        if self.enabled and (not self.reader_ids or any(value < 1 for value in self.reader_ids)):
-            raise ValueError("Option E requires explicit approved reader IDs")
         return self
 
 

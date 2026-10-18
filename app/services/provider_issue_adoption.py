@@ -39,7 +39,7 @@ from app.external_identities import (
     link_issue_external_identity,
     upsert_external_identity,
 )
-from app.models import Event, Thread
+from app.models import Event, Issue, Thread
 from app.models.external_identity import ExternalIdentity
 from app.repositories import issue_repository
 from app.services.issue_insertion import create_issue_in_natural_order
@@ -105,7 +105,7 @@ async def _recalculate_thread_tracking(
     tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
 
     if tracking_state.next_unread_issue_id is None:
-        thread.status = "completed"
+        thread.apply_derived_status("completed")
     elif was_unmigrated or not had_next_unread_issue:
         if not was_unmigrated and thread.status == "completed":
             await db.execute(
@@ -115,7 +115,7 @@ async def _recalculate_thread_tracking(
                 .values(queue_position=Thread.queue_position + 1)
             )
             thread.queue_position = 1
-        thread.status = "active"
+        thread.apply_derived_status("active")
 
     db.add(Event(type="issues_created", timestamp=datetime.now(UTC), thread_id=thread.id))
     await refresh_user_blocked_status(user_id, db)
@@ -132,6 +132,8 @@ async def adopt_comicvine_issue(
     metadata: dict[str, object] | None = None,
     comicvine_client: ComicVineClient | None = None,
     thread: Thread | None = None,
+    issue: Issue | None = None,
+    recalculate_tracking: bool = True,
 ) -> ProviderIssueAdoptionResult:
     """Adopt one ComicVine issue into an owned thread, idempotently.
 
@@ -154,6 +156,15 @@ async def adopt_comicvine_issue(
             ownership lookup and row lock are skipped, so the caller must hold
             the thread row lock itself. Batch series import uses this because it
             locks the thread once for the whole roster instead of per issue.
+        issue: Optional already-loaded target issue. When provided, the
+            in-thread number lookup is skipped and the issue is reused as-is
+            (``outcome="reused"``). Callers that create issues before adoption
+            (e.g. issue creation) should pass the newly created issue to avoid
+            a redundant per-issue SELECT.
+        recalculate_tracking: When False, skips the per-issue thread
+            issue-tracking recalculation. Callers that recalculate tracking
+            once for the whole batch (e.g. issue creation) should pass False
+            to avoid redundant per-issue tracking writes.
 
     Returns:
         A :class:`ProviderIssueAdoptionResult` distinguishing ``created``,
@@ -209,10 +220,13 @@ async def adopt_comicvine_issue(
             metadata_json=None if identity_exists else (metadata or {}),
         )
 
-        issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
         if issue is None:
-            issue = await create_issue_in_natural_order(db, thread_id, issue_number)
-            outcome = "created"
+            issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
+            if issue is None:
+                issue = await create_issue_in_natural_order(db, thread_id, issue_number)
+                outcome: AdoptionOutcome = "created"
+            else:
+                outcome = "reused"
         else:
             outcome = "reused"
 
@@ -236,7 +250,7 @@ async def adopt_comicvine_issue(
                 conflict_detail=str(exc),
             )
 
-        if outcome == "created":
+        if outcome == "created" and recalculate_tracking:
             await _recalculate_thread_tracking(db, thread, user_id)
 
     hydration: HydrationOutcome = "not_attempted"

@@ -4,30 +4,30 @@ import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
-import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
+import { useExcludedThreads, useMoveToPosition, useQueueThreads, useRestoreThread, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
-import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { ThreadListItem, ThreadCreatePayload, ThreadUpdatePayload } from '../../types'
-import QueueThreadCard from './QueueThreadCard'
 import CompletedThreadsSection from './CompletedThreadsSection'
+import ExcludedThreadsSection from './ExcludedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
+import RemoveThreadDialog from './RemoveThreadDialog'
 import ShuffleQueueDialog from './ShuffleQueueDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
-import { useQueueCrossovers } from './useQueueCrossovers'
 import { useQueueThreadActions } from './useQueueThreadActions'
+import { useQueueThreadCards } from './useQueueThreadCards'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
-import { canSnoozeSeries } from '../../components/snoozeAvailability'
 
 /**
  * Route entry for the Queue page. The component composes the focused
  * retained feature modules (`QueueControls`, `QueueList`, `QueueModals`,
- * `CompletedThreadsSection`) plus the page-level navigation/error boundary
+ * `CompletedThreadsSection`, `ExcludedThreadsSection`, and the row renderer
+ * `useQueueThreadCards`) plus the page-level navigation/error boundary
  * concerns. Data ownership stays in the page so a second cache layer is
  * never introduced.
  */
@@ -51,16 +51,34 @@ export default function QueuePage() {
   const reactivateMutation = useReactivateThread()
   const moveToPositionMutation = useMoveToPosition()
   const shuffleQueueMutation = useShuffleQueue()
+  // The excluded library view is the discoverable, restorable counterpart to
+  // "Remove from Queue" (#3807). It is a separate bounded read because those
+  // rows are deliberately absent from the active queue response. The shelf
+  // renders nothing while it is empty, so only a failed restore has copy to
+  // show there.
+  const { threads: excludedThreads } = useExcludedThreads(true)
+  const restoreMutation = useRestoreThread()
+  const [restoreError, setRestoreError] = useState<string | null>(null)
+
+  const handleRestore = useCallback(
+    async (threadId: number) => {
+      setRestoreError(null)
+      try {
+        await restoreMutation.mutate(threadId)
+      } catch {
+        setRestoreError(
+          'Could not restore that series to the queue. Check your connection and try again.',
+        )
+      }
+    },
+    [restoreMutation],
+  )
 
   const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
     threads,
     sortBy,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
-  const blockingByThreadId = useQueueBlockingInfo(
-    activeThreads.map((thread) => thread.id),
-  )
-  const crossovers = useQueueCrossovers(activeThreads)
 
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
@@ -112,6 +130,15 @@ export default function QueuePage() {
     if (modals.editingThread) void invalidateAfterIssueEdit(queryClient, modals.editingThread.id)
   }, [modals.editingThread])
 
+  // Row rendering (blocking, crossovers, snooze state) lives in the extracted
+  // module so this page stays a thin route composition.
+  const renderThreadCard = useQueueThreadCards({
+    actions,
+    activeThreads,
+    modals,
+    session,
+  })
+
   const handleRepositionConfirm = useCallback(
     async (targetPosition: number) => {
       if (!modals.repositioningThread) return
@@ -134,66 +161,6 @@ export default function QueuePage() {
       }
     },
     [modals, moveToPositionMutation, authoritativeActiveCount],
-  )
-
-  const renderThreadCard = useCallback(
-    (thread: ThreadListItem, index: number) => {
-      const isDragOver = actions.dragOverThreadId === thread.id
-      const isBlocked = thread.is_blocked
-      const blockingDependencies = blockingByThreadId[thread.id] ?? []
-      const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
-      const snoozeIcon = isSnoozed ? '🔔' : '😴'
-      const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
-      const snoozeDisabled = !canSnoozeSeries({
-        threadId: thread.id,
-        isSnoozed,
-        pendingThreadId: session?.pending_thread_id,
-      })
-      const readDisabled = isBlocked
-      const blockingReasons = blockingDependencies.map((dep) => dep.label)
-      const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by a prerequisite'
-
-      return (
-        <QueueThreadCard
-          key={thread.id}
-          thread={thread}
-          index={index}
-          isBlocked={isBlocked}
-          blockingDependencies={blockingDependencies}
-          crossoverGroups={crossovers.groupsForThread(thread.id)}
-          crossoverGroupsLoading={crossovers.isPending}
-          crossoverGroupsError={crossovers.hasError}
-          isDragOver={isDragOver}
-          snoozeIcon={snoozeIcon}
-          snoozeLabel={snoozeLabel}
-          snoozeDisabled={snoozeDisabled}
-          readDisabled={readDisabled}
-          readDisabledReason={readDisabledReason}
-          onCardClick={() => navigate(`/thread/${thread.id}`)}
-          onDragStart={actions.handleDragStart(thread.id)}
-          onDragEnd={actions.handleDragEnd}
-          onDragOver={actions.handleDragOver(thread.id)}
-          onDrop={actions.handleDrop(thread.id, activeThreads)}
-          onRead={() => void actions.handleThreadRead(thread)}
-          onSnooze={() => void actions.handleSnoozeToggle(thread, isSnoozed)}
-          onMoveToFront={() => actions.handleMoveToFront(thread.id)}
-          onMoveToBack={() => actions.handleMoveToBack(thread.id)}
-          onReposition={() => modals.openRepositionModal(thread)}
-          onEdit={() => modals.showEditModal(thread)}
-          onDependencies={() => modals.openDependenciesModal(thread)}
-          onDelete={() => actions.requestDelete(thread)}
-        />
-      )
-    },
-    [
-      actions,
-      activeThreads,
-      blockingByThreadId,
-      crossovers,
-      modals,
-      navigate,
-      session,
-    ],
   )
 
   const handleLoadMore = useCallback(() => {
@@ -254,6 +221,13 @@ export default function QueuePage() {
         <CompletedThreadsSection
           threads={completedThreads}
           onReactivate={modals.openReactivateModal}
+        />
+
+        <ExcludedThreadsSection
+          threads={excludedThreads}
+          isRestoring={restoreMutation.isPending}
+          error={restoreError}
+          onRestore={handleRestore}
         />
 
         {isError && threads !== null && (
@@ -333,6 +307,14 @@ export default function QueuePage() {
           error={actions.deleteError}
           onConfirm={() => void actions.confirmDelete()}
           onCancel={actions.cancelDelete}
+        />
+
+        <RemoveThreadDialog
+          thread={actions.pendingRemoveThread}
+          isPending={actions.isRemovePending}
+          error={actions.removeError}
+          onConfirm={() => void actions.confirmRemove()}
+          onCancel={actions.cancelRemove}
         />
 
         <ShuffleQueueDialog

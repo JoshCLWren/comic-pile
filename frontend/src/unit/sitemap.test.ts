@@ -117,9 +117,10 @@ describe('sitemap generation regression', () => {
       '/forgot-password',
       '/reset-password',
       '/demo',
-      '/rate',        // redirect
-      '/analytics',   // redirect
-      '/help',        // redirect
+      '/rate',
+      '/analytics',
+      '/roll',
+      '/help',
       '/queue',
       '/thread/:id',
       '/creators/:creatorKey',

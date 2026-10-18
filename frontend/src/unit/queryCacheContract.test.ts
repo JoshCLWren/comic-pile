@@ -280,14 +280,19 @@ describe('targeted cache effects', () => {
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
-  it('limits queue movement refreshes to queue pages, current session, and roll state', async () => {
+  it('limits queue movement refreshes to queue pages, the excluded shelf, current session, and roll state', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateAfterQueueMovement(client)
 
-    expect(resetQueries).toHaveBeenCalledTimes(1)
+    // Both membership lists reset: the active Queue and the excluded shelf a
+    // series crosses into or out of (#3807).
+    expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
+    })
+    expect(resetQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.excluded.pages(),
     })
     expect(invalidateQueries).toHaveBeenCalledTimes(3)
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -311,8 +316,9 @@ describe('targeted cache effects', () => {
     await invalidateAfterUndo(client)
 
     // The queue half is composed from the queue-movement effect, not re-implemented.
-    expect(resetQueries).toHaveBeenCalledTimes(1)
+    expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
     expect(invalidateQueries).toHaveBeenCalledTimes(5)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
@@ -392,6 +398,10 @@ describe('targeted cache effects', () => {
       const { client, setQueryData, invalidateQueries } = createSpiedClient()
 
       await applyUpdatedCustomCBL(client, customCBL)
+
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.readers() })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.all })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
 
       expect(setQueryData).toHaveBeenCalledWith(queryKeys.customCBLs.detail(customCBL.id), customCBL)
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.list(), exact: true })

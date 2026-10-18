@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -52,15 +53,15 @@ class OwnedIssueSeries:
 
     ComicPile's series identity is the thread: one thread is one series or one
     creator run in the reader's own library. The title is carried for display
-    only and is never used as a grouping identity.
-
-    Attributes:
-        thread_id: Local ComicPile thread (series/run) id owning the issue.
-        thread_title: Current local thread title, for display only.
+    only and is never used as a grouping identity. ``issue_number`` is carried
+    so bounded drilldown references (creator detail issue rows, comparison
+    issue refs, and team-chemistry shared-issue refs) can label each issue
+    without a further query.
     """
 
     thread_id: int
     thread_title: str
+    issue_number: str = ""
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,8 @@ class CreatorSummaryInputs:
             confirmed creator credit.
         effective_ratings: Mapping of owned issue id to its latest effective
             ``rate`` event rating (latest event by timestamp/id wins).
+        effective_rating_timestamps: Mapping of owned issue id to its latest effective
+            ``rate`` event timestamp (latest event by timestamp/id wins).
     """
 
     owned_issues: dict[int, str] = field(default_factory=dict)
@@ -83,6 +86,7 @@ class CreatorSummaryInputs:
     issue_creator_credits: dict[int, tuple[CreatorCredit, ...]] = field(default_factory=dict)
     issues_with_creator_metadata: frozenset[int] = field(default_factory=frozenset)
     effective_ratings: dict[int, float] = field(default_factory=dict)
+    effective_rating_timestamps: dict[int, datetime] = field(default_factory=dict)
 
 
 def _coerce_creator_id(value: object) -> int | None:
@@ -304,18 +308,20 @@ async def load_creator_summary_inputs(
     """
     # 1. Owned issues and thread ids.
     issue_result = await db.execute(
-        select(Issue.id, Issue.status, Issue.thread_id)
+        select(Issue.id, Issue.status, Issue.thread_id, Issue.issue_number)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
     )
     owned_issues: dict[int, str] = {}
     thread_ids: set[int] = set()
     issue_thread_map: dict[int, int] = {}
-    for issue_id, status, thread_id in issue_result.all():
+    issue_number_map: dict[int, str] = {}
+    for issue_id, status, thread_id, issue_number in issue_result.all():
         owned_issue_id = int(issue_id)
         owned_issues[owned_issue_id] = str(status)
         thread_id_int = int(thread_id)
         issue_thread_map[owned_issue_id] = thread_id_int
+        issue_number_map[owned_issue_id] = str(issue_number)
         thread_ids.add(thread_id_int)
 
     # 2. Thread titles and manual creator credits, read once per thread.
@@ -346,6 +352,7 @@ async def load_creator_summary_inputs(
             owned_issue_series[issue_id] = OwnedIssueSeries(
                 thread_id=thread_id,
                 thread_title=thread_titles.get(thread_id, ""),
+                issue_number=issue_number_map.get(issue_id, ""),
             )
 
     # 3. Confirmed creator credits per owned issue (ComicVine).
@@ -399,14 +406,14 @@ async def load_creator_summary_inputs(
         for issue_id, by_key in per_issue_credits.items()
     }
 
-    # 5. Latest effective rating per owned issue (latest event wins).
+    # 5. Latest effective rating and timestamp per owned issue (latest event wins).
     # PostgreSQL ``DISTINCT ON`` collapses the user's rate events to one row per
     # owned issue inside the database. ``distinct(Event.issue_id)`` would render
     # the same SQL but is deprecated on SQLAlchemy 2.1 and emits
     # ``SADeprecationWarning``; ``postgresql.distinct_on`` applied as a
     # statement extension is the supported spelling.
     rate_result = await db.execute(
-        select(Event.issue_id, Event.rating)
+        select(Event.issue_id, Event.rating, Event.timestamp)
         .join(Issue, Issue.id == Event.issue_id)
         .join(Thread, Thread.id == Issue.thread_id)
         .where(Thread.user_id == user_id)
@@ -416,9 +423,13 @@ async def load_creator_summary_inputs(
         .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
         .ext(distinct_on(Event.issue_id))
     )
-    effective_ratings: dict[int, float] = {
-        int(issue_id): float(rating) for issue_id, rating in rate_result.all() if issue_id is not None
-    }
+    effective_ratings: dict[int, float] = {}
+    effective_rating_timestamps: dict[int, datetime] = {}
+    for issue_id, rating, timestamp in rate_result.all():
+        if issue_id is not None:
+            effective_ratings[int(issue_id)] = float(rating)
+            if timestamp is not None:
+                effective_rating_timestamps[int(issue_id)] = timestamp
 
     return CreatorSummaryInputs(
         owned_issues=owned_issues,
@@ -426,6 +437,7 @@ async def load_creator_summary_inputs(
         issue_creator_credits=issue_creator_credits,
         issues_with_creator_metadata=frozenset(issues_with_creator_metadata),
         effective_ratings=effective_ratings,
+        effective_rating_timestamps=effective_rating_timestamps,
     )
 
 

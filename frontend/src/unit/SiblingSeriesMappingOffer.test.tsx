@@ -229,6 +229,21 @@ describe('SiblingSeriesMappingOffer commit error', () => {
     )
   })
 
+  it('does not claim nothing changed when the commit outcome is unknown', () => {
+    // Issue #3776: a lost 5xx response may hide an already-committed mapping, so the
+    // generic "nothing changed" text would be untruthful.
+    mockCommit({
+      isError: true,
+      error: { isAxiosError: true, response: { status: 502, data: {} }, message: 'Bad Gateway' },
+    })
+
+    renderOffer()
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not confirm the mapping result. Any saved siblings are safe; approve again to replay the request.',
+    )
+  })
+
   it('re-reads the preview when the commit fails with a stale preview', () => {
     const refetch = vi.fn()
     const reset = vi.fn()

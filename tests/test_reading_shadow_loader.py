@@ -160,7 +160,8 @@ async def test_cross_owner_references_are_diagnostic_without_foreign_payload(
     foreign = await _owner(async_db, "private_foreign_username")
     _, own_issues = await _series(async_db, user, "Own", 1)
     _, foreign_issues = await _series(async_db, foreign, "private_foreign_title", 1)
-    edge = Dependency(source_issue_id=foreign_issues[0].id, target_issue_id=own_issues[0].id)
+    edge = Dependency(source_issue_id=foreign_issues[0].id, target_issue_id=own_issues[0].id,
+                      origin="reader", classification="A", provenance="Invalid cross-owner edge")
     async_db.add(edge)
     await async_db.commit()
     inputs = await load_shadow_inputs(async_db, user.id)
@@ -170,6 +171,27 @@ async def test_cross_owner_references_are_diagnostic_without_foreign_payload(
     assert result["valid"] is False
     assert "private_foreign" not in str(result)
     assert "unresolved_reference" in str(result)
+
+
+async def test_cross_owner_historical_edge_cannot_block_a_readers_frontier(
+    async_db: AsyncSession,
+) -> None:
+    """A stale cross-account dependency is neither canonical nor a validation error."""
+    user = await _owner(async_db, "historical_own")
+    foreign = await _owner(async_db, "historical_foreign")
+    own_thread, own_issues = await _series(async_db, user, "Own list", 1)
+    _, foreign_issues = await _series(async_db, foreign, "Foreign old copy", 1)
+    async_db.add(Dependency(source_issue_id=foreign_issues[0].id,
+                            target_issue_id=own_issues[0].id, note="Historical copy"))
+    await async_db.commit()
+    inputs = await load_shadow_inputs(async_db, user.id)
+    assert inputs.prerequisites == ()
+    assert not inputs.unresolved
+    rows = compare_reading_eligibility(inputs)["threads"]
+    assert isinstance(rows, list)
+    assert all(isinstance(row, dict) for row in rows)
+    assert any(row["thread_id"] == own_thread.id and row["proposed_eligible"]
+               for row in rows if isinstance(row, dict))
 
 
 async def test_report_transaction_is_read_only_and_leaves_state_unchanged(
@@ -206,6 +228,45 @@ async def test_report_transaction_is_read_only_and_leaves_state_unchanged(
     monkeypatch.setattr(report_reading_eligibility, "shadow_reading_eligibility", attempt_write)
     with pytest.raises(DBAPIError, match="read-only"):
         await report_reading_eligibility.report(get_test_database_url(), user.id)
+
+
+async def test_all_reader_preflight_is_read_only_and_owner_isolated(
+    async_db_committed: AsyncSession,
+    statements: list[str],
+) -> None:
+    """One production-shaped report evaluates every owner in the same read snapshot."""
+    db = async_db_committed
+    first = await _owner(db, "all_reader_one")
+    second = await _owner(db, "all_reader_two")
+    one, one_issues = await _series(db, first, "Private one", 1)
+    two, two_issues = await _series(db, second, "Private two", 1)
+    db.add(Dependency(source_issue_id=one_issues[0].id,
+                      target_issue_id=one_issues[0].id, note="Legacy self cycle"))
+    await db.commit()
+    statements.clear()
+    result = await report_reading_eligibility.report_all(get_test_database_url())
+    assert result["scope"] == "all_readers"
+    assert result["read_only"] is True
+    payload = result["reports"]
+    assert isinstance(payload, list)
+    assert all(isinstance(row, dict) for row in payload)
+    reports = {r["user_id"]: r for r in payload if isinstance(r, dict)}
+    assert first.id in reports and second.id in reports
+    assert reports[first.id]["valid"] is True
+    assert reports[second.id]["valid"] is True
+    first_rows = reports[first.id]["threads"]
+    second_rows = reports[second.id]["threads"]
+    assert isinstance(first_rows, list) and isinstance(second_rows, list)
+    assert all(isinstance(row, dict) for row in (*first_rows, *second_rows))
+    assert one.id in {row["thread_id"] for row in first_rows if isinstance(row, dict)}
+    assert two.id not in {row["thread_id"] for row in first_rows if isinstance(row, dict)}
+    assert two.id in {row["thread_id"] for row in second_rows if isinstance(row, dict)}
+    assert result["readers_valid"] == result["readers_checked"]
+    fingerprint = result["source_fingerprint"]
+    assert isinstance(fingerprint, str) and len(fingerprint) == 64
+    assert any("SET TRANSACTION READ ONLY" in statement for statement in statements)
+    assert not any(statement.lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE"))
+                   for statement in statements)
 
 
 async def test_cli_requires_explicit_async_postgres_url() -> None:

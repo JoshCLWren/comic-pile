@@ -332,6 +332,59 @@ async def find_owned_thread_for_provider_series(
     return thread_id
 
 
+async def find_owned_thread_snapshot_for_provider_series(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    provider: str,
+    series_external_id: str,
+) -> tuple[int, str, int | None] | None:
+    """Return one owned thread's committed state for a provider series.
+
+    A client that loses the ``series:import`` response asks the server whether
+    the volume actually landed before reporting failure to the user (#3445), so
+    it needs the reused thread's identity and display state in the same
+    user-scoped read instead of a second round trip. Ownership is part of the
+    query so one user's queue can never be reported to another.
+
+    Args:
+        db: Async database session.
+        user_id: Owner whose threads are eligible.
+        provider: Provider name (e.g. ``comicvine``).
+        series_external_id: Stable provider series/volume identifier.
+
+    Returns:
+        ``(thread_id, thread_title, total_issues)`` for the owned thread
+        confirmed against that series, or ``None`` when the user owns none.
+    """
+    from app.models.external_identity import ThreadExternalSeriesMapping
+    from app.models.thread import Thread
+
+    row = (
+        await db.execute(
+            select(Thread.id, Thread.title, Thread.total_issues)
+            .join(ThreadExternalSeriesMapping, Thread.id == ThreadExternalSeriesMapping.thread_id)
+            .join(
+                ExternalIdentity,
+                ExternalIdentity.id == ThreadExternalSeriesMapping.external_identity_id,
+            )
+            .where(
+                Thread.user_id == user_id,
+                ThreadExternalSeriesMapping.status == "confirmed",
+                ExternalIdentity.entity_type == "series",
+                ExternalIdentity.provider == provider.strip().lower(),
+                ExternalIdentity.external_id == series_external_id.strip(),
+            )
+            .order_by(ThreadExternalSeriesMapping.id)
+            .limit(1)
+        )
+    ).first()
+    if row is None:
+        return None
+    thread_id, title, total_issues = row
+    return (thread_id, title, total_issues)
+
+
 async def has_confirmed_series_mapping_for_origin(
     db: AsyncSession,
     *,

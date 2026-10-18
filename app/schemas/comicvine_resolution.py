@@ -247,4 +247,35 @@ class ImportSeriesResponse(BaseModel):
     )
 
 
+class SeriesImportStatusResponse(BaseModel):
+    """Server truth about one ComicVine volume's presence in the caller's queue.
 
+    A client that loses the ``series:import`` response (timeout, dropped
+    connection, gateway timeout) re-checks this endpoint before reporting
+    failure, so the answer must reflect committed server state for the
+    calling user only and must never leak another user's queue.
+    """
+
+    comicvine_volume_id: int
+    imported: bool = Field(
+        ...,
+        description=(
+            "True when the calling user already owns a thread confirmed "
+            "against this ComicVine volume."
+        ),
+    )
+    thread_id: int | None = Field(
+        default=None,
+        description="Existing thread ID, or null when the volume is not imported.",
+    )
+    series_name: str | None = Field(
+        default=None,
+        description="Title of the existing thread, or null when not imported.",
+    )
+    issue_count: int | None = Field(
+        default=None,
+        description=(
+            "Issues the existing thread tracks, or null when not imported. "
+            "The client reports this server count after a recovered import."
+        ),
+    )

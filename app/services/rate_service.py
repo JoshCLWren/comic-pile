@@ -544,7 +544,7 @@ async def rate_thread(
                     else:
                         thread.next_unread_issue_id = None
                         thread.reading_progress = "completed"
-                        thread.status = "completed"
+                        thread.apply_derived_status("completed")
                         thread.issues_remaining = 0
 
         thread_issues_remaining = thread.issues_remaining
@@ -582,13 +582,17 @@ async def rate_thread(
 
     should_complete_thread = thread_issues_remaining <= 0
     if should_complete_thread:
-        thread.status = "completed"
-        queue_position_changes = await move_to_back(
-            thread_id,
-            user_id,
-            db,
-            commit=False,
-        )
+        if thread.apply_derived_status("completed"):
+            queue_position_changes = await move_to_back(
+                thread_id,
+                user_id,
+                db,
+                commit=False,
+            )
+        else:
+            # A series excluded from the queue keeps queue position 0, so there
+            # is nothing to reposition (#3807).
+            queue_position_changes = {}
     elif rate_data.rating >= rating_threshold:
         queue_position_changes = await move_to_front(
             thread_id,

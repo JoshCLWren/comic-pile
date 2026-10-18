@@ -16,6 +16,7 @@ from app.repositories.reading_eligibility_queries import candidate_predicate
 
 from app.models import Issue, Thread
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.thread import EXCLUDED_STATUS
 from app.services.queue_pagination import QueueCursor, QueueSort, build_cursor_filter, build_sort_order
 
 
@@ -115,6 +116,47 @@ async def max_queue_position(db: AsyncSession, user_id: int) -> int:
         .order_by(Thread.queue_position.desc())
     )
     return result.scalar() or 0
+
+
+async def find_recent_duplicate(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    title: str,
+    format_value: str,
+    issues_remaining: int,
+    since: datetime,
+) -> Thread | None:
+    """Find the most recent thread matching a create-submission fingerprint.
+
+    Backs the create endpoint's idempotency window for #3466: a double-clicked
+    "Create Series" submits the same payload twice, and the second submit must
+    merge into the thread created by the first instead of inserting a duplicate.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the candidate thread.
+        title: Series title, compared case-insensitively.
+        format_value: Normalized format value to match exactly.
+        issues_remaining: Remaining issue count to match exactly.
+        since: Only threads created at or after this instant are considered.
+
+    Returns:
+        The most recently created matching thread, or None when no duplicate
+        exists inside the window.
+    """
+    stmt = (
+        select(Thread)
+        .where(Thread.user_id == user_id)
+        .where(func.lower(Thread.title) == title.lower())
+        .where(Thread.format == format_value)
+        .where(Thread.issues_remaining == issues_remaining)
+        .where(Thread.created_at >= since)
+        .order_by(Thread.created_at.desc(), Thread.id.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
 
 
 async def fetch_stale_threads(
@@ -275,6 +317,66 @@ async def fetch_completed_page(
     query = query.limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def fetch_excluded_page(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None,
+    sort: QueueSort,
+    cursor: QueueCursor | None,
+    limit: int,
+) -> list[Thread]:
+    """Fetch one deterministic page of a user's EXCLUDED threads.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        search: Normalized case-insensitive title substring, or None.
+        sort: Validated sort order key with deterministic tie-breakers.
+        cursor: Decoded continuation cursor, or None for the first page.
+        limit: Maximum number of threads to return.
+
+    Returns:
+        Excluded threads in canonical page order, at most ``limit`` rows.
+    """
+    query = select(Thread).where(
+        Thread.user_id == user_id,
+        Thread.status == EXCLUDED_STATUS,
+    )
+
+    if search:
+        query = query.where(Thread.title.ilike(f"%{search}%"))
+
+    for col in build_sort_order(sort):
+        query = query.order_by(col)
+
+    if cursor is not None:
+        query = query.where(build_cursor_filter(cursor))
+
+    query = query.limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def fetch_excluded_thread_ids(db: AsyncSession, user_id: int) -> list[int]:
+    """Fetch the IDs of every thread this reader excluded from the queue.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+
+    Returns:
+        Ascending thread IDs whose durable queue exclusion is still in effect.
+    """
+    result = await db.execute(
+        select(Thread.id).where(
+            Thread.user_id == user_id,
+            Thread.status == EXCLUDED_STATUS,
+        )
+    )
+    return sorted(result.scalars().all())
 
 
 async def fetch_completed_threads(db: AsyncSession, user_id: int) -> list[Thread]:

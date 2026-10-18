@@ -351,8 +351,33 @@ describe('QueueMapSeriesDialog', () => {
     await user.click(await screen.findByTestId('queue-map-series-result'))
 
     expect(await screen.findByText('The mapping plan could not be loaded. Nothing was changed.')).toBeInTheDocument()
+    expect(screen.getByTestId('queue-map-series-retry')).toHaveTextContent('Try again')
     await user.click(screen.getByTestId('queue-map-series-dismiss'))
     expect(onClose).toHaveBeenCalledTimes(1)
+    expect(mockedCommit).not.toHaveBeenCalled()
+  })
+
+  it('lets the reader retry the same volume after a preview failure', async () => {
+    const user = userEvent.setup()
+    // The first attempt fails (e.g. a transient provider outage); the retry must
+    // re-request the same volume and render its plan instead of forcing a different one.
+    mockedPreview.mockRejectedValueOnce(new Error('preview down'))
+    renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await screen.findByText('The mapping plan could not be loaded. Nothing was changed.')
+
+    await user.click(screen.getByTestId('queue-map-series-retry'))
+
+    expect(await screen.findByTestId('queue-map-series-preview')).toBeInTheDocument()
+    expect(await screen.findByTestId('queue-map-series-approve')).toHaveTextContent('Map 1 issue')
+    expect(mockedPreview).toHaveBeenCalledTimes(2)
+    expect(mockedPreview).toHaveBeenLastCalledWith({
+      origin_issue_id: 1,
+      provider: 'comicvine',
+      provider_series_external_id: '20764',
+      scope_mode: 'queue_thread_bootstrap',
+    })
     expect(mockedCommit).not.toHaveBeenCalled()
   })
 
@@ -629,6 +654,26 @@ describe('QueueMapSeriesDialog', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not map the series. Nothing was changed.',
+    )
+    expect(onMapped).not.toHaveBeenCalled()
+    expect(invalidateQueueSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not claim nothing changed when the commit outcome is unknown', async () => {
+    // Issue #3776: a lost 5xx response may hide an already-committed mapping.
+    const user = userEvent.setup()
+    mockedCommit.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 504, data: {} },
+      message: 'Gateway Timeout',
+    })
+    const { onMapped } = renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not confirm the mapping result. Any saved mappings are safe; map again to replay the request.',
     )
     expect(onMapped).not.toHaveBeenCalled()
     expect(invalidateQueueSpy).not.toHaveBeenCalled()

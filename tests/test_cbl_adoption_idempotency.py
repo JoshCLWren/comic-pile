@@ -179,6 +179,19 @@ async def _cleanup(
             await db.execute(select(ContinuityPlan.id).where(ContinuityPlan.user_id == user_id))
         ).scalars().all()
     )
+    # The seeded CBL entries carry external identities this module committed for
+    # real. They are referenced by no other fixture, so remove them here or they
+    # leak into count-based assertions in later shard tests.
+    identity_ids = set(
+        (
+            await db.execute(
+                select(CBLSourceEntry.external_issue_identity_id).where(
+                    CBLSourceEntry.list_id == list_id,
+                    CBLSourceEntry.external_issue_identity_id.is_not(None),
+                )
+            )
+        ).scalars().all()
+    )
     await db.execute(delete(CblAdoptionReceipt).where(CblAdoptionReceipt.user_id == user_id))
     if plan_ids or extra_plan_ids:
         await db.execute(
@@ -189,6 +202,8 @@ async def _cleanup(
     await db.execute(delete(CBLSourceEntry).where(CBLSourceEntry.list_id == list_id))
     await db.execute(delete(CBLSourceList).where(CBLSourceList.id == list_id))
     await db.execute(delete(CBLSource).where(CBLSource.id == source_id))
+    if identity_ids:
+        await db.execute(delete(ExternalIdentity).where(ExternalIdentity.id.in_(identity_ids)))
     thread_ids = list(
         (await db.execute(select(Thread.id).where(Thread.user_id == user_id))).scalars().all()
     )

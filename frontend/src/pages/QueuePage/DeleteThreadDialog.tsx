@@ -33,9 +33,20 @@ export default function DeleteThreadDialog({
       {thread && (
         <div className="space-y-4">
           <p className="text-sm text-[var(--theme-text-muted)]">
-            Are you sure you want to delete{' '}
-            <span className="font-bold text-[var(--theme-text-primary)]">{thread.title}</span>? Its
-            reading history will be removed. This cannot be undone.
+            Permanently delete{' '}
+            <span className="font-bold text-[var(--theme-text-primary)]">{thread.title}</span>?
+          </p>
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            This is destructive and cannot be undone. It removes the series together with its
+            issues and reading history, ratings and events, and its ComicVine mapping links.
+          </p>
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Reading-plan membership may also be pruned. To keep the series and its history but
+            take it out of the queue, cancel and choose{' '}
+            <span className="font-bold text-[var(--theme-text-primary)]">
+              Remove from Queue
+            </span>{' '}
+            instead.
           </p>
           {error && (
             <p

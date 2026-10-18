@@ -81,12 +81,14 @@ def _eligibility_input(signal: TasteSignal) -> EligibilitySignal:
 async def test_put_verdict_creates_signal_and_returns_canonical_response(
     auth_client: AsyncClient,
     async_db: AsyncSession,
+    default_user: User,
 ) -> None:
     """A verdict on an unknown key creates the row and returns canonical data.
 
     Args:
         auth_client: Authenticated HTTP client for API requests.
         async_db: Async database session for direct database queries.
+        default_user: The authenticated test user.
     """
     response = await auth_client.put(VERDICT_URL, json={"verdict": "confirmed"})
     assert response.status_code == 200
@@ -95,14 +97,14 @@ async def test_put_verdict_creates_signal_and_returns_canonical_response(
     assert data["signal_type"] == "creator"
     assert data["external_key"] == "creator:writer:dk"
     assert data["user_verdict"] == "confirmed"
-    assert data["user_id"] == 1
+    assert data["user_id"] == default_user.id
     assert datetime.fromisoformat(data["verdict_at"]) is not None
     assert data["affinity_estimate"] is None
     assert data["evidence_count"] == 0
 
     result = await async_db.execute(
         select(TasteSignal).where(
-            TasteSignal.user_id == 1,
+            TasteSignal.user_id == default_user.id,
             TasteSignal.signal_type == "creator",
             TasteSignal.external_key == "creator:writer:dk",
         )

@@ -73,6 +73,89 @@ That CLI form also keeps only the current production alias. Prefer the script
 so cleanup stays on `DELETE /v13/deployments/{dpl_...}` and never invokes
 `vercel remove comic-pile`.
 
+## Daily release-source sync (Vercel Cron)
+
+ComicPile runs release-source synchronization once per day through Vercel Cron.
+The job uses the existing FastAPI function; it does not require another service,
+a long-running worker, or a GitHub Actions scheduler.
+
+```json
+{
+  "crons": [
+    { "path": "/api/v1/cron/release-sync", "schedule": "0 9 * * *" }
+  ]
+}
+```
+
+On the Vercel Hobby tier the job may start at any point inside the `09:00` UTC
+hour. Do not add a more frequent schedule; once daily is the v1 contract.
+
+### Required `CRON_SECRET`
+
+Set a random `CRON_SECRET` (at least 16 characters) in the Vercel project's
+Production environment variables. Vercel automatically sends it to the cron
+path as `Authorization: Bearer <CRON_SECRET>`. Never commit the value, put it in
+a URL, or copy it into an issue or log.
+
+The endpoint fails closed:
+
+- no usable `CRON_SECRET` in the deployment: `503`, and no work runs;
+- missing or incorrect bearer value: `401`, and no work runs;
+- correct value: the sync runs.
+
+Merging the cron configuration therefore does not start production
+synchronization on its own. The job remains inert until an operator configures
+`CRON_SECRET`, which is the intended activation boundary for the Option E
+exclusion gate (#3671). The scheduled run delegates to the existing release-sync
+service, so durable collection exclusions, confirmed-volume identity checks, and
+per-owner ownership rules still apply.
+
+### Concurrency and retry behavior
+
+Vercel may deliver a scheduled invocation more than once or while a previous
+invocation is still running. The endpoint takes a transaction-scoped PostgreSQL
+advisory lock before touching provider or reader data. If another invocation
+holds the lock, the second call exits cleanly with HTTP `200` and:
+
+```json
+{
+  "success": true,
+  "status": "already_running",
+  "message": "Release sync skipped: another scheduled run is already active",
+  "result": { "status": "already_running" }
+}
+```
+
+`already_running` is a no-op, not an error. The next daily run reprocesses the
+same owners idempotently, and issue adoption converges on canonical ComicVine
+identity instead of creating duplicates.
+
+### Manual authenticated test
+
+Use the deployment secret from your shell environment without printing it:
+
+```bash
+curl --fail --silent --show-error \
+  --header "Authorization: Bearer ${CRON_SECRET}" \
+  https://comic-pile.vercel.app/api/v1/cron/release-sync
+```
+
+A successful run returns `status: "completed"` plus secret-free counters for
+owners, sources, created/reused issues, skipped future or unknown-date issues,
+failures, excluded sources/issues, duration, and whether the wall-clock budget
+deferred any owners.
+
+### Observability
+
+Each run emits structured `release_sync_cron_*` log events with owner and source
+counts, failures, truncation, and duration. Logs and responses never include
+`CRON_SECRET`, `COMICVINE_API_KEY`, the database URL, or provider raw secrets.
+The response is marked `Cache-Control: no-store`.
+
+The runner stops starting new owners after a bounded wall-clock budget and
+reports the remainder as `users_deferred` with `truncated: true`. The next daily
+run catches those owners up.
+
 ## Live-project verification
 
 The Vercel project must track `main` as its Production Branch. Verify this in **Project Settings → Environments → Production → Branch Tracking**.
@@ -88,3 +171,5 @@ After this change is merged:
    only (`targets.production`). The previous READY production must be gone.
 
 Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported.
+
+During an unsettled production rollout, pruning temporarily retains READY production deployments as well as the incoming build. Vercel can report the BUILDING deployment as `targets.production` before it serves the public alias. Pruning refreshes the protected set before every deletion. Once the production target is READY and no production build remains in progress, the normal keep-N=1 policy resumes.

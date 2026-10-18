@@ -10,7 +10,7 @@ import {
   useMoveToPosition,
   useShuffleQueue,
 } from '../../hooks/useQueue'
-import { useDeleteThread } from '../../hooks/useThread'
+import { useDeleteThread, useExcludeThread } from '../../hooks/useThread'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useToast } from '../../contexts/useToast'
 import {
@@ -58,6 +58,7 @@ function restoreSeriesActionsFocusByThreadId(threadId: number): void {
  */
 export interface UseQueueThreadActionsDeps {
   deleteHook?: typeof useDeleteThread
+  excludeHook?: typeof useExcludeThread
   moveToFrontHook?: typeof useMoveToFront
   moveToBackHook?: typeof useMoveToBack
   moveToPositionHook?: typeof useMoveToPosition
@@ -83,6 +84,12 @@ interface QueueThreadActionResult {
   requestDelete: (thread: ThreadListItem) => void
   confirmDelete: () => Promise<void> | void
   cancelDelete: () => void
+  pendingRemoveThread: ThreadListItem | null
+  removeError: string | null
+  isRemovePending: boolean
+  requestRemove: (thread: ThreadListItem) => void
+  confirmRemove: () => Promise<void> | void
+  cancelRemove: () => void
   isShuffleConfirmOpen: boolean
   requestShuffle: () => void
   confirmShuffle: () => Promise<void> | void
@@ -111,6 +118,7 @@ export function useQueueThreadActions(
   } = params
   const {
     deleteHook = useDeleteThread,
+    excludeHook = useExcludeThread,
     moveToFrontHook = useMoveToFront,
     moveToBackHook = useMoveToBack,
     moveToPositionHook = useMoveToPosition,
@@ -123,6 +131,7 @@ export function useQueueThreadActions(
 
   const { showToast } = toastHook()
   const deleteMutation = deleteHook()
+  const excludeMutation = excludeHook()
   const moveToFrontMutation = moveToFrontHook()
   const moveToBackMutation = moveToBackHook()
   const moveToPositionMutation = moveToPositionHook()
@@ -135,6 +144,8 @@ export function useQueueThreadActions(
   const [reorderError, setReorderError] = useState<string | null>(null)
   const [pendingDeleteThread, setPendingDeleteThread] = useState<ThreadListItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [pendingRemoveThread, setPendingRemoveThread] = useState<ThreadListItem | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
   const [isShuffleConfirmOpen, setIsShuffleConfirmOpen] = useState(false)
 
   const handleDragStart = useCallback(
@@ -197,6 +208,34 @@ export function useQueueThreadActions(
     setDeleteError(null)
     setPendingDeleteThread(null)
   }, [])
+
+  const requestRemove = useCallback((thread: ThreadListItem) => {
+    setRemoveError(null)
+    setPendingRemoveThread(thread)
+  }, [])
+
+  const cancelRemove = useCallback(() => {
+    setRemoveError(null)
+    setPendingRemoveThread(null)
+  }, [])
+
+  const confirmRemove = useCallback(async () => {
+    if (!pendingRemoveThread) return
+    const threadId = pendingRemoveThread.id
+    const threadTitle = pendingRemoveThread.title
+    setRemoveError(null)
+    try {
+      // The mutation owns the write and the queue/excluded cache effects; this
+      // handler only owns the dialog's own optimistic state and messaging.
+      await excludeMutation.mutate(threadId)
+      setPendingRemoveThread(null)
+      showToast(`Removed "${threadTitle}" from queue`, 'success')
+    } catch (err: unknown) {
+      const detail = getApiErrorDetail(err)
+      setRemoveError(detail)
+      showToast(`Failed to remove series: ${detail}`, 'error')
+    }
+  }, [pendingRemoveThread, excludeMutation, showToast])
 
   const confirmDelete = useCallback(async () => {
     if (!pendingDeleteThread) return
@@ -335,6 +374,12 @@ export function useQueueThreadActions(
     requestDelete,
     confirmDelete,
     cancelDelete,
+    pendingRemoveThread,
+    removeError,
+    isRemovePending: excludeMutation.isPending,
+    requestRemove,
+    confirmRemove,
+    cancelRemove,
     isShuffleConfirmOpen,
     requestShuffle,
     confirmShuffle,

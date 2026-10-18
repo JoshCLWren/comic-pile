@@ -16,6 +16,7 @@ from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesM
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 from app.schemas.thread import ThreadResponse
+from app.schemas.dependency import BlockingDependency, BlockingExplanation
 from app.services.reading_list_cycle_validator import validate_reading_constraints
 from app.services.reading_list_evaluator import (
     Blocker,
@@ -156,7 +157,7 @@ async def get_execution_eligibility(
         None for legacy execution, otherwise the transaction's immutable result.
     """
     settings = get_reading_execution_settings()
-    if not settings.enabled or user_id not in settings.reader_ids:
+    if not settings.enabled:
         return None
     key = f"option_e_eligibility:{user_id}"
     # Match ordinary SELECT autoflush before evaluating pending reader writes.
@@ -211,8 +212,6 @@ def describe_blocker_origin(snapshot: ReadingEligibilitySnapshot, blocker: Block
         Reader-facing origin for Queue summaries and Roll recovery.
     """
     if blocker.kind == "prerequisite":
-        if "historical classification unknown" in blocker.provenance:
-            return "Existing prerequisite (origin not yet classified)"
         return "Reader prerequisite" if blocker.origin == "reader" else "Converted prerequisite"
     kind = {
         "strict_order": "Strict order",
@@ -220,6 +219,44 @@ def describe_blocker_origin(snapshot: ReadingEligibilitySnapshot, blocker: Block
         "after_previous": "Wait for previous",
     }[blocker.kind]
     return f"{kind} in {snapshot.list_labels.get(blocker.list_id, 'Reading List')}"
+
+
+def project_blocking_explanation(
+    snapshot: ReadingEligibilitySnapshot, thread_id: int,
+) -> BlockingExplanation:
+    """Project every live blocker with reader names and exact Issue links.
+
+    Args:
+        snapshot: The same validated result used by Roll and Queue.
+        thread_id: Owned Thread to explain.
+
+    Returns:
+        All restrictions without consulting cached flags or legacy edges.
+    """
+    state = snapshot.threads.get(thread_id)
+    dependencies: list[BlockingDependency] = []
+    reasons: list[str] = []
+    if state is not None:
+        for blocker in state.blockers:
+            origin = describe_blocker_origin(snapshot, blocker)
+            for issue_id in blocker.waiting_on_issue_ids:
+                source_thread_id = snapshot.issue_thread_ids[issue_id]
+                label = f"{origin}: waiting on {snapshot.issue_labels.get(issue_id, 'required issue')}"
+                reasons.append(label)
+                dependencies.append(BlockingDependency(
+                    issue_id=issue_id,
+                    thread_id=source_thread_id,
+                    thread_title=snapshot.thread_labels.get(source_thread_id, "Required series"),
+                    issue_number=snapshot.issue_numbers.get(issue_id, ""),
+                    label=label,
+                ))
+    if state is not None and state.next_issue_id is None:
+        reasons.append("No available unread issue")
+    return BlockingExplanation(
+        is_blocked=bool(state is not None and not state.eligible),
+        blocking_reasons=reasons,
+        blocking_dependencies=dependencies,
+    )
 
 
 def project_thread_responses(
@@ -241,16 +278,7 @@ def project_thread_responses(
     for response in responses:
         state = eligibility.threads.get(response.id)
         frontier = state.next_issue_id if state is not None else None
-        reasons: list[str] = []
-        if state is not None:
-            for blocker in state.blockers:
-                names = [
-                    eligibility.issue_labels.get(source, "required issue")
-                    for source in blocker.waiting_on_issue_ids
-                ]
-                reasons.append(
-                    f"{describe_blocker_origin(eligibility, blocker)}: waiting on {', '.join(names)}"
-                )
+        reasons = project_blocking_explanation(eligibility, response.id).blocking_reasons
         blocked = response.status == "active" and response.id not in available
         if blocked and not reasons:
             reasons = [

@@ -1,3 +1,5 @@
+import { ReaderIssueActions } from '../components/ReaderIssueActions'
+import { EligibilityExplanation } from '../components/EligibilityExplanation'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Breadcrumbs from '../components/Breadcrumbs'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
@@ -18,6 +20,8 @@ function issueLabel(issue: ReadingPlanReaderIssue): string {
 }
 
 function availabilityLabel(issue: ReadingPlanReaderIssue): string {
+  if (issue.availability === 'excluded') return 'Excluded from collection'
+  if (issue.availability === 'inactive') return 'Series is inactive'
   if (issue.availability === 'read') return 'Read'
   if (issue.availability === 'blocked') return 'Blocked by'
   if (issue.availability === 'available') return 'Available now'
@@ -55,14 +59,11 @@ function IssueRow({ issue }: { issue: ReadingPlanReaderIssue }) {
           {issue.is_checkpoint ? ' · Checkpoint' : ''}
         </p>
         {issue.blockers.length > 0 && (
-          <ul className="mt-1 space-y-0.5" aria-label={`Blocked by for ${issueLabel(issue)}`}>
-            {issue.blockers.map((blocker) => (
-              <li key={blocker.issue_id} className="text-sm text-[var(--theme-warning)]">
-                {blocker.explanation}
-              </li>
-            ))}
-          </ul>
+          <EligibilityExplanation isBlocked dependencies={issue.blockers.map((blocker) => ({
+            ...blocker, label: blocker.explanation,
+          }))} />
         )}
+        <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} />
         {issue.source_paths.length > 0 && (
           <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
             Source reading order: {issue.source_paths[0]}
@@ -161,7 +162,9 @@ export default function ReadingPlanDetailPage() {
             {view.name}
           </h1>
           <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
-            {isStrict
+            {view.execution_mode === 'option_e'
+              ? 'Availability follows your Reading Lists, series order, collection exclusions and explicit prerequisites, just as Roll and Queue do.'
+              : isStrict
               ? 'Strict records intent for selected hard prerequisites; compiling them from plan order is not active yet. Source reading order is not a blocker by itself.'
               : 'Informational: this is a reading reference. Source reading order adds no hard blockers.'}
           </p>
@@ -238,8 +241,7 @@ export default function ReadingPlanDetailPage() {
           Blocked next
         </h2>
         <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
-          Next unread issues waiting on a hard prerequisite. Source reading order is not a blocker by
-          itself.
+          Next unread issues waiting on the reading requirements shown below.
         </p>
         {view.blocked_next.length === 0 ? (
           <p className="mt-3 text-sm text-[var(--theme-text-dim)]">No hard blockers on the next unread issues in this plan.</p>

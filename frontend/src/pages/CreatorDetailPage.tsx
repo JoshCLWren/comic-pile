@@ -1,10 +1,13 @@
 import { Link, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
+import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
 import type { CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
+import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySection'
 import Breadcrumbs from '../components/Breadcrumbs'
+import { RatingHistoryChart } from '../components/RatingHistoryChart'
 
 function formatRatingDate(value: string | null): string | null {
   if (!value) return null
@@ -160,6 +163,11 @@ export default function CreatorDetailPage() {
     loadMore,
     refetch,
   } = useCreatorDetail(isValidKey ? creatorKey : null)
+  const {
+    data: teamChemistry,
+    isError: teamChemistryError,
+    refetch: refetchTeamChemistry,
+  } = useCreatorTeamChemistry(isValidKey)
 
   if (!isValidKey) {
     return (
@@ -334,6 +342,20 @@ export default function CreatorDetailPage() {
           </p>
         )}
       </section>
+
+      {summary.ratings_count > 0 && (
+        <section aria-labelledby="creator-rating-history-heading" className="mt-6">
+          <SectionHeading id="creator-rating-history-heading">Rating history</SectionHeading>
+          <div className="mt-2">
+            <RatingHistoryChart ratedIssues={ratedIssues} totalRatings={summary.ratings_count} />
+          </div>
+          {ratingsPartial && (
+            <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }} role="note">
+              History reflects only rated issues with confirmed creator metadata and is a lower bound.
+            </p>
+          )}
+        </section>
+      )}
 
       {ratingDistribution != null ? (
         <section aria-labelledby="creator-distribution-heading" className="mt-6">
@@ -536,6 +558,25 @@ export default function CreatorDetailPage() {
             ))}
           </ul>
         </section>
+      )}
+
+      {teamChemistry && (
+        <CreatorTeamChemistrySection data={teamChemistry} forCreatorKey={creatorKey ?? null} />
+      )}
+      {teamChemistryError && (
+        <p role="alert" className="mt-6 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+          Could not load team chemistry for this creator. Your ratings are unchanged.
+          <button
+            type="button"
+            onClick={() => {
+              void refetchTeamChemistry()
+            }}
+            className="ml-2 underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            style={{ color: 'var(--theme-text-primary)' }}
+          >
+            Try again
+          </button>
+        </p>
       )}
 
       {isError && (

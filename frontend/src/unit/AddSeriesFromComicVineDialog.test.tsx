@@ -2,9 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
-const { importSeriesSpy, searchSeriesSpy, invalidateSpy, toastSpy } = vi.hoisted(() => ({
+const { importSeriesSpy, searchSeriesSpy, importStatusSpy, invalidateSpy, toastSpy } = vi.hoisted(() => ({
   importSeriesSpy: vi.fn(),
   searchSeriesSpy: vi.fn(),
+  importStatusSpy: vi.fn(),
   invalidateSpy: vi.fn().mockResolvedValue(undefined),
   toastSpy: {
     toasts: [],
@@ -17,6 +18,7 @@ vi.mock('../services/api-comicvine', () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     importSeries: importSeriesSpy,
+    getSeriesImportStatus: importStatusSpy,
   },
 }))
 
@@ -89,6 +91,31 @@ async function search(query: string) {
   return input
 }
 
+/**
+ * Status answer for a volume that never reached the caller's queue.
+ *
+ * The dialog only asks the server about an import after losing the response,
+ * and "not imported" is the answer that must never be reported as a confirmed
+ * failure while a slow import may still be running.
+ */
+function statusNotImported(comicvineVolumeId = 42) {
+  return {
+    comicvine_volume_id: comicvineVolumeId,
+    imported: false,
+    thread_id: null,
+    series_name: null,
+    issue_count: null,
+  }
+}
+
+/** An axios-shaped rejection that carries a real server response. */
+function serverError(status: number, detail: string) {
+  return Object.assign(new Error(`Request failed with status code ${status}`), {
+    isAxiosError: true,
+    response: { status, data: { detail } },
+  })
+}
+
 describe('AddSeriesFromComicVineDialog search step', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -97,6 +124,8 @@ describe('AddSeriesFromComicVineDialog search step', () => {
     invalidateSpy.mockResolvedValue(undefined)
     searchSeriesSpy.mockReset()
     importSeriesSpy.mockReset()
+    importStatusSpy.mockReset()
+    importStatusSpy.mockResolvedValue(statusNotImported())
     searchSeriesSpy.mockResolvedValue(page([stormwatch]))
   })
 
@@ -359,6 +388,8 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
     invalidateSpy.mockResolvedValue(undefined)
     searchSeriesSpy.mockReset()
     importSeriesSpy.mockReset()
+    importStatusSpy.mockReset()
+    importStatusSpy.mockResolvedValue(statusNotImported())
     searchSeriesSpy.mockResolvedValue(page([stormwatch]))
     importSeriesSpy.mockResolvedValue({
       thread_id: 501,
@@ -476,7 +507,9 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
   })
 
   it('keeps the dialog open and reports the failure when the import fails', async () => {
-    importSeriesSpy.mockRejectedValue(new Error('ComicVine provider failure'))
+    // A bounded provider failure answers with 502, so the server has already
+    // decided the outcome and there is nothing left to re-check.
+    importSeriesSpy.mockRejectedValue(serverError(502, 'Failed to fetch ComicVine series'))
     const onClose = vi.fn()
     const onAdded = vi.fn()
 
@@ -485,10 +518,13 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
 
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('ComicVine provider failure'))
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to fetch ComicVine series'),
+    )
     expect(screen.getByRole('button', { name: 'Add Series to ComicPile' })).toBeEnabled()
     expect(onClose).not.toHaveBeenCalled()
     expect(onAdded).not.toHaveBeenCalled()
+    expect(importStatusSpy).not.toHaveBeenCalled()
   })
 
   it('falls back to a generic message when the import failure is not an Error', async () => {
@@ -581,6 +617,160 @@ describe('AddSeriesFromComicVineDialog confirm and add', () => {
   })
 })
 
+describe('AddSeriesFromComicVineDialog lost-response recovery (#3445)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    toastSpy.showToast.mockClear()
+    toastSpy.showToast.mockImplementation(() => 'toast-id')
+    invalidateSpy.mockClear()
+    invalidateSpy.mockResolvedValue(undefined)
+    searchSeriesSpy.mockReset()
+    importSeriesSpy.mockReset()
+    importStatusSpy.mockReset()
+    importStatusSpy.mockResolvedValue(statusNotImported())
+    searchSeriesSpy.mockResolvedValue(page([stormwatch]))
+    // The shared client reports a request it never got a response for as a
+    // plain network error even though the server finished the import.
+    importSeriesSpy.mockRejectedValue(
+      new Error('Network error. Please check your connection and try again.'),
+    )
+  })
+
+  async function selectStormwatch() {
+    await search('Stormwatch')
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Stormwatch - WildStorm/ }))
+    await waitFor(() => expect(screen.getByTestId('add-series-confirm-card')).toBeInTheDocument())
+  }
+
+  it('reports an import the server committed after the client gave up as a success', async () => {
+    importStatusSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      imported: true,
+      thread_id: 501,
+      series_name: 'Stormwatch',
+      issue_count: 12,
+    })
+    const onAdded = vi.fn()
+    const onClose = vi.fn()
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps({ onAdded, onClose })} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+
+    await waitFor(() =>
+      expect(toastSpy.showToast).toHaveBeenCalledWith(
+        'Added "Stormwatch" to ComicPile (12 issues)',
+        'success',
+      ),
+    )
+    // The new series reaches Queue through the same invalidation a normal
+    // success performs, so nothing needs a manual reload to appear.
+    expect(invalidateSpy).toHaveBeenCalled()
+    expect(onAdded).toHaveBeenCalledWith(501)
+    expect(onClose).toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('re-checks the server for the volume it submitted', async () => {
+    importStatusSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      imported: true,
+      thread_id: 501,
+      series_name: 'Stormwatch',
+      issue_count: 12,
+    })
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+
+    await waitFor(() => expect(importStatusSpy).toHaveBeenCalledWith(42))
+  })
+
+  it('omits the issue count when the server cannot report one', async () => {
+    importStatusSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      imported: true,
+      thread_id: 501,
+      series_name: 'Stormwatch',
+      issue_count: null,
+    })
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+
+    await waitFor(() =>
+      expect(toastSpy.showToast).toHaveBeenCalledWith(
+        'Added "Stormwatch" to ComicPile',
+        'success',
+      ),
+    )
+  })
+
+  it('says the outcome is unknown and refreshes the queue when nothing is committed yet', async () => {
+    const onClose = vi.fn()
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps({ onClose })} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'We couldn\'t confirm whether "Stormwatch" was added',
+      ),
+    )
+    // The queue refresh is what shows the real state, and the message points at
+    // it instead of inviting a retry that would duplicate the series.
+    expect(invalidateSpy).toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(toastSpy.showToast).not.toHaveBeenCalled()
+  })
+
+  it('says the outcome is unknown when the server status check also fails', async () => {
+    importStatusSpy.mockRejectedValue(new Error('Network error'))
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps()} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'We couldn\'t confirm whether "Stormwatch" was added',
+      ),
+    )
+    expect(invalidateSpy).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Add Series to ComicPile' })).toBeEnabled()
+  })
+
+  it('does not ask the server to import the volume a second time while recovering', async () => {
+    importStatusSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      imported: true,
+      thread_id: 501,
+      series_name: 'Stormwatch',
+      issue_count: 12,
+    })
+    const onAdded = vi.fn()
+
+    render(<AddSeriesFromComicVineDialog {...defaultProps({ onAdded })} />)
+    await selectStormwatch()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Series to ComicPile' }))
+    await waitFor(() => expect(onAdded).toHaveBeenCalledWith(501))
+
+    // Recovery reads server state; it never re-issues the import that would
+    // create a duplicate series.
+    expect(importSeriesSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('AddSeriesFromComicVineDialog open-state handling', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -589,6 +779,8 @@ describe('AddSeriesFromComicVineDialog open-state handling', () => {
     invalidateSpy.mockResolvedValue(undefined)
     searchSeriesSpy.mockReset()
     importSeriesSpy.mockReset()
+    importStatusSpy.mockReset()
+    importStatusSpy.mockResolvedValue(statusNotImported())
     searchSeriesSpy.mockResolvedValue(page([stormwatch]))
   })
 

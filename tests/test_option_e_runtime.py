@@ -22,7 +22,6 @@ def option_e(monkeypatch: pytest.MonkeyPatch, default_user: User) -> Iterator[No
     """Enable only the test process with an explicitly non-production reference."""
     monkeypatch.setenv("OPTION_E_ENABLED", "true")
     monkeypatch.setenv("OPTION_E_APPROVED_PREVIEW", "local-test-fixture-no-production-approval")
-    monkeypatch.setenv("OPTION_E_READER_IDS", f"[{default_user.id}]")
     get_reading_execution_settings.cache_clear()
     try:
         yield
@@ -278,9 +277,20 @@ async def test_session_filters_leave_no_roll_offer(
     assert stale.status_code == 200 and stale.json() == []
     response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 400
-    for thread_id in [one_id, two_id]:
-        response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
-        assert response.status_code == 400
+    # A session-skipped thread still refuses an explicit override ...
+    skipped_override = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": two_id}
+    )
+    assert skipped_override.status_code == 400
+    # ... but the snoozed thread is overridable now that the picker offers it (issue
+    # #3446), and the override leaves the durable session snooze in place.
+    snoozed_override = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": one_id}
+    )
+    assert snoozed_override.status_code == 200, snoozed_override.text
+    session_after_override = await auth_client.get("/api/v1/sessions/current/")
+    assert session_after_override.status_code == 200
+    assert one_id in session_after_override.json()["snoozed_thread_ids"]
 
 
 def test_activation_requires_a_separate_approval_reference(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -289,6 +299,49 @@ def test_activation_requires_a_separate_approval_reference(monkeypatch: pytest.M
     assert ReadingExecutionSettings(enabled=False).enabled is False
     with pytest.raises(ValidationError, match="owner-approved"):
         ReadingExecutionSettings(enabled=True, approved_preview=" ")
+
+
+async def test_old_dependencies_do_not_override_canonical_reading_intent(
+    option_e: None,
+    async_db: AsyncSession,
+) -> None:
+    """Legacy and compiled edges remain audit data, not hidden reading-order rules."""
+    user = await get_or_create_user_async(async_db)
+    first, a = await _series(async_db, user.id, "Historical source", 1)
+    legacy, b = await _series(async_db, user.id, "Old checkpoint", 2)
+    compiled, c = await _series(async_db, user.id, "Generated copy", 3)
+    deliberate, d = await _series(async_db, user.id, "Explicit exception", 4)
+    async_db.add_all([
+        Dependency(source_issue_id=a[0].id, target_issue_id=b[0].id,
+                   note="Old reading plan checkpoint"),
+        Dependency(source_issue_id=a[0].id, target_issue_id=c[0].id,
+                   origin="converted", classification="C",
+                   provenance="legacy continuity-rule expansion"),
+        Dependency(source_issue_id=a[0].id, target_issue_id=d[0].id,
+                   origin="reader", classification="A",
+                   provenance="Explicit reader requirement"),
+    ])
+    await async_db.flush()
+    live = await get_execution_eligibility(async_db, user.id)
+    assert live is not None
+    assert live.candidate_ids() == {first.id, legacy.id, compiled.id}
+    assert not live.threads[deliberate.id].eligible
+    assert live.threads[deliberate.id].blockers[0].origin == "reader"
+    from app.repositories.reading_shadow_repository import load_shadow_inputs
+    from app.services.reading_shadow_service import compare_reading_eligibility
+    shadow = compare_reading_eligibility(await load_shadow_inputs(async_db, user.id))
+    rows = shadow["threads"]
+    assert isinstance(rows, list)
+    assert all(isinstance(row, dict) for row in rows)
+    by_thread = {row["thread_id"]: row for row in rows if isinstance(row, dict)}
+    assert by_thread[legacy.id]["legacy_derived_frontier_blocked"] is True
+    assert by_thread[legacy.id]["proposed_eligible"] is True
+    assert by_thread[compiled.id]["proposed_eligible"] is True
+    assert by_thread[deliberate.id]["proposed_eligible"] is False
+    summary = shadow["summary"]
+    assert isinstance(summary, dict)
+    inert_count = summary["inert_dependencies"]
+    assert isinstance(inert_count, int) and inert_count >= 2
 
 
 async def test_v2_identity_fanout_does_not_shrink_thread_die_pool(
@@ -373,15 +426,30 @@ def test_queue_cursor_cannot_cross_execution_modes() -> None:
         decode_queue_cursor(token, sort="position", search="", execution="option_e")
 
 
-async def test_activation_does_not_enable_unapproved_readers(
+async def test_activation_is_app_wide_with_reader_data_isolation(
     option_e: None,
     async_db: AsyncSession,
 ) -> None:
-    """One reader's approval cannot change another reader's execution authority."""
-    other = User(username="not_approved_for_option_e", password_hash="unused")
+    """Every reader uses the canonical engine, but only their owned constraints."""
+    first = await get_or_create_user_async(async_db)
+    other = User(username="other_canonical_reader", password_hash="unused")
     async_db.add(other)
     await async_db.flush()
-    assert await get_execution_eligibility(async_db, other.id) is None
+    one, one_issues = await _series(async_db, first.id, "First reader", 1)
+    two, two_issues = await _series(async_db, other.id, "Second reader", 2)
+    own_list = CustomCBLList(user_id=first.id, name="Private strict", mode="strict")
+    async_db.add(own_list)
+    await async_db.flush()
+    async_db.add(CustomCBLEntry(list_id=own_list.id, issue_id=one_issues[1].id, position=1))
+    await async_db.flush()
+    first_result = await get_execution_eligibility(async_db, first.id)
+    other_result = await get_execution_eligibility(async_db, other.id)
+    assert first_result is not None and other_result is not None
+    assert one.id in first_result.candidate_ids()
+    assert two.id in other_result.candidate_ids()
+    assert two.id not in first_result.threads
+    assert one.id not in other_result.threads
+    assert two_issues[0].id == other_result.threads[two.id].next_issue_id
 
 
 async def test_empty_and_fully_excluded_queues_have_valid_live_sort_sql(
@@ -564,6 +632,8 @@ async def test_durable_snooze_does_not_depend_on_cached_blocked_flag(
         assert response.status_code == 200 and response.json()[field] == []
     selected = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
     assert selected.status_code == 400
+    manual = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
+    assert manual.status_code == 400
 
 
 async def test_rating_a_stale_offer_cannot_consume_the_next_issue(
@@ -649,3 +719,371 @@ async def test_rating_rejects_an_offer_removed_from_the_queue(
     assert response.status_code == 409
     assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_id)) == "unread"
     assert await async_db.scalar(select(Event.id).where(Event.type == "rate")) is None
+
+
+async def test_live_explanations_agree_for_all_reader_surfaces(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """Strict list and stable prerequisite both survive stale legacy flags."""
+    user = await get_or_create_user_async(async_db)
+    first, first_issues = await _series(async_db, user.id, "The Dead Remembered", 1)
+    later, later_issues = await _series(async_db, user.id, "King of Fear", 2)
+    prerequisite, prerequisite_issues = await _series(async_db, user.id, "Required special", 3)
+    reading_list = CustomCBLList(user_id=user.id, name="Julix", mode="strict")
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(list_id=reading_list.id, issue_id=first_issues[0].id, position=1),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=later_issues[0].id, position=2),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=later_issues[1].id, position=3, skipped=True),
+        Dependency(source_issue_id=prerequisite_issues[0].id, target_issue_id=later_issues[0].id,
+                   origin="reader"),
+    ])
+    later.next_unread_issue_id = later_issues[1].id
+    list_id, first_id, later_id = reading_list.id, first.id, later.id
+    first_issue_id, later_issue_id = first_issues[0].id, later_issues[0].id
+    source_issue_id = prerequisite_issues[0].id
+    await async_db.commit()
+
+    batch = await auth_client.post("/api/v1/threads:getBlockingInfo", json={"thread_ids": [later_id]})
+    assert batch.status_code == 200
+    explanation = batch.json()["threads"][str(later_id)]
+    assert explanation["is_blocked"] is True
+    assert {row["issue_id"] for row in explanation["blocking_dependencies"]} == {
+        first_issue_id, source_issue_id,
+    }
+    assert any("Strict order in Julix" in reason for reason in explanation["blocking_reasons"])
+    assert any("Reader prerequisite" in reason for reason in explanation["blocking_reasons"])
+
+    single = await auth_client.post(f"/api/v1/threads/{later_id}:getBlockingInfo")
+    assert single.json() == explanation
+    detail = await auth_client.get(f"/api/v1/threads/{later_id}")
+    assert detail.status_code == 200
+    assert detail.json()["next_unread_issue_id"] == later_issue_id
+    assert detail.json()["blocking_reasons"] == explanation["blocking_reasons"]
+    page = await auth_client.get("/api/v1/threads/", params={"page_size": 50})
+    queue_row = next(row for row in page.json()["threads"] if row["id"] == later_id)
+    assert queue_row["blocking_reasons"] == explanation["blocking_reasons"]
+
+    reader = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/reader")
+    assert reader.status_code == 200
+    view = reader.json()
+    assert view["execution_mode"] == "option_e"
+    assert len(view["entries"]) == 3
+    assert view["entries"][0]["availability"] == "available"
+    assert view["entries"][1]["availability"] == "blocked"
+    assert view["entries"][1]["explanation"] == explanation
+    assert view["entries"][2]["skipped"] is True
+    assert view["entries"][2]["availability"] == "later"
+    plan_response = await auth_client.post("/api/v1/continuity-plans/", json={
+        "name": "Historical shorter copy", "ordering_mode": "informational",
+        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "nodes": [
+            {"id": "first", "node_type": "issue", "ref_id": first_issue_id,
+             "lane_id": "main", "position": 0},
+            {"id": "later", "node_type": "issue", "ref_id": later_issue_id,
+             "lane_id": "main", "position": 1},
+        ],
+    })
+    assert plan_response.status_code == 201, plan_response.text
+    plan_id = plan_response.json()["id"]
+    plan_reader = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+    assert plan_reader.status_code == 200
+    assert plan_reader.json()["execution_mode"] == "option_e"
+    blocked = plan_reader.json()["blocked_next"]
+    assert len(blocked) == 1
+    assert blocked[0]["issue_id"] == later_issue_id
+    assert [row["explanation"] for row in blocked[0]["blockers"]] == explanation["blocking_reasons"]
+    # Reading explanations does not repair stored pointers or cached flags.
+    await async_db.refresh(later)
+    assert later.next_unread_issue_id != later_issue_id
+    assert later.is_blocked is False
+    first_detail = await auth_client.get(f"/api/v1/threads/{first_id}")
+    assert first_detail.json()["is_blocked"] is False
+
+
+async def test_reading_list_reader_is_inactive_until_approved(
+    auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """Opening the reader cannot turn saved strict intent into active execution."""
+    user = await get_or_create_user_async(async_db)
+    _, issues = await _series(async_db, user.id, "Ordinary", 1)
+    reading_list = CustomCBLList(user_id=user.id, name="Inactive strict", mode="strict")
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add(CustomCBLEntry(list_id=reading_list.id, issue_id=issues[0].id, position=1))
+    list_id = reading_list.id
+    await async_db.commit()
+    response = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/reader")
+    assert response.status_code == 200
+    assert response.json()["execution_mode"] == "legacy"
+    assert response.json()["entries"][0]["availability"] == "legacy"
+    assert response.json()["entries"][0]["explanation"] is None
+    assert (await auth_client.get("/api/v1/custom-cbls/999999999/reader")).status_code == 404
+
+
+async def test_list_reader_distinguishes_exclusions_inactive_and_empty_lists(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """Collection exclusions, inactivity and no membership never masquerade as blockers."""
+    user = await get_or_create_user_async(async_db)
+    _, excluded_issues = await _series(async_db, user.id, "Excluded", 1)
+    _, inactive_issues = await _series(async_db, user.id, "Inactive", 2, status="paused")
+    reading_list = CustomCBLList(user_id=user.id, name="States", mode="loose")
+    empty = CustomCBLList(user_id=user.id, name="Empty", mode="loose")
+    foreign_user = await get_or_create_user_async(async_db, username="other-list-reader")
+    foreign = CustomCBLList(user_id=foreign_user.id, name="Private", mode="loose")
+    async_db.add_all([reading_list, empty, foreign])
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(list_id=reading_list.id, issue_id=excluded_issues[0].id, position=1),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=inactive_issues[0].id, position=2),
+        CollectionExclusion(user_id=user.id, issue_id=excluded_issues[0].id),
+    ])
+    list_id, empty_id, foreign_id = reading_list.id, empty.id, foreign.id
+    await async_db.commit()
+    response = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/reader")
+    assert response.status_code == 200
+    assert [entry["availability"] for entry in response.json()["entries"]] == ["excluded", "inactive"]
+    empty_response = await auth_client.get(f"/api/v1/custom-cbls/{empty_id}/reader")
+    assert empty_response.json()["entries"] == []
+    assert (await auth_client.get(f"/api/v1/custom-cbls/{foreign_id}/reader")).status_code == 404
+
+
+async def test_thread_connection_panel_uses_only_reader_prerequisites_when_enabled(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Historical edges cannot contradict the live Thread availability explanation."""
+    user = await get_or_create_user_async(async_db)
+    historical, old = await _series(async_db, user.id, "Historical", 1)
+    generated, compiled = await _series(async_db, user.id, "Generated", 2)
+    deliberate, explicit = await _series(async_db, user.id, "Reader", 3)
+    target, target_issues = await _series(async_db, user.id, "Target", 4)
+    async_db.add_all([
+        Dependency(source_issue_id=old[0].id, target_issue_id=target_issues[0].id),
+        Dependency(source_issue_id=compiled[0].id, target_issue_id=target_issues[0].id,
+                   origin="converted", classification="C", provenance="Old compiler"),
+        Dependency(source_issue_id=explicit[0].id, target_issue_id=target_issues[0].id,
+                   origin="reader"),
+    ])
+    historical_id, generated_id, reader_id, target_id = (
+        historical.id, generated.id, deliberate.id, target.id,
+    )
+    await async_db.commit()
+    response = await auth_client.get(f"/api/v1/threads/{target_id}/connected")
+    assert response.status_code == 200
+    assert {row["thread_id"] for row in response.json()["connected_threads"]} == {reader_id}
+    outgoing = await auth_client.get(f"/api/v1/threads/{generated_id}/connected")
+    assert outgoing.status_code == 200
+    assert outgoing.json()["connected_threads"] == []
+
+    monkeypatch.setenv("OPTION_E_ENABLED", "false")
+    get_reading_execution_settings.cache_clear()
+    legacy = await auth_client.get(f"/api/v1/threads/{target_id}/connected")
+    assert legacy.status_code == 200
+    assert {row["thread_id"] for row in legacy.json()["connected_threads"]} == {
+        historical_id, generated_id, reader_id,
+    }
+
+
+@pytest.mark.parametrize("stale_cache", [False, True])
+async def test_read_now_binds_canonical_issue_for_rating_and_undo(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    stale_cache: bool,
+) -> None:
+    """Read now must persist the same exact offer that rating consumes."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _series(async_db, user.id, "Read now regression", 1)
+    thread_id, issue_ids = thread.id, [issue.id for issue in issues]
+    if stale_cache:
+        thread.is_blocked = True
+        thread.issues_remaining = 0
+        thread.total_issues = None
+        thread.next_unread_issue_id = issue_ids[1]
+    session = ReadingSession(user_id=user.id, pending_issue_id=issue_ids[1])
+    async_db.add(session)
+    await async_db.flush()
+    session_id = session.id
+    await async_db.commit()
+
+    selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["issue_id"] == issue_ids[0]
+    assert selected.json()["issues_remaining"] == 2
+    event = await async_db.scalar(select(Event).where(Event.selection_method == "manual"))
+    assert event is not None
+    assert (event.selected_thread_id, event.issue_id, event.issue_number) == (
+        thread_id,
+        issue_ids[0],
+        "1",
+    )
+    assert (
+        await async_db.scalar(
+            select(ReadingSession.pending_issue_id).where(ReadingSession.id == session_id)
+        )
+        == issue_ids[0]
+    )
+
+    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
+    assert rated.status_code == 200, rated.text
+    assert rated.json()["roll_reconciliation"]["last_read"]["issue_id"] == issue_ids[0]
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_ids[0])) == "read"
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_ids[1])) == "unread"
+    snapshot_id = await async_db.scalar(
+        select(Snapshot.id)
+        .where(
+            Snapshot.session_id == session_id,
+            Snapshot.description == "After rating",
+        )
+        .order_by(Snapshot.id.desc())
+        .limit(1)
+    )
+    assert snapshot_id is not None
+    undone = await auth_client.post(f"/api/v1/undo/{session_id}/undo/{snapshot_id}")
+    assert undone.status_code == 200, undone.text
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_ids[0])) == "unread"
+
+
+async def test_read_now_rejects_canonical_blocked_and_session_skipped_threads(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Read now cannot offer an issue the rating guard would reject."""
+    user = await get_or_create_user_async(async_db)
+    first, first_issues = await _series(async_db, user.id, "Required first", 1)
+    blocked, blocked_issues = await _series(async_db, user.id, "Wait for first", 2)
+    reading_list = CustomCBLList(user_id=user.id, name="Read now order", mode="strict")
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            CustomCBLEntry(list_id=reading_list.id, issue_id=first_issues[0].id, position=1),
+            CustomCBLEntry(list_id=reading_list.id, issue_id=blocked_issues[0].id, position=2),
+            ReadingSession(user_id=user.id, skipped_thread_ids=[first.id]),
+        ]
+    )
+    thread_ids = [first.id, blocked.id]
+    await async_db.commit()
+    for thread_id in thread_ids:
+        selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
+        assert selected.status_code == 400, selected.text
+    assert await async_db.scalar(select(Event.id).where(Event.selection_method == "manual")) is None
+
+
+async def test_read_now_clears_current_snooze_before_rating(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Manual selection keeps its explicit current-session unsnooze behavior."""
+    from datetime import UTC, datetime, timedelta
+
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _series(async_db, user.id, "Read now snoozed", 1)
+    session = ReadingSession(user_id=user.id, snoozed_thread_ids=[thread.id])
+    async_db.add(session)
+    await async_db.flush()
+    async_db.add(Event(
+        type="snooze", thread_id=thread.id, session_id=session.id,
+        timestamp=datetime.now(UTC) - timedelta(minutes=1),
+    ))
+    thread_id, issue_id, session_id = thread.id, issues[0].id, session.id
+    await async_db.commit()
+    selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["issue_id"] == issue_id
+    assert await async_db.scalar(select(Event.id).where(Event.type == "unsnooze")) is not None
+    assert await async_db.scalar(
+        select(ReadingSession.snoozed_thread_ids).where(ReadingSession.id == session_id)
+    ) == []
+    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
+    assert rated.status_code == 200, rated.text
+    assert rated.json()["roll_reconciliation"]["last_read"]["issue_id"] == issue_id
+
+
+async def test_set_current_issue_creates_a_rateable_canonical_offer(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """Correcting the current issue also enters rating with a fresh bound offer."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _series(async_db, user.id, "Correct then rate", 1, count=3)
+    thread.total_issues = None
+    thread_id, issue_ids = thread.id, [issue.id for issue in issues]
+    await async_db.commit()
+    corrected = await auth_client.post(
+        f"/api/v1/threads/{thread_id}:setCurrentIssue", json={"issue_number": "2"},
+    )
+    assert corrected.status_code == 200, corrected.text
+    assert corrected.json()["issue_id"] == issue_ids[1]
+    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
+    assert rated.status_code == 200, rated.text
+    assert rated.json()["roll_reconciliation"]["last_read"]["issue_id"] == issue_ids[1]
+    statuses = list((await async_db.scalars(
+        select(Issue.status).where(Issue.id.in_(issue_ids)).order_by(Issue.position)
+    )).all())
+    assert statuses == ["read", "read", "unread"]
+
+
+async def test_canonical_prerequisite_read_now_ignores_retired_frontier_and_edges(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """Recovery Read now selects and rates the canonical prerequisite leaf."""
+    user = await get_or_create_user_async(async_db)
+    source, source_issues = await _series(async_db, user.id, "Recovery first", 1, blocked=True)
+    target, target_issues = await _series(async_db, user.id, "Recovery waiting", 2)
+    source.next_unread_issue_id = source_issues[1].id
+    _, historical_issues = await _series(async_db, user.id, "Retired blocker", 3)
+    async_db.add(Dependency(
+        source_issue_id=historical_issues[0].id, target_issue_id=source_issues[0].id,
+        origin="converted", classification="C", provenance="Retired generated edge",
+    ))
+    reading_list = CustomCBLList(user_id=user.id, name="Recovery sequence", mode="strict")
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(list_id=reading_list.id, issue_id=source_issues[0].id, position=1),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=target_issues[0].id, position=2),
+        ReadingSession(user_id=user.id, pending_thread_id=target.id, pending_issue_id=target_issues[0].id),
+    ])
+    source_id, target_id, issue_id = source.id, target.id, source_issues[0].id
+    await async_db.commit()
+    switched = await auth_client.post(
+        "/api/v1/roll/switch-prerequisite", json={"node_type": "issue", "node_id": issue_id},
+    )
+    assert switched.status_code == 200, switched.text
+    assert switched.json()["original_thread_id"] == target_id
+    assert switched.json()["target_thread_id"] == source_id
+    assert switched.json()["target_issue_id"] == issue_id
+    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
+    assert rated.status_code == 200, rated.text
+    assert rated.json()["roll_reconciliation"]["last_read"]["issue_id"] == issue_id
+
+
+async def test_rejected_current_issue_correction_does_not_commit_progress(
+    option_e: None, async_db: AsyncSession,
+) -> None:
+    """Session initialization cannot commit progress before availability validation."""
+    from app.services.errors import InvalidRequestError
+    from app.services.thread_service import set_current_issue
+
+    user = await get_or_create_user_async(async_db)
+    _, source_issues = await _series(async_db, user.id, "Correction prerequisite", 1)
+    target, target_issues = await _series(async_db, user.id, "Blocked correction", 2)
+    async_db.add(Dependency(
+        source_issue_id=source_issues[0].id, target_issue_id=target_issues[1].id,
+        origin="reader", classification="A", provenance="Explicit correction prerequisite",
+    ))
+    owner_id, thread_id, issue_ids = user.id, target.id, [issue.id for issue in target_issues]
+    await async_db.commit()
+    with pytest.raises(InvalidRequestError):
+        await set_current_issue(async_db, owner_id, thread_id, issue_number="2")
+    await async_db.rollback()
+    statuses = list((await async_db.scalars(
+        select(Issue.status).where(Issue.id.in_(issue_ids)).order_by(Issue.position)
+    )).all())
+    assert statuses == ["unread", "unread"]
+    assert await async_db.scalar(select(Event.id).where(Event.selection_method == "manual")) is None

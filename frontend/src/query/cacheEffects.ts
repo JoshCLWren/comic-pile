@@ -197,18 +197,23 @@ export async function invalidateAfterQueueMovement(
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
     }),
+    // Exclude/restore move a series across the active-queue boundary without
+    // deleting it (#3807), so the excluded library view is a fourth surface
+    // that changes membership. Reset it the same way the Queue list resets:
+    // a cached page still lists a series on the wrong side of the boundary.
+    client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
   ])
 }
 
 /**
  * Invalidate all Queue-affecting queries after a mutation that changes queue
  * ordering or membership (create, delete, reposition, shuffle, snooze,
- * unsnooze, reactivate). TanStack Query refetches invalidated queries
- * automatically — callers must not also call `refetch()`.
+ * unsnooze, reactivate, exclude, restore). TanStack Query refetches invalidated
+ * queries automatically — callers must not also call `refetch()`.
  *
  * This is intentionally an alias of `invalidateAfterQueueMovement` — both
- * operations refresh the same three retained resources (queue pages, current
- * session, roll bootstrap) and must stay in sync.
+ * operations refresh the same four retained resources (queue pages, current
+ * session, roll bootstrap, excluded library pages) and must stay in sync.
  */
 export async function invalidateAfterQueueMutation(
   client: QueryClient,
@@ -408,6 +413,7 @@ export function applyIssueReadSnapshotToCache(
   )
 
   applyEditedThreadToQueuePages(client, updatedThread)
+  void invalidateAfterReaderProgress(client)
 }
 
 /**
@@ -426,6 +432,9 @@ export async function invalidateAfterDependencyChange(
     client.invalidateQueries({ queryKey: queryKeys.thread.detail(threadId), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.thread.summary(threadId), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.readingOrders.forThread(threadId) }),
+    client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
+    client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.all }),
     client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
   ])
@@ -441,6 +450,7 @@ export async function applyCreatedCustomCBL(
 ): Promise<void> {
   client.setQueryData(queryKeys.customCBLs.detail(created.id), created)
   await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+  await invalidateReadingEligibility(client)
 }
 
 /**
@@ -453,6 +463,7 @@ export async function applyUpdatedCustomCBL(
 ): Promise<void> {
   client.setQueryData(queryKeys.customCBLs.detail(saved.id), saved)
   await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+  await invalidateReadingEligibility(client)
 }
 
 /**
@@ -465,6 +476,7 @@ export async function applyDeletedCustomCBL(
 ): Promise<void> {
   client.removeQueries({ queryKey: queryKeys.customCBLs.detail(deletedId), exact: true })
   await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+  await invalidateReadingEligibility(client)
 }
 
 /**
@@ -677,4 +689,22 @@ export async function invalidateAfterTagMutation(
       exact: true,
     }),
   ])
+}
+
+/** A global read can release requirements in other series and overlapping lists. */
+async function invalidateReadingEligibility(client: QueryClient, includeAuthoringLists = false): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.thread.all }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.all }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.all }),
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
+    client.invalidateQueries({ queryKey: includeAuthoringLists ? queryKeys.customCBLs.all : queryKeys.customCBLs.readers() }),
+    client.invalidateQueries({ queryKey: queryKeys.session.all }),
+  ])
+}
+
+/** Refresh global read state without refetching a just-saved authoring draft. */
+export async function invalidateAfterReaderProgress(client: QueryClient): Promise<void> {
+  await invalidateReadingEligibility(client, true)
 }

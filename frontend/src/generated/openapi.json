@@ -272,8 +272,19 @@
         "type": "object"
       },
       "BlockingDependency": {
-        "description": "A single dependency blocking a thread, described in reader language.",
+        "description": "One unread Issue required by a list or explicit prerequisite.",
         "properties": {
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
           "issue_number": {
             "title": "Issue Number",
             "type": "string"
@@ -4195,6 +4206,388 @@
         "title": "CreatorInsights",
         "type": "object"
       },
+      "CreatorDiscoveryCoverage": {
+        "description": "Explicit metadata-coverage state for the discovery aggregation.",
+        "properties": {
+          "rated_issues_total": {
+            "description": "Rated issues in the library.",
+            "minimum": 0.0,
+            "title": "Rated Issues Total",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "description": "Rated issues carrying at least one usable confirmed credit.",
+            "minimum": 0.0,
+            "title": "Rated Issues With Creator Metadata",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "description": "True only when every rated issue carries confirmed creator metadata.",
+            "title": "Ratings Complete",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "title": "CreatorDiscoveryCoverage",
+        "type": "object"
+      },
+      "CreatorDiscoveryEntry": {
+        "description": "One canonical creator inside a discovery view with supporting metrics.",
+        "properties": {
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Personal average across the rated sample.",
+            "title": "Average Rating"
+          },
+          "canonical_creator_key": {
+            "description": "Stable normalized creator key (e.g. ``creator:12345``).",
+            "title": "Canonical Creator Key",
+            "type": "string"
+          },
+          "display_name": {
+            "description": "Human-readable creator name from confirmed issue metadata.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "earlier_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average of the earlier half of a trend-eligible history.",
+            "title": "Earlier Average Rating"
+          },
+          "max_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest effective rating.",
+            "title": "Max Rating"
+          },
+          "median_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Personal median across the rated sample.",
+            "title": "Median Rating"
+          },
+          "min_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lowest effective rating.",
+            "title": "Min Rating"
+          },
+          "normalized_roles": {
+            "description": "Distinct confirmed roles seen for this creator.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Normalized Roles",
+            "type": "array"
+          },
+          "rated_issue_count": {
+            "description": "Headline-eligible rated issues contributing to the metrics.",
+            "minimum": 0.0,
+            "title": "Rated Issue Count",
+            "type": "integer"
+          },
+          "rating_spread": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest minus lowest effective rating, or null when unrated.",
+            "title": "Rating Spread"
+          },
+          "rating_stddev": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Population standard deviation across the rated sample, or null when unrated.",
+            "title": "Rating Stddev"
+          },
+          "read_unrated_issue_count": {
+            "default": 0,
+            "description": "Attributed read-but-unrated owned issues.",
+            "minimum": 0.0,
+            "title": "Read Unrated Issue Count",
+            "type": "integer"
+          },
+          "reasons": {
+            "description": "Every deterministic rule that qualified this creator for this view.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "recent_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average of the recent half of a trend-eligible history.",
+            "title": "Recent Average Rating"
+          },
+          "top_rating_count": {
+            "default": 0,
+            "description": "Count of ratings at the top of the scale.",
+            "minimum": 0.0,
+            "title": "Top Rating Count",
+            "type": "integer"
+          },
+          "top_rating_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proportion of ratings at the top of the scale (0.0-1.0).",
+            "title": "Top Rating Rate"
+          },
+          "trend_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Recent average minus earlier average for the trend view.",
+            "title": "Trend Delta"
+          },
+          "trend_direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "``warmed`` or ``cooled`` for the trend view, otherwise null.",
+            "title": "Trend Direction"
+          },
+          "trend_sample_count": {
+            "default": 0,
+            "description": "Rated issues carrying a timestamp that supported a trend, else 0.",
+            "minimum": 0.0,
+            "title": "Trend Sample Count",
+            "type": "integer"
+          },
+          "unread_issue_count": {
+            "default": 0,
+            "description": "Attributed unread owned issues for this creator.",
+            "minimum": 0.0,
+            "title": "Unread Issue Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "rated_issue_count"
+        ],
+        "title": "CreatorDiscoveryEntry",
+        "type": "object"
+      },
+      "CreatorDiscoveryMode": {
+        "description": "The fixed, deterministic set of personal taste-discovery views.\n\nOrdering in this enum is the canonical display order of the views.",
+        "enum": [
+          "consistently_loved",
+          "polarizing",
+          "most_read",
+          "highest_top_rating_rate",
+          "great_average_small_sample",
+          "loved_with_unread",
+          "moved_over_time"
+        ],
+        "title": "CreatorDiscoveryMode",
+        "type": "string"
+      },
+      "CreatorDiscoveryReason": {
+        "description": "One deterministic rule that qualified a creator for a view.\n\n``value`` is the observed metric and ``threshold`` is the fixed rule the\nmetric had to satisfy. ``comparison`` is one of ``gte``, ``lte``, ``gt``,\n``lt`` so the UI can render the relationship without parsing prose.",
+        "properties": {
+          "comparison": {
+            "description": "One of gte, lte, gt, lt.",
+            "title": "Comparison",
+            "type": "string"
+          },
+          "label": {
+            "description": "Human-readable metric name for UI copy.",
+            "title": "Label",
+            "type": "string"
+          },
+          "metric": {
+            "description": "Machine key of the qualifying metric.",
+            "title": "Metric",
+            "type": "string"
+          },
+          "threshold": {
+            "description": "Threshold the value had to satisfy.",
+            "title": "Threshold",
+            "type": "number"
+          },
+          "value": {
+            "description": "Observed value of the metric.",
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "metric",
+          "label",
+          "value",
+          "threshold",
+          "comparison"
+        ],
+        "title": "CreatorDiscoveryReason",
+        "type": "object"
+      },
+      "CreatorDiscoveryResponse": {
+        "description": "Response body for the bounded personal taste-discovery endpoint.",
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorDiscoveryCoverage",
+            "description": "Metadata-coverage state distinguishing complete from lower bounds."
+          },
+          "max_entries_per_view": {
+            "description": "Bounding constant applied per view.",
+            "minimum": 1.0,
+            "title": "Max Entries Per View",
+            "type": "integer"
+          },
+          "minimum_reliable_sample": {
+            "description": "The canonical personal-reliability rated-sample floor.",
+            "minimum": 1.0,
+            "title": "Minimum Reliable Sample",
+            "type": "integer"
+          },
+          "views": {
+            "description": "One entry per view in canonical order, including empty views.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryView"
+            },
+            "title": "Views",
+            "type": "array"
+          }
+        },
+        "required": [
+          "coverage",
+          "minimum_reliable_sample",
+          "max_entries_per_view"
+        ],
+        "title": "CreatorDiscoveryResponse",
+        "type": "object"
+      },
+      "CreatorDiscoveryView": {
+        "description": "One bounded taste-discovery view and its qualifying creators.",
+        "properties": {
+          "description": {
+            "description": "Deterministic explanation of what qualifies a creator.",
+            "title": "Description",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "max_entries": {
+            "description": "Bounding constant applied to entries.",
+            "minimum": 1.0,
+            "title": "Max Entries",
+            "type": "integer"
+          },
+          "min_sample": {
+            "description": "Minimum rated sample the view requires (0 = no floor).",
+            "minimum": 0.0,
+            "title": "Min Sample",
+            "type": "integer"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/CreatorDiscoveryMode",
+            "description": "Stable view identifier."
+          },
+          "title": {
+            "description": "Short human-readable view title.",
+            "title": "Title",
+            "type": "string"
+          },
+          "total": {
+            "description": "Qualifying creators before bounded truncation.",
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "description": "True when more creators qualified than the bounded response returns.",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "title",
+          "description",
+          "min_sample",
+          "total",
+          "truncated",
+          "max_entries"
+        ],
+        "title": "CreatorDiscoveryView",
+        "type": "object"
+      },
       "CreatorIssueRow": {
         "description": "Detail for a specific issue attributed to the creator.",
         "properties": {
@@ -5370,6 +5763,307 @@
           "display_name"
         ],
         "title": "CreatorSummaryItem",
+        "type": "object"
+      },
+      "CreatorTeamChemistryResponse": {
+        "description": "Response payload for the creator team-chemistry endpoint.",
+        "properties": {
+          "coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorTeamCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_ranked_pairs": {
+            "description": "Bounding constant applied to the returned pair list.",
+            "minimum": 1.0,
+            "title": "Max Ranked Pairs",
+            "type": "integer"
+          },
+          "min_shared_team_sample": {
+            "default": 3,
+            "description": "Minimum shared sample required before a pair may rank.",
+            "minimum": 1.0,
+            "title": "Min Shared Team Sample",
+            "type": "integer"
+          },
+          "pairs": {
+            "description": "Ranked recurring teams, strongest shared average first.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamPair"
+            },
+            "title": "Pairs",
+            "type": "array"
+          },
+          "pairs_total": {
+            "default": 0,
+            "description": "Pairs meeting the minimum shared sample before ranking truncation.",
+            "minimum": 0.0,
+            "title": "Pairs Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_ranked_pairs"
+        ],
+        "title": "CreatorTeamChemistryResponse",
+        "type": "object"
+      },
+      "CreatorTeamCoverage": {
+        "description": "Explicit metadata-coverage state for the team-chemistry aggregation.",
+        "properties": {
+          "rated_issues_total": {
+            "description": "Rated issues in the library.",
+            "minimum": 0.0,
+            "title": "Rated Issues Total",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "description": "Rated issues carrying at least one usable confirmed credit.",
+            "minimum": 0.0,
+            "title": "Rated Issues With Creator Metadata",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "description": "True when every rated issue carries confirmed creator metadata; otherwise pair results are lower bounds.",
+            "title": "Ratings Complete",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "title": "CreatorTeamCoverage",
+        "type": "object"
+      },
+      "CreatorTeamIssueRef": {
+        "description": "One bounded, navigable shared-issue drilldown reference.",
+        "properties": {
+          "effective_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Rating"
+          },
+          "issue_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Issue number within the thread.",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "status": {
+            "description": "Owned issue status (read/unread).",
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "Owning local thread/series id.",
+            "exclusiveMinimum": 0.0,
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Thread title, for display only.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "title": "CreatorTeamIssueRef",
+        "type": "object"
+      },
+      "CreatorTeamMember": {
+        "description": "One canonical creator identity inside a ranked team pair.",
+        "properties": {
+          "baseline_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Creator's personal baseline average, or null when unrated.",
+            "title": "Baseline Average Rating"
+          },
+          "baseline_rated_count": {
+            "description": "Creator's personal headline-eligible rated sample size.",
+            "minimum": 0.0,
+            "title": "Baseline Rated Count",
+            "type": "integer"
+          },
+          "canonical_creator_key": {
+            "description": "Stable ``creator:<id>`` key.",
+            "title": "Canonical Creator Key",
+            "type": "string"
+          },
+          "difference_from_baseline": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shared-pair average minus this creator's baseline average. Descriptive context only.",
+            "title": "Difference From Baseline"
+          },
+          "display_name": {
+            "description": "Latest confirmed display name.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "roles": {
+            "description": "Interior-storytelling roles on shared issues.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "roles",
+          "baseline_rated_count"
+        ],
+        "title": "CreatorTeamMember",
+        "type": "object"
+      },
+      "CreatorTeamPair": {
+        "description": "One ranked recurring creator pair with explainable shared metrics.",
+        "properties": {
+          "creators": {
+            "description": "The two canonical creator identities of this team.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamMember"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Creators",
+            "type": "array"
+          },
+          "max_shared_issue_refs": {
+            "default": 5,
+            "description": "Bounding constant applied to the returned issue sample.",
+            "minimum": 1.0,
+            "title": "Max Shared Issue Refs",
+            "type": "integer"
+          },
+          "pair_key": {
+            "description": "Stable unordered pair key, ``a|b`` sorted.",
+            "title": "Pair Key",
+            "type": "string"
+          },
+          "shared_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average of the shared issues' effective ratings.",
+            "title": "Shared Average Rating"
+          },
+          "shared_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamIssueRef"
+            },
+            "title": "Shared Issue Refs",
+            "type": "array"
+          },
+          "shared_median_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Median Rating"
+          },
+          "shared_rated_issue_count": {
+            "description": "Shared rated issues carrying eligible interior credits for both members.",
+            "minimum": 0.0,
+            "title": "Shared Rated Issue Count",
+            "type": "integer"
+          },
+          "shared_rating_distribution": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Shared Rating Distribution",
+            "type": "object"
+          },
+          "shared_series": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamSeriesRef"
+            },
+            "title": "Shared Series",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pair_key",
+          "creators",
+          "shared_rated_issue_count"
+        ],
+        "title": "CreatorTeamPair",
+        "type": "object"
+      },
+      "CreatorTeamSeriesRef": {
+        "description": "Bounded shared-series context behind one team pair.",
+        "properties": {
+          "shared_issue_count": {
+            "description": "Pair issues from this thread.",
+            "minimum": 1.0,
+            "title": "Shared Issue Count",
+            "type": "integer"
+          },
+          "thread_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Thread title, for display only.",
+            "title": "Thread Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "shared_issue_count"
+        ],
+        "title": "CreatorTeamSeriesRef",
         "type": "object"
       },
       "CrossRepoDeliveryRequest": {
@@ -11309,6 +12003,145 @@
         "title": "ReadingListPredecessorChange",
         "type": "object"
       },
+      "ReadingListReaderEntry": {
+        "description": "One current list member with the execution authority's decision.",
+        "properties": {
+          "availability": {
+            "enum": [
+              "read",
+              "available",
+              "blocked",
+              "later",
+              "excluded",
+              "inactive",
+              "legacy"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "checkpoint_target_issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Checkpoint Target Issue Ids",
+            "type": "array"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BlockingExplanation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gate": {
+            "default": "none",
+            "enum": [
+              "none",
+              "hold",
+              "after_previous"
+            ],
+            "title": "Gate",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "default": false,
+            "title": "Is Checkpoint",
+            "type": "boolean"
+          },
+          "issue_id": {
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status",
+          "availability"
+        ],
+        "title": "ReadingListReaderEntry",
+        "type": "object"
+      },
+      "ReadingListReaderResponse": {
+        "description": "Full current list order; never reconstructed from plan membership.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingListReaderEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "execution_mode": {
+            "enum": [
+              "legacy",
+              "option_e"
+            ],
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "list_id": {
+            "title": "List Id",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "strict",
+              "loose"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "name",
+          "mode",
+          "execution_mode"
+        ],
+        "title": "ReadingListReaderResponse",
+        "type": "object"
+      },
       "ReadingModeResponse": {
         "description": "Current reading-mode state for the active session.",
         "properties": {
@@ -11811,7 +12644,7 @@
         "type": "object"
       },
       "ReadingPlanBlocker": {
-        "description": "One unread canonical Dependency source holding a plan issue back.",
+        "description": "One unread Issue required by the current execution authority.",
         "properties": {
           "explanation": {
             "title": "Explanation",
@@ -12054,7 +12887,9 @@
               "read",
               "available",
               "blocked",
-              "later"
+              "later",
+              "excluded",
+              "inactive"
             ],
             "title": "Availability",
             "type": "string"
@@ -12206,6 +13041,15 @@
             },
             "title": "Blocked Next",
             "type": "array"
+          },
+          "execution_mode": {
+            "default": "legacy",
+            "enum": [
+              "legacy",
+              "option_e"
+            ],
+            "title": "Execution Mode",
+            "type": "string"
           },
           "lanes": {
             "items": {
@@ -13167,6 +14011,13 @@
       "RollBootstrapThread": {
         "description": "Lightweight thread summary for the roll bootstrap pool.",
         "properties": {
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocking Reasons",
+            "type": "array"
+          },
           "format": {
             "title": "Format",
             "type": "string"
@@ -14165,6 +15016,62 @@
           "decision"
         ],
         "title": "SeriesDecision",
+        "type": "object"
+      },
+      "SeriesImportStatusResponse": {
+        "description": "Server truth about one ComicVine volume's presence in the caller's queue.\n\nA client that loses the ``series:import`` response (timeout, dropped\nconnection, gateway timeout) re-checks this endpoint before reporting\nfailure, so the answer must reflect committed server state for the\ncalling user only and must never leak another user's queue.",
+        "properties": {
+          "comicvine_volume_id": {
+            "title": "Comicvine Volume Id",
+            "type": "integer"
+          },
+          "imported": {
+            "description": "True when the calling user already owns a thread confirmed against this ComicVine volume.",
+            "title": "Imported",
+            "type": "boolean"
+          },
+          "issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issues the existing thread tracks, or null when not imported. The client reports this server count after a recovered import.",
+            "title": "Issue Count"
+          },
+          "series_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Title of the existing thread, or null when not imported.",
+            "title": "Series Name"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Existing thread ID, or null when the volume is not imported.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "imported"
+        ],
+        "title": "SeriesImportStatusResponse",
         "type": "object"
       },
       "SeriesMappingCommitRequest": {
@@ -18139,7 +19046,7 @@
     },
     "/api/v1/admin/delete-test-data/": {
       "post": {
-        "description": "Delete all test data (threads, sessions, events marked as test).\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Dictionary with counts of deleted threads, sessions, and events.",
+        "description": "Delete all test data (threads, sessions, events marked as test).\n\nArgs:\n    db: SQLAlchemy session for database operations.\n    current_user: Authenticated user making the request.\n\nReturns:\n    Dictionary with counts of deleted threads, sessions, and events.",
         "operationId": "delete_test_data_api_v1_admin_delete_test_data__post",
         "responses": {
           "200": {
@@ -18157,6 +19064,11 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Delete Test Data",
         "tags": [
           "admin",
@@ -18229,7 +19141,7 @@
     },
     "/api/v1/admin/import/csv/": {
       "post": {
-        "description": "Import threads from CSV file.\n\nCSV format: title, format, issues_remaining\n- title: Thread title (required)\n- format: Thread format (required)\n- issues_remaining: Number of issues remaining (required, integer)\n\nThreads are inserted at position 1 (front of queue).\n\nArgs:\n    file: CSV file to import.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Dictionary with \"imported\" count and \"errors\" list.\n\nRaises:\n    HTTPException: If file is not a CSV.",
+        "description": "Import threads from CSV file.\n\nCSV format: title, format, issues_remaining\n- title: Thread title (required)\n- format: Thread format (required)\n- issues_remaining: Number of issues remaining (required, integer)\n\nThreads are inserted at position 1 (front of queue).\n\nArgs:\n    file: CSV file to import.\n    db: SQLAlchemy session for database operations.\n    current_user: Authenticated user importing the threads.\n\nReturns:\n    Dictionary with \"imported\" count and \"errors\" list.\n\nRaises:\n    HTTPException: If file is not a CSV.",
         "operationId": "import_csv_api_v1_admin_import_csv__post",
         "requestBody": {
           "content": {
@@ -18277,6 +19189,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Import Csv",
         "tags": [
           "admin",
@@ -20084,6 +21001,55 @@
         ]
       }
     },
+    "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
+      "get": {
+        "description": "Report whether this user already imported one ComicVine volume.\n\nA client whose ``series:import`` response was lost asks this endpoint\nbefore reporting failure, so a slow import that actually committed is\nrecovered instead of being reported as an error or retried into a\nduplicate series. The answer is scoped to the calling user's threads.\n\nArgs:\n    comicvine_volume_id: ComicVine volume ID the client submitted.\n    current_user: Authenticated caller.\n    db: Async database session.\n\nReturns:\n    SeriesImportStatusResponse with the owned thread when the volume is\n    already imported for this user.",
+        "operationId": "api_series_import_status_api_v1_comicvine_series__comicvine_volume_id__import_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comicvine_volume_id",
+            "required": true,
+            "schema": {
+              "title": "Comicvine Volume Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesImportStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Api Series Import Status",
+        "tags": [
+          "comicvine-resolution",
+          "comicvine-resolution"
+        ]
+      }
+    },
     "/api/v1/comicvine/series/{comicvine_volume_id}/issues": {
       "get": {
         "description": "Fetch all issues within a ComicVine series/volume.\n\nArgs:\n    comicvine_volume_id: ComicVine volume ID.\n    series_name: Optional series name to avoid extra API call.\n    current_user: Authenticated user.",
@@ -20792,7 +21758,7 @@
     },
     "/api/v1/continuity-plans/{plan_id}/reader": {
       "get": {
-        "description": "Return progress, available now, blocked next, and ordered lanes.\n\nBlocking uses canonical issue-level Dependencies only. The payload is the\nprimary reader view for a Reading Plan and does not change Roll eligibility.",
+        "description": "Return progress, available now, blocked next, and ordered lanes.\n\nAvailability uses the same guarded authority as Roll. Disabled readers retain\nlegacy dependencies; inspecting a plan never activates list execution.",
         "operationId": "get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get",
         "parameters": [
           {
@@ -21417,6 +22383,34 @@
         ]
       }
     },
+    "/api/v1/creators/discoveries": {
+      "get": {
+        "description": "Return explainable personal taste-discovery views for the authenticated user.\n\nEvery view is deterministic and derived only from the user's own latest\neffective ratings and confirmed creator credits. A creator may appear in\nmultiple views, and each entry carries the supporting metrics and the exact\nrules that qualified it, so no ranking is unexplained. Every view has an\nexplicit minimum sample before it ranks creators, and missing creator\nmetadata is reported as partial coverage rather than negative evidence.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    db: Async database session.\n\nReturns:\n    Bounded discovery views in canonical order plus metadata-coverage state.",
+        "operationId": "get_creator_discoveries_endpoint_api_v1_creators_discoveries_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorDiscoveryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Creator Discoveries Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
     "/api/v1/creators/summaries": {
       "get": {
         "description": "Return bounded personal summary statistics for the requested creator keys.\n\nOnly creator keys visible in the authenticated user's own confirmed issue\nmetadata are summarized; unknown or foreign keys are silently omitted so a\ncreator key can never leak another user's library state.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    keys: Comma-separated canonical creator keys.\n    db: Async database session.\n\nReturns:\n    Batch summary keyed by requested visible creator keys, plus explicit\n    coverage state.\n\nRaises:\n    HTTPException: When the ``keys`` parameter is missing, unbounded, or malformed.",
@@ -21469,6 +22463,34 @@
           }
         ],
         "summary": "Get Creator Summaries Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
+    "/api/v1/creators/team-chemistry": {
+      "get": {
+        "description": "Return ranked recurring creator-team pairs for the authenticated user.\n\nA team is a pair of stable canonical creator identities credited together\non shared rated issues with eligible interior-storytelling roles. Pairs\nbelow ``min_shared_team_sample`` shared rated issues are never ranked, the\nreturned issue drilldown sample is bounded, and every metric stays\ndescriptive personal-reading data: no causation or significance is\nexpressed or implied.\n\nOnly creator identities visible in the authenticated user's own confirmed\nissue metadata are considered, so a creator key can never leak another\nuser's library state, and same-name creators remain distinct via their\ncanonical keys.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    db: Async database session.\n\nReturns:\n    Ranked bounded team pairs with shared sample, average, distribution,\n    baseline context, and navigable issue references, plus explicit\n    metadata-coverage state.",
+        "operationId": "get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorTeamChemistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Creator Team Chemistry Endpoint",
         "tags": [
           "creators",
           "creators"
@@ -22470,6 +23492,56 @@
           }
         ],
         "summary": "Export Custom Cbl",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "custom-cbls"
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/reader": {
+      "get": {
+        "description": "Explain the complete current list using the same authority as Roll.",
+        "operationId": "read_custom_cbl_api_v1_custom_cbls__list_id__reader_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingListReaderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Custom Cbl",
         "tags": [
           "dependencies",
           "dependencies",
@@ -28609,6 +29681,107 @@
         ]
       }
     },
+    "/api/v1/threads/excluded/threads": {
+      "get": {
+        "description": "List excluded threads with deterministic cursor-based pagination.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order – ``title`` or ``created``.\n    page_size: Threads per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Paginated excluded threads plus ``next_page_token`` when more pages exist.\n\nRaises:\n    HTTPException: If the sort value is unsupported or the page token is stale/malformed.",
+        "operationId": "list_excluded_threads_api_v1_threads_excluded_threads_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Sort order: title or created",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "created",
+              "description": "Sort order: title or created",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of threads to return per page (default 50, max 200)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Number of threads to return per page (default 50, max 200)",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor token for pagination continuation",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination continuation",
+              "title": "Page Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueThreadListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Excluded Threads",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/groups:batch": {
       "post": {
         "description": "List crossover groups for several owned threads in one request.",
@@ -29071,6 +30244,55 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/exclude": {
+      "post": {
+        "description": "Remove a thread from the active queue without deleting data.\n\nRaises:\n    HTTPException: 404 when not found; 400 when thread is not active.",
+        "operationId": "exclude_thread_api_v1_threads__thread_id__exclude_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Exclude Thread",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
     "/api/v1/threads/{thread_id}/issue-dependencies": {
       "get": {
         "description": "Return dependency edges for every issue in one thread using bulk queries.\n\nThis endpoint replaces the frontend's previous one-request-per-issue pattern.\nEmpty dependency payloads are included so clients can distinguish a complete\nresponse from missing data without issuing fallback requests.",
@@ -29487,6 +30709,55 @@
         "tags": [
           "reading-orders",
           "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/restore": {
+      "post": {
+        "description": "Restore an excluded thread back to the active queue.\n\nRaises:\n    HTTPException: 404 when not found; 400 when thread is not excluded.",
+        "operationId": "restore_thread_api_v1_threads__thread_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Thread",
+        "tags": [
+          "threads",
+          "threads"
         ]
       }
     },

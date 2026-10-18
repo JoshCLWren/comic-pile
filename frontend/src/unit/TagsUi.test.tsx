@@ -85,6 +85,41 @@ function emptyEffective(): EffectiveTagsResponse {
   return { target_type: 'Issue', target_id: 11, direct_tags: [], effective_tags: [] }
 }
 
+function mustReadTag(): Tag {
+  return {
+    id: 5,
+    name: 'Must Read',
+    normalized_name: 'must read',
+    scope: 'global',
+    owner_user_id: null,
+    color: '#DC2626',
+    created_at: '',
+    updated_at: '',
+  }
+}
+
+/**
+ * "Must Read" reaches issue #11 only through its thread The Ultimates
+ * (issue #3426), so the picker must never offer a plain add for it.
+ */
+function inheritedEffective(): EffectiveTagsResponse {
+  const tag = mustReadTag()
+  return {
+    target_type: 'Issue',
+    target_id: 11,
+    direct_tags: [],
+    effective_tags: [
+      {
+        tag,
+        direct: false,
+        sources: [
+          { target_type: 'Thread', target_id: 5, display_name: 'The Ultimates' },
+        ],
+      },
+    ],
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockedAdminFlag.mockReturnValue(false)
@@ -1055,5 +1090,112 @@ describe('BulkTagToolbar (issue #3032)', () => {
     await user.click(screen.getByRole('button', { name: 'Clear selection' }))
     expect(onClearSelection).toHaveBeenCalled()
     expect(screen.getByText('3 selected')).toBeInTheDocument()
+  })
+})
+
+describe('TagEditor inherited tags (issue #3426)', () => {
+  function renderEditor(props: Partial<React.ComponentProps<typeof TagEditor>> = {}) {
+    return render(
+      <MemoryRouter>
+        <TagEditor
+          targetType="Issue"
+          targetId={11}
+          targetLabel="#11"
+          isOpen
+          onClose={vi.fn()}
+          {...props}
+        />
+      </MemoryRouter>,
+    )
+  }
+
+  it('annotates a tag the issue already inherits instead of offering Add', async () => {
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(inheritedEffective())
+    mockedTagsApi.list.mockResolvedValue({ tags: [mustReadTag()] })
+
+    renderEditor()
+
+    // The picker marker carries the inheritance source; the chip list in the
+    // same modal also renders its own "Inherited" marker, so the picker state
+    // is keyed by that title.
+    const marker = await screen.findByTitle('Inherited from The Ultimates')
+    expect(marker).toHaveTextContent('Inherited')
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull()
+    expect(mockedTagsApi.assign).not.toHaveBeenCalled()
+  })
+
+  it('still offers Add for a tag the issue neither holds directly nor inherits', async () => {
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(inheritedEffective())
+    mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
+
+    renderEditor()
+
+    expect(await screen.findByRole('button', { name: 'Add' })).toBeInTheDocument()
+    expect(screen.queryByTitle('Inherited from The Ultimates')).toBeNull()
+    expect(screen.queryByText('Added')).toBeNull()
+  })
+
+  it('explains an inherited duplicate in the reuse box instead of offering another add', async () => {
+    const user = userEvent.setup()
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(inheritedEffective())
+    mockedTagsApi.list.mockResolvedValue({ tags: [mustReadTag()] })
+
+    renderEditor()
+    await user.type(screen.getByLabelText('New tag name'), 'Must Read')
+
+    const box = await screen.findByRole('alert')
+    expect(box).toHaveTextContent('already tags this issue via The Ultimates')
+    expect(within(box).queryByRole('button')).toBeNull()
+    expect(mockedTagsApi.assign).not.toHaveBeenCalled()
+    expect(mockedTagsApi.create).not.toHaveBeenCalled()
+  })
+
+  it('refuses to double-tag when creation matches a global tag that is inherited', async () => {
+    const user = userEvent.setup()
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(inheritedEffective())
+    mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
+    mockedTagsApi.create.mockResolvedValue({
+      tag: mustReadTag(),
+      redirected_to_global: true,
+      near_matches: [],
+    })
+
+    renderEditor()
+    await user.type(screen.getByLabelText('New tag name'), 'Must Read')
+    await user.click(await screen.findByRole('button', { name: 'Create and add' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'already tags this issue via The Ultimates',
+    )
+    expect(mockedTagsApi.assign).not.toHaveBeenCalled()
+  })
+
+  it('refuses to double-tag when reusing a global near-match that is inherited', async () => {
+    const user = userEvent.setup()
+    mockedTagsApi.effectiveForIssue.mockResolvedValue(inheritedEffective())
+    mockedTagsApi.list.mockResolvedValue({ tags: [makeTag(1)] })
+    mockedTagsApi.create.mockResolvedValue({
+      tag: makeTag(10),
+      redirected_to_global: false,
+      near_matches: [
+        {
+          id: 5,
+          name: 'Must Read',
+          color: '#DC2626',
+          normalized_name: 'must read',
+          scope: 'global',
+        },
+      ],
+    })
+
+    renderEditor()
+    await user.type(screen.getByLabelText('New tag name'), 'Must Read')
+    await user.click(await screen.findByRole('button', { name: 'Create and add' }))
+    await user.click(await screen.findByRole('button', { name: /Use global “Must Read”/i }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'already tags this issue via The Ultimates',
+    )
+    expect(mockedTagsApi.assign).not.toHaveBeenCalled()
   })
 })

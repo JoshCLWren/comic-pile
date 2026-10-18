@@ -56,7 +56,7 @@ async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "START_DIE" in str(exc_info.value)
 
 async def test_get_or_create_ignores_advisory_lock_failure(
-    async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    async_db: AsyncSession, default_user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Advisory lock errors should not prevent session creation."""
     original_execute = async_db.execute
@@ -68,9 +68,9 @@ async def test_get_or_create_ignores_advisory_lock_failure(
 
     monkeypatch.setattr(async_db, "execute", wrapped_execute)
 
-    session = await get_or_create(async_db, user_id=1)
+    session = await get_or_create(async_db, user_id=default_user.id)
     assert session.id is not None
-    assert session.user_id == 1
+    assert session.user_id == default_user.id
 
 async def test_is_active_true(async_db: AsyncSession, default_user: User) -> None:
     """Session created < 6 hours ago is active."""
@@ -141,6 +141,8 @@ async def test_should_start_new_false(async_db: AsyncSession, default_user: User
 
 async def test_get_or_create_existing(async_db: AsyncSession, sample_data: dict) -> None:
     """Returns existing active session (< 6 hours old)."""
+    user_id = sample_data["user"].id
+
     # End all sample sessions first
     for session in sample_data["sessions"]:
         session.ended_at = datetime.now(UTC)
@@ -150,23 +152,25 @@ async def test_get_or_create_existing(async_db: AsyncSession, sample_data: dict)
     active_session = ReadingSession(
         started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
-        user_id=1,
+        user_id=user_id,
     )
     async_db.add(active_session)
     await async_db.commit()
 
-    result = await get_or_create(async_db, user_id=1)
+    result = await get_or_create(async_db, user_id=user_id)
     assert result.id == active_session.id
 
 async def test_get_or_create_new(async_db: AsyncSession, sample_data: dict) -> None:
     """Creates new session when none active."""
+    user_id = sample_data["user"].id
+
     for session in sample_data["sessions"]:
         session.ended_at = datetime.now(UTC)
     await async_db.commit()
 
-    new_session = await get_or_create(async_db, user_id=1)
+    new_session = await get_or_create(async_db, user_id=user_id)
     assert new_session.start_die == 6
-    assert new_session.user_id == 1
+    assert new_session.user_id == user_id
 
 async def test_end_session(async_db: AsyncSession, sample_data: dict) -> None:
     """Marks session as ended."""

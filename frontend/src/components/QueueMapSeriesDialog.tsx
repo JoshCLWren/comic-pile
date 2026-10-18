@@ -15,7 +15,7 @@ import type {
   SeriesMappingClassification,
   SeriesMappingPreviewRow,
 } from '../services/api-series-mapping'
-import { getApiErrorDetail } from '../utils/apiError'
+import { getApiErrorDetail, isIndeterminateApiOutcome } from '../utils/apiError'
 
 interface QueueMapSeriesDialogProps {
   isOpen: boolean
@@ -248,10 +248,16 @@ export default function QueueMapSeriesDialog({
 
   const commitErrorDetail = commit.isError ? getApiErrorDetail(commit.error) : null
   const previewIsStale = commitErrorDetail !== null && STALE_PREVIEW_DETAILS.has(commitErrorDetail)
+  const commitOutcomeUnknown = commit.isError && isIndeterminateApiOutcome(commit.error)
 
   const commitMessage = (() => {
     if (!commit.isError) return null
     if (previewIsStale) return 'That preview is out of date. Reviewing the series again.'
+    if (commitOutcomeUnknown) {
+      // A lost response does not prove nothing changed: the mappings may have committed.
+      // Approving again replays the same idempotency key, so retrying is safe.
+      return 'Could not confirm the mapping result. Any saved mappings are safe; map again to replay the request.'
+    }
     return 'Could not map the series. Nothing was changed.'
   })()
 
@@ -412,14 +418,28 @@ export default function QueueMapSeriesDialog({
                 >
                   The mapping plan could not be loaded. Nothing was changed.
                 </p>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  data-testid="queue-map-series-dismiss"
-                  className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
-                >
-                  Done
-                </button>
+                {/* A provider outage or a transient fetch failure is recoverable, so the
+                    failing volume keeps a Try-again path instead of forcing a different
+                    volume (issue #3504). */}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    data-testid="queue-map-series-dismiss"
+                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
+                  >
+                    Done
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void preview.refetch()}
+                    disabled={preview.isFetching}
+                    data-testid="queue-map-series-retry"
+                    className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
+                  >
+                    {preview.isFetching ? 'Retrying...' : 'Try again'}
+                  </button>
+                </div>
               </div>
             )}
 

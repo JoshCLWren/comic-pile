@@ -72,6 +72,7 @@ export interface paths {
          *
          *     Args:
          *         db: SQLAlchemy session for database operations.
+         *         current_user: Authenticated user making the request.
          *
          *     Returns:
          *         Dictionary with counts of deleted threads, sessions, and events.
@@ -191,6 +192,7 @@ export interface paths {
          *     Args:
          *         file: CSV file to import.
          *         db: SQLAlchemy session for database operations.
+         *         current_user: Authenticated user importing the threads.
          *
          *     Returns:
          *         Dictionary with "imported" count and "errors" list.
@@ -1087,6 +1089,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Series Import Status
+         * @description Report whether this user already imported one ComicVine volume.
+         *
+         *     A client whose ``series:import`` response was lost asks this endpoint
+         *     before reporting failure, so a slow import that actually committed is
+         *     recovered instead of being reported as an error or retried into a
+         *     duplicate series. The answer is scoped to the calling user's threads.
+         *
+         *     Args:
+         *         comicvine_volume_id: ComicVine volume ID the client submitted.
+         *         current_user: Authenticated caller.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         SeriesImportStatusResponse with the owned thread when the volume is
+         *         already imported for this user.
+         */
+        get: operations["api_series_import_status_api_v1_comicvine_series__comicvine_volume_id__import_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/comicvine/series/{comicvine_volume_id}/issues": {
         parameters: {
             query?: never;
@@ -1334,8 +1370,8 @@ export interface paths {
          * Get Continuity Plan Reader
          * @description Return progress, available now, blocked next, and ordered lanes.
          *
-         *     Blocking uses canonical issue-level Dependencies only. The payload is the
-         *     primary reader view for a Reading Plan and does not change Roll eligibility.
+         *     Availability uses the same guarded authority as Roll. Disabled readers retain
+         *     legacy dependencies; inspecting a plan never activates list execution.
          */
         get: operations["get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get"];
         put?: never;
@@ -1561,6 +1597,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/creators/discoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Creator Discoveries Endpoint
+         * @description Return explainable personal taste-discovery views for the authenticated user.
+         *
+         *     Every view is deterministic and derived only from the user's own latest
+         *     effective ratings and confirmed creator credits. A creator may appear in
+         *     multiple views, and each entry carries the supporting metrics and the exact
+         *     rules that qualified it, so no ranking is unexplained. Every view has an
+         *     explicit minimum sample before it ranks creators, and missing creator
+         *     metadata is reported as partial coverage rather than negative evidence.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is aggregated.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Bounded discovery views in canonical order plus metadata-coverage state.
+         */
+        get: operations["get_creator_discoveries_endpoint_api_v1_creators_discoveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/creators/summaries": {
         parameters: {
             query?: never;
@@ -1589,6 +1659,47 @@ export interface paths {
          *         HTTPException: When the ``keys`` parameter is missing, unbounded, or malformed.
          */
         get: operations["get_creator_summaries_endpoint_api_v1_creators_summaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/creators/team-chemistry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Creator Team Chemistry Endpoint
+         * @description Return ranked recurring creator-team pairs for the authenticated user.
+         *
+         *     A team is a pair of stable canonical creator identities credited together
+         *     on shared rated issues with eligible interior-storytelling roles. Pairs
+         *     below ``min_shared_team_sample`` shared rated issues are never ranked, the
+         *     returned issue drilldown sample is bounded, and every metric stays
+         *     descriptive personal-reading data: no causation or significance is
+         *     expressed or implied.
+         *
+         *     Only creator identities visible in the authenticated user's own confirmed
+         *     issue metadata are considered, so a creator key can never leak another
+         *     user's library state, and same-name creators remain distinct via their
+         *     canonical keys.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is aggregated.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Ranked bounded team pairs with shared sample, average, distribution,
+         *         baseline context, and navigable issue references, plus explicit
+         *         metadata-coverage state.
+         */
+        get: operations["get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1939,6 +2050,26 @@ export interface paths {
          * @description Export one custom list as a portable .cbl XML document.
          */
         get: operations["export_custom_cbl_api_v1_custom_cbls__list_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-cbls/{list_id}/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Custom Cbl
+         * @description Explain the complete current list using the same authority as Roll.
+         */
+        get: operations["read_custom_cbl_api_v1_custom_cbls__list_id__reader_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4983,6 +5114,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/excluded/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Excluded Threads
+         * @description List excluded threads with deterministic cursor-based pagination.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         search: Optional case-insensitive title search filter.
+         *         sort: Sort order – ``title`` or ``created``.
+         *         page_size: Threads per page (default 50, max 200).
+         *         page_token: Opaque cursor token for pagination continuation.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         Paginated excluded threads plus ``next_page_token`` when more pages exist.
+         *
+         *     Raises:
+         *         HTTPException: If the sort value is unsupported or the page token is stale/malformed.
+         */
+        get: operations["list_excluded_threads_api_v1_threads_excluded_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/groups:batch": {
         parameters: {
             query?: never;
@@ -5152,6 +5318,29 @@ export interface paths {
         get: operations["check_thread_dependency_order_api_v1_threads__thread_id__dependency_order_check_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/exclude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exclude Thread
+         * @description Remove a thread from the active queue without deleting data.
+         *
+         *     Raises:
+         *         HTTPException: 404 when not found; 400 when thread is not active.
+         */
+        post: operations["exclude_thread_api_v1_threads__thread_id__exclude_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5349,6 +5538,29 @@ export interface paths {
         get: operations["get_thread_reading_orders_api_v1_threads__thread_id__reading_orders_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Thread
+         * @description Restore an excluded thread back to the active queue.
+         *
+         *     Raises:
+         *         HTTPException: 404 when not found; 400 when thread is not excluded.
+         */
+        post: operations["restore_thread_api_v1_threads__thread_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5993,9 +6205,11 @@ export interface components {
         };
         /**
          * BlockingDependency
-         * @description A single dependency blocking a thread, described in reader language.
+         * @description One unread Issue required by a list or explicit prerequisite.
          */
         BlockingDependency: {
+            /** Issue Id */
+            issue_id?: number | null;
             /** Issue Number */
             issue_number: string;
             /** Label */
@@ -7672,6 +7886,243 @@ export interface components {
             most_rated_series?: components["schemas"]["CreatorSeriesGroup"] | null;
         };
         /**
+         * CreatorDiscoveryCoverage
+         * @description Explicit metadata-coverage state for the discovery aggregation.
+         */
+        CreatorDiscoveryCoverage: {
+            /**
+             * Rated Issues Total
+             * @description Rated issues in the library.
+             */
+            rated_issues_total: number;
+            /**
+             * Rated Issues With Creator Metadata
+             * @description Rated issues carrying at least one usable confirmed credit.
+             */
+            rated_issues_with_creator_metadata: number;
+            /**
+             * Ratings Complete
+             * @description True only when every rated issue carries confirmed creator metadata.
+             */
+            ratings_complete: boolean;
+        };
+        /**
+         * CreatorDiscoveryEntry
+         * @description One canonical creator inside a discovery view with supporting metrics.
+         */
+        CreatorDiscoveryEntry: {
+            /**
+             * Average Rating
+             * @description Personal average across the rated sample.
+             */
+            average_rating?: number | null;
+            /**
+             * Canonical Creator Key
+             * @description Stable normalized creator key (e.g. ``creator:12345``).
+             */
+            canonical_creator_key: string;
+            /**
+             * Display Name
+             * @description Human-readable creator name from confirmed issue metadata.
+             */
+            display_name: string;
+            /**
+             * Earlier Average Rating
+             * @description Average of the earlier half of a trend-eligible history.
+             */
+            earlier_average_rating?: number | null;
+            /**
+             * Max Rating
+             * @description Highest effective rating.
+             */
+            max_rating?: number | null;
+            /**
+             * Median Rating
+             * @description Personal median across the rated sample.
+             */
+            median_rating?: number | null;
+            /**
+             * Min Rating
+             * @description Lowest effective rating.
+             */
+            min_rating?: number | null;
+            /**
+             * Normalized Roles
+             * @description Distinct confirmed roles seen for this creator.
+             */
+            normalized_roles?: string[];
+            /**
+             * Rated Issue Count
+             * @description Headline-eligible rated issues contributing to the metrics.
+             */
+            rated_issue_count: number;
+            /**
+             * Rating Spread
+             * @description Highest minus lowest effective rating, or null when unrated.
+             */
+            rating_spread?: number | null;
+            /**
+             * Rating Stddev
+             * @description Population standard deviation across the rated sample, or null when unrated.
+             */
+            rating_stddev?: number | null;
+            /**
+             * Read Unrated Issue Count
+             * @description Attributed read-but-unrated owned issues.
+             * @default 0
+             */
+            read_unrated_issue_count: number;
+            /**
+             * Reasons
+             * @description Every deterministic rule that qualified this creator for this view.
+             */
+            reasons?: components["schemas"]["CreatorDiscoveryReason"][];
+            /**
+             * Recent Average Rating
+             * @description Average of the recent half of a trend-eligible history.
+             */
+            recent_average_rating?: number | null;
+            /**
+             * Top Rating Count
+             * @description Count of ratings at the top of the scale.
+             * @default 0
+             */
+            top_rating_count: number;
+            /**
+             * Top Rating Rate
+             * @description Proportion of ratings at the top of the scale (0.0-1.0).
+             */
+            top_rating_rate?: number | null;
+            /**
+             * Trend Delta
+             * @description Recent average minus earlier average for the trend view.
+             */
+            trend_delta?: number | null;
+            /**
+             * Trend Direction
+             * @description ``warmed`` or ``cooled`` for the trend view, otherwise null.
+             */
+            trend_direction?: string | null;
+            /**
+             * Trend Sample Count
+             * @description Rated issues carrying a timestamp that supported a trend, else 0.
+             * @default 0
+             */
+            trend_sample_count: number;
+            /**
+             * Unread Issue Count
+             * @description Attributed unread owned issues for this creator.
+             * @default 0
+             */
+            unread_issue_count: number;
+        };
+        /**
+         * CreatorDiscoveryMode
+         * @description The fixed, deterministic set of personal taste-discovery views.
+         *
+         *     Ordering in this enum is the canonical display order of the views.
+         * @enum {string}
+         */
+        CreatorDiscoveryMode: "consistently_loved" | "polarizing" | "most_read" | "highest_top_rating_rate" | "great_average_small_sample" | "loved_with_unread" | "moved_over_time";
+        /**
+         * CreatorDiscoveryReason
+         * @description One deterministic rule that qualified a creator for a view.
+         *
+         *     ``value`` is the observed metric and ``threshold`` is the fixed rule the
+         *     metric had to satisfy. ``comparison`` is one of ``gte``, ``lte``, ``gt``,
+         *     ``lt`` so the UI can render the relationship without parsing prose.
+         */
+        CreatorDiscoveryReason: {
+            /**
+             * Comparison
+             * @description One of gte, lte, gt, lt.
+             */
+            comparison: string;
+            /**
+             * Label
+             * @description Human-readable metric name for UI copy.
+             */
+            label: string;
+            /**
+             * Metric
+             * @description Machine key of the qualifying metric.
+             */
+            metric: string;
+            /**
+             * Threshold
+             * @description Threshold the value had to satisfy.
+             */
+            threshold: number;
+            /**
+             * Value
+             * @description Observed value of the metric.
+             */
+            value: number;
+        };
+        /**
+         * CreatorDiscoveryResponse
+         * @description Response body for the bounded personal taste-discovery endpoint.
+         */
+        CreatorDiscoveryResponse: {
+            /** @description Metadata-coverage state distinguishing complete from lower bounds. */
+            coverage: components["schemas"]["CreatorDiscoveryCoverage"];
+            /**
+             * Max Entries Per View
+             * @description Bounding constant applied per view.
+             */
+            max_entries_per_view: number;
+            /**
+             * Minimum Reliable Sample
+             * @description The canonical personal-reliability rated-sample floor.
+             */
+            minimum_reliable_sample: number;
+            /**
+             * Views
+             * @description One entry per view in canonical order, including empty views.
+             */
+            views?: components["schemas"]["CreatorDiscoveryView"][];
+        };
+        /**
+         * CreatorDiscoveryView
+         * @description One bounded taste-discovery view and its qualifying creators.
+         */
+        CreatorDiscoveryView: {
+            /**
+             * Description
+             * @description Deterministic explanation of what qualifies a creator.
+             */
+            description: string;
+            /** Entries */
+            entries?: components["schemas"]["CreatorDiscoveryEntry"][];
+            /**
+             * Max Entries
+             * @description Bounding constant applied to entries.
+             */
+            max_entries: number;
+            /**
+             * Min Sample
+             * @description Minimum rated sample the view requires (0 = no floor).
+             */
+            min_sample: number;
+            /** @description Stable view identifier. */
+            mode: components["schemas"]["CreatorDiscoveryMode"];
+            /**
+             * Title
+             * @description Short human-readable view title.
+             */
+            title: string;
+            /**
+             * Total
+             * @description Qualifying creators before bounded truncation.
+             */
+            total: number;
+            /**
+             * Truncated
+             * @description True when more creators qualified than the bounded response returns.
+             */
+            truncated: boolean;
+        };
+        /**
          * CreatorIssueRow
          * @description Detail for a specific issue attributed to the creator.
          */
@@ -8447,6 +8898,182 @@ export interface components {
              * @default 0
              */
             upcoming_count: number;
+        };
+        /**
+         * CreatorTeamChemistryResponse
+         * @description Response payload for the creator team-chemistry endpoint.
+         */
+        CreatorTeamChemistryResponse: {
+            coverage?: components["schemas"]["CreatorTeamCoverage"] | null;
+            /**
+             * Max Ranked Pairs
+             * @description Bounding constant applied to the returned pair list.
+             */
+            max_ranked_pairs: number;
+            /**
+             * Min Shared Team Sample
+             * @description Minimum shared sample required before a pair may rank.
+             * @default 3
+             */
+            min_shared_team_sample: number;
+            /**
+             * Pairs
+             * @description Ranked recurring teams, strongest shared average first.
+             */
+            pairs?: components["schemas"]["CreatorTeamPair"][];
+            /**
+             * Pairs Total
+             * @description Pairs meeting the minimum shared sample before ranking truncation.
+             * @default 0
+             */
+            pairs_total: number;
+        };
+        /**
+         * CreatorTeamCoverage
+         * @description Explicit metadata-coverage state for the team-chemistry aggregation.
+         */
+        CreatorTeamCoverage: {
+            /**
+             * Rated Issues Total
+             * @description Rated issues in the library.
+             */
+            rated_issues_total: number;
+            /**
+             * Rated Issues With Creator Metadata
+             * @description Rated issues carrying at least one usable confirmed credit.
+             */
+            rated_issues_with_creator_metadata: number;
+            /**
+             * Ratings Complete
+             * @description True when every rated issue carries confirmed creator metadata; otherwise pair results are lower bounds.
+             */
+            ratings_complete: boolean;
+        };
+        /**
+         * CreatorTeamIssueRef
+         * @description One bounded, navigable shared-issue drilldown reference.
+         */
+        CreatorTeamIssueRef: {
+            /** Effective Rating */
+            effective_rating?: number | null;
+            /** Issue Id */
+            issue_id: number;
+            /**
+             * Issue Number
+             * @description Issue number within the thread.
+             */
+            issue_number: string;
+            /**
+             * Status
+             * @description Owned issue status (read/unread).
+             */
+            status: string;
+            /**
+             * Thread Id
+             * @description Owning local thread/series id.
+             */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Thread title, for display only.
+             */
+            thread_title: string;
+        };
+        /**
+         * CreatorTeamMember
+         * @description One canonical creator identity inside a ranked team pair.
+         */
+        CreatorTeamMember: {
+            /**
+             * Baseline Average Rating
+             * @description Creator's personal baseline average, or null when unrated.
+             */
+            baseline_average_rating?: number | null;
+            /**
+             * Baseline Rated Count
+             * @description Creator's personal headline-eligible rated sample size.
+             */
+            baseline_rated_count: number;
+            /**
+             * Canonical Creator Key
+             * @description Stable ``creator:<id>`` key.
+             */
+            canonical_creator_key: string;
+            /**
+             * Difference From Baseline
+             * @description Shared-pair average minus this creator's baseline average. Descriptive context only.
+             */
+            difference_from_baseline?: number | null;
+            /**
+             * Display Name
+             * @description Latest confirmed display name.
+             */
+            display_name: string;
+            /**
+             * Roles
+             * @description Interior-storytelling roles on shared issues.
+             */
+            roles: string[];
+        };
+        /**
+         * CreatorTeamPair
+         * @description One ranked recurring creator pair with explainable shared metrics.
+         */
+        CreatorTeamPair: {
+            /**
+             * Creators
+             * @description The two canonical creator identities of this team.
+             */
+            creators: components["schemas"]["CreatorTeamMember"][];
+            /**
+             * Max Shared Issue Refs
+             * @description Bounding constant applied to the returned issue sample.
+             * @default 5
+             */
+            max_shared_issue_refs: number;
+            /**
+             * Pair Key
+             * @description Stable unordered pair key, ``a|b`` sorted.
+             */
+            pair_key: string;
+            /**
+             * Shared Average Rating
+             * @description Average of the shared issues' effective ratings.
+             */
+            shared_average_rating?: number | null;
+            /** Shared Issue Refs */
+            shared_issue_refs?: components["schemas"]["CreatorTeamIssueRef"][];
+            /** Shared Median Rating */
+            shared_median_rating?: number | null;
+            /**
+             * Shared Rated Issue Count
+             * @description Shared rated issues carrying eligible interior credits for both members.
+             */
+            shared_rated_issue_count: number;
+            /** Shared Rating Distribution */
+            shared_rating_distribution?: {
+                [key: string]: number;
+            };
+            /** Shared Series */
+            shared_series?: components["schemas"]["CreatorTeamSeriesRef"][];
+        };
+        /**
+         * CreatorTeamSeriesRef
+         * @description Bounded shared-series context behind one team pair.
+         */
+        CreatorTeamSeriesRef: {
+            /**
+             * Shared Issue Count
+             * @description Pair issues from this thread.
+             */
+            shared_issue_count: number;
+            /** Thread Id */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Thread title, for display only.
+             */
+            thread_title: string;
         };
         /**
          * CrossRepoDeliveryRequest
@@ -10990,6 +11617,72 @@ export interface components {
             issue_name: string;
         };
         /**
+         * ReadingListReaderEntry
+         * @description One current list member with the execution authority's decision.
+         */
+        ReadingListReaderEntry: {
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "read" | "available" | "blocked" | "later" | "excluded" | "inactive" | "legacy";
+            /** Checkpoint Target Issue Ids */
+            checkpoint_target_issue_ids?: number[];
+            explanation?: components["schemas"]["BlockingExplanation"] | null;
+            /**
+             * Gate
+             * @default none
+             * @enum {string}
+             */
+            gate: "none" | "hold" | "after_previous";
+            /** Id */
+            id: number;
+            /**
+             * Is Checkpoint
+             * @default false
+             */
+            is_checkpoint: boolean;
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Position */
+            position: number;
+            /** Series Name */
+            series_name: string;
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * ReadingListReaderResponse
+         * @description Full current list order; never reconstructed from plan membership.
+         */
+        ReadingListReaderResponse: {
+            /** Entries */
+            entries?: components["schemas"]["ReadingListReaderEntry"][];
+            /**
+             * Execution Mode
+             * @enum {string}
+             */
+            execution_mode: "legacy" | "option_e";
+            /** List Id */
+            list_id: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "strict" | "loose";
+            /** Name */
+            name: string;
+        };
+        /**
          * ReadingModeResponse
          * @description Current reading-mode state for the active session.
          */
@@ -11210,7 +11903,7 @@ export interface components {
         };
         /**
          * ReadingPlanBlocker
-         * @description One unread canonical Dependency source holding a plan issue back.
+         * @description One unread Issue required by the current execution authority.
          */
         ReadingPlanBlocker: {
             /** Explanation */
@@ -11311,7 +12004,7 @@ export interface components {
              * Availability
              * @enum {string}
              */
-            availability: "read" | "available" | "blocked" | "later";
+            availability: "read" | "available" | "blocked" | "later" | "excluded" | "inactive";
             /** Blockers */
             blockers?: components["schemas"]["ReadingPlanBlocker"][];
             /** Display Position */
@@ -11367,6 +12060,12 @@ export interface components {
             available_now: components["schemas"]["ReadingPlanReaderIssue"][];
             /** Blocked Next */
             blocked_next: components["schemas"]["ReadingPlanReaderIssue"][];
+            /**
+             * Execution Mode
+             * @default legacy
+             * @enum {string}
+             */
+            execution_mode: "legacy" | "option_e";
             /** Lanes */
             lanes: components["schemas"]["ReadingPlanReaderLane"][];
             /** Name */
@@ -11778,6 +12477,8 @@ export interface components {
          * @description Lightweight thread summary for the roll bootstrap pool.
          */
         RollBootstrapThread: {
+            /** Blocking Reasons */
+            blocking_reasons?: string[];
             /** Format */
             format: string;
             /** Id */
@@ -12159,6 +12860,39 @@ export interface components {
              * @description Series name
              */
             series_name: string;
+        };
+        /**
+         * SeriesImportStatusResponse
+         * @description Server truth about one ComicVine volume's presence in the caller's queue.
+         *
+         *     A client that loses the ``series:import`` response (timeout, dropped
+         *     connection, gateway timeout) re-checks this endpoint before reporting
+         *     failure, so the answer must reflect committed server state for the
+         *     calling user only and must never leak another user's queue.
+         */
+        SeriesImportStatusResponse: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id: number;
+            /**
+             * Imported
+             * @description True when the calling user already owns a thread confirmed against this ComicVine volume.
+             */
+            imported: boolean;
+            /**
+             * Issue Count
+             * @description Issues the existing thread tracks, or null when not imported. The client reports this server count after a recovered import.
+             */
+            issue_count?: number | null;
+            /**
+             * Series Name
+             * @description Title of the existing thread, or null when not imported.
+             */
+            series_name?: string | null;
+            /**
+             * Thread Id
+             * @description Existing thread ID, or null when the volume is not imported.
+             */
+            thread_id?: number | null;
         };
         /**
          * SeriesMappingCommitRequest
@@ -15164,6 +15898,37 @@ export interface operations {
             };
         };
     };
+    api_series_import_status_api_v1_comicvine_series__comicvine_volume_id__import_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     api_get_series_issues_api_v1_comicvine_series__comicvine_volume_id__issues_get: {
         parameters: {
             query?: {
@@ -15958,6 +16723,26 @@ export interface operations {
             };
         };
     };
+    get_creator_discoveries_endpoint_api_v1_creators_discoveries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorDiscoveryResponse"];
+                };
+            };
+        };
+    };
     get_creator_summaries_endpoint_api_v1_creators_summaries_get: {
         parameters: {
             query?: {
@@ -15986,6 +16771,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorTeamChemistryResponse"];
                 };
             };
         };
@@ -16477,6 +17282,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_custom_cbl_api_v1_custom_cbls__list_id__reader_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingListReaderResponse"];
                 };
             };
             /** @description Validation Error */
@@ -20164,6 +21000,43 @@ export interface operations {
             };
         };
     };
+    list_excluded_threads_api_v1_threads_excluded_threads_get: {
+        parameters: {
+            query?: {
+                search?: string | null;
+                /** @description Sort order: title or created */
+                sort?: string;
+                /** @description Number of threads to return per page (default 50, max 200) */
+                page_size?: number;
+                /** @description Opaque cursor token for pagination continuation */
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueThreadListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_thread_groups_batch_api_v1_threads_groups_batch_post: {
         parameters: {
             query?: never;
@@ -20452,6 +21325,37 @@ export interface operations {
             };
         };
     };
+    exclude_thread_api_v1_threads__thread_id__exclude_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_thread_issue_dependencies_api_v1_threads__thread_id__issue_dependencies_get: {
         parameters: {
             query?: never;
@@ -20671,6 +21575,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_thread_api_v1_threads__thread_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
                 };
             };
             /** @description Validation Error */

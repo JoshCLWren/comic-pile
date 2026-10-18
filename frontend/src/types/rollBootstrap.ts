@@ -10,6 +10,7 @@ export interface RollBootstrapThread {
   format: string
   issue_id?: number | null
   issue_number?: string | null
+  blocking_reasons?: string[]
   route_labels?: string[]
   last_activity_at?: string | null
   /** Visible direct tags, so a die face shows tag context before rolling (#3425). */

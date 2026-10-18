@@ -1,5 +1,15 @@
 import api from './api'
 
+/**
+ * Request budget for one ComicVine series import.
+ *
+ * The provider fetch plus per-issue adoption is a server-side batch job, so it
+ * needs far more headroom than the shared 10s default used for ordinary reads
+ * and writes. Anything still slower than this is treated as an unknown outcome
+ * and resolved with a status re-check rather than a plain failure.
+ */
+export const SERIES_IMPORT_TIMEOUT_MS = 120_000
+
 export interface ComicVineCreator {
   creator_id?: number | null
   name: string
@@ -84,6 +94,19 @@ export interface ComicVineImportSeriesResult {
    * retry adopted into the original series rather than duplicating it.
    */
   thread_created: boolean
+}
+
+/**
+ * Server truth about whether the calling user already owns this ComicVine
+ * volume. A client whose import response was lost re-checks before reporting
+ * failure so a committed import is recovered instead of retried as a duplicate.
+ */
+export interface ComicVineSeriesImportStatus {
+  comicvine_volume_id: number
+  imported: boolean
+  thread_id: number | null
+  series_name: string | null
+  issue_count: number | null
 }
 
 export interface ComicVineIssueIntelligence {
@@ -208,7 +231,20 @@ export const comicVineApi = {
   importIssue: (payload: ComicVineImportIssuePayload) =>
     api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
   importSeries: (payload: ComicVineImportSeriesPayload) =>
-    api.post<ComicVineImportSeriesResult, ComicVineImportSeriesPayload>('/v1/comicvine/series:import', payload),
+    // A series import adopts every provider issue for one volume, so a long run
+    // routinely outlasts the shared 10s client default. The server keeps working
+    // after the client gives up, which used to surface as a bogus "Network
+    // error" on an import that had already succeeded (#3445). This request gets
+    // its own budget instead of raising the default for every other call.
+    api.post<ComicVineImportSeriesResult, ComicVineImportSeriesPayload>(
+      '/v1/comicvine/series:import',
+      payload,
+      { timeout: SERIES_IMPORT_TIMEOUT_MS },
+    ),
+  getSeriesImportStatus: (volumeId: number) =>
+    api.get<ComicVineSeriesImportStatus>(
+      `/v1/comicvine/series/${volumeId}/import-status`,
+    ),
   searchSeries: (query: string, limit = 10, offset = 0) =>
     api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit, offset } }),
   resolveIdentity: (input: string) =>

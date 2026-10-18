@@ -12,6 +12,7 @@ from app.continuity_chains import resolve_continuity_chains
 from app.models import Event, Issue, ReadingSession, Thread
 from app.roll_recovery import build_roll_recovery
 from app.schemas.roll import RollRecoveryInfo
+from app.services.reading_eligibility_service import get_execution_eligibility
 from comic_pile.reading_session import get_current_die_for_session, get_or_create
 
 
@@ -107,9 +108,15 @@ async def switch_pending_roll_to_prerequisite(
     )
     original_title = original_thread_result.scalar_one_or_none()
 
+    eligibility = await get_execution_eligibility(db, user_id)
+    target_state = eligibility.threads.get(target_thread.id) if eligibility is not None else None
+    target_frontier = (
+        target_state.next_issue_id if target_state is not None else target_thread.next_unread_issue_id
+    )
     if (
         target_issue.status != "unread"
-        or target_thread.next_unread_issue_id != target_issue.id
+        or target_frontier != target_issue.id
+        or (eligibility is not None and target_thread.id not in eligibility.candidate_ids())
         or target_thread.status != "active"
     ):
         refreshed = await build_roll_recovery(
@@ -120,20 +127,21 @@ async def switch_pending_roll_to_prerequisite(
         )
         raise _stale_recovery(refreshed)
 
-    target_readiness = await resolve_continuity_chains(
-        db,
-        user_id=user_id,
-        node_type="issue",
-        node_id=target_issue.id,
-    )
-    if target_readiness.direct_blockers:
-        refreshed = await build_roll_recovery(
+    if eligibility is None:
+        target_readiness = await resolve_continuity_chains(
             db,
             user_id=user_id,
-            pending_thread_id=original_thread_id,
-            pending_thread_title=original_title,
+            node_type="issue",
+            node_id=target_issue.id,
         )
-        raise _stale_recovery(refreshed)
+        if target_readiness.direct_blockers:
+            refreshed = await build_roll_recovery(
+                db,
+                user_id=user_id,
+                pending_thread_id=original_thread_id,
+                pending_thread_title=original_title,
+            )
+            raise _stale_recovery(refreshed)
 
     if locked_session.pending_thread_id == target_thread.id:
         return RollPrerequisiteSwitchResult(
@@ -184,6 +192,8 @@ async def switch_pending_roll_to_prerequisite(
             selection_method="dependency_recovery",
         )
     )
+    if eligibility is not None:
+        locked_session.pending_issue_id = target_issue_id
     locked_session.pending_thread_id = target_thread_id
     locked_session.pending_thread_updated_at = datetime.now(UTC)
     await db.commit()

@@ -784,10 +784,12 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("dependency_id", [None, 101])
 async def test_batch_apply_refuses_token_mismatch(
     async_db: AsyncSession,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    dependency_id: int | None,
 ) -> None:
     """Batch apply refuses when a safe row's snapshot token no longer matches."""
     user = await get_or_create_user_async(async_db)
@@ -815,6 +817,7 @@ async def test_batch_apply_refuses_token_mismatch(
     for issue in issues:
         async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue.id))
     reader_order = Dependency(
+        id=dependency_id,
         source_issue_id=issues[0].id,
         target_issue_id=issues[2].id,
         note="classified reader order",
@@ -831,6 +834,20 @@ async def test_batch_apply_refuses_token_mismatch(
         expected_group_names=(group.name,),
         plan_name="Batch Safe Family",
         reader_order_dependency_ids=(reader_order.id,),
+    )
+    # Fixture identities must not inherit production dependency classifications.
+    # ID 101 is deliberately covered because the production index marks it
+    # needs_review; sequence allocation previously made this test order-dependent.
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index", lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: ({reader_order.id: "reading_plan_order"}, {}),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
     )
     snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]

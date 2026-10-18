@@ -7,7 +7,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
 WORKER = ROOT / ".github" / "scripts" / "free-model-factory-worker.sh"
 
 
-def test_terminal_step_publishes_normalized_attempt_evidence():
+def test_terminal_step_publishes_normalized_attempt_evidence() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "factory-attempt-outcome:v1" in workflow
@@ -17,7 +17,7 @@ def test_terminal_step_publishes_normalized_attempt_evidence():
     assert "attempt_outcome='unknown_failure'" in workflow
 
 
-def test_worker_status_is_captured_after_attempt_code_exits():
+def test_worker_status_is_captured_after_attempt_code_exits() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     worker = WORKER.read_text(encoding="utf-8")
 
@@ -27,14 +27,14 @@ def test_worker_status_is_captured_after_attempt_code_exits():
     assert "Exit 2 and 3 are reserved for controller invariant/read failures" in worker
 
 
-def test_terminal_step_preserves_newer_attempt_evidence():
+def test_terminal_step_preserves_newer_attempt_evidence() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "existing_run > GITHUB_RUN_ID" in workflow
     assert "Newer attempt evidence from run" in workflow
 
 
-def test_omniroute_control_plane_requests_retry_transient_tunnel_failures():
+def test_omniroute_control_plane_requests_retry_transient_tunnel_failures() -> None:
     """A brief Funnel/DNS interruption must not retire the gateway for one probe."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 

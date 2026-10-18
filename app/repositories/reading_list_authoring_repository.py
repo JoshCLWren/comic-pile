@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Literal
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -104,14 +104,14 @@ async def load_entries(db: AsyncSession, user_id: int) -> list[CustomCBLEntry]:
 
 
 async def load_requirements(db: AsyncSession, user_id: int) -> list[Dependency]:
-    """Keep enforced historical requirements without classifying or rewriting them.
+    """Load only deliberate reader prerequisites for canonical execution.
 
     Args:
         db: Current authoring transaction.
         user_id: Reader who owns both requirement endpoints.
 
     Returns:
-        Existing enforced dependency models, excluding inert cbl-order rows.
+        Reader-authored prerequisites; historical compilations are not execution inputs.
     """
     source = aliased(Issue)
     target = aliased(Issue)
@@ -128,11 +128,7 @@ async def load_requirements(db: AsyncSession, user_id: int) -> list[Dependency]:
                 .where(
                     source_thread.user_id == user_id,
                     target_thread.user_id == user_id,
-                    or_(
-                        Dependency.origin.is_not(None),
-                        Dependency.note.is_(None),
-                        Dependency.note.not_like("cbl-order:%"),
-                    ),
+                    Dependency.origin == "reader",
                 )
             )
         ).all()
@@ -140,7 +136,11 @@ async def load_requirements(db: AsyncSession, user_id: int) -> list[Dependency]:
 
 
 async def load_excluded_issue_ids(
-    db: AsyncSession, user_id: int, issues: Sequence[Issue]
+    db: AsyncSession,
+    user_id: int,
+    issues: Sequence[Issue],
+    *,
+    proposed_exclusions: Sequence[CollectionExclusion] | None = None,
 ) -> frozenset[int]:
     """Resolve owner exclusions by stable Issue, Thread and confirmed volume identity.
 
@@ -148,16 +148,22 @@ async def load_excluded_issue_ids(
         db: Current authoring transaction.
         user_id: Reader whose collection exclusions are resolved.
         issues: Already-loaded owned Issue rows.
+        proposed_exclusions: Explicit hypothetical targets for read-only planning.
+            None loads the owner's durable exclusions.
 
     Returns:
         Owned Issue IDs matched by durable collection exclusions.
     """
-    exclusions = list(
-        (
-            await db.scalars(
-                select(CollectionExclusion).where(CollectionExclusion.user_id == user_id)
-            )
-        ).all()
+    exclusions = (
+        list(proposed_exclusions)
+        if proposed_exclusions is not None
+        else list(
+            (
+                await db.scalars(
+                    select(CollectionExclusion).where(CollectionExclusion.user_id == user_id)
+                )
+            ).all()
+        )
     )
     issue_ids = {row.issue_id for row in exclusions if row.issue_id is not None}
     thread_ids = {row.thread_id for row in exclusions if row.thread_id is not None}

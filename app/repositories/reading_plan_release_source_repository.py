@@ -144,6 +144,34 @@ async def list_enabled_for_user(
     return list(result.scalars().all())
 
 
+async def list_enabled_user_ids(db: AsyncSession) -> list[int]:
+    """List every owner with at least one enabled release source.
+
+    Scheduled sync runs have no authenticated request user, so they must
+    discover the owners to evaluate without crossing reader ownership. Only
+    owners with enabled subscriptions are returned; a reader who disabled every
+    source is not part of the run.
+
+    Args:
+        db: Database session.
+
+    Returns:
+        Distinct owner ids in stable ascending order.
+    """
+    stmt = (
+        select(ContinuityPlan.user_id)
+        .join(
+            ReadingPlanReleaseSource,
+            ReadingPlanReleaseSource.plan_id == ContinuityPlan.id,
+        )
+        .where(ReadingPlanReleaseSource.enabled.is_(True))
+        .distinct()
+        .order_by(ContinuityPlan.user_id)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def has_confirmed_thread_volume(
     db: AsyncSession, *, thread_id: int, external_identity_id: int
 ) -> bool:

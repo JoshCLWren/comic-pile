@@ -40,12 +40,13 @@ class DependencyNoteUpdate(BaseModel):
 
 
 class BlockingDependency(BaseModel):
-    """A single dependency blocking a thread, described in reader language."""
+    """One unread Issue required by a list or explicit prerequisite."""
 
     thread_id: int
     thread_title: str
     issue_number: str
     label: str
+    issue_id: int | None = None
 
 
 class BlockingExplanation(BaseModel):

@@ -16,6 +16,7 @@ const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
 
 interface LocationState {
+  search?: string
   state?: { openEditModal?: boolean }
 }
 
@@ -41,6 +42,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
   return {
     ...actual,
     dependenciesApi: {
+      getBatchBlockingInfo: vi.fn().mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } }),
       getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
       getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
     },
@@ -85,6 +87,7 @@ const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 beforeEach(() => {
   routeParams.id = '1'
   locationState.state = undefined
+  locationState.search = undefined
   navigateSpy.mockReset()
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
@@ -96,6 +99,8 @@ beforeEach(() => {
   } as never)
   mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
+  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockReset()
+  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
   mockedConnectedThreads.mockReset()
   mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
   mockedThreadIssuesTags.mockReset()
@@ -431,7 +436,7 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  await waitFor(() => expect(screen.getByText('Nothing blocks this series')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('No incoming explicit prerequisites')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 
@@ -575,4 +580,42 @@ it('offers per-issue tag editing directly without enabling Select mode (#3424)',
   await waitFor(() =>
     expect(screen.getByRole('heading', { name: 'Tags · #1' })).toBeInTheDocument(),
   )
+})
+
+it('retries canonical requirements without claiming a failed load means available', async () => {
+  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockRejectedValueOnce(new Error('offline'))
+  renderPage()
+  expect(await screen.findByText('Unable to load reading requirements.')).toBeVisible()
+  expect(screen.queryByText('Available now')).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Retry requirements' }))
+  expect(await screen.findByText('Available now')).toBeVisible()
+  expect(dependenciesApi.getBatchBlockingInfo).toHaveBeenCalledTimes(2)
+})
+
+it('uses canonical list blockers even when explicit connected prerequisites are empty', async () => {
+  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({ threads: { 1: {
+    is_blocked: true, blocking_reasons: ['Hold in Ultimate: waiting on One Year In #1'],
+    blocking_dependencies: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'Hold in Ultimate: waiting on One Year In #1' }],
+  } } })
+  renderPage()
+  expect(await screen.findByText('Waiting')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toHaveAttribute('href', '/thread/2?issue=9#issue-9')
+  expect(screen.queryByText('Available now')).not.toBeInTheDocument()
+})
+
+it('opens the exact required issue after loading its later page', async () => {
+  locationState.search = '?issue=101'
+  const thread = await threadsApi.get(1)
+  mockedThreadsApiGet.mockResolvedValue({ ...thread, total_issues: 2 })
+  mockedIssuesApiList.mockResolvedValueOnce({
+    issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+    next_page_token: 'next', total_count: 2, page_size: 100,
+  }).mockResolvedValueOnce({
+    issues: [{ id: 101, thread_id: 1, issue_number: '101', status: 'unread', read_at: null, created_at: 'now' }],
+    next_page_token: null, total_count: 2, page_size: 100,
+  })
+  renderPage()
+  await waitFor(() => expect(document.getElementById('issue-101')).toHaveFocus())
+  expect(mockedIssuesApiList).toHaveBeenCalledWith(1, { page_size: 100, page_token: 'next' })
+  expect(screen.getByText('#101')).toBeVisible()
 })
