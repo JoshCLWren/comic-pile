@@ -551,7 +551,7 @@ export default function CreatorComparisonPage() {
     setActiveModal({ isOpen: true, creatorKey, metricType, metricLabel, initialParams: params })
   }
 
-  const invalidSyntax = keys.some((k: string) => parseCreatorKey(k) === null)
+  const invalidSyntax = keys.some((k: string) => parseCreatorKey(k.trim()) === null)
   const duplicateKeys = keys.length !== new Set(keys).size
   const inputInvalid = keys.length < 2 || keys.length > 4 || invalidSyntax || duplicateKeys
 
