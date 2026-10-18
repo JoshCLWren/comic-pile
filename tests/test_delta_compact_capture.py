@@ -183,8 +183,11 @@ async def test_rating_undo_preserves_catalog_link(
         external_id="catalog-1",
         metadata_json={"name": "Cataloged Issue"},
     )
+    async_db.add(ext_identity)
+    await async_db.flush()
+
     catalog_issue = CatalogIssue(canonical_external_identity_id=ext_identity.id)
-    async_db.add_all([ext_identity, catalog_issue])
+    async_db.add(catalog_issue)
     await async_db.flush()
 
     session = ReadingSession(
