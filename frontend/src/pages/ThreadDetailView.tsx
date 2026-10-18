@@ -12,6 +12,7 @@ import { useThread, useUpdateThread } from '../hooks/useThread'
 import { useConnectedThreads } from '../hooks/useReaderContext'
 import { useThreadIssuePages } from '../hooks/useThreadIssues'
 import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
+import { useComicVineIssueIntelligence } from '../hooks/useComicVineIssueIntelligence'
 import {
   applyEditedThreadToQueuePages,
   applyIssueReadSnapshotToCache,
@@ -20,6 +21,7 @@ import {
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getManualCreatorCreditList } from '../types'
+import type { Issue, ManualCreatorCredit, Thread } from '../types'
 import { getCreatorDisplayText } from '../utils/creatorUtils'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
@@ -32,6 +34,22 @@ import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
+
+function IssueCreator({ issueId, thread }: { issueId: number; thread: Thread | undefined }) {
+  const { metadata } = useComicVineIssueIntelligence(issueId)
+  // Prefer issue-level ComicVine creators; fall back to thread manual credits per spec
+  const creatorsFromIntelligence =
+    metadata?.creators?.map((c) => ({ name: c.name, roles: c.roles })) ?? []
+  const fallbackCreators = (thread?.manual_creator_credits ?? []) as ManualCreatorCredit[]
+  const creatorsToShow = creatorsFromIntelligence.length > 0 ? creatorsFromIntelligence : fallbackCreators
+  const displayText = getCreatorDisplayText(creatorsToShow)
+  if (!displayText) return null
+  return (
+    <span className="text-xs text-stone-400">
+      by {displayText}
+    </span>
+  )
+}
 
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
@@ -545,11 +563,7 @@ export default function ThreadDetailView() {
                               <span className="text-sm font-medium text-stone-300">
                                 #{issue.issue_number}
                               </span>
-                              {thread && getCreatorDisplayText(thread.manual_creator_credits ?? []).length > 0 && (
-                                <span className="text-xs text-stone-400">
-                                  by {getCreatorDisplayText(thread.manual_creator_credits ?? [])}
-                                </span>
-                              )}
+                              {thread && <IssueCreator issueId={issue.id} thread={thread} />}
                             </span>
                             <div className="flex items-center gap-3">
                               <button
