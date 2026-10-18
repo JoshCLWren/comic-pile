@@ -18,6 +18,7 @@ CANONICAL_OUTCOME_CLASSES = frozenset(
         "work_failure",
         "provider_failure",
         "provider_throttle",
+        "provider_quota",
         "model_unavailable",
         "model_policy_violation",
         "environment_failure",
@@ -33,6 +34,15 @@ LOCK_RE = re.compile(
     re.IGNORECASE,
 )
 TARGET_RE = re.compile(r"checked out (?P<kind>issue|pr) #(?P<number>\d+) on ")
+# Account-level quota/budget exhaustion. Unlike a transient throttle this does
+# not clear within minutes, so it gets its own class (and a quota pause).
+QUOTA_RE = re.compile(
+    r"budget[ _]exhausted|payment required|(?:http(?: status)?|status(?: code)?)[ :]+402\b|"
+    r"(?:monthly|daily|weekly) usage limit|reached your [a-z ]*usage limit|"
+    r"insufficient[ _](?:credits|balance|quota)|exceeded your current quota|"
+    r"quota[ _](?:exceeded|exhausted)",
+    re.I,
+)
 RATE_LIMIT_RE = re.compile(
     r"(?:^|[^0-9.])429(?!\d)|too many requests|rate.?limit|\bquota\b|throttl|"
     r"(?:at|out of|no|insufficient|exceeded)\s+capacity|"
@@ -206,6 +216,14 @@ def classify(log: str) -> Result:
 
     # TPM / request-too-large must win over backing-model "not available" noise
     # that OmniRoute emits after a 413 cascade for native intents.
+    if QUOTA_RE.search(log):
+        return Result(
+            **common,
+            outcome="PROVIDER QUOTA",
+            outcome_class="provider_quota",
+            detail="runtime evidence shows the provider account quota or budget is exhausted",
+        )
+
     if RATE_LIMIT_RE.search(log):
         return Result(
             **common,
@@ -394,6 +412,26 @@ class ClassifierTests(unittest.TestCase):
         result = classify(self.BASE + "ComicPile fixed-model smoke\nError: Too Many Requests 429\n")
         self.assertEqual(result.outcome, "PROVIDER THROTTLE")
         self.assertEqual(result.outcome_class, "provider_throttle")
+
+    def test_mistral_budget_exhausted_is_provider_quota(self) -> None:
+        """Mistral 402 budget exhaustion is quota, not unknown_failure or throttle."""
+        result = classify(
+            self.BASE
+            + "Smoke exact pinned model through OpenCode\n> build · codestral-latest\n"
+            + "Error: API budget exhausted.\n##[error]Process completed with exit code 1.\n"
+        )
+        self.assertEqual(result.outcome, "PROVIDER QUOTA")
+        self.assertEqual(result.outcome_class, "provider_quota")
+        self.assert_canonical(result)
+
+    def test_ollama_monthly_usage_limit_is_provider_quota(self) -> None:
+        """Ollama monthly usage-limit 429s are quota exhaustion, not a throttle."""
+        result = classify(
+            self.BASE
+            + "ComicPile fixed-model smoke\nError: you (joshisplutar) have reached your monthly "
+            + "usage limit, upgrade for higher limits (HTTP 429)\n"
+        )
+        self.assertEqual(result.outcome_class, "provider_quota")
 
     def test_tpm_413_is_provider_throttle(self) -> None:
         """HTTP 413 TPM / request-too-large maps to provider_throttle."""

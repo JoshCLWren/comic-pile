@@ -45,6 +45,7 @@ IGNORED_MODEL_OUTCOMES = {
 PROVIDER_FAILURE_OUTCOMES = {
     "provider_failure",
     "provider_throttle",
+    "provider_quota",
     # Historical aliases.
     "provider_unavailable",
     "provider_throttled",
@@ -229,7 +230,7 @@ def _provider_state(
         return "healthy"
     cooldown = (
         RATE_LIMIT_COOLDOWN_SECONDS
-        if newest.outcome in {"provider_throttle", "provider_unavailable", "provider_throttled"}
+        if newest.outcome in {"provider_throttle", "provider_quota", "provider_unavailable", "provider_throttled"}
         else FAILURE_COOLDOWN_SECONDS
     )
     if now_epoch < newest.updated + cooldown:
@@ -262,7 +263,7 @@ def _model_state(
         if provider in MODEL_SCOPED_PROVIDERS:
             cooldown = (
                 RATE_LIMIT_COOLDOWN_SECONDS
-                if item.outcome in {"provider_throttle", "provider_unavailable", "provider_throttled"}
+                if item.outcome in {"provider_throttle", "provider_quota", "provider_unavailable", "provider_throttled"}
                 else FAILURE_COOLDOWN_SECONDS
             )
             if now_epoch < item.updated + cooldown:
@@ -453,7 +454,10 @@ def select_candidate(
         if item is not None
     }
     if provider_cooling:
-        if "provider_throttle" in cooling_outcomes or "provider_throttled" in cooling_outcomes:
+        if "provider_quota" in cooling_outcomes:
+            failure = "provider_quota"
+            detail = "provider quota exhaustion evidence is cooling all discovered candidates"
+        elif "provider_throttle" in cooling_outcomes or "provider_throttled" in cooling_outcomes:
             failure = "provider_throttle"
             detail = "provider throttle evidence is cooling all discovered candidates"
         else:
