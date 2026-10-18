@@ -14,7 +14,7 @@ import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
-import { LatestRequestGuard, type LoadPhase, type RequestTicket } from '../utils/latestRequest'
+import { LatestRequestGuard, type LoadPhase } from '../utils/latestRequest'
 
 interface AddSeriesFromComicVineDialogProps {
   isOpen: boolean
