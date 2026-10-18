@@ -634,6 +634,26 @@ describe('QueueMapSeriesDialog', () => {
     expect(invalidateQueueSpy).not.toHaveBeenCalled()
   })
 
+  it('does not claim nothing changed when the commit outcome is unknown', async () => {
+    // Issue #3776: a lost 5xx response may hide an already-committed mapping.
+    const user = userEvent.setup()
+    mockedCommit.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 504, data: {} },
+      message: 'Gateway Timeout',
+    })
+    const { onMapped } = renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not confirm the mapping result. Any saved mappings are safe; map again to replay the request.',
+    )
+    expect(onMapped).not.toHaveBeenCalled()
+    expect(invalidateQueueSpy).not.toHaveBeenCalled()
+  })
+
   it('re-reads the plan when the commit reports a stale preview', async () => {
     const user = userEvent.setup()
     mockedCommit.mockRejectedValueOnce({

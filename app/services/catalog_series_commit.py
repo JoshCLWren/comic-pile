@@ -25,6 +25,7 @@ replays the winning receipt.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -74,6 +75,16 @@ ERROR_PREVIEW_EXPIRED = "preview_expired"
 ERROR_CONFIRMED_MAPPING_CONFLICT = "confirmed_mapping_conflict"
 ERROR_IDEMPOTENCY_CONFLICT = "idempotency_conflict"
 ERROR_INVALID_APPROVED_ROW = "invalid_approved_row"
+
+HYDRATION_BUDGET_SECONDS = 10.0
+"""Total inline budget for post-commit metadata hydration in one request.
+
+Identities are committed before hydration begins, so exceeding this budget only defers
+best-effort metadata refresh; it never rolls back a confirmed mapping (issue #3776). It
+bounds the worst case for N approved identities instead of N times the per-identity
+fallback timeout, which previously let a 16-sibling approval hold the response for
+roughly two minutes.
+"""
 
 
 class SeriesMappingCommitConflictError(Exception):
@@ -482,7 +493,10 @@ async def _hydrate_after_commit(
     """Hand confirmed identities to existing metadata hydration after the commit.
 
     Hydration runs only once the identity transaction has committed and every failure is
-    swallowed: a provider outage must never roll back a confirmed identity.
+    swallowed: a provider outage must never roll back a confirmed identity. The whole batch
+    shares one inline budget (issue #3776), so an N-sibling approval cannot hold the HTTP
+    response open for the sum of the per-identity fallback timeouts; identities left over
+    when the budget is spent are simply deferred to the normal read-path refresh.
 
     Args:
         user_id: Authenticated user ID (for logging only).
@@ -493,13 +507,25 @@ async def _hydrate_after_commit(
 
     from app.services.comicvine_fallback import refresh_issue_metadata
 
-    for identity_id in identity_ids:
-        try:
-            await refresh_issue_metadata(identity_id)
-        except Exception as exc:
-            logger.warning(
-                "catalog_series_mapping_commit hydration_failed user_id=%s identity_id=%s error=%s",
-                user_id,
-                identity_id,
-                type(exc).__name__,
-            )
+    hydrated = 0
+    try:
+        async with asyncio.timeout(HYDRATION_BUDGET_SECONDS):
+            for identity_id in identity_ids:
+                try:
+                    await refresh_issue_metadata(identity_id)
+                    hydrated += 1
+                except Exception as exc:
+                    logger.warning(
+                        "catalog_series_mapping_commit hydration_failed user_id=%s identity_id=%s error=%s",
+                        user_id,
+                        identity_id,
+                        type(exc).__name__,
+                    )
+    except TimeoutError:
+        logger.warning(
+            "catalog_series_mapping_commit hydration_budget_exhausted user_id=%s "
+            "hydrated=%s total=%s",
+            user_id,
+            hydrated,
+            len(identity_ids),
+        )

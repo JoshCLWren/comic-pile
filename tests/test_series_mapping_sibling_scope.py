@@ -9,6 +9,7 @@ commit surface confirms exactly those rows.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -23,6 +24,7 @@ from app.models.external_identity import (
 )
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.services import catalog_series_commit
 
 PREVIEW_URL = "/api/v1/catalog/series-mappings/preview"
 COMMIT_URL = "/api/v1/catalog/series-mappings/commit"
@@ -557,3 +559,201 @@ class TestSiblingScopeCommit:
 
         assert commit.status_code == 422
         assert commit.json()["detail"] == "invalid_approved_row"
+
+    @pytest.mark.asyncio
+    async def test_repeated_commit_replays_after_hydration_spent_its_budget(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data, monkeypatch
+    ) -> None:
+        """A lost response can be resolved by replaying a receipt written before hydration.
+
+        Issue #3776: hydration runs after the identity transaction commits, so a batch that
+        exhausts the inline hydration budget still leaves a durable receipt. Retrying the same
+        approval must replay that result rather than reporting that nothing changed.
+        """
+        origin = sample_data["issue"]
+        await _confirm_origin_issue(async_db, origin)
+
+        roster = [
+            _roster_row(ORIGIN_COMICVINE_ISSUE_ID, "1"),
+            _roster_row(SIBLING_COMICVINE_ISSUE_IDS[2], "2"),
+            _roster_row(SIBLING_COMICVINE_ISSUE_IDS[3], "3"),
+        ]
+
+        with _patch_comicvine(roster):
+            preview = await auth_client.post(
+                PREVIEW_URL,
+                json={
+                    "origin_issue_id": origin.id,
+                    "provider": "comicvine",
+                    "provider_series_external_id": str(VOLUME_ID),
+                },
+            )
+        assert preview.status_code == 200
+        preview_data = preview.json()
+        payload = {
+            "preview_token": preview_data["preview_token"],
+            "idempotency_key": "issue-3776-replay",
+            "approved_row_ids": _approvable_row_ids(preview_data["rows"]),
+        }
+
+        async def slow_refresh(identity_id: int) -> None:
+            await asyncio.sleep(5)
+
+        monkeypatch.setattr(catalog_series_commit, "HYDRATION_BUDGET_SECONDS", 0.05)
+        with (
+            _patch_comicvine(roster),
+            patch(
+                "app.services.comicvine_fallback.refresh_issue_metadata",
+                new=slow_refresh,
+            ),
+        ):
+            first = await auth_client.post(COMMIT_URL, json=payload)
+        assert first.status_code == 200
+
+        # The reader retries the same approval after the lost response. The stored receipt is
+        # replayed even though committing it necessarily changed the plan's bound state.
+        with (
+            _patch_comicvine(roster),
+            patch("app.services.comicvine_fallback.refresh_issue_metadata", new=AsyncMock()),
+        ):
+            second = await auth_client.post(COMMIT_URL, json=payload)
+
+        assert second.status_code == 200
+        assert second.json() == first.json()
+
+    @pytest.mark.asyncio
+    async def test_sixteen_sibling_approval_bounds_hydration_and_keeps_mappings(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data, monkeypatch
+    ) -> None:
+        """The reported 16-sibling approval commits within one hydration budget.
+
+        Issue #3776: approving 16 siblings previously awaited up to 16 times the per-identity
+        fallback timeout. The commit must still persist every mapping and return, with the
+        leftover metadata refresh deferred to the read path.
+        """
+        user = sample_data["user"]
+        _, issues = await _create_thread_with_issues(
+            async_db,
+            user_id=user.id,
+            title="Saga Siblings",
+            issue_numbers=[str(number) for number in range(1, 18)],
+        )
+        origin = issues[0]
+        await _confirm_origin_issue(async_db, origin)
+        sibling_issues = issues[1:]
+        roster = [_roster_row(ORIGIN_COMICVINE_ISSUE_ID, "1")] + [
+            _roster_row(500000 + number, str(number)) for number in range(2, 18)
+        ]
+
+        with _patch_comicvine(roster):
+            preview = await auth_client.post(
+                PREVIEW_URL,
+                json={
+                    "origin_issue_id": origin.id,
+                    "provider": "comicvine",
+                    "provider_series_external_id": str(VOLUME_ID),
+                },
+            )
+        assert preview.status_code == 200
+        preview_data = preview.json()
+        approved = _approvable_row_ids(preview_data["rows"])
+        assert approved == [f"issue:{issue.id}" for issue in sibling_issues]
+
+        hydrated: list[int] = []
+
+        async def slow_refresh(identity_id: int) -> None:
+            hydrated.append(identity_id)
+            await asyncio.sleep(5)
+
+        monkeypatch.setattr(catalog_series_commit, "HYDRATION_BUDGET_SECONDS", 0.05)
+        with (
+            _patch_comicvine(roster),
+            patch(
+                "app.services.comicvine_fallback.refresh_issue_metadata",
+                new=slow_refresh,
+            ),
+        ):
+            commit = await auth_client.post(
+                COMMIT_URL,
+                json={
+                    "preview_token": preview_data["preview_token"],
+                    "idempotency_key": "issue-3776-sixteen",
+                    "approved_row_ids": approved,
+                },
+            )
+
+        assert commit.status_code == 200
+        assert sorted(commit.json()["confirmed_issue_ids"]) == sorted(
+            issue.id for issue in sibling_issues
+        )
+        # Hydration is best effort and bounded: fewer than all sixteen identities were
+        # attempted inline, yet no confirmed mapping was lost.
+        assert 0 < len(hydrated) < len(sibling_issues)
+
+        confirmed = (
+            await async_db.execute(
+                select(IssueExternalIdentityMapping).where(
+                    IssueExternalIdentityMapping.issue_id.in_(
+                        [issue.id for issue in sibling_issues]
+                    ),
+                    IssueExternalIdentityMapping.status == "confirmed",
+                )
+            )
+        ).scalars().all()
+        assert len(confirmed) == len(sibling_issues)
+
+
+class TestHydrationBudget:
+    """Post-commit hydration must be bounded and must never affect the commit result."""
+
+    @pytest.mark.asyncio
+    async def test_budget_caps_total_inline_work(self, monkeypatch) -> None:
+        """One budget bounds the batch instead of N times the per-identity timeout."""
+        attempted: list[int] = []
+
+        async def never_finishes(identity_id: int) -> None:
+            attempted.append(identity_id)
+            await asyncio.sleep(5)
+
+        monkeypatch.setattr(
+            "app.services.comicvine_fallback.refresh_issue_metadata", never_finishes
+        )
+        monkeypatch.setattr(catalog_series_commit, "HYDRATION_BUDGET_SECONDS", 0.05)
+
+        await catalog_series_commit._hydrate_after_commit(
+            user_id=1, identity_ids=list(range(1, 17))
+        )
+
+        assert 0 < len(attempted) < 16
+
+    @pytest.mark.asyncio
+    async def test_identity_failures_are_swallowed_and_do_not_stop_the_batch(
+        self, monkeypatch
+    ) -> None:
+        """A provider failure for one identity never aborts hydration of the rest."""
+        attempted: list[int] = []
+
+        async def flaky(identity_id: int) -> None:
+            attempted.append(identity_id)
+            if identity_id == 2:
+                raise RuntimeError("provider outage")
+
+        monkeypatch.setattr("app.services.comicvine_fallback.refresh_issue_metadata", flaky)
+
+        await catalog_series_commit._hydrate_after_commit(user_id=1, identity_ids=[1, 2, 3])
+
+        assert attempted == [1, 2, 3]
+
+    @pytest.mark.asyncio
+    async def test_no_identities_skips_hydration_entirely(self, monkeypatch) -> None:
+        """An empty approval never calls the hydrator."""
+        attempted: list[int] = []
+
+        async def record(identity_id: int) -> None:
+            attempted.append(identity_id)
+
+        monkeypatch.setattr("app.services.comicvine_fallback.refresh_issue_metadata", record)
+
+        await catalog_series_commit._hydrate_after_commit(user_id=1, identity_ids=[])
+
+        assert attempted == []

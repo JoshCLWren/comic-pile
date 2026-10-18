@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
+import { getApiErrorDetail, getApiErrorStatus, isIndeterminateApiOutcome } from '../utils/apiError'
 
 describe('getApiErrorDetail', () => {
   it('extracts detail from Axios error response', () => {
@@ -157,5 +157,51 @@ describe('getApiErrorStatus', () => {
   it('returns null for null/undefined', () => {
     expect(getApiErrorStatus(null)).toBe(null)
     expect(getApiErrorStatus(undefined)).toBe(null)
+  })
+})
+
+describe('isIndeterminateApiOutcome', () => {
+  it('treats a 4xx refusal as definitive', () => {
+    const error = {
+      isAxiosError: true,
+      response: { status: 422, data: { detail: 'invalid_approved_row' } },
+    }
+    expect(isIndeterminateApiOutcome(error)).toBe(false)
+  })
+
+  it('treats a 5xx response as indeterminate', () => {
+    const error = {
+      isAxiosError: true,
+      response: { status: 502, data: {} },
+      message: 'Bad Gateway',
+    }
+    expect(isIndeterminateApiOutcome(error)).toBe(true)
+  })
+
+  it('treats an axios transport failure without a response as indeterminate', () => {
+    const error = {
+      isAxiosError: true,
+      response: undefined,
+      message: 'timeout of 10000ms exceeded',
+    }
+    expect(isIndeterminateApiOutcome(error)).toBe(true)
+  })
+
+  it('treats a generic network error message as indeterminate', () => {
+    expect(isIndeterminateApiOutcome(new Error('Network Error'))).toBe(true)
+    expect(isIndeterminateApiOutcome(new Error('Failed to fetch'))).toBe(true)
+  })
+
+  it('treats an unrelated client-side error as definitive', () => {
+    expect(isIndeterminateApiOutcome(new Error('Server error'))).toBe(false)
+    expect(isIndeterminateApiOutcome(null)).toBe(false)
+    expect(isIndeterminateApiOutcome(undefined)).toBe(false)
+  })
+
+  it('reads status from an Error instance carrying a response', () => {
+    const error = Object.assign(new Error('Request failed'), {
+      response: { status: 503, data: {} },
+    })
+    expect(isIndeterminateApiOutcome(error)).toBe(true)
   })
 })
