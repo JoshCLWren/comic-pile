@@ -730,6 +730,40 @@ class TestHydrationBudget:
         assert 0 < len(attempted) < 16
 
     @pytest.mark.asyncio
+    async def test_hydration_budget_stays_under_client_deadline(self, monkeypatch) -> None:
+        """The hydration budget must leave headroom under the Axios client deadline.
+
+        frontend/src/services/api.ts creates the shared client with timeout: 10000ms
+        (10s), and createSeriesMappingApi.commit does not override it. Pre-commit work
+        runs before hydration starts, so the hydration budget must be strictly below
+        10s to leave room for pre-commit work plus transport overhead. Even when every
+        identity refresh is slow, the inline hydration time is bounded by the budget,
+        never consuming the full client deadline.
+        """
+        import time
+
+        from app.services import catalog_series_commit
+
+        started = time.monotonic()
+
+        async def slow_refresh(identity_id: int) -> None:
+            await asyncio.sleep(5)
+
+        monkeypatch.setattr(
+            "app.services.comicvine_fallback.refresh_issue_metadata", slow_refresh
+        )
+
+        await catalog_series_commit._hydrate_after_commit(
+            user_id=HYDRATION_TEST_USER_ID, identity_ids=list(range(1, 17))
+        )
+
+        elapsed = time.monotonic() - started
+        assert catalog_series_commit.HYDRATION_BUDGET_SECONDS < 10.0
+        assert elapsed < 10.0
+
+
+
+    @pytest.mark.asyncio
     async def test_identity_failures_are_swallowed_and_do_not_stop_the_batch(
         self, monkeypatch
     ) -> None:

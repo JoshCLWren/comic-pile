@@ -76,8 +76,15 @@ ERROR_CONFIRMED_MAPPING_CONFLICT = "confirmed_mapping_conflict"
 ERROR_IDEMPOTENCY_CONFLICT = "idempotency_conflict"
 ERROR_INVALID_APPROVED_ROW = "invalid_approved_row"
 
-HYDRATION_BUDGET_SECONDS = 10.0
+HYDRATION_BUDGET_SECONDS = 5.0
 """Total inline budget for post-commit metadata hydration in one request.
+
+The shared Axios client in frontend/src/services/api.ts times out the entire request
+after 10000ms, and createSeriesMappingApi.commit does not override it. Pre-commit
+work (token verification, idempotency lookup, plan building, identity writes, and the
+DB commit) runs before this budget starts, so the hydration budget must leave headroom
+for that work plus transport overhead under the client deadline. Five seconds keeps the
+worst-case inline duration well below 10 seconds even when pre-commit work is slow.
 
 Identities are committed before hydration begins, so exceeding this budget only defers
 best-effort metadata refresh; it never rolls back a confirmed mapping (issue #3776). It
