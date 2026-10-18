@@ -14,11 +14,39 @@ ComicPile uses Vercel for production only. The production branch is `main`.
 `.github/workflows/deploy-production.yml` workflow is the only supported deployment path.
 
 The workflow listens for a direct `main` push and also retains factory-completion and scheduled
-recovery triggers because merges performed by a GitHub workflow token do not reliably start another
-push-triggered workflow. Those triggers share one concurrency group and perform an exact-SHA
-preflight against Vercel. Once a `READY` production deployment exists for the current `main` SHA,
-later automatic triggers exit without rerunning migrations or creating another deployment.
-`workflow_dispatch` deliberately bypasses this deduplication as the explicit force-recovery path.
+recovery triggers. A merge performed with the built-in `GITHUB_TOKEN` (`github-actions[bot]`) fires
+no push or `workflow_run` event at all, and the `*/5` cron fires only every few hours in practice,
+so on its own a factory merge could leave production hours behind `main` (PR #3869, merged as
+`1319bc5a` at 12:10 PM CT by Factory Ready Merge Drain, started no deploy).
+
+### Bot merges dispatch the deploy
+
+`workflow_dispatch` is the one event `GITHUB_TOKEN` may raise. Every factory path that merges with
+it calls `factory_dispatch_production_deploy` from
+`.github/scripts/factory-dispatch-production-deploy.sh`, which runs
+`gh workflow run deploy-production.yml --ref main -f source=factory-merge`:
+
+- Factory Ready Merge Drain and the Fixed Model Factory Dispatcher's ready drain dispatch once per
+  run, after the last merge (an `EXIT` trap, so a later loop failure cannot skip it), and only when
+  that run merged at least one PR.
+- The worker wrappers that can merge (`free-model-factory-worker-primitives.sh`'s standalone loop
+  and the dormant NVIDIA and OmniRoute wrappers) dispatch right after their merge.
+- Those jobs run with `actions: write`. A dispatch failure only warns; the merge stands and the next
+  trigger deploys the same `main`. `FACTORY_DEPLOY_DISPATCH=off` disables it for an incident.
+- `tests/test_factory_deploy_dispatch_after_merge.py` finds every `gh pr merge` or merge-API call
+  under `.github/` and `scripts/` and fails when one does not dispatch the deploy. The only
+  exemption is `scripts/opencode_pipeline.sh`, which merges locally with the operator's token, so
+  its push event deploys normally.
+
+### Overlapping runs
+
+Every trigger shares the `vercel-production` concurrency group with `cancel-in-progress: false`:
+an in-flight deploy is never cancelled, and at most one run waits, with a newer pending run
+replacing an older one. Every run checks out the tip of `main` when it starts and performs an
+exact-SHA preflight against Vercel. Once a `READY` production deployment exists for the current
+`main` SHA, later automatic triggers, including `source=factory-merge` dispatches, exit without
+rerunning migrations or creating another deployment. A manual `workflow_dispatch` (the default
+`source=manual`) deliberately bypasses this deduplication as the explicit force-recovery path.
 
 ## Red-deploy freeze
 
