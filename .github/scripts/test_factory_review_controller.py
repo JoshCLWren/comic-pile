@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -19,6 +20,20 @@ def load_controller():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def configure_model_provenance(
+    monkeypatch: pytest.MonkeyPatch, controller: ModuleType, head: str
+) -> None:
+    """Supply trusted independent model identities for mechanical-gate fixtures."""
+    markers = [
+        controller.agent_model_author_marker(pr=123, head=head, model="model-a", agent="10"),
+        controller.agent_model_review_marker(
+            pr=123, head=head, author_model="model-a", reviewer_model="model-b",
+            author_agent="10", reviewer_agent="11",
+        ),
+    ]
+    monkeypatch.setattr(controller, "model_comment_bodies", lambda _pr: markers)
 
 
 def test_required_checks_no_checks_configured_retries():
@@ -186,6 +201,7 @@ def test_reconcile_ci_promotes_green_authorized_pr_without_worker(monkeypatch):
 def test_reconcile_ci_routes_conflicted_green_pr_to_repair(monkeypatch):
     controller = load_controller()
     head = "d" * 40
+    configure_model_provenance(monkeypatch, controller, head)
     monkeypatch.setattr(
         controller,
         "pr_json",
@@ -241,6 +257,7 @@ def test_reconcile_ci_routes_conflicted_green_pr_to_repair(monkeypatch):
 def test_reconcile_ci_does_not_transition_when_findings_persistence_fails(monkeypatch):
     controller = load_controller()
     head = "d" * 40
+    configure_model_provenance(monkeypatch, controller, head)
     monkeypatch.setattr(
         controller,
         "pr_json",
@@ -312,7 +329,7 @@ def configure_review_handoff(
         ),
     )
     monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [])
-    monkeypatch.setattr(controller, "model_comment_bodies", lambda _pr: [])
+    configure_model_provenance(monkeypatch, controller, HEAD)
     monkeypatch.setattr(
         controller,
         "roster_model_for_worker",
@@ -457,6 +474,7 @@ def test_reconcile_ci_returns_changed_head_to_review(monkeypatch):
     """Require fresh authorization when the head changes during reconciliation."""
     controller = load_controller()
     head = "c" * 40
+    configure_model_provenance(monkeypatch, controller, head)
     changed_head = "d" * 40
     states = iter(
         [
@@ -856,3 +874,34 @@ def test_review_controller_has_three_repairs_then_cancel_circuit_breaker():
     assert "FACTORY_REPAIR_CYCLE_LIMIT = 3" in source
     assert 'status": "strike-limit-cancelled"' in source
     assert "comic-pile-factory-strike-reset-v1" in source
+
+
+@pytest.mark.parametrize("resolved, decision", [(True, "pass"), (False, "deny")])
+def test_review_thread_query_uses_named_graphql_field(
+    monkeypatch: pytest.MonkeyPatch, resolved: bool, decision: str
+) -> None:
+    """Inspect current-head threads through a valid gh field without bypassing blockers."""
+    controller = load_controller()
+    calls: list[list[str]] = []
+
+    def github_json(args: list[str]) -> object:
+        calls.append(args)
+        if args[1] == "graphql":
+            query_arg = args[args.index("-f") + 1]
+            assert query_arg.startswith("query=query($owner:String!")
+            assert "reviewThreads(first:100)" in query_arg
+            return {"data": {"repository": {"pullRequest": {"reviewThreads": {
+                "nodes": [{"isResolved": resolved, "comments": {
+                    "nodes": [{"commit": {"oid": HEAD}}],
+                    "pageInfo": {"hasNextPage": False},
+                }}],
+                "pageInfo": {"hasNextPage": False},
+            }}}}}
+        if "/comments?" in args[-1]:
+            return [[{"commit_id": HEAD}]]
+        return [[]]
+
+    monkeypatch.setattr(controller, "gh_json", github_json)
+    result = controller.current_head_review_gate(123, HEAD)
+    assert result["decision"] == decision
+    assert len(calls) == 3

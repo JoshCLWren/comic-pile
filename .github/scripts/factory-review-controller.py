@@ -1216,7 +1216,7 @@ def current_head_review_gate(pr_number: int, head: str) -> GateResult:
                     f"number={pr_number}",
                     "-f",
                     (
-                        "query($owner:String!,$name:String!,$number:Int!){"
+                        "query=query($owner:String!,$name:String!,$number:Int!){"
                         "repository(owner:$owner,name:$name){pullRequest(number:$number){"
                         "reviewThreads(first:100){nodes{isResolved comments(first:100){"
                         "nodes{commit{oid}} pageInfo{hasNextPage}}} pageInfo{hasNextPage}}}}}"
