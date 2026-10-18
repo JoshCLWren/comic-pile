@@ -789,4 +789,53 @@ describe('CreatorComparisonPage', () => {
     expect(rows[0]).toHaveAttribute('aria-label', '5★: 1 rating, 50.0%')
     expect(rows[1]).toHaveAttribute('aria-label', '0.5★: 1 rating, 50.0%')
   })
+
+  it('renders four creators and keeps each detail cell span-full so it cannot force an overflow column (#3459)', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:1': makeItem({ canonical_creator_key: 'creator:1', display_name: 'Creator One' }),
+            'creator:2': makeItem({ canonical_creator_key: 'creator:2', display_name: 'Creator Two' }),
+            'creator:3': makeItem({ canonical_creator_key: 'creator:3', display_name: 'Creator Three' }),
+            'creator:4': makeItem({ canonical_creator_key: 'creator:4', display_name: 'Creator Four' }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:1,creator:2,creator:3,creator:4')
+
+    expect(screen.getByText('Comparing 4 creators')).toBeInTheDocument()
+    const cards = screen.getAllByTestId('creator-comparison-card')
+    expect(cards).toHaveLength(4)
+
+    // Full-width detail cells span the whole row instead of forcing an implicit
+    // second grid column that ran past the card edge (the #3459 overflow).
+    // Rendered packing itself is asserted in the Chromium spec.
+    const distributionCell = within(cards[0])
+      .getByTestId('rating-distribution')
+      .closest('.col-span-full')
+    expect(distributionCell).not.toBeNull()
+    expect(cards[0].querySelector('.sm\\:col-span-2')).toBeNull()
+  })
+
+  it('renders a three-creator comparison', () => {
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:1': makeItem({ canonical_creator_key: 'creator:1', display_name: 'Creator One' }),
+            'creator:2': makeItem({ canonical_creator_key: 'creator:2', display_name: 'Creator Two' }),
+            'creator:3': makeItem({ canonical_creator_key: 'creator:3', display_name: 'Creator Three' }),
+          },
+        }),
+      }),
+    )
+
+    renderAt('creator:1,creator:2,creator:3')
+
+    expect(screen.getByText('Comparing 3 creators')).toBeInTheDocument()
+    expect(screen.getAllByTestId('creator-comparison-card')).toHaveLength(3)
+  })
 })

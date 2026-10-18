@@ -12,6 +12,8 @@
  * 4. Thin samples are explicit (`Insufficient data` plus banner) and partial
  *    metadata is a lower bound, never an exhaustive total.
  * 5. Phone width stacks comparison cards with no horizontal overflow.
+ * 6. Four creators lay out as two balanced rows with no card-edge overflow at
+ *    1280 or at a 200%-zoom(~640px) viewport (#3459).
  *
  * Payloads are fulfilled at the network layer so this spec asserts rendered
  * behavior, not backend fixtures. Backend coverage for the comparison
@@ -128,6 +130,38 @@ async function expectNoHorizontalOverflow(page: Page) {
     return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth }
   })
   expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1)
+}
+
+/**
+ * Issue #3459: no compare value or distribution label may run past its card
+ * edge. `scrollWidth` includes overflowing descendants even when the card
+ * itself is not a scroll container, so it catches the pre-fix implicit-column
+ * overflow the `sm:col-span-2` cells caused in a single-column inner grid.
+ */
+async function expectCardsContained(page: Page) {
+  const overflows = await page
+    .getByTestId('creator-comparison-card')
+    .evaluateAll((cards) => cards.map((card) => card.scrollWidth - card.clientWidth))
+  expect(overflows.length).toBeGreaterThan(0)
+  for (const overflow of overflows) {
+    expect(overflow).toBeLessThanOrEqual(1)
+  }
+}
+
+/** Number of cards per visual row, derived from their rendered top edges. */
+async function cardRowCounts(page: Page): Promise<number[]> {
+  const tops = await page
+    .getByTestId('creator-comparison-card')
+    .evaluateAll((cards) =>
+      cards.map((card) => Math.round(card.getBoundingClientRect().top)),
+    )
+  const rows = new Map<number, number>()
+  for (const top of tops) {
+    const existing = [...rows.keys()].find((key) => Math.abs(key - top) <= 2)
+    const key = existing ?? top
+    rows.set(key, (rows.get(key) ?? 0) + 1)
+  }
+  return [...rows.values()]
 }
 
 test.describe('Issue #3091: creator comparison', () => {
@@ -279,6 +313,43 @@ test.describe('Issue #3091: creator comparison', () => {
     ])
     expect(smallBar).toBeGreaterThan(largeBar)
 
+    await expectNoHorizontalOverflow(page)
+  })
+
+  test('four creators lay out without an orphan card or edge overflow (#3459)', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    await installCreatorComparison(page, {
+      'creator:1': comparisonItem('creator:1', 'Creator One'),
+      'creator:2': comparisonItem('creator:2', 'Creator Two'),
+      'creator:3': comparisonItem('creator:3', 'Creator Three'),
+      'creator:4': comparisonItem('creator:4', 'Creator Four'),
+    })
+
+    await page.goto('/creators/compare?keys=creator:1,creator:2,creator:3,creator:4', {
+      waitUntil: 'domcontentloaded',
+    })
+
+    await expect(page.getByRole('heading', { name: 'Creator Comparison' })).toBeVisible({
+      timeout: 20000,
+    })
+    await expect(page.getByText('Comparing 4 creators')).toBeVisible()
+    await expect(page.getByTestId('creator-comparison-card')).toHaveCount(4)
+
+    // Values and distribution labels stay inside their cards, and the page
+    // never scrolls sideways.
+    await expectCardsContained(page)
+    await expectNoHorizontalOverflow(page)
+
+    // Four creators form two balanced rows of two, never a 3 + 1 orphan.
+    expect(await cardRowCounts(page)).toEqual([2, 2])
+
+    // 200% browser zoom on a 1280px window presents a ~640 CSS px viewport.
+    // The overflow was worse there, so re-check the containment boundary.
+    await page.setViewportSize({ width: 640, height: 800 })
+    await expectCardsContained(page)
     await expectNoHorizontalOverflow(page)
   })
 })
