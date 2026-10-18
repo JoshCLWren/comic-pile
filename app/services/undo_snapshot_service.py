@@ -135,9 +135,7 @@ class UndoSnapshotService:
             await self.repository.delete_snapshot(snapshot_id)
 
         # Pre-compute response values to avoid post-commit MissingGreenlet errors
-        response_values = await self._precompute_response_values(
-            session, session_id, is_delta
-        )
+        response_values = await self._precompute_response_values(session, session_id)
 
         return session, response_values, {"is_delta": is_delta, "snapshot_id": snapshot_id}
 
@@ -404,7 +402,7 @@ class UndoSnapshotService:
         )
 
     async def _precompute_response_values(
-        self, session: ReadingSession, session_id: int, is_delta: bool
+        self, session: ReadingSession, session_id: int
     ) -> dict[str, Any]:
         """Pre-compute response values to avoid post-commit MissingGreenlet errors."""
         # Combined query: fetch all die-changing events and latest roll event
@@ -431,9 +429,11 @@ class UndoSnapshotService:
                 [str(session.start_die)] + [str(evt.die_after) for evt in die_events]
             )
 
-        # Snapshot count: one query regardless of delta/full
+        # Snapshot count: one query regardless of delta/full. A consumed delta is
+        # deleted before this runs, so the count is the true remaining total.
+        # Subtracting the delta again here reported one fewer snapshot than the
+        # session snapshot list and the History card showed (#3468).
         pre_snapshot_count = await self.repository.count_session_snapshots(session_id)
-        pre_snapshot_count -= 1 if is_delta else 0
 
         # Active thread info from pre-fetched events
         pre_active_event = None

@@ -71,10 +71,19 @@ export async function applyRatedThreadCache(
   client.setQueryData(queryKeys.thread.detail(thread.id), thread)
   client.setQueryData(queryKeys.thread.summary(thread.id), thread)
 
-  await client.invalidateQueries({
-    queryKey: queryKeys.session.current(),
-    exact: true,
-  })
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    // A rating writes a new "After rating" snapshot (#3468). Both snapshot
+    // lists read the same rows, and the History card counts them through the
+    // paginated session list, so all three must stop serving the pre-rating
+    // state the moment the rating commits.
+    client.invalidateQueries({ queryKey: queryKeys.undo.all }),
+    client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
+    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
+  ])
 }
 
 export async function applyUpdatedThreadCache(
@@ -226,11 +235,14 @@ export async function invalidateAfterQueueMutation(
  *
  * An undo restores queue order/membership, the current session, the roll
  * bootstrap, and the session-history aggregates that count reads and ratings,
- * so this composes the queue-movement refresh and adds the two undo-specific
+ * so this composes the queue-movement refresh and adds the three undo-specific
  * spaces: the paginated Session history cards (whose "N issues read" total
- * must stop counting an undone rating) and the snapshot lists the next undo
- * reads from. Session detail and session snapshots stay on their callers'
- * explicit refetch because those are the surfaces the caller already owns.
+ * must stop counting an undone rating), the snapshot lists the next undo reads
+ * from, and the session detail page's snapshot list — the same rows the
+ * History card counts, so both must refresh together (#3468).
+ *
+ * Session detail stays on its callers' explicit refetch because that is the
+ * surface the caller already owns.
  *
  * TanStack Query refetches invalidated active queries — callers must not also
  * call `refetch()` for a key this helper already refreshes.
@@ -239,6 +251,7 @@ export async function invalidateAfterUndo(client: QueryClient): Promise<void> {
   await Promise.all([
     invalidateAfterQueueMovement(client),
     client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
   ])
 }
