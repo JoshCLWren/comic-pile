@@ -17,7 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
-from app.schemas.thread import ThreadUpdate
+from app.repositories import thread_repository
+from app.schemas.thread import ThreadCreate, ThreadUpdate
 from app.services import issue as issue_service
 from app.services import thread_service
 
@@ -163,4 +164,117 @@ async def test_reactivate_thread_via_mark_unread_keeps_positions_dense(
 
     await async_db.refresh(completed)
     assert completed.status == "active"
+    _assert_dense(await _active_positions(async_db, default_user.id))
+
+
+@pytest.mark.asyncio
+async def test_new_series_after_tail_completion_stays_within_the_queue(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """A series created after the last one finishes still lands inside 1..N.
+
+    Completing a series leaves the position it held on the finished shelf, so
+    appending behind "the highest position this reader owns" pushed the new
+    series past the end of the dense range and made Queue, the roll card, and
+    the thread page display a position larger than the queue itself (#3449).
+    """
+    await _add_thread(async_db, default_user, title="A", position=1)
+    await _add_thread(async_db, default_user, title="B", position=2)
+    tail = await _add_thread(
+        async_db, default_user, title="C", position=3, total_issues=1
+    )
+    tail_issue = Issue(
+        thread_id=tail.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+        read_at=None,
+    )
+    async_db.add(tail_issue)
+    await async_db.commit()
+
+    await issue_service.mark_issue_read(async_db, tail_issue.id, default_user.id)
+    await async_db.commit()
+
+    # The finished series keeps its old position; the queue is now 1..2.
+    _assert_dense(await _active_positions(async_db, default_user.id))
+
+    await thread_service.create_thread_with_retry(
+        async_db,
+        default_user.id,
+        ThreadCreate(title="D", format="comic", issues_remaining=1),
+    )
+    await async_db.commit()
+
+    _assert_dense(await _active_positions(async_db, default_user.id))
+
+
+@pytest.mark.asyncio
+async def test_max_queue_position_ignores_finished_and_excluded_series(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Queue appends read the active queue, not every row the reader owns."""
+    await _add_thread(async_db, default_user, title="A", position=1)
+    await _add_thread(async_db, default_user, title="B", position=2)
+    tail = await _add_thread(async_db, default_user, title="C", position=3)
+    await async_db.commit()
+
+    assert await thread_repository.max_queue_position(async_db, default_user.id) == 3
+
+    await thread_service.delete_thread(async_db, default_user.id, tail.id)
+
+    assert await thread_repository.max_queue_position(async_db, default_user.id) == 2
+
+
+@pytest.mark.asyncio
+async def test_edit_finished_series_back_into_queue_assigns_a_position(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """A legacy series edited back to "issues left" rejoins the active queue.
+
+    The queue page lists every ``active`` row, so returning the series to the
+    active queue without a queue position rendered it as "#0" and left it out of
+    every roll pool, which selects on ``queue_position >= 1`` (#3449).
+    """
+    await _add_thread(async_db, default_user, title="A", position=1)
+    await _add_thread(async_db, default_user, title="B", position=2)
+
+    finished = Thread(
+        title="C",
+        format="comic",
+        user_id=default_user.id,
+        queue_position=0,
+        status="completed",
+        issues_remaining=0,
+        total_issues=None,
+        reading_progress="completed",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(finished)
+    await async_db.commit()
+
+    await thread_service.update_thread(
+        async_db, default_user.id, finished.id, ThreadUpdate(issues_remaining=4)
+    )
+
+    await async_db.refresh(finished)
+    assert finished.status == "active"
+    assert finished.queue_position >= 1
+    _assert_dense(await _active_positions(async_db, default_user.id))
+
+
+@pytest.mark.asyncio
+async def test_exclude_and_restore_keeps_positions_dense(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """Removing a series from the queue and restoring it keeps 1..N dense."""
+    first = await _add_thread(async_db, default_user, title="A", position=1)
+    await _add_thread(async_db, default_user, title="B", position=2)
+    await _add_thread(async_db, default_user, title="C", position=3)
+    await async_db.commit()
+
+    await thread_service.exclude_thread(async_db, default_user.id, first.id)
+    _assert_dense(await _active_positions(async_db, default_user.id))
+
+    await thread_service.restore_thread(async_db, default_user.id, first.id)
     _assert_dense(await _active_positions(async_db, default_user.id))

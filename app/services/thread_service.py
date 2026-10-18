@@ -751,7 +751,15 @@ async def update_thread(
                     thread.queue_position = 0
                     await thread_repository.renormalize_queue_positions(db, user_id)
             else:
-                thread.apply_derived_status("active")
+                if thread.apply_derived_status("active") and thread.queue_position < 1:
+                    # Editing a finished series back to "issues left" returns it
+                    # to the active queue, which `fetch_queue_page` lists by
+                    # status alone. Leaving it on the completed shelf's position
+                    # 0 would render it as "#0" and keep it out of every roll
+                    # pool, which selects on ``queue_position >= 1`` (#3449).
+                    thread.queue_position = (
+                        await thread_repository.max_queue_position(db, user_id) + 1
+                    )
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
     if thread_data.manual_creator_credits is not None:

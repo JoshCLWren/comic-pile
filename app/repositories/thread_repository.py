@@ -101,21 +101,33 @@ async def threads_for_user(db: AsyncSession, user_id: int) -> list[Thread]:
 
 
 async def max_queue_position(db: AsyncSession, user_id: int) -> int:
-    """Return the highest queue position held by a user's threads (0 if none).
+    """Return the highest position in a user's active queue (0 if empty).
+
+    Every caller appends a newly positioned series behind the queue, so this
+    must read the active queue membership predicate
+    (``status == "active" and queue_position >= 1``) that
+    :func:`count_active_threads` and ``queue_repository.active_queue_positions``
+    use, not every row the reader owns. Completed and excluded series can keep
+    the position they held when they left the queue (``mark_issue_read`` and
+    the ``move_to_back`` completion path both leave it in place), and counting
+    those stale values made a new series start past the end of the dense
+    1..N range, so Queue, roll card, and thread page could display a position
+    larger than the number of queued items (#3449).
 
     Args:
         db: Database session.
         user_id: Owner of the threads.
 
     Returns:
-        The maximum queue position, or 0 when the user has no threads.
+        The maximum active queue position, or 0 when the queue is empty.
     """
     result = await db.execute(
-        select(Thread.queue_position)
+        select(func.max(Thread.queue_position))
         .where(Thread.user_id == user_id)
-        .order_by(Thread.queue_position.desc())
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
     )
-    return result.scalar() or 0
+    return int(result.scalar_one() or 0)
 
 
 async def renormalize_queue_positions(db: AsyncSession, user_id: int) -> None:
