@@ -65,8 +65,14 @@ def set_test_environment() -> Iterator[None]:
 
 @pytest.fixture(scope="session")
 def worker_id() -> str:
-    """Provide a worker ID for test coordination."""
-    return "master"
+    """Provide a worker ID for test coordination.
+
+    Honors pytest-xdist's ``PYTEST_XDIST_WORKER`` environment variable so each
+    xdist worker receives its real id (``gw0``, ``gw1``, ...) instead of being
+    shadowed to ``"master"``. Falls back to ``"master"`` for sequential runs,
+    which keeps the non-xdist schema-initialization path unchanged.
+    """
+    return os.environ.get("PYTEST_XDIST_WORKER", "master")
 
 
 @pytest.fixture(autouse=True)
