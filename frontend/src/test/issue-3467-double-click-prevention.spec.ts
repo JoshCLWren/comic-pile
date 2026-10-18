@@ -82,9 +82,9 @@ test.describe('Issue #3467: Pick this series double-click prevention', () => {
 
     const dialog = await openOverridePicker(page, title)
 
-    const overrideGate: { release?: () => void } = {}
+    let overrideGate: (() => void) | undefined
     const overrideInFlight = new Promise<void>((resolve) => {
-      overrideGate.release = resolve
+      overrideGate = resolve
     })
     await page.route('**/roll/override', async (route) => {
       await overrideInFlight
@@ -94,7 +94,7 @@ test.describe('Issue #3467: Pick this series double-click prevention', () => {
     await dialog.getByRole('button', { name: 'Pick this series' }).click()
     await expect(dialog.getByRole('button', { name: 'Selecting...' })).toBeDisabled()
 
-    overrideGate.release?.()
+    overrideGate?.()
     await expect(dialog).not.toBeVisible({ timeout: 15000 })
   })
 })
