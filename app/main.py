@@ -89,6 +89,43 @@ def _robots_tag_for_spa_path(request_path: str) -> str | None:
     return "noindex, nofollow"
 
 
+def _spa_route_file_path(request_path: str) -> Path:
+    """Return the route-specific HTML file for a request path, if one exists.
+
+    The Vite build's ``closeBundle`` hook generates a static ``<route>.html`` for
+    every non-parameterized route (see ``frontend/scripts/generate-route-html.mjs``).
+    Serving that file lets crawlers and clients see route-specific title,
+    description, canonical, and robots metadata instead of the landing page
+    shell.
+
+    The request path is never trusted for filesystem layout: empty, ``.`` and
+    ``..`` segments, and backslashes are rejected so a crafted request such as
+    ``/../../frontend/dice-playground`` cannot escape ``static/react`` and serve
+    an unrelated ``.html`` file. An unsafe path falls back to the SPA index,
+    exactly like any other route without a generated file, and the resolved
+    candidate must stay inside the build directory even if it contains a
+    symlinked segment.
+
+    Args:
+        request_path: Request path with or without a leading slash.
+
+    Returns:
+        Path to the generated route HTML file, or the SPA index when the path
+        is unsafe or no route-specific file was generated.
+    """
+    build_dir = Path("static/react")
+    stripped = request_path.strip().strip("/")
+    if not stripped:
+        return build_dir / "index.html"
+    segments = stripped.replace("\\", "/").split("/")
+    if any(segment in ("", ".", "..") for segment in segments):
+        return build_dir / "index.html"
+    candidate = build_dir / f"{stripped}.html"
+    if not candidate.resolve().is_relative_to(build_dir.resolve()):
+        return build_dir / "index.html"
+    return candidate
+
+
 def _render_sitemap_xml() -> str:
     """Render the sitemap for the canonical indexable path set.
 
@@ -623,12 +660,14 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             from fastapi.responses import FileResponse, HTMLResponse
 
             spa_index = Path("static/react/index.html")
+            route_file = _spa_route_file_path(request_path)
+            serve_path = route_file if route_file.exists() else spa_index
             cache_headers = {"Cache-Control": "no-store, no-cache, must-revalidate"}
             robots_tag = _robots_tag_for_spa_path(request_path)
             if robots_tag is not None:
                 cache_headers["X-Robots-Tag"] = robots_tag
-            if spa_index.exists():
-                return FileResponse(str(spa_index), headers=cache_headers)
+            if serve_path.exists():
+                return FileResponse(str(serve_path), headers=cache_headers)
             if app_settings.environment == "production":
                 raise StarletteHTTPException(status_code=503, detail="Frontend assets unavailable")
             fallback_html = "<!doctype html><html><body><div id='root'></div></body></html>"

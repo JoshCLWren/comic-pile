@@ -9,6 +9,23 @@
 
 export const STRUCTURED_DATA_SCRIPT_ID = 'comic-pile-structured-data'
 export const BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID = 'comic-pile-breadcrumb-structured-data'
+const DEFAULT_PRODUCTION_ORIGIN = 'https://comic-pile.vercel.app'
+
+/**
+ * Resolve the absolute origin used for absolute SEO URLs.
+ *
+ * `VITE_PRODUCTION_ORIGIN` overrides the canonical production origin so a
+ * deployment on another host can emit its own absolute URLs. Falls back to the
+ * canonical origin when unset, matching `frontend/scripts/generate-sitemap.mjs`.
+ *
+ * @returns The origin with no trailing slash and no path.
+ */
+export function resolveProductionOrigin(): string {
+  // Import-meta env values are strings or absent, so parse at this I/O
+  // boundary and branch on the trimmed domain value rather than its runtime type.
+  const raw = import.meta.env.VITE_PRODUCTION_ORIGIN?.trim()
+  return raw ? raw : DEFAULT_PRODUCTION_ORIGIN
+}
 
 export const SITE_NAME = 'ComicPile'
 export const SITE_DESCRIPTION =
@@ -56,19 +73,20 @@ export interface StructuredDataGraph {
  * @returns The WebSite + SoftwareApplication JSON-LD graph.
  */
 export function buildLandingStructuredData(siteUrl: string): StructuredDataGraph {
+  const absoluteUrl = siteUrl === '/' ? resolveProductionOrigin() : siteUrl
   return {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'WebSite',
         name: SITE_NAME,
-        url: siteUrl,
+        url: absoluteUrl,
         description: SITE_DESCRIPTION,
       },
       {
         '@type': 'SoftwareApplication',
         name: SITE_NAME,
-        url: siteUrl,
+        url: absoluteUrl,
         description: SITE_DESCRIPTION,
         applicationCategory: 'WebApplication',
         featureList: [...LANDING_FEATURES],

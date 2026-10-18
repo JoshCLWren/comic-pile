@@ -122,12 +122,14 @@ test.describe('Issue #3068: SEO route cleanup', () => {
   })
 
   test('canonical links are present for indexable routes', async ({ page }) => {
-    // Only the landing page should have a canonical link
+    // Only the landing page should have a canonical link, and it must name the
+    // configured production origin (issue #3485) rather than whatever origin
+    // the page happens to be served from during the test run.
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
     // Check for canonical link tag in head
     const canonicalLink = page.locator('link[rel="canonical"]')
-    await expect(canonicalLink).toHaveAttribute('href', new RegExp(page.url(), 'i'))
+    await expect(canonicalLink).toHaveAttribute('href', 'https://comic-pile.vercel.app/')
   })
 
   test('robots.txt disallows all non-public routes', async ({ page }) => {

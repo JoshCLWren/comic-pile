@@ -73,6 +73,7 @@ export const ROUTE_SEO_TABLE: readonly RouteSeoEntry[] = [
   { pattern: '/whats-new', visibility: 'private', canonicalPath: null, title: `What's new — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/glossary', visibility: 'private', canonicalPath: null, title: `Glossary — ${APP_TITLE}`, description: APP_DESCRIPTION },
   { pattern: '/identity-inbox', visibility: 'private', canonicalPath: null, title: `Identity inbox — ${APP_TITLE}`, description: APP_DESCRIPTION },
+  { pattern: '/cbl-sources', visibility: 'private', canonicalPath: null, title: `CBL Sources — ${APP_TITLE}`, description: 'Browse trusted reading-order sources and add them as Reading Plans in ComicPile.' },
 ]
 
 const FALLBACK_ENTRY: RouteSeoEntry = {
