@@ -695,7 +695,13 @@ export default function CreatorComparisonPage() {
       )}
 
       {affectedNames.length > 0 && (
-        <div className="mt-4 rounded-xl border px-4 py-3">
+        <div
+          className="mt-4 rounded-xl border px-4 py-3"
+          style={{
+            borderColor: 'var(--theme-warning)',
+            backgroundColor: 'color-mix(in srgb, var(--theme-warning) 10%, transparent)',
+          }}
+        >
           <p className="text-sm" style={{ color: 'var(--theme-text-primary)' }}>
             <strong>Note:</strong> Some creators have fewer than 3 rated issues, making their statistics less reliable.
             <span className="break-words ml-2">Affected: {affectedNames.join(', ')}</span>
@@ -737,9 +743,8 @@ export default function CreatorComparisonPage() {
       {comparisonItems.length === 0 && (
         <div className="mt-6">
           <p className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-            None of the selected creators were found in your library. None of the selected
-            creators are available in your library — the comparison can only include creators
-            with issues credited to them in your library.
+            None of the selected creators are available in your library — the comparison can
+            only include creators with issues credited to them in your library.
           </p>
           <div className="mt-2">
             <Link

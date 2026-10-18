@@ -492,7 +492,7 @@ describe('CreatorComparisonPage', () => {
 
     expect(screen.getByText('Comparing 0 creators')).toBeInTheDocument()
     expect(
-      screen.getByText('None of the selected creators were found in your library. None of the selected creators are available in your library — the comparison can only include creators with issues credited to them in your library.'),
+      screen.getByText('None of the selected creators are available in your library — the comparison can only include creators with issues credited to them in your library.'),
     ).toBeInTheDocument()
   })
 
@@ -592,7 +592,7 @@ describe('CreatorComparisonPage', () => {
       }),
     )
 
-renderAt('creator:100,creator:101')
+    renderAt('creator:100,creator:101')
 
     // Each bar is bucket_count / creator_ratings_count, so bars are directly
     // comparable regardless of sample size.
