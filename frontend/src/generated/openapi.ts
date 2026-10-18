@@ -1452,6 +1452,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Release Sources For Reader
+         * @description List reader-facing release source status for one plan.
+         *
+         *     Returns enabled and disabled sources so the reader can re-enable a
+         *     previously disabled volume without leaving the plan reader view.
+         */
+        get: operations["list_release_sources_for_reader_api_v1_continuity_plans__plan_id__release_sources_reader_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity-rules/": {
         parameters: {
             query?: never;
@@ -12002,8 +12025,36 @@ export interface components {
             /** Plan Id */
             plan_id: number;
             progress: components["schemas"]["ReadingPlanProgress"];
+            /** Release Sources */
+            release_sources?: components["schemas"]["ReadingPlanReleaseSourceStatus"][];
             /** Sources */
             sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
+        };
+        /**
+         * ReadingPlanReleaseSourceStatus
+         * @description One followed ComicVine volume and its sync state on a Reading Plan.
+         */
+        ReadingPlanReleaseSourceStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /** External Identity Id */
+            external_identity_id: number;
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /** Provider Issue Count */
+            provider_issue_count?: number | null;
+            /** Provider Publisher */
+            provider_publisher?: string | null;
+            /** Provider Start Year */
+            provider_start_year?: number | null;
+            /** Provider Title */
+            provider_title?: string | null;
+            /** Provider Volume Id */
+            provider_volume_id: string;
+            /** Source Id */
+            source_id: number;
+            /** Thread Id */
+            thread_id: number;
         };
         /**
          * ReadingPlanSourcePlacementView
@@ -16417,6 +16468,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["app__schemas__reading_plan_release_source__ReleaseSourceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_release_sources_for_reader_api_v1_continuity_plans__plan_id__release_sources_reader_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanReleaseSourceStatus"][];
                 };
             };
             /** @description Validation Error */

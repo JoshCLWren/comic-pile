@@ -68,6 +68,26 @@ const disabledSource = {
   last_synced_at: null,
 }
 
+const sourceWithoutTitle = {
+  ...enabledSource,
+  source_id: 903,
+  thread_id: 6,
+  provider_title: '',
+  provider_publisher: null,
+  provider_start_year: null,
+  provider_issue_count: null,
+  enabled: false,
+  last_synced_at: null,
+}
+
+const sourceWithInvalidSync = {
+  ...enabledSource,
+  source_id: 904,
+  thread_id: 7,
+  provider_title: 'Invalid Sync',
+  last_synced_at: 'not-a-date',
+}
+
 describe('NewReleasesSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -121,5 +141,39 @@ describe('NewReleasesSection', () => {
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith({ sourceId: 902, enabled: true }),
     )
+  })
+
+  it('falls back to provider_volume_id when provider_title is empty', () => {
+    render(
+      <NewReleasesSection sources={[sourceWithoutTitle]} emptyLabel="No sources" />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('4000-77')).toBeInTheDocument()
+    expect(screen.queryByText(/X-Men/)).not.toBeInTheDocument()
+  })
+
+  it('shows Never synced for invalid last_synced_at', () => {
+    render(
+      <NewReleasesSection sources={[sourceWithInvalidSync]} emptyLabel="No sources" />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('Last sync: Never synced')).toBeInTheDocument()
+  })
+
+  it('renders volume label without metadata when only title is present', () => {
+    const minimalSource = {
+      ...enabledSource,
+      source_id: 905,
+      provider_title: 'Minimal Title',
+      provider_publisher: null,
+      provider_start_year: null,
+      provider_issue_count: null,
+    }
+    render(
+      <NewReleasesSection sources={[minimalSource]} emptyLabel="No sources" />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('Minimal Title')).toBeInTheDocument()
+    expect(screen.queryByText(/·/)).not.toBeInTheDocument()
   })
 })

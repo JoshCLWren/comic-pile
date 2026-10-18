@@ -12958,6 +12958,13 @@
           "progress": {
             "$ref": "#/components/schemas/ReadingPlanProgress"
           },
+          "release_sources": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
+            },
+            "title": "Release Sources",
+            "type": "array"
+          },
           "sources": {
             "items": {
               "$ref": "#/components/schemas/ReadingPlanSourceSnapshot"
@@ -12977,6 +12984,96 @@
           "sources"
         ],
         "title": "ReadingPlanReaderResponse",
+        "type": "object"
+      },
+      "ReadingPlanReleaseSourceStatus": {
+        "description": "One followed ComicVine volume and its sync state on a Reading Plan.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "title": "External Identity Id",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "provider_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Issue Count"
+          },
+          "provider_publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Publisher"
+          },
+          "provider_start_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Start Year"
+          },
+          "provider_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Title"
+          },
+          "provider_volume_id": {
+            "title": "Provider Volume Id",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "title": "ReadingPlanReleaseSourceStatus",
         "type": "object"
       },
       "ReadingPlanSourcePlacementView": {
@@ -21858,6 +21955,60 @@
           }
         ],
         "summary": "List Release Sources",
+        "tags": [
+          "dependencies",
+          "dependencies",
+          "reading-plan-release-sources"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
+      "get": {
+        "description": "List reader-facing release source status for one plan.\n\nReturns enabled and disabled sources so the reader can re-enable a\npreviously disabled volume without leaving the plan reader view.",
+        "operationId": "list_release_sources_for_reader_api_v1_continuity_plans__plan_id__release_sources_reader_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
+                  },
+                  "title": "Response List Release Sources For Reader Api V1 Continuity Plans  Plan Id  Release Sources Reader Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Release Sources For Reader",
         "tags": [
           "dependencies",
           "dependencies",
