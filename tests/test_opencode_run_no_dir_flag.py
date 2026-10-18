@@ -9,26 +9,29 @@ or `subprocess.run(..., cwd=dir)`) instead.
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCAN_SUFFIXES = {".sh", ".py", ".yml", ".yaml", ".md", ".cjs", ".mjs", ".js", ".ts"}
-SKIP_PREFIXES = ("archive/",)
 SELF = Path(__file__).resolve()
 
 
+SCAN_ROOTS = (".github", ".agents", ".claude", "scripts", "app", "tests", "docs")
+SKIP_DIRS = {"node_modules", ".venv", "__pycache__", "archive"}
+
+
 def _tracked_files() -> list[Path]:
-    output = subprocess.run(
-        ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
-    ).stdout
+    # CI may run without a .git directory, so walk the source roots directly.
     files = []
-    for rel in output.splitlines():
-        if rel.startswith(SKIP_PREFIXES):
+    for root_name in SCAN_ROOTS:
+        root = ROOT / root_name
+        if not root.is_dir():
             continue
-        path = ROOT / rel
-        if path.suffix in SCAN_SUFFIXES and path.is_file() and path.resolve() != SELF:
-            files.append(path)
+        for path in root.rglob("*"):
+            if any(part in SKIP_DIRS for part in path.relative_to(ROOT).parts):
+                continue
+            if path.suffix in SCAN_SUFFIXES and path.is_file() and path.resolve() != SELF:
+                files.append(path)
     return files
 
 
