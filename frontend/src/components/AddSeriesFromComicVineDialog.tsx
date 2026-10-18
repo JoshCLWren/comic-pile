@@ -9,12 +9,14 @@ import type {
   ComicVineImportSeriesResult,
 } from '../services/api-comicvine'
 import ImageWithLoading from './ImageWithLoading'
+// Declared before the query-effect and error-helper imports so main's concurrent
+// #3854 series-status imports stay in a separate hunk and merge cleanly (#3872).
+import { LatestRequestGuard, type LoadPhase } from '../utils/latestRequest'
 import { optimizedImageUrl, optimizedImageSrcSet } from '../services/imageDelivery'
 import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
-import { LatestRequestGuard, type LoadPhase } from '../utils/latestRequest'
 
 interface AddSeriesFromComicVineDialogProps {
   isOpen: boolean
