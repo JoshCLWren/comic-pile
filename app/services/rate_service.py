@@ -35,6 +35,9 @@ from app.schemas import RateRequest
 from app.schemas.roll_v2 import RateResponse, RollLastRead, RollReconciliation
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
+    CREATED_ISSUES_KEY,
+    DELETED_ISSUES_KEY,
+    ISSUE_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
     SNAPSHOT_VERSION,
     SNAPSHOT_VERSION_KEY,
@@ -71,9 +74,17 @@ async def _capture_thread_pre_state(
     thread: Thread,
     db: AsyncSession,
     issues: list[Issue] | None = None,
-    *, force_issue_tracking: bool = False,
+    *,
+    force_issue_tracking: bool = False,
+    compact: bool = False,
 ) -> dict:
-    """Extract a thread's full pre-rating state as a plain dictionary.
+    """Extract a thread's pre-rating state as a plain dictionary.
+
+    When ``compact`` is True, only the thread fields that a rating action can
+    change are captured — a bounded, constant-size set — and the full issue
+    collection is omitted entirely (the caller supplies an explicit
+    ``issue_changes`` list separately). The legacy full capture is retained
+    for full-library snapshots and session-start checkpoints.
 
     Args:
         thread: Thread being rated.
@@ -81,13 +92,16 @@ async def _capture_thread_pre_state(
         issues: Already-loaded issues for the thread in canonical position
             order. When None (and the thread uses issue tracking), the issues
             are loaded with one query.
-
         force_issue_tracking: Capture canonical Issue state despite stale legacy metadata.
+        compact: Capture a bounded per-action thread state instead of full state.
 
     Returns:
         Serializable pre-rating thread state.
     """
     uses_issue_tracking = force_issue_tracking or thread.uses_issue_tracking()
+    if compact:
+        return _build_compact_thread_state(thread, uses_issue_tracking)
+
     state: dict = {
         "title": thread.title,
         "format": normalize_format_value(thread.format),
@@ -129,6 +143,54 @@ async def _capture_thread_pre_state(
         state["reading_progress"] = None
 
     return state
+
+
+def _build_compact_thread_state(thread: Thread, uses_issue_tracking: bool) -> dict:
+    """Build the bounded per-action thread state for a v2 rating delta.
+
+    Only fields a rating action can change are captured, so the payload stays
+    constant-size regardless of the thread's issue count. Queue position and
+    blocked flags live in their own change maps; title, format, notes, and
+    other identity fields are unchanged by rating and need no preimage.
+
+    Args:
+        thread: Thread whose changed fields are captured.
+        uses_issue_tracking: Whether the thread used issue tracking pre-rating.
+
+    Returns:
+        Compact thread state dictionary.
+    """
+    return {
+        "issues_remaining": thread.issues_remaining,
+        "last_rating": thread.last_rating,
+        "last_activity_at": thread.last_activity_at.isoformat()
+        if thread.last_activity_at
+        else None,
+        "total_issues": thread.total_issues,
+        "next_unread_issue_id": thread.next_unread_issue_id,
+        "reading_progress": thread.reading_progress,
+        "status": thread.status,
+        USES_ISSUE_TRACKING_KEY: uses_issue_tracking,
+    }
+
+
+def _issue_preimage(issue: Issue) -> dict:
+    """Build a serializable preimage of an issue before it is mutated.
+
+    Args:
+        issue: Issue whose pre-rating state is captured.
+
+    Returns:
+        Serializable issue preimage.
+    """
+    return {
+        "id": issue.id,
+        "number": issue.issue_number,
+        "status": issue.status,
+        "read_at": issue.read_at.isoformat() if issue.read_at else None,
+        "position": issue.position,
+        "catalog_issue_id": issue.catalog_issue_id,
+    }
 
 
 async def _capture_threads_pre_states(
@@ -178,8 +240,17 @@ async def snapshot_thread_states(
     queue_position_changes: dict[int, int] | None = None,
     blocked_changes: dict[int, bool] | None = None,
     pre_session_state: dict | None = None,
+    issue_changes: list[dict] | None = None,
+    created_issues: list[dict] | None = None,
+    deleted_issues: list[dict] | None = None,
 ) -> None:
     """Create a versioned delta or legacy full undo snapshot.
+
+    The v2 delta stores only the records that actually changed on this action
+    (issue #3226): the rated thread's changed fields, the changed issue
+    preimages, created/deleted issue preimages, and queue/blocking changes.
+    Unchanged issues are never serialized, so a one-issue rating on a
+    10,000-issue thread stays bounded by the action's own mutations.
 
     Args:
         db: SQLAlchemy session.
@@ -192,6 +263,9 @@ async def snapshot_thread_states(
         queue_position_changes: Changed thread IDs mapped to old positions.
         blocked_changes: Changed thread IDs mapped to old blocked flags.
         pre_session_state: Pre-rating session fields.
+        issue_changes: Issue preimages whose state changed on this action.
+        created_issues: Preimages of issues created during implicit migration.
+        deleted_issues: Preimages of issues deleted during this action.
 
     Raises:
         ValueError: If delta state is supplied without a rated thread ID.
@@ -202,9 +276,27 @@ async def snapshot_thread_states(
                 "rated_thread_id is required when rated_thread_pre_state is set"
             )
 
+        # Compact per-action records are nested under the rated thread so the
+        # payload's top level keeps only thread-id keys plus the reserved
+        # underscore-prefixed change maps (issue #3226). Undo applies them via
+        # the per-thread state, and the top-level thread-id scan never mistakes
+        # a change key for a thread id.
+        rated_state = dict(rated_thread_pre_state)
+        if issue_changes is not None:
+            # Always emit the compact issue-change list for a v2 rating delta,
+            # even when empty. Restore keys off this marker to apply only the
+            # recorded changes; omitting it would let a compact payload fall
+            # through to the legacy full-collection path, which would delete
+            # issues the delta never recorded (issue #3226).
+            rated_state[ISSUE_CHANGES_KEY] = issue_changes
+        if created_issues:
+            rated_state[CREATED_ISSUES_KEY] = created_issues
+        if deleted_issues:
+            rated_state[DELETED_ISSUES_KEY] = deleted_issues
+
         thread_states: dict = {
             SNAPSHOT_VERSION_KEY: SNAPSHOT_VERSION,
-            str(rated_thread_id): rated_thread_pre_state,
+            str(rated_thread_id): rated_state,
         }
         if queue_position_changes:
             thread_states[QUEUE_CHANGES_KEY] = {
@@ -363,9 +455,17 @@ async def rate_thread(
             raise HTTPException(status_code=409, detail="The pending issue is excluded from this reading session")
         live_source_event_id, live_issue = offered[0].id, offered[1]
         canonical_issues = await issues_ordered(db, thread_id)
+    # Capture compact thread pre-state for v2 delta (only changed fields)
     pre_thread_state = await _capture_thread_pre_state(
         thread, db, issues=canonical_issues, force_issue_tracking=eligibility is not None,
+        compact=True,
     )
+    # Preimages of only the issues this action actually mutates. The payload
+    # stays bounded by the action's own changes: the rated thread's unchanged
+    # issues are never serialized (issue #3226). Each capture happens right
+    # before the mutation so the recorded preimage is the true pre-action state.
+    issue_changes: list[dict] = []
+    created_issues_list: list[Issue] = []
     current_die = await get_current_die_for_session(current_session, db)
     pre_session_state = {
         "start_die": current_session.start_die,
@@ -408,7 +508,6 @@ async def rate_thread(
         current_issue = await find_in_thread_by_number(
             db, thread.id, issue_number
         )
-        created_issues: list[Issue] = []
 
         if not current_issue:
             try:
@@ -430,10 +529,10 @@ async def rate_thread(
                         position=issue_position,
                     )
                     db.add(issue)
-                    created_issues.append(issue)
+                    created_issues_list.append(issue)
                 await db.flush()
                 current_issue = next(
-                    (i for i in created_issues if i.issue_number == issue_number),
+                    (i for i in created_issues_list if i.issue_number == issue_number),
                     None,
                 )
                 if not current_issue:
@@ -458,10 +557,19 @@ async def rate_thread(
                     detail="Migration failed.",
                 ) from error
 
-        if created_issues:
-            all_issues = sorted(created_issues, key=lambda i: i.position)
+        if created_issues_list:
+            all_issues = sorted(created_issues_list, key=lambda i: i.position)
         else:
             all_issues = await issues_ordered(db, thread.id)
+            # Only capture preimages for the issues this action actually mutates
+            # (bounded by the mutation, not the full thread collection — #3226).
+            changed_issues: list[Issue] = []
+            for issue in all_issues:
+                if issue.position < current_issue.position and issue.status != "read":
+                    changed_issues.append(issue)
+                elif issue.position == current_issue.position:
+                    changed_issues.append(issue)
+            issue_changes.extend(_issue_preimage(issue) for issue in changed_issues)
         for issue in all_issues:
             if issue.position < current_issue.position and issue.status != "read":
                 issue.status = "read"
@@ -486,6 +594,7 @@ async def rate_thread(
     next_issue: Issue | None = None
 
     if live_issue is not None:
+        issue_changes.append(_issue_preimage(live_issue))
         live_issue.status = "read"
         live_issue.read_at = datetime.now(UTC)
         rated_issue_id, rated_issue_number = live_issue.id, live_issue.issue_number
@@ -514,6 +623,7 @@ async def rate_thread(
             if issues:
                 issue = issues[0]
                 if issue.id == thread.next_unread_issue_id:
+                    issue_changes.append(_issue_preimage(issue))
                     issue.status = "read"
                     issue.read_at = datetime.now(UTC)
                     rated_issue_id = issue.id
@@ -675,6 +785,9 @@ async def rate_thread(
         queue_position_changes=queue_position_changes,
         blocked_changes=blocked_changes,
         pre_session_state=pre_session_state,
+        issue_changes=issue_changes,
+        created_issues=[_issue_preimage(i) for i in created_issues_list] if created_issues_list else None,
+        deleted_issues=None,
     )
     response_eligibility = await get_execution_eligibility(db, user_id)
     await db.commit()
