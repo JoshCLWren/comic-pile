@@ -665,11 +665,20 @@ async def rate_thread(
 
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
-    new_die = (
-        step_down(current_die)
-        if rate_data.rating >= rating_threshold
-        else step_up(current_die)
-    )
+    # A pinned manual die never moves the ladder (#3144): record the die that
+    # was rolled with no ``die_after`` so the rating does not become the die
+    # AUTO resumes from once the manual die is cleared (#3893).
+    manual_die = current_session.manual_die
+    die_after: int | None = None
+    if manual_die:
+        new_die = manual_die
+    else:
+        new_die = (
+            step_down(current_die)
+            if rate_data.rating >= rating_threshold
+            else step_up(current_die)
+        )
+        die_after = new_die
 
     source_roll_event_id = (
         live_source_event_id if eligibility is not None
@@ -683,7 +692,7 @@ async def rate_thread(
         rating=rate_data.rating,
         issues_read=issues_read,
         die=current_die,
-        die_after=new_die,
+        die_after=die_after,
         issue_id=rated_issue_id,
         issue_number=rated_issue_number,
         source_roll_event_id=source_roll_event_id,

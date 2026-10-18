@@ -700,7 +700,7 @@ async def test_rate_targets_pending_thread_not_last_roll(
 
 @pytest.mark.asyncio
 async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Rating creates rate event with die_after value."""
+    """A pinned manual die records the rolled die and no ladder move (#3893)."""
     from tests.conftest import get_or_create_user_async
     from comic_pile.reading_session import get_current_die
 
@@ -751,7 +751,7 @@ async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: Async
     rate_event = result.scalars().first()
     assert rate_event is not None
     assert rate_event.die == 20
-    assert rate_event.die_after == 12
+    assert rate_event.die_after is None
 
     current_die = await get_current_die(session.id, async_db)
     assert current_die == 20
@@ -761,7 +761,7 @@ async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: Async
 async def test_rate_low_rating_updates_manual_die(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Low rating steps die up and records die_after in rate event."""
+    """A low rating on a pinned manual die does not step the ladder (#3893)."""
     from tests.conftest import get_or_create_user_async
     from comic_pile.reading_session import get_current_die
 
@@ -812,10 +812,127 @@ async def test_rate_low_rating_updates_manual_die(
     rate_event = result.scalars().first()
     assert rate_event is not None
     assert rate_event.die == 6
-    assert rate_event.die_after == 8
+    assert rate_event.die_after is None
 
     current_die = await get_current_die(session.id, async_db)
     assert current_die == 6
+
+
+async def _rate_on_manual_die(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    *,
+    rating: float,
+    prior_auto_die_after: int | None = None,
+) -> ReadingSession:
+    """Roll and rate on a manual d20 in a session that started on d6 (#3893).
+
+    ``prior_auto_die_after`` seeds an earlier automatic ladder move so AUTO
+    has a non-start die to return to.
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+    session = ReadingSession(start_die=6, user_id=user.id)
+    async_db.add(session)
+    thread = Thread(
+        title="Manual Die Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(session)
+    await async_db.refresh(thread)
+
+    if prior_auto_die_after is not None:
+        async_db.add(
+            Event(
+                type="rate",
+                session_id=session.id,
+                thread_id=thread.id,
+                rating=2.0,
+                issues_read=1,
+                die=6,
+                die_after=prior_auto_die_after,
+                timestamp=datetime.now(UTC) - timedelta(minutes=5),
+            )
+        )
+
+    session.manual_die = 20
+    async_db.add(
+        Event(
+            type="roll",
+            die=20,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.post("/api/v1/rate/", json={"rating": rating, "issues_read": 1})
+    assert response.status_code == 200, response.text
+    # AUTO must resolve against this same session, not a freshly created one.
+    await async_db.refresh(session)
+    assert session.ended_at is None
+    assert session.manual_die == 20
+    return session
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rating", [3.0, 4.0])
+async def test_manual_d20_rating_is_recorded_truthfully(
+    auth_client: AsyncClient, async_db: AsyncSession, rating: float
+) -> None:
+    """Regression #3893: a manual d20 roll is recorded as d20, never d30/d12."""
+    from app.services.session_response import build_ladder_path
+
+    session = await _rate_on_manual_die(auth_client, async_db, rating=rating)
+
+    result = await async_db.execute(
+        select(Event).where(Event.session_id == session.id, Event.type == "rate")
+    )
+    rate_event = result.scalars().one()
+    assert rate_event.die == 20
+    assert rate_event.die_after is None
+
+    assert await build_ladder_path(session.id, async_db) == "6"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rating", [3.0, 4.0])
+async def test_auto_after_manual_d20_rating_returns_to_auto_die(
+    auth_client: AsyncClient, async_db: AsyncSession, rating: float
+) -> None:
+    """Regression #3893: clearing the manual die resolves AUTO to the start die."""
+    await _rate_on_manual_die(auth_client, async_db, rating=rating)
+
+    response = await auth_client.post("/api/v1/roll/clear-manual-die")
+    assert response.status_code == 200
+    assert response.text == "d6"
+
+
+@pytest.mark.asyncio
+async def test_auto_after_manual_d20_rating_keeps_prior_auto_move(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Regression #3893: AUTO resumes the last automatic ladder die (d8)."""
+    from app.services.session_response import build_ladder_path
+
+    session = await _rate_on_manual_die(
+        auth_client, async_db, rating=3.0, prior_auto_die_after=8
+    )
+    assert await build_ladder_path(session.id, async_db) == "6 → 8"
+
+    response = await auth_client.post("/api/v1/roll/clear-manual-die")
+    assert response.status_code == 200
+    assert response.text == "d8"
 
 
 @pytest.mark.asyncio
