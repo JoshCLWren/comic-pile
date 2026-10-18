@@ -44,6 +44,7 @@ class ThreadComment(TypedDict):
 class ThreadComments(TypedDict):
     nodes: list[ThreadComment]
     totalCount: NotRequired[int]
+    pageInfo: NotRequired[PageInfo]
 
 
 class ReviewThread(TypedDict):
@@ -308,7 +309,8 @@ def fake_gh(tmp_path: Path, *, fail: bool = False) -> dict[str, str]:
         [
             thread("some-human", "human comment", line=1),
             thread("greptile-apps", "greptile finding", line=5),
-        ]
+        ],
+        {"hasNextPage": False, "endCursor": None},
     )
     script = bin_dir / "gh"
     if fail:
@@ -346,6 +348,7 @@ def test_mission_fetches_writes_file_and_injects_greptile_first(tmp_path: Path) 
     assert "HIGH PRIORITY, must-address" in text
     assert text.index("greptile finding") < text.index("human comment")
     assert "advice" in text
+    assert "INCOMPLETE" not in text
     calls = (tmp_path / "gh-calls.log").read_text()
     assert f"commits/{HEAD}/check-runs" in calls
     assert "isOutdated" in calls and "author{login}" in calls
@@ -359,7 +362,7 @@ def test_fetch_failure_never_fails_the_wrapper(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert (
-        "WARNING: the wrapper could not fetch or format: review threads,review submissions,PR body,check runs"
+        "The wrapper could not fetch or format: review threads,review submissions,PR body,check runs"
         in result.stdout
     )
 
@@ -413,7 +416,7 @@ def test_every_thread_page_is_read_and_greptile_still_comes_first(tmp_path: Path
     out = format_findings(tmp_path, threads_json=first + "\n" + second)
     assert "HIGH PRIORITY G1. app/x.py:200" in out
     assert out.index("page two greptile finding") < out.index("page one human")
-    assert "pagination was incomplete" not in out
+    assert "INCOMPLETE" not in out
 
 
 def test_incomplete_thread_pagination_is_flagged(tmp_path: Path) -> None:
@@ -423,7 +426,7 @@ def test_incomplete_thread_pagination_is_flagged(tmp_path: Path) -> None:
             [thread("greptile-apps", "finding")], {"hasNextPage": True, "endCursor": "c1"}
         ),
     )
-    assert "WARNING: review-thread pagination was incomplete" in out
+    assert "WARNING: INCOMPLETE REVIEW DATA" in out
 
 
 def test_hidden_thread_comments_are_flagged(tmp_path: Path) -> None:

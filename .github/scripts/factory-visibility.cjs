@@ -106,25 +106,34 @@ function reviewerGraphqlLogins() {
   return new Set([...REPAIR_ROUTING_REVIEWER_BOTS].flatMap(login => [login, login.replace(/\[bot\]$/, '')]));
 }
 
-async function unresolvedReviewerBotThreads(github, context, number) {
+const REVIEW_THREAD_PAGE_LIMIT = 50;
+
+async function unresolvedReviewerBotThreads(github, context, number, { pageLimit = REVIEW_THREAD_PAGE_LIMIT } = {}) {
   // Follow every reviewThreads page: an open finding beyond the first 100
-  // threads must still route the PR to repair.
+  // threads must still route the PR to repair. Only each thread's first
+  // comment (its author) matters here, and comments(first:1) always returns
+  // it, so nested comment pages cannot hide a finding. Returns the count and
+  // whether every page was read; callers must fail closed when incomplete.
   const logins = reviewerGraphqlLogins();
   let count = 0;
   let after = null;
-  for (let page = 0; page < 50; page += 1) {
+  for (let page = 0; page < pageLimit; page += 1) {
     const response = await withRetry(() => github.graphql(
       `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{isResolved isOutdated comments(first:1){nodes{author{login}}}}}}}}`,
       { owner: context.repo.owner, name: context.repo.repo, number, after },
     ));
     const threads = response?.repository?.pullRequest?.reviewThreads;
-    count += (threads?.nodes || []).filter(thread => !thread.isResolved
+    if (!Array.isArray(threads?.nodes)) return { count, complete: false };
+    count += threads.nodes.filter(thread => !thread.isResolved
       && !thread.isOutdated
       && logins.has(thread.comments?.nodes?.[0]?.author?.login)).length;
-    if (!threads?.pageInfo?.hasNextPage || !threads.pageInfo.endCursor) break;
+    if (threads.pageInfo?.hasNextPage === false) return { count, complete: true };
+    if (threads.pageInfo?.hasNextPage !== true || !threads.pageInfo.endCursor) {
+      return { count, complete: false };
+    }
     after = threads.pageInfo.endCursor;
   }
-  return count;
+  return { count, complete: false };
 }
 
 async function livePullRequestHead(github, context, number) {
@@ -472,7 +481,15 @@ async function reconcile({ github, context }) {
       // stale by the time this runs. Route only if the review still targets
       // the live PR head.
       if (review.commit_id !== await livePullRequestHead(github, context, pullRequest.number)) return;
-      if (await unresolvedReviewerBotThreads(github, context, pullRequest.number) === 0) return;
+      const { count, complete } = await unresolvedReviewerBotThreads(github, context, pullRequest.number);
+      if (count === 0) {
+        // Fail closed: never treat a truncated thread listing as "no
+        // findings". Failing the run leaves the event visibly red for retry.
+        if (!complete) {
+          throw new Error(`PR #${pullRequest.number}: review-thread pagination was incomplete; refusing to treat Greptile findings as absent`);
+        }
+        return;
+      }
       await reconcileLabels(github, context, pullRequest.number, {
         owner: currentOwner || await ownerFromLinkedIssue(github, context, pullRequest),
         stage: 'factory:changes-requested',
@@ -507,6 +524,7 @@ module.exports._test = {
   isRepairRoutingReviewer,
   unresolvedReviewerBotThreads,
   livePullRequestHead,
+  REVIEW_THREAD_PAGE_LIMIT,
   REPAIR_ROUTING_REVIEWER_BOTS,
   performedViaUntrustedApp,
   TRUSTED_APP_SLUGS,

@@ -5,6 +5,7 @@ const reconcile = require('./factory-visibility.cjs');
 const {
   trusted,
   isRepairRoutingReviewer,
+  unresolvedReviewerBotThreads,
   REPAIR_ROUTING_REVIEWER_BOTS,
   TRUSTED_APP_SLUGS,
 } = reconcile._test;
@@ -44,14 +45,14 @@ function githubFor({
       if (graphqlCalls) graphqlCalls.push({ query, variables });
       const index = variables.after ? Number(variables.after.slice('cursor-'.length)) : 0;
       const page = pages[index];
-      const hasNextPage = index + 1 < pages.length;
+      const hasNextPage = index + 1 < pages.length || page.hasNextPage === true;
+      const pageInfo = 'pageInfo' in page
+        ? page.pageInfo
+        : { hasNextPage, endCursor: hasNextPage ? `cursor-${index + 1}` : null };
       return {
         repository: {
           pullRequest: {
-            reviewThreads: {
-              nodes: page.nodes,
-              pageInfo: { hasNextPage, endCursor: hasNextPage ? `cursor-${index + 1}` : null },
-            },
+            reviewThreads: { nodes: page.nodes, ...(pageInfo === undefined ? {} : { pageInfo }) },
           },
         },
       };
@@ -146,6 +147,45 @@ test('Greptile findings beyond the first thread page still route', async () => {
   assert.equal(graphqlCalls[1].variables.after, 'cursor-1');
   assert.equal(calls.length, 1);
   assert.ok(calls[0].labels.includes('factory:changes-requested'));
+});
+
+test('truncated thread pagination with no findings seen fails closed instead of skipping', async () => {
+  for (const truncated of [
+    { nodes: [thread({ isResolved: true })], pageInfo: { hasNextPage: true, endCursor: null } },
+    { nodes: [thread({ isResolved: true })], pageInfo: undefined },
+    { nodes: null, pageInfo: { hasNextPage: false, endCursor: null } },
+  ]) {
+    const calls = [];
+    const github = githubFor({ threadPages: [truncated], setLabels: async input => calls.push(input) });
+    await assert.rejects(
+      reconcile({ github, context: reviewContext(greptileReview()) }),
+      /review-thread pagination was incomplete/,
+    );
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('truncated thread pagination still routes when an open Greptile finding was already seen', async () => {
+  const { calls } = await run(greptileReview(), {
+    threadPages: [{ nodes: [thread()], pageInfo: { hasNextPage: true, endCursor: null } }],
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:changes-requested'));
+});
+
+test('thread counting reports incomplete when the page limit is exhausted', async () => {
+  const github = githubFor({
+    threadPages: [{ nodes: [thread({ isResolved: true })] }, { nodes: [thread()] }],
+  });
+  const context = reviewContext(greptileReview());
+  assert.deepEqual(
+    await unresolvedReviewerBotThreads(github, context, 100, { pageLimit: 1 }),
+    { count: 0, complete: false },
+  );
+  assert.deepEqual(
+    await unresolvedReviewerBotThreads(github, context, 100),
+    { count: 1, complete: true },
+  );
 });
 
 test('Greptile review routes only when it still targets the live PR head', async () => {
