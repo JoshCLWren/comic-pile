@@ -6,7 +6,7 @@ import QueuePage from '../pages/QueuePage'
 import { ToastProvider } from '../contexts/ToastProvider'
 import QueueBulkMapSeriesDialog from '../components/QueueBulkMapSeriesDialog'
 import { useCreateThread, useUpdateThread, useReactivateThread } from '../hooks/useThread'
-import { useQueueThreads } from '../hooks/useQueue'
+import { useQueueThreads, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 
 vi.mock('../components/QueueBulkMapSeriesDialog', () => ({
@@ -103,6 +103,8 @@ vi.mock('../pages/QueuePage/useQueueThreadActions', () => ({
 }))
 
 const mockedUseQueueThreads = vi.mocked(useQueueThreads)
+const mockedUseMoveToPosition = vi.mocked(useMoveToPosition)
+const mockedUseShuffleQueue = vi.mocked(useShuffleQueue)
 const mockedUseCreateThread = vi.mocked(useCreateThread)
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedUseReactivateThread = vi.mocked(useReactivateThread)
@@ -140,6 +142,8 @@ describe('QueuePage bulk mapping wiring', () => {
     mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     mockedUseSession.mockReturnValue({
       data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
       refetch: vi.fn(),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Modal from './Modal'
 import { useComicVineSearch } from '../hooks/useComicVineSearch'
 import type { ComicVineSeriesResult } from '../services/api-comicvine'
@@ -35,6 +35,7 @@ interface QueueMapSeriesDialogProps {
 type DialogStep = 'search' | 'preview'
 
 const SEARCH_PAGE_SIZE = 20
+const SEARCH_DEBOUNCE_MS = 300
 
 function stripParenthesizedYears(title: string): string {
   return title.replace(/\((\d{4}(-\d{4})?)\)/g, '').trim()
@@ -104,12 +105,13 @@ export default function QueueMapSeriesDialog({
 }: QueueMapSeriesDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
   const [query, setQuery] = useState(threadTitle)
-   const queryChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [searchTerm, setSearchTerm] = useState(() => stripParenthesizedYears(threadTitle))
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
   const [uncheckedRowIds, setUncheckedRowIds] = useState<ReadonlySet<string>>(() => new Set())
-  
+  const queryDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const searchQuery = useComicVineSearch({
-    query,
+    query: searchTerm,
     pageSize: SEARCH_PAGE_SIZE,
     enabled: isOpen && step === 'search',
   })
@@ -138,39 +140,70 @@ export default function QueueMapSeriesDialog({
       const initial = stripParenthesizedYears(threadTitle)
       setStep('search')
       setQuery(initial)
+      setSearchTerm(initial)
       setSelectedSeries(null)
       setUncheckedRowIds(new Set())
-   // Clean up query change timeout to prevent memory leaks
-   useEffect(() => {
-     return () => {
-       if (queryChangeTimeoutRef.current) {
-         clearTimeout(queryChangeTimeoutRef.current)
-       }
-     }
-   }, [])
       commit.reset()
     }
     // Reset only on open transitions; the search query is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, threadId])
-   const handleQueryChange = useCallback(
-     (value: string) => {
-       // Debounce the query update to avoid spamming searches on every keystroke
-       if (queryChangeTimeoutRef.current) {
-         clearTimeout(queryChangeTimeoutRef.current)
-       }
-       queryChangeTimeoutRef.current = setTimeout(() => {
-         setQuery(value)
-       }, 300)
-      },
-      [queryChangeTimeoutRef],
-    )
+
+  useEffect(
+    () => () => {
+      if (queryDebounceRef.current) clearTimeout(queryDebounceRef.current)
+    },
+    [],
+  )
+
+  const handleQueryChange = useCallback((value: string) => {
+    // The input stays responsive, but only the debounced value reaches the
+    // provider search hook so each typed prefix does not spend a ComicVine
+    // request against the shared hourly budget (issue #3484 review).
+    setQuery(value)
+    if (queryDebounceRef.current) clearTimeout(queryDebounceRef.current)
+    queryDebounceRef.current = setTimeout(() => {
+      setSearchTerm(value)
+    }, SEARCH_DEBOUNCE_MS)
+  }, [])
+
+  const {
+    hasNextPage: searchHasNextPage,
+    isFetching: isSearchFetching,
+    isPlaceholderData: isSearchPlaceholder,
+    fetchNextPage,
+    data: searchData,
+    isLoading: isSearchLoading,
+    error: searchError,
+  } = searchQuery
+
+  // Flatten the infinite pages into one deduplicated list. React Query retains
+  // the previous pages while a new query settles, so a provider page that
+  // overlaps the prior one must not render the same volume twice.
+  const searchResults = useMemo(() => {
+    const seen = new Set<number>()
+    const unique: ComicVineSeriesResult[] = []
+    for (const page of searchData?.pages ?? []) {
+      for (const series of page.results) {
+        if (seen.has(series.comicvine_volume_id)) continue
+        seen.add(series.comicvine_volume_id)
+        unique.push(series)
+      }
+    }
+    return unique
+  }, [searchData])
+  const hasSearchText = query.trim().length > 0
+  // While a debounced re-search is in flight, React Query keeps the previous
+  // results as placeholder data but reports no next page for the *new* query.
+  // Keep the load-more control visible (disabled) so the list does not jump.
+  const showLoadMore =
+    hasSearchText && (searchHasNextPage || (isSearchPlaceholder && isSearchFetching))
 
   const handleLoadMore = useCallback(() => {
-    if (searchQuery.hasNextPage && !searchQuery.isFetching) {
-      searchQuery.fetchNextPage()
+    if (searchHasNextPage && !isSearchFetching) {
+      void fetchNextPage()
     }
-  }, [searchQuery.hasNextPage, searchQuery.isFetching, searchQuery.fetchNextPage])
+  }, [searchHasNextPage, isSearchFetching, fetchNextPage])
 
   const handleSelectSeries = useCallback((series: ComicVineSeriesResult) => {
     setSelectedSeries(series)
@@ -285,7 +318,7 @@ export default function QueueMapSeriesDialog({
               data-testid="queue-map-series-search-input"
               className="w-full min-h-11 rounded-xl px-4 text-sm text-stone-100 bg-stone-800/50 border border-stone-700/50 placeholder:text-stone-500 focus:outline-none focus:border-amber-500/50"
             />
-            {searchQuery.error && (
+            {searchError && (
               <p
                 role="alert"
                 className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200"
@@ -306,43 +339,49 @@ export default function QueueMapSeriesDialog({
                 This series has no tracked issues to map.
               </p>
             )}
-             {searchQuery.isFetching && (
-               <div className="flex justify-center py-6" aria-label="Searching">
-                 <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
-               </div>
-             )}
-             {!searchQuery.isFetching && !searchQuery.isLoading && searchQuery.data?.pages.reduce((total, page) => total + page.results.length, 0) === 0 && !searchQuery.error && (
-               <p className="text-sm text-stone-400">No volumes matched that search.</p>
-             )}
-            <ul className="space-y-2 max-h-72 overflow-y-auto overscroll-contain">
-              {searchQuery.data?.pages.flatMap((page: any) => page.results).map((series: any) => {
-                const meta = seriesMetaText(series)
-                return (
-                  <li key={series.comicvine_volume_id}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectSeries(series)}
-                      disabled={!originReady}
-                      data-testid="queue-map-series-result"
-                      aria-label={meta ? `${series.name} - ${meta}` : series.name}
-                      className="w-full text-left rounded-xl bg-stone-800/50 border border-stone-700/50 p-3 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
-                    >
-                      <span className="block text-sm font-bold text-stone-100">{series.name}</span>
-                      {meta && <span className="block text-xs text-stone-400">{meta}</span>}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-            {searchQuery.hasNextPage && (
+            {hasSearchText && isSearchFetching && searchResults.length === 0 && (
+              <div className="flex justify-center py-6" aria-label="Searching">
+                <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+              </div>
+            )}
+            {hasSearchText &&
+              !isSearchFetching &&
+              !isSearchLoading &&
+              searchResults.length === 0 &&
+              !searchError && (
+                <p className="text-sm text-stone-400">No volumes matched that search.</p>
+              )}
+            {hasSearchText && (
+              <ul className="space-y-2 max-h-72 overflow-y-auto overscroll-contain">
+                {searchResults.map((series) => {
+                  const meta = seriesMetaText(series)
+                  return (
+                    <li key={series.comicvine_volume_id}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSeries(series)}
+                        disabled={!originReady}
+                        data-testid="queue-map-series-result"
+                        aria-label={meta ? `${series.name} - ${meta}` : series.name}
+                        className="w-full text-left rounded-xl bg-stone-800/50 border border-stone-700/50 p-3 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
+                      >
+                        <span className="block text-sm font-bold text-stone-100">{series.name}</span>
+                        {meta && <span className="block text-xs text-stone-400">{meta}</span>}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            {showLoadMore && (
               <button
                 type="button"
                 onClick={handleLoadMore}
-                disabled={searchQuery.isFetching}
+                disabled={isSearchFetching}
                 data-testid="queue-map-series-load-more"
                 className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition disabled:opacity-50"
               >
-                {searchQuery.isFetching ? 'Loading...' : 'Show more volumes'}
+                {isSearchFetching ? 'Loading...' : 'Show more volumes'}
               </button>
             )}
             {onSkip && (

@@ -19,6 +19,7 @@ import DeleteThreadDialog from './DeleteThreadDialog'
 import RemoveThreadDialog from './RemoveThreadDialog'
 import ShuffleQueueDialog from './ShuffleQueueDialog'
 import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
+import { useQueueBulkMapping } from './useQueueBulkMapping'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
@@ -49,11 +50,7 @@ export default function QueuePage() {
 
   // Series that show the per-row `Map series` repair action (everything except
   // fully mapped or non-issue-tracked rows) are the bulk action's scope.
-  const threadsNeedingMapping =
-    threads?.filter((thread) => {
-      const status = thread.comicvine_mapping?.status
-      return status === 'unresolved' || status === 'partial' || status === 'needs_review'
-    }) ?? []
+  const bulkMapping = useQueueBulkMapping(threads)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -172,16 +169,6 @@ export default function QueuePage() {
     [modals, moveToPositionMutation, authoritativeActiveCount],
   )
 
-  const [bulkMapDialogOpen, setBulkMapDialogOpen] = useState(false)
-
-  const handleBulkMapSeries = useCallback(() => {
-    setBulkMapDialogOpen(true)
-  }, [])
-
-  const handleBulkMapClose = useCallback(() => {
-    setBulkMapDialogOpen(false)
-  }, [])
-
   const handleLoadMore = useCallback(() => {
     void loadMore().catch(() => undefined)
   }, [loadMore])
@@ -209,8 +196,8 @@ export default function QueuePage() {
           onShuffle={actions.requestShuffle}
           onCreateThread={modals.showCreateModal}
           onAddFromComicVine={modals.showAddSeriesComicVineModal}
-          onBulkMapSeries={handleBulkMapSeries}
-          bulkMapDisabled={threadsNeedingMapping.length === 0}
+          onBulkMapSeries={bulkMapping.openBulkMap}
+          bulkMapDisabled={bulkMapping.bulkMapDisabled}
           sortBy={sortBy}
           onSortChange={setSortBy}
           searchQuery={searchQuery}
@@ -346,12 +333,7 @@ export default function QueuePage() {
           onCancel={actions.cancelShuffle}
         />
 
-        <QueueBulkMapSeriesDialog
-          isOpen={bulkMapDialogOpen}
-          threadIds={threadsNeedingMapping.map(thread => thread.id)}
-          threadTitles={threadsNeedingMapping.map(thread => thread.title)}
-          onClose={handleBulkMapClose}
-        />
+        <QueueBulkMapSeriesDialog {...bulkMapping.dialogProps} />
       </div>
     </PositionMenuProvider>
   )

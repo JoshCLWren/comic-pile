@@ -13,6 +13,16 @@ interface QueueBulkMapSeriesDialogProps {
    * the Queue caches, so callers that only display the dialog can omit it.
    */
   onMapped?: (confirmedIssueIds: number[]) => void
+  /**
+   * Reports whether an unfinished batch is preserved and can be resumed.
+   *
+   * The Queue derives the bulk action's disabled state from the series it
+   * currently shows. A search can filter out every unmapped series while a run
+   * is still saved here, so the host uses this to keep `Map Series` reachable
+   * and let the reader resume instead of stranding the batch. Optional: hosts
+   * that do not gate the action can omit it.
+   */
+  onBatchPendingChange?: (hasPendingBatch: boolean) => void
 }
 
 interface BulkBatchItem {
@@ -61,6 +71,7 @@ export default function QueueBulkMapSeriesDialog({
   threadTitles,
   onClose,
   onMapped,
+  onBatchPendingChange,
 }: QueueBulkMapSeriesDialogProps) {
   const [phase, setPhase] = useState<RunPhase>('idle')
   const [batch, setBatch] = useState<BulkBatchItem[]>([])
@@ -103,6 +114,14 @@ export default function QueueBulkMapSeriesDialog({
   }, [isOpen, phase, batch, outcomes])
 
   const currentItem = batch[currentIndex]
+
+  // A run that is still mid-mapping is a saved batch the reader can resume.
+  // Report it so the Queue keeps the bulk action enabled even when its current
+  // search would otherwise hide every unmapped series.
+  const hasPendingBatch = phase === 'mapping'
+  useEffect(() => {
+    onBatchPendingChange?.(hasPendingBatch)
+  }, [hasPendingBatch, onBatchPendingChange])
 
   const finishCurrent = useCallback(
     (outcome: SeriesOutcome, confirmed: number[] = []) => {
@@ -213,7 +232,7 @@ export default function QueueBulkMapSeriesDialog({
               type="button"
               onClick={handleDone}
               data-testid="queue-bulk-map-series-done"
-              className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-white bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition"
+              className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-950 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition"
             >
               Done
             </button>

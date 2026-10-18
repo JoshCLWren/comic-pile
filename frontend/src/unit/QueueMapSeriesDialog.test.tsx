@@ -488,10 +488,10 @@ describe('QueueMapSeriesDialog', () => {
   it('loads more results and deduplicates volumes already listed', async () => {
     const user = userEvent.setup()
     mockedSearchSeries.mockResolvedValueOnce(
-      searchResponse([VOLUME], { has_more: true, next_offset: 10 }),
+      searchResponse([VOLUME], { has_more: true, next_offset: 20 }),
     )
     mockedSearchSeries.mockResolvedValueOnce(
-      searchResponse([VOLUME, VOLUME_2], { offset: 10, has_more: false, next_offset: null }),
+      searchResponse([VOLUME, VOLUME_2], { offset: 20, has_more: false, next_offset: null }),
     )
     renderDialog()
 
@@ -510,7 +510,7 @@ describe('QueueMapSeriesDialog', () => {
   it('disables the load more button while a search is in flight', async () => {
     const user = userEvent.setup()
     mockedSearchSeries.mockResolvedValueOnce(
-      searchResponse([VOLUME], { has_more: true, next_offset: 10 }),
+      searchResponse([VOLUME], { has_more: true, next_offset: 20 }),
     )
     let resolveSecond!: (value: ComicVineSeriesSearchResponse) => void
     mockedSearchSeries.mockImplementationOnce(

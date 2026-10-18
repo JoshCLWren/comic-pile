@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { queryKeys } from '../query/queryKeys'
 import { comicVineApi } from '../services/api-comicvine'
 import type { ComicVineSeriesSearchResponse } from '../services/api-comicvine'
@@ -27,6 +27,9 @@ export function useComicVineSearch({
       return response
     },
     enabled: enabled && !!query.trim(),
+    // Keep the reader's current results visible while a new query settles so the
+    // list and its load-more control do not flash empty on every keystroke.
+    placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
     getNextPageParam: (lastPage: ComicVineSeriesSearchResponse) => lastPage.next_offset,
     initialPageParam: 0,
