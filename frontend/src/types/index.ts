@@ -507,31 +507,6 @@ export interface BugReportResponse {
 }
 
 /**
- * Extended DependencyGroupResponse with progress information
- */
-export interface DependencyGroupResponseWithProgress {
-  id: number
-  name: string
-  created_at: string
-  memberships: DependencyGroupMemberResponse[]
-  read_issues: number
-  total_issues: number
-  reading_progress: string
-}
-
-/**
- * Dependency group member response
- */
-export interface DependencyGroupMemberResponse {
-  id: number
-  thread_id: number | null
-  issue_id: number | null
-  series_title: string | null
-  issue_number: string | null
-  sequence_order: number | null
-}
-
-/**
  * Reader-context response from GET /v1/issues/{issue_id}/reader-context
  * As defined in issue #1401
  */

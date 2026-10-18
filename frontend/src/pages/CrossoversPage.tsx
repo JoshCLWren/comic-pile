@@ -24,7 +24,6 @@ import {
   useRemoveCrossoverMember,
   type CrossoverApiDeps,
 } from '../hooks/useCrossovers'
-import type { DependencyGroupResponseWithProgress } from '../types'
 
 type PositionedIssue = Issue & { position: number }
 
@@ -68,9 +67,7 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
     isPending: isLoadingGroups,
     error: groupsError,
     refetch: refetchGroups,
-  } = useCrossoverGroupsList(api) as {
-    data: DependencyGroupResponseWithProgress[]
-  }
+  } = useCrossoverGroupsList(api)
 
   const {
     data: threads = [],
@@ -335,7 +332,7 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
                       <span className="block text-lg font-black text-[var(--theme-text-primary)]">{group.name}</span>
                       <span className="text-sm text-[var(--theme-text-dim)]">
                         {group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}
-                        {group.total_issues && group.total_issues > 0 && (
+                        {group.total_issues > 0 && (
                           <span className="ml-2">
                             Progress: {group.read_issues}/{group.total_issues} ({group.reading_progress})
                           </span>
