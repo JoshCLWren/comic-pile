@@ -18,6 +18,7 @@ import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
 import RemoveThreadDialog from './RemoveThreadDialog'
 import ShuffleQueueDialog from './ShuffleQueueDialog'
+import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
@@ -45,6 +46,12 @@ export default function QueuePage() {
     loadMore,
     activeCount,
   } = useQueueThreads(searchQuery, sortBy)
+
+  // Filter threads that need mapping for bulk mapping
+  const threadsNeedingMapping = threads?.filter(
+    thread => thread.comicvine_mapping?.status === 'unresolved' || 
+              thread.comicvine_mapping?.status === 'partial'
+  ) || []
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -163,6 +170,18 @@ export default function QueuePage() {
     [modals, moveToPositionMutation, authoritativeActiveCount],
   )
 
+  const [bulkMapDialogOpen, setBulkMapDialogOpen] = useState(false)
+
+  const handleBulkMapSeries = useCallback(() => {
+    setBulkMapDialogOpen(true)
+  }, [])
+
+  const handleBulkMapMapped = useCallback((confirmedIssueIds: number[]) => {
+    // Queue pages refresh through the shared series-mapping commit hook, so the
+    // mapping indicators update without a hard reload or a manual refetch here.
+    setBulkMapDialogOpen(false)
+  }, [])
+
   const handleLoadMore = useCallback(() => {
     void loadMore().catch(() => undefined)
   }, [loadMore])
@@ -190,6 +209,7 @@ export default function QueuePage() {
           onShuffle={actions.requestShuffle}
           onCreateThread={modals.showCreateModal}
           onAddFromComicVine={modals.showAddSeriesComicVineModal}
+          onBulkMapSeries={handleBulkMapSeries}
           sortBy={sortBy}
           onSortChange={setSortBy}
           searchQuery={searchQuery}
@@ -323,6 +343,14 @@ export default function QueuePage() {
           isPending={shuffleQueueMutation.isPending}
           onConfirm={() => void actions.confirmShuffle()}
           onCancel={actions.cancelShuffle}
+        />
+
+        <QueueBulkMapSeriesDialog
+          isOpen={bulkMapDialogOpen}
+          threadIds={threadsNeedingMapping.map(thread => thread.id)}
+          threadTitles={threadsNeedingMapping.map(thread => thread.title)}
+          onClose={() => setBulkMapDialogOpen(false)}
+          onMapped={handleBulkMapMapped}
         />
       </div>
     </PositionMenuProvider>
