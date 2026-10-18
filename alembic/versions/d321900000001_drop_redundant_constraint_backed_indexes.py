@@ -22,7 +22,11 @@ writes block) for the duration of the drop. ``DROP INDEX CONCURRENTLY`` would
 avoid that lock but cannot run inside Alembic's migration transaction, so this
 migration keeps transactional ``DROP INDEX`` and sets an explicit
 ``lock_timeout`` so it fails fast with a clear error instead of queueing
-indefinitely behind concurrent writers.
+indefinitely behind concurrent writers. The timeout is applied with ``SET
+LOCAL`` so it is scoped to this migration's transaction: a plain ``SET`` is
+session-scoped, and Alembic reuses one connection for every revision in an
+``upgrade``, which would silently impose this migration's five-second lock
+budget on unrelated later revisions.
 """
 
 from collections.abc import Sequence
@@ -48,18 +52,20 @@ REDUNDANT_INDEXES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 )
 
 # Fail fast instead of queueing behind writers while waiting for the SHARE lock.
+# Transaction-scoped (SET LOCAL) so the budget never leaks to other revisions
+# applied later on the same Alembic connection.
 LOCK_TIMEOUT = "5s"
 
 
 def upgrade() -> None:
     """Drop the three redundant constraint-backed indexes."""
-    op.execute(f"SET lock_timeout = '{LOCK_TIMEOUT}'")
+    op.execute(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'")
     for index_name, table_name, _columns in REDUNDANT_INDEXES:
         op.drop_index(index_name, table_name=table_name)
 
 
 def downgrade() -> None:
     """Restore the three redundant indexes with their original definitions."""
-    op.execute(f"SET lock_timeout = '{LOCK_TIMEOUT}'")
+    op.execute(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'")
     for index_name, table_name, columns in REDUNDANT_INDEXES:
         op.create_index(index_name, table_name, list(columns))

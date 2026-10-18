@@ -45,7 +45,9 @@ created_at: datetime             # Creation timestamp
 **Critical Indexes:**
 - `ix_issue_thread_id`: Fast lookup of all issues in a thread
 - `ix_issue_thread_number`: Find specific issue by number within thread
-- `ix_issue_thread_position`: Ordered listing of issues
+- `uq_issue_thread_position`: Ordered listing of issues (the unique
+  `(thread_id, position)` constraint's backing index; it replaced the redundant
+  `ix_issue_thread_position` ordinary index in issue #3219)
 
 **Relationships:**
 - `thread`: Parent Thread
@@ -1280,7 +1282,9 @@ CREATE TABLE dependencies (
 -- Indexes
 CREATE INDEX ix_issue_thread_id ON issues(thread_id);
 CREATE INDEX ix_issue_thread_number ON issues(thread_id, issue_number);
-CREATE INDEX ix_issue_thread_position ON issues(thread_id, position);
+-- (thread_id, position) ordering is served by the uq_issue_thread_position
+-- unique constraint's backing index; the redundant ordinary duplicate was
+-- dropped in issue #3219.
 CREATE INDEX ix_thread_user_status_position ON threads(user_id, status, queue_position);
 CREATE INDEX ix_thread_user_status_blocked_position ON threads(user_id, status, is_blocked, queue_position);
 ```
