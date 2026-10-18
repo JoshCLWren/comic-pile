@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import Modal from './Modal'
 import { comicVineApi } from '../services/api-comicvine'
 import type {
@@ -137,17 +137,14 @@ function hasUnknownOutcome(error: unknown): boolean {
   return error instanceof Error && getApiErrorStatus(error) === null
 }
 
-// ... (around line 130)
 export default function AddSeriesFromComicVineDialog({
   isOpen,
   onClose,
   onAdded,
 }: AddSeriesFromComicVineDialogProps) {
   const { showToast } = useToast()
-  const { data: threads } = useQueueThreads() // Add this to check if series is already linked
 
   const [step, setStep] = useState<DialogStep>('search')
-// ...
   const [query, setQuery] = useState('')
   const [seriesResults, setSeriesResults] = useState<ComicVineSeriesResult[]>([])
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
@@ -158,6 +155,7 @@ export default function AddSeriesFromComicVineDialog({
   const [unknownOutcome, setUnknownOutcome] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [alreadyReadCount, setAlreadyReadCount] = useState(0)
+  const [existingSeries, setExistingSeries] = useState<ComicVineSeriesImportStatus | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const asyncRef = useRef(0)
@@ -183,8 +181,38 @@ export default function AddSeriesFromComicVineDialog({
       setUnknownOutcome(null)
       setHasSearched(false)
       setAlreadyReadCount(0)
+      setExistingSeries(null)
     }
   }, [isOpen])
+
+  /**
+   * Ask the server whether the selected volume is already linked (#3854).
+   *
+   * `getSeriesImportStatus` is the same user-scoped answer the lost-response
+   * recovery trusts, so the confirm copy can tell an existing series from a
+   * fresh add without waiting on the paginated queue. An unreachable check
+   * keeps the fresh-add copy; the import itself stays idempotent server-side,
+   * so a stale "new series" fallback never creates a duplicate row.
+   */
+  useEffect(() => {
+    if (!isOpen || step !== 'confirm' || !selectedSeries) {
+      return
+    }
+    let cancelled = false
+    comicVineApi.getSeriesImportStatus(selectedSeries.comicvine_volume_id)
+      .then((status) => {
+        if (!cancelled && status?.imported) {
+          setExistingSeries(status)
+        }
+      })
+      .catch(() => {
+        // An unreachable status check keeps the fresh-add copy in place; the
+        // import itself stays idempotent server-side either way.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, step, selectedSeries])
 
   const handleSearch = useCallback(
     async (searchQuery: string, offset = 0, append = false) => {
@@ -254,6 +282,9 @@ export default function AddSeriesFromComicVineDialog({
     // different run must not carry the previous volume's already-read count
     // into the new confirmation, where it would exceed the new issue count.
     setAlreadyReadCount(0)
+    // Drop the previous volume's linked status so the confirm copy starts
+    // fresh; the status effect refills it from the server for this volume.
+    setExistingSeries(null)
     setStep('confirm')
   }, [])
 
@@ -328,9 +359,6 @@ export default function AddSeriesFromComicVineDialog({
   )
 
   const maxAlreadyRead = selectedSeries?.issue_count ?? 0
-
-  // Note: ThreadListItem doesn't have comicvine_volume_id, so we can't check for duplicates
-  // This functionality is incomplete and should be removed or implemented with a different approach
 
   return (
     <Modal
@@ -467,7 +495,9 @@ export default function AddSeriesFromComicVineDialog({
                 </div>
               </div>
               <p className="text-xs text-stone-400">
-                This will create a new series in your queue with all {selectedSeries.issue_count ?? '?'} issues from the ComicVine volume.
+                {existingSeries
+                  ? `"${existingSeries.series_name ?? selectedSeries.name}" is already in your queue. Adding it again will not create a new series or duplicate issues — only missing issues are added to the existing series.`
+                  : `This will create a new series in your queue with all ${selectedSeries.issue_count ?? '?'} issues from the ComicVine volume.`}
               </p>
             </div>
             {maxAlreadyRead > 0 && (

@@ -236,30 +236,28 @@ describe('useQueueFilters', () => {
       const { result } = renderHook(() => useQueueFilters(threads, 'position', 'Saga'))
       expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2, 3])
     })
+
+    it('restores every thread when the active search is cleared', () => {
+      const threads = [
+        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
+        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
+      ]
+      const { result, rerender } = renderHook(
+        ({ search }: { search: string }) => useQueueFilters(threads, 'position', search),
+        { initialProps: { search: 'saga' } },
+      )
+      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1])
+
+      rerender({ search: '' })
+
+      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
+    })
   })
 
-  describe('zero-added scenario', () => {
-    it('handles zero-added scenario with empty threads array', () => {
+  describe('empty queue', () => {
+    it('matches nothing when the queue has no rows yet', () => {
       const { result } = renderHook(() => useQueueFilters([], 'position', 'search'))
       expect(result.current.filteredThreads).toEqual([])
-    })
-
-    it('handles zero-added scenario with no search matches', () => {
-      const threads = [
-        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
-        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
-      ]
-      const { result } = renderHook(() => useQueueFilters(threads, 'position', 'nonexistent'))
-      expect(result.current.filteredThreads).toEqual([])
-    })
-
-    it('handles zero-added scenario with empty search', () => {
-      const threads = [
-        makeThread({ id: 1, title: 'Saga', queue_position: 1 }),
-        makeThread({ id: 2, title: 'Descender', queue_position: 2 }),
-      ]
-      const { result } = renderHook(() => useQueueFilters(threads, 'position', ''))
-      expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
     })
   })
 })
