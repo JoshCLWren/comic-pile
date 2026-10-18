@@ -2125,7 +2125,7 @@ def test_controller_writes_review_model_marker_on_approve(
             None,
             None,
             "Fix bug",
-            None,
+            ("human", "interactive-first-timer"),
         ),
         (
             "contributor-foreign-committer",
@@ -2684,13 +2684,17 @@ def test_reconcile_provenance_is_idempotent_for_attested_head(
 def test_reconcile_provenance_fails_closed_without_mutation(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """Untrusted authors, moved heads, and foreign commits never get attested."""
+    """Mismatched authors, moved heads, and foreign commits never get attested."""
     module = load_review_controller()
     sent, transitions = reconcile_harness(
         monkeypatch,
         module,
         pr=_reconcile_pr(author="intruder"),
-        commit={"sha": REVIEWED_HEAD, "commit": {"message": "Fix\n\nModel: gpt-6"}},
+        commit={
+            "sha": REVIEWED_HEAD,
+            "author": {"login": "JoshCLWren"},
+            "commit": {"message": "Fix\n\nModel: gpt-6"},
+        },
     )
     result = module.reconcile_provenance(3747, REVIEWED_HEAD)
     assert result["status"] == "unattested"

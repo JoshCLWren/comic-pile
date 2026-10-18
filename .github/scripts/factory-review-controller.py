@@ -549,14 +549,15 @@ def attest_exact_head_author(
     owner = REPO.split("/", 1)[0]
     pr_author_login = str(author.get("login") or "") if author is not None else ""
     # A contributor head has the same provenance rule as a local human head,
-    # anchored to GitHub's actual PR and commit identities. Unknown identities
-    # cannot be inferred from a body, trailer, label, or fork branch name.
+    # anchored to GitHub's actual PR and commit identities. Unlinked commit
+    # emails use the verified submitter, as for owner-authored local heads;
+    # known foreign identities cannot inherit the submitter's attribution.
     if pr_author_login != owner:
         if (
             not pr_author_login
             or pr_author_login.endswith("[bot]")
-            or commit_author != pr_author_login
-            or commit_committer not in {pr_author_login, "web-flow"}
+            or commit_author not in {None, pr_author_login}
+            or commit_committer not in {None, pr_author_login, "web-flow"}
         ):
             return None
     identity = owner_attested_head_identity(
