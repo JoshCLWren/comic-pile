@@ -43,6 +43,7 @@ def test_health_cooldowns_distinguish_canonical_capacity_failures():
     assert controller.cooldown_seconds("work_failure") == 0
     assert controller.cooldown_seconds("provider_failure") == 15 * 60
     assert controller.cooldown_seconds("provider_throttle") == 30 * 60
+    assert controller.cooldown_seconds("provider_quota") == 30 * 60
     assert controller.cooldown_seconds("model_unavailable") == 6 * 60 * 60
     assert controller.cooldown_seconds("model_retired_410") == 6 * 60 * 60
     assert controller.cooldown_seconds("model_policy_violation") == 6 * 60 * 60

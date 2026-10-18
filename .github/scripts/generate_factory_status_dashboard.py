@@ -37,6 +37,7 @@ STAGES = (
 ATTENTION_OUTCOMES = {
     "provider_failure",
     "provider_throttle",
+    "provider_quota",
     "provider_unavailable",
     "provider_throttled",
     "model_unavailable",

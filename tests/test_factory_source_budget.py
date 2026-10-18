@@ -145,3 +145,10 @@ def test_runner_and_dispatcher_wiring() -> None:
 def test_budget_module_parses_on_older_python() -> None:
     """The dispatcher runs this with the runner's system python3."""
     ast.parse((SCRIPTS / "factory_source_budget.py").read_text(), feature_version=(3, 10))
+
+
+def test_scheduled_batch_applies_source_budget_before_offer_cap() -> None:
+    """Over-budget metered lanes must not displace eligible workers in the cap."""
+    text = (ROOT / ".github/workflows/fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
+    scheduled = text[text.index("source_seed=") : text.index("Scheduled batch:")]
+    assert scheduled.index("factory_source_budget.py filter") < scheduled.index(".[:$cap]")

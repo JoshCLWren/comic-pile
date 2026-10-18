@@ -140,6 +140,13 @@ jobs:
             echo "Bootstrapping all configured fixed-model slots: ${workers}"
           fi
 
+          # Quota-paused workers stay rostered but are not refilled until reset.
+          workers="$(python3 .github/scripts/factory_quota_pause.py filter <<< "$workers")"
+          if [[ "$workers" == '[]' ]]; then
+            echo 'Every refill candidate is quota-paused; nothing to start'
+            exit 0
+          fi
+
           # Give force-cancel a brief chance to update GitHub's active-run view,
           # then let the canonical controller reconcile any provably stale lease.
           sleep 2

@@ -163,3 +163,62 @@ it('keeps uncertain volume identity unresolved despite an Include choice', () =>
   expect(next.entries[0]?.adoption_decision).toBe('unresolved')
   expect(next.summary.unresolved_count).toBe(1)
 })
+
+it('excludes a series with ambiguous_unresolved entries via series decision', () => {
+  const unresolvedPreview: CBLAdoptionPreview = {
+    ...preview,
+    entries: [
+      entry({
+        cbl_entry_id: 101,
+        cbl_position: 1,
+        adoption_class: 'ambiguous_unresolved',
+        adoption_decision: 'unresolved',
+        adopted: false,
+        resolved_issue_id: null,
+        canonical_issue_id: null,
+      }),
+      entry({
+        cbl_entry_id: 102,
+        cbl_position: 2,
+        adoption_class: 'ambiguous_unresolved',
+        adoption_decision: 'unresolved',
+        adopted: false,
+        resolved_issue_id: null,
+        canonical_issue_id: null,
+      }),
+    ],
+  }
+  const next = applyCblAdoptionChoices(unresolvedPreview, { 'group-1': false }, {})
+  expect(next.entries[0]?.adoption_decision).toBe('excluded')
+  expect(next.entries[1]?.adoption_decision).toBe('excluded')
+  expect(next.summary.excluded_count).toBe(2)
+  expect(next.summary.unresolved_count).toBe(0)
+})
+
+it('lets an entry choice override a series exclude for an unresolved entry', () => {
+  const unresolvedPreview: CBLAdoptionPreview = {
+    ...preview,
+    entries: [
+      entry({
+        cbl_entry_id: 101,
+        adoption_class: 'ambiguous_unresolved',
+        adoption_decision: 'unresolved',
+        adopted: false,
+        resolved_issue_id: null,
+        canonical_issue_id: null,
+      }),
+    ],
+  }
+  const excluded = applyCblAdoptionChoices(unresolvedPreview, { 'group-1': false }, {})
+  expect(excluded.entries[0]?.adoption_decision).toBe('excluded')
+  expect(excluded.summary.unresolved_count).toBe(0)
+
+  // Unskip after a series exclude returns the entry to needs-attention.
+  const reconsidered = applyCblAdoptionChoices(
+    unresolvedPreview,
+    { 'group-1': false },
+    { '101': true },
+  )
+  expect(reconsidered.entries[0]?.adoption_decision).toBe('unresolved')
+  expect(reconsidered.summary.unresolved_count).toBe(1)
+})

@@ -40,6 +40,8 @@ on:
       - '.github/scripts/factory_candidate_health.py'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
+      - '.github/factory-quota-pauses.json'
+      - '.github/scripts/factory_quota_pause.py'
       - '.github/factory-source-budgets.json'
       - '.github/scripts/factory_source_budget.py'
 
@@ -640,8 +642,10 @@ jobs:
               | tail -n +"$((offset + 1))" | head -n "$total")"
             workers="$(printf '%s\n%s\n' "$source_seed" "$fill" \
               | awk 'NF && !seen[$0]++ {print}' \
-              | head -n "$offer_count" \
-              | jq -Rsc 'split("\n") | map(select(length > 0))')"
+              | jq -Rsc 'split("\n") | map(select(length > 0))' \
+              | python3 .github/scripts/factory_quota_pause.py filter \
+              | python3 .github/scripts/factory_source_budget.py filter \
+              | jq -c --argjson cap "$offer_count" '.[:$cap]')"
             echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick}, offset ${offset}/${total}, source-diverse seed)"
           else
             # A control-plane change should smoke one current lane per provider.
@@ -654,11 +658,25 @@ jobs:
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }
 
+          # Quota-paused workers stay on the roster but must not consume batch
+          # or capacity slots until their provider quota resets. Scheduled
+          # batches are already filtered before the offer cap so paused lanes
+          # never displace eligible ones; this pass covers the smoke branch.
+          workers="$(python3 .github/scripts/factory_quota_pause.py filter <<< "$workers")"
+          if [[ "$workers" == '[]' ]]; then
+            echo 'Every resolved worker is quota-paused; nothing to dispatch'
+            echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
+            echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           echo 'Reconciling abandoned factory leases before assignment'
           python3 "$controller" reconcile
 
           # Metered free sources (OrcaRouter, Requesty) have small per-account
           # daily request limits; drop their workers once today's cap is used.
+          # Scheduled batches were already budget-filtered before the offer
+          # cap; this pass covers the smoke branch and races with refills.
           workers="$(python3 .github/scripts/factory_source_budget.py filter <<< "$workers")"
           if [[ "$workers" == '[]' ]]; then
             echo 'Every resolved worker is over its source daily dispatch budget; nothing to dispatch'
