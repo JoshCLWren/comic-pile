@@ -10,6 +10,9 @@ Endpoints:
   canonical creators using shared personal analytics semantics (issue #3091).
 - ``GET /api/v1/creators/team-chemistry`` — bounded ranked recurring creator
   teams credited together on shared rated issues (issue #3094).
+- ``GET /api/v1/creators/discoveries`` — explainable personal taste-discovery
+  views (consistently loved, polarizing, most read, top-rating rate, small
+  sample, loved-with-unread, warmed/cooled) (issue #3093).
 - ``GET /api/v1/creators/{creator_key}`` — bounded personal creator detail,
   including series/run-level aggregates (issues #2037, #3088).
 - ``GET /api/v1/creators/{creator_key}/series/{series_key}/issues`` — bounded
@@ -37,11 +40,13 @@ from app.schemas.creator_comparison import (
     CreatorSeriesDrilldown,
 )
 from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
+from app.schemas.creator_discovery import CreatorDiscoveryResponse
 from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
 from app.schemas.creator_team_chemistry import CreatorTeamChemistryResponse
 from app.services.creator_comparison import get_creator_comparison
 from app.services.creator_detail import get_creator_detail, get_creator_series_issues
+from app.services.creator_discovery import get_creator_discoveries
 from app.services.creator_list import get_creator_list
 from app.services.creator_summary import get_creator_summaries
 from app.services.creator_metric_drilldown import get_creator_metric_drilldown
@@ -357,6 +362,30 @@ async def get_creator_team_chemistry_endpoint(
         metadata-coverage state.
     """
     return await get_creator_team_chemistry(db, current_user.id)
+
+
+@router.get("/discoveries", response_model=CreatorDiscoveryResponse)
+async def get_creator_discoveries_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CreatorDiscoveryResponse:
+    """Return explainable personal taste-discovery views for the authenticated user.
+
+    Every view is deterministic and derived only from the user's own latest
+    effective ratings and confirmed creator credits. A creator may appear in
+    multiple views, and each entry carries the supporting metrics and the exact
+    rules that qualified it, so no ranking is unexplained. Every view has an
+    explicit minimum sample before it ranks creators, and missing creator
+    metadata is reported as partial coverage rather than negative evidence.
+
+    Args:
+        current_user: Authenticated user whose library is aggregated.
+        db: Async database session.
+
+    Returns:
+        Bounded discovery views in canonical order plus metadata-coverage state.
+    """
+    return await get_creator_discoveries(db, current_user.id)
 
 
 @router.get("/{creator_key}/series/{series_key}/issues", response_model=CreatorSeriesIssueListResponse)

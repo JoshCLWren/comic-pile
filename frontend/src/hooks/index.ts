@@ -39,6 +39,7 @@ export {
 } from './useDependencies'
 export { useReaderContext, useReadingOrdersForThread, useConnectedThreads } from './useReaderContext'
 export { useTasteDiscoveries } from './useTasteDiscoveries'
+export { useCreatorDiscoveries } from './useCreatorDiscoveries'
 export { useRollBootstrap, resolveBrowserTimezone } from './useRollBootstrap'
 export { useRollPrerequisiteSwitch } from './useRollPrerequisiteSwitch'
 export { usePreferences, useUpdatePreferences, PreferencesSync } from './usePreferences'
