@@ -1597,6 +1597,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/creators/discoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Creator Discoveries Endpoint
+         * @description Return explainable personal taste-discovery views for the authenticated user.
+         *
+         *     Every view is deterministic and derived only from the user's own latest
+         *     effective ratings and confirmed creator credits. A creator may appear in
+         *     multiple views, and each entry carries the supporting metrics and the exact
+         *     rules that qualified it, so no ranking is unexplained. Every view has an
+         *     explicit minimum sample before it ranks creators, and missing creator
+         *     metadata is reported as partial coverage rather than negative evidence.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is aggregated.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Bounded discovery views in canonical order plus metadata-coverage state.
+         */
+        get: operations["get_creator_discoveries_endpoint_api_v1_creators_discoveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/creators/summaries": {
         parameters: {
             query?: never;
@@ -7777,6 +7811,243 @@ export interface components {
              * @description Bounded list of upcoming unread issues.
              */
             upcoming_issues?: components["schemas"]["CreatorIssueRow"][];
+        };
+        /**
+         * CreatorDiscoveryCoverage
+         * @description Explicit metadata-coverage state for the discovery aggregation.
+         */
+        CreatorDiscoveryCoverage: {
+            /**
+             * Rated Issues Total
+             * @description Rated issues in the library.
+             */
+            rated_issues_total: number;
+            /**
+             * Rated Issues With Creator Metadata
+             * @description Rated issues carrying at least one usable confirmed credit.
+             */
+            rated_issues_with_creator_metadata: number;
+            /**
+             * Ratings Complete
+             * @description True only when every rated issue carries confirmed creator metadata.
+             */
+            ratings_complete: boolean;
+        };
+        /**
+         * CreatorDiscoveryEntry
+         * @description One canonical creator inside a discovery view with supporting metrics.
+         */
+        CreatorDiscoveryEntry: {
+            /**
+             * Average Rating
+             * @description Personal average across the rated sample.
+             */
+            average_rating?: number | null;
+            /**
+             * Canonical Creator Key
+             * @description Stable normalized creator key (e.g. ``creator:12345``).
+             */
+            canonical_creator_key: string;
+            /**
+             * Display Name
+             * @description Human-readable creator name from confirmed issue metadata.
+             */
+            display_name: string;
+            /**
+             * Earlier Average Rating
+             * @description Average of the earlier half of a trend-eligible history.
+             */
+            earlier_average_rating?: number | null;
+            /**
+             * Max Rating
+             * @description Highest effective rating.
+             */
+            max_rating?: number | null;
+            /**
+             * Median Rating
+             * @description Personal median across the rated sample.
+             */
+            median_rating?: number | null;
+            /**
+             * Min Rating
+             * @description Lowest effective rating.
+             */
+            min_rating?: number | null;
+            /**
+             * Normalized Roles
+             * @description Distinct confirmed roles seen for this creator.
+             */
+            normalized_roles?: string[];
+            /**
+             * Rated Issue Count
+             * @description Headline-eligible rated issues contributing to the metrics.
+             */
+            rated_issue_count: number;
+            /**
+             * Rating Spread
+             * @description Highest minus lowest effective rating, or null when unrated.
+             */
+            rating_spread?: number | null;
+            /**
+             * Rating Stddev
+             * @description Population standard deviation across the rated sample, or null when unrated.
+             */
+            rating_stddev?: number | null;
+            /**
+             * Read Unrated Issue Count
+             * @description Attributed read-but-unrated owned issues.
+             * @default 0
+             */
+            read_unrated_issue_count: number;
+            /**
+             * Reasons
+             * @description Every deterministic rule that qualified this creator for this view.
+             */
+            reasons?: components["schemas"]["CreatorDiscoveryReason"][];
+            /**
+             * Recent Average Rating
+             * @description Average of the recent half of a trend-eligible history.
+             */
+            recent_average_rating?: number | null;
+            /**
+             * Top Rating Count
+             * @description Count of ratings at the top of the scale.
+             * @default 0
+             */
+            top_rating_count: number;
+            /**
+             * Top Rating Rate
+             * @description Proportion of ratings at the top of the scale (0.0-1.0).
+             */
+            top_rating_rate?: number | null;
+            /**
+             * Trend Delta
+             * @description Recent average minus earlier average for the trend view.
+             */
+            trend_delta?: number | null;
+            /**
+             * Trend Direction
+             * @description ``warmed`` or ``cooled`` for the trend view, otherwise null.
+             */
+            trend_direction?: string | null;
+            /**
+             * Trend Sample Count
+             * @description Rated issues carrying a timestamp that supported a trend, else 0.
+             * @default 0
+             */
+            trend_sample_count: number;
+            /**
+             * Unread Issue Count
+             * @description Attributed unread owned issues for this creator.
+             * @default 0
+             */
+            unread_issue_count: number;
+        };
+        /**
+         * CreatorDiscoveryMode
+         * @description The fixed, deterministic set of personal taste-discovery views.
+         *
+         *     Ordering in this enum is the canonical display order of the views.
+         * @enum {string}
+         */
+        CreatorDiscoveryMode: "consistently_loved" | "polarizing" | "most_read" | "highest_top_rating_rate" | "great_average_small_sample" | "loved_with_unread" | "moved_over_time";
+        /**
+         * CreatorDiscoveryReason
+         * @description One deterministic rule that qualified a creator for a view.
+         *
+         *     ``value`` is the observed metric and ``threshold`` is the fixed rule the
+         *     metric had to satisfy. ``comparison`` is one of ``gte``, ``lte``, ``gt``,
+         *     ``lt`` so the UI can render the relationship without parsing prose.
+         */
+        CreatorDiscoveryReason: {
+            /**
+             * Comparison
+             * @description One of gte, lte, gt, lt.
+             */
+            comparison: string;
+            /**
+             * Label
+             * @description Human-readable metric name for UI copy.
+             */
+            label: string;
+            /**
+             * Metric
+             * @description Machine key of the qualifying metric.
+             */
+            metric: string;
+            /**
+             * Threshold
+             * @description Threshold the value had to satisfy.
+             */
+            threshold: number;
+            /**
+             * Value
+             * @description Observed value of the metric.
+             */
+            value: number;
+        };
+        /**
+         * CreatorDiscoveryResponse
+         * @description Response body for the bounded personal taste-discovery endpoint.
+         */
+        CreatorDiscoveryResponse: {
+            /** @description Metadata-coverage state distinguishing complete from lower bounds. */
+            coverage: components["schemas"]["CreatorDiscoveryCoverage"];
+            /**
+             * Max Entries Per View
+             * @description Bounding constant applied per view.
+             */
+            max_entries_per_view: number;
+            /**
+             * Minimum Reliable Sample
+             * @description The canonical personal-reliability rated-sample floor.
+             */
+            minimum_reliable_sample: number;
+            /**
+             * Views
+             * @description One entry per view in canonical order, including empty views.
+             */
+            views?: components["schemas"]["CreatorDiscoveryView"][];
+        };
+        /**
+         * CreatorDiscoveryView
+         * @description One bounded taste-discovery view and its qualifying creators.
+         */
+        CreatorDiscoveryView: {
+            /**
+             * Description
+             * @description Deterministic explanation of what qualifies a creator.
+             */
+            description: string;
+            /** Entries */
+            entries?: components["schemas"]["CreatorDiscoveryEntry"][];
+            /**
+             * Max Entries
+             * @description Bounding constant applied to entries.
+             */
+            max_entries: number;
+            /**
+             * Min Sample
+             * @description Minimum rated sample the view requires (0 = no floor).
+             */
+            min_sample: number;
+            /** @description Stable view identifier. */
+            mode: components["schemas"]["CreatorDiscoveryMode"];
+            /**
+             * Title
+             * @description Short human-readable view title.
+             */
+            title: string;
+            /**
+             * Total
+             * @description Qualifying creators before bounded truncation.
+             */
+            total: number;
+            /**
+             * Truncated
+             * @description True when more creators qualified than the bounded response returns.
+             */
+            truncated: boolean;
         };
         /**
          * CreatorIssueRow
@@ -16375,6 +16646,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_creator_discoveries_endpoint_api_v1_creators_discoveries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorDiscoveryResponse"];
                 };
             };
         };

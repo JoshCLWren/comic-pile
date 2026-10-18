@@ -361,6 +361,12 @@ export const queryKeys = {
      */
     teamChemistry: () => ['creators', 'team-chemistry'] as const,
     /**
+     * Canonical bounded personal taste-discovery key (issue #3093). The
+     * aggregation covers the authenticated user's whole library, so the key
+     * carries no parameters beyond the domain prefix.
+     */
+    discoveries: () => ['creators', 'discoveries'] as const,
+    /**
      * Canonical creator metric drilldown key (issue #3176).
      * Supports different metric types with optional parameters for role, rating value, series, and pagination.
      */

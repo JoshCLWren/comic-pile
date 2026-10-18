@@ -4091,6 +4091,388 @@
         "title": "CreatorDetailResponse",
         "type": "object"
       },
+      "CreatorDiscoveryCoverage": {
+        "description": "Explicit metadata-coverage state for the discovery aggregation.",
+        "properties": {
+          "rated_issues_total": {
+            "description": "Rated issues in the library.",
+            "minimum": 0.0,
+            "title": "Rated Issues Total",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "description": "Rated issues carrying at least one usable confirmed credit.",
+            "minimum": 0.0,
+            "title": "Rated Issues With Creator Metadata",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "description": "True only when every rated issue carries confirmed creator metadata.",
+            "title": "Ratings Complete",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "title": "CreatorDiscoveryCoverage",
+        "type": "object"
+      },
+      "CreatorDiscoveryEntry": {
+        "description": "One canonical creator inside a discovery view with supporting metrics.",
+        "properties": {
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Personal average across the rated sample.",
+            "title": "Average Rating"
+          },
+          "canonical_creator_key": {
+            "description": "Stable normalized creator key (e.g. ``creator:12345``).",
+            "title": "Canonical Creator Key",
+            "type": "string"
+          },
+          "display_name": {
+            "description": "Human-readable creator name from confirmed issue metadata.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "earlier_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average of the earlier half of a trend-eligible history.",
+            "title": "Earlier Average Rating"
+          },
+          "max_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest effective rating.",
+            "title": "Max Rating"
+          },
+          "median_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Personal median across the rated sample.",
+            "title": "Median Rating"
+          },
+          "min_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lowest effective rating.",
+            "title": "Min Rating"
+          },
+          "normalized_roles": {
+            "description": "Distinct confirmed roles seen for this creator.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Normalized Roles",
+            "type": "array"
+          },
+          "rated_issue_count": {
+            "description": "Headline-eligible rated issues contributing to the metrics.",
+            "minimum": 0.0,
+            "title": "Rated Issue Count",
+            "type": "integer"
+          },
+          "rating_spread": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest minus lowest effective rating, or null when unrated.",
+            "title": "Rating Spread"
+          },
+          "rating_stddev": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Population standard deviation across the rated sample, or null when unrated.",
+            "title": "Rating Stddev"
+          },
+          "read_unrated_issue_count": {
+            "default": 0,
+            "description": "Attributed read-but-unrated owned issues.",
+            "minimum": 0.0,
+            "title": "Read Unrated Issue Count",
+            "type": "integer"
+          },
+          "reasons": {
+            "description": "Every deterministic rule that qualified this creator for this view.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "recent_average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average of the recent half of a trend-eligible history.",
+            "title": "Recent Average Rating"
+          },
+          "top_rating_count": {
+            "default": 0,
+            "description": "Count of ratings at the top of the scale.",
+            "minimum": 0.0,
+            "title": "Top Rating Count",
+            "type": "integer"
+          },
+          "top_rating_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proportion of ratings at the top of the scale (0.0-1.0).",
+            "title": "Top Rating Rate"
+          },
+          "trend_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Recent average minus earlier average for the trend view.",
+            "title": "Trend Delta"
+          },
+          "trend_direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "``warmed`` or ``cooled`` for the trend view, otherwise null.",
+            "title": "Trend Direction"
+          },
+          "trend_sample_count": {
+            "default": 0,
+            "description": "Rated issues carrying a timestamp that supported a trend, else 0.",
+            "minimum": 0.0,
+            "title": "Trend Sample Count",
+            "type": "integer"
+          },
+          "unread_issue_count": {
+            "default": 0,
+            "description": "Attributed unread owned issues for this creator.",
+            "minimum": 0.0,
+            "title": "Unread Issue Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "rated_issue_count"
+        ],
+        "title": "CreatorDiscoveryEntry",
+        "type": "object"
+      },
+      "CreatorDiscoveryMode": {
+        "description": "The fixed, deterministic set of personal taste-discovery views.\n\nOrdering in this enum is the canonical display order of the views.",
+        "enum": [
+          "consistently_loved",
+          "polarizing",
+          "most_read",
+          "highest_top_rating_rate",
+          "great_average_small_sample",
+          "loved_with_unread",
+          "moved_over_time"
+        ],
+        "title": "CreatorDiscoveryMode",
+        "type": "string"
+      },
+      "CreatorDiscoveryReason": {
+        "description": "One deterministic rule that qualified a creator for a view.\n\n``value`` is the observed metric and ``threshold`` is the fixed rule the\nmetric had to satisfy. ``comparison`` is one of ``gte``, ``lte``, ``gt``,\n``lt`` so the UI can render the relationship without parsing prose.",
+        "properties": {
+          "comparison": {
+            "description": "One of gte, lte, gt, lt.",
+            "title": "Comparison",
+            "type": "string"
+          },
+          "label": {
+            "description": "Human-readable metric name for UI copy.",
+            "title": "Label",
+            "type": "string"
+          },
+          "metric": {
+            "description": "Machine key of the qualifying metric.",
+            "title": "Metric",
+            "type": "string"
+          },
+          "threshold": {
+            "description": "Threshold the value had to satisfy.",
+            "title": "Threshold",
+            "type": "number"
+          },
+          "value": {
+            "description": "Observed value of the metric.",
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "metric",
+          "label",
+          "value",
+          "threshold",
+          "comparison"
+        ],
+        "title": "CreatorDiscoveryReason",
+        "type": "object"
+      },
+      "CreatorDiscoveryResponse": {
+        "description": "Response body for the bounded personal taste-discovery endpoint.",
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorDiscoveryCoverage",
+            "description": "Metadata-coverage state distinguishing complete from lower bounds."
+          },
+          "max_entries_per_view": {
+            "description": "Bounding constant applied per view.",
+            "minimum": 1.0,
+            "title": "Max Entries Per View",
+            "type": "integer"
+          },
+          "minimum_reliable_sample": {
+            "description": "The canonical personal-reliability rated-sample floor.",
+            "minimum": 1.0,
+            "title": "Minimum Reliable Sample",
+            "type": "integer"
+          },
+          "views": {
+            "description": "One entry per view in canonical order, including empty views.",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryView"
+            },
+            "title": "Views",
+            "type": "array"
+          }
+        },
+        "required": [
+          "coverage",
+          "minimum_reliable_sample",
+          "max_entries_per_view"
+        ],
+        "title": "CreatorDiscoveryResponse",
+        "type": "object"
+      },
+      "CreatorDiscoveryView": {
+        "description": "One bounded taste-discovery view and its qualifying creators.",
+        "properties": {
+          "description": {
+            "description": "Deterministic explanation of what qualifies a creator.",
+            "title": "Description",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "max_entries": {
+            "description": "Bounding constant applied to entries.",
+            "minimum": 1.0,
+            "title": "Max Entries",
+            "type": "integer"
+          },
+          "min_sample": {
+            "description": "Minimum rated sample the view requires (0 = no floor).",
+            "minimum": 0.0,
+            "title": "Min Sample",
+            "type": "integer"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/CreatorDiscoveryMode",
+            "description": "Stable view identifier."
+          },
+          "title": {
+            "description": "Short human-readable view title.",
+            "title": "Title",
+            "type": "string"
+          },
+          "total": {
+            "description": "Qualifying creators before bounded truncation.",
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "description": "True when more creators qualified than the bounded response returns.",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "title",
+          "description",
+          "min_sample",
+          "total",
+          "truncated",
+          "max_entries"
+        ],
+        "title": "CreatorDiscoveryView",
+        "type": "object"
+      },
       "CreatorIssueRow": {
         "description": "Detail for a specific issue attributed to the creator.",
         "properties": {
@@ -21880,6 +22262,34 @@
           }
         ],
         "summary": "Compare Creators Endpoint",
+        "tags": [
+          "creators",
+          "creators"
+        ]
+      }
+    },
+    "/api/v1/creators/discoveries": {
+      "get": {
+        "description": "Return explainable personal taste-discovery views for the authenticated user.\n\nEvery view is deterministic and derived only from the user's own latest\neffective ratings and confirmed creator credits. A creator may appear in\nmultiple views, and each entry carries the supporting metrics and the exact\nrules that qualified it, so no ranking is unexplained. Every view has an\nexplicit minimum sample before it ranks creators, and missing creator\nmetadata is reported as partial coverage rather than negative evidence.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    db: Async database session.\n\nReturns:\n    Bounded discovery views in canonical order plus metadata-coverage state.",
+        "operationId": "get_creator_discoveries_endpoint_api_v1_creators_discoveries_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorDiscoveryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Creator Discoveries Endpoint",
         "tags": [
           "creators",
           "creators"

@@ -180,6 +180,54 @@ MIN_RATED_ISSUES_PER_SERIES: int = MIN_RATED_FOR_RELIABLE
 #: drift apart.
 MIN_SHARED_TEAM_SAMPLE: int = 3
 
+# ---------------------------------------------------------------------------
+# Creator taste-discovery thresholds (issue #3093)
+# ---------------------------------------------------------------------------
+# Deterministic, documented numbers behind the personal taste-discovery views.
+# Discovery is descriptive personal analytics, never a global quality signal.
+# Small samples are excluded from every view whose ranking implies reliability
+# (consistency, polarization, top-rating rate, trend); the one small-sample
+# view is explicitly labeled and sits below the reliability floor. Shared by
+# the aggregation layer, the response schema, and the UI copy so the documented
+# rule and the enforced contract cannot drift apart.
+
+#: Minimum headline-rated sample before a creator may rank in a view that
+#: implies reliability. Reuses the canonical personal-reliability floor.
+DISCOVERY_MIN_RELIABLE_SAMPLE: int = MIN_RATED_FOR_RELIABLE
+
+#: "Most consistently loved": a high personal average backed by a meaningful
+#: sample and low dispersion (population standard deviation) across the
+#: creator's rated issues.
+CONSISTENCY_LOVED_MIN_AVERAGE: float = 4.0
+CONSISTENCY_LOVED_MAX_STDDEV: float = 0.5
+
+#: "Most polarizing": the spread between a creator's lowest and highest
+#: effective rating must reach this value on a meaningful sample.
+POLARIZING_MIN_SPREAD: float = 2.0
+
+#: Top of the product's real 0.5–5.0 rating scale and the minimum proportion
+#: of a creator's ratings that must sit there to qualify for the top-rate view.
+TOP_RATING_VALUE: float = 5.0
+TOP_RATING_RATE_MIN_PROPORTION: float = 0.6
+
+#: "Great average, small sample": promising creators whose evidence is still
+#: below the reliable-sample floor but who already average highly.
+SMALL_SAMPLE_MAX: int = DISCOVERY_MIN_RELIABLE_SAMPLE - 1
+SMALL_SAMPLE_MIN_AVERAGE: float = 4.0
+
+#: "Loved creators with unread work": a high personal average plus at least one
+#: attributed unread owned issue.
+LOVED_WITH_UNREAD_MIN_AVERAGE: float = 4.0
+
+#: "Warmed to / cooled on": minimum rated issues carrying a timestamp before a
+#: trend may be claimed, and the minimum change in average rating between the
+#: earlier and recent halves of that rated history.
+TREND_MIN_SAMPLE: int = 6
+TREND_MIN_DELTA: float = 0.5
+
+#: Maximum number of entries returned per discovery view (bounded response).
+MAX_DISCOVERY_ENTRIES: int = 10
+
 
 def validate_tag_color(color: object) -> tuple[str, str]:
     """Validate and normalize a tag color against the fixed palette.
