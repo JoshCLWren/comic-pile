@@ -210,7 +210,7 @@ export default function QueuePage() {
           onCreateThread={modals.showCreateModal}
           onAddFromComicVine={modals.showAddSeriesComicVineModal}
           onBulkMapSeries={handleBulkMapSeries}
-          bulkMapDisabled={threadsNeedingMapping.length === 0 && !bulkMapDialogOpen}
+          bulkMapDisabled={threadsNeedingMapping.length === 0}
           sortBy={sortBy}
           onSortChange={setSortBy}
           searchQuery={searchQuery}

@@ -104,6 +104,7 @@ export default function QueueMapSeriesDialog({
 }: QueueMapSeriesDialogProps) {
   const [step, setStep] = useState<DialogStep>('search')
   const [query, setQuery] = useState(threadTitle)
+   const queryChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
   const [uncheckedRowIds, setUncheckedRowIds] = useState<ReadonlySet<string>>(() => new Set())
   
@@ -139,18 +140,31 @@ export default function QueueMapSeriesDialog({
       setQuery(initial)
       setSelectedSeries(null)
       setUncheckedRowIds(new Set())
+   // Clean up query change timeout to prevent memory leaks
+   useEffect(() => {
+     return () => {
+       if (queryChangeTimeoutRef.current) {
+         clearTimeout(queryChangeTimeoutRef.current)
+       }
+     }
+   }, [])
       commit.reset()
     }
     // Reset only on open transitions; the search query is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, threadId])
-
-  const handleQueryChange = useCallback(
-    (value: string) => {
-      setQuery(value)
-    },
-    [],
-  )
+   const handleQueryChange = useCallback(
+     (value: string) => {
+       // Debounce the query update to avoid spamming searches on every keystroke
+       if (queryChangeTimeoutRef.current) {
+         clearTimeout(queryChangeTimeoutRef.current)
+       }
+       queryChangeTimeoutRef.current = setTimeout(() => {
+         setQuery(value)
+       }, 300)
+      },
+      [queryChangeTimeoutRef],
+    )
 
   const handleLoadMore = useCallback(() => {
     if (searchQuery.hasNextPage && !searchQuery.isFetching) {
@@ -292,14 +306,14 @@ export default function QueueMapSeriesDialog({
                 This series has no tracked issues to map.
               </p>
             )}
-            {(searchQuery.isFetching && searchQuery.data?.pages.length === 0) && (
-              <div className="flex justify-center py-6" aria-label="Searching">
-                <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
-              </div>
-            )}
-            {!searchQuery.isFetching && !searchQuery.isLoading && searchQuery.data?.pages.length === 0 && !searchQuery.error && (
-              <p className="text-sm text-stone-400">No volumes matched that search.</p>
-            )}
+             {searchQuery.isFetching && (
+               <div className="flex justify-center py-6" aria-label="Searching">
+                 <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+               </div>
+             )}
+             {!searchQuery.isFetching && !searchQuery.isLoading && searchQuery.data?.pages.reduce((total, page) => total + page.results.length, 0) === 0 && !searchQuery.error && (
+               <p className="text-sm text-stone-400">No volumes matched that search.</p>
+             )}
             <ul className="space-y-2 max-h-72 overflow-y-auto overscroll-contain">
               {searchQuery.data?.pages.flatMap((page: any) => page.results).map((series: any) => {
                 const meta = seriesMetaText(series)

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueBulkMapSeriesDialog from '../components/QueueBulkMapSeriesDialog'
 import QueueMapSeriesDialog from '../components/QueueMapSeriesDialog'
 
-vi.mock('../../components/QueueMapSeriesDialog', () => ({
+vi.mock('../components/QueueMapSeriesDialog', () => ({
   default: vi.fn(),
 }))
 

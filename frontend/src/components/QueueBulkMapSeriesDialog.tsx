@@ -184,7 +184,7 @@ export default function QueueBulkMapSeriesDialog({
 
           {summary.mapped > 0 && (
             <div className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-[var(--theme-bg-panel)] p-3">
-              <p className="text-sm text-[var(--theme-text-primary)]">
+              <p className="text-sm text-white">
                 <span className="font-bold text-[var(--theme-primary-action)]">
                   {summary.mapped}
                 </span>{' '}
@@ -197,7 +197,7 @@ export default function QueueBulkMapSeriesDialog({
 
           {summary.skipped > 0 && (
             <div className="rounded-lg border border-[var(--theme-warning)]/40 bg-[var(--theme-bg-panel)] p-3">
-              <p className="text-sm text-[var(--theme-text-primary)]">
+              <p className="text-sm text-white">
                 <span className="font-bold text-[var(--theme-warning)]">{summary.skipped}</span>{' '}
                 series left for manual review.
               </p>
@@ -213,7 +213,7 @@ export default function QueueBulkMapSeriesDialog({
               type="button"
               onClick={handleDone}
               data-testid="queue-bulk-map-series-done"
-              className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition"
+              className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-white bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition"
             >
               Done
             </button>
