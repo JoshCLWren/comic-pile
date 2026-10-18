@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import Modal from '../components/Modal'
-import { useDrilldownPresentation } from '../hooks/useCreatorMetricDrilldown'
-import type { CreatorMetricDrilldown } from '../types/index'
+import { useCreatorMetricDrilldown, useDrilldownPresentation } from '../hooks/useCreatorMetricDrilldown'
 import { DrilldownIssueList } from './DrilldownIssueList'
 import { CalculationDisplay } from './CalculationDisplay'
 import { ExclusionExplanation } from './ExclusionExplanation'
-import { queryKeys } from '../query/queryKeys'
 
 interface DrilldownParams {
   role?: string
@@ -33,14 +30,19 @@ export function CreatorMetricDrilldownModal({
   metricLabel,
   initialParams,
 }: CreatorMetricDrilldownModalProps) {
-  const queryClient = useQueryClient()
   useDrilldownPresentation()
   const [currentPage, setCurrentPage] = useState(initialParams?.page || 1)
   const [currentParams, setCurrentParams] = useState<DrilldownParams>(initialParams || {})
 
-  // Get the drilldown data from cache or fetch it
-  const drilldownData = queryClient.getQueryData<CreatorMetricDrilldown>(
-    queryKeys.creators.metric(creatorKey, metricType, currentParams)
+  // Load the evidence for the selected metric. Previously this only read a
+  // pre-primed cache entry and never issued a request, so a metric opened a
+  // permanent "Loading ..." shell instead of its supporting issues (issue
+  // #3460). Fetching here keeps pagination and role/rating filters working
+  // because the query key follows `currentParams`.
+  const { data: drilldownData, isError } = useCreatorMetricDrilldown(
+    creatorKey,
+    metricType,
+    currentParams,
   )
 
   // Reset pagination when modal opens
@@ -65,6 +67,23 @@ export function CreatorMetricDrilldownModal({
   // Handle rating value change for distribution metrics
   const handleRatingValueChange = (ratingValue: string) => {
     setCurrentParams(prev => ({ ...prev, ratingValue, page: 1 }))
+  }
+
+  // A failed fetch must not masquerade as a permanent loading shell: surface
+  // the failure so the reader knows the evidence view did not resolve.
+  if (isError) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={`${metricLabel} Details`}
+        overlayClassName="max-w-4xl"
+      >
+        <p role="alert" className="text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+          Could not load the evidence for this metric. Close this view and try again.
+        </p>
+      </Modal>
+    )
   }
 
   if (!drilldownData) {

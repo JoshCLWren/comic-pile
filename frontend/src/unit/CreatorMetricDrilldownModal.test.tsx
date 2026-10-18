@@ -1,11 +1,23 @@
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
 import { queryKeys } from '../query/queryKeys'
+import { creatorMetricDrilldownApi } from '../services/creatorMetricDrilldownApi'
 import type { CreatorMetricDrilldown } from '../types/index'
+
+vi.mock('../services/creatorMetricDrilldownApi', () => ({
+  creatorMetricDrilldownApi: {
+    getMetricDrilldown: vi.fn(),
+    getRatingDistributionDrilldown: vi.fn(),
+    getRoleDrilldown: vi.fn(),
+    getSeriesDrilldown: vi.fn(),
+  },
+}))
+
+const mockedGetMetricDrilldown = vi.mocked(creatorMetricDrilldownApi.getMetricDrilldown)
 
 const DRILLDOWN: CreatorMetricDrilldown = {
   metric_type: 'average-rating',
@@ -72,6 +84,13 @@ function renderModal(drilldown: CreatorMetricDrilldown | undefined) {
 }
 
 describe('CreatorMetricDrilldownModal', () => {
+  beforeEach(() => {
+    mockedGetMetricDrilldown.mockReset()
+    // By default a fetch never settles, so the loading test is deterministic and
+    // no test depends on jsdom's real network behavior.
+    mockedGetMetricDrilldown.mockImplementation(() => new Promise<CreatorMetricDrilldown>(() => {}))
+  })
+
   it('renders the calculation with supporting and excluded issues', () => {
     renderModal(DRILLDOWN)
 
@@ -84,10 +103,19 @@ describe('CreatorMetricDrilldownModal', () => {
     expect(screen.getByText('1 not included')).toBeInTheDocument()
   })
 
-  it('shows a loading state while the drilldown is not cached', () => {
+  it('shows a loading state while the drilldown is still loading', () => {
     renderModal(undefined)
 
     expect(screen.getByText('Loading Average rating...')).toBeInTheDocument()
+  })
+
+  it('surfaces a failed fetch instead of spinning forever (issue #3460)', async () => {
+    mockedGetMetricDrilldown.mockRejectedValue(new Error('drilldown unavailable'))
+    renderModal(undefined)
+
+    expect(
+      await screen.findByText('Could not load the evidence for this metric. Close this view and try again.'),
+    ).toBeInTheDocument()
   })
 
   it('hides pagination controls for a single page of evidence', () => {

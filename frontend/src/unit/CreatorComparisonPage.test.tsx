@@ -1,15 +1,30 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorComparisonPage from '../pages/CreatorComparisonPage'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
-import type { CreatorComparisonItem, CreatorComparisonResponse } from '../types/index'
+import { creatorMetricDrilldownApi } from '../services/creatorMetricDrilldownApi'
+import type {
+  CreatorComparisonItem,
+  CreatorComparisonResponse,
+  CreatorMetricDrilldown,
+} from '../types/index'
 
 vi.mock('../hooks/useCreatorComparison', () => ({
   useCreatorComparison: vi.fn(),
 }))
 
+vi.mock('../services/creatorMetricDrilldownApi', () => ({
+  creatorMetricDrilldownApi: {
+    getMetricDrilldown: vi.fn(),
+    getRatingDistributionDrilldown: vi.fn(),
+    getRoleDrilldown: vi.fn(),
+    getSeriesDrilldown: vi.fn(),
+  },
+}))
+
 const mockedHook = vi.mocked(useCreatorComparison)
+const mockedGetMetricDrilldown = vi.mocked(creatorMetricDrilldownApi.getMetricDrilldown)
 
 type HookResult = ReturnType<typeof useCreatorComparison>
 
@@ -837,5 +852,121 @@ describe('CreatorComparisonPage', () => {
 
     expect(screen.getByText('Comparing 3 creators')).toBeInTheDocument()
     expect(screen.getAllByTestId('creator-comparison-card')).toHaveLength(3)
+  })
+})
+
+function makeDrilldown(metricType: string, creatorKey: string): CreatorMetricDrilldown {
+  return {
+    metric_type: metricType,
+    creator_key: creatorKey,
+    calculation: {
+      formula: `${metricType} evidence adds up`,
+      numerator: '4 rating points',
+      denominator: '1 rated issue',
+      percentage: '4.0★',
+    },
+    total_count: 1,
+    included_issues: [
+      {
+        issue_id: 101,
+        thread_id: 1,
+        thread_title: 'Saga',
+        issue_number: '1',
+        status: 'read',
+        effective_rating: 4,
+        effective_rating_source: null,
+        effective_rating_timestamp: null,
+        creator_roles: ['writer'],
+        exclusion_reason: null,
+      },
+    ],
+    excluded_issues: [],
+    pagination: { page: 1, page_size: 50, next_page_token: null, total_pages: 1 },
+  }
+}
+
+// Issue #3460: every headline metric, distribution bucket, role and series
+// rating must open the evidence view for the metric it displays. These tests
+// click one control of each type and prove the drilldown fetch is bound to the
+// right creator, metric type and filter parameters.
+describe('CreatorComparisonPage metric evidence views (#3460)', () => {
+  beforeEach(() => {
+    mockedGetMetricDrilldown.mockImplementation(async (creatorKey, metricType) =>
+      makeDrilldown(metricType, creatorKey),
+    )
+    mockedHook.mockReturnValue(
+      baseHook({
+        data: makeResponse({
+          comparisons: {
+            'creator:7': makeItem({
+              canonical_creator_key: 'creator:7',
+              display_name: 'Brian K. Vaughan',
+              rating_distribution: { '5': 2 },
+            }),
+            'creator:12': makeItem({
+              canonical_creator_key: 'creator:12',
+              display_name: 'Steve McNiven',
+              average_rating: 3.8,
+              median_rating: 4,
+              ratings_count: 5,
+              rating_distribution: { '4': 5 },
+              top_rating_rate: 0.2,
+              role_stats: [{ role: 'artist', issue_count: 5, rated_issue_count: 5, average_rating: 3.8 }],
+              strongest_series: [
+                { thread_id: 2, thread_title: 'Old Man Logan', issue_count: 5, rated_issue_count: 5, average_rating: 3.5 },
+              ],
+            }),
+          },
+        }),
+      }),
+    )
+    renderAt('creator:7,creator:12')
+  })
+
+  it('opens the average rating evidence view', async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Average 4.5 out of 5 from 4 ratings' }))
+
+    expect(await screen.findByText('average-rating evidence adds up')).toBeInTheDocument()
+    expect(mockedGetMetricDrilldown).toHaveBeenLastCalledWith('creator:7', 'average-rating', {})
+  })
+
+  it('opens the median rating evidence view', async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Median 4.5 out of 5' }))
+
+    expect(await screen.findByText('median-rating evidence adds up')).toBeInTheDocument()
+    expect(mockedGetMetricDrilldown).toHaveBeenLastCalledWith('creator:7', 'median-rating', {})
+  })
+
+  it('opens the distribution bucket evidence view with the bucket filter', async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'View the 2 issues rated 5★' }))
+
+    expect(await screen.findByText('rating-distribution evidence adds up')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockedGetMetricDrilldown).toHaveBeenLastCalledWith('creator:7', 'rating-distribution', {
+        ratingValue: '5',
+      }),
+    )
+  })
+
+  it('opens the role evidence view with the role filter', async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'writer' }))
+
+    expect(await screen.findByText('role-stats evidence adds up')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockedGetMetricDrilldown).toHaveBeenLastCalledWith('creator:7', 'role-stats', {
+        role: 'writer',
+      }),
+    )
+  })
+
+  it('opens the series evidence view with the series filter', async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Average 4.7 out of 5' }))
+
+    expect(await screen.findByText('series-stats evidence adds up')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockedGetMetricDrilldown).toHaveBeenLastCalledWith('creator:7', 'series-stats', {
+        seriesKey: 'thread:1',
+      }),
+    )
   })
 })
