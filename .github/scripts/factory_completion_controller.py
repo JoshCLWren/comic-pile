@@ -111,6 +111,7 @@ def cooldown_seconds(outcome: str | None) -> int:
         return MODEL_MISSING_COOLDOWN_SECONDS
     if normalized in {
         "provider_throttle",
+        "provider_quota",
         "provider_unavailable",
         "provider_throttled",
         "rate limited",
@@ -377,7 +378,17 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
 
 
 def load_manifest_candidates(path: Path) -> list[dict[str, str]]:
-    """Read configured worker, provider, and model candidates from the manifest."""
+    """Read configured worker, provider, and model candidates from the manifest.
+
+    Quota-paused workers (see factory-quota-pauses.json) stay rostered but are
+    not offered as candidates until their provider quota resets.
+    """
+    scripts = str(Path(__file__).resolve().parent)
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from factory_quota_pause import active_pauses
+
+    paused = {str(worker) for worker in active_pauses()}
     candidates: list[dict[str, str]] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -385,6 +396,8 @@ def load_manifest_candidates(path: Path) -> list[dict[str, str]]:
             continue
         fields = line.split("\t")
         if len(fields) < 3 or not fields[0].strip().isdigit():
+            continue
+        if fields[0].strip() in paused:
             continue
         candidates.append(
             {

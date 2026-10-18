@@ -103,7 +103,7 @@ fi
 record_terminal_outcome() {
   local outcome="$1" detail="$2"
   case "$outcome" in
-    success|no_work|work_failure|provider_failure|provider_throttle|model_unavailable|model_retired_410|model_policy_violation|environment_failure|control_plane_failure|unknown_failure) ;;
+    success|no_work|work_failure|provider_failure|provider_throttle|provider_quota|model_unavailable|model_retired_410|model_policy_violation|environment_failure|control_plane_failure|unknown_failure) ;;
     *)
       echo "unsupported terminal factory outcome: ${outcome}" >&2
       return 2
@@ -116,7 +116,9 @@ record_terminal_outcome() {
 
 record_agent_failure_outcome() {
   local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
-  if [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
+  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)' "$log_file"; then
+    record_terminal_outcome provider_quota "pinned provider/model account quota or budget is exhausted (agent exit ${status})"
+  elif [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
     record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"

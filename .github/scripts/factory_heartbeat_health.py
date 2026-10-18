@@ -81,7 +81,7 @@ def heartbeat_health(
             ages.append(age)
         freshness = "missing" if age is None else "stale" if age >= stale_seconds else "fresh"
         outcome = attempt.get("attempt outcome", "")
-        quota_limited = outcome in {"provider_throttle", "provider_throttled"}
+        quota_limited = outcome in {"provider_throttle", "provider_quota", "provider_throttled"}
         detail = attempt.get("detail", "")
         if re.search(r"(?i)(weekly|week).*(quota|limit)|(quota|limit).*(weekly|week)", detail):
             quota_limited = True
