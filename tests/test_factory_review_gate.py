@@ -1753,7 +1753,10 @@ def test_trusted_native_changes_requested_routes_to_repair_only() -> None:
     assert "pull_request_review:" in workflow
     assert "types: [submitted, dismissed]" in workflow
     assert "await visibility({ github, context });" in workflow
-    assert '[[ "$EVENT_NAME" == \'pull_request_review\' ]] && exit 0' in workflow
+    assert (
+        '[[ "$EVENT_NAME" == \'pull_request_review\' || '
+        '"$EVENT_NAME" == \'pull_request_review_comment\' ]] && exit 0'
+    ) in workflow
     # Review votes never feed ready or merge gates. Those remain controller-only.
     controller = (SCRIPTS / "factory-review-controller.py").read_text(encoding="utf-8")
     assert "head_has_cross_model_review" in controller

@@ -65,7 +65,16 @@ function githubFor({
       }
       return labels.map(name => ({ name }));
     },
-    rest: { issues: api },
+    // Greptile routing recomputes from live state on every submitted review;
+    // these PRs have no review threads and no Greptile summary.
+    graphql: async () => ({
+      repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } } },
+    }),
+    rest: {
+      issues: api,
+      pulls: { get: async ({ pull_number }) => ({ data: { number: pull_number, state: 'open', body: '', head: { sha: 'a'.repeat(40), ref: 'factory/1-1-x', repo: { full_name: 'JoshCLWren/comic-pile' } } } }) },
+      checks: { listForRef: async () => ({ data: { check_runs: [] } }) },
+    },
   };
 }
 

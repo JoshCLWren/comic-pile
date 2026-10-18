@@ -25,6 +25,14 @@ if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-review-findings.sh" ]]; then
 else
   source .github/scripts/factory-review-findings.sh
 fi
+# Trusted pre-push fast checks, staged the same way (see factory-fast-checks.sh).
+# shellcheck source=factory-fast-checks.sh
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-fast-checks.sh" ]]; then
+  source "$(dirname "${BASH_SOURCE[0]}")/factory-fast-checks.sh"
+else
+  source .github/scripts/factory-fast-checks.sh
+fi
+FACTORY_PUSH_BLOCKED_REASON=''
 
 log() { printf '[factory:%s][source:%s][model:%s] %s\n' "$WORKER" "$SOURCE" "$MODEL" "$*"; }
 remaining() { echo $((DEADLINE - $(date +%s))); }
@@ -388,7 +396,7 @@ run_agent() {
   local target mission prompt findings status=0
   if [[ "$mode" == "pr" ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY, must-address feedback: fix each one in code or post a concrete evidence-backed rebuttal reply on its thread, and never resolve a thread silently. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY, must-address feedback: fix each open one in code or rebut it with concrete evidence, and record every outcome in the outcome file described below; the wrapper posts those outcomes as the thread replies and blocks FACTORY_GATE_READY while any open Greptile finding lacks one. Never resolve a Greptile thread yourself. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only when no semantic blocker remains; otherwise end with FACTORY_GATE_NOT_READY."
     findings="$(factory_review_findings_mission "$number" "${EXPECTED_HEAD:-$(git rev-parse HEAD)}")"
     mission+=" ${findings}"
   else
@@ -661,6 +669,14 @@ _persist_issue_pr_untraced() {
   if ! reject_out_of_scope_diff 'issue' "$number" "$base_ref"; then
     return 1
   fi
+  if ! factory_run_fast_checks "$base_ref" "/tmp/factory-fast-checks-${WORKER}.log" >&2; then
+    log "fast checks failed for issue #${number}; not pushing (log: /tmp/factory-fast-checks-${WORKER}.log)" >&2
+    factory_report_fast_check_failure 'issue' "$number" "/tmp/factory-fast-checks-${WORKER}.log"
+    git reset --hard "$base_ref" >/dev/null
+    git clean -fd >/dev/null
+    FACTORY_PUSH_BLOCKED_REASON='fast-checks-failed'
+    return 1
+  fi
   git add -A >&2
   git commit -m "factory: advance #${number} with ${DISPLAY}" >&2
   # The agent may be running on a local worktree branch whose name differs from
@@ -710,6 +726,14 @@ _persist_pr_changes_untraced() {
   [[ -n "$(git status --porcelain)" ]] || return 1
   base_ref="$EXPECTED_HEAD"
   if ! reject_out_of_scope_diff 'pr' "$pr" "$base_ref"; then
+    return 1
+  fi
+  if ! factory_run_fast_checks "$base_ref" "/tmp/factory-fast-checks-${WORKER}.log" >&2; then
+    log "fast checks failed for pr #${pr}; not pushing (log: /tmp/factory-fast-checks-${WORKER}.log)" >&2
+    factory_report_fast_check_failure 'pr' "$pr" "/tmp/factory-fast-checks-${WORKER}.log"
+    git reset --hard "$base_ref" >/dev/null
+    git clean -fd >/dev/null
+    FACTORY_PUSH_BLOCKED_REASON='fast-checks-failed'
     return 1
   fi
   git add -A

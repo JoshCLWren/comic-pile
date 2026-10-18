@@ -190,7 +190,8 @@ def test_greptile_findings_are_listed_first_and_high_priority(tmp_path: Path) ->
     assert "Human nit" not in out[greptile:other]
     assert "R2. app/x.py:2" in out
     assert "FIXED IN CODE" in out and "EVIDENCE-BACKED REBUTTAL" in out
-    assert "never resolve a thread silently" in out
+    assert "Never resolve a Greptile thread" in out
+    assert "[OPEN: outcome entry required]" in out
 
 
 def test_resolved_threads_are_excluded_and_outdated_are_flagged(tmp_path: Path) -> None:
@@ -326,6 +327,7 @@ JSON
   *pulls/42/reviews*) echo '[]' ;;
   "pr view 42"*) printf '%s' 'x <!-- greptile_comment -->S<!-- /greptile_comment -->' ;;
   *check-runs*) echo '{{"check_runs":[{{"name":"PR-Agent advisory review","conclusion":"neutral","output":{{"title":"t","summary":"advice","text":null}}}}]}}' ;;
+  *issues/42/comments*) echo '[]' ;;
   *) exit 1 ;;
 esac
 """)
@@ -333,6 +335,7 @@ esac
     return {
         "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
         "GITHUB_REPOSITORY": "JoshCLWren/comic-pile",
+        "FACTORY_GREPTILE_OUTCOMES_FILE": str(tmp_path / "outcomes.json"),
     }
 
 
@@ -351,7 +354,7 @@ def test_mission_fetches_writes_file_and_injects_greptile_first(tmp_path: Path) 
     assert "INCOMPLETE" not in text
     calls = (tmp_path / "gh-calls.log").read_text()
     assert f"commits/{HEAD}/check-runs" in calls
-    assert "isOutdated" in calls and "author{login}" in calls
+    assert "isOutdated" in calls and "author{__typename login}" in calls
     assert "api graphql --paginate" in calls and "$endCursor" in calls
 
 
@@ -362,7 +365,7 @@ def test_fetch_failure_never_fails_the_wrapper(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert (
-        "The wrapper could not fetch or format: review threads,review submissions,PR body,check runs"
+        "The wrapper could not fetch or format: review threads,review submissions,PR body,check runs,PR comments"
         in result.stdout
     )
 

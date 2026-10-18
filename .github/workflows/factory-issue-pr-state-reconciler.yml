@@ -2,13 +2,21 @@ name: Factory Issue PR State Reconciler
 
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review, closed, unlabeled]
+    # `edited` routes Greptile re-reviews that only rewrite the PR-body
+    # summary (no new review submission) when it lists open findings for the
+    # current head. Only Greptile routing runs for `edited`.
+    types: [opened, reopened, ready_for_review, closed, unlabeled, edited]
   # Trusted review feedback may route a PR to repair. Native APPROVED is
   # deliberately not a merge authorization; controller attestations still rule.
-  # `submitted` also covers Greptile's COMMENTED reviews: unresolved Greptile
-  # findings on the exact current head route the PR to factory:changes-requested.
+  # `submitted` also covers Greptile's COMMENTED reviews and thread replies:
+  # each one recomputes Greptile routing from the live PR state, so open
+  # Greptile findings route the PR to factory:changes-requested.
   pull_request_review:
     types: [submitted, dismissed]
+  # A thread reply fires pull_request_review_comment. Greptile pushback on an
+  # answered finding reopens it, so recompute routing for replies as well.
+  pull_request_review_comment:
+    types: [created]
   workflow_dispatch:
   schedule:
     # PR events cannot repair issues whose last canonical PR was closed before
@@ -23,9 +31,15 @@ permissions:
   pull-requests: write
 
 # Issue state is shared by every PR linked to that issue. Serialize all
-# reconciliations so duplicate PR events cannot race label replacement.
+# issue-centric reconciliations so duplicate PR events cannot race label
+# replacement. Greptile routing events (pull_request_review, thread replies
+# via pull_request_review_comment, and PR-body `edited`) only touch their own PR, so they use a per-PR group instead: a
+# burst of events on one PR can no longer replace a queued routing run for a
+# different PR (run 39140967515 was lost that way). Within one PR group a
+# newer pending run may still replace an older pending one; that is safe
+# because routing is recomputed from live PR state, never from the payload.
 concurrency:
-  group: factory-issue-pr-state-reconciler
+  group: ${{ (github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' || (github.event_name == 'pull_request_target' && github.event.action == 'edited')) && format('factory-greptile-routing-pr-{0}', github.event.pull_request.number) || 'factory-issue-pr-state-reconciler' }}
   cancel-in-progress: false
 
 jobs:
@@ -44,7 +58,9 @@ jobs:
         with:
           script: |
             const visibility = require('./.github/scripts/factory-visibility.cjs');
-            if (context.eventName === 'pull_request_review') {
+            if (context.eventName === 'pull_request_review'
+                || context.eventName === 'pull_request_review_comment'
+                || (context.eventName === 'pull_request_target' && context.payload.action === 'edited')) {
               await visibility({ github, context });
             } else {
               await visibility.reconcileMissingPrLabels({ github, context });
@@ -54,6 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action || '' }}
           EVENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref || '' }}
           EVENT_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
@@ -61,7 +78,9 @@ jobs:
           set -Eeuo pipefail
           # This event only affects PR review/repair state. Do not enter the
           # scheduled linked-issue sweep or infer issue closure from a review.
-          [[ "$EVENT_NAME" == 'pull_request_review' ]] && exit 0
+          [[ "$EVENT_NAME" == 'pull_request_review' || "$EVENT_NAME" == 'pull_request_review_comment' ]] && exit 0
+          # A PR-body edit only feeds Greptile routing (previous step).
+          [[ "$EVENT_NAME" == 'pull_request_target' && "$EVENT_ACTION" == 'edited' ]] && exit 0
 
           issue_from_head() {
             sed -nE 's#^factory/[0-9]+-([0-9]+)-.*$#\1#p' <<< "$1"
