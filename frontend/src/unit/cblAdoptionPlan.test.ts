@@ -193,5 +193,4 @@ it('excludes a series with ambiguous_unresolved entries via series decision', ()
   expect(next.entries[1]?.adoption_decision).toBe('excluded')
   expect(next.summary.excluded_count).toBe(2)
   expect(next.summary.unresolved_count).toBe(0)
-  expect(next.summary.needsAttentionCount).toBeUndefined() // not a field, but verify unresolved is 0
 })
