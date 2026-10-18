@@ -127,7 +127,9 @@ def calculate_cbl_adoption_plan(
 
     Existing entries are included by default. Missing/importable entries require
     an explicit entry or series include decision. Unresolved/ambiguous entries
-    are never adopted. An entry decision overrides its series decision.
+    are never adopted, but excluding their series defers them exactly like a
+    per-entry skip so one exclusion clears the attention gate (#3542). An entry
+    decision overrides its series decision.
     """
     series_choices = {str(key): value for key, value in (series_decisions or {}).items()}
     entry_choices = {str(key): value for key, value in (entry_decisions or {}).items()}
@@ -164,8 +166,12 @@ def calculate_cbl_adoption_plan(
                 excluded += 1
         elif not selectable:
             # An explicit per-entry skip lets the reader defer one ambiguous
-            # entry without blocking adoption of the whole source.
-            if entry_key in entry_choices and entry_choices[entry_key] is False:
+            # entry without blocking adoption of the whole source, and an
+            # explicit series exclusion clears every unresolved entry in that
+            # series without a separate skip (#3542). The entry choice keeps
+            # precedence over the series choice, matching the branch above and
+            # the commit-time decision resolver.
+            if entry_choices.get(entry_key, series_choices.get(series_group_id, True)) is False:
                 decision = "excluded"
                 excluded += 1
             else:

@@ -424,13 +424,13 @@ async def test_cbl_adoption_preview_is_read_only_and_supports_overrides(
     assert overridden.entries[0]["adoption_class"] == "existing"
     assert overridden.entries[1]["adoption_decision"] == "would_create_missing"
     assert overridden.entries[1]["adoption_class"] == "missing_importable"
-    assert overridden.entries[2]["adoption_decision"] == "unresolved"
+    assert overridden.entries[2]["adoption_decision"] == "excluded"
     assert overridden.entries[2]["adoption_class"] == "ambiguous_unresolved"
     assert overridden.final_adopted_order == (2,)
     assert overridden.reused_existing_count == 0
     assert overridden.missing_would_create_count == 1
-    assert overridden.excluded_count == 1
-    assert overridden.unresolved_count == 1
+    assert overridden.excluded_count == 2
+    assert overridden.unresolved_count == 0
     assert before["issues"] == await async_db.scalar(select(func.count()).select_from(Issue))
     assert before["threads"] == await async_db.scalar(select(func.count()).select_from(Thread))
     assert before["memberships"] == await async_db.scalar(
@@ -668,6 +668,51 @@ def test_cbl_adoption_unresolved_entry_can_be_skipped() -> None:
     unskipped = calculate_cbl_adoption_plan(entries, entry_decisions={"20": True})
     assert unskipped.unresolved_count == 1
     assert unskipped.entries[1]["adoption_decision"] == "unresolved"
+
+
+def test_cbl_adoption_series_exclusion_defers_unresolved_entries() -> None:
+    """Excluding a series clears its unresolved entries from the attention gate.
+
+    The reader must not need a separate per-entry Skip before adoption can
+    proceed, and an explicit entry choice still beats the series choice (#3542).
+    """
+    entries = [
+        {
+            "cbl_position": 1,
+            "cbl_entry_id": 10,
+            "series_name": "Known",
+            "issue_number": "1",
+            "series_group_id": "known-key",
+            "resolution_status": "resolved_via_comicvine_canonical",
+            "resolved_issue_id": 8,
+        },
+        {
+            "cbl_position": 2,
+            "cbl_entry_id": 20,
+            "series_name": "Mystery",
+            "issue_number": "?",
+            "series_group_id": "mystery-key",
+            "resolution_status": "ambiguous_no_comicvine_id",
+            "resolved_issue_id": None,
+        },
+    ]
+    excluded = calculate_cbl_adoption_plan(entries, series_decisions={"mystery-key": False})
+    assert excluded.unresolved_count == 0
+    assert excluded.excluded_count == 1
+    assert excluded.entries[1]["adoption_decision"] == "excluded"
+    assert excluded.final_adopted_order == (1,)
+
+    # The series exclusion leaves unrelated series untouched.
+    assert excluded.entries[0]["adoption_decision"] == "included_existing"
+
+    # An explicit per-entry include overrides the series exclusion.
+    reconsidered = calculate_cbl_adoption_plan(
+        entries,
+        series_decisions={"mystery-key": False},
+        entry_decisions={"20": True},
+    )
+    assert reconsidered.unresolved_count == 1
+    assert reconsidered.entries[1]["adoption_decision"] == "unresolved"
 
 
 @pytest.mark.asyncio
